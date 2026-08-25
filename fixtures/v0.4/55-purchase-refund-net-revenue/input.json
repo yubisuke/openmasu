@@ -27,7 +27,7 @@
       "definition": { "calculation": "revenue_sum", "window": { "type": "elapsed", "day": 0 }, "numerator": "purchase_net_revenue" },
       "rule_bundle_id": "metric-purchase-net",
       "rule_bundle_version": "0.4.8",
-      "rule_bundle_hash": "8888888888888888888888888888888888888888888888888888888888888888"
+      "rule_bundle_hash": "01b66078d11af8ace103a5d2cf594ffe79c19bd59a4dc1f20757339a8a7f4f5f"
     },
     {
       "metric_name": "cohort_purchase_net_revenue_d1_usd",
@@ -40,7 +40,7 @@
       "definition": { "calculation": "revenue_sum", "window": { "type": "elapsed", "day": 1 }, "numerator": "purchase_net_revenue" },
       "rule_bundle_id": "metric-purchase-net",
       "rule_bundle_version": "0.4.8",
-      "rule_bundle_hash": "8888888888888888888888888888888888888888888888888888888888888888"
+      "rule_bundle_hash": "01b66078d11af8ace103a5d2cf594ffe79c19bd59a4dc1f20757339a8a7f4f5f"
     },
     {
       "metric_name": "cohort_purchase_net_revenue_d3_usd",
@@ -53,7 +53,7 @@
       "definition": { "calculation": "revenue_sum", "window": { "type": "elapsed", "day": 3 }, "numerator": "purchase_net_revenue" },
       "rule_bundle_id": "metric-purchase-net",
       "rule_bundle_version": "0.4.8",
-      "rule_bundle_hash": "8888888888888888888888888888888888888888888888888888888888888888"
+      "rule_bundle_hash": "01b66078d11af8ace103a5d2cf594ffe79c19bd59a4dc1f20757339a8a7f4f5f"
     },
     {
       "metric_name": "cohort_purchase_net_revenue_d7_usd",
@@ -66,7 +66,7 @@
       "definition": { "calculation": "revenue_sum", "window": { "type": "elapsed", "day": 7 }, "numerator": "purchase_net_revenue" },
       "rule_bundle_id": "metric-purchase-net",
       "rule_bundle_version": "0.4.8",
-      "rule_bundle_hash": "8888888888888888888888888888888888888888888888888888888888888888"
+      "rule_bundle_hash": "01b66078d11af8ace103a5d2cf594ffe79c19bd59a4dc1f20757339a8a7f4f5f"
     }
   ],
   "metric_evaluations": [

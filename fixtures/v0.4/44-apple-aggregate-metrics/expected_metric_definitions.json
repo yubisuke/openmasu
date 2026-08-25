@@ -31,7 +31,7 @@
     "amount_scale": 6,
     "rule_bundle_id": "metric-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
   },
   {
     "metric_name": "d0_jst_install_calendar_ad_revenue_usd",
@@ -48,7 +48,7 @@
     "amount_scale": 6,
     "rule_bundle_id": "metric-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
   },
   {
     "metric_name": "d0_utc_install_calendar_ad_revenue_usd",
@@ -65,7 +65,7 @@
     "amount_scale": 6,
     "rule_bundle_id": "metric-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
   },
   {
     "metric_name": "skan_attributed_installs",

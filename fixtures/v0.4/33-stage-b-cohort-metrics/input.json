@@ -63,7 +63,7 @@
       "grouping_dimensions": ["campaign_id", "network", "country", "cohort_date", "attribution_status"],
       "rule_bundle_id": "metric-stage-b",
       "rule_bundle_version": "0.3.0",
-      "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+      "rule_bundle_hash": "f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499"
     },
     {
       "metric_name": "d3_roas",
@@ -75,7 +75,7 @@
       "definition": { "calculation": "revenue_over_cost", "window": { "type": "elapsed", "day": 3 }, "numerator": "revenue", "denominator": "cost", "cost_basis": "cohort_acquisition_day_current_snapshot" },
       "rule_bundle_id": "metric-stage-b",
       "rule_bundle_version": "0.3.0",
-      "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+      "rule_bundle_hash": "f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499"
     },
     {
       "metric_name": "d7_roas",
@@ -87,7 +87,7 @@
       "definition": { "calculation": "revenue_over_cost", "window": { "type": "elapsed", "day": 7 }, "numerator": "revenue", "denominator": "cost", "cost_basis": "cohort_acquisition_day_current_snapshot" },
       "rule_bundle_id": "metric-stage-b",
       "rule_bundle_version": "0.3.0",
-      "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+      "rule_bundle_hash": "f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499"
     },
     {
       "metric_name": "retention_d1",
@@ -100,7 +100,7 @@
       "activity_events": ["session_start"],
       "rule_bundle_id": "metric-stage-b",
       "rule_bundle_version": "0.3.0",
-      "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+      "rule_bundle_hash": "f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499"
     },
     {
       "metric_name": "retention_d7",
@@ -113,7 +113,7 @@
       "activity_events": ["session_start"],
       "rule_bundle_id": "metric-stage-b",
       "rule_bundle_version": "0.3.0",
-      "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+      "rule_bundle_hash": "f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499"
     },
     {
       "metric_name": "cohort_ltv_d7_usd",
@@ -126,7 +126,7 @@
       "definition": { "calculation": "revenue_over_cohort", "window": { "type": "elapsed", "day": 7 }, "numerator": "revenue", "denominator": "cohort_size" },
       "rule_bundle_id": "metric-stage-b",
       "rule_bundle_version": "0.3.0",
-      "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+      "rule_bundle_hash": "f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499"
     },
     {
       "metric_name": "cohort_install_count",
@@ -137,7 +137,7 @@
       "definition": { "calculation": "cohort_size", "window": { "type": "elapsed", "day": 0 }, "numerator": "cohort_size" },
       "rule_bundle_id": "metric-stage-b",
       "rule_bundle_version": "0.3.0",
-      "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+      "rule_bundle_hash": "f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499"
     }
   ],
   "metric_evaluations": [

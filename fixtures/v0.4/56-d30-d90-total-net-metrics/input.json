@@ -32,49 +32,49 @@
     {
       "metric_name": "cohort_purchase_net_revenue_d30_usd", "metric_definition_version": "0.4.9", "anchor_event": "install", "aggregation_time_zone": "UTC", "value_type": "money", "currency": "USD", "amount_scale": 6,
       "definition": { "calculation": "revenue_sum", "window": { "type": "elapsed", "day": 30 }, "numerator": "purchase_net_revenue" },
-      "rule_bundle_id": "metric-purchase-net", "rule_bundle_version": "0.4.9", "rule_bundle_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+      "rule_bundle_id": "metric-purchase-net", "rule_bundle_version": "0.4.9", "rule_bundle_hash": "709f6688c7bb8537b7af3aa3b5a3aa879036a866fe13a21b83244baec6389712",
       "grouping_dimensions": ["campaign_id", "network", "country", "cohort_date", "attribution_status"]
     },
     {
       "metric_name": "cohort_purchase_net_revenue_d90_usd", "metric_definition_version": "0.4.9", "anchor_event": "install", "aggregation_time_zone": "UTC", "value_type": "money", "currency": "USD", "amount_scale": 6,
       "definition": { "calculation": "revenue_sum", "window": { "type": "elapsed", "day": 90 }, "numerator": "purchase_net_revenue" },
-      "rule_bundle_id": "metric-purchase-net", "rule_bundle_version": "0.4.9", "rule_bundle_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+      "rule_bundle_id": "metric-purchase-net", "rule_bundle_version": "0.4.9", "rule_bundle_hash": "709f6688c7bb8537b7af3aa3b5a3aa879036a866fe13a21b83244baec6389712",
       "grouping_dimensions": ["campaign_id", "network", "country", "cohort_date", "attribution_status"]
     },
     {
       "metric_name": "cohort_total_net_revenue_d30_usd", "metric_definition_version": "0.4.9", "anchor_event": "install", "aggregation_time_zone": "UTC", "value_type": "money", "currency": "USD", "amount_scale": 6,
       "definition": { "calculation": "revenue_sum", "window": { "type": "elapsed", "day": 30 }, "numerator": "total_net_revenue" },
-      "rule_bundle_id": "metric-total-net", "rule_bundle_version": "0.4.9", "rule_bundle_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+      "rule_bundle_id": "metric-total-net", "rule_bundle_version": "0.4.9", "rule_bundle_hash": "fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3",
       "grouping_dimensions": ["campaign_id", "network", "country", "cohort_date", "attribution_status"]
     },
     {
       "metric_name": "cohort_total_net_revenue_d90_usd", "metric_definition_version": "0.4.9", "anchor_event": "install", "aggregation_time_zone": "UTC", "value_type": "money", "currency": "USD", "amount_scale": 6,
       "definition": { "calculation": "revenue_sum", "window": { "type": "elapsed", "day": 90 }, "numerator": "total_net_revenue" },
-      "rule_bundle_id": "metric-total-net", "rule_bundle_version": "0.4.9", "rule_bundle_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+      "rule_bundle_id": "metric-total-net", "rule_bundle_version": "0.4.9", "rule_bundle_hash": "fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3",
       "grouping_dimensions": ["campaign_id", "network", "country", "cohort_date", "attribution_status"]
     },
     {
       "metric_name": "d30_total_net_roas", "metric_definition_version": "0.4.9", "anchor_event": "install", "aggregation_time_zone": "UTC", "value_type": "ratio", "ratio_scale": 6,
       "definition": { "calculation": "revenue_over_cost", "window": { "type": "elapsed", "day": 30 }, "numerator": "total_net_revenue", "denominator": "cost", "cost_basis": "cohort_acquisition_day_current_snapshot" },
-      "rule_bundle_id": "metric-total-net", "rule_bundle_version": "0.4.9", "rule_bundle_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+      "rule_bundle_id": "metric-total-net", "rule_bundle_version": "0.4.9", "rule_bundle_hash": "fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3",
       "grouping_dimensions": ["campaign_id", "network", "country", "cohort_date", "attribution_status"]
     },
     {
       "metric_name": "d90_total_net_roas", "metric_definition_version": "0.4.9", "anchor_event": "install", "aggregation_time_zone": "UTC", "value_type": "ratio", "ratio_scale": 6,
       "definition": { "calculation": "revenue_over_cost", "window": { "type": "elapsed", "day": 90 }, "numerator": "total_net_revenue", "denominator": "cost", "cost_basis": "cohort_acquisition_day_current_snapshot" },
-      "rule_bundle_id": "metric-total-net", "rule_bundle_version": "0.4.9", "rule_bundle_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+      "rule_bundle_id": "metric-total-net", "rule_bundle_version": "0.4.9", "rule_bundle_hash": "fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3",
       "grouping_dimensions": ["campaign_id", "network", "country", "cohort_date", "attribution_status"]
     },
     {
       "metric_name": "cohort_total_net_ltv_d30_usd", "metric_definition_version": "0.4.9", "anchor_event": "install", "aggregation_time_zone": "UTC", "value_type": "money", "currency": "USD", "amount_scale": 6,
       "definition": { "calculation": "revenue_over_cohort", "window": { "type": "elapsed", "day": 30 }, "numerator": "total_net_revenue", "denominator": "cohort_size" },
-      "rule_bundle_id": "metric-total-net", "rule_bundle_version": "0.4.9", "rule_bundle_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+      "rule_bundle_id": "metric-total-net", "rule_bundle_version": "0.4.9", "rule_bundle_hash": "fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3",
       "grouping_dimensions": ["campaign_id", "network", "country", "cohort_date", "attribution_status"]
     },
     {
       "metric_name": "cohort_total_net_ltv_d90_usd", "metric_definition_version": "0.4.9", "anchor_event": "install", "aggregation_time_zone": "UTC", "value_type": "money", "currency": "USD", "amount_scale": 6,
       "definition": { "calculation": "revenue_over_cohort", "window": { "type": "elapsed", "day": 90 }, "numerator": "total_net_revenue", "denominator": "cohort_size" },
-      "rule_bundle_id": "metric-total-net", "rule_bundle_version": "0.4.9", "rule_bundle_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+      "rule_bundle_id": "metric-total-net", "rule_bundle_version": "0.4.9", "rule_bundle_hash": "fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3",
       "grouping_dimensions": ["campaign_id", "network", "country", "cohort_date", "attribution_status"]
     }
   ],

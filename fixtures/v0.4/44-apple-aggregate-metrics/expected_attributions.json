@@ -25,7 +25,7 @@
     "finality": "final",
     "rule_bundle_id": "apple-postback-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "rule_bundle_hash": "91181289d7e6604c8a73b7e83d6950334db9bc1067b78ab25216ecaa24bcb896"
   },
   {
     "attribution_id": "attr:skan-coarse-44",
@@ -53,7 +53,7 @@
     "finality": "final",
     "rule_bundle_id": "apple-postback-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "rule_bundle_hash": "91181289d7e6604c8a73b7e83d6950334db9bc1067b78ab25216ecaa24bcb896"
   },
   {
     "attribution_id": "attr:skan-fine-44",
@@ -81,6 +81,6 @@
     "finality": "final",
     "rule_bundle_id": "apple-postback-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "rule_bundle_hash": "91181289d7e6604c8a73b7e83d6950334db9bc1067b78ab25216ecaa24bcb896"
   }
 ]

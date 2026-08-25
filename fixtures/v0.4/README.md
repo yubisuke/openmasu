@@ -154,6 +154,23 @@ Each fixture contains the same 13 `expected_*.json` artifacts listed above. Empt
 | `55-purchase-refund-net-revenue` | One EUR 8 settled purchase and one D1 EUR 3.2 capped refund convert independently at 1.25 to reviewed D0/D1/D3/D7 net values of USD 10/6/6/6; pending/reversed rows are excluded, target-free and explicit target paths are exercised, and ad revenue stays USD 7. |
 | `56-d30-d90-total-net-metrics` | D30 purchase net/total net/ROAS/LTV are USD 8/USD 9/0.9/USD 9; D90 values are USD 30/USD 37/3.7/USD 37. D31 is excluded only from D30 and exact D91 is excluded from D90. |
 
+## WO-20 non-fraud rule-bundle provenance review
+
+WO-20 replaces the undocumented placeholder hashes on attribution, Apple postback, and metric artifacts with SHA-256 digests of RFC 8785 canonical rule-bundle definitions. A structural comparison against the pre-WO-20 fixture tree found 335 changed fields in 110 JSON files. Every changed path ends in `rule_bundle_hash`; no metric value, attribution decision, identifier, timestamp, grouping, or other artifact field changed.
+
+| Rule bundle | Version | Reviewed SHA-256 digest | Changed fields |
+| --- | --- | --- | ---: |
+| `attribution-default` | `0.3.0` | `2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50` | 65 |
+| `apple-postback-default` | `0.3.0` | `91181289d7e6604c8a73b7e83d6950334db9bc1067b78ab25216ecaa24bcb896` | 10 |
+| `metric-default` | `0.3.0` | `f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443` | 193 |
+| `metric-stage-b` | `0.3.0` | `f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499` | 25 |
+| `metric-stage-m3` | `0.3.1` | `7239025186e4e679b4ab044aa34b02e4df52b3698641ef1e47f4d49f918e902f` | 6 |
+| `metric-purchase-net` | `0.4.8` | `01b66078d11af8ace103a5d2cf594ffe79c19bd59a4dc1f20757339a8a7f4f5f` | 12 |
+| `metric-purchase-net` | `0.4.9` | `709f6688c7bb8537b7af3aa3b5a3aa879036a866fe13a21b83244baec6389712` | 6 |
+| `metric-total-net` | `0.4.9` | `fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3` | 18 |
+
+The reviewed field locations are 75 in `expected_attributions.json`, 190 in `expected_metric_definitions.json`, 48 in `expected_metric_runs.json`, and 22 in `input.json`. The inputs changed only where they embed expected definition or run artifacts for parity assertions.
+
 ## Adding a fixture
 
 `fixtures/.candidates/` is a gitignored working area for proposed synthetic inputs. It is outside `fixtures/v0.4/` and is not discovered by `npm run validate`.

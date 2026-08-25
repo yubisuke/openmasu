@@ -11,7 +11,7 @@
     "aggregation_time_zone": "UTC",
     "rule_bundle_id": "metric-stage-b",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+    "rule_bundle_hash": "f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499",
     "rounding_mode": "half_even",
     "reproducibility_status": "fully_reproducible",
     "value_type": "ratio",
