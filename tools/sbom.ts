@@ -62,4 +62,24 @@ const ios = {
 };
 writeFileSync(join(root, "sdk-ios.cdx.json"), `${JSON.stringify(ios, null, 2)}\n`);
 JSON.parse(readFileSync(join(root, "sdk-ios.cdx.json"), "utf8"));
-console.log(`Generated ${workspaces.length} CycloneDX workspace SBOMs and the resolved iOS SDK SBOM (${iosPins.length} runtime dependencies).`);
+const unityPackage = JSON.parse(readFileSync(join(process.cwd(), "sdk", "unity", "com.openmasu.sdk", "package.json"), "utf8")) as {
+  name: string; version: string;
+};
+const unityRef = `pkg:upm/${unityPackage.name}@${unityPackage.version}`;
+const unity = {
+  bomFormat: "CycloneDX",
+  specVersion: "1.5",
+  serialNumber: "urn:uuid:31ae319a-462a-5e8d-8b6a-603ee4d6b523",
+  version: 1,
+  metadata: {
+    component: {
+      type: "library", "bom-ref": unityRef, group: "dev.openmasu", name: unityPackage.name,
+      version: unityPackage.version,
+    },
+  },
+  components: [],
+  dependencies: [{ ref: unityRef, dependsOn: [] }],
+};
+writeFileSync(join(root, "sdk-unity.cdx.json"), `${JSON.stringify(unity, null, 2)}\n`);
+JSON.parse(readFileSync(join(root, "sdk-unity.cdx.json"), "utf8"));
+console.log(`Generated ${workspaces.length} CycloneDX workspace SBOMs and the resolved iOS/Unity SDK SBOMs (${iosPins.length} iOS runtime dependencies).`);

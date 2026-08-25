@@ -193,7 +193,19 @@ Requirements: JDK 17 and Android SDK 36. The Android project uses a checksum-pin
 dotnet run --project sdk/unity/tests/UnityCompileProbe.csproj --configuration Release
 ```
 
-The second command requires a running API 36 emulator. The first command compiles every documented Install Referrer 2.2 accessor, tests queue/consent/Meta/MAX behavior, verifies the merged manifest and backup rules, builds the native sample, and writes `sbom/sdk-android.cdx.json`. The Unity command is a shim compile and callback-concurrency gate; an actual Unity export remains an operator procedure. M2 distributes source and local build instructions only, not Maven or UPM registry artifacts.
+The second command requires a running API 36 emulator. The first command compiles every documented Install Referrer 2.2 accessor, tests queue/consent/Meta/MAX behavior, verifies the merged manifest and backup rules, builds the native sample, and writes `sbom/sdk-android.cdx.json`. The Unity command is a shim compile and callback-concurrency gate; an actual Unity export remains an operator procedure.
+
+The standard Unity Android bridge enables the Google Play reader by default. Set `OpenMasuOptions.EnablePlayReferrer=false` for an explicit unavailable fallback. Meta reading remains opt-in through the non-secret `OpenMasuOptions.MetaAppId`; blank or invalid values fail closed. The bridge package carries the provider module dependencies and keeps host-level reader injection available to native Android applications.
+
+To generate the local, reproducible SDK distribution without publishing to a registry:
+
+```bash
+npm run sbom
+./sdk/android/gradlew -p sdk/android :core:assembleRelease :installreferrer:assembleRelease :metareferrer:assembleRelease :max:assembleRelease :unitybridge:assembleRelease verifySdkSbom --no-daemon
+python tools/build-sdk-release.py --reproducibility-check
+```
+
+`build/sdk-release/openmasu-sdk-0.1.0/` contains Maven AAR/POM artifacts, a Unity UPM archive, an immutable Swift Package source archive, Android/iOS/Unity CycloneDX SBOMs, source and toolchain metadata, and a SHA-256 manifest. CI rebuilds and byte-compares the bundle. These are synthetic build artifacts only: no registry publication, Unity export, real provider read, device validation, or distribution signing is claimed.
 
 ### Google Play purchase verification
 

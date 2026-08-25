@@ -18,7 +18,8 @@ namespace OpenMasu.Unity
             {
                 EnsureBridge().CallStatic("initialize", activity, options.Endpoint, options.SdkKeyId, options.SdkSecret,
                     options.WrapperVersion, string.Join(",", options.DeepLinkHosts ?? Array.Empty<string>()),
-                    string.Join(",", options.DeepLinkSchemes ?? Array.Empty<string>()));
+                    string.Join(",", options.DeepLinkSchemes ?? Array.Empty<string>()), options.EnablePlayReferrer,
+                    options.MetaAppId ?? string.Empty);
             }
         }
 

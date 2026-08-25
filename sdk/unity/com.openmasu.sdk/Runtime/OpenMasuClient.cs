@@ -68,6 +68,8 @@ namespace OpenMasu.Unity
         public string WrapperVersion { get; set; } = "0.1.0";
         public string[] DeepLinkHosts { get; set; } = Array.Empty<string>();
         public string[] DeepLinkSchemes { get; set; } = Array.Empty<string>();
+        public bool EnablePlayReferrer { get; set; } = true;
+        public string MetaAppId { get; set; } = string.Empty;
     }
 
     public sealed class OpenMasuClient : IDisposable

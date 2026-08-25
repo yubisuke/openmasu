@@ -50,6 +50,48 @@ class OpenMasuSdkTest {
     assertEquals(0, sdk.pendingCount())
   }
 
+  @Test fun `injected Unity provider readers flow once into the install evidence`() {
+    val playReads = AtomicInteger()
+    val metaReads = AtomicInteger()
+    val sdk = sdk(
+      RecordingTransport(false),
+      PlayReferrerReader {
+        playReads.incrementAndGet()
+        PlayReferrerEvidence(
+          status = "available",
+          clientResponse = "ok",
+          clickId = "click-synthetic-provider-17",
+          referrer = "cid=click-synthetic-provider-17",
+        )
+      },
+      MetaReferrerReader {
+        metaReads.incrementAndGet()
+        MetaReferrerEvidence(
+          status = "decrypt_pending",
+          installReferrer = "synthetic-protected-referrer",
+          providerAuthority = "synthetic.provider.InstallReferrerProvider",
+        )
+      },
+    )
+    sdk.initialize()
+    await { sdk.pendingEvents().any { it.eventName == "install" } }
+
+    val payload = JSONObject(sdk.pendingEvents().single { it.eventName == "install" }.payloadJson)
+    assertEquals(1, playReads.get())
+    assertEquals(1, metaReads.get())
+    assertEquals("available", payload.getString("referrer_status"))
+    assertEquals("click-synthetic-provider-17", payload.getString("click_id"))
+    assertEquals("decrypt_failed", payload.getString("meta_referrer_status"))
+    assertEquals(
+      "synthetic-protected-referrer",
+      payload.getJSONObject("extensions").getString("meta_install_referrer_protected"),
+    )
+    sdk.initialize()
+    Thread.sleep(100)
+    assertEquals(1, playReads.get())
+    assertEquals(1, metaReads.get())
+  }
+
   @Test fun `withdrawal atomically purges consent-required purposes and keeps the control event`() {
     val transport = RecordingTransport(false)
     val sdk = sdk(transport)

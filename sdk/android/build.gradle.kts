@@ -9,6 +9,13 @@ plugins {
 group = "dev.openmasu"
 version = "0.1.0"
 
+allprojects {
+  tasks.withType<org.gradle.api.tasks.bundling.AbstractArchiveTask>().configureEach {
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+  }
+}
+
 tasks.register("verifySdkSbom") {
   dependsOn("cyclonedxBom")
   doLast {
@@ -34,6 +41,7 @@ tasks.register("androidAcceptance") {
     ":sample:assembleDebug",
     ":sample:verifyMergedManifest",
     ":unitybridge:assembleDebug",
+    ":unitybridge:testDebugUnitTest",
     "verifyDeepLinkPolicy",
   )
 }
