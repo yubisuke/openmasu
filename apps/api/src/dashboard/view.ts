@@ -27,6 +27,14 @@ export type DashboardTrackingLink = {
   readonly created_at: string;
 };
 
+export type DashboardSdkKey = {
+  readonly sdk_key_id: string;
+  readonly platform: "android" | "ios";
+  readonly status: "active" | "retired";
+  readonly created_at: string;
+  readonly status_changed_at: string;
+};
+
 export type DashboardView = {
   readonly apps: readonly DashboardApp[];
   readonly selectedAppId?: string;
@@ -41,8 +49,11 @@ export type DashboardView = {
   readonly deterministicCharts: readonly DashboardChart[];
   readonly appleAggregateCharts: readonly DashboardChart[];
   readonly trackingLinks: readonly DashboardTrackingLink[];
+  readonly sdkKeys: readonly DashboardSdkKey[];
   readonly fraudRows: readonly FraudAuditRow[];
   readonly csrfToken: string;
+  readonly canOperate: boolean;
+  readonly canAdminister: boolean;
   readonly nextCursor?: string;
   readonly metadata: {
     readonly watermark?: string;
@@ -73,8 +84,11 @@ export function buildDashboardView(input: {
   readonly records?: readonly RecordCountRow[];
   readonly differences?: DifferenceAuditPage;
   readonly trackingLinks?: readonly DashboardTrackingLink[];
+  readonly sdkKeys?: readonly DashboardSdkKey[];
   readonly fraudRows?: readonly FraudAuditRow[];
   readonly csrfToken: string;
+  readonly canOperate?: boolean;
+  readonly canAdminister?: boolean;
 }): DashboardView {
   const rows = [...(input.metrics?.data ?? [])].sort(compare);
   const aggregateNames = new Set([
@@ -107,8 +121,13 @@ export function buildDashboardView(input: {
     trackingLinks: [...(input.trackingLinks ?? [])].sort((left, right) =>
       right.created_at.localeCompare(left.created_at, "en")
       || left.tracking_link_id.localeCompare(right.tracking_link_id, "en")),
+    sdkKeys: [...(input.sdkKeys ?? [])].sort((left, right) =>
+      right.created_at.localeCompare(left.created_at, "en")
+      || left.sdk_key_id.localeCompare(right.sdk_key_id, "en")),
     fraudRows: [...(input.fraudRows ?? [])],
     csrfToken: input.csrfToken,
+    canOperate: input.canOperate ?? false,
+    canAdminister: input.canAdminister ?? false,
     ...(input.metrics?.next_cursor ? { nextCursor: input.metrics.next_cursor } : {}),
     metadata: {
       ...(input.query?.watermarkAtMost ? { watermark: input.query.watermarkAtMost } : {}),

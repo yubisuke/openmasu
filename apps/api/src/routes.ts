@@ -14,8 +14,12 @@ export type RouteHandler =
   | "device_privacy"
   | "admin_apps_list"
   | "admin_apps_create"
+  | "admin_sdk_keys_list"
+  | "admin_sdk_keys_issue"
+  | "admin_sdk_keys_retire"
   | "admin_tracking_links_list"
   | "admin_tracking_links"
+  | "admin_tracking_link_transition"
   | "admin_link_domain"
   | "admin_app_link_identity"
   | "admin_privacy"
@@ -36,6 +40,15 @@ export type RouteHandler =
   | "dashboard_fraud"
   | "dashboard_tracking_links_list"
   | "dashboard_tracking_links_create"
+  | "dashboard_tracking_link_transition"
+  | "dashboard_sdk_keys_issue"
+  | "dashboard_sdk_keys_retire"
+  | "dashboard_link_domain"
+  | "dashboard_app_link_identity"
+  | "dashboard_apple_registration"
+  | "dashboard_conversion_schema"
+  | "dashboard_rule_bundle"
+  | "dashboard_google_data_manager"
   | "dashboard_apps_create";
 
 export type RouteDefinition = {
@@ -63,8 +76,12 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "google_play_rtdn", method: "POST", pattern: /^\/v1\/google-play\/rtdn$/, auth: "google_oidc", mutates: true },
   { handler: "admin_apps_list", method: "GET", pattern: /^\/v1\/admin\/apps$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_apps_create", method: "POST", pattern: /^\/v1\/admin\/apps$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "admin_sdk_keys_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/sdk-keys$/, auth: "admin_bearer", mutates: false, capability: "administer" },
+  { handler: "admin_sdk_keys_issue", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/sdk-keys$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "admin_sdk_keys_retire", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/sdk-keys\/[^/]+\/retire$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_tracking_links_list", method: "GET", pattern: /^\/v1\/admin\/tracking-links$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_tracking_links", method: "POST", pattern: /^\/v1\/admin\/tracking-links$/, auth: "admin_bearer", mutates: true, capability: "operate" },
+  { handler: "admin_tracking_link_transition", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/tracking-links\/[^/]+\/(?:pause|archive)$/, auth: "admin_bearer", mutates: true, capability: "operate" },
   { handler: "admin_link_domain", method: "POST", pattern: /^\/v1\/admin\/link-domain$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_app_link_identity", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/link-identity$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_privacy", method: "POST", pattern: /^\/v1\/admin\/privacy-requests$/, auth: "admin_bearer", mutates: true, capability: "operate" },
@@ -81,6 +98,15 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_fraud", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/fraud$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_tracking_links_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/tracking-links$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_tracking_links_create", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/tracking-links$/, auth: "dashboard_session", mutates: true, capability: "operate" },
+  { handler: "dashboard_tracking_link_transition", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/tracking-links\/[^/]+\/(?:pause|archive)$/, auth: "dashboard_session", mutates: true, capability: "operate" },
+  { handler: "dashboard_sdk_keys_issue", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/sdk-keys$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_sdk_keys_retire", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/sdk-keys\/[^/]+\/retire$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_link_domain", method: "POST", pattern: /^\/dashboard\/link-domain$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_app_link_identity", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/link-identity$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_apple_registration", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/apple-registration$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_conversion_schema", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/conversion-schemas$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_rule_bundle", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/rule-bundles$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_google_data_manager", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/google-data-manager$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_app", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_apps_create", method: "POST", pattern: /^\/dashboard\/apps$/, auth: "dashboard_session", mutates: true, capability: "administer" },
 ] as const;

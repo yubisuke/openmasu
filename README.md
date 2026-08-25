@@ -165,6 +165,12 @@ docker compose logs bootstrap
 
 Open `http://localhost:8080/dashboard`, sign in with the generated admin key shown by the bootstrap log, select the application, and use **Create a tracking link**. The destination URL must use an origin in `OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST`; an unlisted origin remains rejected. An existing deployment must update its generated app runtime environment through its secret-management procedure and restart the API before a changed allowlist takes effect.
 
+## Manage apps, SDK keys, and provider configuration
+
+An administrator can use the same zero-JavaScript app page to issue a successor Android or iOS SDK key, retire the prior key, register a tenant link domain, and submit app-link, Apple app, conversion-schema, fraud-rule-bundle, and Google Data Manager configuration. A new SDK secret is shown exactly once; normal pages and list APIs expose only key metadata. Rotation permits at most two active keys, and the last active key cannot be retired. The overlap is an app-release-adoption window, not a short operations window: retire the old key only after the successor has reached the intended installed-app population.
+
+Tracking-link lifecycle operations are append-only. An active link may be paused or archived, a paused link may be archived, and an archived link is terminal. Non-active links continue to use the documented safe fallback instead of their configured destination. Administrators can perform every operation, operators can create/pause/archive tracking links, and read-only identities cannot mutate configuration. Dashboard mutations require the bound session CSRF token and same-origin request checks.
+
 ## Backfill aggregate MAX revenue
 
 OpenMasu can pull the AppLovin MAX Revenue Reporting API into a separate, append-only aggregate-revenue snapshot series. Set `OPENMASU_MAX_REPORT_KEY` or `OPENMASU_MAX_REPORT_KEY_FILE` in the private deployment environment, then run an inclusive UTC range within the provider's current 45-day request window:

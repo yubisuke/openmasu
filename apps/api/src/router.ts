@@ -45,10 +45,11 @@ import {
   verifyDashboardSession,
   type DashboardSession,
 } from "./session.js";
-import { createTrackingLink, listTrackingLinks, type TrackingLinkRecord } from "./tracking-links.js";
+import { createTrackingLink, listTrackingLinks, transitionTrackingLink, type TrackingLinkRecord } from "./tracking-links.js";
 import { registerAppLinkIdentity, registerLinkDomain } from "./link-domains.js";
 import { receiveGooglePlayRtdn, type GooglePlayRtdnReceiverDependencies } from "./google-play-rtdn-receiver.js";
 import { configureGoogleDataManagerDestination } from "./google-data-manager-admin.js";
+import { issueSdkKey, listSdkKeys, retireSdkKey } from "./sdk-auth.js";
 
 export const dashboardHeaders = {
   "content-security-policy": "default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
@@ -169,7 +170,7 @@ async function dashboardSessionFor(
 }
 
 function dashboardAppId(pathname: string): string | undefined {
-  const match = /^\/dashboard\/apps\/([^/]+)(?:\/(?:cohorts\.csv|differences|fraud|tracking-links))?$/.exec(pathname);
+  const match = /^\/dashboard\/apps\/([^/]+)(?:\/.*)?$/.exec(pathname);
   if (!match) return undefined;
   try {
     return decodeURIComponent(match[1]);
@@ -179,13 +180,42 @@ function dashboardAppId(pathname: string): string | undefined {
 }
 
 function adminAppId(pathname: string): string | undefined {
-  const match = /^\/v1\/admin\/apps\/([^/]+)\/(?:apple-registration|conversion-schemas|rule-bundles|link-identity|google-data-manager)$/.exec(pathname);
+  const match = /^\/v1\/admin\/apps\/([^/]+)(?:\/.*)?$/.exec(pathname);
   if (!match) return undefined;
   try {
     return decodeURIComponent(match[1]);
   } catch {
     return undefined;
   }
+}
+
+function decodedPathPart(pathname: string, pattern: RegExp): string | undefined {
+  const match = pattern.exec(pathname);
+  if (!match) return undefined;
+  try { return decodeURIComponent(match[1]); } catch { return undefined; }
+}
+
+function trackingLinkAction(pathname: string): { trackingLinkId: string; status: "paused" | "archived" } | undefined {
+  const match = /\/tracking-links\/([^/]+)\/(pause|archive)$/.exec(pathname);
+  if (!match) return undefined;
+  try {
+    return { trackingLinkId: decodeURIComponent(match[1]), status: match[2] === "pause" ? "paused" : "archived" };
+  } catch { return undefined; }
+}
+
+function sdkKeyId(pathname: string): string | undefined {
+  return decodedPathPart(pathname, /\/sdk-keys\/([^/]+)\/retire$/);
+}
+
+function jsonFormValue(body: URLSearchParams, name: string): unknown {
+  const value = body.get(name);
+  if (value === null || value.trim() === "") throw new Error(`${name}_required`);
+  return JSON.parse(value);
+}
+
+function publicReason(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : "";
+  return /^[a-z0-9_:-]{1,128}$/.test(message) ? message : fallback;
 }
 
 async function rejectDashboardCsrf(
@@ -297,6 +327,8 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
         dashboardHtml(response, 200, renderDashboard(buildDashboardView({
           apps,
           csrfToken: csrfToken(session.token),
+          canOperate: roleAllows(session.role, "operate"),
+          canAdminister: roleAllows(session.role, "administer"),
         })));
         return;
       }
@@ -386,7 +418,13 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
         return;
       }
 
-      if (["dashboard_app", "dashboard_export", "dashboard_differences", "dashboard_fraud", "dashboard_tracking_links_list", "dashboard_tracking_links_create", "dashboard_apps_create"].includes(route.handler)) {
+      if ([
+        "dashboard_app", "dashboard_export", "dashboard_differences", "dashboard_fraud",
+        "dashboard_tracking_links_list", "dashboard_tracking_links_create", "dashboard_tracking_link_transition",
+        "dashboard_sdk_keys_issue", "dashboard_sdk_keys_retire", "dashboard_link_domain",
+        "dashboard_app_link_identity", "dashboard_apple_registration", "dashboard_conversion_schema",
+        "dashboard_rule_bundle", "dashboard_google_data_manager", "dashboard_apps_create",
+      ].includes(route.handler)) {
         const session = await dashboardSessionFor(dependencies, request);
         if (!session) {
           dashboardHtml(response, 401, loginPage("Authentication required."));
@@ -422,9 +460,144 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
           return;
         }
 
+        if (route.handler === "dashboard_link_domain") {
+          const body = await formBody(request);
+          const host = body.get("host") ?? "";
+          if (!csrfOriginAccepted(request, dependencies.dashboard.publicBaseUrl)
+            || !verifyCsrfToken(session.token, body.get("csrf_token") ?? undefined)) {
+            await rejectDashboardCsrf(dependencies, response, session, "dashboard_link_domain_register", "tenant", session.tenantId);
+            return;
+          }
+          try {
+            await registerLinkDomain({ pool: dependencies.pool, identity: sessionIdentity, host });
+            response.writeHead(303, { ...dashboardHeaders, location: "/dashboard" }).end();
+          } catch (error) {
+            await recordDashboardAudit(dependencies.pool, {
+              tenantId: session.tenantId, actorRef: `admin_key:${session.adminKeyId}`,
+              action: "link_domain_registered", targetScope: "tenant", targetRef: host || "host:unrecognized",
+              outcome: "failed", reasonCode: error instanceof Error ? error.message : "link_domain_invalid",
+            });
+            dashboardHtml(response, 400, `<!doctype html><html lang="en"><body><h1>Link domain registration failed</h1><p>${escapeHtml(error instanceof Error ? error.message : "link_domain_invalid")}</p></body></html>`);
+          }
+          return;
+        }
+
         const appId = dashboardAppId(target.pathname) ?? "";
         try {
           const appIdentity = await requireRegisteredApp(dependencies.readerPool, sessionIdentity, appId);
+          if (route.handler === "dashboard_tracking_link_transition") {
+            const body = await formBody(request);
+            const action = trackingLinkAction(target.pathname);
+            if (!csrfOriginAccepted(request, dependencies.dashboard.publicBaseUrl)
+              || !verifyCsrfToken(session.token, body.get("csrf_token") ?? undefined)) {
+              await rejectDashboardCsrf(dependencies, response, session, "dashboard_tracking_link_transition", "tracking_link", action?.trackingLinkId ?? "tracking_link:unrecognized");
+              return;
+            }
+            try {
+              if (!action) throw new Error("tracking_link_action_invalid");
+              await transitionTrackingLink({
+                pool: dependencies.pool, tenantId: appIdentity.tenantId, appId: appIdentity.appId,
+                trackingLinkId: action.trackingLinkId, status: action.status,
+                actorRef: `admin_key:${session.adminKeyId}`,
+              });
+              response.writeHead(303, { ...dashboardHeaders, location: `/dashboard/apps/${encodeURIComponent(appIdentity.appId)}/tracking-links` }).end();
+            } catch (error) {
+              const reason = publicReason(error, "tracking_link_transition_failed");
+              await recordDashboardAudit(dependencies.pool, {
+                tenantId: appIdentity.tenantId, appId: appIdentity.appId,
+                actorRef: `admin_key:${session.adminKeyId}`, action: "tracking_link_transition",
+                targetScope: "tracking_link", targetRef: action?.trackingLinkId ?? "tracking_link:unrecognized",
+                outcome: "failed", reasonCode: reason,
+              });
+              dashboardHtml(response, reason === "tracking_link_not_found" ? 404 : 409, `<!doctype html><html lang="en"><body><h1>Tracking link transition failed</h1><p>${escapeHtml(reason)}</p></body></html>`);
+            }
+            return;
+          }
+          if (route.handler === "dashboard_sdk_keys_issue" || route.handler === "dashboard_sdk_keys_retire") {
+            const body = await formBody(request);
+            const targetKeyId = sdkKeyId(target.pathname);
+            if (!csrfOriginAccepted(request, dependencies.dashboard.publicBaseUrl)
+              || !verifyCsrfToken(session.token, body.get("csrf_token") ?? undefined)) {
+              await rejectDashboardCsrf(dependencies, response, session, "dashboard_sdk_key_mutation", "sdk_key", targetKeyId ?? "sdk_key:new");
+              return;
+            }
+            try {
+              if (route.handler === "dashboard_sdk_keys_issue") {
+                const platform = body.get("platform");
+                if (platform !== "android" && platform !== "ios") throw new Error("sdk_platform_invalid");
+                const issued = await issueSdkKey({
+                  pool: dependencies.pool, payloadStore: dependencies.payloadStore,
+                  scope: appIdentity, platform, actorRef: `admin_key:${session.adminKeyId}`,
+                });
+                dashboardHtml(response, 201, `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>SDK key issued</title><link rel="stylesheet" href="/dashboard/app.css"></head><body><main><h1>SDK key issued</h1><p>Copy this secret now. It cannot be retrieved again.</p><dl><dt>SDK key ID</dt><dd>${escapeHtml(issued.sdk_key_id)}</dd><dt>SDK key</dt><dd><code>${escapeHtml(issued.sdk_key)}</code></dd><dt>Platform</dt><dd>${escapeHtml(issued.platform)}</dd></dl><p><a href="/dashboard/apps/${encodeURIComponent(appIdentity.appId)}">Return to the app dashboard</a></p></main></body></html>`);
+              } else {
+                if (!targetKeyId) throw new Error("sdk_key_not_found");
+                const retired = await retireSdkKey({
+                  pool: dependencies.pool, scope: appIdentity, sdkKeyId: targetKeyId,
+                  actorRef: `admin_key:${session.adminKeyId}`,
+                });
+                response.writeHead(303, { ...dashboardHeaders, location: `/dashboard/apps/${encodeURIComponent(appIdentity.appId)}` }).end();
+              }
+            } catch (error) {
+              const reason = publicReason(error, "sdk_key_lifecycle_failed");
+              await recordDashboardAudit(dependencies.pool, {
+                tenantId: appIdentity.tenantId, appId: appIdentity.appId,
+                actorRef: `admin_key:${session.adminKeyId}`, action: "sdk_key_lifecycle",
+                targetScope: "sdk_key", targetRef: targetKeyId ?? "sdk_key:new",
+                outcome: "failed", reasonCode: reason,
+              });
+              dashboardHtml(response, reason === "sdk_key_not_found" ? 404 : 409, `<!doctype html><html lang="en"><body><h1>SDK key operation failed</h1><p>${escapeHtml(reason)}</p></body></html>`);
+            }
+            return;
+          }
+          if (["dashboard_app_link_identity", "dashboard_apple_registration", "dashboard_conversion_schema", "dashboard_rule_bundle", "dashboard_google_data_manager"].includes(route.handler)) {
+            const body = await formBody(request);
+            if (!csrfOriginAccepted(request, dependencies.dashboard.publicBaseUrl)
+              || !verifyCsrfToken(session.token, body.get("csrf_token") ?? undefined)) {
+              await rejectDashboardCsrf(dependencies, response, session, "dashboard_configuration", "app", appIdentity.appId);
+              return;
+            }
+            const form = Object.fromEntries(body);
+            try {
+              if (route.handler === "dashboard_app_link_identity") {
+                await registerAppLinkIdentity({
+                  pool: dependencies.pool, identity: appIdentity,
+                  body: {
+                    ...(form.android_package_name ? { android_package_name: form.android_package_name } : {}),
+                    ...(form.android_sha256_fingerprints ? { android_sha256_fingerprints: form.android_sha256_fingerprints.split(",").map((value) => value.trim()).filter(Boolean) } : {}),
+                    ...(form.apple_team_id ? { apple_team_id: form.apple_team_id } : {}),
+                    ...(form.apple_bundle_id ? { apple_bundle_id: form.apple_bundle_id } : {}),
+                  },
+                });
+              } else if (route.handler === "dashboard_apple_registration") {
+                await registerAppleApp({ pool: dependencies.pool, identity: appIdentity,
+                  appleAppAdamId: form.apple_app_adam_id, appleBundleId: form.apple_bundle_id || undefined });
+              } else if (route.handler === "dashboard_conversion_schema") {
+                await registerConversionSchema({ pool: dependencies.pool, identity: appIdentity,
+                  schemaVersion: form.schema_version, definition: jsonFormValue(body, "definition_json") });
+              } else if (route.handler === "dashboard_rule_bundle") {
+                await activateRuleBundle({ pool: dependencies.pool, identity: appIdentity, body: jsonFormValue(body, "definition_json") as Record<string, unknown> });
+              } else {
+                await configureGoogleDataManagerDestination({ pool: dependencies.pool, identity: appIdentity, body: {
+                  operating_account_id: form.operating_account_id,
+                  conversion_action_id: form.conversion_action_id,
+                  enabled: form.enabled === "true",
+                  app_audience: form.app_audience,
+                } });
+              }
+              response.writeHead(303, { ...dashboardHeaders, location: `/dashboard/apps/${encodeURIComponent(appIdentity.appId)}` }).end();
+            } catch (error) {
+              const reason = publicReason(error, "admin_configuration_invalid");
+              await recordDashboardAudit(dependencies.pool, {
+                tenantId: appIdentity.tenantId, appId: appIdentity.appId,
+                actorRef: `admin_key:${session.adminKeyId}`, action: "dashboard_configuration",
+                targetScope: "app", targetRef: appIdentity.appId,
+                outcome: "failed", reasonCode: reason,
+              });
+              dashboardHtml(response, 400, `<!doctype html><html lang="en"><body><h1>Configuration failed</h1><p>${escapeHtml(reason)}</p></body></html>`);
+            }
+            return;
+          }
           if (route.handler === "dashboard_tracking_links_create") {
             const body = await formBody(request);
             if (!csrfOriginAccepted(request, dependencies.dashboard.publicBaseUrl)
@@ -496,6 +669,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
           const apps = await listApps(dependencies.readerPool, sessionIdentity);
           const trackingLinks = (await listTrackingLinks(dependencies.readerPool, appIdentity.tenantId, appIdentity.appId))
             .map((link) => listedTrackingLink(dependencies.redirectorBaseUrl, link));
+          const sdkKeys = await listSdkKeys(dependencies.readerPool, appIdentity);
           const metrics = await metricReport(dependencies.readerPool, appIdentity, parsed.query);
           const effectiveWatermark = parsed.query.watermarkAtMost
             ?? metrics.data.map((row) => row.input_received_at_watermark).sort().at(-1);
@@ -514,6 +688,9 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             records: route.handler === "dashboard_differences" || route.handler === "dashboard_tracking_links_list" ? [] : records,
             differences: storedDifferences,
             trackingLinks,
+            sdkKeys,
+            canOperate: roleAllows(session.role, "operate"),
+            canAdminister: roleAllows(session.role, "administer"),
             csrfToken: csrfToken(session.token),
           })));
         } catch (error) {
@@ -586,6 +763,48 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             json(response, error instanceof Error && error.message === "app_already_registered" ? 409 : 400, {
               error: error instanceof Error ? error.message : "app_registration_failed",
             });
+          }
+          return;
+        }
+        if (route.handler === "admin_sdk_keys_list" || route.handler === "admin_sdk_keys_issue" || route.handler === "admin_sdk_keys_retire") {
+          const appId = adminAppId(target.pathname) ?? "";
+          try {
+            const appIdentity = await requireRegisteredApp(pool, identity, appId);
+            if (route.handler === "admin_sdk_keys_list") {
+              json(response, 200, { data: await listSdkKeys(pool, appIdentity) });
+              return;
+            }
+            if (route.handler === "admin_sdk_keys_issue") {
+              const body = await jsonBody(request);
+              const platform = body.platform;
+              if (platform !== "android" && platform !== "ios") throw new Error("sdk_platform_invalid");
+              const issued = await issueSdkKey({
+                pool: dependencies.pool, payloadStore: dependencies.payloadStore,
+                scope: appIdentity, platform, actorRef: `admin_key:${identity.keyId}`,
+              });
+              json(response, 201, issued);
+              return;
+            }
+            const targetKeyId = sdkKeyId(target.pathname);
+            if (!targetKeyId) throw new Error("sdk_key_not_found");
+            const retired = await retireSdkKey({
+              pool: dependencies.pool, scope: appIdentity, sdkKeyId: targetKeyId,
+              actorRef: `admin_key:${identity.keyId}`,
+            });
+            json(response, 200, retired);
+          } catch (error) {
+            if (error instanceof AppNotFoundError || (error instanceof Error && error.message === "sdk_key_not_found")) {
+              json(response, 404, { error: "not_found" });
+            } else {
+              const reason = publicReason(error, "sdk_key_lifecycle_failed");
+              await recordDashboardAudit(dependencies.pool, {
+                tenantId: identity.tenantId, appId,
+                actorRef: `admin_key:${identity.keyId}`, action: "sdk_key_lifecycle",
+                targetScope: "sdk_key", targetRef: sdkKeyId(target.pathname) ?? "sdk_key:new",
+                outcome: "failed", reasonCode: reason,
+              });
+              json(response, 409, { error: reason });
+            }
           }
           return;
         }
@@ -732,6 +951,34 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
           } catch (error) {
             const status = error instanceof Error && error.message === "app_not_found" ? 404 : 400;
             json(response, status, { error: status === 404 ? "app_not_found" : error instanceof Error ? error.message : "tracking_link_invalid" });
+          }
+          return;
+        }
+        if (route.handler === "admin_tracking_link_transition") {
+          try {
+            const appIdentity = await requireRegisteredApp(dependencies.pool, identity, adminAppId(target.pathname) ?? "");
+            const action = trackingLinkAction(target.pathname);
+            if (!action) throw new Error("tracking_link_action_invalid");
+            json(response, 200, await transitionTrackingLink({
+              pool: dependencies.pool, tenantId: appIdentity.tenantId, appId: appIdentity.appId,
+              trackingLinkId: action.trackingLinkId, status: action.status,
+              actorRef: `admin_key:${identity.keyId}`,
+            }));
+          } catch (error) {
+            if (error instanceof AppNotFoundError || (error instanceof Error && error.message === "tracking_link_not_found")) {
+              json(response, 404, { error: "not_found" });
+            } else {
+              const reason = publicReason(error, "tracking_link_transition_failed");
+              const appId = adminAppId(target.pathname) ?? "";
+              const action = trackingLinkAction(target.pathname);
+              await recordDashboardAudit(dependencies.pool, {
+                tenantId: identity.tenantId, appId,
+                actorRef: `admin_key:${identity.keyId}`, action: "tracking_link_transition",
+                targetScope: "tracking_link", targetRef: action?.trackingLinkId ?? "tracking_link:unrecognized",
+                outcome: "failed", reasonCode: reason,
+              });
+              json(response, 409, { error: reason });
+            }
           }
           return;
         }
