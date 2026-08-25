@@ -760,9 +760,21 @@ describe("M2a signed SDK ingestion", () => {
          AND result.purchase_kind='subscription_renewal' AND result.verdict='verified'`,
       [tenantId, appId],
     )).rowCount), 1);
+    assert.deepEqual(await processCommerceReadbacks(pool, payloadStore, tenantId, {
+      now: new Date(Date.now() + 150_000),
+      googleClient: async ({ operation }) => {
+        assert.equal(operation, "subscription");
+        return { status: 200, body: Buffer.from(JSON.stringify({
+          subscriptionState: "SUBSCRIPTION_STATE_ACTIVE",
+        })) };
+      },
+    }), { processed: 2, deferred: 0, failed: 0 },
+    "each distinct authenticated RTDN delivery must complete its own state read-back");
   });
 
   it("WO19 reads a voided order authoritatively and records its exact refund once", async () => {
+    const partialRefundAt = new Date(Date.now() - 60_000).toISOString();
+    const fullRefundAt = new Date(Date.now() - 30_000).toISOString();
     const messageId = `synthetic-rtdn-void-${run}`;
     const envelope = rtdnEnvelopeFor(messageId, {
       voidedPurchaseNotification: {
@@ -790,13 +802,13 @@ describe("M2a signed SDK ingestion", () => {
           orderId: verifiedRenewalOrderId,
           orderHistory: { partialRefundEvents: [{
             state: "PROCESSED_SUCCESSFULLY",
-            processTime: "2026-10-01T00:00:00.000Z",
+            processTime: partialRefundAt,
             refundDetails: { total: { currencyCode: "JPY", units: "120", nanos: 0 } },
           }] },
         })) };
       },
     });
-    assert.deepEqual(outcome, { processed: 2, deferred: 0, failed: 0 });
+    assert.deepEqual(outcome, { processed: 1, deferred: 0, failed: 0 });
     assert.deepEqual(await processCommerceReadbacks(pool, payloadStore, tenantId, {
       now: new Date(Date.now() + 240_000), googleClient: async () => { throw new Error("must not repeat"); },
     }), { processed: 0, deferred: 0, failed: 0 });
@@ -820,7 +832,7 @@ describe("M2a signed SDK ingestion", () => {
       now: new Date(Date.now() + 300_000),
       googleClient: async () => ({ status: 200, body: Buffer.from(JSON.stringify({
         orderId: verifiedRenewalOrderId,
-        orderHistory: { refundEvent: { eventTime: "2026-10-02T00:00:00.000Z",
+        orderHistory: { refundEvent: { eventTime: fullRefundAt,
           refundDetails: { total: { currencyCode: "JPY", units: "920", nanos: 0 } } } },
       })) }),
     });
@@ -1411,8 +1423,10 @@ describe("M2a signed SDK ingestion", () => {
             AND raw.record_id=rejection.record_id
           WHERE rejection.tenant_id=$1 AND rejection.app_id=$2
             AND rejection.reason_code='refund_target_invalid'
+            AND raw.event_id=ANY($3::text[])
           ORDER BY rejection.record_id`,
-        [tenantId, appId],
+        [tenantId, appId, [mismatchedRefund.event_id, overRefund.event_id, precedingRefund.event_id,
+          ambiguousRefund.event_id, missingRefund.event_id]],
       )).rows,
     }));
     assert.equal(evidence.purchase.processing_purpose_id, "revenue_measurement");
