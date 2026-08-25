@@ -4,6 +4,12 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Dependabot cannot run npm updates while this repository's exact Node.js
+    # and npm pins are enforced by engine-strict. Keep the pins authoritative
+    # and review routine npm version updates manually until the updater can use
+    # the declared toolchain. A limit of zero disables version updates without
+    # removing this ecosystem's security-update customization.
+    open-pull-requests-limit: 0
     ignore:
       # 2.0.1 is missing its published bundles and type declarations. Upgrade
       # manually after upstream publishes and verifies a repaired release.
