@@ -1683,6 +1683,51 @@ describe("M2a signed SDK ingestion", () => {
     )).rowCount), 0);
   });
 
+  it("WO20 returns a subject-scoped portable response without protected payload material", async () => {
+    const before = await withTenant(pool, tenantId, async (client) => Number((await client.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM ledger.privacy_requests WHERE tenant_id=$1 AND app_id=$2",
+      [tenantId, appId],
+    )).rows[0].count));
+    const response = await signed("/v1/privacy/access", {
+      installation_id: installationId,
+      request_type: "portability",
+    }, { secret: installationSecret, installationKeyId });
+    const text = await response.text();
+    assert.equal(response.status, 200, text);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    const artifact = JSON.parse(text) as Record<string, any>;
+    assert.equal(artifact.request_type, "portability");
+    assert.equal(artifact.subject_scope, "installation");
+    assert.ok(artifact.records.length > 0);
+    assert.match(JSON.stringify(artifact), /device_reported_unverified/);
+    for (const forbidden of [
+      "raw_payload_ref", "raw_query_ref", "body_ref", "installation_id", "transaction_id",
+      "purchase_token", "tracking_link_id", "deep_link_value",
+    ]) assert.doesNotMatch(JSON.stringify(artifact), new RegExp(forbidden));
+
+    const other = await signed("/v1/privacy/access", {
+      installation_id: `installation:other-dsar-${run}`,
+      request_type: "access",
+    }, { secret: installationSecret, installationKeyId });
+    assert.equal(other.status, 403);
+    const evidence = await withTenant(pool, tenantId, async (client) => ({
+      privacyRows: Number((await client.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM ledger.privacy_requests WHERE tenant_id=$1 AND app_id=$2",
+        [tenantId, appId],
+      )).rows[0].count),
+      audits: (await client.query<{ outcome: string; reason_code: string | null }>(
+        `SELECT outcome,reason_code FROM ledger.audit_logs
+          WHERE tenant_id=$1 AND app_id=$2 AND action='privacy_access'
+          ORDER BY occurred_at`, [tenantId, appId],
+      )).rows,
+    }));
+    assert.equal(evidence.privacyRows, before, "subject access must not reuse the deletion ledger");
+    assert.deepEqual(evidence.audits.slice(-2), [
+      { outcome: "succeeded", reason_code: null },
+      { outcome: "failed", reason_code: "installation_scope_mismatch" },
+    ]);
+  });
+
   it("authorises on-device deletion only for the credential's own installation", async () => {
     const secondId = `installation:other-${run}`;
     const secondResponse = await signed("/v1/installations", { installation_id: secondId });

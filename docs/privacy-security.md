@@ -100,7 +100,9 @@ Before implementation, legal and operational requirements must validate these de
 - Privacy tombstones retain plaintext `reason_code` and `policy_version`. Their `provenance_digest` is a tamper-evident SHA-256/JCS anchor over tenant, app, privacy request, record, and completion time; it is not a secrecy mechanism.
 - Retention expiry follows the same tombstone and immutable recalculation path without creating a privacy request. Replacement metric runs are marked `retention_affected`.
 - Request state is `received | processing | completed | failed`.
-- M3 CSV and dashboard exports are aggregate operator reports. They are not data-subject access or portability exports and must never be presented as such. A DSAR access/portability contract remains a separate open design item.
+- M3 CSV and dashboard exports are aggregate operator reports. They are not data-subject access or portability exports and must never be presented as such.
+- Subject access and portability use the separate `POST /v1/privacy/access` route. The route requires the installation credential and an exact digest match for that installation; tenant and app scope come only from the authenticated principal. The synchronous `internal-v1` response is not retained and contains only allowlisted normalized facts with opaque scoped references. Raw payloads, protected references, provider credentials, transaction identifiers, link slugs and free-form deep-link parameters are excluded.
+- Access and portability do not revoke the installation credential, purge evidence, or write to the deletion ledger. A digest-only success or failure audit is retained for the audit-record period above. Deletion continues to use its separate request lifecycle and tombstone path.
 
 ## Authentication and secrets
 

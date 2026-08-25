@@ -115,6 +115,8 @@ The bootstrap service generates local secrets, migrations run automatically, and
 
 The API and dashboard listen on `http://localhost:8080` (`/dashboard` for the login page), and the portable redirector listens on `http://localhost:8090`. `npm run bootstrap` prints the local admin key once; paste it into the dashboard login form. Dashboard reports are aggregate operator views, not data-subject exports. Tracking links are created through the authenticated management route; request query parameters and headers can never override their stored destinations. SDK enrollment and event delivery use the HMAC signing string fixed in [M2 Design Baseline](docs/design/m2-baseline.md).
 
+Subject access and portability are deliberately separate from dashboard reporting. An enrolled installation can sign `POST /v1/privacy/access` with its installation credential and a body containing its own `installation_id` plus `request_type: "access"` or `"portability"`. The response contains only allowlisted normalized facts and opaque scoped references; it is returned with `Cache-Control: no-store` and is not a raw-payload export. Deletion remains a separate operation at `POST /v1/privacy/on-device`.
+
 An abridged clean-start output makes the two origins explicit:
 
 ```json
