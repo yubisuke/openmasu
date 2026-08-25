@@ -20,17 +20,17 @@ The rule is intentionally asymmetric: a provider signal may make state newer, bu
 
 The public Pub/Sub endpoint verifies Google's OIDC JWT, resolves the registered Android package without request-provided tenant scope, enforces a closed RTDN shape, encrypts the decoded provider body, and records a deployment-global notification digest. All documented subscription notification types are retained as non-financial lifecycle facts. Subscription state is re-read with `purchases.subscriptionsv2.get`. Voided or partially refunded orders are re-read with `orders.get`; only processed refund-history amounts are normalized.
 
-The read-back queue is durable, tenant-scoped, retry-bounded, exponential-backoff controlled, and idempotent. A 429 or 5xx retains work. A permanent non-200 response terminates the item without creating money. Historical rows created before verified order bindings existed may require an operator reconciliation because OpenMasu deliberately does not retain raw order IDs in ledger artifacts.
+The read-back queue is durable, tenant-scoped, retry-bounded, exponential-backoff controlled, and idempotent. A 429 or 5xx retains work until the bounded terminal attempt; terminal exhaustion appends a safe `readback_failed` fact before removing queue work. A permanent non-200 response terminates the item without creating money. Refund history is checked cumulatively against the verified purchase amount, so multiple full/partial entries cannot subtract more than the original purchase. Historical rows created before verified order bindings existed may require an operator reconciliation because OpenMasu deliberately does not retain raw order IDs in ledger artifacts.
 
 ## App Store path
 
-The App Store Server Notifications V2 endpoint uses the unverified outer payload only to find a pre-registered bundle/app pair. It then verifies the outer JWS and every nested transaction or renewal JWS against a configured Apple root fingerprint, certificate validity, ES256, environment, bundle, and App Apple ID scope. The notification UUID is the replay boundary. The full signed payload stays encrypted.
+The App Store Server Notifications V2 endpoint uses the unverified outer payload only to find a pre-registered bundle/app pair. Production requires the App Apple ID; Sandbox, where that field may be absent, resolves only an unambiguous deployment-registered bundle. It then verifies the outer JWS and every nested transaction or renewal JWS against a configured Apple root fingerprint, certificate validity, ES256, environment, bundle, and App Apple ID scope. The notification UUID is the replay boundary. The full signed payload stays encrypted.
 
 The worker calls transaction history or refund history with a short-lived ES256 App Store Server API token. Revision cursors are encrypted and processed in ascending order. Every returned signed transaction is verified again before a safe lifecycle fact is appended. Store transaction identifiers are stored only as SHA-256 digests. This repository does not contain Apple credentials, production roots, transaction identifiers, or live App Store evidence.
 
 ## Privacy, retention, and observability
 
-Installation-, app-, and tenant-scope deletion purges matching notification and cursor ciphertext. Append-only safe facts retain digests only where the deletion policy permits. The worker emits a bounded `commerce_readback_cycle` structured record containing only tenant scope and counts. No token, order ID, transaction ID, signed payload, provider body, credential, IP address, or User-Agent is logged or emitted in public artifacts.
+Installation-, app-, and tenant-scope deletion purges matching notification and cursor ciphertext. Purchase bindings retain only a tenant/app-scoped installation digest, never the installation identifier. Append-only safe facts retain digests only where the deletion policy permits. The worker emits a bounded `commerce_readback_cycle` structured record containing only tenant scope and counts. No token, order ID, transaction ID, signed payload, provider body, credential, IP address, or User-Agent is logged or emitted in public artifacts.
 
 ## Residual boundary
 
@@ -39,4 +39,3 @@ Installation-, app-, and tenant-scope deletion purges matching notification and 
 - App Store transactions are retained as verified lifecycle evidence, but installation-level revenue requires a separate host-owned binding that is not inferred from Apple identifiers.
 - Current Google subscription state is authoritative at read time; a latest-state response alone cannot reconstruct every missed intermediate renewal.
 - Entitlement, acknowledgement, tax, payout, and customer-support workflows are outside this measurement component.
-
