@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:event-install:v0.2",
-  "title": "Open MMP Install Event v0.2",
+  "$id": "urn:open-mmp:schema:event-install:v0.3",
+  "title": "Open MMP Install Event v0.3",
   "type": "object",
   "additionalProperties": false,
   "required": ["event_name", "installation_id", "referrer_status", "install_type"],
@@ -10,8 +10,11 @@
     "installation_id": { "$ref": "../common.schema.json#/$defs/id" },
     "prior_installation_id": { "$ref": "../common.schema.json#/$defs/id" },
     "install_type": { "enum": ["first_install", "reinstall", "redownload"] },
+    "install_origin": { "enum": ["play_first_launch", "ios_first_launch", "identifier_reset"], "default": "play_first_launch" },
     "click_id": { "$ref": "../common.schema.json#/$defs/clickId" },
-    "referrer_status": { "enum": ["available", "none", "unsupported", "unavailable"] },
+    "referrer_status": { "enum": ["available", "third_party", "none", "unsupported", "unavailable", "not_applicable"] },
+    "third_party_referrer_classification": { "enum": ["play_organic_marker", "foreign"] },
+    "referrer_client_response": { "enum": ["ok", "service_unavailable", "feature_not_supported", "developer_error", "service_disconnected", "permission_error"] },
     "protected_referrer_evidence_ref": { "type": "string" },
     "referrer_click_at_device": { "$ref": "../common.schema.json#/$defs/dateTime" },
     "referrer_click_at_server": { "$ref": "../common.schema.json#/$defs/dateTime" },
@@ -26,13 +29,24 @@
     "sdk_version": { "type": "string", "minLength": 1, "maxLength": 128 },
     "ad_tracking_limited": { "type": "boolean" },
     "attribution_confirmed_at": { "$ref": "../common.schema.json#/$defs/dateTime" },
-    "meta_referrer_status": { "enum": ["decrypted", "decrypt_failed", "absent"] },
+    "meta_referrer_status": { "enum": ["provider_unavailable", "app_version_unsupported", "no_campaign_data", "decrypt_failed", "auth_failed", "decrypted"] },
+    "is_ct": { "type": "integer", "enum": [0, 1] },
+    "actual_timestamp": { "type": "integer", "minimum": 0 },
     "meta_referrer_context": {
       "type": "object",
       "additionalProperties": false,
       "required": ["attribution_model"],
       "properties": {
-        "attribution_model": { "enum": ["last_click", "view_through"] }
+        "attribution_model": { "enum": ["last_click", "view_through"] },
+        "campaign_group_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "campaign_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "adgroup_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "ad_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "account_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "ad_objective_name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "is_instagram": { "type": "boolean" },
+        "publisher_platform": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "platform_position": { "type": "string", "minLength": 1, "maxLength": 128 }
       }
     },
     "adservices_context": {
@@ -40,7 +54,7 @@
       "additionalProperties": false,
       "required": ["status", "attribution"],
       "properties": {
-        "status": { "enum": ["attributed", "token_expired"] },
+        "status": { "enum": ["attributed", "token_expired", "not_attributed", "lookup_unavailable"] },
         "attribution": { "type": "boolean" },
         "org_id": { "type": "string", "pattern": "^[0-9]+$" },
         "campaign_id": { "type": "string", "pattern": "^[0-9]+$" },
@@ -61,6 +75,10 @@
         },
         {
           "if": { "properties": { "status": { "const": "token_expired" } }, "required": ["status"] },
+          "then": { "properties": { "attribution": { "const": false } } }
+        },
+        {
+          "if": { "properties": { "status": { "enum": ["not_attributed", "lookup_unavailable"] } }, "required": ["status"] },
           "then": { "properties": { "attribution": { "const": false } } }
         }
       ]
@@ -93,19 +111,33 @@
       }
     },
     {
-      "if": { "properties": { "meta_referrer_status": { "enum": ["decrypted", "decrypt_failed"] } }, "required": ["meta_referrer_status"] },
+      "if": { "properties": { "meta_referrer_status": { "const": "decrypted" } }, "required": ["meta_referrer_status"] },
       "then": {
-        "properties": { "meta_referrer_context": {} },
+        "properties": { "meta_referrer_context": {}, "is_ct": {}, "actual_timestamp": {} },
         "required": ["meta_referrer_context"]
       }
     },
     {
-      "if": { "properties": { "meta_referrer_status": { "const": "absent" } }, "required": ["meta_referrer_status"] },
+      "if": { "properties": { "meta_referrer_status": { "enum": ["provider_unavailable", "app_version_unsupported", "no_campaign_data", "decrypt_failed", "auth_failed"] } }, "required": ["meta_referrer_status"] },
       "then": {
         "not": {
-          "properties": { "meta_referrer_context": {} },
-          "required": ["meta_referrer_context"]
+          "anyOf": [
+            { "properties": { "meta_referrer_context": {} }, "required": ["meta_referrer_context"] },
+            { "properties": { "is_ct": {} }, "required": ["is_ct"] },
+            { "properties": { "actual_timestamp": {} }, "required": ["actual_timestamp"] }
+          ]
         }
+      }
+    },
+    {
+      "if": { "properties": { "referrer_status": { "const": "third_party" } }, "required": ["referrer_status"] },
+      "then": {
+        "properties": { "third_party_referrer_classification": {} },
+        "required": ["third_party_referrer_classification"],
+        "not": { "properties": { "click_id": {} }, "required": ["click_id"] }
+      },
+      "else": {
+        "not": { "properties": { "third_party_referrer_classification": {} }, "required": ["third_party_referrer_classification"] }
       }
     }
   ]

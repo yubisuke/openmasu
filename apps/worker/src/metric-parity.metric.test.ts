@@ -10,7 +10,7 @@ import { computeSqlMetricRuns, computeSqlMetricRunsWithClient } from "./metrics/
 
 type Any = Record<string, any>;
 const fixtureName = "33-stage-b-cohort-metrics";
-const fixtureDirectory = join(process.cwd(), "fixtures", "v0.2", fixtureName);
+const fixtureDirectory = join(process.cwd(), "fixtures", "v0.3", fixtureName);
 const input: Any = JSON.parse(readFileSync(join(fixtureDirectory, "input.json"), "utf8"));
 const goldenPath = join(fixtureDirectory, "expected_metric_runs.json");
 const goldenBefore = readFileSync(goldenPath);
@@ -44,7 +44,7 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
       const result = await client.query<{ artifact: Any }>(
         `SELECT artifact FROM ledger.metric_runs
          WHERE tenant_id=$1 AND app_id=$2 AND metric_run_id = ANY($3::text[])
-         ORDER BY metric_run_id`,
+         ORDER BY metric_run_id COLLATE "C"`,
         [scope.tenant_id, scope.app_id, ids],
       );
       return result.rows.map((row) => row.artifact);
@@ -57,10 +57,17 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
   });
 
   it("B2 SQL cohort metric_runs are JCS-byte-identical to evaluator", () => {
-    assert.equal(sqlRuns.length, 7);
+    assert.equal(oracle.length, 8);
+    assert.equal(sqlRuns.length, oracle.length);
+    assert.equal(sqlRuns.length, golden.length);
     assert.equal(Buffer.compare(Buffer.from(jcs(oracle)), Buffer.from(jcs(golden))), 0);
     assert.equal(Buffer.compare(Buffer.from(jcs(sqlRuns)), Buffer.from(jcs(oracle))), 0);
     assert.equal(Buffer.compare(Buffer.from(jcs(persistedRuns)), Buffer.from(jcs(oracle))), 0);
+
+    const organicRoas = sqlRuns.find((run) => run.metric_run_id === "run-33-organic:d1_roas");
+    assert.equal(organicRoas?.value_state, "undefined");
+    assert.equal(organicRoas?.undefined_reason, "no_attributed_cost");
+    assert.equal("value_unscaled" in (organicRoas ?? {}), false);
   });
 
   it("B3 half_even_div matches TypeScript tie vectors", async () => {
@@ -164,7 +171,9 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
     const expected = evaluate(mutation).metric_runs;
     const actual = await computeSqlMetricRuns(appPool, mutation, false);
     assert.equal(jcs(actual), jcs(expected));
-    assert.equal(actual[0]?.value_unscaled, "0");
+    const cohortSize = actual.find((run) =>
+      run.metric_run_id === "run-33-late-install:cohort_install_count");
+    assert.equal(cohortSize?.value_unscaled, "0");
   });
 
   it("B2 excludes event conflicts from snapshot and cohort values", async () => {
@@ -295,7 +304,7 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
       },
     ];
     mutation.privacy_requests = [{
-      contract_version: "0.2.1",
+      contract_version: "0.3.0",
       tenant_id: input.server_context.tenant_id,
       app_id: input.server_context.app_id,
       privacy_request_id: "privacy:redaction-33",
@@ -337,7 +346,7 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
   it("B8 persists undefined ROAS with an explicit reason", async () => {
     const undefinedFixture = "37-undefined-organic-roas";
     const undefinedInput: Any = JSON.parse(readFileSync(
-      join(process.cwd(), "fixtures", "v0.2", undefinedFixture, "input.json"),
+      join(process.cwd(), "fixtures", "v0.3", undefinedFixture, "input.json"),
       "utf8",
     ));
     await ingestFixture(fixtureName, undefinedInput, appPool, seedPool);
@@ -358,5 +367,250 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
       undefined_reason: "no_attributed_cost",
       value_unscaled: null,
     });
+  });
+
+  it("C13 reproduces reviewed daily click and install runs without ledger sequence input", async () => {
+    const dailyFixture = "42-daily-metric-date";
+    const dailyDirectory = join(process.cwd(), "fixtures", "v0.3", dailyFixture);
+    const dailyInput: Any = JSON.parse(readFileSync(join(dailyDirectory, "input.json"), "utf8"));
+    const dailyGolden: Any[] = JSON.parse(readFileSync(
+      join(dailyDirectory, "expected_metric_runs.json"),
+      "utf8",
+    ));
+    await ingestFixture(dailyFixture, dailyInput, appPool, seedPool);
+    const expected = evaluate(dailyInput).metric_runs;
+    const first = await computeSqlMetricRuns(appPool, dailyInput, false);
+    const firstSequence = await withTenant(appPool, dailyInput.server_context.tenant_id, async (client) =>
+      (await client.query<{ value: string }>("SELECT max(ledger_seq)::text AS value FROM ledger.raw_records")).rows[0].value);
+    assert.equal(jcs(expected), jcs(dailyGolden));
+    assert.equal(jcs(first), jcs(expected));
+    assert.equal(first.find((run) => run.metric_name === "daily_click_count")?.value_unscaled, "1");
+    assert.equal(first.find((run) => run.metric_name === "daily_install_count")?.value_unscaled, "1");
+
+    await ingestFixture(dailyFixture, dailyInput, appPool, seedPool);
+    const secondSequence = await withTenant(appPool, dailyInput.server_context.tenant_id, async (client) =>
+      (await client.query<{ value: string }>("SELECT max(ledger_seq)::text AS value FROM ledger.raw_records")).rows[0].value);
+    const second = await computeSqlMetricRuns(appPool, dailyInput, false);
+    assert.notEqual(secondSequence, firstSequence);
+    assert.equal(jcs(second), jcs(first));
+    assert.deepEqual(
+      second.map((run) => [run.input_snapshot_id, run.grouping.dimension_digest]),
+      first.map((run) => [run.input_snapshot_id, run.grouping.dimension_digest]),
+    );
+  });
+
+  it("C13 applies the UTC calendar day as a lower-inclusive, upper-exclusive window", async () => {
+    const dailyFixture = "42-daily-metric-date-boundary";
+    const source: Any = JSON.parse(readFileSync(
+      join(process.cwd(), "fixtures", "v0.3", "42-daily-metric-date", "input.json"),
+      "utf8",
+    ));
+    const click = source.records.find((record: Any) => record.event_name === "click");
+    const variants = [
+      ["lower", "2026-08-20T00:00:00.000Z"],
+      ["last", "2026-08-20T23:59:59.999Z"],
+      ["upper", "2026-08-21T00:00:00.000Z"],
+    ].map(([label, timestamp], index) => ({
+      ...structuredClone(click),
+      record_id: `click-42-${label}`,
+      delivery_id: `delivery:click-42-${label}`,
+      event_id: `event:click-42-${label}`,
+      occurred_at: timestamp,
+      received_at: "2026-08-21T00:00:00.000Z",
+      processing_sequence: 10 + index,
+      payload: {
+        ...structuredClone(click.payload),
+        click_id: `click-42-${label}_0000000000000000`,
+        redirector_click_at: timestamp,
+      },
+    }));
+    source.records.push(...variants);
+    source.metric_evaluations = [{
+      ...source.metric_evaluations[0],
+      metric_run_id_prefix: "run-42-boundary",
+    }];
+    await ingestFixture(dailyFixture, source, appPool, seedPool);
+    const expected = evaluate(source).metric_runs;
+    const actual = await computeSqlMetricRuns(appPool, source, false);
+    assert.equal(jcs(actual), jcs(expected));
+    assert.equal(actual[0].value_unscaled, "3");
+  });
+
+  it("C13 separates and sums organic, non-organic, and unattributed installs", async () => {
+    const fixture = "42-daily-attribution-status";
+    const daily: Any = JSON.parse(readFileSync(
+      join(process.cwd(), "fixtures", "v0.3", "42-daily-metric-date", "input.json"),
+      "utf8",
+    ));
+    const paid: Any = JSON.parse(readFileSync(
+      join(process.cwd(), "fixtures", "v0.3", "01-valid-install-referrer", "input.json"),
+      "utf8",
+    ));
+    const unknown: Any = JSON.parse(readFileSync(
+      join(process.cwd(), "fixtures", "v0.3", "03-unknown-click", "input.json"),
+      "utf8",
+    ));
+    const paidClick = structuredClone(paid.records.find((record: Any) => record.event_name === "click"));
+    Object.assign(paidClick, {
+      record_id: "click-42-paid",
+      delivery_id: "delivery:click-42-paid",
+      event_id: "event:click-42-paid",
+      occurred_at: "2026-08-20T01:00:00.000Z",
+      received_at: "2026-08-20T01:00:01.000Z",
+      processing_sequence: 20,
+    });
+    Object.assign(paidClick.payload, {
+      click_id: "click-42-paid_0000000000000000",
+      redirector_click_at: "2026-08-20T01:00:00.000Z",
+    });
+    const paidInstall = structuredClone(paid.records.find((record: Any) => record.event_name === "install"));
+    Object.assign(paidInstall, {
+      record_id: "install-42-paid",
+      delivery_id: "delivery:install-42-paid",
+      event_id: "event:install-42-paid",
+      occurred_at: "2026-08-20T02:00:00.000Z",
+      received_at: "2026-08-20T02:00:01.000Z",
+      processing_sequence: 21,
+    });
+    Object.assign(paidInstall.payload, {
+      installation_id: "installation:install-42-paid",
+      click_id: "click-42-paid_0000000000000000",
+      install_begin_at_server: "2026-08-20T02:00:00.000Z",
+      protected_referrer_evidence_ref: "protected:referrer:install-42-paid",
+    });
+    const unknownInstall = structuredClone(unknown.records[0]);
+    Object.assign(unknownInstall, {
+      record_id: "install-42-unknown",
+      delivery_id: "delivery:install-42-unknown",
+      event_id: "event:install-42-unknown",
+      occurred_at: "2026-08-20T03:00:00.000Z",
+      received_at: "2026-08-20T03:00:01.000Z",
+      processing_sequence: 22,
+    });
+    Object.assign(unknownInstall.payload, {
+      installation_id: "installation:install-42-unknown",
+      click_id: "unknown-click-42_0000000000000000",
+      install_begin_at_server: "2026-08-20T03:00:00.000Z",
+      protected_referrer_evidence_ref: "protected:referrer:install-42-unknown",
+    });
+    daily.records.push(paidClick, paidInstall, unknownInstall);
+    const baseEvaluation = {
+      ...daily.metric_evaluations[1],
+      metric_run_id_prefix: "run-42-install-all",
+      grouping: { metric_date: "2026-08-20" },
+    };
+    daily.metric_evaluations = [
+      baseEvaluation,
+      ...(["organic", "non_organic", "unattributed"] as const).map((status) => ({
+        ...baseEvaluation,
+        metric_run_id_prefix: `run-42-install-${status}`,
+        grouping: { metric_date: "2026-08-20", attribution_status: status },
+      })),
+    ];
+    await ingestFixture(fixture, daily, appPool, seedPool);
+    const expected = evaluate(daily).metric_runs;
+    const actual = await computeSqlMetricRuns(appPool, daily, false);
+    assert.equal(jcs(actual), jcs(expected));
+    const value = (prefix: string): bigint => BigInt(actual.find((run) =>
+      run.metric_run_id === `${prefix}:daily_install_count`)?.value_unscaled ?? "-1");
+    const total = value("run-42-install-all");
+    const parts = value("run-42-install-organic")
+      + value("run-42-install-non_organic")
+      + value("run-42-install-unattributed");
+    assert.equal(total, 3n);
+    assert.equal(parts, total);
+  });
+
+  it("M4 reproduces qualified Apple aggregate counts and receipt-date buckets", async () => {
+    const appleFixture = "44-apple-aggregate-metrics";
+    const appleDirectory = join(process.cwd(), "fixtures", "v0.3", appleFixture);
+    const appleInput: Any = JSON.parse(readFileSync(join(appleDirectory, "input.json"), "utf8"));
+    const appleGolden: Any[] = JSON.parse(readFileSync(
+      join(appleDirectory, "expected_metric_runs.json"),
+      "utf8",
+    ));
+    await ingestFixture(appleFixture, appleInput, appPool, seedPool);
+    const appleFacts = await withTenant(appPool, appleInput.server_context.tenant_id, async (client) => {
+      const result = await client.query<{
+        event_name: string;
+        signature_verified: boolean;
+        did_win: boolean;
+        source_identifier_present: boolean;
+        conversion_bucket: string | null;
+      }>(
+        `SELECT event_name, signature_verified, did_win, source_identifier_present, conversion_bucket
+         FROM ledger.apple_postback_facts
+         WHERE tenant_id=$1 AND app_id=$2
+         ORDER BY logical_event_id COLLATE "C"`,
+        [appleInput.server_context.tenant_id, appleInput.server_context.app_id],
+      );
+      return result.rows;
+    });
+    assert.equal(appleFacts.length, appleInput.records.length);
+    assert.ok(appleFacts.every((fact) => fact.signature_verified && fact.did_win && fact.source_identifier_present));
+    assert.ok(appleFacts.every((fact) => fact.conversion_bucket !== null));
+    const expected = evaluate(appleInput).metric_runs;
+    const actual = await computeSqlMetricRuns(appPool, appleInput, false);
+    assert.equal(jcs(expected), jcs(appleGolden));
+    assert.equal(jcs(actual), jcs(expected));
+    assert.equal(actual.find((run) => run.metric_name === "skan_attributed_installs")?.value_unscaled, "2");
+    assert.equal(actual.find((run) => run.metric_name === "aak_attributed_installs")?.value_unscaled, "1");
+    assert.equal(actual.find((run) =>
+      run.metric_run_id === "run-44-skan-fine-21:skan_conversion_value_distribution")?.value_unscaled, "1");
+
+    await withTenant(appPool, appleInput.server_context.tenant_id, async (client) => {
+      await client.query(
+        `INSERT INTO ledger.attribution_results (
+           attribution_id, tenant_id, app_id, subject_scope, subject_ref,
+           effective_at, decided_at, status, method, model, reason_code, artifact
+         )
+         SELECT attribution_id || ':future', tenant_id, app_id, subject_scope, subject_ref,
+           effective_at, '2026-08-22T00:00:00.000Z', 'organic', method, model, reason_code,
+           artifact || jsonb_build_object(
+             'attribution_id', attribution_id || ':future',
+             'decided_at', '2026-08-22T00:00:00.000Z',
+             'status', 'organic'
+           )
+         FROM ledger.attribution_results
+         WHERE tenant_id=$1 AND app_id=$2 AND subject_scope='aggregate'
+         ORDER BY attribution_id COLLATE "C" LIMIT 1`,
+        [appleInput.server_context.tenant_id, appleInput.server_context.app_id],
+      );
+    });
+    const fixedWatermarkActual = await computeSqlMetricRuns(appPool, appleInput, false);
+    assert.equal(fixedWatermarkActual.find((run) =>
+      run.metric_name === "skan_attributed_installs")?.value_unscaled, "2",
+    "an attribution decided after the fixed watermark changed a historical aggregate metric");
+
+    const receiptAuthority = structuredClone(appleInput);
+    receiptAuthority.records.find((record: Any) => record.record_id === "skan-fine-44").occurred_at =
+      "2026-08-19T01:00:00.000Z";
+    await ingestFixture("44-apple-receipt-authority", receiptAuthority, appPool, seedPool);
+    const receiptExpected = evaluate(receiptAuthority).metric_runs;
+    const receiptActual = await computeSqlMetricRuns(appPool, receiptAuthority, false);
+    assert.equal(jcs(receiptActual), jcs(receiptExpected));
+    assert.equal(receiptActual.find((run) => run.metric_name === "skan_attributed_installs")?.value_unscaled, "2");
+
+    for (const mutation of [
+      { name: "signature", apply: (payload: Any) => { payload.signature_verified = false; } },
+      { name: "winner", apply: (payload: Any) => { payload.did_win = false; } },
+      { name: "source", apply: (payload: Any) => { delete payload.source_identifier; } },
+      {
+        name: "conversion",
+        apply: (payload: Any) => {
+          delete payload.conversion_value;
+          delete payload.coarse_conversion_value;
+        },
+      },
+    ]) {
+      const disqualified = structuredClone(appleInput);
+      mutation.apply(disqualified.records.find((record: Any) => record.record_id === "skan-fine-44").payload);
+      await ingestFixture(`44-apple-disqualified-${mutation.name}`, disqualified, appPool, seedPool);
+      const disqualifiedExpected = evaluate(disqualified).metric_runs;
+      const disqualifiedActual = await computeSqlMetricRuns(appPool, disqualified, false);
+      assert.equal(jcs(disqualifiedActual), jcs(disqualifiedExpected));
+      assert.equal(disqualifiedActual.find((run) =>
+        run.metric_name === "skan_attributed_installs")?.value_unscaled, "1");
+    }
   });
 });

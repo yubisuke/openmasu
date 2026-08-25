@@ -20,6 +20,15 @@ type EncryptedObject = {
 };
 type WrappedKey = { version: 1; nonce: string; tag: string; ciphertext: string };
 
+function referenceKeyId(reference: string): string {
+  if (!reference.startsWith("encrypted:")) throw new Error("unsupported payload reference");
+  const keyId = reference.slice("encrypted:".length);
+  if (!/^[A-Za-z0-9._-]{1,512}$/.test(keyId) || keyId.includes("..")) {
+    throw new Error("invalid payload reference");
+  }
+  return keyId;
+}
+
 function encrypt(key: Buffer, plaintext: Buffer, aad: Buffer): { nonce: Buffer; tag: Buffer; ciphertext: Buffer } {
   const nonce = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, nonce);
@@ -77,8 +86,7 @@ export class EncryptedFilePayloadStore implements PayloadStore {
   }
 
   async read(reference: string): Promise<Buffer> {
-    if (!reference.startsWith("encrypted:")) throw new Error("unsupported payload reference");
-    const keyId = reference.slice("encrypted:".length);
+    const keyId = referenceKeyId(reference);
     const object = JSON.parse(readFileSync(join(this.objectRoot, `${keyId}.json`), "utf8")) as EncryptedObject;
     const wrapped = JSON.parse(readFileSync(join(this.keyRoot, `${keyId}.json`), "utf8")) as WrappedKey;
     const dataKey = decrypt(this.wrappingKey, wrapped, Buffer.from(keyId, "utf8"));
@@ -87,8 +95,7 @@ export class EncryptedFilePayloadStore implements PayloadStore {
   }
 
   async purge(reference: string): Promise<void> {
-    if (!reference.startsWith("encrypted:")) throw new Error("unsupported payload reference");
-    const keyId = reference.slice("encrypted:".length);
+    const keyId = referenceKeyId(reference);
     rmSync(join(this.objectRoot, `${keyId}.json`), { force: true });
     rmSync(join(this.keyRoot, `${keyId}.json`), { force: true });
   }

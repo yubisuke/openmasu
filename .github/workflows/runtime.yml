@@ -52,23 +52,53 @@ jobs:
       - name: Run runtime unit and integration tests
         run: |
           npm test
+          npm run check:operational-logs
           npm run test:integration
           npm run test:db-invariants
           npm run test:env-coverage
+      - name: Verify backup restore and completed privacy reapplication
+        run: OPENMMP_M5_BACKUP_RESTORE=1 OPENMMP_M5_PG_TOOLS=docker npm run test:backup-restore
+      - name: Run M2a redirector, signed-ingestion, replay, worker, and deletion gates
+        run: npm run test:m2a
       - name: Reproduce contract goldens through PostgreSQL
         run: npm run seed && npm run verify:parity
       - name: Verify SQL cohort metrics against the contract evaluator
         run: npm run test:metric-parity
+      - name: Verify raw, API, dashboard-view, and HTML consistency
+        run: npm run verify:consistency
       - name: Run reduced synthetic metric performance floor
         run: OPENMMP_BENCHMARK_ROWS=100000 npm run benchmark:metric-floor
       - name: Check threat-model coverage
         run: npm run check:threat-model
       - name: Compose first-run smoke
         run: |
+          export OPENMMP_MAX_TENANT_ID=tenant-a
+          export OPENMMP_MAX_APP_ID=app-a
+          export OPENMMP_ENROLL_RATE_RPS=10000
+          export OPENMMP_ENROLL_RATE_BURST=2000
+          export OPENMMP_INGEST_RATE_RPS=10
+          export OPENMMP_INGEST_RATE_BURST=20
+          export OPENMMP_INGEST_APP_RATE_RPS=10000
+          export OPENMMP_INGEST_APP_RATE_BURST=2000
+          export OPENMMP_MAX_RATE_RPS=20000
+          export OPENMMP_MAX_RATE_BURST=12000
           docker compose up -d --wait
+          docker compose --env-file /dev/null --profile seed run --rm seed
           docker compose --env-file /dev/null exec -T api sh -c 'set -a && . /run/openmmp/app/runtime.env && set +a && OPENMMP_API_HOST_PORT=8080 node --import tsx tools/runtime-smoke.ts'
+      - name: Measure synthetic ingestion and MAX postback load
+        run: |
+          docker compose --env-file /dev/null exec -T api sh -c 'set -a && . /run/openmmp/app/runtime.env && set +a && node --import tsx tools/m5-load.ts' > m5-load.json
+          cat m5-load.json
+      - name: Upload M5 load evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: m5-synthetic-load
+          path: m5-load.json
+          if-no-files-found: error
       - name: Generate workspace SBOMs
         run: npm run sbom
+      - name: Enforce the M3 API runtime component baseline
+        run: npm run check:api-runtime-sbom
       - name: Upload workspace SBOMs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

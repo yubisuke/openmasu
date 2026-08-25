@@ -1,0 +1,14 @@
+[
+  {
+    "contract_version": "0.3.0",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "privacy_request_id": "privacy-24",
+    "record_id": "click-24",
+    "lifecycle_status": "redacted",
+    "reason_code": "privacy_deletion",
+    "policy_version": "privacy-v0.2",
+    "provenance_digest": "dac7255a6b12c5b9029f60c9497ef5f62fdcfb067b8b299922800dc9a615c760",
+    "created_at": "2026-08-12T02:01:00.000Z"
+  }
+]

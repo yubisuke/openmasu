@@ -1,0 +1,93 @@
+[
+  {
+    "attribution_id": "attr:install-10a",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:install-10a",
+    "reason_code_version": "0.3.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-10a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-10T00:00:00.000Z",
+    "decided_at": "2026-08-12T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-12T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "organic",
+    "method": "none",
+    "model": "none",
+    "reason_code": "no_referrer"
+  },
+  {
+    "attribution_id": "attr:install-10b",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:install-10b",
+    "reason_code_version": "0.3.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-10-paid",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-10b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-12T00:00:00.000Z",
+    "decided_at": "2026-08-12T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-12T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "non_organic",
+    "method": "install_referrer",
+    "model": "last_click",
+    "reason_code": "valid_install_referrer"
+  },
+  {
+    "attribution_id": "attr:install-10c",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:install-10c",
+    "reason_code_version": "0.3.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-10c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-12T01:00:00.000Z",
+    "decided_at": "2026-08-12T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-12T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "organic",
+    "method": "none",
+    "model": "none",
+    "reason_code": "no_referrer"
+  }
+]

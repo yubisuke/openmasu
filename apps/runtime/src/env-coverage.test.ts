@@ -3,6 +3,7 @@ import { join, relative } from "node:path";
 
 function files(path: string): string[] {
   return readdirSync(path, { withFileTypes: true }).flatMap((entry) => {
+    if (entry.name === "node_modules") return [];
     const child = join(path, entry.name);
     return entry.isDirectory() ? files(child) : [child];
   });

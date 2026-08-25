@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:privacy-tombstone:v0.2",
-  "title": "Open MMP Privacy Tombstone v0.2",
+  "$id": "urn:open-mmp:schema:privacy-tombstone:v0.3",
+  "title": "Open MMP Privacy Tombstone v0.3",
   "type": "object",
   "additionalProperties": false,
   "required": ["contract_version", "tenant_id", "app_id", "privacy_request_id", "record_id", "lifecycle_status", "reason_code", "policy_version", "provenance_digest", "created_at"],
   "properties": {
-    "contract_version": { "const": "0.2.0" },
+    "contract_version": { "const": "0.3.0" },
     "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
     "app_id": { "$ref": "common.schema.json#/$defs/id" },
     "privacy_request_id": { "$ref": "common.schema.json#/$defs/id" },

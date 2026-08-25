@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-mmp:schema:event-custom-event:v0.3",
+  "title": "Open MMP Custom Event v0.3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_name", "installation_id", "event_key"],
+  "properties": {
+    "event_name": { "const": "custom_event" },
+    "installation_id": { "$ref": "../common.schema.json#/$defs/id" },
+    "event_key": {
+      "anyOf": [
+        { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+        { "const": "openmmp.conversion_value_updated" }
+      ]
+    },
+    "money": { "$ref": "../common.schema.json#/$defs/money" },
+    "attributes": {
+      "type": "object",
+      "maxProperties": 20,
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string", "maxLength": 256 },
+          { "type": "number" },
+          { "type": "boolean" },
+          { "type": "null" }
+        ]
+      }
+    }
+  }
+}

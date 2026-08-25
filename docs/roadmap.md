@@ -5,6 +5,7 @@ This is the canonical milestone sequence. `docs/project-plan.md` is a phase summ
 | Canonical roadmap milestone | Project-plan phase | Scope relationship |
 | --- | --- | --- |
 | M0.2 Contract v0.2 | Phase 0.2 | Contract, registries, fixtures, and evaluators |
+| M0.3 Contract v0.3 | Phase 0.3 | Narrow Android/Unity/Meta contract extensions required by M2 |
 | M1a Shadow ledger and import foundation | Phase 1a | Received-evidence ledger, three import paths, and runtime security foundation |
 | M1b Cohort metrics and difference audit | Phase 1b | Recalculable decision metrics and neutral reconciliation |
 | M1.5 Continuation decision gate | Phase 1.5 | Owner decision based on operator-run validation; no code deliverable |
@@ -30,6 +31,12 @@ Contract v0.2 is complete and the full local contract validation suite passes. I
 
 Evidence gate: Independently implemented evaluators reproduce the same reviewed canonical outputs from the same synthetic fixtures and policy versions.
 
+## M0.3 Contract v0.3
+
+Contract v0.3 is complete and locally validated. It preserves the M0.2 audit model while adding only the vocabulary and closed evidence shapes required by M2: third-party referrer classification, typed Meta Install Referrer evidence and precedence, imported click evidence, attribution-status metric grouping, a closed custom event, public click-injection classification, revenue precision, and wrapper provenance. The immutable v0.2.1 baseline is the `contract-v0.2.1` Git tag.
+
+Evidence gate: 27 schemas, 8 registries, 47 reviewed synthetic fixtures, both independent evaluators, registry/schema equality, CTIT boundary mutations, optional integrity evidence, and runtime payload-schema rejection pass without real data or credentials.
+
 ## M1a Shadow ledger and import foundation
 
 M1a is implemented and locally validated with synthetic inputs. PostgreSQL runtime parity, import idempotency/restatement, MAX receipt, deletion, encryption/purge, rate limits, environment coverage, SBOM generation, and threat coverage are executable gates. External API account connectivity, operator real-data validation, production TLS, capacity, and deployment operations remain unverified by design.
@@ -46,7 +53,7 @@ Evidence gate: A clean Docker Compose startup ingests the synthetic fixtures thr
 
 ## M1b Cohort metrics and difference audit
 
-M1b is implemented and locally validated with synthetic inputs. The SQL engine is JCS-byte-identical to the evaluator for the reviewed cohort fixture, supports immutable snapshot supersession and redaction recalculation, and exposes authenticated JSON/CSV metric and difference-audit reads. The 10-million-row synthetic arithmetic floor completed well below ten minutes on the recorded development environment. Exact 4-vCPU/8-GB cgroup validation, the contract vocabulary for a withheld `candidate_missing` case, and a contract grouping dimension that separates organic from unattributed cohorts remain explicit follow-up work.
+M1b is implemented and locally validated with synthetic inputs. The SQL engine is JCS-byte-identical to the evaluator for the reviewed cohort fixture, supports immutable snapshot supersession and redaction recalculation, and exposes authenticated JSON/CSV metric and difference-audit reads. The 10-million-row synthetic arithmetic floor completed well below ten minutes on the recorded development environment. Contract v0.3 closes the earlier `candidate_missing` and attribution-status grouping follow-ups. Exact 4-vCPU/8-GB cgroup validation remains unperformed.
 
 - Recalculable D0, ROAS, retention, and cohort-LTV metric engine
 - Cost and revenue snapshots with versioned FX, grouping, and watermarks
@@ -63,6 +70,8 @@ Evidence gate: A dated owner decision identifies the selected path and the evide
 
 ## M2 Android, Unity, and redirector
 
+M2a and M2b are implemented and synthetically validated. The Node redirector, stored tracking links, HMAC SDK enrollment and ingestion, ephemeral replay state, encrypted durable batches, ordered worker drain, late-click supersession, credential-bound deletion, Kotlin SDK, Unity bridge, Android emulator workflow, Android SBOM, and operator checklist are present. Real-device, Play internal-track, live Meta/MAX, and Unity-export evidence remains explicitly operator-verified and outside the code gate.
+
 - Unity C# SDK and Android Kotlin bridge
 - Google Play Install Referrer client and deterministic first-party attribution
 - Portable Node.js redirector; a Cloudflare Workers redirector may be offered as an optional adapter
@@ -71,9 +80,11 @@ Evidence gate: A dated owner decision identifies the selected path and the evide
 - Advertising-revenue callback, sample application, and device and Play internal-testing procedure
 - Complete Android SDK field inventory, Google Play Data safety mapping, consent-queue tests, and backup/restore exclusion for `installation_id`
 
-Evidence gate: A Google Play first launch retrieves synthetic click evidence through the portable runtime and produces one non-conflicting install record; device validation remains separately labeled until performed.
+Evidence gate: An API 36 emulator first launch reads synthetic referrer evidence, sends one signed non-conflicting install through a local ingestion shell, and proves committed queue survival across process death. The runtime integration gate separately validates durable ingestion and attribution. Real-device and campaign validation remains separately labeled until performed.
 
 ## M3 Metrics dashboard
+
+M3 is implemented on synthetic evidence. It uses dependency-free server-rendered HTML and SVG, tenant-scoped opaque sessions, a forced-RLS reader role, one typed filter/SQL-builder path shared by API and dashboard, additive CSV columns, aggregate-only record counts, and fixed-watermark consistency checks. Real-browser, production-TLS, real-cardinality, and five-day operator observations remain in the [M3 operator checklist](validation/m3-operator-checklist.md).
 
 - App registration and measurement-link creation
 - ROAS, retention, cohort, and attribution breakdowns
@@ -81,39 +92,64 @@ Evidence gate: A Google Play first launch retrieves synthetic click evidence thr
 - Attribution method, policy version, grouping, and data-freshness display
 - Authentication established before exposing any dashboard data
 
-Evidence gate: Raw records, reporting API, and dashboard match under identical filters and definitions.
+Evidence gate: `npm run verify:consistency` compares raw aggregate counts, reporting rows, the typed dashboard view, and rendered numeric attributes under at least eight synthetic filter combinations at one fixed watermark. Runtime CI separately proves reader RLS, SQL/evaluator metric parity, CSV byte identity, and the API runtime SBOM baseline.
 
 ## M4a iOS first-party measurement
+
+M4a is implemented with synthetic evidence. The Swift Package, excluded SQLite
+queue, HMAC delivery, consent/reset lifecycle, AdServices token handoff, MAX
+mapping, Unity C ABI, Privacy Manifest, built-symbol audit, and dependency-empty
+iOS SDK SBOM are executable gates in the pinned macOS workflow. Real-device,
+live Apple/MAX, Unity-export, and App Store evidence remains in the
+[M4 checklist](validation/m4-device-checklist.md).
 
 - Swift SDK and Unity iOS bridge
 - First-party events, persistent delivery queue, consent controls, and advertising-revenue evidence
 - Apple AdServices token collection and server lookup after current primary-source verification
 - Apple Privacy Manifest and App Privacy Details mapping
 
-Evidence gate: An iOS test application delivers synthetic install, event, and revenue evidence to the ledger; real-device and Apple Ads validation remain separately labeled until performed.
+Evidence gate: The macOS CI sample compiles and synthetic install, event, conversion-value, and revenue paths reproduce the shared contract vectors. Real-device and Apple Ads validation remain separately labeled until performed.
 
 ## M4b Apple aggregate attribution
+
+M4b is implemented with synthetic evidence. SKAdNetwork and AdAttributionKit
+receivers verify generated signatures, reject replay/conflict, resolve tenancy
+without enumeration, drive protected AdServices lookup, and persist separate
+aggregate metric series. Historical aggregate metrics respect their fixed
+watermark.
 
 - SKAdNetwork and AdAttributionKit developer postback-copy receipt
 - Signature and transaction-ID verification and replay rejection
 - Versioned conversion-tag and value policy
 - Aggregate reporting that never mixes the aggregate series with deterministic installation-level attribution
 
-Evidence gate: Apple test procedures produce verified, replay-resistant postbacks and aggregate results.
+Evidence gate: Runtime CI produces verified, replay-resistant synthetic postbacks and aggregate results; live Apple delivery remains an operator procedure.
 
 ## M5 Production and limited adapter boundary
 
-- Tenant isolation and RBAC
-- Full production rate policy, backup and restore, and deletion-request end-to-end flow
-- OpenTelemetry, load tests, SDK distribution, and compatibility policy
-- Play Integrity and App Attest integration
-- Rule-bundle versions, digests, and supersession history
-- Signed, least-privilege adapters limited to first-party links, Meta, and Apple Ads, with primary-source revalidation and fixture certification before implementation
-- Other media-network adapters are outside the current roadmap unless a later owner decision and primary-source evidence explicitly add them
-- Final threat-model review, production SBOM, and tenant-isolation, replay, deletion, and backup/restore evidence
+M5 is implemented as a synthetic code and CI milestone. It adds minimum
+tenant-wide RBAC, authenticated Prometheus text metrics, closed structured
+logging, backup/restore privacy reapplication, deletion/recalculation/export
+evidence, append-only rule-bundle history, and an integrity-evidence contract
+reservation. It does not claim a production deployment or live integrity
+integration.
 
-Evidence gate: A production pilot completes backup restoration, deletion, replay, failure, and shadow-reconciliation exercises with documented evidence.
+- Tenant isolation and minimum `admin | operator | read_only` RBAC
+- Existing rate controls plus an informational [100,000-event and 10,000-postback synthetic load record](validation/m5-load-results.md)
+- PostgreSQL custom-format backup/restore procedure and completed-privacy-request reapplication
+- Authenticated dependency-free operational metrics; full OpenTelemetry is deferred until operational cardinality or tracing needs justify it
+- Play Integrity and App Attest evidence fields and operator procedures only; no live project configuration
+- Rule-bundle identifiers, versions, hashes, supersession history, and audit rows
+- Adapter boundary limited to first-party evidence, Meta Install Referrer, and Apple Ads/Apple aggregate evidence
+- User-level attribution for TikTok, AppLovin, Unity Ads, and Mintegral remains unsupported when it requires a partner MMP or non-public provider evidence
+- Final threat-model review, all existing workspace/SDK SBOMs, and tenant-isolation, replay, deletion, and backup/restore CI evidence
+
+Evidence gate: CI restores a synthetic PostgreSQL 17 custom-format dump into a
+new database, reapplies completed privacy requests, proves restored encrypted
+payloads remain unreadable, and verifies recalculated exports. CI also records
+synthetic HTTP load and retains all prior replay, isolation, dashboard, SDK, and
+contract gates. A production pilot remains an operator gate.
 
 ## Immediate next step
 
-Run the M1a CI and operator checklist, then implement M1b cohort metrics and neutral difference audit. Real provider connectivity, operator-run validation, device validation, platform approval, and production evidence remain separate states.
+Run the operator checklists and a controlled shadow pilot. Real provider connectivity, device validation, platform approval, production TLS, backup operations, capacity, integrity-service configuration, and incident response remain separate states.

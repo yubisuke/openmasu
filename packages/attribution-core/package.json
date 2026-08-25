@@ -1,6 +1,6 @@
 {
   "name": "@open-mmp/attribution-core",
-  "version": "0.2.1",
+  "version": "0.3.6",
   "private": true,
   "description": "Pure Open MMP contract evaluator",
   "type": "module",
@@ -8,14 +8,18 @@
     ".": {
       "types": "./src/evaluator.ts",
       "default": "./src/evaluator.ts"
+    },
+    "./install-referrer-mapping": {
+      "types": "./src/install-referrer-mapping.ts",
+      "default": "./src/install-referrer-mapping.ts"
     }
   },
   "dependencies": {
-    "@open-mmp/contracts": "0.2.1",
+    "@open-mmp/contracts": "0.3.6",
     "json-canonicalize": "2.0.0"
   },
   "devDependencies": {
-    "@types/node": "22.15.3",
-    "typescript": "5.8.3"
+    "@types/node": "22.20.1",
+    "typescript": "5.9.3"
   }
 }

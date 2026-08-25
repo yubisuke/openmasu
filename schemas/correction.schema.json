@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:correction:v0.2",
-  "title": "Open MMP Correction v0.2",
+  "$id": "urn:open-mmp:schema:correction:v0.3",
+  "title": "Open MMP Correction v0.3",
   "type": "object",
   "additionalProperties": false,
   "required": ["contract_version", "tenant_id", "app_id", "correction_id", "corrects_record_id", "correction_type", "correction_reason", "effective_at"],
   "properties": {
-    "contract_version": { "const": "0.2.0" },
+    "contract_version": { "const": "0.3.0" },
     "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
     "app_id": { "$ref": "common.schema.json#/$defs/id" },
     "correction_id": { "$ref": "common.schema.json#/$defs/id" },

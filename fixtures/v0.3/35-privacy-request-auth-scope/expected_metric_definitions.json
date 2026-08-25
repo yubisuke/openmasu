@@ -1,0 +1,53 @@
+[
+  {
+    "metric_name": "d0_install_to_24h_ad_revenue_usd",
+    "aggregation_time_zone": "UTC",
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": { "type": "elapsed", "day": 0 },
+      "numerator": "revenue"
+    },
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  {
+    "metric_name": "d0_jst_install_calendar_ad_revenue_usd",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": { "type": "calendar_day", "day": 0 },
+      "numerator": "revenue"
+    },
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  {
+    "metric_name": "d0_utc_install_calendar_ad_revenue_usd",
+    "aggregation_time_zone": "UTC",
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": { "type": "calendar_day", "day": 0 },
+      "numerator": "revenue"
+    },
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+]

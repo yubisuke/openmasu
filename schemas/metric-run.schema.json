@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:metric-run:v0.2",
-  "title": "Open MMP Metric Run v0.2",
+  "$id": "urn:open-mmp:schema:metric-run:v0.3",
+  "title": "Open MMP Metric Run v0.3",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -55,7 +55,10 @@
             "campaign_id": { "$ref": "common.schema.json#/$defs/id" },
             "network": { "type": "string", "minLength": 1, "maxLength": 128 },
             "country": { "type": "string", "pattern": "^[A-Z]{2}$" },
-            "cohort_date": { "type": "string", "format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+            "cohort_date": { "type": "string", "format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+            "metric_date": { "type": "string", "format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+            "attribution_status": { "enum": ["organic", "non_organic", "unattributed"] },
+            "apple_conversion_bucket": { "type": "string", "pattern": "^(fine:([0-9]|[1-5][0-9]|6[0-3])|coarse:(low|medium|high))$" }
           }
         },
         "dimension_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
@@ -129,6 +132,95 @@
           "required": ["ratio_scale"]
         }
       }
+    },
+    {
+      "if": {
+        "properties": { "metric_name": { "enum": ["skan_attributed_installs", "aak_attributed_installs"] } },
+        "required": ["metric_name"]
+      },
+      "then": {
+        "required": ["grouping"],
+        "properties": {
+          "metric_definition_version": { "const": "0.3.3" },
+          "aggregation_time_zone": { "const": "UTC" },
+          "value_type": { "const": "count" },
+          "grouping": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "dimensions": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "metric_date": {},
+                  "attribution_status": {},
+                  "apple_conversion_bucket": {}
+                },
+                "required": ["metric_date"],
+                "minProperties": 1,
+                "maxProperties": 1,
+                "not": {
+                  "anyOf": [
+                    { "properties": { "attribution_status": {} }, "required": ["attribution_status"] },
+                    { "properties": { "apple_conversion_bucket": {} }, "required": ["apple_conversion_bucket"] }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "metric_name": { "const": "skan_conversion_value_distribution" } }, "required": ["metric_name"] },
+      "then": {
+        "required": ["grouping"],
+        "properties": {
+          "metric_definition_version": { "const": "0.3.3" },
+          "aggregation_time_zone": { "const": "UTC" },
+          "value_type": { "const": "count" },
+          "grouping": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "dimensions": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "metric_date": {},
+                  "apple_conversion_bucket": {},
+                  "attribution_status": {}
+                },
+                "required": ["metric_date", "apple_conversion_bucket"],
+                "minProperties": 2,
+                "maxProperties": 2,
+                "not": { "properties": { "attribution_status": {} }, "required": ["attribution_status"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "grouping": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "dimensions": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": { "apple_conversion_bucket": {} },
+                "required": ["apple_conversion_bucket"]
+              }
+            },
+            "required": ["dimensions"]
+          }
+        },
+        "required": ["grouping"]
+      },
+      "then": { "properties": { "metric_name": { "const": "skan_conversion_value_distribution" } } }
     }
   ]
 }

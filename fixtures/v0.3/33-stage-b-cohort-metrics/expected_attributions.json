@@ -1,0 +1,58 @@
+[
+  {
+    "attribution_id": "attr:install-33",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:install-33",
+    "reason_code_version": "0.3.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-01T00:00:00.000Z",
+    "decided_at": "2026-08-09T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-09T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "non_organic",
+    "method": "imported",
+    "model": "provider_reported",
+    "reason_code": "provider_attributed"
+  },
+  {
+    "attribution_id": "attr:organic-install-33",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:organic-33",
+    "reason_code_version": "0.3.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "organic-install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-01T01:00:00.000Z",
+    "decided_at": "2026-08-09T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-09T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "organic",
+    "method": "imported",
+    "model": "provider_reported",
+    "reason_code": "provider_organic"
+  }
+]

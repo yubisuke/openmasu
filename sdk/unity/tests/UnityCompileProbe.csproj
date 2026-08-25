@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <LangVersion>9.0</LangVersion>
+    <DefineConstants>$(DefineConstants);OPENMMP_APPLOVIN_MAX;UNITY_EDITOR</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\com.openmmp.sdk\Runtime\*.cs" Link="Runtime\%(Filename)%(Extension)" />
+    <Compile Include="..\com.openmmp.sdk\Editor\OpenMmpIOSPostprocessor.cs" Link="Editor\OpenMmpIOSPostprocessor.cs" />
+  </ItemGroup>
+</Project>

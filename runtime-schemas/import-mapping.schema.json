@@ -14,13 +14,10 @@
     "provider": { "type": "string", "pattern": "^[a-z0-9-]{1,64}$" },
     "format": { "enum": ["csv", "json", "jsonl"] },
     "row_filter": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["source", "equals"],
-      "properties": {
-        "source": { "type": "string", "minLength": 1 },
-        "equals": { "type": ["string", "number", "boolean"] }
-      }
+      "oneOf": [
+        { "$ref": "#/$defs/filterClause" },
+        { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/filterClause" } }
+      ]
     },
     "rules": {
       "type": "array",
@@ -41,11 +38,22 @@
   },
   "$defs": {
     "id": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
+    "filterClause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "equals"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "equals": { "type": ["string", "number", "boolean"] }
+      }
+    },
     "expression": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "source": { "type": "string", "minLength": 1 },
+        "fallback_column": { "type": "string", "minLength": 1 },
+        "prefix": { "type": "string", "minLength": 1, "maxLength": 128 },
         "const": {},
         "default": {},
         "map": {
@@ -79,6 +87,7 @@
           "additionalProperties": false,
           "required": ["scale"],
           "properties": {
+            "input": { "const": "integer" },
             "scale": { "type": "integer", "minimum": 0, "maximum": 18 },
             "currency_source": { "type": "string", "minLength": 1 },
             "currency_default": { "type": "string", "pattern": "^[A-Z]{3}$" }
@@ -94,6 +103,12 @@
         { "properties": { "source": {} }, "required": ["source"] },
         { "properties": { "const": {} }, "required": ["const"] },
         { "properties": { "object": {} }, "required": ["object"] }
+      ],
+      "allOf": [
+        {
+          "if": { "properties": { "fallback_column": {} }, "required": ["fallback_column"] },
+          "then": { "properties": { "source": {} }, "required": ["source"] }
+        }
       ]
     }
   }

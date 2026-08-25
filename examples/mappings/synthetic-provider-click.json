@@ -25,7 +25,7 @@
             "object": {
               "provider": { "const": "synthetic-provider" },
               "provider_attributed": { "source": "attributed", "boolean": { "true_values": ["paid", true], "false_values": ["organic", false] } },
-              "provider_attribution_strategy": { "source": "strategy", "map": { "click": "click_through", "view": "view_through" }, "map_default": "unknown" },
+              "provider_attribution_strategy": { "source": "strategy", "map": { "click": "click_through", "view": "view_through" }, "map_default": "unattributed" },
               "provider_click_ref": { "source": "provider_click_ref" },
               "provider_campaign_ref": { "source": "campaign_id" },
               "provider_country": { "source": "country", "uppercase": true },

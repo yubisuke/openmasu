@@ -1,0 +1,17 @@
+{
+  "name": "@open-mmp/apple-postback",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pure Apple aggregate postback signature verification",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "22.15.3",
+    "typescript": "5.9.3"
+  }
+}

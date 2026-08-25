@@ -18,6 +18,16 @@ export function createAppPool(): Pool {
   });
 }
 
+export function createReaderPool(): Pool {
+  return new Pool({
+    connectionString: requireEnvironment(
+      "OPENMMP_READER_DATABASE_URL",
+      process.env.OPENMMP_READER_DATABASE_URL,
+    ),
+    max: 10,
+  });
+}
+
 export function createMigrationPool(): Pool {
   return new Pool({
     connectionString: requireEnvironment(
@@ -81,3 +91,5 @@ export function uuidV7(now = Date.now()): string {
   const hex = bytes.toString("hex");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
+
+export { appendDurableBatch, type DurableBatchInput } from "./ingest-batch.js";

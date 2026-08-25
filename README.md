@@ -16,7 +16,7 @@ This project is licensed under the [Apache License 2.0](LICENSE); attribution is
 
 ## Current status
 
-This project contains the v0.2.1 contract, the M1a Shadow ledger/import foundation, and the M1b cohort metric and difference-audit runtime. The local runtime has a PostgreSQL append-only ledger, schema-validated existing-MMP imports, synthetic Meta and Google Ads cost adapters, manual cost normalization, MAX S2S receipt and Reporting API normalization, recalculable SQL cohort metrics, authenticated JSON/CSV reporting, append-only reconciliation results, admin deletion, encrypted payload objects, rate limits, runtime CI, and workspace SBOM generation. Local synthetic gates pass. Real provider connectivity, operator data validation, device validation, a production deployment, and exact 4-vCPU/8-GB capacity validation have not been demonstrated. The immutable v0.1 baseline is available at the `contract-v0.1` Git tag.
+This project contains the v0.3.6 contract and the synthetic code milestones from M1 through M5: the Shadow ledger and import foundation, cohort metrics and difference audit, Android/Unity and Apple measurement paths, the server-rendered operator dashboard, minimum RBAC, authenticated operational metrics, privacy-safe restore support, rule-bundle history, and release evidence. Real provider connectivity, real-device and campaign validation, Unity Xcode export, App Store review, a production deployment, real backup operations, real production load, real integrity-service configuration, real-cardinality dashboard usability, and exact 4-vCPU/8-GB capacity validation have not been demonstrated. Immutable baselines are available at the `contract-v0.1` and `contract-v0.2.1` Git tags. See [the current status](docs/STATUS.md) for the milestone-by-milestone boundary.
 
 The first product entry point is a Shadow MMP that runs alongside an existing provider. It normalizes first-party events, existing MMP exports, media cost, and revenue into a common contract, then explains neutral differences through candidate evidence, exclusion reasons, attribution windows, ID joins, and recalculation history. Difference reasons describe measurement semantics, not provider quality. It must not be treated as the primary MMP until a real shadow pilot has produced sufficient evidence.
 
@@ -28,6 +28,8 @@ The first native attribution vertical slice targets Android:
 4. The SDK sends an install record to the ingestion API.
 5. The attribution engine deterministically matches the click and install.
 6. Reporting separates organic and non-organic installs and groups results by campaign.
+
+The implemented adapter boundary is deliberately narrow: first-party measurement links and evidence, Meta Install Referrer, and Apple Ads/Apple aggregate evidence. AppLovin MAX integration is revenue evidence, not user-level install attribution. User-level attribution for TikTok, the AppLovin ad network, the Unity Ads network, or Mintegral is outside the supported boundary when it requires a partner MMP relationship or non-public provider evidence.
 
 ## Principles
 
@@ -44,26 +46,28 @@ The first native attribution vertical slice targets Android:
 
 ```text
 apps/
-  api/                 # Management and reporting API
+  api/                 # Management/reporting API and server-rendered dashboard
   redirector/          # Measurement links and redirects
   worker/              # Attribution and recalculation jobs
-  dashboard/           # Management UI, later in the MVP
 packages/
   contracts/           # API schemas and shared types
   attribution-core/    # Pure attribution logic
-sdks/
-  android/             # Kotlin SDK and Unity bridge
-  ios/                 # Swift SDK, Phase 2
+  redirector-core/     # Portable redirect and referrer behavior
+  meta-install-referrer/ # Synthetic AES-GCM decryption core
+sdk/
+  android/             # Kotlin SDK, optional provider modules, and native sample
+  ios/                 # Swift Package, Apple adapters, native sample, and tests
+  unity/               # UPM package, Android/iOS bridges, samples, and compile probe
 docs/
 ```
 
-Implemented M1a code lives in `apps/api`, `apps/worker`, `apps/runtime`, `packages/contracts`, and `packages/attribution-core`. Later SDK, redirector, and dashboard directories remain planned.
+Implemented runtime code lives in `apps/api`, `apps/redirector`, `apps/worker`, `apps/runtime`, `packages/contracts`, `packages/attribution-core`, `packages/redirector-core`, `packages/meta-install-referrer`, `sdk/android`, `sdk/ios`, and `sdk/unity`.
 
-## Current layout (v0.2 contract artifacts)
+## Current layout (v0.3 contract artifacts)
 
 - `schemas/` — Draft 2020-12 artifact schemas, including event payloads under `schemas/events/`
 - `registries/` — versioned closed vocabularies and compatibility definitions
-- `fixtures/v0.2/` — reviewed synthetic inputs and immutable golden outputs
+- `fixtures/v0.3/` — reviewed synthetic inputs and immutable golden outputs
 - `spec/` — normative contract behavior and serialization rules
 - `tools/` — TypeScript and Python reference evaluators and contract validation
 - `issue-drafts/` — historical design and acceptance records
@@ -73,15 +77,25 @@ Implemented M1a code lives in `apps/api`, `apps/worker`, `apps/runtime`, `packag
 - [Product scope](docs/product-scope.md)
 - [Architecture](docs/architecture.md)
 - [Privacy and security](docs/privacy-security.md)
+- [Import mapping DSL](docs/import-mappings.md)
 - [Initial threat model](docs/threat-model.md)
 - [Roadmap](docs/roadmap.md)
 - [Project plan](docs/project-plan.md)
 - [Issue #1 draft](issue-drafts/001-event-metric-contract-v0.1.md)
 - [Primary references](docs/references.md)
-- [Event & Metric Contract v0.2](spec/event-metric-contract-v0.2.md)
-- [Contract v0.2 migration guide](docs/contract-v0.2-migration.md)
+- [Event & Metric Contract v0.3](spec/event-metric-contract-v0.3.md)
+- [Contract v0.3 migration guide](docs/contract-v0.3-migration.md)
 - [Schema versioning policy](docs/schema-versioning.md)
 - [Operator real-data validation checklist](docs/validation/real-data-checklist.md)
+- [M2 device and provider validation checklist](docs/validation/m2-device-checklist.md)
+- [M3 operator validation checklist](docs/validation/m3-operator-checklist.md)
+- [M4 device and Apple-provider validation checklist](docs/validation/m4-device-checklist.md)
+- [M5 integrity-service checklist](docs/validation/m5-integrity-checklist.md)
+- [M5 production-operator checklist](docs/validation/m5-operator-checklist.md)
+- [M5 synthetic load record](docs/validation/m5-load-results.md)
+- [Backup and restore runbook](docs/operations/backup-restore.md)
+- [Release runbook](docs/operations/release.md)
+- [Current milestone status](docs/STATUS.md)
 
 ## Five-minute synthetic quickstart
 
@@ -93,6 +107,8 @@ npm run demo:metrics
 ```
 
 The bootstrap service generates local secrets, migrations run automatically, and the API and worker start only after PostgreSQL is healthy. `demo:metrics` prints tenant-scoped ledger counts plus a clearly labelled contract-synthetic preview. The preview is calculated from fixture 33 and does not claim that a real provider or campaign was queried. Its key values are:
+
+The API and dashboard listen on `http://localhost:8080` (`/dashboard` for the login page), and the portable redirector listens on `http://localhost:8090`. `npm run bootstrap` prints the local admin key once; paste it into the dashboard login form. Dashboard reports are aggregate operator views, not data-subject exports. Tracking links are created through the authenticated management route; request query parameters and headers can never override their stored destinations. SDK enrollment and event delivery use the HMAC signing string fixed in [M2 Design Baseline](docs/design/m2-baseline.md).
 
 ```json
 {
@@ -110,7 +126,41 @@ docker compose --profile seed run --rm seed
 npm run verify:parity
 ```
 
+To exercise the operator CSV-to-metric path without committing a tabular file, create a synthetic CSV only under the gitignored `.openmmp/` directory and run the two explicit jobs:
+
+```bash
+mkdir -p .openmmp
+printf 'network,campaign_id,country,date,cost_micros,currency,as_of\nsynthetic-cli-network,synthetic-cli-campaign,us,2026-08-20,2500000,USD,2026-08-20T12:00:00.000Z\n' > .openmmp/synthetic-cost.csv
+npm run import:cost -- --file=.openmmp/synthetic-cost.csv --mapping=examples/mappings/synthetic-manual-cost.json
+npm run metrics:run -- --date=2026-08-20 --definitions=examples/metrics/synthetic-d0-roas.json
+```
+
+The first command persists one immutable synthetic `cost_record`; the second runs the existing cohort SQL engine at the explicit day watermark and persists `d0_roas` with `value_state=present`. With no matching synthetic revenue loaded for that cohort, the reproducible ratio value is zero. Re-running the same metric definition intentionally refuses to overwrite the immutable metric-run ID.
+
 This quickstart uses synthetic inputs only. Do not place provider exports, credentials, real user data, campaign values, or validation results in this public repository.
+
+## Android, iOS, and Unity SDK development
+
+Requirements: JDK 17 and Android SDK 36. The Android project uses a checksum-pinned Gradle 8.13 wrapper. From the repository root:
+
+```bash
+./sdk/android/gradlew -p sdk/android androidAcceptance verifySdkSbom
+./sdk/android/gradlew -p sdk/android :sample:connectedDebugAndroidTest
+dotnet run --project sdk/unity/tests/UnityCompileProbe.csproj --configuration Release
+```
+
+The second command requires a running API 36 emulator. The first command compiles every documented Install Referrer 2.2 accessor, tests queue/consent/Meta/MAX behavior, verifies the merged manifest and backup rules, builds the native sample, and writes `sbom/sdk-android.cdx.json`. The Unity command is a shim compile and callback-concurrency gate; an actual Unity export remains an operator procedure. M2 distributes source and local build instructions only, not Maven or UPM registry artifacts.
+
+On macOS, run the Swift and Simulator gates:
+
+```bash
+swift test --package-path sdk/ios
+cd sdk/ios
+xcodebuild -scheme OpenMmpObjC -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+xcodebuild -scheme OpenMmpSample -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+```
+
+The pinned `sdk-ios` workflow additionally compiles the adapter against the exact AppLovin MAX Swift Package, audits the built product and privacy manifest, emits a dependency-empty iOS SDK SBOM, and runs the Unity iOS bridge probe. See the [iOS SDK guide](sdk/ios/README.md). Real Apple/MAX accounts, real devices, and Unity exports remain operator procedures.
 
 ## Contract validation
 
@@ -122,4 +172,4 @@ python -m pip install --require-hashes --requirement requirements-contract.txt
 npm run validate
 ```
 
-Validation is read-only. It checks 26 schemas, 8 registries, 38 reviewed synthetic fixtures, 494 golden output artifacts across 13 classes, 38 scenario assertions, 26 acceptance criteria, semantic and metamorphic mutations, deterministic TypeScript output, independent Python output, and RFC 8785 conformance. See the [fixture provenance note](fixtures/v0.2/README.md).
+Validation is read-only. It checks 27 schemas, 8 registries, 47 reviewed synthetic fixtures, 611 golden output artifacts across 13 classes, 47 scenario assertions, 26 acceptance criteria, semantic and metamorphic mutations, deterministic TypeScript output, independent Python output, and RFC 8785 conformance. See the [fixture provenance note](fixtures/v0.3/README.md).

@@ -24,7 +24,7 @@ const artifacts = {
 
 const schema: JSONSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
-  title: "Open MMP Evaluation Output v0.2",
+  title: "Open MMP Evaluation Output v0.3",
   type: "object",
   additionalProperties: false,
   required: Object.keys(artifacts),

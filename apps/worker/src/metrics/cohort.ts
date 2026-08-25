@@ -6,7 +6,8 @@ import { jcs, sha256 } from "@open-mmp/attribution-core";
 type Any = Record<string, any>;
 type Queryable = Pick<PoolClient, "query">;
 
-type Scope = { tenant_id: string; app_id: string };
+export type MetricScope = { tenant_id: string; app_id: string };
+type Scope = MetricScope;
 type SnapshotRecord = {
   tenant_id: string;
   app_id: string;
@@ -126,6 +127,7 @@ async function currentCosts(
   watermark: string,
   grouping: Any,
 ): Promise<CurrentCost[]> {
+  if (grouping?.attribution_status !== undefined && grouping.attribution_status !== "non_organic") return [];
   const result = await client.query<CurrentCost>(
     `SELECT tenant_id, app_id, cost_record_id, as_of,
             report_snapshot_digest, cost_key_digest AS dimension_digest
@@ -155,6 +157,152 @@ async function currentCosts(
   return result.rows;
 }
 
+async function eventCountValue(
+  client: Queryable,
+  scope: Scope,
+  watermark: string,
+  grouping: Any,
+  definition: Any,
+  privacyState: "before" | "after",
+): Promise<{ value_state: "present"; value_unscaled: string }> {
+  const eventNames = definition.event_names ?? [];
+  const eventName = eventNames[0];
+  if (eventNames.length !== 1 || ![
+    "click", "install", "skan_postback", "adattributionkit_postback",
+  ].includes(eventName)) {
+    throw new Error("SQL event_count requires exactly one supported event");
+  }
+  if (typeof grouping?.metric_date !== "string") {
+    throw new Error("SQL event_count requires grouping.metric_date");
+  }
+  const aggregatePostback = eventName === "skan_postback" || eventName === "adattributionkit_postback";
+  if (aggregatePostback) {
+    if (definition.aggregation_time_zone !== "UTC") {
+      throw new Error(`SQL aggregate event_count requires UTC aggregation: ${definition.metric_name}`);
+    }
+    if (grouping.attribution_status !== undefined) {
+      throw new Error(`SQL aggregate event_count forbids attribution_status: ${definition.metric_name}`);
+    }
+    const expectedEventName = definition.metric_name === "aak_attributed_installs"
+      ? "adattributionkit_postback"
+      : "skan_postback";
+    if (![
+      "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
+    ].includes(definition.metric_name) || eventName !== expectedEventName) {
+      throw new Error(`SQL aggregate metric and event mismatch: ${definition.metric_name}`);
+    }
+    const conversionBucket = grouping.apple_conversion_bucket;
+    if (definition.metric_name === "skan_conversion_value_distribution" && conversionBucket === undefined) {
+      throw new Error("SQL SKAN conversion distribution requires apple_conversion_bucket");
+    }
+    if (definition.metric_name !== "skan_conversion_value_distribution" && conversionBucket !== undefined) {
+      throw new Error("SQL apple_conversion_bucket is reserved for SKAN conversion distribution");
+    }
+    const aggregate = await client.query<{ value_unscaled: string }>(
+      `SELECT count(*)::text AS value_unscaled
+       FROM ledger.logical_events AS logical
+       JOIN ledger.raw_records_current AS raw
+         ON raw.tenant_id=logical.tenant_id
+        AND raw.app_id=logical.app_id
+        AND raw.record_id=logical.record_id
+       JOIN ledger.apple_postback_facts AS fact
+         ON fact.tenant_id=logical.tenant_id
+        AND fact.app_id=logical.app_id
+        AND fact.logical_event_id=logical.logical_event_id
+       JOIN LATERAL (
+         SELECT candidate.status
+         FROM ledger.attribution_results AS candidate
+         WHERE candidate.tenant_id=logical.tenant_id
+           AND candidate.app_id=logical.app_id
+           AND candidate.subject_scope='aggregate'
+           AND candidate.decided_at <= $3
+           AND candidate.artifact->'evidence_refs' @>
+             jsonb_build_array(jsonb_build_object('ref', raw.record_id))
+         ORDER BY candidate.decided_at DESC, candidate.attribution_id DESC
+         LIMIT 1
+       ) AS attribution ON attribution.status='non_organic'
+       WHERE logical.tenant_id=$1 AND logical.app_id=$2
+         AND raw.received_at <= $3
+         AND ($4='before' OR raw.payload_lifecycle_status='available')
+         AND logical.event_name=$5
+         AND fact.signature_verified
+         AND fact.did_win
+         AND fact.source_identifier_present
+         AND fact.conversion_bucket IS NOT NULL
+         AND timezone('UTC', control.canonical_timestamp_value(fact.received_at))::date=$6::date
+         AND ($7::text IS NULL OR fact.conversion_bucket=$7)`,
+      [
+        scope.tenant_id,
+        scope.app_id,
+        watermark,
+        privacyState,
+        eventName,
+        grouping.metric_date,
+        conversionBucket ?? null,
+      ],
+    );
+    return { value_state: "present", value_unscaled: aggregate.rows[0].value_unscaled };
+  }
+  if (grouping.attribution_status !== undefined && eventName !== "install") {
+    throw new Error("SQL event_count attribution_status applies only to install");
+  }
+  const result = await client.query<{ value_unscaled: string }>(
+    `WITH event AS (
+       SELECT
+         CASE WHEN logical.event_name='click' THEN click.campaign_id ELSE install.campaign_id END AS campaign_id,
+         CASE WHEN logical.event_name='click' THEN click.network ELSE install.network END AS network,
+         CASE WHEN logical.event_name='click' THEN click.country ELSE install.country END AS country,
+         CASE WHEN logical.event_name='install' THEN coalesce(attribution.status, 'unattributed') END AS attribution_status
+       FROM ledger.logical_events AS logical
+       JOIN ledger.raw_records_current AS raw
+         ON raw.tenant_id=logical.tenant_id
+        AND raw.app_id=logical.app_id
+        AND raw.record_id=logical.record_id
+       LEFT JOIN ledger.click_facts AS click ON click.logical_event_id=logical.logical_event_id
+       LEFT JOIN ledger.install_facts AS install ON install.logical_event_id=logical.logical_event_id
+       LEFT JOIN LATERAL (
+         SELECT candidate.status
+         FROM ledger.attribution_results AS candidate
+         WHERE candidate.tenant_id=logical.tenant_id
+           AND candidate.app_id=logical.app_id
+           AND candidate.subject_scope='installation_level'
+           AND candidate.subject_ref=install.installation_id
+           AND candidate.decided_at <= $3
+         ORDER BY candidate.decided_at DESC, candidate.attribution_id DESC
+         LIMIT 1
+       ) AS attribution ON logical.event_name='install'
+       WHERE logical.tenant_id=$1 AND logical.app_id=$2
+         AND raw.received_at <= $3
+         AND ($4='before' OR raw.payload_lifecycle_status='available')
+         AND logical.event_name=$5
+         AND control.canonical_timestamp_value(raw.occurred_at)
+           >= ($6::date::timestamp AT TIME ZONE $7)
+         AND control.canonical_timestamp_value(raw.occurred_at)
+           < (($6::date + 1)::timestamp AT TIME ZONE $7)
+     )
+     SELECT count(*)::text AS value_unscaled
+     FROM event
+     WHERE ($8::text IS NULL OR campaign_id=$8)
+       AND ($9::text IS NULL OR network=$9)
+       AND ($10::text IS NULL OR country=$10)
+       AND ($11::text IS NULL OR attribution_status=$11)`,
+    [
+      scope.tenant_id,
+      scope.app_id,
+      watermark,
+      privacyState,
+      eventName,
+      grouping.metric_date,
+      definition.aggregation_time_zone,
+      grouping.campaign_id ?? null,
+      grouping.network ?? null,
+      grouping.country ?? null,
+      grouping.attribution_status ?? null,
+    ],
+  );
+  return { value_state: "present", value_unscaled: result.rows[0].value_unscaled };
+}
+
 async function metricValue(
   client: Queryable,
   scope: Scope,
@@ -168,6 +316,9 @@ async function metricValue(
   undefined_reason: "no_attributed_cost" | "empty_cohort";
 }> {
   const calculation = definition.definition.calculation;
+  if (calculation === "event_count") {
+    return eventCountValue(client, scope, watermark, grouping, definition, privacyState);
+  }
   const activityEvents = definition.activity_events ?? ["session_start"];
   if (calculation === "active_installations_over_cohort" &&
       activityEvents.some((eventName: string) => eventName !== "session_start")) {
@@ -193,6 +344,16 @@ async function metricValue(
            ON raw.record_id=logical.record_id
           AND raw.tenant_id=logical.tenant_id
           AND raw.app_id=logical.app_id
+         LEFT JOIN LATERAL (
+           SELECT candidate.status
+           FROM ledger.attribution_results AS candidate
+           WHERE candidate.tenant_id=install.tenant_id
+             AND candidate.app_id=install.app_id
+             AND candidate.subject_scope='installation_level'
+             AND candidate.subject_ref=install.installation_id
+           ORDER BY candidate.decided_at DESC, candidate.attribution_id DESC
+           LIMIT 1
+         ) AS attribution ON true
          WHERE install.tenant_id=$1 AND install.app_id=$2 AND install.occurred_at IS NOT NULL
            AND raw.received_at <= $3
            AND ($15='before' OR raw.payload_lifecycle_status='available')
@@ -200,6 +361,7 @@ async function metricValue(
            AND ($5::text IS NULL OR install.network=$5)
            AND ($6::text IS NULL OR install.country=$6)
            AND ($7::text IS NULL OR timezone($8, install.occurred_at_ts)::date::text=$7)
+           AND ($16::text IS NULL OR attribution.status=$16)
        ),
        revenue_candidates AS (
          SELECT revenue.*, cohort.installed_at, rate.rate_unscaled, rate.rate_scale
@@ -247,6 +409,7 @@ async function metricValue(
            SELECT DISTINCT ON (cost_key_digest) *
            FROM ledger.cost_records
            WHERE tenant_id=$1 AND app_id=$2 AND as_of <= $3
+             AND ($16::text IS NULL OR $16='non_organic')
              AND ($4::text IS NULL OR campaign_id=$4)
              AND ($5::text IS NULL OR network=$5)
              AND ($6::text IS NULL OR country=$6)
@@ -306,6 +469,7 @@ async function metricValue(
       fxPolicy.target_scale,
       definition.ratio_scale ?? 0,
       privacyState,
+      grouping?.attribution_status ?? null,
     ],
   );
   const row = result.rows[0];
@@ -320,7 +484,7 @@ async function metricValue(
   };
 }
 
-async function persistMetricRun(client: Queryable, scope: Scope, artifact: Any): Promise<void> {
+export async function persistMetricRun(client: Queryable, scope: Scope, artifact: Any): Promise<void> {
   const grouping = artifact.grouping?.dimensions ?? {};
   const result = await client.query(
     `INSERT INTO ledger.metric_runs (
@@ -358,12 +522,48 @@ async function persistMetricRun(client: Queryable, scope: Scope, artifact: Any):
   }
 }
 
+async function persistMetricReplayManifest(
+  client: Queryable,
+  scope: Scope,
+  artifact: Any,
+  definition: Any,
+  evaluation: Any,
+  fxPolicy: Any,
+): Promise<void> {
+  const replayArtifact = {
+    version: 1,
+    source_metric_run_id: artifact.metric_run_id,
+    metric_definition: definition,
+    evaluation: {
+      ...evaluation,
+      metric_names: [artifact.metric_name],
+    },
+    fx_policy: fxPolicy,
+  };
+  const manifestId = `metric-replay:${sha256(replayArtifact).slice(0, 48)}`;
+  await client.query(
+    `INSERT INTO control.metric_replay_manifests (
+      metric_replay_manifest_id, tenant_id, app_id, source_metric_run_id, created_at, artifact
+    ) VALUES ($1,$2,$3,$4,$5,$6::jsonb)
+    ON CONFLICT (tenant_id, app_id, source_metric_run_id) DO NOTHING`,
+    [
+      manifestId,
+      scope.tenant_id,
+      scope.app_id,
+      artifact.metric_run_id,
+      artifact.computed_at,
+      JSON.stringify(replayArtifact),
+    ],
+  );
+}
+
 export async function computeSqlMetricRunsWithClient(
   client: Queryable,
   input: Any,
   persist = true,
+  scopeOverride?: MetricScope,
 ): Promise<Any[]> {
-  const scope = scopeForInput(input);
+  const scope = scopeOverride ?? scopeForInput(input);
   const fxPolicy = input.fx_policy;
   if (!fxPolicy || fxPolicy.rates?.length !== 1) {
     throw new Error("v0.2 SQL metric runs require exactly one structured FX rate");
@@ -374,6 +574,7 @@ export async function computeSqlMetricRunsWithClient(
   for (const definition of input.metric_definitions ?? []) {
     definitions.set(definition.metric_name, definition);
   }
+  for (const definition of definitions.values()) assertMetricDefinitionSeries(definition);
   const output: Any[] = [];
 
   for (const evaluation of input.metric_evaluations ?? []) {
@@ -471,20 +672,49 @@ export async function computeSqlMetricRunsWithClient(
           supersedes_metric_run_id: `${evaluation.supersedes_metric_run_id_prefix}:${metricName}`,
         } : {}),
       };
-      if (persist) await persistMetricRun(client, scope, artifact);
+      if (persist) {
+        await persistMetricRun(client, scope, artifact);
+        await persistMetricReplayManifest(client, scope, artifact, definition, evaluation, fxPolicy);
+      }
       output.push(artifact);
     }
   }
   return output.sort((left, right) => compareText(left.metric_run_id, right.metric_run_id));
 }
 
-export async function computeSqlMetricRuns(pool: Pool, input: Any, persist = true): Promise<Any[]> {
-  const scope = scopeForInput(input);
+function assertMetricDefinitionSeries(definition: Any): void {
+  const aggregateNames = new Set([
+    "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
+  ]);
+  const eventNames = definition.event_names ?? [];
+  const grouping = definition.grouping_dimensions ?? [];
+  const fail = () => { throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`); };
+  if (aggregateNames.has(definition.metric_name)) {
+    const expectedEvent = definition.metric_name === "aak_attributed_installs"
+      ? "adattributionkit_postback" : "skan_postback";
+    const expectedGrouping = definition.metric_name === "skan_conversion_value_distribution"
+      ? ["metric_date", "apple_conversion_bucket"] : ["metric_date"];
+    if (definition.definition?.calculation !== "event_count" || definition.definition?.numerator !== "events" ||
+        definition.aggregation_time_zone !== "UTC" || eventNames.length !== 1 || eventNames[0] !== expectedEvent ||
+        grouping.length !== expectedGrouping.length || expectedGrouping.some((value) => !grouping.includes(value))) fail();
+    return;
+  }
+  if (eventNames.some((value: string) => value === "skan_postback" || value === "adattributionkit_postback") ||
+      grouping.includes("apple_conversion_bucket")) fail();
+}
+
+export async function computeSqlMetricRuns(
+  pool: Pool,
+  input: Any,
+  persist = true,
+  scopeOverride?: MetricScope,
+): Promise<Any[]> {
+  const scope = scopeOverride ?? scopeForInput(input);
   const client = await pool.connect();
   try {
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
     await client.query("SELECT set_config('open_mmp.tenant_id', $1, true)", [scope.tenant_id]);
-    const output = await computeSqlMetricRunsWithClient(client, input, persist);
+    const output = await computeSqlMetricRunsWithClient(client, input, persist, scope);
     await client.query("COMMIT");
     return output;
   } catch (error) {

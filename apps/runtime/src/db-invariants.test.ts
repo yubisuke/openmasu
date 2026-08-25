@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { createAppPool, createMigrationPool } from "./index.js";
+import { createAppPool, createMigrationPool, createReaderPool, withTenant } from "./index.js";
 
 const timestamp = "2026-08-19T00:00:00.000Z";
 const suffix = `${Date.now()}`;
@@ -11,6 +11,7 @@ const recordA = `test-record-a-${suffix}`;
 const recordB = `test-record-b-${suffix}`;
 
 const appPool = createAppPool();
+const readerPool = createReaderPool();
 const migrationPool = createMigrationPool();
 const appClient = await appPool.connect();
 
@@ -44,6 +45,34 @@ try {
     seed_can_select_raw: boolean;
     seed_can_truncate_raw: boolean;
     seed_can_manage_fixtures: boolean;
+    app_can_delete_nonce: boolean;
+    app_can_delete_ledger: boolean;
+    reader_bypass: boolean;
+    reader_owns_ledger: boolean;
+    reader_can_create: boolean;
+    reader_can_select_sessions: boolean;
+    reader_can_insert_sessions: boolean;
+    app_can_insert_public_postback_audit: boolean;
+    app_can_select_public_postback_audit: boolean;
+    reader_can_select_public_postback_audit: boolean;
+    app_can_resolve_apple_adam: boolean;
+    app_can_list_apple_tenants: boolean;
+    apple_registration_rls_forced: boolean;
+    conversion_schema_rls_forced: boolean;
+    adservices_lookup_rls_forced: boolean;
+    app_can_select_adservices_results: boolean;
+    reader_can_select_adservices_results: boolean;
+    adservices_result_rls_forced: boolean;
+    app_can_list_m4_work_tenants: boolean;
+    app_can_select_apple_postback_facts: boolean;
+    reader_can_select_apple_postback_facts: boolean;
+    apple_postback_fact_rls_forced: boolean;
+    reader_can_select_admin_roles: boolean;
+    reader_can_select_admin_digest: boolean;
+    app_can_insert_rule_bundles: boolean;
+    reader_can_select_rule_bundles: boolean;
+    reader_can_insert_rule_bundles: boolean;
+    rule_bundle_rls_forced: boolean;
   }>(`
     SELECT
       rolbypassrls AS bypass,
@@ -64,7 +93,39 @@ try {
         'openmmp_seed',
         'testing.fixture_inputs',
         'SELECT,INSERT,UPDATE,DELETE'
-      ) AS seed_can_manage_fixtures
+      ) AS seed_can_manage_fixtures,
+      has_table_privilege('openmmp_app', 'ephemeral.request_nonces', 'DELETE') AS app_can_delete_nonce,
+      has_table_privilege('openmmp_app', 'ledger.ingest_batches', 'DELETE') AS app_can_delete_ledger,
+      (SELECT rolbypassrls FROM pg_roles WHERE rolname = 'openmmp_reader') AS reader_bypass,
+      EXISTS (
+        SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'ledger'
+          AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname = 'openmmp_reader')
+      ) AS reader_owns_ledger,
+      has_database_privilege('openmmp_reader', current_database(), 'CREATE') AS reader_can_create,
+      has_table_privilege('openmmp_reader', 'ephemeral.dashboard_sessions', 'SELECT') AS reader_can_select_sessions,
+      has_table_privilege('openmmp_reader', 'ephemeral.dashboard_sessions', 'INSERT') AS reader_can_insert_sessions,
+      has_table_privilege('openmmp_app', 'control.public_postback_audits', 'INSERT') AS app_can_insert_public_postback_audit,
+      has_table_privilege('openmmp_app', 'control.public_postback_audits', 'SELECT') AS app_can_select_public_postback_audit,
+      has_table_privilege('openmmp_reader', 'control.public_postback_audits', 'SELECT') AS reader_can_select_public_postback_audit,
+      has_function_privilege('openmmp_app', 'control.resolve_apple_app_adam_id(bigint)', 'EXECUTE') AS app_can_resolve_apple_adam,
+      has_function_privilege('openmmp_app', 'control.list_apple_postback_tenants()', 'EXECUTE') AS app_can_list_apple_tenants,
+      (SELECT relforcerowsecurity FROM pg_class WHERE oid='control.apple_app_registrations'::regclass) AS apple_registration_rls_forced,
+      (SELECT relforcerowsecurity FROM pg_class WHERE oid='control.conversion_schemas'::regclass) AS conversion_schema_rls_forced,
+      (SELECT relforcerowsecurity FROM pg_class WHERE oid='ephemeral.adservices_lookups'::regclass) AS adservices_lookup_rls_forced,
+      has_table_privilege('openmmp_app', 'ledger.adservices_lookup_results', 'SELECT') AS app_can_select_adservices_results,
+      has_table_privilege('openmmp_reader', 'ledger.adservices_lookup_results', 'SELECT') AS reader_can_select_adservices_results,
+      (SELECT relforcerowsecurity FROM pg_class WHERE oid='ledger.adservices_lookup_results'::regclass) AS adservices_result_rls_forced,
+      has_function_privilege('openmmp_app', 'control.list_m4_work_tenants()', 'EXECUTE') AS app_can_list_m4_work_tenants,
+      has_table_privilege('openmmp_app', 'ledger.apple_postback_facts', 'SELECT') AS app_can_select_apple_postback_facts,
+      has_table_privilege('openmmp_reader', 'ledger.apple_postback_facts', 'SELECT') AS reader_can_select_apple_postback_facts,
+      (SELECT relforcerowsecurity FROM pg_class WHERE oid='ledger.apple_postback_facts'::regclass) AS apple_postback_fact_rls_forced,
+      has_table_privilege('openmmp_reader', 'control.admin_key_roles_current', 'SELECT') AS reader_can_select_admin_roles,
+      has_column_privilege('openmmp_reader', 'control.admin_keys', 'scrypt_digest', 'SELECT') AS reader_can_select_admin_digest,
+      has_table_privilege('openmmp_app', 'control.rule_bundle_revisions', 'INSERT') AS app_can_insert_rule_bundles,
+      has_table_privilege('openmmp_reader', 'control.rule_bundle_revisions', 'SELECT') AS reader_can_select_rule_bundles,
+      has_table_privilege('openmmp_reader', 'control.rule_bundle_revisions', 'INSERT') AS reader_can_insert_rule_bundles,
+      (SELECT relforcerowsecurity FROM pg_class WHERE oid='control.rule_bundle_revisions'::regclass) AS rule_bundle_rls_forced
     FROM pg_roles r
     WHERE rolname = 'openmmp_app'
   `);
@@ -76,13 +137,65 @@ try {
   assert.equal(role.rows[0].seed_can_select_raw, false);
   assert.equal(role.rows[0].seed_can_truncate_raw, true);
   assert.equal(role.rows[0].seed_can_manage_fixtures, true);
+  assert.equal(role.rows[0].app_can_delete_nonce, true);
+  assert.equal(role.rows[0].app_can_delete_ledger, false);
+  assert.equal(role.rows[0].reader_bypass, false);
+  assert.equal(role.rows[0].reader_owns_ledger, false);
+  assert.equal(role.rows[0].reader_can_create, false);
+  assert.equal(role.rows[0].reader_can_select_sessions, true);
+  assert.equal(role.rows[0].reader_can_insert_sessions, false);
+  assert.equal(role.rows[0].app_can_insert_public_postback_audit, true);
+  assert.equal(role.rows[0].app_can_select_public_postback_audit, false);
+  assert.equal(role.rows[0].reader_can_select_public_postback_audit, false);
+  assert.equal(role.rows[0].app_can_resolve_apple_adam, true);
+  assert.equal(role.rows[0].app_can_list_apple_tenants, true);
+  assert.equal(role.rows[0].apple_registration_rls_forced, true);
+  assert.equal(role.rows[0].conversion_schema_rls_forced, true);
+  assert.equal(role.rows[0].adservices_lookup_rls_forced, true);
+  assert.equal(role.rows[0].app_can_select_adservices_results, true);
+  assert.equal(role.rows[0].reader_can_select_adservices_results, false);
+  assert.equal(role.rows[0].adservices_result_rls_forced, true);
+  assert.equal(role.rows[0].app_can_list_m4_work_tenants, true);
+  assert.equal(role.rows[0].app_can_select_apple_postback_facts, true);
+  assert.equal(role.rows[0].reader_can_select_apple_postback_facts, true);
+  assert.equal(role.rows[0].apple_postback_fact_rls_forced, true);
+  assert.equal(role.rows[0].reader_can_select_admin_roles, true);
+  assert.equal(role.rows[0].reader_can_select_admin_digest, false);
+  assert.equal(role.rows[0].app_can_insert_rule_bundles, true);
+  assert.equal(role.rows[0].reader_can_select_rule_bundles, true);
+  assert.equal(role.rows[0].reader_can_insert_rule_bundles, false);
+  assert.equal(role.rows[0].rule_bundle_rls_forced, true);
+
+  await withTenant(appPool, tenantA, (client) => client.query(
+    "INSERT INTO control.apps (tenant_id, app_id, created_at) VALUES ($1,$2,$3)",
+    [tenantA, appA, timestamp],
+  ));
+  assert.equal((await readerPool.query("SELECT app_id FROM control.apps WHERE tenant_id=$1", [tenantA])).rowCount, 0);
+  assert.equal((await withTenant(readerPool, tenantA, (client) => client.query(
+    "SELECT app_id FROM control.apps WHERE tenant_id=$1 AND app_id=$2",
+    [tenantA, appA],
+  ))).rowCount, 1);
+  await assert.rejects(
+    () => withTenant(readerPool, tenantA, (client) => client.query(
+      "INSERT INTO control.apps (tenant_id, app_id, created_at) VALUES ($1,$2,$3)",
+      [tenantA, `reader-write-${suffix}`, timestamp],
+    )),
+    (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "42501",
+  );
 
   await appClient.query("BEGIN");
   await setTenant(tenantA);
   await appClient.query(
-    "INSERT INTO control.apps (tenant_id, app_id, created_at) VALUES ($1, $2, $3)",
-    [tenantA, appA, timestamp],
+    `INSERT INTO ephemeral.request_nonces (
+      tenant_id, app_id, principal_type, principal_key_id, nonce,
+      timestamp_ms, created_at, expires_at
+    ) VALUES ($1,$2,'sdk_key',$3,$4,0,clock_timestamp(),clock_timestamp() + interval '15 minutes')`,
+    [tenantA, appA, `sdk-key-${suffix}`, `Nonce_${"a".repeat(24)}`],
   );
+  assert.equal((await appClient.query(
+    "DELETE FROM ephemeral.request_nonces WHERE tenant_id=$1 AND app_id=$2 RETURNING nonce",
+    [tenantA, appA],
+  )).rowCount, 1, "only ephemeral replay state should be deletable by the app role");
   await appClient.query(
     `INSERT INTO ledger.raw_records (
       record_id, tenant_id, app_id, producer, producer_version, event_id, delivery_id,
@@ -176,6 +289,7 @@ try {
   console.log("A7 tenant isolation passed: unset=0, cross-tenant=0, mismatched INSERT and cross-scope reference rejected.");
   console.log(`A8 append-only database controls passed for ${ledgerTables.rowCount} ledger tables; raw row remained byte-identical.`);
   console.log("A8 payload encryption, decryption, and purge behavior is covered by the Stage 5 integration suite.");
+  console.log("C03 reader RLS passed: unset tenant returned zero rows, tenant scope selected one row, and INSERT failed with 42501.");
 } catch (error) {
   try {
     await appClient.query("ROLLBACK");
@@ -186,5 +300,6 @@ try {
 } finally {
   appClient.release();
   await appPool.end();
+  await readerPool.end();
   await migrationPool.end();
 }

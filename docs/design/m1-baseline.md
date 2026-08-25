@@ -4,13 +4,13 @@ Status: **decided by R-22.** Each option set records the selected recommendation
 
 Repository location: `docs/design/m1-baseline.md`.
 
-Baseline commit: `main` = `1b6fa44`. Contract gate re-run on 2026-08-19: `516` `node --test` assertions pass and the summary line reads
+Baseline commit: `main` = `1b6fa44`; that historical baseline passed 516 `node --test` assertions. The current Contract v0.3 gate re-run on 2026-08-19 passes 585 assertions and its summary line reads
 
 ```
-Validated 26 schemas, 8 registries, 38 reviewed fixtures, 494 golden output artifacts, 38 scenario assertions, 26 acceptance criteria, deterministic TypeScript, independent Python, and RFC 8785 conformance.
+Validated 27 schemas, 8 registries, 41 reviewed fixtures, 533 golden output artifacts, 41 scenario assertions, 26 acceptance criteria, deterministic TypeScript, independent Python, and RFC 8785 conformance.
 ```
 
-Contract v0.2 (WO-2 consistency + WO-3 extension) is landed. The original contract handoffs are recorded as resolved under [Handoffs to contract v0.2](#handoffs-to-contract-v02).
+Contract v0.3 is the active contract line. The original M1 contract handoffs remain recorded under [Handoffs to contract v0.2](#handoffs-to-contract-v02), while the narrow M2 prerequisites are documented in the v0.3 migration guide.
 
 ---
 

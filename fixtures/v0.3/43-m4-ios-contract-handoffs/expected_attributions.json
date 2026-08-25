@@ -1,0 +1,114 @@
+[
+  {
+    "attribution_id": "attr:aak-development-key-43",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "aggregate",
+    "subject_ref": "aggregate:adattributionkit:aak-development-key-43",
+    "status": "non_organic",
+    "method": "adattributionkit",
+    "model": "aggregate",
+    "reason_code": "skan_postback_verified",
+    "reason_code_version": "0.3.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "aak-development-key-43",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-20T03:00:00.000Z",
+    "decided_at": "2026-08-20T12:00:00.000Z",
+    "input_cutoff_at": "2026-08-20T12:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "apple-postback-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  {
+    "attribution_id": "attr:ios-lookup-unavailable-43",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:ios-lookup-unavailable-43",
+    "reason_code_version": "0.3.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ios-lookup-unavailable-43",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-20T02:00:00.000Z",
+    "decided_at": "2026-08-20T12:00:00.000Z",
+    "input_cutoff_at": "2026-08-20T12:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "unattributed",
+    "method": "apple_adservices",
+    "model": "last_click",
+    "reason_code": "adservices_lookup_unavailable"
+  },
+  {
+    "attribution_id": "attr:ios-not-attributed-43",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:ios-not-attributed-43",
+    "reason_code_version": "0.3.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ios-not-attributed-43",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-20T01:00:00.000Z",
+    "decided_at": "2026-08-20T12:00:00.000Z",
+    "input_cutoff_at": "2026-08-20T12:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "unattributed",
+    "method": "apple_adservices",
+    "model": "last_click",
+    "reason_code": "adservices_not_attributed"
+  },
+  {
+    "attribution_id": "attr:skan-minor-43",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "aggregate",
+    "subject_ref": "aggregate:skadnetwork:skan-minor-43",
+    "status": "non_organic",
+    "method": "skadnetwork",
+    "model": "aggregate",
+    "reason_code": "skan_postback_verified",
+    "reason_code_version": "0.3.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "skan-minor-43",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-20T04:00:00.000Z",
+    "decided_at": "2026-08-20T12:00:00.000Z",
+    "input_cutoff_at": "2026-08-20T12:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "apple-postback-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+]

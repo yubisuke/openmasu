@@ -1,0 +1,15 @@
+{
+  "name": "@open-mmp/redirector",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Portable Open MMP redirector HTTP service",
+  "type": "module",
+  "dependencies": {
+    "@open-mmp/redirector-core": "0.1.0",
+    "@open-mmp/runtime": "0.1.0",
+    "pg": "8.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "8.23.1"
+  }
+}

@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import type { Pool } from "pg";
 import { sha256, type CandidateAttempt } from "@open-mmp/attribution-core";
 import { createAppPool, uuidV7, withTenant } from "@open-mmp/runtime";
 import { ingestRuntimeBatch } from "../ingestion.js";
-import { loadMapping, mapRow, MappingError, rowMatches, type ImportMapping } from "./mapping.js";
+import { lintMappings, loadMapping, mapRow, MappingError, rowMatches, type ImportMapping } from "./mapping.js";
 import { ImportLimitError, readRows, type ImportLimits } from "./source.js";
 
 type Any = Record<string, any>;
@@ -58,7 +58,7 @@ function toAttempt(mapping: ImportMapping, mapped: Any, fileDigest: string, rowO
     throw new MappingError("mapped occurred_at is invalid", ["occurred_at"]);
   }
   const record = {
-    contract_version: "0.2.0",
+    contract_version: "0.3.0",
     record_id: identifier("record", [mapping.source_id, fileDigest, rowOrdinal]),
     delivery_id: identifier("delivery", [fileDigest, rowOrdinal]),
     tenant_id: mapping.tenant_id,
@@ -67,7 +67,7 @@ function toAttempt(mapping: ImportMapping, mapped: Any, fileDigest: string, rowO
     producer_version: `mapping:${mapping.version}`,
     event_id: eventId,
     event_name: eventName,
-    schema_version: "0.2.0",
+    schema_version: "0.3.0",
     occurred_at: new Date(occurredAt).toISOString(),
     occurred_at_source: "import",
     received_at: receivedAt,
@@ -107,9 +107,9 @@ async function historicalAttempts(pool: Pool, mapping: ImportMapping): Promise<C
     const result = await client.query<{ server_context: Any; record: Any; import_run_id: string }>(
       `SELECT server_context, record, import_run_id::text
        FROM control.import_attempts
-       WHERE tenant_id=$1 AND app_id=$2 AND source_id=$3
+       WHERE tenant_id=$1 AND app_id=$2 AND record->>'producer'=$3
        ORDER BY created_at, row_ordinal, import_attempt_id`,
-      [mapping.tenant_id, mapping.app_id, mapping.source_id],
+      [mapping.tenant_id, mapping.app_id, `import:${mapping.provider}`],
     );
     return result.rows.map((row) => ({ server: row.server_context, record: row.record, batch_id: row.import_run_id }));
   });
@@ -146,59 +146,88 @@ export async function runMmpImport(options: {
     return { status: "skipped", import_run_id: runId, rows: loaded.rows.length, accepted: 0, rejected: 0, deliveries: 0, logical_events: 0 };
   }
 
-  const attempts: CandidateAttempt[] = [];
+  const attemptRows: Array<{ ordinal: number; attempt: CandidateAttempt }> = [];
   const failures: Array<{ ordinal: number; reason: string; fields: string[] }> = [];
   for (const [ordinal, row] of loaded.rows.entries()) {
     if (!rowMatches(mapping, row)) continue;
     try {
-      attempts.push(toAttempt(mapping, mapRow(mapping, row), fileDigest, ordinal, now));
+      attemptRows.push({ ordinal, attempt: toAttempt(mapping, mapRow(mapping, row), fileDigest, ordinal, now) });
     } catch (error) {
       const mappingError = error instanceof MappingError ? error : new MappingError("row mapping failed");
       failures.push({ ordinal, reason: mappingError.message.includes("timestamp") ? "timestamp_invalid" : "mapping_validation_failed", fields: mappingError.fields });
     }
   }
-  const history = await historicalAttempts(options.pool, mapping);
-  const output = await ingestRuntimeBatch(attempts, options.pool, history);
-  await withTenant(options.pool, mapping.tenant_id, async (client) => {
-    await client.query(
+  try {
+    const history = await historicalAttempts(options.pool, mapping);
+    const output = await ingestRuntimeBatch(attemptRows.map(({ attempt }) => attempt), options.pool, history);
+    const invalidKeys = new Set(output.validation_failures.map((failure) => `${failure.record_id}\u0000${failure.delivery_id}`));
+    const acceptedRows = attemptRows.filter(({ attempt }) => !invalidKeys.has(`${attempt.record.record_id}\u0000${attempt.record.delivery_id}`));
+    const rowByAttempt = new Map(attemptRows.map(({ ordinal, attempt }) => [
+      `${attempt.record.record_id}\u0000${attempt.record.delivery_id}`,
+      ordinal,
+    ]));
+    const allFailures = [
+      ...failures,
+      ...output.validation_failures.map((failure) => ({
+        ordinal: rowByAttempt.get(`${failure.record_id}\u0000${failure.delivery_id}`)!,
+        reason: "row_schema_invalid",
+        fields: [...failure.fields],
+      })),
+    ];
+    // import_runs is append-only: publish the terminal state in the same transaction as
+    // the file, attempt, and row-rejection artifacts instead of mutating a running row.
+    await withTenant(options.pool, mapping.tenant_id, async (client) => {
+      await client.query(
+        `INSERT INTO control.import_runs (
+          import_run_id, tenant_id, app_id, source_id, source_snapshot_digest,
+          status, started_at, completed_at
+        ) VALUES ($1,$2,$3,$4,$5,'completed',$6,$6)`,
+        [runId, mapping.tenant_id, mapping.app_id, mapping.source_id, fileDigest, now],
+      );
+      await client.query(
+        `INSERT INTO control.import_files (
+          import_file_id, tenant_id, app_id, source_id, file_digest, file_bytes,
+          row_count, first_seen_at, import_run_id
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [uuidV7(options.now?.valueOf()), mapping.tenant_id, mapping.app_id, mapping.source_id, fileDigest, loaded.bytes, loaded.rows.length, now, runId],
+      );
+      for (const { ordinal, attempt } of acceptedRows) {
+        await client.query(
+          `INSERT INTO control.import_attempts (
+            import_attempt_id, import_run_id, tenant_id, app_id, source_id,
+            row_ordinal, server_context, record, created_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9)`,
+          [uuidV7(), runId, mapping.tenant_id, mapping.app_id, mapping.source_id, ordinal, JSON.stringify(attempt.server), JSON.stringify(attempt.record), now],
+        );
+      }
+      for (const failure of allFailures) {
+        await client.query(
+          `INSERT INTO control.import_row_rejections (
+            import_rejection_id, import_run_id, tenant_id, app_id, source_id,
+            row_ordinal, reason_code, field_names, occurred_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)`,
+          [uuidV7(), runId, mapping.tenant_id, mapping.app_id, mapping.source_id, failure.ordinal, failure.reason, JSON.stringify(failure.fields), now],
+        );
+      }
+    });
+    console.log(`Import ${basename(options.filePath)}: rows=${loaded.rows.length} accepted=${acceptedRows.length} rejected=${allFailures.length}`);
+    return {
+      status: "completed", import_run_id: runId, rows: loaded.rows.length,
+      accepted: acceptedRows.length, rejected: allFailures.length,
+      deliveries: output.deliveries.length, logical_events: output.logical_events.length,
+    };
+  } catch (error) {
+    // Projection writes are transaction-scoped per logical record. A terminal failed run
+    // still records the source snapshot without requiring UPDATE permission.
+    await withTenant(options.pool, mapping.tenant_id, (client) => client.query(
       `INSERT INTO control.import_runs (
         import_run_id, tenant_id, app_id, source_id, source_snapshot_digest,
         status, started_at, completed_at
-      ) VALUES ($1,$2,$3,$4,$5,'completed',$6,$6)`,
+      ) VALUES ($1,$2,$3,$4,$5,'failed',$6,$6)`,
       [runId, mapping.tenant_id, mapping.app_id, mapping.source_id, fileDigest, now],
-    );
-    await client.query(
-      `INSERT INTO control.import_files (
-        import_file_id, tenant_id, app_id, source_id, file_digest, file_bytes,
-        row_count, first_seen_at, import_run_id
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [uuidV7(options.now?.valueOf()), mapping.tenant_id, mapping.app_id, mapping.source_id, fileDigest, loaded.bytes, loaded.rows.length, now, runId],
-    );
-    for (const [ordinal, attempt] of attempts.entries()) {
-      await client.query(
-        `INSERT INTO control.import_attempts (
-          import_attempt_id, import_run_id, tenant_id, app_id, source_id,
-          row_ordinal, server_context, record, created_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9)`,
-        [uuidV7(), runId, mapping.tenant_id, mapping.app_id, mapping.source_id, ordinal, JSON.stringify(attempt.server), JSON.stringify(attempt.record), now],
-      );
-    }
-    for (const failure of failures) {
-      await client.query(
-        `INSERT INTO control.import_row_rejections (
-          import_rejection_id, import_run_id, tenant_id, app_id, source_id,
-          row_ordinal, reason_code, field_names, occurred_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)`,
-        [uuidV7(), runId, mapping.tenant_id, mapping.app_id, mapping.source_id, failure.ordinal, failure.reason, JSON.stringify(failure.fields), now],
-      );
-    }
-  });
-  console.log(`Import ${basename(options.filePath)}: rows=${loaded.rows.length} accepted=${attempts.length} rejected=${failures.length}`);
-  return {
-    status: "completed", import_run_id: runId, rows: loaded.rows.length,
-    accepted: attempts.length, rejected: failures.length,
-    deliveries: output.deliveries.length, logical_events: output.logical_events.length,
-  };
+    ).then(() => undefined));
+    throw error;
+  }
 }
 
 function argument(name: string): string | undefined {
@@ -213,6 +242,10 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
   const mappingPath = source.endsWith(".json") && (source.includes("/") || source.includes("\\"))
     ? resolve(source)
     : join(resolve(process.env.OPENMMP_MAPPINGS_DIR ?? "examples/mappings"), source.endsWith(".json") ? source : `${source}.json`);
+  const mappings = readdirSync(dirname(mappingPath), { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+    .map((entry) => loadMapping(join(dirname(mappingPath), entry.name)));
+  for (const warning of lintMappings(mappings)) console.warn(JSON.stringify({ level: "warning", ...warning }));
   const pool = createAppPool();
   try {
     const summary = await runMmpImport({ pool, mappingPath, filePath: resolve(file) });

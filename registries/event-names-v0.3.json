@@ -1,0 +1,4 @@
+{
+  "contract_version": "0.3.0",
+  "event_names": ["click", "install", "session_start", "ad_impression", "ad_view", "ad_revenue", "purchase", "refund", "consent_changed", "custom_event", "skan_postback", "adattributionkit_postback"]
+}

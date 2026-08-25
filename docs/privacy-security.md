@@ -41,6 +41,11 @@ The initial MVP does not collect them. A future adapter may handle one only when
 - AdAttributionKit is modeled as privacy-preserving platform attribution, not deterministic installation-level attribution.
 - Device fingerprinting is prohibited by project policy.
 - Verify postback signatures and transaction IDs and reject replayed postbacks.
+- The M4 SDK does not import `AdSupport` or `AppTrackingTransparency`, read IDFA or `identifierForVendor`, or use pasteboard/location signals. These prohibitions are checked in source and built symbols.
+- All SDK state is below one Application Support subtree that is re-excluded from backup after every write. iOS files use `completeUntilFirstUserAuthentication`; SQLite uses WAL, `synchronous=NORMAL`, and `secure_delete=ON`.
+- The Privacy Manifest declares tracking disabled and no tracking domains. It declares linked Device ID for analytics/app functionality, Product Interaction and Purchase History for analytics, and Advertising Data for analytics/developer advertising. Operators must narrow or extend their final application declaration to match enabled features.
+- The built-symbol audit is authoritative for Required Reason APIs. M4 currently declares none and fails CI if a listed API appears without an exact category/reason mapping.
+- AdServices raw tokens are protected evidence, never public claims or logs. SKAdNetwork and AdAttributionKit postbacks are aggregate evidence and cannot carry an installation identity.
 
 ## Android
 
@@ -49,6 +54,12 @@ The initial MVP does not collect them. A future adapter may handle one only when
 - Treat an unsupported or unavailable Install Referrer path as explicit unattributed evidence (`install_referrer_unsupported` or `install_referrer_unavailable`), not as an organic assertion.
 - Never reconnect a deleted advertising ID to an earlier ID or derived profile.
 - Google announced the retirement of Attribution Reporting (Android) on 2025-10-17 and no longer accepts enrollment; this project does not adopt it.
+
+### Meta Install Referrer evidence
+
+- Decrypted identifiers and classification fields remain protected, tenant/app-scoped evidence. They are not public campaign metadata.
+- The typed contract keeps only measurement-relevant IDs, objective classification, Instagram flag, publisher platform, and platform position. Free-form campaign, ad-group, and campaign-group names are excluded because they can contain operator-confidential text and add no measurement role that the corresponding IDs do not serve.
+- Encrypted source material, decryption keys, authentication failures, and key-rotation state remain deployment-private. Fixtures use synthetic values only.
 
 ## Initial retention proposal
 
@@ -78,7 +89,7 @@ Before implementation, legal and operational requirements must validate these de
 - Privacy tombstones retain plaintext `reason_code` and `policy_version`. Their `provenance_digest` is a tamper-evident SHA-256/JCS anchor over tenant, app, privacy request, record, and completion time; it is not a secrecy mechanism.
 - Retention expiry follows the same tombstone and immutable recalculation path without creating a privacy request. Replacement metric runs are marked `retention_affected`.
 - Request state is `received | processing | completed | failed`.
-- Data access and export (DSAR access/portability) will be provided through the M3 reporting API; the request contract is not yet defined and is tracked as an open design item.
+- M3 CSV and dashboard exports are aggregate operator reports. They are not data-subject access or portability exports and must never be presented as such. A DSAR access/portability contract remains a separate open design item.
 
 ## Authentication and secrets
 
@@ -95,6 +106,8 @@ Before implementation, legal and operational requirements must validate these de
 - M1a protected raw payloads use project-level AES-256-GCM envelope encryption. Every object receives a random 256-bit data key; the payload and wrapped data key use separate nonces and authentication tags, and tenant/app/object identity is authenticated as AAD. Each key entry is stored separately so lawful purge removes both the encrypted object and its wrapped key; integration tests prove the object cannot be decrypted afterwards.
 - Deployment secrets enter through the M1a `SecretStore` environment-or-`*_FILE` port and are never stored in fixtures, logs, audit artifacts, or the public repository.
 - Backups and logs that contain protected metadata remain encrypted, access-controlled, and covered by retention policy.
+- A restored database must not serve traffic until every completed privacy request present in the authoritative ledger has been reapplied with `npm run db:reapply-privacy`. The job purges restored encrypted objects, appends missing tombstone/correction state idempotently, and supersedes replay-manifest-backed metrics. It fails closed for affected metric runs that lack replay input.
+- A backup that predates a completed privacy request is insufficient by itself. The operator must first restore the later authoritative completed-request ledger or select a newer backup; the public CLI does not invent or import missing deletion requests.
 - Encryption keys and signing secrets remain deployment-private, are access-controlled, support rotation, and are separable from encrypted data. Docker Compose defaults are not production key-management evidence.
 
 ## Open-core fraud boundary
@@ -121,7 +134,7 @@ Each decision records its reason, evidence references, policy digest, evaluation
 
 ## Release gates
 
-The initial public [threat model](threat-model.md) maps the M0.2 Contract v0.2 controls and the residual risks that only a runtime release can address.
+The initial public [threat model](threat-model.md) maps the M0.3 Contract v0.3 controls and the residual risks that only a runtime release can address.
 
 - Threat model
 - Complete SDK field inventory
@@ -135,15 +148,17 @@ Gate ownership follows the canonical [roadmap](roadmap.md):
 
 | Gate | Required milestone |
 | --- | --- |
-| Initial threat model, retention/redaction contract, and replay/conflict/redaction fixtures | M0.2 Contract v0.2 |
+| Initial threat model, retention/redaction contract, and replay/conflict/redaction fixtures | M0.3 Contract v0.3 |
 | Private vulnerability-reporting path, TLS 1.2-or-later transport evidence, ledger isolation tests, deletion recalculation, envelope-encryption evidence, and an SBOM for every runtime artifact | M1a Shadow ledger and import foundation |
 | Complete Android SDK field inventory, Google Play Data safety mapping, consent-queue tests, and backup/restore exclusion for `installation_id` | M2 Android, Unity, and redirector |
 | Apple Privacy Manifest and App Privacy Details mapping | M4a iOS first-party measurement |
 | Aggregate-postback signature, replay, and series-separation evidence | M4b Apple aggregate attribution |
-| Final threat-model review, production SBOM, tenant-isolation/replay/deletion exercises, and backup/restore evidence | M5 Production and limited adapter boundary |
+| Final threat-model review, all workspace/SDK SBOMs, tenant-isolation/replay/deletion exercises, authenticated operational metrics, and backup/restore privacy-reapply evidence | M5 Production and limited adapter boundary |
 
-The M1a runtime gates continue to apply to every later runtime milestone.
+The M1a runtime gates continue to apply to every later runtime milestone. M5 adds synthetic restore, load, RBAC, observability, and release evidence. Real Play, Meta, MAX, Apple, device-transfer, Unity-export, integrity-service, production-backup, and incident-response validation remains outside the public repository and does not become true because CI is green.
 
 ## M1a deletion implementation status
 
-The implemented management path accepts `tenant_admin_api` deletion requests only after scrypt-verifier bearer authentication. It resolves affected records inside the authenticated tenant/app scope, appends payload lifecycle state, tombstone and correction artifacts, purges matching protected object/key entries, appends replacement D0 runs marked `redaction_affected`, and records the admin key ID in the runtime audit ledger. `on_device_sdk` remains fail-closed with HTTP 501 `on_device_path_not_implemented`. Backup erasure and large asynchronous deletion jobs remain deployment and later-milestone work.
+The management path accepts `tenant_admin_api` deletion requests only after scrypt-verifier bearer authentication. M2a also opens the separate `on_device_sdk` route only after HMAC authentication with the per-installation credential, and authorizes deletion against the tenant/app keyed digest bound to that credential. Both paths append lifecycle state, tombstone and correction artifacts, purge matching protected object/key entries, append replacement D0 runs when prior runs exist, and record an opaque authentication reference in the runtime audit ledger. The completed privacy artifact never retains `deletion_subject_ref`. M5 adds a restore-time job that reapplies completed requests and recalculates replay-manifest-backed SQL metrics before traffic. Real backup custody, backup lineage, scheduling, and large asynchronous deletion operations remain deployment responsibilities.
+
+Redirector source IP is used ephemerally for an in-process token bucket and is never written to the application database, payload store, or application logs. With `OPENMMP_REDIRECTOR_GEO=off` (the default), the redirector does not derive `click.country`. Operators enabling country derivation must update their Google Play Data safety declaration. The current Google Play guidance was checked on 2026-08-19: https://support.google.com/googleplay/android-developer/answer/10787469?hl=en.

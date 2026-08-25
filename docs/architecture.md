@@ -10,16 +10,16 @@ Proposed stack:
 - Schemas: JSON Schema Draft 2020-12 with generated runtime types
 - Database: PostgreSQL
 - Android SDK: Kotlin
-- Unity integration: C# API with an Android Kotlin bridge
-- iOS SDK: Swift, Phase 4a
-- Dashboard: TypeScript web application, later in the MVP
+- Unity integration: C# API with Android Kotlin and iOS Swift/C ABI bridges
+- iOS SDK: Swift Package with first-party, Apple, and provider-neutral MAX products
+- Dashboard: dependency-free, server-rendered TypeScript HTML with no client JavaScript
 - Local runtime: Docker Compose
 
 ## Reference deployment boundary
 
-M1 through M3 use one portable deployment path: Docker Compose, Node.js services, and PostgreSQL. They do not adopt Cloudflare Queues, R2, or D1. M2 may offer a Cloudflare Workers redirector as an optional edge adapter, but the same redirector behavior must remain available through the portable Node.js interface. The ingestion API, worker, authoritative ledger, protected evidence, and dashboard do not require Cloudflare. No public contract depends on a Cloudflare-specific API.
+M1 through M4 use one portable deployment path: Docker Compose, Node.js services, and PostgreSQL. They do not adopt Cloudflare Queues, R2, or D1. M2 may offer a Cloudflare Workers redirector as an optional edge adapter, but the same redirector behavior must remain available through the portable Node.js interface. The ingestion API, worker, authoritative ledger, protected evidence, Apple postback receiver, and dashboard do not require Cloudflare. No public contract depends on a Cloudflare-specific API.
 
-The decided M1 implementation baseline is documented in [M1 Design Baseline](design/m1-baseline.md). R-22 resolves every option set in that document to its recorded recommendation.
+The decided M1 implementation baseline is documented in [M1 Design Baseline](design/m1-baseline.md). R-22 resolves every option set in that document to its recorded recommendation. The Android, Unity, redirector, and SDK-ingestion design is fixed by R-24 in [M2 Design Baseline](design/m2-baseline.md). The dependency-free server-rendered dashboard, tenant-scoped session, reader-role, and typed reporting design is fixed by R-25 in [M3 Design Baseline](design/m3-baseline.md). The Swift SDK, Apple receiver, AdServices, conversion schema, and aggregate-series design is fixed by R-28 in [M4 Design Baseline](design/m4-baseline.md).
 
 ## Android M2 flow
 
@@ -48,7 +48,7 @@ sequenceDiagram
 
 ### M1a runtime component inventory
 
-The following six component identifiers are mechanically matched to the M1a threat table.
+The following component identifiers are mechanically matched to the threat tables.
 
 <!-- m1-component:import-worker -->
 - `import-worker`: file-driven existing-MMP imports, cost adapters, MAX inbox processing, and contract evaluation.
@@ -62,6 +62,31 @@ The following six component identifiers are mechanically matched to the M1a thre
 - `postgres-ledger`: authoritative RLS, append-only raw evidence, deliveries, corrections, tombstones, decisions, costs, and metric runs.
 <!-- m1-component:runtime-ci -->
 - `runtime-ci`: Linux/PostgreSQL migration, unit/integration, golden parity, Compose smoke, threat coverage, and per-workspace SBOM gate.
+
+### M2 component inventory
+
+The following four identifiers are covered mechanically.
+
+<!-- m1-component:redirector -->
+- `redirector`: portable Node HTTP shell and shared deterministic core for stored measurement links, Play referrers, click evidence, safe fallback, and memory-only source-IP rate limiting.
+<!-- m1-component:sdk-ingestion -->
+- `sdk-ingestion`: app-key enrollment, per-installation credentials, HMAC request integrity, ephemeral nonce replay defence, durable batch inbox, ordered worker drain, and on-device deletion authorization.
+<!-- m1-component:sdk-android -->
+- `sdk-android`: Kotlin client boundary for Install Referrer, Meta evidence, durable delivery, consent, collection lifecycle, and MAX revenue mapping.
+<!-- m1-component:unity-bridge -->
+- `unity-bridge`: C# bridge to Kotlin/Swift for Unity lifecycle, main-thread callbacks, and Android/iOS MAX impression-revenue callbacks.
+
+### M3 component inventory
+
+<!-- m1-component:dashboard -->
+- `dashboard`: tenant-scoped opaque sessions, strict credential separation, a read-only PostgreSQL role, shared typed report filters, aggregate exports, and dependency-free server-rendered HTML/SVG.
+
+### M4 component inventory
+
+<!-- m1-component:apple-postback-receiver -->
+- `apple-postback-receiver`: API routes for SKAdNetwork and AdAttributionKit developer copies, Apple signature/JWS verification, non-enumerating app lookup, replay/conflict handling, and protected AdServices follow-up.
+<!-- m1-component:sdk-ios -->
+- `sdk-ios`: Swift first-party client with one excluded storage subtree, durable SQLite queue, HMAC delivery, consent/reset lifecycle, AdServices, conversion-value updates, MAX mapping, Unity C ABI, privacy manifest, symbol audit, and dependency-empty runtime SBOM.
 
 ### Redirector
 
@@ -137,13 +162,47 @@ Initial Android rule:
 
 ### Reporting API
 
-- `GET /v1/reports/metrics?format=json|csv` returns tenant/app-scoped metric rows after bearer-key verification.
-- `GET /v1/audit/differences?format=json|csv` returns the persisted reconciliation artifact, including internal/external snapshots, protected matching-key metadata, candidates, exclusions, windows, joins, freshness, and neutral reason codes.
+- `GET /v1/reports/metrics?app_id=...&format=json|csv` returns tenant-scoped, validated-app metric rows under one typed filter and keyset-pagination contract.
+- `GET /v1/reports/records?app_id=...&watermark_at_most=...` returns aggregate counts and declared non-identifying dimensions only; it never returns an installation, click, record ID, payload, or payload reference.
+- `GET /v1/audit/differences?app_id=...&format=json|csv` renders only persisted reconciliation artifacts, including internal/external snapshots, protected matching-key metadata, candidates, exclusions, windows, joins, freshness, and neutral reason codes.
 - JSON and CSV are generated from one normalized row model. Metric rows carry the metric-definition version, policy versions, input watermark, immutable snapshot ID, freshness, and explicit present/undefined value state.
+- Date filters are half-open, filter values are bound parameters, supersession defaults to the latest row, and `supersession=all` exposes history. Pagination uses an opaque keyset cursor and never `OFFSET`.
 - Undefined ROAS has an absent numeric value and an explicit reason. It is not coerced to zero or infinity.
 - Raw-record access remains separate from aggregate reporting; these endpoints never expose raw payloads.
-- The authenticated scope, not request parameters, fixes the tenant and app. Responses use `cache-control: no-store`.
+- The authenticated scope fixes the tenant. The request supplies an `app_id` that is validated against that tenant's registered apps; unknown and cross-tenant apps have the same response. Responses use `cache-control: no-store`.
 - Aggregate privacy reports are never presented as installation-level records.
+
+### M5 management and operations
+
+<!-- m1-component:production-control-plane -->
+<!-- m1-component:privacy-restore -->
+<!-- m1-component:operational-observability -->
+<!-- m1-component:integrity-evidence -->
+
+Administrator keys are tenant-wide control-plane identities. Every route still
+resolves and validates the requested app inside that tenant; a role does not
+turn a request-supplied `app_id` into authority. Dashboard sessions inherit the
+backing key role and become invalid when that key is retired.
+
+| Role | Read reports/dashboard/metrics | Operate tracking and imports | Administer apps, keys, privacy, Apple configuration, and rule bundles |
+| --- | --- | --- | --- |
+| `admin` | Yes | Yes | Yes |
+| `operator` | Yes | Yes | No |
+| `read_only` | Yes | No | No |
+
+`GET /metrics` requires a valid administrator bearer identity with read
+capability and returns dependency-free Prometheus text. Labels are closed route,
+method, status-class, and queue vocabularies; tenant, app, installation, record,
+payload, authorization, cookie, and query values are never labels or output.
+Application HTTP logs use a closed event type that structurally cannot accept
+payload/body/authentication/identifier fields.
+
+Rule-bundle activation writes an append-only tenant/app-scoped revision with
+ID, version, hash, predecessor, and an audit row. The registry records which
+version governed a historical result; live rule definitions, thresholds,
+watchlists, weights, and response timing remain deployment-private. Metric
+replay manifests retain exact versioned evaluation inputs for privacy
+recalculation and are intentionally unavailable to the reader role.
 
 ## Data layers
 
@@ -201,7 +260,7 @@ Aggregate subjects must not contain an `installation_id`.
 
 - M1a implements the ledger and three portable import paths; M1b adds cohort metrics and difference audit.
 - M2 adds the Android and Unity SDKs plus the portable redirector and optional Workers adapter.
-- M4a adds first-party iOS measurement; M4b adds AdAttributionKit and SKAdNetwork postback receipt and verification.
+- M4a adds first-party iOS measurement; M4b adds AdAttributionKit and SKAdNetwork postback receipt, verification, and separate fixed-watermark aggregate reporting.
 - M5 adds production controls and only the adapter scope approved in the roadmap.
 - Google announced the retirement of Attribution Reporting (Android) on 2025-10-17 and no longer accepts enrollment; this project does not adopt it.
 - A second analytical store is considered only when the measured thresholds above are crossed.

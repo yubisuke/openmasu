@@ -1,0 +1,20 @@
+{
+  "contract_version": "0.3.0",
+  "fx_policy": { "policy_version": "fx-v0.2", "target_currency": "USD", "target_scale": 6, "rounding_mode": "half_even", "rates": [{ "currency": "USD", "rate_unscaled": "100000000", "rate_scale": 8, "source": "synthetic-fixture-rate", "as_of": "2026-08-18T00:00:00.000Z" }] },
+  "metric_evaluations": [], "reconciliation_inputs": [], "privacy_requests": [],
+  "server_context": { "tenant_id": "tenant-a", "app_id": "app-a", "received_at": "2026-08-18T03:00:00.000Z", "policy_digest": "policy-v0.2", "processing_purposes": [{ "processing_purpose_id": "analytics", "consent_required": false, "policy_version": "consent-v0.2" }], "withdrawals": [], "alternative_legal_bases": [] },
+  "records": [
+    {
+      "contract_version": "0.3.0", "record_id": "import-install-30", "delivery_id": "delivery:import-install-30", "tenant_id": "tenant-a", "app_id": "app-a", "producer": "import:synthetic-provider", "producer_version": "fixture-v0.2", "event_id": "event:import-install-30", "event_name": "install", "schema_version": "0.3.0", "occurred_at": "2026-08-18T02:00:00.000Z", "occurred_at_source": "import", "received_at": "2026-08-18T03:00:00.000Z", "processing_purpose_id": "analytics", "processing_sequence": 1,
+      "payload": { "installation_id": "installation:import-30", "install_type": "first_install", "referrer_status": "unavailable", "import_context": { "provider": "synthetic-provider", "provider_attributed": true, "provider_attribution_strategy": "click_through", "provider_install_ref": "provider-install-30", "provider_campaign_ref": "provider-campaign-30", "provider_network": "synthetic-network" } }
+    },
+    {
+      "contract_version": "0.3.0", "record_id": "import-revenue-30", "delivery_id": "delivery:import-revenue-30", "tenant_id": "tenant-a", "app_id": "app-a", "producer": "import:synthetic-provider", "producer_version": "fixture-v0.2", "event_id": "event:import-revenue-30", "event_name": "ad_revenue", "schema_version": "0.3.0", "occurred_at": "2026-08-18T02:10:00.000Z", "occurred_at_source": "import", "received_at": "2026-08-18T03:00:00.000Z", "processing_purpose_id": "analytics", "processing_sequence": 2,
+      "payload": { "subject_scope": "installation_level", "installation_id": "installation:import-30", "impression_id": "impression-import-30", "ad_unit_id": "ad-unit-30", "ad_network": "synthetic-network", "amount_unscaled": "1000000", "amount_scale": 6, "currency": "USD", "currency_source": "reported", "revenue_source": "imported_reported", "import_context": { "provider": "synthetic-provider", "provider_attributed": true, "provider_attribution_strategy": "click_through", "provider_install_ref": "provider-install-30", "provider_network": "synthetic-network", "provider_confirmed_at": "2026-08-18T02:15:00.000Z" } }
+    },
+    {
+      "contract_version": "0.3.0", "record_id": "postback-revenue-30", "delivery_id": "delivery:postback-revenue-30", "tenant_id": "tenant-a", "app_id": "app-a", "producer": "postback:synthetic-kind", "producer_version": "fixture-v0.2", "event_id": "event:postback-revenue-30", "event_name": "ad_revenue", "schema_version": "0.3.0", "occurred_at": "2026-08-18T02:20:00.000Z", "occurred_at_source": "server", "received_at": "2026-08-18T03:00:00.000Z", "processing_purpose_id": "analytics", "processing_sequence": 3,
+      "payload": { "subject_scope": "installation_level", "installation_id": "installation:import-30", "impression_id": "impression-postback-30", "ad_unit_id": "ad-unit-30", "ad_network": "synthetic-network", "amount_unscaled": "2000000", "amount_scale": 6, "currency": "USD", "revenue_source": "server_verified" }
+    }
+  ]
+}

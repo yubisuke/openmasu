@@ -42,7 +42,7 @@ function dimensionObject(row: CostInput): Record<string, unknown> {
 export function costArtifact(row: CostInput, reportSnapshotDigest: string): Record<string, unknown> {
   const dimensions = dimensionObject(row);
   return {
-    contract_version: "0.2.0",
+    contract_version: "0.3.0",
     cost_record_id: `cost:${sha256([dimensions, row.as_of, row.amount_unscaled, row.currency]).slice(0, 48)}`,
     tenant_id: row.tenant_id,
     app_id: row.app_id,

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:common:v0.2",
-  "title": "Open MMP Common Types v0.2",
+  "$id": "urn:open-mmp:schema:common:v0.3",
+  "title": "Open MMP Common Types v0.3",
   "$defs": {
     "id": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
     "clickId": {
@@ -34,6 +34,34 @@
         "access_class": { "enum": ["public", "protected", "private"] }
       }
     },
+    "integrityVerdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Server-assigned platform-integrity evidence. It is evidence only and does not independently determine attribution, fraud, or metric eligibility.",
+      "required": ["provider", "verdict", "evaluated_at", "policy_version"],
+      "properties": {
+        "provider": { "enum": ["play_integrity", "app_attest"] },
+        "verdict": { "enum": ["verified", "failed", "unavailable"] },
+        "evaluated_at": { "$ref": "#/$defs/dateTime" },
+        "policy_version": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "evidence_ref": { "type": "string", "pattern": "^protected:[A-Za-z0-9._:-]{1,256}$" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "verdict": { "enum": ["verified", "failed"] } }, "required": ["verdict"] },
+          "then": {
+            "properties": { "evidence_ref": {} },
+            "required": ["evidence_ref"]
+          },
+          "else": {
+            "not": {
+              "properties": { "evidence_ref": {} },
+              "required": ["evidence_ref"]
+            }
+          }
+        }
+      ]
+    },
     "aggregationTimeZone": { "enum": ["UTC", "Asia/Tokyo"] },
     "importContext": {
       "type": "object",
@@ -42,7 +70,7 @@
       "properties": {
         "provider": { "type": "string", "pattern": "^[a-z0-9-]{1,64}$" },
         "provider_attributed": { "type": "boolean" },
-        "provider_attribution_strategy": { "enum": ["click_through", "view_through", "modeled", "organic", "unattributed"] },
+        "provider_attribution_strategy": { "enum": ["click_through", "view_through", "modeled", "self_attributed_network", "organic", "unattributed"] },
         "provider_install_ref": { "type": "string", "minLength": 1, "maxLength": 256 },
         "provider_click_ref": { "type": "string", "minLength": 1, "maxLength": 256 },
         "provider_campaign_ref": { "type": "string", "minLength": 1, "maxLength": 256 },
@@ -56,7 +84,7 @@
       "allOf": [
         {
           "if": { "properties": { "provider_attributed": { "const": true } }, "required": ["provider_attributed"] },
-          "then": { "properties": { "provider_attribution_strategy": { "enum": ["click_through", "view_through", "modeled"] } } },
+          "then": { "properties": { "provider_attribution_strategy": { "enum": ["click_through", "view_through", "modeled", "self_attributed_network"] } } },
           "else": { "properties": { "provider_attribution_strategy": { "enum": ["organic", "unattributed"] } } }
         }
       ]

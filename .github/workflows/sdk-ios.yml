@@ -1,0 +1,67 @@
+name: iOS SDK
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ios-sdk:
+    runs-on: macos-26
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.18.0
+          cache: npm
+      - name: Install pinned npm
+        run: npm install --global npm@11.6.2
+      - name: Install JavaScript dependencies
+        run: npm ci
+      - name: Record the Apple toolchain
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          swift --version
+      - name: Run Swift package tests
+        run: |
+          swift package --package-path sdk/ios resolve
+          swift build --package-path sdk/ios/CrashProbe --product OpenMmpQueueCrashProbe
+          crash_probe_bin="$(swift build --package-path sdk/ios/CrashProbe --show-bin-path)/OpenMmpQueueCrashProbe"
+          test -x "$crash_probe_bin"
+          OPENMMP_QUEUE_CRASH_PROBE="$crash_probe_bin" swift test --package-path sdk/ios
+      - name: Run the package tests on an iOS Simulator
+        working-directory: sdk/ios
+        run: |
+          simulator_id=$(xcrun simctl list devices available -j | /usr/bin/python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(device["udid"] for runtime in sorted(devices) for device in devices[runtime] if device["name"].startswith("iPhone")))')
+          test -n "$simulator_id"
+          xcodebuild -scheme OpenMmpIOS-Package -destination "platform=iOS Simulator,id=$simulator_id" -derivedDataPath ../../build/ios-tests CODE_SIGNING_ALLOWED=NO test
+      - name: Build the shipping products and sample for an iOS Simulator
+        working-directory: sdk/ios
+        run: |
+          xcodebuild -scheme OpenMmpObjC -destination 'generic/platform=iOS Simulator' -derivedDataPath ../../build/ios-sdk CODE_SIGNING_ALLOWED=NO build
+          xcodebuild -scheme OpenMmpSample -destination 'generic/platform=iOS Simulator' -derivedDataPath ../../build/ios-sample CODE_SIGNING_ALLOWED=NO build
+      - name: Compile against the pinned AppLovin MAX SDK
+        working-directory: sdk/ios/ProviderCompileProbe
+        run: xcodebuild -scheme OpenMmpProviderCompileProbe -destination 'generic/platform=iOS Simulator' -derivedDataPath ../../../build/ios-provider CODE_SIGNING_ALLOWED=NO build
+      - name: Validate the privacy manifest and dependency-empty SDK SBOM
+        run: |
+          plutil -lint sdk/ios/Sources/OpenMmpCore/PrivacyInfo.xcprivacy
+          npm run sbom
+          node tools/check-ios-sdk.mjs --built-root build/ios-sdk
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 8.0.x
+      - name: Compile and exercise the Unity iOS bridge shim
+        run: dotnet run --project sdk/unity/tests/UnityCompileProbe.csproj --configuration Release
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sdk-ios-sbom
+          path: sbom/sdk-ios.cdx.json
+          if-no-files-found: error

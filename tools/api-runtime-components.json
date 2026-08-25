@@ -1,0 +1,19 @@
+[
+  "api",
+  "apple-postback",
+  "pg",
+  "pg-connection-string",
+  "pg-int8",
+  "pg-pool",
+  "pg-protocol",
+  "pg-types",
+  "pgpass",
+  "postgres-array",
+  "postgres-bytea",
+  "postgres-date",
+  "postgres-interval",
+  "redirector-core",
+  "runtime",
+  "split2",
+  "xtend"
+]

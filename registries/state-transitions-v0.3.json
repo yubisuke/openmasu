@@ -1,0 +1,40 @@
+{
+  "contract_version": "0.3.0",
+  "axes": {
+    "ingestion": {
+      "states": ["received", "accepted", "rejected"],
+      "transitions": [["received", "accepted"], ["received", "rejected"]],
+      "terminal": ["accepted", "rejected"]
+    },
+    "duplicate_resolution": {
+      "states": ["unique", "duplicate_delivery", "event_id_conflict", "record_id_collision"],
+      "transitions": [],
+      "terminal": ["unique", "duplicate_delivery", "event_id_conflict", "record_id_collision"]
+    },
+    "timeliness": {
+      "states": ["on_time", "late"],
+      "transitions": [],
+      "terminal": ["on_time", "late"]
+    },
+    "record_lifecycle": {
+      "states": ["active", "retracted"],
+      "transitions": [["active", "retracted"]],
+      "terminal": ["retracted"]
+    },
+    "payload_availability": {
+      "states": ["available", "redacted", "purged"],
+      "transitions": [["available", "redacted"], ["available", "purged"], ["redacted", "purged"]],
+      "terminal": ["purged"]
+    },
+    "attribution_finality": {
+      "states": ["pending", "provisional", "final", "superseded", "retracted"],
+      "transitions": [["pending", "provisional"], ["provisional", "final"], ["final", "superseded"], ["final", "retracted"]],
+      "terminal": ["superseded", "retracted"]
+    },
+    "privacy_request": {
+      "states": ["received", "processing", "completed", "failed"],
+      "transitions": [["received", "processing"], ["processing", "completed"], ["processing", "failed"]],
+      "terminal": ["completed", "failed"]
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "OpenMmp.Editor",
+  "references": ["OpenMmp.Runtime"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}

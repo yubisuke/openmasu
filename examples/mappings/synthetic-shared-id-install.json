@@ -1,0 +1,20 @@
+{
+  "version": "1.0.0",
+  "kind": "mmp_raw",
+  "source_id": "synthetic-shared-installs",
+  "tenant_id": "tenant-local",
+  "app_id": "app-local",
+  "provider": "synthetic-shared-provider",
+  "format": "json",
+  "row_filter": { "source": "event_type", "equals": "install" },
+  "rules": [
+    { "target": "event_name", "expression": { "const": "install" } },
+    { "target": "event_id", "expression": { "source": "shared_id", "prefix": "install:" } },
+    { "target": "occurred_at", "expression": { "source": "occurred_at", "timestamp": { "default_timezone": "UTC", "truncate_to_milliseconds": true } } },
+    { "target": "payload", "expression": { "object": {
+      "installation_id": { "source": "installation_id" },
+      "referrer_status": { "const": "none" },
+      "install_type": { "const": "first_install" }
+    } } }
+  ]
+}

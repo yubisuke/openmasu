@@ -35,7 +35,7 @@ The project is an open-source product for self-hosting teams. No company-specifi
 - Detection-response timing
 - Real user, campaign, cost, revenue, and provider-export evidence
 
-Fraud decisions retain evidence references, reason codes, rule-bundle versions and digests, evaluation time, action, and supersession history. A later delayed-transparency policy for retired rules may be considered, but it is not part of v0.2.
+Fraud decisions retain evidence references, reason codes, rule-bundle versions and digests, evaluation time, action, and supersession history. A later delayed-transparency policy for retired rules may be considered, but it is not part of v0.3.
 
 ## Execution phases
 
@@ -44,6 +44,10 @@ Fraud decisions retain evidence references, reason codes, rule-bundle versions a
 ### Phase 0.2: Contract v0.2
 
 Contract v0.2 is complete and its local validation gate passes. It includes the in-place consistency migration plus imported provider-reported attribution, automatic neutral reconciliation, typed reporting dimensions, cost and cohort metrics, Apple aggregate envelopes, a minimal verified Meta envelope, and the closed processing-purpose catalog. It remains contract evidence, not production-runtime readiness.
+
+### Phase 0.3: Contract v0.3
+
+Contract v0.3 is complete and locally validated. It adds only the closed Android/Unity/Meta evidence required by Phase 2, including third-party referrer classification, typed Meta Install Referrer evidence, attribution-status grouping, custom events, click-injection classification, revenue precision, and wrapper provenance. It does not claim an SDK, device run, live campaign, or production integration.
 
 ### Phase 1a: Shadow ledger and import foundation
 
@@ -58,7 +62,7 @@ M1a is implemented and locally validated with synthetic evidence. The public rep
 
 ### Phase 1b: Cohort metrics and difference audit
 
-Phase 1b is implemented for the v0.2.1 contract and locally validated with synthetic PostgreSQL data. Snapshot supersession, SQL/evaluator parity, redaction recalculation, undefined ROAS, JSON/CSV export, persisted difference evidence, a third oracle, and a 10-million-row arithmetic floor have executable evidence. Exact 4-vCPU/8-GB capacity validation and two contract vocabulary/grouping follow-ups remain outside the completed runtime change.
+Phase 1b is implemented and locally validated with synthetic PostgreSQL data. Snapshot supersession, SQL/evaluator parity, redaction recalculation, undefined ROAS, JSON/CSV export, persisted difference evidence, a third oracle, and a 10-million-row arithmetic floor have executable evidence. Contract v0.3 closes the two vocabulary/grouping follow-ups. Exact 4-vCPU/8-GB capacity validation remains outside the completed runtime change.
 
 - Recalculable D0, ROAS, retention, and cohort-LTV engine
 - Versioned cost, revenue, FX, grouping, and watermark handling
@@ -71,19 +75,29 @@ There is no code deliverable. The owner uses the M1a/M1b evidence, operator-run 
 
 ### Phase 2: Android, Unity, and redirector
 
+M2a and M2b are complete on synthetic evidence: the portable redirector, HMAC app and installation authentication, durable batch processing, Kotlin SDK, Install Referrer/Meta/MAX modules, Unity UPM bridge, native and Unity samples, emulator evidence, Android SBOM, and operator checklist are present without changing contract v0.3. Real-device, real-Play, live Meta/MAX, and Unity-export validation remains an external operator responsibility and is not a code-completion claim.
+
 - Unity C# SDK and Android Kotlin bridge
 - Google Play Install Referrer and versioned deterministic attribution
 - Portable Node.js redirector, with an optional Cloudflare Workers adapter only for that redirector
-- Meta Install Referrer decryption after primary-source field verification
+- Meta Install Referrer decryption against the v0.3 typed evidence fields, using synthetic vectors for the code gate
 - Persistent queue, retry, idempotency, identifier reset, and sample application
 
 ### Phase 3: Metrics dashboard
 
+Phase 3 is implemented on synthetic evidence. The dashboard is served by the existing API process as server-rendered, zero-JavaScript HTML/SVG and shares the reporting query builder and encoder rather than calling a second reporting implementation.
+
 - App registration, measurement-link creation, and authenticated reporting
 - ROAS, retention, cohort, and attribution views
 - Raw, report, and dashboard consistency under identical definitions
+- Fixed-watermark consistency across aggregate record counts, API rows, typed views, and rendered values
+- Reader-role RLS, opaque sessions, CSRF/Origin protection, and a no-growth API runtime SBOM gate
 
 ### Phase 4a: iOS first-party measurement
+
+Implemented with synthetic Swift, Simulator, server-ingestion, privacy-manifest,
+Unity bridge, and SBOM gates. Real-device and live-provider evidence remains
+operator-owned.
 
 - Swift SDK and Unity iOS bridge
 - First-party events, advertising revenue, persistent delivery, and consent controls
@@ -91,16 +105,24 @@ There is no code deliverable. The owner uses the M1a/M1b evidence, operator-run 
 
 ### Phase 4b: Apple aggregate attribution
 
+Implemented with generated signature vectors, replay/conflict tests, protected
+AdServices lookup, fixed-watermark metrics, and separate dashboard/API series.
+
 - SKAdNetwork and AdAttributionKit developer postback-copy receipt
 - Verification, replay rejection, versioned conversion-value policy, and aggregate reporting
 - No mixing of aggregate iOS reports with deterministic installation-level attribution
 
 ### Phase 5: Production and limited adapter boundary
 
-- Tenant isolation, RBAC, rate limits, observability, load tests, backup and restore, and deletion exercises
-- Play Integrity, App Attest, rule-bundle versioning, and production security evidence
-- Signed, least-privilege adapters limited to first-party links, Meta, and Apple Ads
-- Other media-network adapters remain outside the roadmap unless a later owner decision and current primary-source evidence explicitly add them
+Implemented as a synthetic code/CI phase: tenant-wide minimum RBAC, existing
+rate controls, closed structured logging, authenticated Prometheus metrics,
+informational load measurement, privacy-safe backup restoration, deletion
+recalculation/export evidence, rule-bundle history, and release runbooks.
+
+- Play Integrity and App Attest are reserved as optional evidence and remain operator-configured; they are not live integrations.
+- Supported attribution evidence is limited to first-party links, Meta Install Referrer, and Apple Ads/Apple aggregate paths.
+- AppLovin MAX remains revenue evidence. TikTok, AppLovin, Unity Ads, and Mintegral user-level attribution is unsupported where partner-MMP or non-public evidence is required.
+- Production TLS, real backup recovery, real load, provider/device delivery, integrity projects, incident response, and trademark clearance remain operator-owned gates.
 
 ## Evidence gates
 
@@ -111,6 +133,7 @@ A phase completes through measurable evidence, not code completion alone.
 - A fixed policy version reproduces a historical decision
 - Duplicate, conflict, delay, deletion, import, aggregate, and platform fixtures pass automatically
 - Runtime fixture reproduction, operator-run validation, device validation, platform approval, and production validation remain distinct states
+- All planned synthetic code phases are implemented; M2-M5 operator evidence remains open and must not be inferred from CI
 - Platform approval, device validation, and campaign validation remain labeled unverified until actually completed
 
 ## Rough estimate

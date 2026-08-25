@@ -1,0 +1,50 @@
+[
+  {
+    "contract_version": "0.3.0",
+    "logical_event_id": "logical:tenant-a:app-a:postback:synthetic-adattributionkit:event:aak-development-key-43",
+    "record_id": "aak-development-key-43",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "postback:synthetic-adattributionkit",
+    "event_id": "event:aak-development-key-43",
+    "event_name": "adattributionkit_postback",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.3.0",
+    "logical_event_id": "logical:tenant-a:app-a:postback:synthetic-skan:event:skan-minor-43",
+    "record_id": "skan-minor-43",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "postback:synthetic-skan",
+    "event_id": "event:skan-minor-43",
+    "event_name": "skan_postback",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.3.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-ios:event:ios-lookup-unavailable-43",
+    "record_id": "ios-lookup-unavailable-43",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-ios",
+    "event_id": "event:ios-lookup-unavailable-43",
+    "event_name": "install",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.3.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-ios:event:ios-not-attributed-43",
+    "record_id": "ios-not-attributed-43",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-ios",
+    "event_id": "event:ios-not-attributed-43",
+    "event_name": "install",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  }
+]

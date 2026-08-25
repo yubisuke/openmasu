@@ -1,0 +1,866 @@
+[
+  {
+    "metric_run_id": "run-33-organic:d1_roas",
+    "metric_name": "d1_roas",
+    "metric_definition_version": "0.3.0",
+    "input_snapshot_id": "273ab694d8b90a8ee4812563fcc128193c9d64de9aa3b5a58324299f3f189246",
+    "input_received_at_watermark": "2026-08-09T00:00:00.000Z",
+    "input_ledger_position": "2026-08-08T00:00:01.000Z|session-33-d7",
+    "computed_at": "2026-08-09T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-stage-b",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "value_state": "undefined",
+    "undefined_reason": "no_attributed_cost",
+    "ratio_scale": 6,
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "provider-campaign-33",
+        "network": "synthetic-network",
+        "country": "JP",
+        "cohort_date": "2026-08-01",
+        "attribution_status": "organic"
+      },
+      "dimension_digest": "d3a0e6d907896eae7261d018d8a533756f3de9755114778e3bbe8eca7c2348fb"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-view-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "aggregate-revenue-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "organic-install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "session-33-d1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "session-33-d7",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "run-33:cohort_install_count",
+    "metric_name": "cohort_install_count",
+    "metric_definition_version": "0.3.0",
+    "input_snapshot_id": "410f180c57b5dc607dc6254ccd959efdf6ea1777fe1af7f0d93b6dad11b4f75c",
+    "input_received_at_watermark": "2026-08-09T00:00:00.000Z",
+    "input_ledger_position": "2026-08-08T00:00:01.000Z|session-33-d7",
+    "computed_at": "2026-08-09T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-stage-b",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "value_unscaled": "1",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "provider-campaign-33",
+        "network": "synthetic-network",
+        "country": "JP",
+        "cohort_date": "2026-08-01",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "e144f2b18e580c92ce60cfe2b1131190d01de435b08e24adbafdd4a64554980b"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-view-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "aggregate-revenue-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "organic-install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "session-33-d1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "session-33-d7",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "run-33:cohort_ltv_d7_usd",
+    "metric_name": "cohort_ltv_d7_usd",
+    "metric_definition_version": "0.3.0",
+    "input_snapshot_id": "410f180c57b5dc607dc6254ccd959efdf6ea1777fe1af7f0d93b6dad11b4f75c",
+    "input_received_at_watermark": "2026-08-09T00:00:00.000Z",
+    "input_ledger_position": "2026-08-08T00:00:01.000Z|session-33-d7",
+    "computed_at": "2026-08-09T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-stage-b",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "150000000",
+    "fx_rate_unscaled": "5",
+    "fx_rate_scale": 1,
+    "fx_rate_source": "synthetic-fixture-rate",
+    "fx_rate_as_of": "2026-08-01T00:00:00.000Z",
+    "fx_rate_snapshot_id": "1e4819c8668a2960af272ad149d7630d78f74d00977e35f7e42f2d1ed337da29",
+    "fx_policy_version": "fx-stage-b-v0.2",
+    "amount_scale": 6,
+    "currency": "USD",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "provider-campaign-33",
+        "network": "synthetic-network",
+        "country": "JP",
+        "cohort_date": "2026-08-01",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "e144f2b18e580c92ce60cfe2b1131190d01de435b08e24adbafdd4a64554980b"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-view-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "aggregate-revenue-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "organic-install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "session-33-d1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "session-33-d7",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "run-33:d1_roas",
+    "metric_name": "d1_roas",
+    "metric_definition_version": "0.3.0",
+    "input_snapshot_id": "410f180c57b5dc607dc6254ccd959efdf6ea1777fe1af7f0d93b6dad11b4f75c",
+    "input_received_at_watermark": "2026-08-09T00:00:00.000Z",
+    "input_ledger_position": "2026-08-08T00:00:01.000Z|session-33-d7",
+    "computed_at": "2026-08-09T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-stage-b",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "value_unscaled": "500000",
+    "ratio_scale": 6,
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "provider-campaign-33",
+        "network": "synthetic-network",
+        "country": "JP",
+        "cohort_date": "2026-08-01",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "e144f2b18e580c92ce60cfe2b1131190d01de435b08e24adbafdd4a64554980b"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-view-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "aggregate-revenue-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "organic-install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "session-33-d1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "session-33-d7",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "run-33:d3_roas",
+    "metric_name": "d3_roas",
+    "metric_definition_version": "0.3.0",
+    "input_snapshot_id": "410f180c57b5dc607dc6254ccd959efdf6ea1777fe1af7f0d93b6dad11b4f75c",
+    "input_received_at_watermark": "2026-08-09T00:00:00.000Z",
+    "input_ledger_position": "2026-08-08T00:00:01.000Z|session-33-d7",
+    "computed_at": "2026-08-09T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-stage-b",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "value_unscaled": "1000000",
+    "ratio_scale": 6,
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "provider-campaign-33",
+        "network": "synthetic-network",
+        "country": "JP",
+        "cohort_date": "2026-08-01",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "e144f2b18e580c92ce60cfe2b1131190d01de435b08e24adbafdd4a64554980b"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-view-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "aggregate-revenue-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "organic-install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "session-33-d1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "session-33-d7",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "run-33:d7_roas",
+    "metric_name": "d7_roas",
+    "metric_definition_version": "0.3.0",
+    "input_snapshot_id": "410f180c57b5dc607dc6254ccd959efdf6ea1777fe1af7f0d93b6dad11b4f75c",
+    "input_received_at_watermark": "2026-08-09T00:00:00.000Z",
+    "input_ledger_position": "2026-08-08T00:00:01.000Z|session-33-d7",
+    "computed_at": "2026-08-09T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-stage-b",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "value_unscaled": "1500000",
+    "ratio_scale": 6,
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "provider-campaign-33",
+        "network": "synthetic-network",
+        "country": "JP",
+        "cohort_date": "2026-08-01",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "e144f2b18e580c92ce60cfe2b1131190d01de435b08e24adbafdd4a64554980b"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-view-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "aggregate-revenue-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "organic-install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "session-33-d1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "session-33-d7",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "run-33:retention_d1",
+    "metric_name": "retention_d1",
+    "metric_definition_version": "0.3.0",
+    "input_snapshot_id": "410f180c57b5dc607dc6254ccd959efdf6ea1777fe1af7f0d93b6dad11b4f75c",
+    "input_received_at_watermark": "2026-08-09T00:00:00.000Z",
+    "input_ledger_position": "2026-08-08T00:00:01.000Z|session-33-d7",
+    "computed_at": "2026-08-09T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-stage-b",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "value_unscaled": "1000000",
+    "ratio_scale": 6,
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "provider-campaign-33",
+        "network": "synthetic-network",
+        "country": "JP",
+        "cohort_date": "2026-08-01",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "e144f2b18e580c92ce60cfe2b1131190d01de435b08e24adbafdd4a64554980b"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-view-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "aggregate-revenue-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "organic-install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "session-33-d1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "session-33-d7",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "run-33:retention_d7",
+    "metric_name": "retention_d7",
+    "metric_definition_version": "0.3.0",
+    "input_snapshot_id": "410f180c57b5dc607dc6254ccd959efdf6ea1777fe1af7f0d93b6dad11b4f75c",
+    "input_received_at_watermark": "2026-08-09T00:00:00.000Z",
+    "input_ledger_position": "2026-08-08T00:00:01.000Z|session-33-d7",
+    "computed_at": "2026-08-09T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-stage-b",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "value_unscaled": "1000000",
+    "ratio_scale": 6,
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "provider-campaign-33",
+        "network": "synthetic-network",
+        "country": "JP",
+        "cohort_date": "2026-08-01",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "e144f2b18e580c92ce60cfe2b1131190d01de435b08e24adbafdd4a64554980b"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-view-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "aggregate-revenue-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "organic-install-33",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-33-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "session-33-d1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "session-33-d7",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  }
+]

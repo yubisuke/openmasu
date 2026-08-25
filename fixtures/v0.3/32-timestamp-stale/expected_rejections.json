@@ -1,0 +1,19 @@
+[
+  {
+    "contract_version": "0.3.0",
+    "delivery_id": "delivery:stale-session-32",
+    "record_id": "stale-session-32",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "reason_code": "timestamp_stale",
+    "reason_code_version": "0.3.0",
+    "payload_disposition": "discarded",
+    "retained": "non_identifying_metadata",
+    "processing_purpose_id": "analytics",
+    "consent_evaluation_policy_version": "consent-v0.2",
+    "consent_decision_reason_code": "consent_not_required",
+    "staleness_policy_version": "retention-v0.2",
+    "staleness_policy_digest": "c034a208b23264f380a2103e28d8f80375eae379ebabb805e1da9238876a05c3",
+    "staleness_authority": "server"
+  }
+]

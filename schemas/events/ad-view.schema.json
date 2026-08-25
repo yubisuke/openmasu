@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:event-ad-view:v0.2",
-  "title": "Open MMP Advertiser-side Ad View Event v0.2",
+  "$id": "urn:open-mmp:schema:event-ad-view:v0.3",
+  "title": "Open MMP Advertiser-side Ad View Event v0.3",
   "type": "object",
   "additionalProperties": false,
   "required": ["event_name", "view_id", "campaign_id", "network", "viewed_at"],

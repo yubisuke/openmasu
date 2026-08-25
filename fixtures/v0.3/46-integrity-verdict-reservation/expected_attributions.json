@@ -1,0 +1,86 @@
+[
+  {
+    "attribution_id": "attr:app-attest-unavailable-46",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:app-attest-unavailable-46",
+    "reason_code_version": "0.3.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "app-attest-unavailable-46",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-20T12:02:00.000Z",
+    "decided_at": "2026-08-20T15:00:00.000Z",
+    "input_cutoff_at": "2026-08-20T15:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "unattributed",
+    "method": "none",
+    "model": "none",
+    "reason_code": "platform_referrer_not_available"
+  },
+  {
+    "attribution_id": "attr:play-integrity-failed-46",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:play-integrity-failed-46",
+    "reason_code_version": "0.3.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "play-integrity-failed-46",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-20T12:01:00.000Z",
+    "decided_at": "2026-08-20T15:00:00.000Z",
+    "input_cutoff_at": "2026-08-20T15:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "unattributed",
+    "method": "none",
+    "model": "none",
+    "reason_code": "install_referrer_unavailable"
+  },
+  {
+    "attribution_id": "attr:play-integrity-verified-46",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:play-integrity-verified-46",
+    "reason_code_version": "0.3.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "play-integrity-verified-46",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-20T12:00:00.000Z",
+    "decided_at": "2026-08-20T15:00:00.000Z",
+    "input_cutoff_at": "2026-08-20T15:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "organic",
+    "method": "none",
+    "model": "none",
+    "reason_code": "no_referrer"
+  }
+]

@@ -1,0 +1,22 @@
+{
+  "version": "1.0.0",
+  "kind": "mmp_raw",
+  "source_id": "synthetic-and-filter-clicks",
+  "tenant_id": "tenant-local",
+  "app_id": "app-local",
+  "provider": "synthetic-and-filter-provider",
+  "format": "json",
+  "row_filter": [
+    { "source": "event_type", "equals": "click" },
+    { "source": "row_status", "equals": "accepted" }
+  ],
+  "rules": [
+    { "target": "event_name", "expression": { "const": "click" } },
+    { "target": "event_id", "expression": { "source": "event_id" } },
+    { "target": "occurred_at", "expression": { "source": "occurred_at", "timestamp": { "default_timezone": "UTC", "truncate_to_milliseconds": true } } },
+    { "target": "payload", "expression": { "object": {
+      "click_id": { "source": "click_id" },
+      "redirector_time_status": { "const": "missing" }
+    } } }
+  ]
+}

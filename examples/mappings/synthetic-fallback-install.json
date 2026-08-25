@@ -1,0 +1,19 @@
+{
+  "version": "1.0.0",
+  "kind": "mmp_raw",
+  "source_id": "synthetic-fallback-installs",
+  "tenant_id": "tenant-local",
+  "app_id": "app-local",
+  "provider": "synthetic-fallback-provider",
+  "format": "json",
+  "rules": [
+    { "target": "event_name", "expression": { "const": "install" } },
+    { "target": "event_id", "expression": { "source": "primary_event_id", "fallback_column": "legacy_event_id" } },
+    { "target": "occurred_at", "expression": { "source": "occurred_at", "timestamp": { "default_timezone": "UTC", "truncate_to_milliseconds": true } } },
+    { "target": "payload", "expression": { "object": {
+      "installation_id": { "source": "installation_id" },
+      "referrer_status": { "const": "none" },
+      "install_type": { "const": "first_install" }
+    } } }
+  ]
+}

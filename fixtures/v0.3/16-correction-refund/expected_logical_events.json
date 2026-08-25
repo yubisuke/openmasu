@@ -1,0 +1,26 @@
+[
+  {
+    "contract_version": "0.3.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:purchase-16",
+    "record_id": "purchase-16",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:purchase-16",
+    "event_name": "purchase",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.3.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:refund-16",
+    "record_id": "refund-16",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:refund-16",
+    "event_name": "refund",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  }
+]

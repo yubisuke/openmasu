@@ -1,0 +1,13 @@
+{
+  "name": "@open-mmp/meta-install-referrer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pure server-side Meta Install Referrer decryption",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  }
+}

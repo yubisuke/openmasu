@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { canonicalize } from "json-canonicalize";
-import type { OpenMMPEvaluationOutputV02 as EvaluationOutput } from "@open-mmp/contracts";
+import type { OpenMMPEvaluationOutputV03 as EvaluationOutput } from "@open-mmp/contracts";
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type Any = Record<string, any>;
@@ -20,7 +20,7 @@ type Reconciliation = EvaluationOutput["reconciliation"][number];
 type EvidenceRef = Attribution["evidence_refs"][number];
 type LifecycleStatus = EvidenceRef["lifecycle_status"];
 
-const CONTRACT_VERSION = "0.2.0" as const;
+const CONTRACT_VERSION = "0.3.0" as const;
 const HASH = "0".repeat(64);
 const DAY_MS = 86_400_000;
 
@@ -84,7 +84,7 @@ function attempts(input: Any): Attempt[] {
       batch.records.map((record: Any) => ({ server: batch.server_context, record, batch_id: batch.batch_id })),
     );
   }
-  return input.records.map((record: Any) => ({ server: input.server_context, record, batch_id: "batch-default" }));
+  return (input.records ?? []).map((record: Any) => ({ server: input.server_context, record, batch_id: "batch-default" }));
 }
 
 function assertImportProviderContexts(all: Attempt[]): void {
@@ -370,6 +370,25 @@ function timestampInvalidDecision(attempt: Attempt): Any {
   };
 }
 
+function preIngestionDecision(item: Any): Any {
+  return {
+    record_id: item.record_id,
+    delivery_id: item.delivery_id,
+    tenant_id: item.tenant_id,
+    app_id: item.app_id,
+    received_at: item.received_at,
+    ingestion_status: "rejected",
+    duplicate_resolution: "unique",
+    timeliness: "on_time",
+    clock_skew_suspected: false,
+    payload_disposition: "discarded",
+    reason_code: item.reason_code,
+    processing_purpose_id: item.processing_purpose_id,
+    consent_evaluation_policy_version: item.consent_evaluation_policy_version,
+    consent_decision_reason_code: item.consent_decision_reason_code,
+  };
+}
+
 function decide(attempt: Attempt, candidates: CandidateProvider): Any {
   const { server, record } = attempt;
   if (server.timestamp_stale_policy) {
@@ -464,6 +483,8 @@ function makeRawRecord(attempt: Attempt, lifecycle: "available" | "redacted" | "
     app_id: server.app_id,
     producer: record.producer,
     producer_version: record.producer_version,
+    ...(record.producer_variant ? { producer_variant: record.producer_variant } : {}),
+    ...(record.wrapper_version ? { wrapper_version: record.wrapper_version } : {}),
     event_id: record.event_id,
     delivery_id: record.delivery_id,
     event_name: record.event_name,
@@ -474,6 +495,7 @@ function makeRawRecord(attempt: Attempt, lifecycle: "available" | "redacted" | "
     received_at: record.received_at,
     payload_lifecycle_status: lifecycle,
     raw_payload_ref: lifecycle === "available" ? `protected:${record.record_id}` : `tombstone:${record.record_id}`,
+    ...(record.integrity_verdict ? { integrity_verdict: record.integrity_verdict } : {}),
     processing_purpose_id: consent.processing_purpose_id,
     consent_evaluation_policy_version: consent.consent_evaluation_policy_version,
     consent_decision_reason_code: consent.consent_decision_reason_code,
@@ -536,14 +558,26 @@ function makeAttribution(
   const imported = importedProducer ? payload.import_context : undefined;
   if (importedProducer) {
     if (!imported) return result("unattributed", "imported", "provider_reported", "provider_unattributed");
+    const referencedClicks = imported.provider_click_ref
+      ? candidates.all().filter((candidate) =>
+        candidate.server.tenant_id === server.tenant_id && candidate.server.app_id === server.app_id &&
+        candidate.record.event_name === "click" && candidate.record.producer === "redirector" &&
+        candidate.record.payload.remote_click_ref === imported.provider_click_ref &&
+        decisionFor(decisions, candidate).ingestion_status === "accepted" &&
+        decisionFor(decisions, candidate).duplicate_resolution === "unique",
+      )
+      : [];
+    const importedEvidence = referencedClicks.length === 1
+      ? { evidence_refs: [evidence(referencedClicks[0].record.record_id), evidence(install.record_id)] }
+      : {};
     if (imported.provider_attributed) {
       if (imported.provider_attribution_strategy === "modeled") {
-        return result("non_organic", "imported", "provider_reported", "provider_modeled_conversion");
+        return result("non_organic", "imported", "provider_reported", "provider_modeled_conversion", importedEvidence);
       }
       if (!imported.provider_confirmed_at) {
-        return result("non_organic", "imported", "provider_reported", "provider_time_authority_unavailable");
+        return result("non_organic", "imported", "provider_reported", "provider_time_authority_unavailable", importedEvidence);
       }
-      return result("non_organic", "imported", "provider_reported", "provider_attributed");
+      return result("non_organic", "imported", "provider_reported", "provider_attributed", importedEvidence);
     }
     if (imported.provider_attribution_strategy === "organic") {
       return result("organic", "imported", "provider_reported", "provider_organic");
@@ -558,11 +592,11 @@ function makeAttribution(
       "meta_referrer_decrypted",
     );
   }
-  if (payload.meta_referrer_status === "decrypt_failed") {
+  if (["decrypt_failed", "auth_failed"].includes(payload.meta_referrer_status)) {
     return result(
       "unattributed",
       "meta_install_referrer",
-      payload.meta_referrer_context.attribution_model,
+      payload.meta_referrer_context?.attribution_model ?? "last_click",
       "meta_referrer_decrypt_failed",
     );
   }
@@ -572,9 +606,21 @@ function makeAttribution(
   if (payload.adservices_context?.status === "token_expired") {
     return result("unattributed", "apple_adservices", "last_click", "adservices_token_expired");
   }
+  if (payload.adservices_context?.status === "not_attributed") {
+    return result("unattributed", "apple_adservices", "last_click", "adservices_not_attributed");
+  }
+  if (payload.adservices_context?.status === "lookup_unavailable") {
+    return result("unattributed", "apple_adservices", "last_click", "adservices_lookup_unavailable");
+  }
   if (payload.referrer_status === "none") return result("organic", "none", "none", "no_referrer");
+  if (payload.referrer_status === "third_party") {
+    return payload.third_party_referrer_classification === "play_organic_marker"
+      ? result("organic", "none", "none", "no_first_party_referrer")
+      : result("unattributed", "none", "none", "foreign_referrer_unresolved");
+  }
   if (payload.referrer_status === "unsupported") return result("unattributed", "none", "none", "install_referrer_unsupported");
   if (payload.referrer_status === "unavailable") return result("unattributed", "none", "none", "install_referrer_unavailable");
+  if (payload.referrer_status === "not_applicable") return result("unattributed", "none", "none", "platform_referrer_not_available");
   const clicks = candidates.clickCandidates(server.tenant_id, server.app_id, payload.click_id).filter((candidate) =>
     decisionFor(decisions, candidate).ingestion_status === "accepted" &&
     decisionFor(decisions, candidate).duplicate_resolution === "unique",
@@ -700,9 +746,31 @@ function metricDefinitions(input: Any): MetricDefinition[] {
   const names = new Set<string>();
   for (const definition of definitions) {
     if (names.has(definition.metric_name)) throw new Error(`duplicate metric definition: ${definition.metric_name}`);
+    validateMetricDefinitionSeries(definition);
     names.add(definition.metric_name);
   }
   return sortByKey(definitions, (definition) => [definition.metric_name, definition.metric_definition_version]);
+}
+
+function validateMetricDefinitionSeries(definition: Any): void {
+  const aggregateNames = new Set([
+    "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
+  ]);
+  const aggregateEvents = new Set(["skan_postback", "adattributionkit_postback"]);
+  const eventNames = definition.event_names ?? [];
+  const grouping = definition.grouping_dimensions ?? [];
+  const fail = () => { throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`); };
+  if (aggregateNames.has(definition.metric_name)) {
+    const expectedEvent = definition.metric_name === "aak_attributed_installs"
+      ? "adattributionkit_postback" : "skan_postback";
+    const expectedGrouping = definition.metric_name === "skan_conversion_value_distribution"
+      ? ["metric_date", "apple_conversion_bucket"] : ["metric_date"];
+    if (definition.definition?.calculation !== "event_count" || definition.definition?.numerator !== "events" ||
+        definition.aggregation_time_zone !== "UTC" || eventNames.length !== 1 || eventNames[0] !== expectedEvent ||
+        grouping.length !== expectedGrouping.length || expectedGrouping.some((value) => !grouping.includes(value))) fail();
+    return;
+  }
+  if (eventNames.some((value: string) => aggregateEvents.has(value)) || grouping.includes("apple_conversion_bucket")) fail();
 }
 
 function costRecords(input: Any): CostRecord[] {
@@ -733,6 +801,7 @@ function metricRuns(
   all: Attempt[],
   decisions: Map<string, Any>,
   lifecycle: Map<string, LifecycleStatus>,
+  attributions: Attribution[],
 ): MetricRun[] {
   const evaluations = input.metric_evaluations ?? [];
   if (!evaluations.length) return [];
@@ -740,6 +809,12 @@ function metricRuns(
   const definitions = metricDefinitions(input);
   const definitionsByName = new Map(definitions.map((definition) => [definition.metric_name, definition]));
   const cost_records = costRecords(input);
+  const attributionStatuses = new Map(attributions
+    .filter((attribution) => attribution.subject_scope === "installation_level")
+    .map((attribution) => [
+      compositeKey([attribution.tenant_id, attribution.app_id, attribution.subject_ref]),
+      attribution.status,
+    ]));
   const output: MetricRun[] = [];
   for (const evaluation of evaluations) {
     const included = all.filter((attempt) =>
@@ -754,7 +829,8 @@ function metricRuns(
       attempt.server.policy_digest,
     ]);
     const visible = included.filter((attempt) => evaluation.privacy_state !== "after" || !lifecycle.has(attemptEvidenceKey(attempt)));
-    const installs = visible.filter((attempt) => attempt.record.event_name === "install" && matchesGrouping(attempt, evaluation.grouping));
+    const installs = visible.filter((attempt) => attempt.record.event_name === "install" &&
+      matchesGrouping(attempt, evaluation.grouping, attributionStatuses));
     const revenue = visible.filter((attempt) => attempt.record.event_name === "ad_revenue" &&
       attempt.record.payload.subject_scope === "installation_level");
     const activities = visible;
@@ -775,6 +851,7 @@ function metricRuns(
     const cohortScopes = new Set(installs.map((install) => compositeKey([install.server.tenant_id, install.server.app_id])));
     const groupedCosts = cost_records.filter((cost) => {
       const grouping = evaluation.grouping;
+      if (grouping?.attribution_status !== undefined && grouping.attribution_status !== "non_organic") return false;
       if (compareText(cost.as_of, evaluation.input_received_at_watermark) > 0) return false;
       if (cohortScopes.size && !cohortScopes.has(compositeKey([cost.tenant_id, cost.app_id]))) return false;
       if (!grouping) return true;
@@ -806,6 +883,12 @@ function metricRuns(
     for (const metricName of selectedNames) {
       const definition = definitionsByName.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
+      if (evaluation.grouping && definition.grouping_dimensions) {
+        const groupingDimensions = new Set<string>(definition.grouping_dimensions);
+        const unsupported = Object.keys(evaluation.grouping)
+          .filter((dimension) => !groupingDimensions.has(dimension));
+        if (unsupported.length) throw new Error(`unsupported grouping for ${metricName}: ${unsupported.join(",")}`);
+      }
       const revenueValue = revenue.reduce((sum, item) => {
         const installation = installs.find((candidate) =>
           candidate.server.tenant_id === item.server.tenant_id && candidate.server.app_id === item.server.app_id &&
@@ -855,8 +938,72 @@ function metricRuns(
         }
       } else if (definition.definition.calculation === "cohort_size") {
         value = cohortSize;
+      } else if (definition.definition.calculation === "event_count") {
+        const eventNames = new Set<string>(definition.event_names ?? []);
+        const eventName = [...eventNames][0];
+        const metricDate = evaluation.grouping?.metric_date;
+        if (metricDate === undefined) throw new Error(`event_count requires metric_date grouping: ${metricName}`);
+        if (eventNames.size !== 1 || !["click", "install", "skan_postback", "adattributionkit_postback"].includes(eventName)) {
+          throw new Error(`event_count requires exactly one supported event name: ${metricName}`);
+        }
+        const aggregatePostback = eventName === "skan_postback" || eventName === "adattributionkit_postback";
+        if (aggregatePostback) {
+          if (definition.aggregation_time_zone !== "UTC") {
+            throw new Error(`aggregate event_count requires UTC aggregation: ${metricName}`);
+          }
+          if (evaluation.grouping?.attribution_status !== undefined) {
+            throw new Error(`aggregate event_count forbids attribution_status: ${metricName}`);
+          }
+          const expectedEventName = metricName === "aak_attributed_installs"
+            ? "adattributionkit_postback"
+            : "skan_postback";
+          if (!["skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs"].includes(metricName) || eventName !== expectedEventName) {
+            throw new Error(`aggregate event_count metric and event mismatch: ${metricName}`);
+          }
+          const conversionBucket = evaluation.grouping?.apple_conversion_bucket;
+          if (metricName === "skan_conversion_value_distribution" && conversionBucket === undefined) {
+            throw new Error(`SKAN conversion distribution requires apple_conversion_bucket: ${metricName}`);
+          }
+          if (metricName !== "skan_conversion_value_distribution" && conversionBucket !== undefined) {
+            throw new Error(`apple_conversion_bucket is reserved for SKAN conversion distribution: ${metricName}`);
+          }
+          value = BigInt(visible.filter((attempt) => {
+            if (attempt.record.event_name !== eventName ||
+                dateAt(attempt.record.received_at, "UTC", "received_at") !== metricDate) return false;
+            const attribution = attributions.find((candidate) =>
+              candidate.tenant_id === attempt.server.tenant_id &&
+              candidate.app_id === attempt.server.app_id &&
+              candidate.subject_scope === "aggregate" &&
+              candidate.status === "non_organic" &&
+              candidate.evidence_refs.some((reference) => reference.ref === attempt.record.record_id));
+            if (!attribution) return false;
+            if (conversionBucket === undefined) return true;
+            const payload = attempt.record.payload;
+            const actualBucket = payload.conversion_value !== undefined
+              ? `fine:${payload.conversion_value}`
+              : payload.coarse_conversion_value !== undefined
+                ? `coarse:${payload.coarse_conversion_value}`
+                : undefined;
+            return actualBucket === conversionBucket;
+          }).length);
+        } else {
+          if (evaluation.grouping?.apple_conversion_bucket !== undefined) {
+            throw new Error(`apple_conversion_bucket requires aggregate SKAN events: ${metricName}`);
+          }
+          if (evaluation.grouping?.attribution_status !== undefined && eventName !== "install") {
+            throw new Error(`attribution_status event_count requires install events: ${metricName}`);
+          }
+          value = BigInt(visible.filter((attempt) =>
+            eventNames.has(attempt.record.event_name) &&
+            matchesGrouping(attempt, evaluation.grouping, attributionStatuses) &&
+            dateAt(attempt.record.occurred_at, definition.aggregation_time_zone, "occurred_at") === metricDate,
+          ).length);
+        }
       } else {
         throw new Error(`unsupported metric calculation: ${definition.definition.calculation}`);
+      }
+      if (definition.definition.calculation !== "event_count" && evaluation.grouping?.metric_date !== undefined) {
+        throw new Error(`metric_date grouping is reserved for event_count: ${metricName}`);
       }
       const grouping = evaluation.grouping ? {
         dimensions: evaluation.grouping,
@@ -955,7 +1102,11 @@ function scaleMoney(payload: Any, targetScale: number): bigint {
   return roundHalfEven(BigInt(payload.amount_unscaled), 10n ** BigInt(-difference));
 }
 
-function matchesGrouping(attempt: Attempt, grouping: Any): boolean {
+function matchesGrouping(
+  attempt: Attempt,
+  grouping: Any,
+  attributionStatuses: Map<string, Attribution["status"]>,
+): boolean {
   if (!grouping) return true;
   const payload = attempt.record.payload;
   const campaign = payload.campaign_id ?? payload.import_context?.provider_campaign_ref;
@@ -966,6 +1117,14 @@ function matchesGrouping(attempt: Attempt, grouping: Any): boolean {
   if (grouping.country !== undefined && country !== grouping.country) return false;
   if (grouping.cohort_date !== undefined && attempt.record.event_name === "install" &&
       dateAt(attempt.record.occurred_at, "UTC", "occurred_at") !== grouping.cohort_date) return false;
+  if (grouping.attribution_status !== undefined && attempt.record.event_name === "install") {
+    const status = attributionStatuses.get(compositeKey([
+      attempt.server.tenant_id,
+      attempt.server.app_id,
+      attempt.record.payload.installation_id,
+    ]));
+    if (status !== grouping.attribution_status) return false;
+  }
   return true;
 }
 
@@ -999,6 +1158,8 @@ function reconciliationResults(input: Any, accepted: Attempt[]): Reconciliation[
     if (item.privacy_effect === "redaction") difference_reason_code = "redaction_caused_recalculation";
     else if (item.provider_modeled_without_candidate && !matched.length) difference_reason_code = "provider_modeled_conversion";
     else if (!externalKeys.size) difference_reason_code = "join_key_missing";
+    else if (!matched.length && (item.matching_keys ?? []).some((entry: Any) =>
+      ["provider_click_id", "provider_install_id"].includes(entry.type))) difference_reason_code = "candidate_missing";
     else if (!matched.length) difference_reason_code = "external_row_unmatched";
     else if (matched.length > 1 && item.matching_keys.some((entry: Any) => entry.cardinality === "one_to_one")) difference_reason_code = "join_key_ambiguous";
     else if (matched[0].excluded) difference_reason_code = "candidate_excluded";
@@ -1012,7 +1173,7 @@ function reconciliationResults(input: Any, accepted: Attempt[]): Reconciliation[
       input_snapshot_id: item.input_snapshot_id,
       external_snapshot_id: item.external_snapshot_id,
       difference_reason_code,
-      difference_reason_version: difference_reason_code === "provider_modeled_conversion" ? "0.2.1" : CONTRACT_VERSION,
+      difference_reason_version: difference_reason_code === "provider_modeled_conversion" ? "0.3.0" : CONTRACT_VERSION,
       matching_keys: sortedKeys,
       candidates: matched.map((candidate: Any) => candidate.candidate_id).sort(compareText),
       exclusions: matched.filter((candidate: Any) => candidate.excluded).map((candidate: Any) => candidate.exclusion_reason).sort(compareText),
@@ -1042,6 +1203,7 @@ export function evaluate(
     }
   });
   const decisions = new Map(all.map((attempt, index) => [attemptDecisionKey(attempt), decisionsList[index]]));
+  const preIngestionDecisions = (input.pre_ingestion_rejections ?? []).map(preIngestionDecision);
   assertInstallationAnchors(all, decisions);
   const lifecycle = privacyIndex(input);
   const acceptedUnique = all.filter((attempt) => {
@@ -1053,7 +1215,7 @@ export function evaluate(
   const logicalEvidence = acceptedUnique.filter((attempt) => !lifecycle.has(attemptEvidenceKey(attempt)));
   const raw_records = sortByKey(rawEvidence.map((attempt) => makeRawRecord(attempt, "available")),
     (record) => [record.record_id, record.tenant_id, record.app_id, record.delivery_id]);
-  const deliveries = sortByKey(all.map((attempt): Delivery => {
+  const deliveries = sortByKey([...all.map((attempt): Delivery => {
     const decision = decisionFor(decisions, attempt);
     return {
       contract_version: CONTRACT_VERSION,
@@ -1083,7 +1245,23 @@ export function evaluate(
         staleness_authority: decision.staleness_authority,
       } : {}),
     };
-  }), (delivery) => [delivery.delivery_id, delivery.record_id, delivery.tenant_id, delivery.app_id]);
+  }), ...preIngestionDecisions.map((decision: Any): Delivery => ({
+    contract_version: CONTRACT_VERSION,
+    delivery_id: decision.delivery_id,
+    record_id: decision.record_id,
+    tenant_id: decision.tenant_id,
+    app_id: decision.app_id,
+    received_at: decision.received_at,
+    ingestion_status: decision.ingestion_status,
+    duplicate_resolution: decision.duplicate_resolution,
+    timeliness: decision.timeliness,
+    clock_skew_suspected: decision.clock_skew_suspected,
+    payload_disposition: decision.payload_disposition,
+    ...(decision.processing_purpose_id ? { processing_purpose_id: decision.processing_purpose_id } : {}),
+    consent_evaluation_policy_version: decision.consent_evaluation_policy_version,
+    consent_decision_reason_code: decision.consent_decision_reason_code,
+    reason_code: decision.reason_code,
+  }))], (delivery) => [delivery.delivery_id, delivery.record_id, delivery.tenant_id, delivery.app_id]);
   const logical_events = sortByKey(logicalEvidence.map((attempt): LogicalEvent => ({
     contract_version: CONTRACT_VERSION,
     logical_event_id: `logical:${attempt.server.tenant_id}:${attempt.server.app_id}:${attempt.record.producer}:${attempt.record.event_id}`,
@@ -1174,7 +1352,7 @@ export function evaluate(
   }
   const privacy_tombstones = sortByKey(privacyTombstoneValues,
     (tombstone) => [tombstone.privacy_request_id, tombstone.record_id, tombstone.tenant_id, tombstone.app_id]);
-  const fraud_decisions = sortByKey(acceptedUnique
+  const transportFraud = acceptedUnique
     .filter((attempt) => attempt.record.event_name === "click" && (attempt.record.payload.bot_prefetch || attempt.record.payload.replay_suspected))
     .map((attempt): FraudDecision => {
       const reason_code: FraudDecision["reason_code"] = attempt.record.payload.replay_suspected ? "replay_suspected" : "bot_prefetch";
@@ -1196,8 +1374,50 @@ export function evaluate(
       rule_bundle_hash: HASH,
       evaluated_at: attempt.record.received_at,
     });
-    }), (decision) => [decision.fraud_decision_id]);
-  const rejections = sortByKey(decisionsList
+    });
+  const clickInjectionFraud = acceptedUnique.flatMap((attempt): FraudDecision[] => {
+    if (attempt.record.event_name !== "install") return [];
+    const payload = attempt.record.payload;
+    if (payload.referrer_status !== "available" || !payload.click_id || !payload.install_begin_at_server) return [];
+    const matchingClicks = acceptedUnique.filter((candidate) =>
+      candidate.server.tenant_id === attempt.server.tenant_id && candidate.server.app_id === attempt.server.app_id &&
+      candidate.record.event_name === "click" && candidate.record.payload.click_id === payload.click_id &&
+      candidate.record.payload.redirector_time_status !== "invalid" && candidate.record.payload.redirector_click_at,
+    );
+    if (matchingClicks.length !== 1) return [];
+    const click = matchingClicks[0];
+    let delta: number;
+    try {
+      delta = time(payload.install_begin_at_server, "install_begin_at_server") -
+        time(click.record.payload.redirector_click_at, "redirector_click_at");
+    } catch {
+      // Invalid authority is classified by attribution and cannot support CTIT evidence.
+      return [];
+    }
+    const thresholdSeconds = attempt.server.click_injection_policy?.threshold_seconds ?? 10;
+    if (delta < 0 || delta >= thresholdSeconds * 1000) return [];
+    return [{
+      fraud_decision_id: `fraud:${attempt.record.record_id}:click-injection`,
+      subject_ref: attempt.record.record_id,
+      decision: "suspected",
+      action: "flag",
+      reason_code: "click_injection_suspected",
+      reason_code_version: CONTRACT_VERSION,
+      evidence: [{
+        type: "ctit_category",
+        captured_at: attempt.record.received_at,
+        digest: sha256(["click_injection_suspected", click.record.record_id, attempt.record.record_id]),
+        access_class: "protected",
+      }],
+      rule_bundle_id: "fraud-public-envelope",
+      rule_bundle_version: CONTRACT_VERSION,
+      rule_bundle_hash: HASH,
+      evaluated_at: attempt.record.received_at,
+    }];
+  });
+  const fraud_decisions = sortByKey([...transportFraud, ...clickInjectionFraud],
+    (decision) => [decision.fraud_decision_id]);
+  const rejections = sortByKey([...decisionsList, ...preIngestionDecisions]
     .filter((decision) => decision.ingestion_status === "rejected")
     .map((decision): Rejection => ({
       contract_version: CONTRACT_VERSION,
@@ -1231,7 +1451,7 @@ export function evaluate(
     attributions,
     cost_records: costRecords(input),
     metric_definitions: metricDefinitions(input),
-    metric_runs: metricRuns(input, all, decisions, lifecycle),
+    metric_runs: metricRuns(input, all, decisions, lifecycle, attributions),
     fraud_decisions,
     rejections,
     reconciliation: reconciliationResults(input, acceptedUnique),

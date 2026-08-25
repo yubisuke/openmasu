@@ -1,0 +1,24 @@
+[
+  {
+    "contract_version": "0.3.0",
+    "record_id": "consent-control-after-withdrawal",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "producer_version": "fixture-v0.1",
+    "event_id": "event:consent-control-after-withdrawal",
+    "delivery_id": "delivery:consent-control-after-withdrawal",
+    "event_name": "consent_changed",
+    "schema_version": "0.3.0",
+    "payload_sha256": "22ae437e945a2d7db0347bdd371f16e1b88847488be2ab487e596bb032b857c6",
+    "occurred_at": "2026-08-12T00:01:00.000Z",
+    "occurred_at_source": "device",
+    "received_at": "2026-08-12T00:02:00.000Z",
+    "payload_lifecycle_status": "available",
+    "raw_payload_ref": "protected:consent-control-after-withdrawal",
+    "processing_purpose_id": "analytics",
+    "consent_evaluation_policy_version": "consent-v1",
+    "consent_decision_reason_code": "consent_not_required",
+    "withdrawal_recognized_at": "2026-08-12T00:00:00.000Z"
+  }
+]

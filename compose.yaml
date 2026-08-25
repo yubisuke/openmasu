@@ -24,6 +24,16 @@ services:
       OPENMMP_DATABASE_HOST: postgres
       OPENMMP_DATABASE_PORT: "5432"
       OPENMMP_DATABASE_NAME: openmmp
+      OPENMMP_MAX_TENANT_ID: ${OPENMMP_MAX_TENANT_ID:-tenant-local}
+      OPENMMP_MAX_APP_ID: ${OPENMMP_MAX_APP_ID:-app-local}
+      OPENMMP_ENROLL_RATE_RPS: ${OPENMMP_ENROLL_RATE_RPS:-50}
+      OPENMMP_ENROLL_RATE_BURST: ${OPENMMP_ENROLL_RATE_BURST:-100}
+      OPENMMP_INGEST_RATE_RPS: ${OPENMMP_INGEST_RATE_RPS:-1}
+      OPENMMP_INGEST_RATE_BURST: ${OPENMMP_INGEST_RATE_BURST:-20}
+      OPENMMP_INGEST_APP_RATE_RPS: ${OPENMMP_INGEST_APP_RATE_RPS:-500}
+      OPENMMP_INGEST_APP_RATE_BURST: ${OPENMMP_INGEST_APP_RATE_BURST:-1000}
+      OPENMMP_MAX_RATE_RPS: ${OPENMMP_MAX_RATE_RPS:-200}
+      OPENMMP_MAX_RATE_BURST: ${OPENMMP_MAX_RATE_BURST:-500}
     volumes:
       - .:/repository
       - migration-secrets:/run/openmmp/migration
@@ -94,6 +104,21 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+
+  redirector:
+    <<: *app
+    command: ["/bin/sh", "-c", "set -a && . /run/openmmp/app/runtime.env && set +a && node --import tsx apps/redirector/src/server.ts"]
+    volumes:
+      - app-secrets:/run/openmmp/app:ro
+      - payload-objects:/run/openmmp/payloads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${OPENMMP_REDIRECTOR_HOST_PORT:-8090}:8090"
+    networks:
+      - backend
+      - edge
 
   seed:
     <<: *app

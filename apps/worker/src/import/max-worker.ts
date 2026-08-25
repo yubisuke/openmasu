@@ -28,7 +28,7 @@ function attemptFromInbox(inbox: Any, query: URLSearchParams): CandidateAttempt 
     import_context: {
       provider: "applovin-max",
       provider_attributed: false,
-      provider_attribution_strategy: "unknown",
+      provider_attribution_strategy: "unattributed",
       provider_network: query.get("network") || "unknown",
       provider_country: (query.get("cc") || "ZZ").toUpperCase(),
       provider_confirmed_at: inbox.received_at,
@@ -45,7 +45,7 @@ function attemptFromInbox(inbox: Any, query: URLSearchParams): CandidateAttempt 
       alternative_legal_bases: [],
     },
     record: {
-      contract_version: "0.2.0",
+      contract_version: "0.3.0",
       record_id: `record:max:${inbox.inbox_id}`,
       delivery_id: `delivery:max:${inbox.inbox_id}`,
       tenant_id: inbox.tenant_id,
@@ -54,7 +54,7 @@ function attemptFromInbox(inbox: Any, query: URLSearchParams): CandidateAttempt 
       producer_version: "max-s2s-v1",
       event_id: inbox.event_id,
       event_name: "ad_revenue",
-      schema_version: "0.2.0",
+      schema_version: "0.3.0",
       occurred_at: occurredAt,
       occurred_at_source: "import",
       received_at: inbox.received_at,
@@ -88,7 +88,8 @@ export async function processMaxInbox(pool: Pool, payloadStore: PayloadStore, te
       );
       const history = historyRows.rows.map((row) => ({ server: row.server_context, record: row.record, batch_id: row.import_run_id }));
       // withTenant is re-entrant through a separate pool connection; do not pass this transaction's client.
-      await ingestRuntimeBatch([attempt], pool, history);
+      const output = await ingestRuntimeBatch([attempt], pool, history);
+      const validationFailure = output.validation_failures[0];
       const runId = uuidV7(Date.parse(inbox.received_at));
       await client.query(
         `INSERT INTO control.import_runs (
@@ -97,13 +98,24 @@ export async function processMaxInbox(pool: Pool, payloadStore: PayloadStore, te
         ) VALUES ($1,$2,$3,'max-s2s',$4,'completed',$5,$5)`,
         [runId, inbox.tenant_id, inbox.app_id, inbox.raw_query_digest, inbox.received_at],
       );
-      await client.query(
-        `INSERT INTO control.import_attempts (
-          import_attempt_id, import_run_id, tenant_id, app_id, source_id,
-          row_ordinal, server_context, record, created_at
-        ) VALUES ($1,$2,$3,$4,'max-s2s',0,$5::jsonb,$6::jsonb,$7)`,
-        [uuidV7(), runId, inbox.tenant_id, inbox.app_id, JSON.stringify(attempt.server), JSON.stringify(attempt.record), inbox.received_at],
-      );
+      if (validationFailure) {
+        await client.query(
+          `INSERT INTO control.import_row_rejections (
+            import_rejection_id, import_run_id, tenant_id, app_id, source_id,
+            row_ordinal, reason_code, field_names, occurred_at
+          ) VALUES ($1,$2,$3,$4,'max-s2s',0,'row_schema_invalid',$5::jsonb,$6)`,
+          [uuidV7(), runId, inbox.tenant_id, inbox.app_id, JSON.stringify(validationFailure.fields), inbox.received_at],
+        );
+        await payloadStore.purge(inbox.raw_query_ref);
+      } else {
+        await client.query(
+          `INSERT INTO control.import_attempts (
+            import_attempt_id, import_run_id, tenant_id, app_id, source_id,
+            row_ordinal, server_context, record, created_at
+          ) VALUES ($1,$2,$3,$4,'max-s2s',0,$5::jsonb,$6::jsonb,$7)`,
+          [uuidV7(), runId, inbox.tenant_id, inbox.app_id, JSON.stringify(attempt.server), JSON.stringify(attempt.record), inbox.received_at],
+        );
+      }
       await client.query(
         `INSERT INTO ledger.ingest_inbox_states (
           inbox_id, tenant_id, app_id, status, changed_at, artifact

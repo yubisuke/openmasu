@@ -3,10 +3,11 @@ import { join } from "node:path";
 import { sha256 } from "@open-mmp/attribution-core";
 import { createAppPool, createSeedPool } from "@open-mmp/runtime";
 import { ingestFixture } from "./ingestion.js";
+import { computeSqlMetricRuns } from "./metrics/cohort.js";
 
 type Any = Record<string, any>;
 
-const fixtureRoot = join(process.cwd(), "fixtures", "v0.2");
+const fixtureRoot = join(process.cwd(), "fixtures", "v0.3");
 const fixtureNames = readdirSync(fixtureRoot, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
@@ -14,8 +15,11 @@ const fixtureNames = readdirSync(fixtureRoot, { withFileTypes: true })
 const appPool = createAppPool();
 const seedPool = createSeedPool();
 let artifactCount = 0;
+let dashboardMetricInput: Any | undefined;
 
 try {
+  await seedPool.query("DELETE FROM testing.fixture_runs");
+  await seedPool.query("DELETE FROM testing.fixture_inputs");
   for (const fixtureName of fixtureNames) {
     const input: Any = JSON.parse(readFileSync(join(fixtureRoot, fixtureName, "input.json"), "utf8"));
     const inputDigest = sha256(input);
@@ -33,10 +37,13 @@ try {
     if (stored.rows[0].input_digest !== inputDigest) throw new Error(`fixture input digest drift: ${fixtureName}`);
     try {
       artifactCount += await ingestFixture(fixtureName, stored.rows[0].input, appPool, seedPool);
+      if (fixtureName === "42-daily-metric-date") dashboardMetricInput = stored.rows[0].input;
     } catch (error) {
       throw new Error(`fixture ingestion failed: ${fixtureName}`, { cause: error });
     }
   }
+  if (!dashboardMetricInput) throw new Error("daily dashboard metric fixture is missing");
+  await computeSqlMetricRuns(appPool, dashboardMetricInput, true);
 } finally {
   await appPool.end();
   await seedPool.end();

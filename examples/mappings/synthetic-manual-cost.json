@@ -10,6 +10,7 @@
     { "target": "campaign_id", "expression": { "source": "campaign_id" } },
     { "target": "country", "expression": { "source": "country", "uppercase": true } },
     { "target": "date", "expression": { "source": "date" } },
-    { "target": "money", "expression": { "source": "cost_micros", "money": { "scale": 6, "currency_source": "currency" } } }
+    { "target": "as_of", "expression": { "source": "as_of", "timestamp": { "default_timezone": "UTC", "truncate_to_milliseconds": true } } },
+    { "target": "money", "expression": { "source": "cost_micros", "money": { "input": "integer", "scale": 6, "currency_source": "currency" } } }
   ]
 }

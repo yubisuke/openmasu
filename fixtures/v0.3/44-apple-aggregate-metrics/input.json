@@ -1,0 +1,218 @@
+{
+  "contract_version": "0.3.0",
+  "fx_policy": {
+    "policy_version": "fx-m4-v0.3.3",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "1",
+        "rate_scale": 0,
+        "source": "synthetic-fixture-rate",
+        "as_of": "2026-08-20T00:00:00.000Z"
+      }
+    ]
+  },
+  "metric_definitions": [
+    {
+      "metric_name": "skan_attributed_installs",
+      "metric_definition_version": "0.3.3",
+      "anchor_event": "calendar_day",
+      "aggregation_time_zone": "UTC",
+      "value_type": "count",
+      "definition": {
+        "calculation": "event_count",
+        "window": { "type": "calendar_day", "day": 0 },
+        "numerator": "events"
+      },
+      "event_names": ["skan_postback"],
+      "grouping_dimensions": ["metric_date"],
+      "rule_bundle_id": "metric-stage-m4",
+      "rule_bundle_version": "0.3.3",
+      "rule_bundle_hash": "4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    {
+      "metric_name": "skan_conversion_value_distribution",
+      "metric_definition_version": "0.3.3",
+      "anchor_event": "calendar_day",
+      "aggregation_time_zone": "UTC",
+      "value_type": "count",
+      "definition": {
+        "calculation": "event_count",
+        "window": { "type": "calendar_day", "day": 0 },
+        "numerator": "events"
+      },
+      "event_names": ["skan_postback"],
+      "grouping_dimensions": ["metric_date", "apple_conversion_bucket"],
+      "rule_bundle_id": "metric-stage-m4",
+      "rule_bundle_version": "0.3.3",
+      "rule_bundle_hash": "4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    {
+      "metric_name": "aak_attributed_installs",
+      "metric_definition_version": "0.3.3",
+      "anchor_event": "calendar_day",
+      "aggregation_time_zone": "UTC",
+      "value_type": "count",
+      "definition": {
+        "calculation": "event_count",
+        "window": { "type": "calendar_day", "day": 0 },
+        "numerator": "events"
+      },
+      "event_names": ["adattributionkit_postback"],
+      "grouping_dimensions": ["metric_date"],
+      "rule_bundle_id": "metric-stage-m4",
+      "rule_bundle_version": "0.3.3",
+      "rule_bundle_hash": "4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  ],
+  "metric_evaluations": [
+    {
+      "metric_run_id_prefix": "run-44-skan-count",
+      "input_received_at_watermark": "2026-08-21T00:00:00.000Z",
+      "computed_at": "2026-08-21T00:01:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "metric_names": ["skan_attributed_installs"],
+      "grouping": { "metric_date": "2026-08-20" }
+    },
+    {
+      "metric_run_id_prefix": "run-44-skan-fine-21",
+      "input_received_at_watermark": "2026-08-21T00:00:00.000Z",
+      "computed_at": "2026-08-21T00:01:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "metric_names": ["skan_conversion_value_distribution"],
+      "grouping": { "metric_date": "2026-08-20", "apple_conversion_bucket": "fine:21" }
+    },
+    {
+      "metric_run_id_prefix": "run-44-skan-coarse-low",
+      "input_received_at_watermark": "2026-08-21T00:00:00.000Z",
+      "computed_at": "2026-08-21T00:01:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "metric_names": ["skan_conversion_value_distribution"],
+      "grouping": { "metric_date": "2026-08-20", "apple_conversion_bucket": "coarse:low" }
+    },
+    {
+      "metric_run_id_prefix": "run-44-aak-count",
+      "input_received_at_watermark": "2026-08-21T00:00:00.000Z",
+      "computed_at": "2026-08-21T00:01:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "metric_names": ["aak_attributed_installs"],
+      "grouping": { "metric_date": "2026-08-20" }
+    }
+  ],
+  "reconciliation_inputs": [],
+  "privacy_requests": [],
+  "server_context": {
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-21T00:00:00.000Z",
+    "policy_digest": "policy-m4-v0.3.3",
+    "processing_purposes": [
+      {
+        "processing_purpose_id": "analytics",
+        "consent_required": false,
+        "policy_version": "consent-m4-v0.3.3"
+      }
+    ],
+    "withdrawals": [],
+    "alternative_legal_bases": []
+  },
+  "records": [
+    {
+      "contract_version": "0.3.0",
+      "record_id": "skan-fine-44",
+      "delivery_id": "delivery:skan-fine-44",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "postback:synthetic-skan",
+      "producer_version": "fixture-v0.3.3",
+      "event_id": "event:skan-fine-44",
+      "event_name": "skan_postback",
+      "schema_version": "0.3.0",
+      "occurred_at": "2026-08-20T01:00:00.000Z",
+      "occurred_at_source": "server",
+      "received_at": "2026-08-20T01:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "version": "4.0",
+        "ad_network_id": "synthetic-network.skadnetwork",
+        "app_id": 123456789,
+        "transaction_id": "synthetic-skan-transaction-44-a",
+        "attribution_signature": "synthetic-signature-a",
+        "signature_verified": true,
+        "source_identifier": "4401",
+        "conversion_value": 21,
+        "postback_sequence_index": 0,
+        "did_win": true,
+        "fidelity_type": 1
+      }
+    },
+    {
+      "contract_version": "0.3.0",
+      "record_id": "skan-coarse-44",
+      "delivery_id": "delivery:skan-coarse-44",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "postback:synthetic-skan",
+      "producer_version": "fixture-v0.3.3",
+      "event_id": "event:skan-coarse-44",
+      "event_name": "skan_postback",
+      "schema_version": "0.3.0",
+      "occurred_at": "2026-08-20T02:00:00.000Z",
+      "occurred_at_source": "server",
+      "received_at": "2026-08-20T02:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 2,
+      "payload": {
+        "version": "4.0",
+        "ad_network_id": "synthetic-network.skadnetwork",
+        "app_id": 123456789,
+        "transaction_id": "synthetic-skan-transaction-44-b",
+        "attribution_signature": "synthetic-signature-b",
+        "signature_verified": true,
+        "source_identifier": "4402",
+        "coarse_conversion_value": "low",
+        "postback_sequence_index": 1,
+        "did_win": true
+      }
+    },
+    {
+      "contract_version": "0.3.0",
+      "record_id": "aak-fine-44",
+      "delivery_id": "delivery:aak-fine-44",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "postback:synthetic-adattributionkit",
+      "producer_version": "fixture-v0.3.3",
+      "event_id": "event:aak-fine-44",
+      "event_name": "adattributionkit_postback",
+      "schema_version": "0.3.0",
+      "occurred_at": "2026-08-20T05:00:00.000Z",
+      "occurred_at_source": "server",
+      "received_at": "2026-08-20T05:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 5,
+      "payload": {
+        "jws_string": "eyJhbGciOiJFUzI1NiJ9.eyJzeW50aGV0aWMiOnRydWV9.c3ludGhldGljLXNpZ25hdHVyZQ",
+        "signature_verified": true,
+        "postback_identifier": "synthetic-aak-postback-44",
+        "advertised_item_identifier": 123456789,
+        "conversion_type": "download",
+        "ad_network_identifier": "synthetic.adattributionkit",
+        "impression_type": "app-impression",
+        "postback_sequence_index": 0,
+        "source_identifier": "4405",
+        "conversion_value": 7,
+        "did_win": true,
+        "ad_interaction_type": "click"
+      }
+    }
+  ]
+}

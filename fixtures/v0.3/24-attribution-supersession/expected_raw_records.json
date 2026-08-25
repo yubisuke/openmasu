@@ -1,0 +1,23 @@
+[
+  {
+    "contract_version": "0.3.0",
+    "record_id": "install-24",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "producer_version": "fixture-v0.2",
+    "event_id": "event:install-24",
+    "delivery_id": "delivery:install-24",
+    "event_name": "install",
+    "schema_version": "0.3.0",
+    "payload_sha256": "12f0007243e1ae7042f48c8b36a4621a654c6dee67a756778d646a833f844763",
+    "occurred_at": "2026-08-12T00:00:00.000Z",
+    "occurred_at_source": "device",
+    "received_at": "2026-08-12T00:00:00.000Z",
+    "payload_lifecycle_status": "available",
+    "raw_payload_ref": "protected:install-24",
+    "processing_purpose_id": "analytics",
+    "consent_evaluation_policy_version": "consent-v0.2",
+    "consent_decision_reason_code": "consent_not_required"
+  }
+]

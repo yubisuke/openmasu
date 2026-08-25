@@ -1,0 +1,12 @@
+{
+  "contract_version": "0.3.0",
+  "fx_policy": { "policy_version": "fx-v0.2", "target_currency": "USD", "target_scale": 6, "rounding_mode": "half_even", "rates": [{ "currency": "USD", "rate_unscaled": "100000000", "rate_scale": 8, "source": "synthetic-fixture-rate", "as_of": "2026-08-18T00:00:00.000Z" }] },
+  "metric_evaluations": [], "reconciliation_inputs": [], "privacy_requests": [],
+  "server_context": { "tenant_id": "tenant-a", "app_id": "app-a", "received_at": "2026-08-18T05:00:00.000Z", "policy_digest": "policy-v0.2", "processing_purposes": [{ "processing_purpose_id": "analytics", "consent_required": false, "policy_version": "consent-v0.2" }], "withdrawals": [], "alternative_legal_bases": [], "timestamp_stale_policy": { "before": "2026-08-01T00:00:00.000Z", "authority": "server", "policy_version": "retention-v0.2", "policy_digest": "c034a208b23264f380a2103e28d8f80375eae379ebabb805e1da9238876a05c3" } },
+  "records": [
+    {
+      "contract_version": "0.3.0", "record_id": "stale-session-32", "delivery_id": "delivery:stale-session-32", "tenant_id": "tenant-a", "app_id": "app-a", "producer": "sdk-android", "producer_version": "fixture-v0.2", "event_id": "event:stale-session-32", "event_name": "session_start", "schema_version": "0.3.0", "occurred_at": "2026-07-31T23:59:59.999Z", "occurred_at_source": "device", "received_at": "2026-08-18T05:00:00.000Z", "processing_purpose_id": "analytics", "processing_sequence": 1,
+      "payload": { "installation_id": "installation:stale-32", "session_id": "session:stale-32" }
+    }
+  ]
+}

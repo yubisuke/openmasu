@@ -1,0 +1,37 @@
+{
+  "required_reason_apis": [
+    {
+      "category": "NSPrivacyAccessedAPICategoryFileTimestamp",
+      "symbols": ["creationDate", "modificationDate", "fileModificationDate", "contentModificationDateKey", "creationDateKey", "getattrlist", "getattrlistbulk", "fgetattrlist", "stat", "fstat", "fstatat", "lstat", "getattrlistat"],
+      "allowed_reasons": ["DDA9.1", "C617.1", "3B52.1", "0A2A.1"]
+    },
+    {
+      "category": "NSPrivacyAccessedAPICategorySystemBootTime",
+      "symbols": ["systemUptime", "mach_absolute_time"],
+      "allowed_reasons": ["35F9.1", "8FFB.1", "3D61.1"]
+    },
+    {
+      "category": "NSPrivacyAccessedAPICategoryDiskSpace",
+      "symbols": ["volumeAvailableCapacity", "volumeTotalCapacityKey", "systemFreeSize", "systemSize", "statfs", "statvfs", "fstatfs", "fstatvfs"],
+      "allowed_reasons": ["85F4.1", "E174.1", "7D9E.1", "B728.1"]
+    },
+    {
+      "category": "NSPrivacyAccessedAPICategoryActiveKeyboards",
+      "symbols": ["activeInputModes"],
+      "allowed_reasons": ["3EC4.1", "54BD.1"]
+    },
+    {
+      "category": "NSPrivacyAccessedAPICategoryUserDefaults",
+      "symbols": ["UserDefaults"],
+      "allowed_reasons": ["CA92.1", "1C8F.1", "C56D.1", "AC6B.1"]
+    }
+  ],
+  "forbidden_symbols": [
+    "ASIdentifierManager",
+    "advertisingIdentifier",
+    "ATTrackingManager",
+    "identifierForVendor",
+    "UIPasteboard",
+    "CLLocationManager"
+  ]
+}

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:event-consent-changed:v0.2",
-  "title": "Open MMP Consent Changed Event v0.2",
+  "$id": "urn:open-mmp:schema:event-consent-changed:v0.3",
+  "title": "Open MMP Consent Changed Event v0.3",
   "type": "object",
   "additionalProperties": false,
   "required": ["event_name", "consent_state", "effective_at", "consent_policy_version"],

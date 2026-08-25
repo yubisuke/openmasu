@@ -1,0 +1,110 @@
+[
+  {
+    "metric_run_id": "run-44-aak-count:aak_attributed_installs",
+    "metric_name": "aak_attributed_installs",
+    "metric_definition_version": "0.3.3",
+    "input_snapshot_id": "4f3e68d9af03c83d11167652960648bbc6eb40e6aaa459413f5c6097000b2c24",
+    "input_received_at_watermark": "2026-08-21T00:00:00.000Z",
+    "input_ledger_position": "2026-08-20T05:00:01.000Z|aak-fine-44",
+    "computed_at": "2026-08-21T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-stage-m4",
+    "rule_bundle_version": "0.3.3",
+    "rule_bundle_hash": "4444444444444444444444444444444444444444444444444444444444444444",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "value_unscaled": "1",
+    "grouping": {
+      "dimensions": { "metric_date": "2026-08-20" },
+      "dimension_digest": "fa01365cf546acb09901470599f02c86230f7b03d1275d37dbcbbe2f54916ff9"
+    },
+    "evidence_refs": [
+      { "tenant_id": "tenant-a", "app_id": "app-a", "ref": "aak-fine-44", "lifecycle_status": "available", "access_class": "protected" },
+      { "tenant_id": "tenant-a", "app_id": "app-a", "ref": "skan-coarse-44", "lifecycle_status": "available", "access_class": "protected" },
+      { "tenant_id": "tenant-a", "app_id": "app-a", "ref": "skan-fine-44", "lifecycle_status": "available", "access_class": "protected" }
+    ]
+  },
+  {
+    "metric_run_id": "run-44-skan-coarse-low:skan_conversion_value_distribution",
+    "metric_name": "skan_conversion_value_distribution",
+    "metric_definition_version": "0.3.3",
+    "input_snapshot_id": "4f3e68d9af03c83d11167652960648bbc6eb40e6aaa459413f5c6097000b2c24",
+    "input_received_at_watermark": "2026-08-21T00:00:00.000Z",
+    "input_ledger_position": "2026-08-20T05:00:01.000Z|aak-fine-44",
+    "computed_at": "2026-08-21T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-stage-m4",
+    "rule_bundle_version": "0.3.3",
+    "rule_bundle_hash": "4444444444444444444444444444444444444444444444444444444444444444",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "value_unscaled": "1",
+    "grouping": {
+      "dimensions": { "metric_date": "2026-08-20", "apple_conversion_bucket": "coarse:low" },
+      "dimension_digest": "36678a1480db7e2688d596fee1df19cdffb24f87f910a6e1960ac3623ae4d6fe"
+    },
+    "evidence_refs": [
+      { "tenant_id": "tenant-a", "app_id": "app-a", "ref": "aak-fine-44", "lifecycle_status": "available", "access_class": "protected" },
+      { "tenant_id": "tenant-a", "app_id": "app-a", "ref": "skan-coarse-44", "lifecycle_status": "available", "access_class": "protected" },
+      { "tenant_id": "tenant-a", "app_id": "app-a", "ref": "skan-fine-44", "lifecycle_status": "available", "access_class": "protected" }
+    ]
+  },
+  {
+    "metric_run_id": "run-44-skan-count:skan_attributed_installs",
+    "metric_name": "skan_attributed_installs",
+    "metric_definition_version": "0.3.3",
+    "input_snapshot_id": "4f3e68d9af03c83d11167652960648bbc6eb40e6aaa459413f5c6097000b2c24",
+    "input_received_at_watermark": "2026-08-21T00:00:00.000Z",
+    "input_ledger_position": "2026-08-20T05:00:01.000Z|aak-fine-44",
+    "computed_at": "2026-08-21T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-stage-m4",
+    "rule_bundle_version": "0.3.3",
+    "rule_bundle_hash": "4444444444444444444444444444444444444444444444444444444444444444",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "value_unscaled": "2",
+    "grouping": {
+      "dimensions": { "metric_date": "2026-08-20" },
+      "dimension_digest": "fa01365cf546acb09901470599f02c86230f7b03d1275d37dbcbbe2f54916ff9"
+    },
+    "evidence_refs": [
+      { "tenant_id": "tenant-a", "app_id": "app-a", "ref": "aak-fine-44", "lifecycle_status": "available", "access_class": "protected" },
+      { "tenant_id": "tenant-a", "app_id": "app-a", "ref": "skan-coarse-44", "lifecycle_status": "available", "access_class": "protected" },
+      { "tenant_id": "tenant-a", "app_id": "app-a", "ref": "skan-fine-44", "lifecycle_status": "available", "access_class": "protected" }
+    ]
+  },
+  {
+    "metric_run_id": "run-44-skan-fine-21:skan_conversion_value_distribution",
+    "metric_name": "skan_conversion_value_distribution",
+    "metric_definition_version": "0.3.3",
+    "input_snapshot_id": "4f3e68d9af03c83d11167652960648bbc6eb40e6aaa459413f5c6097000b2c24",
+    "input_received_at_watermark": "2026-08-21T00:00:00.000Z",
+    "input_ledger_position": "2026-08-20T05:00:01.000Z|aak-fine-44",
+    "computed_at": "2026-08-21T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-stage-m4",
+    "rule_bundle_version": "0.3.3",
+    "rule_bundle_hash": "4444444444444444444444444444444444444444444444444444444444444444",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "value_unscaled": "1",
+    "grouping": {
+      "dimensions": { "metric_date": "2026-08-20", "apple_conversion_bucket": "fine:21" },
+      "dimension_digest": "5a98b7723dc942bcca2f310907244af8e695d5f868b0b337d9e64728b7a06a43"
+    },
+    "evidence_refs": [
+      { "tenant_id": "tenant-a", "app_id": "app-a", "ref": "aak-fine-44", "lifecycle_status": "available", "access_class": "protected" },
+      { "tenant_id": "tenant-a", "app_id": "app-a", "ref": "skan-coarse-44", "lifecycle_status": "available", "access_class": "protected" },
+      { "tenant_id": "tenant-a", "app_id": "app-a", "ref": "skan-fine-44", "lifecycle_status": "available", "access_class": "protected" }
+    ]
+  }
+]

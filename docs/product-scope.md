@@ -72,6 +72,25 @@ Difference reasons are neutral measurement-semantic categories (such as window, 
 - User-level cross-app tracking on iOS
 - Persistent device identifiers justified as fraud prevention
 - Immediate replacement of an existing production MMP
+- User-level attribution for a media network when access requires partner-MMP status or non-public provider evidence
+
+## Final adapter boundary
+
+The supported measurement boundary is first-party links and events, Meta Install
+Referrer evidence, Apple Ads through AdServices, and Apple aggregate developer
+postbacks. AppLovin MAX supplies impression-revenue evidence only; it is not a
+user-level install-attribution adapter. TikTok, AppLovin, Unity Ads, and
+Mintegral user-level attribution is structurally unavailable to this
+self-hosted public implementation when the required evidence is restricted to
+partner MMPs. Adding a network requires a new owner decision, current primary
+documentation, a least-privilege public integration surface, synthetic
+fixtures, and neutral discrepancy semantics.
+
+M5 production controls make the repository safer to operate, but they do not
+turn a synthetic CI milestone into a production service. TLS termination,
+external secret management, real backup recovery, real load, provider/device
+validation, integrity-service projects, and incident operations remain outside
+the code gate.
 
 ## MVP evidence gates
 

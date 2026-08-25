@@ -13,4 +13,4 @@ const threats = markers("docs/threat-model.md", "threat-component");
 if (JSON.stringify(architecture) !== JSON.stringify(threats)) {
   throw new Error(`threat model component coverage differs: architecture=${architecture.join(",")} threats=${threats.join(",")}`);
 }
-console.log(`Threat model coverage passed: ${architecture.length} M1 components.`);
+console.log(`Threat model coverage passed: ${architecture.length} runtime components.`);

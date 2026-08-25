@@ -11,7 +11,7 @@ const d0Metrics = new Set([
   "d0_utc_install_calendar_ad_revenue_usd",
   "d0_jst_install_calendar_ad_revenue_usd",
 ]);
-const fixtureRoot = join(process.cwd(), "fixtures", "v0.2");
+const fixtureRoot = join(process.cwd(), "fixtures", "v0.3");
 const fixtureNames = readdirSync(fixtureRoot, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)

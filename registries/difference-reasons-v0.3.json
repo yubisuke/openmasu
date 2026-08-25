@@ -1,0 +1,10 @@
+{
+  "contract_version": "0.3.0",
+  "reasons": [
+    "matched", "candidate_missing", "candidate_excluded", "window_mismatch",
+    "join_key_missing", "join_key_ambiguous", "freshness_mismatch",
+    "external_row_unmatched", "redaction_caused_recalculation",
+    "currency_policy_mismatch", "scope_mismatch", "provider_modeled_conversion"
+  ],
+  "note": "Reasons describe measurement semantics and available evidence, not provider quality. provider_modeled_conversion classifies a provider-marked modeled external row with no internal candidate; it is classified rather than unexplained."
+}

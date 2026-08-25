@@ -1,0 +1,136 @@
+{
+  "version": "m4-max-revenue-v1",
+  "vectors": [
+    {
+      "name": "half-even-exact",
+      "input": {
+        "revenue": 0.0000015,
+        "precision": "exact",
+        "network_name": "Synthetic Network",
+        "ad_unit_id": "ad-unit:synthetic",
+        "format": "rewarded",
+        "placement": "completion",
+        "network_placement": "synthetic-placement"
+      },
+      "installation_id": "installation:synthetic",
+      "impression_id": "impression:synthetic",
+      "expected_payload": {
+        "ad_network": "Synthetic Network",
+        "ad_unit_id": "ad-unit:synthetic",
+        "amount_scale": 6,
+        "amount_unscaled": "2",
+        "currency": "USD",
+        "currency_source": "reported",
+        "event_name": "ad_revenue",
+        "extensions": {
+          "ad_format": "rewarded",
+          "network_placement": "synthetic-placement",
+          "placement": "completion"
+        },
+        "impression_id": "impression:synthetic",
+        "installation_id": "installation:synthetic",
+        "mediation_provider": "applovin-max",
+        "revenue_precision": "exact",
+        "revenue_source": "client_estimated",
+        "subject_scope": "installation_level"
+      }
+    },
+    {
+      "name": "publisher-defined",
+      "input": {
+        "revenue": 0.25,
+        "precision": "publisher_defined",
+        "network_name": "Synthetic Network",
+        "ad_unit_id": "ad-unit:synthetic",
+        "format": "banner"
+      },
+      "installation_id": "installation:synthetic",
+      "impression_id": "impression:synthetic",
+      "expected_payload": {
+        "ad_network": "Synthetic Network",
+        "ad_unit_id": "ad-unit:synthetic",
+        "amount_scale": 6,
+        "amount_unscaled": "250000",
+        "currency": "USD",
+        "currency_source": "reported",
+        "event_name": "ad_revenue",
+        "extensions": {
+          "ad_format": "banner"
+        },
+        "impression_id": "impression:synthetic",
+        "installation_id": "installation:synthetic",
+        "mediation_provider": "applovin-max",
+        "revenue_precision": "publisher_defined",
+        "revenue_source": "client_estimated",
+        "subject_scope": "installation_level"
+      }
+    },
+    {
+      "name": "estimated",
+      "input": {
+        "revenue": 1.0000005,
+        "precision": "estimated",
+        "network_name": "Synthetic Network",
+        "ad_unit_id": "ad-unit:synthetic",
+        "format": "interstitial"
+      },
+      "installation_id": "installation:synthetic",
+      "impression_id": "impression:synthetic",
+      "expected_payload": {
+        "ad_network": "Synthetic Network",
+        "ad_unit_id": "ad-unit:synthetic",
+        "amount_scale": 6,
+        "amount_unscaled": "1000000",
+        "currency": "USD",
+        "currency_source": "reported",
+        "event_name": "ad_revenue",
+        "extensions": {
+          "ad_format": "interstitial"
+        },
+        "impression_id": "impression:synthetic",
+        "installation_id": "installation:synthetic",
+        "mediation_provider": "applovin-max",
+        "revenue_precision": "estimated",
+        "revenue_source": "client_estimated",
+        "subject_scope": "installation_level"
+      }
+    },
+    {
+      "name": "undefined",
+      "input": {
+        "revenue": 0.0,
+        "precision": "undefined",
+        "network_name": "Synthetic Network",
+        "ad_unit_id": "ad-unit:synthetic",
+        "format": "mrec"
+      },
+      "installation_id": "installation:synthetic",
+      "impression_id": "impression:synthetic",
+      "expected_payload": {
+        "ad_network": "Synthetic Network",
+        "ad_unit_id": "ad-unit:synthetic",
+        "amount_scale": 6,
+        "amount_unscaled": "0",
+        "currency": "USD",
+        "currency_source": "reported",
+        "event_name": "ad_revenue",
+        "extensions": {
+          "ad_format": "mrec"
+        },
+        "impression_id": "impression:synthetic",
+        "installation_id": "installation:synthetic",
+        "mediation_provider": "applovin-max",
+        "revenue_precision": "undefined",
+        "revenue_source": "client_estimated",
+        "subject_scope": "installation_level"
+      }
+    }
+  ],
+  "invalid": {
+    "revenue": -1.0,
+    "precision": "undefined",
+    "network_name": "Synthetic Network",
+    "ad_unit_id": "ad-unit:synthetic",
+    "format": "banner"
+  }
+}

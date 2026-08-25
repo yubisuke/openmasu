@@ -1,0 +1,91 @@
+{
+  "contract_version": "0.3.0",
+  "fx_policy": {
+    "policy_version": "fx-v0.2.1",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "100000000",
+        "rate_scale": 8,
+        "source": "synthetic-fixture-rate",
+        "as_of": "2026-08-19T00:00:00.000Z"
+      }
+    ]
+  },
+  "cost_records": [],
+  "metric_definitions": [
+    {
+      "metric_name": "d1_roas",
+      "metric_definition_version": "0.3.0",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "value_type": "ratio",
+      "ratio_scale": 6,
+      "definition": {
+        "calculation": "revenue_over_cost",
+        "window": { "type": "elapsed", "day": 1 },
+        "numerator": "revenue",
+        "denominator": "cost",
+        "cost_basis": "cohort_acquisition_day_current_snapshot"
+      },
+      "rule_bundle_id": "metric-stage-b",
+      "rule_bundle_version": "0.3.0",
+      "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  ],
+  "metric_evaluations": [
+    {
+      "metric_run_id_prefix": "run-37",
+      "input_received_at_watermark": "2026-08-19T01:00:00.000Z",
+      "computed_at": "2026-08-19T01:01:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "metric_names": ["d1_roas"]
+    }
+  ],
+  "reconciliation_inputs": [],
+  "privacy_requests": [],
+  "server_context": {
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-19T01:00:00.000Z",
+    "policy_digest": "policy-v0.2.1",
+    "processing_purposes": [
+      {
+        "processing_purpose_id": "analytics",
+        "consent_required": false,
+        "policy_version": "consent-v0.2.1"
+      }
+    ],
+    "withdrawals": [],
+    "alternative_legal_bases": []
+  },
+  "records": [
+    {
+      "contract_version": "0.3.0",
+      "record_id": "install-37",
+      "delivery_id": "delivery:install-37",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.2.1",
+      "event_id": "event:install-37",
+      "event_name": "install",
+      "schema_version": "0.3.0",
+      "occurred_at": "2026-08-19T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-19T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-37",
+        "install_type": "first_install",
+        "referrer_status": "none",
+        "install_begin_at_server_status": "missing"
+      }
+    }
+  ]
+}

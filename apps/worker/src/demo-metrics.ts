@@ -17,7 +17,7 @@ try {
     return result.rows[0];
   });
   const syntheticInput = JSON.parse(readFileSync(
-    join(process.cwd(), "fixtures", "v0.2", "33-stage-b-cohort-metrics", "input.json"),
+    join(process.cwd(), "fixtures", "v0.3", "33-stage-b-cohort-metrics", "input.json"),
     "utf8",
   ));
   const syntheticPreview = evaluate(syntheticInput).metric_runs
