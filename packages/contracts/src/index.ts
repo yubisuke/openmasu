@@ -7,3 +7,11 @@ export {
 } from "./m1b-metric-definitions.js";
 export { M3_METRIC_DEFINITIONS } from "./m3-metric-definitions.js";
 export { validateEventPayload, type EventPayloadValidation } from "./event-validation.js";
+export {
+  NON_FRAUD_RULE_BUNDLES,
+  nonFraudBundleHash,
+  validateNonFraudBundleDefinition,
+  type NonFraudRuleBundleDefinition,
+  type NonFraudRuleBundleId,
+  type NonFraudRuleBundleKey,
+} from "./rule-bundle-provenance.js";

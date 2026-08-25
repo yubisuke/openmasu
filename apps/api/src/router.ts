@@ -32,7 +32,7 @@ import type { KeyedTokenBucket, TokenBucket } from "./rate-limit.js";
 import { matchRoute, type RouteDefinition } from "./routes.js";
 import { activateRuleBundle } from "./rule-bundles.js";
 import type { SdkRouteDependencies } from "./sdk-routes.js";
-import { handleDevicePrivacy, handleSdkBatch, handleSdkEnrollment } from "./sdk-routes.js";
+import { handleDeviceDsar, handleDevicePrivacy, handleSdkBatch, handleSdkEnrollment } from "./sdk-routes.js";
 import {
   assertDashboardBaseUrl,
   clearDashboardSessionCookie,
@@ -311,6 +311,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
       if (route.handler === "sdk_enrollment" && dependencies.sdk) return handleSdkEnrollment(request, response, dependencies.sdk);
       if (route.handler === "sdk_batch" && dependencies.sdk) return handleSdkBatch(request, response, dependencies.sdk);
       if (route.handler === "device_privacy" && dependencies.sdk) return handleDevicePrivacy(request, response, dependencies.sdk);
+      if (route.handler === "device_dsar" && dependencies.sdk) return handleDeviceDsar(request, response, dependencies.sdk);
 
       if (route.handler === "dashboard_css") {
         if (request.headers["if-none-match"] === dashboardCssEtag) {

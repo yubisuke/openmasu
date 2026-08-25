@@ -29,6 +29,7 @@ import { encodeMetricReport, metricReport } from "./reporting.js";
 import { ensureSdkKeys, signSdkRequest } from "./sdk-auth.js";
 import { createTrackingLink } from "./tracking-links.js";
 import { verifyCompactJws } from "@openmasu/commerce-lifecycle";
+import { nonFraudBundleHash } from "@openmasu/contracts";
 
 const run = randomBytes(6).toString("hex");
 const tenantId = `tenant-m2a-${run}`;
@@ -1207,10 +1208,27 @@ describe("M2a signed SDK ingestion", () => {
           WHERE logical.tenant_id=$1 AND logical.app_id=$2 AND raw.event_id=$3`,
         [tenantId, appId, forged.event_id],
       )).rows[0].count,
+      acceptedAudits: (await client.query<{ reason_code: string; request_digest: string; target_ref: string }>(
+        `SELECT reason_code,request_digest,target_ref FROM ledger.audit_logs
+          WHERE tenant_id=$1 AND app_id=$2 AND action='deep_link_device_claim_observed'
+          ORDER BY occurred_at`, [tenantId, appId],
+      )).rows,
+      rejectedClaimAudits: (await client.query<{ reason_code: string; target_ref: string }>(
+        `SELECT reason_code,target_ref FROM ledger.audit_logs
+          WHERE tenant_id=$1 AND app_id=$2 AND action='deep_link_client_claim_rejected'
+          ORDER BY occurred_at`, [tenantId, appId],
+      )).rows,
     }));
     assert.deepEqual(isolation.foreign, { tracking_link_id: null, campaign_id: null });
     assert.equal(isolation.foreignReason, "deep_link_unknown_link");
     assert.equal(isolation.forgedLogical, 0);
+    assert.ok(isolation.acceptedAudits.some((row) => row.reason_code === "device_claim_observed"));
+    assert.ok(isolation.acceptedAudits.some((row) => row.reason_code === "deep_link_unknown_link"));
+    assert.ok(isolation.acceptedAudits.every((row) => /^[a-f0-9]{64}$/.test(row.request_digest)));
+    assert.ok(isolation.acceptedAudits.every((row) => /^record-digest:[a-f0-9]{64}$/.test(row.target_ref)));
+    assert.ok(isolation.rejectedClaimAudits.some((row) =>
+      row.reason_code === "device_deep_link_attribution_claim_forbidden"
+      && /^request-digest:[a-f0-9]{32}$/.test(row.target_ref)));
   });
 
   it("assigns revenue purpose and resolves settled refunds without trusting a device target", async () => {
@@ -1683,6 +1701,72 @@ describe("M2a signed SDK ingestion", () => {
     )).rowCount), 0);
   });
 
+  it("WO20 returns a subject-scoped portable response without protected payload material", async () => {
+    const dsarInstallationId = `installation:dsar-${run}`;
+    const enrollment = await signed("/v1/installations", { installation_id: dsarInstallationId });
+    assert.equal(enrollment.status, 201);
+    const dsarCredential = await enrollment.json() as {
+      installation_key_id: string;
+      installation_secret: string;
+    };
+    const dsarSigned = (path: string, body: unknown) => signed(path, body, {
+      secret: dsarCredential.installation_secret,
+      installationKeyId: dsarCredential.installation_key_id,
+    });
+    const open = sourceEvent(`event:dsar-deep-link:${run}`, "deep_link_open", {
+      installation_id: dsarInstallationId,
+      open_source: "android_app_link",
+      destination_status: "delivered",
+      link_slug: "unknownDsarSlug",
+      deep_link_value: "/synthetic/dsar",
+    }, "2026-08-19T05:00:00.000Z");
+    assert.equal((await dsarSigned("/v1/events/batch", { records: [open] })).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+
+    const before = await withTenant(pool, tenantId, async (client) => Number((await client.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM ledger.privacy_requests WHERE tenant_id=$1 AND app_id=$2",
+      [tenantId, appId],
+    )).rows[0].count));
+    const response = await dsarSigned("/v1/privacy/access", {
+      installation_id: dsarInstallationId,
+      request_type: "portability",
+    });
+    const text = await response.text();
+    assert.equal(response.status, 200, text);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    const artifact = JSON.parse(text) as Record<string, any>;
+    assert.equal(artifact.request_type, "portability");
+    assert.equal(artifact.subject_scope, "installation");
+    assert.ok(artifact.records.length > 0);
+    assert.match(JSON.stringify(artifact), /device_reported_unverified/);
+    for (const forbidden of [
+      "raw_payload_ref", "raw_query_ref", "body_ref", "installation_id", "transaction_id",
+      "purchase_token", "tracking_link_id", "deep_link_value",
+    ]) assert.doesNotMatch(JSON.stringify(artifact), new RegExp(forbidden));
+
+    const other = await dsarSigned("/v1/privacy/access", {
+      installation_id: `installation:other-dsar-${run}`,
+      request_type: "access",
+    });
+    assert.equal(other.status, 403);
+    const evidence = await withTenant(pool, tenantId, async (client) => ({
+      privacyRows: Number((await client.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM ledger.privacy_requests WHERE tenant_id=$1 AND app_id=$2",
+        [tenantId, appId],
+      )).rows[0].count),
+      audits: (await client.query<{ outcome: string; reason_code: string | null }>(
+        `SELECT outcome,reason_code FROM ledger.audit_logs
+          WHERE tenant_id=$1 AND app_id=$2 AND action='privacy_access'
+          ORDER BY occurred_at`, [tenantId, appId],
+      )).rows,
+    }));
+    assert.equal(evidence.privacyRows, before, "subject access must not reuse the deletion ledger");
+    assert.deepEqual(evidence.audits.slice(-2), [
+      { outcome: "succeeded", reason_code: null },
+      { outcome: "failed", reason_code: "installation_scope_mismatch" },
+    ]);
+  });
+
   it("authorises on-device deletion only for the credential's own installation", async () => {
     const secondId = `installation:other-${run}`;
     const secondResponse = await signed("/v1/installations", { installation_id: secondId });
@@ -1694,7 +1778,8 @@ describe("M2a signed SDK ingestion", () => {
       metric_definition_version: "0.3.0", input_snapshot_id: "1".repeat(64),
       input_received_at_watermark: "2026-08-19T02:00:00.000Z", input_ledger_position: "2026-08-19T02:00:00.000Z|record:before-delete",
       computed_at: "2026-08-19T02:01:00.000Z", data_freshness: "complete", aggregation_time_zone: "UTC",
-      rule_bundle_id: "metric-default", rule_bundle_version: "0.3.0", rule_bundle_hash: "0".repeat(64),
+      rule_bundle_id: "metric-default", rule_bundle_version: "0.3.0",
+      rule_bundle_hash: nonFraudBundleHash("metric-default"),
       rounding_mode: "half_even", reproducibility_status: "fully_reproducible", value_type: "money",
       value_state: "present", value_unscaled: "1", amount_scale: 6, currency: "USD",
     };

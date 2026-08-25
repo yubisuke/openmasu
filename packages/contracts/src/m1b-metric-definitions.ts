@@ -1,15 +1,16 @@
 import type { OpenMasuMetricDefinitionV04 } from "./generated/contract-types.js";
+import { nonFraudBundleHash } from "./rule-bundle-provenance.js";
 
 // Metric and rule-bundle identifiers are independent of the contract namespace.
 const METRIC_DEFINITION_VERSION = "0.3.0";
 const RULE_BUNDLE_ID = "metric-stage-b";
-const RULE_BUNDLE_HASH = "2".repeat(64);
+const RULE_BUNDLE_HASH = nonFraudBundleHash("metric-stage-b");
 const PURCHASE_NET_METRIC_DEFINITION_VERSION = "0.4.8";
 const PURCHASE_NET_RULE_BUNDLE_ID = "metric-purchase-net";
-const PURCHASE_NET_RULE_BUNDLE_HASH = "8".repeat(64);
+const PURCHASE_NET_RULE_BUNDLE_HASH = nonFraudBundleHash("metric-purchase-net");
 const TOTAL_NET_METRIC_DEFINITION_VERSION = "0.4.9";
 const TOTAL_NET_RULE_BUNDLE_ID = "metric-total-net";
-const TOTAL_NET_RULE_BUNDLE_HASH = "9".repeat(64);
+const TOTAL_NET_RULE_BUNDLE_HASH = nonFraudBundleHash("metric-total-net");
 const AGGREGATION_TIME_ZONE = "UTC";
 const TARGET_CURRENCY = "USD";
 const TARGET_SCALE = 6;
@@ -31,7 +32,7 @@ function referenceAdRevenue(
     definition: { calculation: "revenue_sum", window: { type: windowType, day: 0 }, numerator: "revenue" },
     rule_bundle_id: "metric-default",
     rule_bundle_version: METRIC_DEFINITION_VERSION,
-    rule_bundle_hash: "0".repeat(64),
+    rule_bundle_hash: nonFraudBundleHash("metric-default"),
   };
 }
 
@@ -146,7 +147,7 @@ function horizonPurchaseNetRevenue(day: 30 | 90): OpenMasuMetricDefinitionV04 {
       numerator: "purchase_net_revenue",
     },
     rule_bundle_version: TOTAL_NET_METRIC_DEFINITION_VERSION,
-    rule_bundle_hash: TOTAL_NET_RULE_BUNDLE_HASH,
+    rule_bundle_hash: nonFraudBundleHash("metric-purchase-net-v0.4.9"),
   };
 }
 

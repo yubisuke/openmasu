@@ -12,6 +12,7 @@ export type RouteHandler =
   | "sdk_enrollment"
   | "sdk_batch"
   | "device_privacy"
+  | "device_dsar"
   | "admin_apps_list"
   | "admin_apps_create"
   | "admin_sdk_keys_list"
@@ -72,6 +73,7 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "sdk_enrollment", method: "POST", pattern: /^\/v1\/installations$/, auth: "sdk_hmac", mutates: true },
   { handler: "sdk_batch", method: "POST", pattern: /^\/v1\/events\/batch$/, auth: "sdk_hmac", mutates: true },
   { handler: "device_privacy", method: "POST", pattern: /^\/v1\/privacy\/on-device$/, auth: "sdk_hmac", mutates: true },
+  { handler: "device_dsar", method: "POST", pattern: /^\/v1\/privacy\/access$/, auth: "sdk_hmac", mutates: true },
   { handler: "apple_skan_postback", method: "POST", pattern: /^\/\.well-known\/skadnetwork\/report-attribution\/$/, auth: "public", mutates: true },
   { handler: "apple_aak_postback", method: "POST", pattern: /^\/\.well-known\/appattribution\/report-attribution\/$/, auth: "public", mutates: true },
   { handler: "google_play_rtdn", method: "POST", pattern: /^\/v1\/google-play\/rtdn$/, auth: "google_oidc", mutates: true },

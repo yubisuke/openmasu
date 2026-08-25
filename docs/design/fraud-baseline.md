@@ -750,6 +750,8 @@ Stage 0 is not ceremony. Three rules in this document rest on external semantics
 
 ## Handoffs
 
+- `deep_link_open` is device-reported and forgeable. WO-20 adds digest-only audit evidence without changing installation attribution; a future rule may conservatively flag anomalous re-engagement patterns, but no current rule treats the open itself as authentic.
+
 ### To the runtime (not contract changes)
 
 | # | Target | Change |

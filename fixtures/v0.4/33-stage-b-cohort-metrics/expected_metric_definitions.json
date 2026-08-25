@@ -15,7 +15,7 @@
     },
     "rule_bundle_id": "metric-stage-b",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+    "rule_bundle_hash": "f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499"
   },
   {
     "metric_name": "cohort_ltv_d7_usd",
@@ -36,7 +36,7 @@
     },
     "rule_bundle_id": "metric-stage-b",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+    "rule_bundle_hash": "f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499"
   },
   {
     "metric_name": "d0_install_to_24h_ad_revenue_usd",
@@ -56,7 +56,7 @@
     "amount_scale": 6,
     "rule_bundle_id": "metric-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
   },
   {
     "metric_name": "d0_jst_install_calendar_ad_revenue_usd",
@@ -76,7 +76,7 @@
     "amount_scale": 6,
     "rule_bundle_id": "metric-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
   },
   {
     "metric_name": "d0_utc_install_calendar_ad_revenue_usd",
@@ -96,7 +96,7 @@
     "amount_scale": 6,
     "rule_bundle_id": "metric-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
   },
   {
     "metric_name": "d1_roas",
@@ -124,7 +124,7 @@
     ],
     "rule_bundle_id": "metric-stage-b",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+    "rule_bundle_hash": "f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499"
   },
   {
     "metric_name": "d3_roas",
@@ -145,7 +145,7 @@
     },
     "rule_bundle_id": "metric-stage-b",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+    "rule_bundle_hash": "f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499"
   },
   {
     "metric_name": "d7_roas",
@@ -166,7 +166,7 @@
     },
     "rule_bundle_id": "metric-stage-b",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+    "rule_bundle_hash": "f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499"
   },
   {
     "metric_name": "retention_d1",
@@ -189,7 +189,7 @@
     ],
     "rule_bundle_id": "metric-stage-b",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+    "rule_bundle_hash": "f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499"
   },
   {
     "metric_name": "retention_d7",
@@ -212,6 +212,6 @@
     ],
     "rule_bundle_id": "metric-stage-b",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+    "rule_bundle_hash": "f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499"
   }
 ]

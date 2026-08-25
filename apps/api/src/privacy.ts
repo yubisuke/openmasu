@@ -76,10 +76,15 @@ async function affectedRecordIds(client: any, body: PrivacyRequestBody): Promise
        ON custom.logical_event_id=logical.logical_event_id
       AND custom.tenant_id=logical.tenant_id
       AND custom.app_id=logical.app_id
+     LEFT JOIN ledger.deep_link_open_facts AS deep_link
+       ON deep_link.logical_event_id=logical.logical_event_id
+      AND deep_link.tenant_id=logical.tenant_id
+      AND deep_link.app_id=logical.app_id
      WHERE logical.tenant_id=$1 AND logical.app_id=$2
        AND COALESCE(install.installation_id, session.installation_id, purchase.installation_id,
          refund.installation_id, target_purchase.installation_id,
-         legacy_target_purchase.installation_id, revenue.installation_id, custom.installation_id)=$3
+         legacy_target_purchase.installation_id, revenue.installation_id, custom.installation_id,
+         deep_link.installation_id)=$3
      ORDER BY logical.record_id`,
     [body.tenant_id, body.app_id, body.deletion_subject_ref],
   );

@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
 import { appendDurableBatch, uuidV7, type PayloadStore } from "@openmasu/runtime";
 import { executePrivacyRequest, type PrivacyRequestBody } from "./privacy.js";
+import { assertDsarResponseSafe, generateDsarResponse, parseDsarRequest } from "./dsar.js";
 import { type KeyedTokenBucket } from "./rate-limit.js";
 import { parseJsonBody, readRawBody, RequestBodyError } from "./raw-body.js";
 import {
@@ -255,7 +256,18 @@ export async function handleSdkBatch(
   const receivedAt = new Date().toISOString();
   let records: Any[];
   try { records = value.records.map((record: Any) => normalizedRecord(record, identity, receivedAt, dependencies.config)); }
-  catch (error) { return writeJson(response, 403, { error: error instanceof Error ? error.message : "record_invalid" }); }
+  catch (error) {
+    const reason = error instanceof Error ? error.message : "record_invalid";
+    if (reason === "device_deep_link_attribution_claim_forbidden") {
+      await recordSdkAudit(dependencies.pool, dependencies.config, {
+        actorType: "sdk_installation", actorRef: `sdk_installation:${identity.installationKeyId}`,
+        action: "deep_link_client_claim_rejected", targetScope: "record",
+        targetRef: `request-digest:${identity.requestDigest.slice(0, 32)}`,
+        requestDigest: identity.requestDigest, outcome: "failed", reasonCode: reason,
+      });
+    }
+    return writeJson(response, 403, { error: reason });
+  }
   const durableBody = Buffer.from(JSON.stringify({ records }), "utf8");
   const ingestBatchId = await appendDurableBatch(dependencies.pool, dependencies.payloadStore, {
     tenantId: identity.tenantId,
@@ -318,4 +330,40 @@ export async function handleDevicePrivacy(
   }, privacyBody, dependencies.payloadStore);
   await revokeInstallationCredential({ pool: dependencies.pool, payloadStore: dependencies.payloadStore, identity });
   writeJson(response, 201, artifact);
+}
+
+export async function handleDeviceDsar(
+  request: IncomingMessage,
+  response: ServerResponse,
+  dependencies: SdkRouteDependencies,
+): Promise<void> {
+  const body = await readRawBody(request, Math.min(dependencies.maximumBytes, 32 * 1024));
+  const identity = await authenticate(request, body, dependencies, true);
+  if (!identity) return writeJson(response, 401, { error: "unauthorized" });
+  if (!dependencies.privacyBucket.allow(identity.installationKeyId!)) return writeJson(response, 429, { error: "rate_limited" });
+  let value: Any;
+  try { value = parseJsonBody<Any>(body); }
+  catch { return writeJson(response, 400, { error: "malformed_json" }); }
+  let parsed: ReturnType<typeof parseDsarRequest>;
+  try { parsed = parseDsarRequest(value); }
+  catch (error) { return writeJson(response, 400, { error: error instanceof Error ? error.message : "dsar_request_invalid" }); }
+  if (installationIdDigest(dependencies.config, parsed.installationId) !== identity.installationIdDigest) {
+    await recordSdkAudit(dependencies.pool, dependencies.config, {
+      actorType: "sdk_installation", actorRef: `sdk_installation:${identity.installationKeyId}`,
+      action: "privacy_access", targetScope: "privacy_request", targetRef: "dsar:denied",
+      requestDigest: identity.requestDigest, outcome: "failed", reasonCode: "installation_scope_mismatch",
+    });
+    return writeJson(response, 403, { error: "installation_scope_mismatch" });
+  }
+  const artifact = await generateDsarResponse({
+    pool: dependencies.pool, tenantId: identity.tenantId, appId: identity.appId,
+    installationId: parsed.installationId, requestType: parsed.requestType,
+  });
+  assertDsarResponseSafe(artifact);
+  await recordSdkAudit(dependencies.pool, dependencies.config, {
+    actorType: "sdk_installation", actorRef: `sdk_installation:${identity.installationKeyId}`,
+    action: "privacy_access", targetScope: "privacy_request", targetRef: artifact.request_id,
+    requestDigest: identity.requestDigest, outcome: "succeeded",
+  });
+  writeJson(response, 200, artifact);
 }

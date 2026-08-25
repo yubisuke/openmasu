@@ -6,7 +6,7 @@
       { "tenant_id": "tenant-a", "app_id": "app-a", "ref": "install-41", "lifecycle_status": "available", "access_class": "protected" }
     ],
     "effective_at": "2026-08-19T02:00:09.999Z", "decided_at": "2026-08-19T02:00:10.000Z", "input_cutoff_at": "2026-08-19T02:00:10.000Z", "finality": "final",
-    "rule_bundle_id": "attribution-default", "rule_bundle_version": "0.3.0", "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "rule_bundle_id": "attribution-default", "rule_bundle_version": "0.3.0", "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50",
     "status": "non_organic", "method": "install_referrer", "model": "last_click", "reason_code": "valid_install_referrer"
   }
 ]

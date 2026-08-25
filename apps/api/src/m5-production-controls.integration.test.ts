@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import type { Pool } from "pg";
+import { NON_FRAUD_RULE_BUNDLES, nonFraudBundleHash } from "@openmasu/contracts";
 import { DEFAULT_FRAUD_BUNDLE, fraudBundleHash, sha256Jcs } from "@openmasu/fraud-rules";
 import {
   createAppPool,
@@ -21,6 +22,7 @@ import { createRequestHandler } from "./router.js";
 import { OperationalMetrics, renderOperationalMetrics } from "./operational-metrics.js";
 import { activateRuleBundle } from "./rule-bundles.js";
 import { issueDashboardSession, verifyDashboardSession } from "./session.js";
+import { resolveNonFraudBundle } from "../../worker/src/non-fraud-bundle-runtime.js";
 
 const suffix = `${Date.now()}`;
 const tenantId = `tenant-m5-${suffix}`;
@@ -388,7 +390,7 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
       pool: appPool,
       identity: identities.admin,
       body: {
-        rule_bundle_id: "attribution-default",
+        rule_bundle_id: "synthetic-history",
         rule_bundle_version: "1.0.0",
         rule_bundle_hash: "1".repeat(64),
       },
@@ -398,7 +400,7 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
       pool: appPool,
       identity: identities.admin,
       body: {
-        rule_bundle_id: "attribution-default",
+        rule_bundle_id: "synthetic-history",
         rule_bundle_version: "1.1.0",
         rule_bundle_hash: "2".repeat(64),
         supersedes_rule_bundle_revision_id: first.rule_bundle_revision_id,
@@ -409,7 +411,7 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
       pool: appPool,
       identity: identities.admin,
       body: {
-        rule_bundle_id: "attribution-default",
+        rule_bundle_id: "synthetic-history",
         rule_bundle_version: "1.2.0",
         rule_bundle_hash: "3".repeat(64),
         supersedes_rule_bundle_revision_id: first.rule_bundle_revision_id,
@@ -425,11 +427,11 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
       [...values],
     ));
     await assert.rejects(() => invalidInsert([
-      "rule-bundle:second-root", tenantId, appId, "attribution-default", "2.0.0",
+      "rule-bundle:second-root", tenantId, appId, "synthetic-history", "2.0.0",
       "4".repeat(64), null, "2026-08-20T01:02:00.000Z", "admin_key:synthetic",
       JSON.stringify({
         rule_bundle_revision_id: "rule-bundle:second-root",
-        rule_bundle_id: "attribution-default",
+        rule_bundle_id: "synthetic-history",
         rule_bundle_version: "2.0.0",
         rule_bundle_hash: "4".repeat(64),
         activated_at: "2026-08-20T01:02:00.000Z",
@@ -492,6 +494,54 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
       "DELETE FROM control.rule_bundle_revisions WHERE rule_bundle_revision_id=$1",
       [first.rule_bundle_revision_id],
     )), /append-only/);
+  });
+
+  it("WO20 resolves an activated canonical non-fraud revision and rejects forged provenance", async () => {
+    const definition = structuredClone(NON_FRAUD_RULE_BUNDLES["attribution-default"]);
+    const hash = nonFraudBundleHash("attribution-default");
+    const revision = await activateRuleBundle({
+      pool: appPool,
+      identity: identities.admin,
+      body: {
+        rule_bundle_id: definition.id,
+        rule_bundle_version: definition.version,
+        rule_bundle_hash: hash,
+        definition,
+        definition_digest: hash,
+      },
+      now: new Date("2026-08-20T01:30:00.000Z"),
+    });
+    const resolved = await resolveNonFraudBundle(appPool, tenantId, appId, "attribution-default");
+    assert.deepEqual(resolved, {
+      ruleBundleRevisionId: revision.rule_bundle_revision_id,
+      ruleBundleId: definition.id,
+      ruleBundleVersion: definition.version,
+      ruleBundleHash: hash,
+      definitionDigest: hash,
+    });
+
+    await assert.rejects(() => activateRuleBundle({
+      pool: appPool,
+      identity: identities.admin,
+      body: {
+        rule_bundle_id: definition.id,
+        rule_bundle_version: definition.version,
+        rule_bundle_hash: "f".repeat(64),
+        definition,
+        definition_digest: hash,
+        supersedes_rule_bundle_revision_id: revision.rule_bundle_revision_id,
+      },
+    }), /rule_bundle_hash_mismatch/);
+    await assert.rejects(() => activateRuleBundle({
+      pool: appPool,
+      identity: identities.admin,
+      body: {
+        rule_bundle_id: definition.id,
+        rule_bundle_version: definition.version,
+        definition: { ...definition, rules: [...definition.rules, "synthetic-forgery"] },
+        supersedes_rule_bundle_revision_id: revision.rule_bundle_revision_id,
+      },
+    }), /non_fraud_rule_bundle_definition_unsupported/);
   });
 
   it("F-A-12 registers the canonical fraud definition and rejects forged digests", async () => {

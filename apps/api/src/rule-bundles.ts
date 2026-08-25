@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import { fraudBundleHash, sha256Jcs, type FraudBundle } from "@openmasu/fraud-rules";
+import { NON_FRAUD_RULE_BUNDLES, validateNonFraudBundleDefinition } from "@openmasu/contracts";
 import { uuidV7, withTenant } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
@@ -20,7 +21,7 @@ function validateBody(body: Any): {
   ruleBundleId: string;
   ruleBundleVersion: string;
   ruleBundleHash: string;
-  definition?: FraudBundle;
+  definition?: Any;
   definitionDigest?: string;
   supersedes?: string;
 } {
@@ -31,7 +32,7 @@ function validateBody(body: Any): {
   if (Object.keys(body).some((key) => !allowed.has(key))) throw new Error("rule_bundle_field_forbidden");
   const ruleBundleId = String(body.rule_bundle_id ?? "");
   const ruleBundleVersion = String(body.rule_bundle_version ?? "");
-  const definition = body.definition === undefined ? undefined : body.definition as FraudBundle;
+  const definition = body.definition as Any | undefined;
   const suppliedHash = body.rule_bundle_hash === undefined ? undefined : String(body.rule_bundle_hash);
   const suppliedDefinitionDigest = body.definition_digest === undefined ? undefined : String(body.definition_digest);
   const supersedes = body.supersedes_rule_bundle_revision_id === undefined
@@ -39,8 +40,14 @@ function validateBody(body: Any): {
     : String(body.supersedes_rule_bundle_revision_id);
   if (!/^[A-Za-z0-9._:-]{1,128}$/.test(ruleBundleId)) throw new Error("rule_bundle_id_invalid");
   if (ruleBundleVersion.length < 1 || ruleBundleVersion.length > 128) throw new Error("rule_bundle_version_invalid");
-  if (definition === undefined && ruleBundleId.startsWith("fraud-")) throw new Error("fraud_bundle_definition_required");
-  const computedHash = definition === undefined ? undefined : fraudBundleHash(definition);
+  const knownNonFraud = Object.prototype.hasOwnProperty.call(NON_FRAUD_RULE_BUNDLES, ruleBundleId);
+  if (definition === undefined && (ruleBundleId.startsWith("fraud-") || knownNonFraud)) {
+    throw new Error("rule_bundle_definition_required");
+  }
+  if (definition !== undefined && ruleBundleId.startsWith("fraud-")) fraudBundleHash(definition as FraudBundle);
+  else if (definition !== undefined && knownNonFraud) validateNonFraudBundleDefinition(definition);
+  const computedHash = definition === undefined ? undefined : ruleBundleId.startsWith("fraud-")
+    ? fraudBundleHash(definition as FraudBundle) : sha256Jcs(definition);
   const computedDefinitionDigest = definition === undefined ? undefined : sha256Jcs(definition);
   if (definition && (definition.id !== ruleBundleId || definition.version !== ruleBundleVersion)) {
     throw new Error("rule_bundle_definition_identity_mismatch");

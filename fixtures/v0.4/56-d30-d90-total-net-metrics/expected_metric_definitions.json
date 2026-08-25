@@ -17,7 +17,7 @@
     },
     "rule_bundle_id": "metric-purchase-net",
     "rule_bundle_version": "0.4.9",
-    "rule_bundle_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+    "rule_bundle_hash": "709f6688c7bb8537b7af3aa3b5a3aa879036a866fe13a21b83244baec6389712",
     "grouping_dimensions": [
       "campaign_id",
       "network",
@@ -44,7 +44,7 @@
     },
     "rule_bundle_id": "metric-purchase-net",
     "rule_bundle_version": "0.4.9",
-    "rule_bundle_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+    "rule_bundle_hash": "709f6688c7bb8537b7af3aa3b5a3aa879036a866fe13a21b83244baec6389712",
     "grouping_dimensions": [
       "campaign_id",
       "network",
@@ -72,7 +72,7 @@
     },
     "rule_bundle_id": "metric-total-net",
     "rule_bundle_version": "0.4.9",
-    "rule_bundle_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+    "rule_bundle_hash": "fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3",
     "grouping_dimensions": [
       "campaign_id",
       "network",
@@ -100,7 +100,7 @@
     },
     "rule_bundle_id": "metric-total-net",
     "rule_bundle_version": "0.4.9",
-    "rule_bundle_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+    "rule_bundle_hash": "fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3",
     "grouping_dimensions": [
       "campaign_id",
       "network",
@@ -127,7 +127,7 @@
     },
     "rule_bundle_id": "metric-total-net",
     "rule_bundle_version": "0.4.9",
-    "rule_bundle_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+    "rule_bundle_hash": "fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3",
     "grouping_dimensions": [
       "campaign_id",
       "network",
@@ -154,7 +154,7 @@
     },
     "rule_bundle_id": "metric-total-net",
     "rule_bundle_version": "0.4.9",
-    "rule_bundle_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+    "rule_bundle_hash": "fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3",
     "grouping_dimensions": [
       "campaign_id",
       "network",
@@ -181,7 +181,7 @@
     },
     "rule_bundle_id": "metric-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
   },
   {
     "metric_name": "d0_jst_install_calendar_ad_revenue_usd",
@@ -201,7 +201,7 @@
     },
     "rule_bundle_id": "metric-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
   },
   {
     "metric_name": "d0_utc_install_calendar_ad_revenue_usd",
@@ -221,7 +221,7 @@
     },
     "rule_bundle_id": "metric-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
   },
   {
     "metric_name": "d30_total_net_roas",
@@ -242,7 +242,7 @@
     },
     "rule_bundle_id": "metric-total-net",
     "rule_bundle_version": "0.4.9",
-    "rule_bundle_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+    "rule_bundle_hash": "fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3",
     "grouping_dimensions": [
       "campaign_id",
       "network",
@@ -270,7 +270,7 @@
     },
     "rule_bundle_id": "metric-total-net",
     "rule_bundle_version": "0.4.9",
-    "rule_bundle_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+    "rule_bundle_hash": "fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3",
     "grouping_dimensions": [
       "campaign_id",
       "network",

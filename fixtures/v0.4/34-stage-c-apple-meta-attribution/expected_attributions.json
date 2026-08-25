@@ -25,7 +25,7 @@
     "finality": "final",
     "rule_bundle_id": "apple-postback-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "rule_bundle_hash": "91181289d7e6604c8a73b7e83d6950334db9bc1067b78ab25216ecaa24bcb896"
   },
   {
     "attribution_id": "attr:aak-not-winner-34",
@@ -53,7 +53,7 @@
     "finality": "final",
     "rule_bundle_id": "apple-postback-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "rule_bundle_hash": "91181289d7e6604c8a73b7e83d6950334db9bc1067b78ab25216ecaa24bcb896"
   },
   {
     "attribution_id": "attr:aak-null-conversion-34",
@@ -81,7 +81,7 @@
     "finality": "final",
     "rule_bundle_id": "apple-postback-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "rule_bundle_hash": "91181289d7e6604c8a73b7e83d6950334db9bc1067b78ab25216ecaa24bcb896"
   },
   {
     "attribution_id": "attr:adservices-expired-install-34",
@@ -105,7 +105,7 @@
     "finality": "final",
     "rule_bundle_id": "attribution-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50",
     "status": "unattributed",
     "method": "apple_adservices",
     "model": "last_click",
@@ -133,7 +133,7 @@
     "finality": "final",
     "rule_bundle_id": "attribution-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50",
     "status": "non_organic",
     "method": "apple_adservices",
     "model": "last_click",
@@ -161,7 +161,7 @@
     "finality": "final",
     "rule_bundle_id": "attribution-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50",
     "status": "organic",
     "method": "none",
     "model": "none",
@@ -189,7 +189,7 @@
     "finality": "final",
     "rule_bundle_id": "attribution-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50",
     "status": "unattributed",
     "method": "meta_install_referrer",
     "model": "last_click",
@@ -217,7 +217,7 @@
     "finality": "final",
     "rule_bundle_id": "attribution-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50",
     "status": "non_organic",
     "method": "meta_install_referrer",
     "model": "last_click",
@@ -245,7 +245,7 @@
     "finality": "final",
     "rule_bundle_id": "attribution-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50",
     "status": "unattributed",
     "method": "meta_install_referrer",
     "model": "last_click",
@@ -273,7 +273,7 @@
     "finality": "final",
     "rule_bundle_id": "attribution-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50",
     "status": "organic",
     "method": "none",
     "model": "none",
@@ -301,7 +301,7 @@
     "finality": "final",
     "rule_bundle_id": "attribution-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50",
     "status": "unattributed",
     "method": "none",
     "model": "none",
@@ -329,7 +329,7 @@
     "finality": "final",
     "rule_bundle_id": "attribution-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50",
     "status": "non_organic",
     "method": "meta_install_referrer",
     "model": "view_through",
@@ -361,7 +361,7 @@
     "finality": "final",
     "rule_bundle_id": "apple-postback-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "rule_bundle_hash": "91181289d7e6604c8a73b7e83d6950334db9bc1067b78ab25216ecaa24bcb896"
   },
   {
     "attribution_id": "attr:skan-verified-34",
@@ -389,6 +389,6 @@
     "finality": "final",
     "rule_bundle_id": "apple-postback-default",
     "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "rule_bundle_hash": "91181289d7e6604c8a73b7e83d6950334db9bc1067b78ab25216ecaa24bcb896"
   }
 ]

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import {
   M1B_METRIC_DEFINITIONS,
   REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
+  nonFraudBundleHash,
 } from "@openmasu/contracts";
 import { jcs, sha256 } from "@openmasu/attribution-core";
 
@@ -983,7 +984,8 @@ function assertMetricDefinitionSeries(definition: Any): void {
   if (definition.definition?.numerator === "purchase_net_revenue" || purchaseNetDays.has(definition.metric_name)) {
     const expectedDay = purchaseNetDays.get(definition.metric_name);
     const expectedVersion = expectedDay === 30 || expectedDay === 90 ? "0.4.9" : "0.4.8";
-    const expectedHash = expectedVersion === "0.4.9" ? "9".repeat(64) : "8".repeat(64);
+    const expectedHash = expectedVersion === "0.4.9"
+      ? nonFraudBundleHash("metric-purchase-net-v0.4.9") : nonFraudBundleHash("metric-purchase-net");
     if (expectedDay === undefined || definition.metric_definition_version !== expectedVersion
         || definition.anchor_event !== "install" || definition.aggregation_time_zone !== "UTC"
         || definition.value_type !== "money" || definition.currency !== "USD"
@@ -1003,7 +1005,8 @@ function assertMetricDefinitionSeries(definition: Any): void {
         || (expected.valueType === "money" && (definition.currency !== "USD" || definition.amount_scale !== 6))
         || (expected.valueType === "ratio" && definition.ratio_scale !== 6)
         || definition.rule_bundle_id !== "metric-total-net"
-        || definition.rule_bundle_version !== "0.4.9" || definition.rule_bundle_hash !== "9".repeat(64)
+        || definition.rule_bundle_version !== "0.4.9"
+        || definition.rule_bundle_hash !== nonFraudBundleHash("metric-total-net")
         || definition.definition?.calculation !== expected.calculation
         || definition.definition?.numerator !== "total_net_revenue"
         || definition.definition?.window?.type !== "elapsed"
