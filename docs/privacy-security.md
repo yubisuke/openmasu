@@ -162,7 +162,15 @@ Private and access-controlled:
 
 Each decision records its reason, evidence references, policy digest, evaluation time, action, and supersession history. Public auditability does not require publishing live attack thresholds.
 
-Only the fraud bundle is bound to its real composite JCS hash in M6. The remaining `attribution-default`, `metric-default`, and `apple-postback-default` bundles still use a 64-zero placeholder. This known, golden-changing repair is tracked as F-H-3 and is outside WO-14.
+M6 bound the fraud bundle to its registered composite JCS hash. WO-20 completed
+the related F-H-3 handoff: attribution, metric, and Apple postback artifacts now
+use reviewed SHA-256 digests of canonical JCS definitions instead of placeholder
+hashes. Runtime attribution and Apple postback evaluation prefers an exact active
+registered revision and otherwise uses the checked-in canonical default; metric
+definitions use the same checked-in canonical provenance. Runtime attribution
+and Apple postback artifacts are rejected when their ID, version, and hash do
+not match the resolved definition; metric runs retain the exact definition in
+their replay manifest and pass contract/evaluator parity gates.
 
 ## Release gates
 

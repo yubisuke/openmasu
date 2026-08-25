@@ -481,6 +481,8 @@ G-3 is the defect that most undermines the milestone: `rule_bundle_hash` is `"0"
 
 **WO-14R correction.** Runtime ingestion and source-day evaluation resolve the active fraud definition from `control.rule_bundles_current`, verify its definition digest and composite JCS hash, pass that exact revision through the server context, and reject persistence when the recorded triple does not match the evaluated revision. The in-code definition remains only the fixture and initial-registration default. Transport, CTIT, referrer-order, and source-day decisions all use the same composite hash.
 
+**WO-20 resolution (2026-08-25).** The intentionally deferred F-H-3 repair is complete. Attribution, metric, and Apple postback definitions now have reviewed canonical JCS definitions and non-placeholder SHA-256 provenance. Runtime attribution and Apple postback evaluation prefers an exact active registered revision and otherwise uses the checked-in default; persistence rejects an artifact whose ID, version, or hash differs from that binding. The 335 reviewed fixture changes are exclusively `rule_bundle_hash` replacements and are recorded in `fixtures/v0.4/README.md`.
+
 ### F-D-27. Verify the fraud policy digest
 
 Mirror `decide()`'s existing `timestamp_stale_policy` check for `click_injection_policy` and every new policy object: recompute `sha256(JCS(canonical policy fields))` and throw on mismatch. Six lines, and without them a recorded policy digest is a decoration (G-2).
@@ -756,12 +758,12 @@ Stage 0 is not ceremony. Three rules in this document rest on external semantics
 
 | # | Target | Change |
 | --- | --- | --- |
-| F-H-1 | `apps/worker/src/sdk-worker.ts` | Replace the dead `click_injection_threshold_ms` with a real `click_injection_policy` object resolved from the active bundle (G-1) |
-| F-H-2 | `packages/attribution-core/src/evaluator.ts` `decide()` | Verify `click_injection_policy.policy_digest` as `timestamp_stale_policy.policy_digest` is verified (G-2) |
-| F-H-3 | `evaluator.ts` `HASH` constant | `attribution-default`, `metric-default`, and `apple-postback-default` still emit `"0"×64`. WO-14 fixes only `fraud`. **The remaining three are a scheduled, golden-changing repair, not a leftover** (G-3) |
-| F-H-4 | `apps/redirector/src/handler.ts` | Populate `network`, `site_id`, `remote_click_ref`; the M2 baseline documents these as present and they are not (G-5) |
-| F-H-5 | `docs/design/m2-baseline.md:404` | Correct the click-artifact table to describe what shipped, then correct the code — same treatment M4 gave the `sdk_keys.platform` drift |
-| F-H-6 | M7 `deep_link_open` | Treat the device-declared open as forgeable evidence readable by later fraud rules. Inflated re-engagement from a forged open remains a documented residual until a deterministic combined rule is designed. |
+| F-H-1 | `apps/worker/src/ingestion.ts` | **Resolved by WO-14R.** Runtime ingestion derives `click_injection_policy` from the active fraud definition and supplies its verified digest to the evaluator. |
+| F-H-2 | `packages/attribution-core/src/evaluator.ts` `decide()` | **Resolved by WO-14R.** The evaluator recomputes and verifies `click_injection_policy.policy_digest`. |
+| F-H-3 | Non-fraud evaluators and metric definitions | **Resolved by WO-20.** `attribution-default`, metric bundles, and `apple-postback-default` use reviewed canonical JCS digests; runtime bindings and persisted triples reject mismatches. |
+| F-H-4 | `apps/redirector/src/handler.ts` | **Resolved by WO-14.** Redirect evidence carries server-configured `network` and `site_id` plus a syntax-bounded `remote_click_ref` from the single configured query parameter. |
+| F-H-5 | `docs/design/m2-baseline.md` | **Resolved.** The click-artifact table describes the shipped optional dimensions and the bounded evidence added by M6. |
+| F-H-6 | M7 `deep_link_open` | **Partially resolved by WO-20.** Digest-only audit evidence labels device claims and preserves server-observed resolution/reuse facts without changing installation attribution. Inflated re-engagement from a forged open remains a documented residual until a deterministic combined rule is designed. |
 
 ### To the documents
 
