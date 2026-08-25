@@ -29,6 +29,11 @@ public final class OpenMasuUnityBridge {
   private OpenMasuUnityBridge() {}
 
   public static void initialize(Activity activity, String endpoint, String keyId, String secret, String wrapperVersion,
+      String deepLinkHosts, String deepLinkSchemes) {
+    initialize(activity, endpoint, keyId, secret, wrapperVersion, deepLinkHosts, deepLinkSchemes, false, "");
+  }
+
+  public static void initialize(Activity activity, String endpoint, String keyId, String secret, String wrapperVersion,
       String deepLinkHosts, String deepLinkSchemes, boolean enablePlayReferrer, String metaAppId) {
     Context context = activity.getApplicationContext();
     OpenMasuConfiguration configuration = new OpenMasuConfiguration(
@@ -118,14 +123,21 @@ public final class OpenMasuUnityBridge {
   }
 
   static MetaReferrerReader createMetaReferrerReader(ContentResolver resolver, String metaAppId) {
-    if (metaAppId == null || metaAppId.trim().isEmpty()) return unavailableMetaReader();
+    String normalizedAppId = normalizeMetaAppId(metaAppId);
+    if (normalizedAppId == null) return unavailableMetaReader();
     try {
       Class<?> type = Class.forName("dev.openmasu.sdk.metareferrer.MetaInstallReferrerReader");
       Constructor<?> constructor = type.getConstructor(ContentResolver.class, String.class);
-      return (MetaReferrerReader) constructor.newInstance(resolver, metaAppId.trim());
+      return (MetaReferrerReader) constructor.newInstance(resolver, normalizedAppId);
     } catch (ReflectiveOperationException | LinkageError exception) {
       return unavailableMetaReader();
     }
+  }
+
+  private static String normalizeMetaAppId(String value) {
+    if (value == null) return null;
+    String normalized = value.trim();
+    return normalized.matches("^[A-Za-z0-9._~-]{1,64}$") ? normalized : null;
   }
 
   private static PlayReferrerReader unavailablePlayReader() {

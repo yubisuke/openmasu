@@ -19,11 +19,26 @@ jobs:
           distribution: temurin
           java-version: "17"
           cache: gradle
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.18.0
+          cache: npm
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: 3.13.5
+      - name: Install pinned release tooling
+        run: |
+          npm install --global npm@11.6.2
+          npm ci
+      - name: Generate workspace, iOS, and Unity SBOMs
+        run: npm run sbom
       - name: Install Android SDK 36
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
-      - name: Verify Android SDK, A-09b accessors, manifest, backup rules, and SBOM
-        run: ./sdk/android/gradlew -p sdk/android androidAcceptance verifySdkSbom --no-daemon
+      - name: Verify Android SDK, provider wiring, release AARs, manifest, backup rules, and SBOM
+        run: ./sdk/android/gradlew -p sdk/android androidAcceptance :core:assembleRelease :installreferrer:assembleRelease :metareferrer:assembleRelease :max:assembleRelease :unitybridge:assembleRelease verifySdkSbom --no-daemon
+      - name: Build and reproduce the local SDK release bundle
+        run: python tools/build-sdk-release.py --reproducibility-check
       - name: Verify the pinned Gradle wrapper JAR
         shell: bash
         run: echo "81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f  sdk/android/gradle/wrapper/gradle-wrapper.jar" | sha256sum --check
@@ -34,8 +49,8 @@ jobs:
         run: dotnet run --project sdk/unity/tests/UnityCompileProbe.csproj --configuration Release
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: sdk-android-sbom
-          path: sbom/sdk-android.cdx.json
+          name: openmasu-sdk-release-bundle
+          path: build/sdk-release/openmasu-sdk-0.1.0
           if-no-files-found: error
 
   android-emulator:

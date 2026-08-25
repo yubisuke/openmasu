@@ -37,6 +37,17 @@ AppLovin MAX Swift Package version, lints `PrivacyInfo.xcprivacy`, audits built
 symbols, checks the dependency-empty CycloneDX SBOM, and compiles the Unity C#
 bridge probe.
 
+## Immutable source bundle
+
+The repository release tool packages the tracked `sdk/ios` tree as a
+deterministic source ZIP tied to the same `0.1.0` release identity and commit as
+the Android Maven layout and Unity UPM archive. It does not publish a Swift
+registry package or binary XCFramework. Run the repository-level commands in
+[`docs/operations/release.md`](../../docs/operations/release.md), then verify
+the archive through `SHA256SUMS` and `release-manifest.json`. The macOS
+`sdk-ios` workflow remains the authoritative Swift test and Simulator-build
+evidence for that source revision.
+
 ## Settled commerce events
 
 `OpenMasuCore` exposes `trackSettledPurchase(transactionId:amountUnscaled:amountScale:currency:)`

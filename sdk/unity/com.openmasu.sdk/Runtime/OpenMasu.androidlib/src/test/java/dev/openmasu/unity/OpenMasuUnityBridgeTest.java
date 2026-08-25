@@ -36,4 +36,10 @@ public final class OpenMasuUnityBridgeTest {
     assertEquals("service_unavailable", play.read().getClientResponse());
     assertEquals("provider_unavailable", meta.read().getStatus());
   }
+
+  @Test public void invalidMetaAppIdFailsClosed() {
+    MetaReferrerReader meta = OpenMasuUnityBridge.createMetaReferrerReader(
+        context.getContentResolver(), "invalid/app/id");
+    assertEquals("provider_unavailable", meta.read().getStatus());
+  }
 }

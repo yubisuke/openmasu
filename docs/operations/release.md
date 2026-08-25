@@ -1,6 +1,6 @@
 # Release Runbook
 
-OpenMasu currently ships source and reproducible evidence. This runbook does
+OpenMasu ships source and reproducible local SDK artifacts. This runbook does
 not publish packages, container images, Maven artifacts, Swift packages, UPM
 packages, or npm packages to a public registry.
 
@@ -21,12 +21,18 @@ packages, or npm packages to a public registry.
    the iOS SDK workflow. Confirm every expected workspace and SDK artifact is
    present and the API runtime component baseline is unchanged unless an
    approved dependency change explains it.
-7. Review the [informational synthetic load record](../validation/m5-load-results.md). Do not convert its p95
+7. Build the five Android release AARs, then run
+   `python tools/build-sdk-release.py --reproducibility-check`. Verify the
+   Maven POMs, UPM archive, Swift source archive, normalized SDK SBOMs,
+   `release-manifest.json`, and `SHA256SUMS` under
+   `build/sdk-release/openmasu-sdk-0.1.0/`. The command compares two packaging
+   passes byte for byte and never publishes them.
+8. Review the [informational synthetic load record](../validation/m5-load-results.md). Do not convert its p95
    record into a production service-level objective without a representative
    environment and operator approval.
-8. Confirm all GitHub Actions are green at the exact release commit. Action
+9. Confirm all GitHub Actions are green at the exact release commit. Action
    SHA changes require their own review and are never incidental release work.
-9. Create a signed or annotated source tag only after the owner approves the
+10. Create a signed or annotated source tag only after the owner approves the
    release candidate. Record the exact commit and CI run.
 
 ## Source release contents
@@ -35,8 +41,11 @@ packages, or npm packages to a public registry.
 - TypeScript and Python contract evaluators;
 - API, redirector, worker, runtime, database migrations, and Compose source;
 - Android, iOS, and Unity SDK source and sample source;
+- local Maven AAR/POM artifacts, the Unity UPM archive, and the Swift Package
+  source archive generated from one immutable revision;
 - architecture, security, operation, and validation documents;
-- CycloneDX SBOMs produced by the pinned workflows; and
+- Android, iOS, and Unity CycloneDX SBOMs plus the SHA-256 and build-input
+  manifests produced by the pinned workflows; and
 - CI evidence links and the operator residual checklist.
 
 Do not attach runtime secrets, real data, provider exports, real identifiers,

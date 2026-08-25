@@ -2,9 +2,21 @@
 
 The package in `com.openmasu.sdk` targets Unity 2022.3 LTS (best effort) and Unity 6 LTS. Android `minSdk` is 24.
 
-M2 ships source and local build instructions only. It does not publish a Maven or UPM artifact. Build the Android modules in `sdk/android`, publish the resulting dependency to an operator-controlled local Maven repository, and replace the placeholder `dev.openmasu:core:0.1.0` coordinate in `Runtime/OpenMasu.androidlib/build.gradle`.
+The standard source package includes the Android core, Google Play Install Referrer, Meta Install Referrer, and MAX modules. `OpenMasuOptions.EnablePlayReferrer` defaults to `true`; set it to `false` to make the bridge emit explicit unavailable Play evidence without reading the provider. Set `OpenMasuOptions.MetaAppId` to the deployment's non-secret Meta application ID to enable the Meta reader. A blank or invalid value disables that reader. Provider modules are discovered defensively so a deliberately reduced local package fails closed instead of crashing. No provider credential or campaign value belongs in the package.
+
+OpenMasu does not publish a Maven or UPM registry artifact. CI and local release tooling generate a versioned Maven-layout directory and `com.openmasu.sdk-<version>.tgz` from one source revision. Consumers may point Unity/Gradle at that operator-controlled directory or import the UPM archive without replacing placeholder coordinates by hand. See [the release runbook](../../docs/operations/release.md).
 
 The `.androidlib` resolution path from a UPM package is not established by Unity's primary documentation. The operator checklist records an actual export on both supported Unity lines. If the package directory is not resolved, use the locally built AAR as the documented fallback; do not download or commit a third-party binary.
+
+Generate the local bundle after building the five release AARs and SDK SBOMs:
+
+```bash
+npm run sbom
+./sdk/android/gradlew -p sdk/android :core:assembleRelease :installreferrer:assembleRelease :metareferrer:assembleRelease :max:assembleRelease :unitybridge:assembleRelease verifySdkSbom --no-daemon
+python tools/build-sdk-release.py --reproducibility-check
+```
+
+The output under `build/sdk-release/openmasu-sdk-0.1.0/` contains Maven AAR/POM pairs, the UPM archive, the Swift Package source archive, three CycloneDX SDK SBOMs, a source/toolchain manifest, and `SHA256SUMS`. It is a local CI artifact, not a public registry publication.
 
 MAX integration must subscribe separately to Interstitial, Rewarded, Banner, and MRec revenue callbacks. The compile probe keeps the four-format subscription table closed even when AppLovin is not present in the test environment.
 
