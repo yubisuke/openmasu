@@ -13,4 +13,5 @@ export {
   validateNonFraudBundleDefinition,
   type NonFraudRuleBundleDefinition,
   type NonFraudRuleBundleId,
+  type NonFraudRuleBundleKey,
 } from "./rule-bundle-provenance.js";

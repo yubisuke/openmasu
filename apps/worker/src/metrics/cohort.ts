@@ -985,7 +985,7 @@ function assertMetricDefinitionSeries(definition: Any): void {
     const expectedDay = purchaseNetDays.get(definition.metric_name);
     const expectedVersion = expectedDay === 30 || expectedDay === 90 ? "0.4.9" : "0.4.8";
     const expectedHash = expectedVersion === "0.4.9"
-      ? nonFraudBundleHash("metric-total-net") : nonFraudBundleHash("metric-purchase-net");
+      ? nonFraudBundleHash("metric-purchase-net-v0.4.9") : nonFraudBundleHash("metric-purchase-net");
     if (expectedDay === undefined || definition.metric_definition_version !== expectedVersion
         || definition.anchor_event !== "install" || definition.aggregation_time_zone !== "UTC"
         || definition.value_type !== "money" || definition.currency !== "USD"

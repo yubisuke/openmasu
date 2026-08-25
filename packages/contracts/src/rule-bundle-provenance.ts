@@ -10,6 +10,8 @@ export type NonFraudRuleBundleId =
   | "metric-purchase-net"
   | "metric-total-net";
 
+export type NonFraudRuleBundleKey = NonFraudRuleBundleId | "metric-purchase-net-v0.4.9";
+
 export type NonFraudRuleBundleDefinition = {
   readonly id: NonFraudRuleBundleId;
   readonly version: string;
@@ -18,7 +20,7 @@ export type NonFraudRuleBundleDefinition = {
   readonly rules: readonly string[];
 };
 
-export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleId, NonFraudRuleBundleDefinition>> = {
+export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonFraudRuleBundleDefinition>> = {
   "attribution-default": {
     id: "attribution-default", version: "0.3.0", kind: "attribution",
     implementation: "reference-evaluator-v0.4",
@@ -52,6 +54,11 @@ export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleId, NonFr
     implementation: "reference-metric-v0.4",
     rules: ["settled-purchase-minus-refund-d0", "d1", "d3", "d7"],
   },
+  "metric-purchase-net-v0.4.9": {
+    id: "metric-purchase-net", version: "0.4.9", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["settled-purchase-minus-refund-d30", "d90"],
+  },
   "metric-total-net": {
     id: "metric-total-net", version: "0.4.9", kind: "metric",
     implementation: "reference-metric-v0.4",
@@ -59,16 +66,16 @@ export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleId, NonFr
   },
 };
 
-export function nonFraudBundleHash(id: NonFraudRuleBundleId): string {
+export function nonFraudBundleHash(id: NonFraudRuleBundleKey): string {
   return createHash("sha256").update(canonicalize(NON_FRAUD_RULE_BUNDLES[id]), "utf8").digest("hex");
 }
 
 export function validateNonFraudBundleDefinition(value: unknown): NonFraudRuleBundleDefinition {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("rule_bundle_definition_invalid");
   const candidate = value as Record<string, unknown>;
-  const id = String(candidate.id ?? "") as NonFraudRuleBundleId;
-  const expected = NON_FRAUD_RULE_BUNDLES[id];
-  if (!expected || canonicalize(candidate) !== canonicalize(expected)) {
+  const expected = Object.values(NON_FRAUD_RULE_BUNDLES).find((definition) =>
+    canonicalize(candidate) === canonicalize(definition));
+  if (!expected) {
     throw new Error("non_fraud_rule_bundle_definition_unsupported");
   }
   return expected;

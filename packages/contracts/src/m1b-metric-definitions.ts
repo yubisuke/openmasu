@@ -147,7 +147,7 @@ function horizonPurchaseNetRevenue(day: 30 | 90): OpenMasuMetricDefinitionV04 {
       numerator: "purchase_net_revenue",
     },
     rule_bundle_version: TOTAL_NET_METRIC_DEFINITION_VERSION,
-    rule_bundle_hash: TOTAL_NET_RULE_BUNDLE_HASH,
+    rule_bundle_hash: nonFraudBundleHash("metric-purchase-net-v0.4.9"),
   };
 }
 
