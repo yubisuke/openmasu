@@ -39,6 +39,6 @@ the claim and whether a server-observed redirect click was available. This
 evidence can be used by later fraud review, but it does not reject ingestion,
 authenticate the device, or alter installation attribution.
 
-Contract impact: none. The new evidence is an additive internal ledger table;
-public event and fraud-decision schemas and registries remain unchanged.
-
+Contract impact: none. The new evidence is an additive internal audit record in
+the existing ledger; public event and fraud-decision schemas and registries
+remain unchanged.
