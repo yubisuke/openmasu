@@ -1,4 +1,4 @@
-# [Epic] Define Open MMP Event & Metric Contract v0.1
+# [Epic] Define OpenMasu Event & Metric Contract v0.1
 
 ## Background
 
@@ -299,7 +299,7 @@ Define the public reconciliation shapes used by Milestone 1 before implementatio
 
 This list reflects the WP10 design draft; the normative set is `registries/difference-reasons-v0.1.json`.
 - Typed external-row matching keys: `external_row_id`, `provider_install_id`, `provider_click_id`, `tracking_link_id`, `campaign_id`, `transaction_id`, `impression_id`, and a tenant/app-scoped composite key. Each key declares provider, scope, normalization, cardinality, and whether it is protected.
-- An `Open MMP Shadow Import Profile v0.1` with format contract and synthetic fixtures only. Public docs do not identify deployment providers; provider mappings and certification remain deployment-private, and the profile must not contain operational data or create a live connection.
+- An `OpenMasu Shadow Import Profile v0.1` with format contract and synthetic fixtures only. Public docs do not identify deployment providers; provider mappings and certification remain deployment-private, and the profile must not contain operational data or create a live connection.
 - A reconciliation result that records input snapshots, matching keys used, candidates, exclusions, windows, joins, freshness, reason-code version, and supersession history.
 
 Difference reasons describe measurement semantics and available evidence, never provider quality, correctness, or comparative performance.

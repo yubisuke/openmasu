@@ -5,14 +5,14 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { Client, Pool } from "pg";
-import { sha256 } from "@open-mmp/attribution-core";
+import { sha256 } from "@openmasu/attribution-core";
 import {
   createAppPool,
   createSeedPool,
   EncryptedFilePayloadStore,
   uuidV7,
   withTenant,
-} from "@open-mmp/runtime";
+} from "@openmasu/runtime";
 import { executePrivacyRequest } from "../../api/src/privacy.js";
 import { encodeMetricReport, metricReport } from "../../api/src/reporting.js";
 import { parseMetricQuery } from "../../api/src/report-query.js";
@@ -22,11 +22,11 @@ import { reapplyCompletedPrivacyRequests } from "./privacy-reapply.js";
 
 type Any = Record<string, any>;
 const fixtureName = "33-stage-b-cohort-metrics";
-const fixtureDirectory = join(process.cwd(), "fixtures", "v0.3", fixtureName);
+const fixtureDirectory = join(process.cwd(), "fixtures", "v0.4", fixtureName);
 const input: Any = JSON.parse(readFileSync(join(fixtureDirectory, "input.json"), "utf8"));
 
 function runPostgresTool(tool: "pg_dump" | "pg_restore", args: readonly string[], dumpPath: string): void {
-  if (process.env.OPENMMP_M5_PG_TOOLS !== "docker") {
+  if (process.env.OPENMASU_M5_PG_TOOLS !== "docker") {
     execFileSync(tool, [...args], { stdio: "pipe" });
     return;
   }
@@ -52,8 +52,8 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
   before(async () => {
     appPool = createAppPool();
     seedPool = createSeedPool();
-    root = mkdtempSync(join(tmpdir(), "openmmp-m5-privacy-live-"));
-    snapshot = mkdtempSync(join(tmpdir(), "openmmp-m5-privacy-snapshot-"));
+    root = mkdtempSync(join(tmpdir(), "openmasu-m5-privacy-live-"));
+    snapshot = mkdtempSync(join(tmpdir(), "openmasu-m5-privacy-snapshot-"));
     payloadStore = new EncryptedFilePayloadStore(
       root,
       "synthetic-m5-privacy-master-key-000000000000000",
@@ -144,14 +144,14 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
   });
 
   it("restores a pg_dump and reapplies completed privacy requests before serving data", {
-    skip: process.env.OPENMMP_M5_BACKUP_RESTORE !== "1",
+    skip: process.env.OPENMASU_M5_BACKUP_RESTORE !== "1",
   }, async () => {
-    const migrationUrl = process.env.OPENMMP_MIGRATION_DATABASE_URL;
-    const appUrl = process.env.OPENMMP_APP_DATABASE_URL;
+    const migrationUrl = process.env.OPENMASU_MIGRATION_DATABASE_URL;
+    const appUrl = process.env.OPENMASU_APP_DATABASE_URL;
     assert.ok(migrationUrl && appUrl);
-    const databaseName = `openmmp_restore_${Date.now()}`;
+    const databaseName = `openmasu_restore_${Date.now()}`;
     const dumpPath = join(snapshot, `${databaseName}.dump`);
-    const restoredPayloadRoot = mkdtempSync(join(tmpdir(), "openmmp-m5-restored-payload-"));
+    const restoredPayloadRoot = mkdtempSync(join(tmpdir(), "openmasu-m5-restored-payload-"));
     cpSync(join(snapshot, "payloads"), restoredPayloadRoot, { recursive: true, force: true });
     const admin = new Client({ connectionString: migrationUrl });
     await admin.connect();

@@ -9,7 +9,7 @@ export type EventPayloadValidation =
   | { valid: true; fields: readonly [] }
   | { valid: false; fields: readonly string[] };
 
-const commonSchemaId = "urn:open-mmp:schema:common:v0.3";
+const commonSchemaId = "urn:openmasu:schema:common:v0.4";
 const schemaRoot = fileURLToPath(new URL("../../../schemas/", import.meta.url));
 
 function loadJson(path: string): JsonObject {

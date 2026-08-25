@@ -1,4 +1,4 @@
-import type { OpenMMPMetricDefinitionV03 } from "./generated/contract-types.js";
+import type { OpenMasuMetricDefinitionV04 } from "./generated/contract-types.js";
 
 const CONTRACT_VERSION = "0.3.1";
 const RULE_BUNDLE_ID = "metric-stage-m3";
@@ -7,8 +7,8 @@ const RULE_BUNDLE_HASH = "3".repeat(64);
 function dailyEventCount(
   metricName: string,
   eventName: "click" | "install",
-  groupingDimensions: OpenMMPMetricDefinitionV03["grouping_dimensions"],
-): OpenMMPMetricDefinitionV03 {
+  groupingDimensions: OpenMasuMetricDefinitionV04["grouping_dimensions"],
+): OpenMasuMetricDefinitionV04 {
   return {
     metric_name: metricName,
     metric_definition_version: CONTRACT_VERSION,
@@ -28,7 +28,7 @@ function dailyEventCount(
   };
 }
 
-export const M3_METRIC_DEFINITIONS: ReadonlyArray<OpenMMPMetricDefinitionV03> = [
+export const M3_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricDefinitionV04> = [
   dailyEventCount("daily_click_count", "click", ["metric_date", "campaign_id", "network", "country"]),
   dailyEventCount("daily_install_count", "install", ["metric_date", "campaign_id", "network", "country", "attribution_status"]),
 ];

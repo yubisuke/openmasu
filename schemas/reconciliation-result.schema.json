@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:reconciliation-result:v0.3",
-  "title": "Open MMP Reconciliation Result v0.3",
+  "$id": "urn:openmasu:schema:reconciliation-result:v0.4",
+  "title": "OpenMasu Reconciliation Result v0.4",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -16,7 +16,7 @@
     "input_snapshot_id": { "$ref": "common.schema.json#/$defs/id" },
     "external_snapshot_id": { "$ref": "common.schema.json#/$defs/id" },
     "difference_reason_code": { "enum": ["matched", "candidate_missing", "candidate_excluded", "window_mismatch", "join_key_missing", "join_key_ambiguous", "freshness_mismatch", "external_row_unmatched", "redaction_caused_recalculation", "currency_policy_mismatch", "scope_mismatch", "provider_modeled_conversion"] },
-    "difference_reason_version": { "enum": ["0.3.0", "0.3.0"] },
+    "difference_reason_version": { "enum": ["0.4.0", "0.4.0"] },
     "matching_keys": {
       "type": "array",
       "items": {
@@ -63,10 +63,10 @@
         "required": ["difference_reason_code"]
       },
       "then": {
-        "properties": { "difference_reason_version": { "const": "0.3.0" } }
+        "properties": { "difference_reason_version": { "const": "0.4.0" } }
       },
       "else": {
-        "properties": { "difference_reason_version": { "const": "0.3.0" } }
+        "properties": { "difference_reason_version": { "const": "0.4.0" } }
       }
     }
   ]

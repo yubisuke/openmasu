@@ -8,7 +8,7 @@ data, credentials, device identifiers, private rule values, or production logs.
 
 - Enable branch protection, required reviews, required CI, secret scanning,
   dependency review, and least-privilege GitHub access.
-- Complete project-name and trademark clearance.
+- Complete formal trademark clearance before any trademark registration.
 - Approve release signing, retention, vulnerability response, and rollback
   ownership.
 

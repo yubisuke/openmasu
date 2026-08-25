@@ -1,4 +1,4 @@
-CREATE SCHEMA testing AUTHORIZATION openmmp_owner;
+CREATE SCHEMA testing AUTHORIZATION openmasu_owner;
 REVOKE ALL ON SCHEMA testing FROM PUBLIC;
 
 CREATE TABLE testing.fixture_inputs (
@@ -48,5 +48,5 @@ CREATE TABLE testing.fixture_artifacts (
 );
 
 REVOKE ALL ON ALL TABLES IN SCHEMA testing FROM PUBLIC;
-GRANT USAGE ON SCHEMA testing TO openmmp_seed;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA testing TO openmmp_seed;
+GRANT USAGE ON SCHEMA testing TO openmasu_seed;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA testing TO openmasu_seed;

@@ -1,12 +1,12 @@
--- Open MMP schema snapshot.
+-- OpenMasu schema snapshot.
 -- Generated deterministically from db/migrations; do not edit by hand.
 -- 001_initial_ledger.sql
-CREATE SCHEMA control AUTHORIZATION openmmp_owner;
-CREATE SCHEMA ledger AUTHORIZATION openmmp_owner;
+CREATE SCHEMA control AUTHORIZATION openmasu_owner;
+CREATE SCHEMA ledger AUTHORIZATION openmasu_owner;
 
 REVOKE ALL ON SCHEMA control, ledger FROM PUBLIC;
-GRANT USAGE ON SCHEMA control, ledger TO openmmp_app, openmmp_reader;
-GRANT USAGE ON SCHEMA ledger TO openmmp_seed;
+GRANT USAGE ON SCHEMA control, ledger TO openmasu_app, openmasu_reader;
+GRANT USAGE ON SCHEMA ledger TO openmasu_seed;
 
 CREATE DOMAIN control.identifier AS text
   CHECK (VALUE ~ '^[A-Za-z0-9._:-]{1,128}$');
@@ -423,7 +423,7 @@ BEGIN
     EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', item.table_schema, item.table_name);
     EXECUTE format('ALTER TABLE %I.%I FORCE ROW LEVEL SECURITY', item.table_schema, item.table_name);
     EXECUTE format(
-      'CREATE POLICY %I_tenant ON %I.%I USING (tenant_id = current_setting(''open_mmp.tenant_id'', true)) WITH CHECK (tenant_id = current_setting(''open_mmp.tenant_id'', true))',
+      'CREATE POLICY %I_tenant ON %I.%I USING (tenant_id = current_setting(''openmasu.tenant_id'', true)) WITH CHECK (tenant_id = current_setting(''openmasu.tenant_id'', true))',
       item.table_name,
       item.table_schema,
       item.table_name
@@ -436,24 +436,24 @@ REVOKE ALL ON ALL TABLES IN SCHEMA control, ledger FROM PUBLIC;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA control, ledger FROM PUBLIC;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA control, ledger FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION control.canonical_timestamp_value(control.canonical_timestamp)
-  TO openmmp_app, openmmp_reader;
+  TO openmasu_app, openmasu_reader;
 
-GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA control, ledger TO openmmp_app;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA control, ledger TO openmmp_app;
-REVOKE UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA control, ledger FROM openmmp_app;
-GRANT TRUNCATE ON ALL TABLES IN SCHEMA ledger TO openmmp_seed;
-GRANT SELECT ON ALL TABLES IN SCHEMA control, ledger TO openmmp_reader;
-GRANT SELECT ON ALL SEQUENCES IN SCHEMA control, ledger TO openmmp_reader;
+GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA control, ledger TO openmasu_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA control, ledger TO openmasu_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA control, ledger FROM openmasu_app;
+GRANT TRUNCATE ON ALL TABLES IN SCHEMA ledger TO openmasu_seed;
+GRANT SELECT ON ALL TABLES IN SCHEMA control, ledger TO openmasu_reader;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA control, ledger TO openmasu_reader;
 
-ALTER DEFAULT PRIVILEGES FOR ROLE openmmp_owner IN SCHEMA control, ledger
-  GRANT SELECT, INSERT ON TABLES TO openmmp_app;
-ALTER DEFAULT PRIVILEGES FOR ROLE openmmp_owner IN SCHEMA control, ledger
-  GRANT USAGE, SELECT ON SEQUENCES TO openmmp_app;
-ALTER DEFAULT PRIVILEGES FOR ROLE openmmp_owner IN SCHEMA control, ledger
-  GRANT SELECT ON TABLES TO openmmp_reader;
+ALTER DEFAULT PRIVILEGES FOR ROLE openmasu_owner IN SCHEMA control, ledger
+  GRANT SELECT, INSERT ON TABLES TO openmasu_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE openmasu_owner IN SCHEMA control, ledger
+  GRANT USAGE, SELECT ON SEQUENCES TO openmasu_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE openmasu_owner IN SCHEMA control, ledger
+  GRANT SELECT ON TABLES TO openmasu_reader;
 
 -- 002_fixture_parity.sql
-CREATE SCHEMA testing AUTHORIZATION openmmp_owner;
+CREATE SCHEMA testing AUTHORIZATION openmasu_owner;
 REVOKE ALL ON SCHEMA testing FROM PUBLIC;
 
 CREATE TABLE testing.fixture_inputs (
@@ -503,8 +503,8 @@ CREATE TABLE testing.fixture_artifacts (
 );
 
 REVOKE ALL ON ALL TABLES IN SCHEMA testing FROM PUBLIC;
-GRANT USAGE ON SCHEMA testing TO openmmp_seed;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA testing TO openmmp_seed;
+GRANT USAGE ON SCHEMA testing TO openmasu_seed;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA testing TO openmasu_seed;
 
 -- 003_import_foundation.sql
 CREATE TABLE control.import_files (
@@ -611,7 +611,7 @@ BEGIN
     EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', item.table_schema, item.table_name);
     EXECUTE format('ALTER TABLE %I.%I FORCE ROW LEVEL SECURITY', item.table_schema, item.table_name);
     EXECUTE format(
-      'CREATE POLICY %I_tenant ON %I.%I USING (tenant_id = current_setting(''open_mmp.tenant_id'', true)) WITH CHECK (tenant_id = current_setting(''open_mmp.tenant_id'', true))',
+      'CREATE POLICY %I_tenant ON %I.%I USING (tenant_id = current_setting(''openmasu.tenant_id'', true)) WITH CHECK (tenant_id = current_setting(''openmasu.tenant_id'', true))',
       item.table_name,
       item.table_schema,
       item.table_name
@@ -630,12 +630,12 @@ CREATE TRIGGER ingest_inbox_states_append_only
 REVOKE ALL ON control.import_files, control.import_attempts, control.import_row_rejections,
   ledger.ingest_inbox, ledger.ingest_inbox_states FROM PUBLIC;
 GRANT SELECT, INSERT ON control.import_files, control.import_attempts, control.import_row_rejections,
-  ledger.ingest_inbox, ledger.ingest_inbox_states TO openmmp_app;
+  ledger.ingest_inbox, ledger.ingest_inbox_states TO openmasu_app;
 GRANT SELECT ON control.import_files, control.import_attempts, control.import_row_rejections,
-  ledger.ingest_inbox, ledger.ingest_inbox_states TO openmmp_reader;
-GRANT USAGE, SELECT ON SEQUENCE ledger.ingest_inbox_states_inbox_state_seq_seq TO openmmp_app;
-GRANT SELECT ON SEQUENCE ledger.ingest_inbox_states_inbox_state_seq_seq TO openmmp_reader;
-GRANT TRUNCATE ON ledger.ingest_inbox, ledger.ingest_inbox_states TO openmmp_seed;
+  ledger.ingest_inbox, ledger.ingest_inbox_states TO openmasu_reader;
+GRANT USAGE, SELECT ON SEQUENCE ledger.ingest_inbox_states_inbox_state_seq_seq TO openmasu_app;
+GRANT SELECT ON SEQUENCE ledger.ingest_inbox_states_inbox_state_seq_seq TO openmasu_reader;
+GRANT TRUNCATE ON ledger.ingest_inbox, ledger.ingest_inbox_states TO openmasu_seed;
 
 -- 004_admin_privacy.sql
 CREATE TABLE control.admin_keys (
@@ -672,13 +672,13 @@ ORDER BY key.key_id, state.admin_key_state_seq DESC;
 ALTER TABLE control.admin_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE control.admin_keys FORCE ROW LEVEL SECURITY;
 CREATE POLICY admin_keys_tenant ON control.admin_keys
-  USING (tenant_id = current_setting('open_mmp.tenant_id', true))
-  WITH CHECK (tenant_id = current_setting('open_mmp.tenant_id', true));
+  USING (tenant_id = current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id = current_setting('openmasu.tenant_id', true));
 ALTER TABLE control.admin_key_states ENABLE ROW LEVEL SECURITY;
 ALTER TABLE control.admin_key_states FORCE ROW LEVEL SECURITY;
 CREATE POLICY admin_key_states_tenant ON control.admin_key_states
-  USING (tenant_id = current_setting('open_mmp.tenant_id', true))
-  WITH CHECK (tenant_id = current_setting('open_mmp.tenant_id', true));
+  USING (tenant_id = current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id = current_setting('openmasu.tenant_id', true));
 
 CREATE TRIGGER admin_keys_append_only
   BEFORE UPDATE OR DELETE ON control.admin_keys
@@ -688,10 +688,10 @@ CREATE TRIGGER admin_key_states_append_only
   FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
 
 REVOKE ALL ON control.admin_keys, control.admin_key_states FROM PUBLIC;
-GRANT SELECT, INSERT ON control.admin_keys, control.admin_key_states TO openmmp_app;
-GRANT USAGE, SELECT ON SEQUENCE control.admin_key_states_admin_key_state_seq_seq TO openmmp_app;
+GRANT SELECT, INSERT ON control.admin_keys, control.admin_key_states TO openmasu_app;
+GRANT USAGE, SELECT ON SEQUENCE control.admin_key_states_admin_key_state_seq_seq TO openmasu_app;
 
-GRANT TRUNCATE ON control.admin_keys, control.admin_key_states TO openmmp_seed;
+GRANT TRUNCATE ON control.admin_keys, control.admin_key_states TO openmasu_seed;
 
 -- 005_metric_engine.sql
 ALTER TABLE ledger.install_facts
@@ -751,7 +751,7 @@ $$;
 
 REVOKE ALL ON FUNCTION ledger.half_even_div(numeric, numeric) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION ledger.half_even_div(numeric, numeric)
-  TO openmmp_app, openmmp_reader, openmmp_seed;
+  TO openmasu_app, openmasu_reader, openmasu_seed;
 
 -- 006_metric_engine_indexes.sql
 CREATE INDEX ad_revenue_facts_installation_time_idx
@@ -805,23 +805,23 @@ CREATE INDEX reconciliation_results_scope_idx
 ALTER TABLE ledger.reconciliation_results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ledger.reconciliation_results FORCE ROW LEVEL SECURITY;
 CREATE POLICY reconciliation_results_tenant ON ledger.reconciliation_results
-  USING (tenant_id = current_setting('open_mmp.tenant_id', true))
-  WITH CHECK (tenant_id = current_setting('open_mmp.tenant_id', true));
+  USING (tenant_id = current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id = current_setting('openmasu.tenant_id', true));
 
 CREATE TRIGGER reconciliation_results_append_only
   BEFORE UPDATE OR DELETE ON ledger.reconciliation_results
   FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
 
 REVOKE ALL ON ledger.reconciliation_results FROM PUBLIC;
-GRANT SELECT, INSERT ON ledger.reconciliation_results TO openmmp_app;
-GRANT SELECT ON ledger.reconciliation_results TO openmmp_reader;
-GRANT TRUNCATE ON ledger.reconciliation_results TO openmmp_seed;
+GRANT SELECT, INSERT ON ledger.reconciliation_results TO openmasu_app;
+GRANT SELECT ON ledger.reconciliation_results TO openmasu_reader;
+GRANT TRUNCATE ON ledger.reconciliation_results TO openmasu_seed;
 
 -- 009_m2a_server_foundation.sql
-CREATE SCHEMA ephemeral AUTHORIZATION openmmp_owner;
+CREATE SCHEMA ephemeral AUTHORIZATION openmasu_owner;
 
 REVOKE ALL ON SCHEMA ephemeral FROM PUBLIC;
-GRANT USAGE ON SCHEMA ephemeral TO openmmp_app;
+GRANT USAGE ON SCHEMA ephemeral TO openmasu_app;
 
 CREATE TABLE control.tracking_links (
   tracking_link_id control.identifier PRIMARY KEY,
@@ -1042,7 +1042,7 @@ BEGIN
     EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', item.table_schema, item.table_name);
     EXECUTE format('ALTER TABLE %I.%I FORCE ROW LEVEL SECURITY', item.table_schema, item.table_name);
     EXECUTE format(
-      'CREATE POLICY %I_tenant ON %I.%I USING (tenant_id = current_setting(''open_mmp.tenant_id'', true)) WITH CHECK (tenant_id = current_setting(''open_mmp.tenant_id'', true))',
+      'CREATE POLICY %I_tenant ON %I.%I USING (tenant_id = current_setting(''openmasu.tenant_id'', true)) WITH CHECK (tenant_id = current_setting(''openmasu.tenant_id'', true))',
       item.table_name,
       item.table_schema,
       item.table_name
@@ -1094,9 +1094,9 @@ GRANT SELECT, INSERT ON
   control.installation_credentials, control.installation_credential_states,
   ledger.ingest_batches, ledger.ingest_batch_states, ledger.ingest_batch_records,
   ledger.custom_event_facts
-TO openmmp_app;
+TO openmasu_app;
 
-GRANT SELECT, INSERT, DELETE ON ephemeral.request_nonces TO openmmp_app;
+GRANT SELECT, INSERT, DELETE ON ephemeral.request_nonces TO openmasu_app;
 
 GRANT SELECT ON
   control.tracking_links, control.tracking_link_states,
@@ -1104,7 +1104,7 @@ GRANT SELECT ON
   control.installation_credentials, control.installation_credential_states,
   ledger.ingest_batches, ledger.ingest_batch_states, ledger.ingest_batch_records,
   ledger.custom_event_facts
-TO openmmp_reader;
+TO openmasu_reader;
 
 GRANT USAGE, SELECT ON SEQUENCE
   control.tracking_link_states_tracking_link_state_seq_seq,
@@ -1112,7 +1112,7 @@ GRANT USAGE, SELECT ON SEQUENCE
   control.installation_credential_state_seq,
   ledger.ingest_batches_inbox_seq_seq,
   ledger.ingest_batch_states_ingest_batch_state_seq_seq
-TO openmmp_app;
+TO openmasu_app;
 
 GRANT SELECT ON SEQUENCE
   control.tracking_link_states_tracking_link_state_seq_seq,
@@ -1120,13 +1120,13 @@ GRANT SELECT ON SEQUENCE
   control.installation_credential_state_seq,
   ledger.ingest_batches_inbox_seq_seq,
   ledger.ingest_batch_states_ingest_batch_state_seq_seq
-TO openmmp_reader;
+TO openmasu_reader;
 
 GRANT TRUNCATE ON
   ledger.ingest_batches, ledger.ingest_batch_states, ledger.ingest_batch_records,
   ledger.custom_event_facts,
   ephemeral.request_nonces
-TO openmmp_seed;
+TO openmasu_seed;
 
 -- 010_m3_dashboard.sql
 ALTER TABLE control.admin_keys
@@ -1172,8 +1172,8 @@ CREATE INDEX click_facts_dashboard_dimensions_idx
 ALTER TABLE ephemeral.dashboard_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ephemeral.dashboard_sessions FORCE ROW LEVEL SECURITY;
 CREATE POLICY dashboard_sessions_tenant ON ephemeral.dashboard_sessions
-  USING (tenant_id = current_setting('open_mmp.tenant_id', true))
-  WITH CHECK (tenant_id = current_setting('open_mmp.tenant_id', true));
+  USING (tenant_id = current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id = current_setting('openmasu.tenant_id', true));
 
 ALTER TABLE ledger.audit_logs DROP CONSTRAINT audit_logs_target_scope_check;
 ALTER TABLE ledger.audit_logs ADD CONSTRAINT audit_logs_target_scope_check
@@ -1183,10 +1183,10 @@ ALTER TABLE ledger.audit_logs ADD CONSTRAINT audit_logs_target_scope_check
   ));
 
 REVOKE ALL ON ephemeral.dashboard_sessions FROM PUBLIC;
-GRANT SELECT, INSERT, DELETE ON ephemeral.dashboard_sessions TO openmmp_app;
-GRANT USAGE ON SCHEMA ephemeral TO openmmp_reader;
-GRANT SELECT ON ephemeral.dashboard_sessions TO openmmp_reader;
-GRANT TRUNCATE ON ephemeral.dashboard_sessions TO openmmp_seed;
+GRANT SELECT, INSERT, DELETE ON ephemeral.dashboard_sessions TO openmasu_app;
+GRANT USAGE ON SCHEMA ephemeral TO openmasu_reader;
+GRANT SELECT ON ephemeral.dashboard_sessions TO openmasu_reader;
+GRANT TRUNCATE ON ephemeral.dashboard_sessions TO openmasu_seed;
 
 -- 011_m4_sdk_platform.sql
 ALTER TABLE control.sdk_keys
@@ -1353,12 +1353,12 @@ ALTER TABLE control.apple_app_registrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE control.apple_app_registrations FORCE ROW LEVEL SECURITY;
 CREATE POLICY apple_app_registrations_tenant ON control.apple_app_registrations
   USING (
-    tenant_id = current_setting('open_mmp.tenant_id', true)
-    OR current_user = 'openmmp_owner'
+    tenant_id = current_setting('openmasu.tenant_id', true)
+    OR current_user = 'openmasu_owner'
   )
   WITH CHECK (
-    tenant_id = current_setting('open_mmp.tenant_id', true)
-    OR current_user = 'openmmp_owner'
+    tenant_id = current_setting('openmasu.tenant_id', true)
+    OR current_user = 'openmasu_owner'
   );
 
 DO $$
@@ -1377,7 +1377,7 @@ BEGIN
     EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', item.table_schema, item.table_name);
     EXECUTE format('ALTER TABLE %I.%I FORCE ROW LEVEL SECURITY', item.table_schema, item.table_name);
     EXECUTE format(
-      'CREATE POLICY %I_tenant ON %I.%I USING (tenant_id = current_setting(''open_mmp.tenant_id'', true)) WITH CHECK (tenant_id = current_setting(''open_mmp.tenant_id'', true))',
+      'CREATE POLICY %I_tenant ON %I.%I USING (tenant_id = current_setting(''openmasu.tenant_id'', true)) WITH CHECK (tenant_id = current_setting(''openmasu.tenant_id'', true))',
       item.table_name,
       item.table_schema,
       item.table_name
@@ -1387,14 +1387,14 @@ END
 $$;
 
 -- list_m4_work_tenants() runs before a tenant GUC exists. FORCE RLS therefore
--- needs SELECT-only owner policies on its three inputs. openmmp_owner is
+-- needs SELECT-only owner policies on its three inputs. openmasu_owner is
 -- NOLOGIN and the SECURITY DEFINER function returns tenant identifiers only.
 CREATE POLICY ingest_batches_m4_discovery_owner
-  ON ledger.ingest_batches FOR SELECT TO openmmp_owner USING (true);
+  ON ledger.ingest_batches FOR SELECT TO openmasu_owner USING (true);
 CREATE POLICY ingest_batch_states_m4_discovery_owner
-  ON ledger.ingest_batch_states FOR SELECT TO openmmp_owner USING (true);
+  ON ledger.ingest_batch_states FOR SELECT TO openmasu_owner USING (true);
 CREATE POLICY adservices_lookups_m4_discovery_owner
-  ON ephemeral.adservices_lookups FOR SELECT TO openmmp_owner USING (true);
+  ON ephemeral.adservices_lookups FOR SELECT TO openmasu_owner USING (true);
 
 CREATE FUNCTION control.resolve_apple_app_adam_id(_apple_app_adam_id bigint)
 RETURNS TABLE (tenant_id control.identifier, app_id control.identifier)
@@ -1494,18 +1494,18 @@ FROM PUBLIC;
 REVOKE ALL ON
   control.public_postback_audits,
   ledger.adservices_lookup_results
-FROM openmmp_app, openmmp_reader;
+FROM openmasu_app, openmasu_reader;
 
 GRANT SELECT, INSERT ON
   control.apple_app_registrations,
   control.conversion_schemas,
   control.conversion_schema_states
-TO openmmp_app;
+TO openmasu_app;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON ephemeral.adservices_lookups TO openmmp_app;
-GRANT INSERT ON control.public_postback_audits TO openmmp_app;
-GRANT SELECT, INSERT ON ledger.adservices_lookup_results TO openmmp_app;
-GRANT SELECT, INSERT ON ledger.apple_postback_facts TO openmmp_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ephemeral.adservices_lookups TO openmasu_app;
+GRANT INSERT ON control.public_postback_audits TO openmasu_app;
+GRANT SELECT, INSERT ON ledger.adservices_lookup_results TO openmasu_app;
+GRANT SELECT, INSERT ON ledger.apple_postback_facts TO openmasu_app;
 
 GRANT SELECT ON
   control.apple_app_registrations,
@@ -1513,27 +1513,27 @@ GRANT SELECT ON
   control.conversion_schema_states,
   ephemeral.adservices_lookups,
   ledger.apple_postback_facts
-TO openmmp_reader;
+TO openmasu_reader;
 
 GRANT USAGE, SELECT ON SEQUENCE control.conversion_schema_states_conversion_schema_state_seq_seq
-TO openmmp_app;
+TO openmasu_app;
 GRANT SELECT ON SEQUENCE control.conversion_schema_states_conversion_schema_state_seq_seq
-TO openmmp_reader;
+TO openmasu_reader;
 
 REVOKE ALL ON FUNCTION control.resolve_apple_app_adam_id(bigint) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION control.resolve_apple_app_adam_id(bigint) TO openmmp_app;
+GRANT EXECUTE ON FUNCTION control.resolve_apple_app_adam_id(bigint) TO openmasu_app;
 REVOKE ALL ON FUNCTION control.list_apple_postback_tenants() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION control.list_apple_postback_tenants() TO openmmp_app;
+GRANT EXECUTE ON FUNCTION control.list_apple_postback_tenants() TO openmasu_app;
 REVOKE ALL ON FUNCTION control.list_m4_work_tenants() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION control.list_m4_work_tenants() TO openmmp_app;
+GRANT EXECUTE ON FUNCTION control.list_m4_work_tenants() TO openmasu_app;
 
 GRANT TRUNCATE ON
   control.public_postback_audits,
   ephemeral.adservices_lookups,
   ledger.adservices_lookup_results,
   ledger.apple_postback_facts
-TO openmmp_seed;
-GRANT USAGE ON SCHEMA control, ephemeral TO openmmp_seed;
+TO openmasu_seed;
+GRANT USAGE ON SCHEMA control, ephemeral TO openmasu_seed;
 
 -- 013_m5_production_controls.sql
 ALTER TABLE control.admin_keys
@@ -1560,11 +1560,11 @@ JOIN control.admin_key_states AS state ON state.key_id = key.key_id
 ORDER BY key.key_id, state.admin_key_state_seq DESC;
 
 REVOKE ALL ON control.admin_key_roles_current FROM PUBLIC;
-REVOKE SELECT ON control.admin_keys_current FROM openmmp_reader;
-REVOKE SELECT ON control.admin_keys, control.admin_key_states FROM openmmp_reader;
-GRANT SELECT ON control.admin_key_roles_current TO openmmp_reader;
-GRANT SELECT (key_id, tenant_id, role) ON control.admin_keys TO openmmp_reader;
-GRANT SELECT (key_id, tenant_id, status, admin_key_state_seq) ON control.admin_key_states TO openmmp_reader;
+REVOKE SELECT ON control.admin_keys_current FROM openmasu_reader;
+REVOKE SELECT ON control.admin_keys, control.admin_key_states FROM openmasu_reader;
+GRANT SELECT ON control.admin_key_roles_current TO openmasu_reader;
+GRANT SELECT (key_id, tenant_id, role) ON control.admin_keys TO openmasu_reader;
+GRANT SELECT (key_id, tenant_id, status, admin_key_state_seq) ON control.admin_key_states TO openmasu_reader;
 
 CREATE TABLE control.rule_bundle_revisions (
   rule_bundle_revision_id control.identifier PRIMARY KEY,
@@ -1620,8 +1620,8 @@ CREATE UNIQUE INDEX rule_bundle_revisions_single_root_idx
 ALTER TABLE control.rule_bundle_revisions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE control.rule_bundle_revisions FORCE ROW LEVEL SECURITY;
 CREATE POLICY rule_bundle_revisions_tenant ON control.rule_bundle_revisions
-  USING (tenant_id = current_setting('open_mmp.tenant_id', true))
-  WITH CHECK (tenant_id = current_setting('open_mmp.tenant_id', true));
+  USING (tenant_id = current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id = current_setting('openmasu.tenant_id', true));
 
 CREATE TRIGGER rule_bundle_revisions_append_only
   BEFORE UPDATE OR DELETE ON control.rule_bundle_revisions
@@ -1636,9 +1636,9 @@ ALTER TABLE ledger.audit_logs ADD CONSTRAINT audit_logs_target_scope_check
   ));
 
 REVOKE ALL ON control.rule_bundle_revisions FROM PUBLIC;
-GRANT SELECT, INSERT ON control.rule_bundle_revisions TO openmmp_app;
-GRANT SELECT ON control.rule_bundle_revisions TO openmmp_reader;
-GRANT TRUNCATE ON control.rule_bundle_revisions TO openmmp_seed;
+GRANT SELECT, INSERT ON control.rule_bundle_revisions TO openmasu_app;
+GRANT SELECT ON control.rule_bundle_revisions TO openmasu_reader;
+GRANT TRUNCATE ON control.rule_bundle_revisions TO openmasu_seed;
 
 -- 014_m5_privacy_reapply.sql
 CREATE TABLE control.metric_replay_manifests (
@@ -1657,14 +1657,14 @@ CREATE TABLE control.metric_replay_manifests (
 ALTER TABLE control.metric_replay_manifests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE control.metric_replay_manifests FORCE ROW LEVEL SECURITY;
 CREATE POLICY metric_replay_manifests_tenant ON control.metric_replay_manifests
-  USING (tenant_id = current_setting('open_mmp.tenant_id', true))
-  WITH CHECK (tenant_id = current_setting('open_mmp.tenant_id', true));
+  USING (tenant_id = current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id = current_setting('openmasu.tenant_id', true));
 
 CREATE TRIGGER metric_replay_manifests_append_only
   BEFORE UPDATE OR DELETE ON control.metric_replay_manifests
   FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
 
 REVOKE ALL ON control.metric_replay_manifests FROM PUBLIC;
-REVOKE SELECT ON control.metric_replay_manifests FROM openmmp_reader;
-GRANT SELECT, INSERT ON control.metric_replay_manifests TO openmmp_app;
-GRANT TRUNCATE ON control.metric_replay_manifests TO openmmp_seed;
+REVOKE SELECT ON control.metric_replay_manifests FROM openmasu_reader;
+GRANT SELECT, INSERT ON control.metric_replay_manifests TO openmasu_app;
+GRANT TRUNCATE ON control.metric_replay_manifests TO openmasu_seed;

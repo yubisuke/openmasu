@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:event-purchase:v0.3",
-  "title": "Open MMP Purchase Event v0.3",
+  "$id": "urn:openmasu:schema:event-purchase:v0.4",
+  "title": "OpenMasu Purchase Event v0.4",
   "type": "object",
   "additionalProperties": false,
   "allOf": [{ "$ref": "../common.schema.json#/$defs/money" }],

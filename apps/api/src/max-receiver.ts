@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
-import { uuidV7, withTenant, type PayloadStore } from "@open-mmp/runtime";
+import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 
 const allowedParameters = new Set([
   "event_id", "event_token", "event_token_all", "revenue", "all_revenue", "ts",

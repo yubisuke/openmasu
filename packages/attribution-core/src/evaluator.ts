@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { canonicalize } from "json-canonicalize";
-import type { OpenMMPEvaluationOutputV03 as EvaluationOutput } from "@open-mmp/contracts";
+import type { OpenMasuEvaluationOutputV04 as EvaluationOutput } from "@openmasu/contracts";
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type Any = Record<string, any>;
@@ -20,7 +20,9 @@ type Reconciliation = EvaluationOutput["reconciliation"][number];
 type EvidenceRef = Attribution["evidence_refs"][number];
 type LifecycleStatus = EvidenceRef["lifecycle_status"];
 
-const CONTRACT_VERSION = "0.3.0" as const;
+const CONTRACT_VERSION = "0.4.0" as const;
+// Rule bundles and metric definitions retain their independent v0.3 identities.
+const REFERENCE_RULE_VERSION = "0.3.0" as const;
 const HASH = "0".repeat(64);
 const DAY_MS = 86_400_000;
 
@@ -535,7 +537,7 @@ function makeAttribution(
     input_cutoff_at: server.received_at,
     finality: "final" as const,
     rule_bundle_id: "attribution-default",
-    rule_bundle_version: CONTRACT_VERSION,
+    rule_bundle_version: REFERENCE_RULE_VERSION,
     rule_bundle_hash: HASH,
   } satisfies Omit<Attribution, "status" | "method" | "model" | "reason_code">;
   const result = (
@@ -694,7 +696,7 @@ function makeAggregatePostbackAttribution(
     input_cutoff_at: server.received_at,
     finality: "final",
     rule_bundle_id: "apple-postback-default",
-    rule_bundle_version: CONTRACT_VERSION,
+    rule_bundle_version: REFERENCE_RULE_VERSION,
     rule_bundle_hash: HASH,
   };
 }
@@ -730,13 +732,13 @@ function baseMetricDefinitions(): MetricDefinition[] {
   ];
   return definitions.map((definition): MetricDefinition => ({
     ...definition,
-    metric_definition_version: CONTRACT_VERSION,
+    metric_definition_version: REFERENCE_RULE_VERSION,
     anchor_event: "install",
     value_type: "money",
     currency: "USD",
     amount_scale: 6,
     rule_bundle_id: "metric-default",
-    rule_bundle_version: CONTRACT_VERSION,
+    rule_bundle_version: REFERENCE_RULE_VERSION,
     rule_bundle_hash: HASH,
   }));
 }
@@ -1173,7 +1175,7 @@ function reconciliationResults(input: Any, accepted: Attempt[]): Reconciliation[
       input_snapshot_id: item.input_snapshot_id,
       external_snapshot_id: item.external_snapshot_id,
       difference_reason_code,
-      difference_reason_version: difference_reason_code === "provider_modeled_conversion" ? "0.3.0" : CONTRACT_VERSION,
+      difference_reason_version: difference_reason_code === "provider_modeled_conversion" ? "0.4.0" : CONTRACT_VERSION,
       matching_keys: sortedKeys,
       candidates: matched.map((candidate: Any) => candidate.candidate_id).sort(compareText),
       exclusions: matched.filter((candidate: Any) => candidate.excluded).map((candidate: Any) => candidate.exclusion_reason).sort(compareText),
@@ -1370,7 +1372,7 @@ export function evaluate(
         access_class: "protected",
       }],
       rule_bundle_id: "fraud-public-envelope",
-      rule_bundle_version: CONTRACT_VERSION,
+      rule_bundle_version: REFERENCE_RULE_VERSION,
       rule_bundle_hash: HASH,
       evaluated_at: attempt.record.received_at,
     });
@@ -1410,7 +1412,7 @@ export function evaluate(
         access_class: "protected",
       }],
       rule_bundle_id: "fraud-public-envelope",
-      rule_bundle_version: CONTRACT_VERSION,
+      rule_bundle_version: REFERENCE_RULE_VERSION,
       rule_bundle_hash: HASH,
       evaluated_at: attempt.record.received_at,
     }];

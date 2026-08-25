@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { uuidV7, withTenant } from "@open-mmp/runtime";
+import { uuidV7, withTenant } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
 

@@ -134,12 +134,12 @@ ALTER TABLE control.apple_app_registrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE control.apple_app_registrations FORCE ROW LEVEL SECURITY;
 CREATE POLICY apple_app_registrations_tenant ON control.apple_app_registrations
   USING (
-    tenant_id = current_setting('open_mmp.tenant_id', true)
-    OR current_user = 'openmmp_owner'
+    tenant_id = current_setting('openmasu.tenant_id', true)
+    OR current_user = 'openmasu_owner'
   )
   WITH CHECK (
-    tenant_id = current_setting('open_mmp.tenant_id', true)
-    OR current_user = 'openmmp_owner'
+    tenant_id = current_setting('openmasu.tenant_id', true)
+    OR current_user = 'openmasu_owner'
   );
 
 DO $$
@@ -158,7 +158,7 @@ BEGIN
     EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', item.table_schema, item.table_name);
     EXECUTE format('ALTER TABLE %I.%I FORCE ROW LEVEL SECURITY', item.table_schema, item.table_name);
     EXECUTE format(
-      'CREATE POLICY %I_tenant ON %I.%I USING (tenant_id = current_setting(''open_mmp.tenant_id'', true)) WITH CHECK (tenant_id = current_setting(''open_mmp.tenant_id'', true))',
+      'CREATE POLICY %I_tenant ON %I.%I USING (tenant_id = current_setting(''openmasu.tenant_id'', true)) WITH CHECK (tenant_id = current_setting(''openmasu.tenant_id'', true))',
       item.table_name,
       item.table_schema,
       item.table_name
@@ -168,14 +168,14 @@ END
 $$;
 
 -- list_m4_work_tenants() runs before a tenant GUC exists. FORCE RLS therefore
--- needs SELECT-only owner policies on its three inputs. openmmp_owner is
+-- needs SELECT-only owner policies on its three inputs. openmasu_owner is
 -- NOLOGIN and the SECURITY DEFINER function returns tenant identifiers only.
 CREATE POLICY ingest_batches_m4_discovery_owner
-  ON ledger.ingest_batches FOR SELECT TO openmmp_owner USING (true);
+  ON ledger.ingest_batches FOR SELECT TO openmasu_owner USING (true);
 CREATE POLICY ingest_batch_states_m4_discovery_owner
-  ON ledger.ingest_batch_states FOR SELECT TO openmmp_owner USING (true);
+  ON ledger.ingest_batch_states FOR SELECT TO openmasu_owner USING (true);
 CREATE POLICY adservices_lookups_m4_discovery_owner
-  ON ephemeral.adservices_lookups FOR SELECT TO openmmp_owner USING (true);
+  ON ephemeral.adservices_lookups FOR SELECT TO openmasu_owner USING (true);
 
 CREATE FUNCTION control.resolve_apple_app_adam_id(_apple_app_adam_id bigint)
 RETURNS TABLE (tenant_id control.identifier, app_id control.identifier)
@@ -275,18 +275,18 @@ FROM PUBLIC;
 REVOKE ALL ON
   control.public_postback_audits,
   ledger.adservices_lookup_results
-FROM openmmp_app, openmmp_reader;
+FROM openmasu_app, openmasu_reader;
 
 GRANT SELECT, INSERT ON
   control.apple_app_registrations,
   control.conversion_schemas,
   control.conversion_schema_states
-TO openmmp_app;
+TO openmasu_app;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON ephemeral.adservices_lookups TO openmmp_app;
-GRANT INSERT ON control.public_postback_audits TO openmmp_app;
-GRANT SELECT, INSERT ON ledger.adservices_lookup_results TO openmmp_app;
-GRANT SELECT, INSERT ON ledger.apple_postback_facts TO openmmp_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ephemeral.adservices_lookups TO openmasu_app;
+GRANT INSERT ON control.public_postback_audits TO openmasu_app;
+GRANT SELECT, INSERT ON ledger.adservices_lookup_results TO openmasu_app;
+GRANT SELECT, INSERT ON ledger.apple_postback_facts TO openmasu_app;
 
 GRANT SELECT ON
   control.apple_app_registrations,
@@ -294,24 +294,24 @@ GRANT SELECT ON
   control.conversion_schema_states,
   ephemeral.adservices_lookups,
   ledger.apple_postback_facts
-TO openmmp_reader;
+TO openmasu_reader;
 
 GRANT USAGE, SELECT ON SEQUENCE control.conversion_schema_states_conversion_schema_state_seq_seq
-TO openmmp_app;
+TO openmasu_app;
 GRANT SELECT ON SEQUENCE control.conversion_schema_states_conversion_schema_state_seq_seq
-TO openmmp_reader;
+TO openmasu_reader;
 
 REVOKE ALL ON FUNCTION control.resolve_apple_app_adam_id(bigint) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION control.resolve_apple_app_adam_id(bigint) TO openmmp_app;
+GRANT EXECUTE ON FUNCTION control.resolve_apple_app_adam_id(bigint) TO openmasu_app;
 REVOKE ALL ON FUNCTION control.list_apple_postback_tenants() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION control.list_apple_postback_tenants() TO openmmp_app;
+GRANT EXECUTE ON FUNCTION control.list_apple_postback_tenants() TO openmasu_app;
 REVOKE ALL ON FUNCTION control.list_m4_work_tenants() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION control.list_m4_work_tenants() TO openmmp_app;
+GRANT EXECUTE ON FUNCTION control.list_m4_work_tenants() TO openmasu_app;
 
 GRANT TRUNCATE ON
   control.public_postback_audits,
   ephemeral.adservices_lookups,
   ledger.adservices_lookup_results,
   ledger.apple_postback_facts
-TO openmmp_seed;
-GRANT USAGE ON SCHEMA control, ephemeral TO openmmp_seed;
+TO openmasu_seed;
+GRANT USAGE ON SCHEMA control, ephemeral TO openmasu_seed;

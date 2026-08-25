@@ -1,8 +1,8 @@
 {
-  "name": "@open-mmp/contracts",
-  "version": "0.3.6",
+  "name": "@openmasu/contracts",
+  "version": "0.4.0",
   "private": true,
-  "description": "Open MMP contract schemas, registries, generated types, and validation dependencies",
+  "description": "OpenMasu contract schemas, registries, generated types, and validation dependencies",
   "type": "module",
   "exports": {
     ".": {

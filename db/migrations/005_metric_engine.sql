@@ -55,4 +55,4 @@ $$;
 
 REVOKE ALL ON FUNCTION ledger.half_even_div(numeric, numeric) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION ledger.half_even_div(numeric, numeric)
-  TO openmmp_app, openmmp_reader, openmmp_seed;
+  TO openmasu_app, openmasu_reader, openmasu_seed;

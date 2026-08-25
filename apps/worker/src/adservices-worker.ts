@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
-import { uuidV7, withTenant, type PayloadStore } from "@open-mmp/runtime";
+import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 
 type JsonObject = Record<string, unknown>;
 

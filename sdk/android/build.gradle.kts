@@ -6,7 +6,7 @@ plugins {
   id("org.cyclonedx.bom") version "3.3.0"
 }
 
-group = "dev.openmmp"
+group = "dev.openmasu"
 version = "0.1.0"
 
 tasks.register("verifySdkSbom") {

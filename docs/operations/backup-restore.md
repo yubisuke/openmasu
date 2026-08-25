@@ -8,7 +8,7 @@ data.
 
 ## Required backup set
 
-A recoverable Open MMP backup has three separately protected parts:
+A recoverable OpenMasu backup has three separately protected parts:
 
 1. a PostgreSQL custom-format archive created while API, worker, redirector,
    import, and administrative writers are quiesced;
@@ -32,7 +32,7 @@ invent missing requests.
 3. Create the database archive with PostgreSQL 17 tools:
 
    ```bash
-   pg_dump --format=custom --no-owner --file openmmp.dump "$OPENMMP_MIGRATION_DATABASE_URL"
+   pg_dump --format=custom --no-owner --file openmasu.dump "$OPENMASU_MIGRATION_DATABASE_URL"
    ```
 
 4. Snapshot both payload-store object and wrapped-key directories while they
@@ -47,12 +47,12 @@ Never use `pg_restore --clean` against the live database. Treat dump contents
 as trusted executable input and restore only a backup produced by the approved
 deployment.
 
-1. Provision the Open MMP database roles in a new PostgreSQL 17 cluster. Create
+1. Provision the OpenMasu database roles in a new PostgreSQL 17 cluster. Create
    an empty destination database; do not point application traffic at it.
 2. Restore the archive:
 
    ```bash
-   pg_restore --exit-on-error --no-owner --dbname "$OPENMMP_MIGRATION_DATABASE_URL" openmmp.dump
+   pg_restore --exit-on-error --no-owner --dbname "$OPENMASU_MIGRATION_DATABASE_URL" openmasu.dump
    ```
 
 3. Restore the matching encrypted object and wrapped-key snapshot. Configure
@@ -79,7 +79,7 @@ deployment.
 ## Repository evidence
 
 `npm run test:backup-restore` uses only synthetic fixture data. With
-`OPENMMP_M5_BACKUP_RESTORE=1`, CI creates a PostgreSQL 17 custom archive,
+`OPENMASU_M5_BACKUP_RESTORE=1`, CI creates a PostgreSQL 17 custom archive,
 restores it into a new disposable database, restores a synthetic encrypted
 payload snapshot, reapplies completed privacy requests, and proves the payload
 is unreadable and the recalculated latest export excludes redacted evidence.

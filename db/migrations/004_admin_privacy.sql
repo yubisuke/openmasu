@@ -32,13 +32,13 @@ ORDER BY key.key_id, state.admin_key_state_seq DESC;
 ALTER TABLE control.admin_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE control.admin_keys FORCE ROW LEVEL SECURITY;
 CREATE POLICY admin_keys_tenant ON control.admin_keys
-  USING (tenant_id = current_setting('open_mmp.tenant_id', true))
-  WITH CHECK (tenant_id = current_setting('open_mmp.tenant_id', true));
+  USING (tenant_id = current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id = current_setting('openmasu.tenant_id', true));
 ALTER TABLE control.admin_key_states ENABLE ROW LEVEL SECURITY;
 ALTER TABLE control.admin_key_states FORCE ROW LEVEL SECURITY;
 CREATE POLICY admin_key_states_tenant ON control.admin_key_states
-  USING (tenant_id = current_setting('open_mmp.tenant_id', true))
-  WITH CHECK (tenant_id = current_setting('open_mmp.tenant_id', true));
+  USING (tenant_id = current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id = current_setting('openmasu.tenant_id', true));
 
 CREATE TRIGGER admin_keys_append_only
   BEFORE UPDATE OR DELETE ON control.admin_keys
@@ -48,7 +48,7 @@ CREATE TRIGGER admin_key_states_append_only
   FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
 
 REVOKE ALL ON control.admin_keys, control.admin_key_states FROM PUBLIC;
-GRANT SELECT, INSERT ON control.admin_keys, control.admin_key_states TO openmmp_app;
-GRANT USAGE, SELECT ON SEQUENCE control.admin_key_states_admin_key_state_seq_seq TO openmmp_app;
+GRANT SELECT, INSERT ON control.admin_keys, control.admin_key_states TO openmasu_app;
+GRANT USAGE, SELECT ON SEQUENCE control.admin_key_states_admin_key_state_seq_seq TO openmasu_app;
 
-GRANT TRUNCATE ON control.admin_keys, control.admin_key_states TO openmmp_seed;
+GRANT TRUNCATE ON control.admin_keys, control.admin_key_states TO openmasu_seed;

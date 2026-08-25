@@ -14,7 +14,7 @@ import {
   EncryptedFilePayloadStore,
   uuidV7,
   withTenant,
-} from "@open-mmp/runtime";
+} from "@openmasu/runtime";
 import { processSdkInbox } from "../../worker/src/sdk-worker.js";
 import { createRequestHandler } from "./router.js";
 import { KeyedTokenBucket } from "./rate-limit.js";
@@ -30,7 +30,7 @@ const sdkSecret = `sdk-secret-${randomBytes(32).toString("base64url")}`;
 const installationId = `installation:m2a-${run}`;
 const masterKey = `master-${randomBytes(32).toString("base64url")}`;
 const digestKey = `digest-${randomBytes(32).toString("base64url")}`;
-const root = mkdtempSync(join(tmpdir(), "open-mmp-m2a-"));
+const root = mkdtempSync(join(tmpdir(), "openmasu-m2a-"));
 const pool = createAppPool();
 const payloadStore = new EncryptedFilePayloadStore(root, masterKey);
 const authConfig = { tenantId, appId, timestampSkewMs: 300_000, nonceTtlMs: 900_000, installationDigestKey: digestKey };
@@ -69,11 +69,11 @@ async function signed(path: string, value: unknown, options: {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-openmmp-sdk-key-id": keyId,
-      "x-openmmp-installation-key-id": installation ?? "-",
-      "x-openmmp-timestamp-ms": String(timestampMs),
-      "x-openmmp-nonce": nonce,
-      "x-openmmp-signature": signature,
+      "x-openmasu-sdk-key-id": keyId,
+      "x-openmasu-installation-key-id": installation ?? "-",
+      "x-openmasu-timestamp-ms": String(timestampMs),
+      "x-openmasu-nonce": nonce,
+      "x-openmasu-signature": signature,
     },
     body: body.toString("utf8"),
   });
@@ -88,7 +88,7 @@ async function count(table: string): Promise<number> {
 
 function workerProcess(delayMs: number) {
   const source = `
-    import { createAppPool, EncryptedFilePayloadStore } from "@open-mmp/runtime";
+    import { createAppPool, EncryptedFilePayloadStore } from "@openmasu/runtime";
     import { processSdkInbox } from "./apps/worker/src/sdk-worker.ts";
     const pool = createAppPool();
     const store = new EncryptedFilePayloadStore(${JSON.stringify(root)}, ${JSON.stringify(masterKey)});
@@ -313,9 +313,9 @@ describe("M2a signed SDK ingestion", () => {
     })))}`);
     const clickAt = "2026-08-18T01:00:00.000Z";
     const record = {
-      contract_version: "0.3.0", record_id: `click:${uuidV7()}`, delivery_id: `delivery:${uuidV7()}`,
+      contract_version: "0.4.0", record_id: `click:${uuidV7()}`, delivery_id: `delivery:${uuidV7()}`,
       tenant_id: tenantId, app_id: appId, producer: "redirector", producer_version: "synthetic-m2a",
-      event_id: `event:late-click:${run}`, event_name: "click", schema_version: "0.3.0",
+      event_id: `event:late-click:${run}`, event_name: "click", schema_version: "0.4.0",
       occurred_at: clickAt, occurred_at_source: "server", received_at: clickAt,
       processing_purpose_id: "analytics", processing_sequence: 1,
       payload: { event_name: "click", click_id: clickId, tracking_link_id: `link:${run}`, campaign_id: `campaign:${run}`, redirector_click_at: clickAt, redirector_time_status: "available" },

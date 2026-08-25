@@ -13,7 +13,7 @@ export function requireEnvironment(name: string, value: string | undefined): str
 
 export function createAppPool(): Pool {
   return new Pool({
-    connectionString: requireEnvironment("OPENMMP_APP_DATABASE_URL", process.env.OPENMMP_APP_DATABASE_URL),
+    connectionString: requireEnvironment("OPENMASU_APP_DATABASE_URL", process.env.OPENMASU_APP_DATABASE_URL),
     max: 10,
   });
 }
@@ -21,8 +21,8 @@ export function createAppPool(): Pool {
 export function createReaderPool(): Pool {
   return new Pool({
     connectionString: requireEnvironment(
-      "OPENMMP_READER_DATABASE_URL",
-      process.env.OPENMMP_READER_DATABASE_URL,
+      "OPENMASU_READER_DATABASE_URL",
+      process.env.OPENMASU_READER_DATABASE_URL,
     ),
     max: 10,
   });
@@ -31,8 +31,8 @@ export function createReaderPool(): Pool {
 export function createMigrationPool(): Pool {
   return new Pool({
     connectionString: requireEnvironment(
-      "OPENMMP_MIGRATION_DATABASE_URL",
-      process.env.OPENMMP_MIGRATION_DATABASE_URL,
+      "OPENMASU_MIGRATION_DATABASE_URL",
+      process.env.OPENMASU_MIGRATION_DATABASE_URL,
     ),
     max: 2,
   });
@@ -41,8 +41,8 @@ export function createMigrationPool(): Pool {
 export function createSeedPool(): Pool {
   return new Pool({
     connectionString: requireEnvironment(
-      "OPENMMP_SEED_DATABASE_URL",
-      process.env.OPENMMP_SEED_DATABASE_URL,
+      "OPENMASU_SEED_DATABASE_URL",
+      process.env.OPENMASU_SEED_DATABASE_URL,
     ),
     max: 2,
   });
@@ -57,7 +57,7 @@ export async function withTenant<T>(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query("SELECT set_config('open_mmp.tenant_id', $1, true)", [tenantId]);
+    await client.query("SELECT set_config('openmasu.tenant_id', $1, true)", [tenantId]);
     const result = await callback(client);
     await client.query("COMMIT");
     return result;

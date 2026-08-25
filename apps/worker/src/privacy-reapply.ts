@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from "pg";
-import { sha256 } from "@open-mmp/attribution-core";
-import { uuidV7, withTenant, type PayloadStore } from "@open-mmp/runtime";
+import { sha256 } from "@openmasu/attribution-core";
+import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 import { computeSqlMetricRunsWithClient, persistMetricRun } from "./metrics/cohort.js";
 
 type Any = Record<string, any>;
@@ -158,7 +158,7 @@ async function appendPrivacyArtifacts(
   for (const recordId of records) {
     const tombstoneId = `tombstone:${request.privacy_request_id}:${recordId}`;
     const tombstone = {
-      contract_version: "0.3.0",
+      contract_version: "0.4.0",
       tenant_id: request.tenant_id,
       app_id: request.app_id,
       privacy_request_id: request.privacy_request_id,
@@ -186,7 +186,7 @@ async function appendPrivacyArtifacts(
         request.completed_at, JSON.stringify(tombstone)],
     );
     const correction = {
-      contract_version: "0.3.0",
+      contract_version: "0.4.0",
       tenant_id: request.tenant_id,
       app_id: request.app_id,
       correction_id: `correction:${sha256([request.privacy_request_id, recordId]).slice(0, 48)}`,

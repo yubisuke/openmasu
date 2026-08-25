@@ -1,6 +1,6 @@
-# Open MMP iOS sample
+# OpenMasu iOS sample
 
-`OpenMmpSampleApp.swift` shows the first-party initialization, AdServices token
+`OpenMasuSampleApp.swift` shows the first-party initialization, AdServices token
 handoff, custom-event, conversion-value, collection-disablement, and
 installation-reset surfaces with synthetic configuration values.
 

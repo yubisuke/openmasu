@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:attribution-result:v0.3",
-  "title": "Open MMP Attribution Result v0.3",
+  "$id": "urn:openmasu:schema:attribution-result:v0.4",
+  "title": "OpenMasu Attribution Result v0.4",
   "type": "object",
   "additionalProperties": false,
   "required": ["attribution_id", "tenant_id", "app_id", "subject_scope", "subject_ref", "status", "method", "model", "reason_code", "reason_code_version", "evidence_refs", "effective_at", "decided_at", "input_cutoff_at", "finality", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash"],
@@ -15,7 +15,7 @@
     "method": { "enum": ["install_referrer", "aggregate_privacy", "imported", "skadnetwork", "adattributionkit", "meta_install_referrer", "apple_adservices", "none"] },
     "model": { "enum": ["last_click", "view_through", "aggregate", "provider_reported", "none"] },
     "reason_code": { "enum": ["valid_install_referrer", "no_referrer", "no_first_party_referrer", "foreign_referrer_unresolved", "unknown_click_id", "window_expired", "authoritative_time_missing", "authoritative_time_invalid", "install_referrer_unsupported", "install_referrer_unavailable", "platform_referrer_not_available", "ambiguous_click_id", "bot_prefetch", "provider_attributed", "provider_organic", "provider_unattributed", "provider_time_authority_unavailable", "provider_modeled_conversion", "meta_referrer_decrypted", "meta_referrer_decrypt_failed", "adservices_attributed", "adservices_token_expired", "adservices_not_attributed", "adservices_lookup_unavailable", "skan_postback_verified", "skan_signature_invalid", "postback_not_winner", "crowd_anonymity_suppressed", "conversion_value_null"] },
-    "reason_code_version": { "const": "0.3.0" },
+    "reason_code_version": { "const": "0.4.0" },
     "evidence_refs": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/evidenceRef" } },
     "effective_at": { "$ref": "common.schema.json#/$defs/dateTime" },
     "decided_at": { "$ref": "common.schema.json#/$defs/dateTime" },

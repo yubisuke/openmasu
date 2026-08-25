@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
-import { sha256, type CandidateAttempt } from "@open-mmp/attribution-core";
-import { decryptMetaInstallReferrer, type MetaKey } from "@open-mmp/meta-install-referrer";
-import { withTenant, type PayloadStore } from "@open-mmp/runtime";
+import { sha256, type CandidateAttempt } from "@openmasu/attribution-core";
+import { decryptMetaInstallReferrer, type MetaKey } from "@openmasu/meta-install-referrer";
+import { withTenant, type PayloadStore } from "@openmasu/runtime";
 import { queueAdServicesLookup, type PendingAdServicesLookup } from "./adservices-worker.js";
 import { ingestRuntimeBatch } from "./ingestion.js";
 

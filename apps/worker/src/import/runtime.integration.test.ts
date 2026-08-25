@@ -6,8 +6,8 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createServer } from "node:http";
-import { createAppPool, createMigrationPool, EncryptedFilePayloadStore, withTenant } from "@open-mmp/runtime";
-import { sha256 } from "@open-mmp/attribution-core";
+import { createAppPool, createMigrationPool, EncryptedFilePayloadStore, withTenant } from "@openmasu/runtime";
+import { sha256 } from "@openmasu/attribution-core";
 import { runMmpImport } from "./runner.js";
 import { persistCostImport } from "./cost.js";
 import { runCostImportFile } from "./cost-cli.js";
@@ -20,7 +20,7 @@ import { TokenBucket } from "../../../api/src/rate-limit.js";
 
 const appPool = createAppPool();
 const ownerPool = createMigrationPool();
-const temporary = mkdtempSync(join(tmpdir(), "openmmp-runtime-test-"));
+const temporary = mkdtempSync(join(tmpdir(), "openmasu-runtime-test-"));
 const payloadStore = new EncryptedFilePayloadStore(
   join(temporary, "payloads"),
   "synthetic-payload-master-key-000000000000000000000000000001",
@@ -123,6 +123,28 @@ describe("M1a import integration", () => {
         (SELECT count(*) FROM ledger.cost_records_current WHERE campaign_id='synthetic-cli-campaign' AND spend_unscaled='2500000')::int AS costs,
         (SELECT count(*) FROM ledger.metric_runs WHERE metric_name='d0_roas' AND value_state='present' AND grouping->>'campaign_id'='synthetic-cli-campaign')::int AS runs`);
       assert.deepEqual(result.rows[0], { costs: 1, runs: 1 });
+    });
+  });
+
+  it("WO12 imports an exact synthetic decimal cost CSV without rounding", async () => {
+    const file = join(temporary, "synthetic-decimal-cost.csv");
+    writeFileSync(file, [
+      "network,campaign_id,country,date,cost_decimal,currency,as_of",
+      "synthetic-decimal-network,synthetic-decimal-campaign,us,2026-08-20,1.23,USD,2026-08-20T12:30:00.000Z",
+      "",
+    ].join("\n"));
+    const imported = await runCostImportFile({
+      pool: appPool,
+      mappingPath: "examples/mappings/synthetic-decimal-cost.json",
+      filePath: file,
+    });
+    assert.equal(imported.inserted, 1);
+    assert.equal(imported.rows, 1);
+    await withTenant(appPool, "tenant-local", async (client) => {
+      const result = await client.query(`SELECT spend_unscaled, spend_scale, currency
+        FROM ledger.cost_records_current
+        WHERE campaign_id='synthetic-decimal-campaign'`);
+      assert.deepEqual(result.rows, [{ spend_unscaled: "1230000", spend_scale: 6, currency: "USD" }]);
     });
   });
 

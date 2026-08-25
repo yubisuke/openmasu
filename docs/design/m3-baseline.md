@@ -102,7 +102,7 @@ Consequences to state plainly rather than discover:
 - (b) A row in the existing `ephemeral` schema: `ephemeral.dashboard_sessions`.
 - (c) A stateless signed cookie carrying the identity (JWT-shaped).
 
-**Decided (R-25): (b).** M2-D-03 created `ephemeral` for exactly this class of data — state that is not evidence, is outside the append-only guarantee, and must be deletable — and it already grants `SELECT, INSERT, DELETE` on that schema to `openmmp_app`. A session is the same shape as a nonce: not evidence, must expire, must be revocable. (a) loses every session on restart, which turns `docker compose restart api` into a logout, and it stops working the moment an operator runs two API replicas. (c) cannot be revoked, so logout becomes a claim rather than an action, and "the operator pressed log out" is precisely the kind of statement this project should be able to demonstrate.
+**Decided (R-25): (b).** M2-D-03 created `ephemeral` for exactly this class of data — state that is not evidence, is outside the append-only guarantee, and must be deletable — and it already grants `SELECT, INSERT, DELETE` on that schema to `openmasu_app`. A session is the same shape as a nonce: not evidence, must expire, must be revocable. (a) loses every session on restart, which turns `docker compose restart api` into a logout, and it stops working the moment an operator runs two API replicas. (c) cannot be revoked, so logout becomes a claim rather than an action, and "the operator pressed log out" is precisely the kind of statement this project should be able to demonstrate.
 
 ```sql
 CREATE TABLE ephemeral.dashboard_sessions (
@@ -116,9 +116,9 @@ CREATE TABLE ephemeral.dashboard_sessions (
   UNIQUE (token_digest)
 );
 CREATE INDEX dashboard_sessions_expiry_idx ON ephemeral.dashboard_sessions (expires_at);
-GRANT SELECT, INSERT, DELETE ON ephemeral.dashboard_sessions TO openmmp_app;
-GRANT USAGE ON SCHEMA ephemeral TO openmmp_reader;
-GRANT SELECT ON ephemeral.dashboard_sessions TO openmmp_reader;
+GRANT SELECT, INSERT, DELETE ON ephemeral.dashboard_sessions TO openmasu_app;
+GRANT USAGE ON SCHEMA ephemeral TO openmasu_reader;
+GRANT SELECT ON ephemeral.dashboard_sessions TO openmasu_reader;
 ```
 
 RLS applies exactly as on `ephemeral.request_nonces`. Note that the table is **tenant-scoped and not app-scoped**, and therefore carries no foreign key to `control.apps` — which is a direct consequence of M3-D-16.
@@ -127,11 +127,11 @@ RLS applies exactly as on `ephemeral.request_nonces`. Note that the table is **t
 
 **Lifetime — absolute only, no sliding idle window.**
 
-- Absolute expiry: **12 hours** (`OPENMMP_DASHBOARD_SESSION_TTL_SECONDS`, default `43200`).
+- Absolute expiry: **12 hours** (`OPENMASU_DASHBOARD_SESSION_TTL_SECONDS`, default `43200`).
 - No idle-timeout refresh, and therefore no write on any read.
 - A sweep deletes expired rows; it runs in the worker alongside the existing nonce sweep, not on the request path.
 
-The reason for refusing a sliding window is structural, not laziness. M3-D-13 makes every dashboard `GET` run on the `openmmp_reader` role, so that "a read path cannot write" is enforced by PostgreSQL rather than by discipline. A sliding session would require touching the session row on every page view — a write on a GET — and the invariant would have to be abandoned to buy an operator convenience worth a few seconds a day. The trade is stated in the documentation: **you log in once each morning.** For a morning screen that is not a cost worth a weaker guarantee.
+The reason for refusing a sliding window is structural, not laziness. M3-D-13 makes every dashboard `GET` run on the `openmasu_reader` role, so that "a read path cannot write" is enforced by PostgreSQL rather than by discipline. A sliding session would require touching the session row on every page view — a write on a GET — and the invariant would have to be abandoned to buy an operator convenience worth a few seconds a day. The trade is stated in the documentation: **you log in once each morning.** For a morning screen that is not a cost worth a weaker guarantee.
 
 Logout deletes the row and clears the cookie. Login always creates a fresh `session_id`; there is no pre-authentication session, so fixation is impossible by construction — but state it, because "we issue a new session on login" is the sentence a reader looks for.
 
@@ -150,7 +150,7 @@ Verified 2026-08-20 from MDN (see [References](#references)):
 Set-Cookie: <name>=<token>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=43200
 ```
 
-with `<name>` = `__Host-openmmp_dashboard` when `OPENMMP_PUBLIC_BASE_URL` uses `https:`, and `openmmp_dashboard` otherwise.
+with `<name>` = `__Host-openmasu_dashboard` when `OPENMASU_PUBLIC_BASE_URL` uses `https:`, and `openmasu_dashboard` otherwise.
 
 Two decisions inside that.
 
@@ -165,7 +165,7 @@ Two decisions inside that.
 
 **Boot self-check (this is the part that prevents a silent first-run failure).** `Secure` cookies are dropped by the browser on a plain-HTTP non-localhost origin. An operator who binds the API to a LAN address over HTTP would see a login form that accepts the key and then behaves as if it did not — the worst possible failure shape, because it looks like a wrong password. Therefore, at startup:
 
-> If the dashboard is enabled and `OPENMMP_PUBLIC_BASE_URL` has scheme `http:` with a host other than `localhost` / `127.0.0.1` / `[::1]`, refuse to start with a named error naming the `proxy` Compose profile.
+> If the dashboard is enabled and `OPENMASU_PUBLIC_BASE_URL` has scheme `http:` with a host other than `localhost` / `127.0.0.1` / `[::1]`, refuse to start with a named error naming the `proxy` Compose profile.
 
 This is the M1 S-3 pattern (boot-time template self-check) applied to the one configuration that turns a security control into an outage.
 
@@ -188,7 +188,7 @@ With that, the `/v1` API has no ambient credential and CSRF against it is imposs
 
 **Decided (R-25): (b) as the asserted control, with (a) already in place and (d) as a cheap second gate.** (a) alone makes the project's safety depend on a browser behaviour the server cannot demonstrate; (b) is a server-side invariant an acceptance test can assert directly ("POST without the token → 403 and an audit row"), which is what this repository consistently prefers over a prose promise. (c) is strictly weaker than (b) here because we already have server-side session state to bind to. (d) is one line and catches non-browser clients, but `Origin` is absent on some legitimate requests, so it must reject only on a *mismatch*, never on absence.
 
-Token construction: `HMAC-SHA256(session_token, "open-mmp-dashboard-csrf-v1")`, rendered base64url into the form. It needs no storage, rotates with the session, and is unavailable to an attacker who cannot read the page — which `HttpOnly` plus `script-src 'none'` (M3-D-07) already guarantees.
+Token construction: `HMAC-SHA256(session_token, "openmasu-dashboard-csrf-v1")`, rendered base64url into the form. It needs no storage, rotates with the session, and is unavailable to an attacker who cannot read the page — which `HttpOnly` plus `script-src 'none'` (M3-D-07) already guarantees.
 
 Every `/dashboard` mutation is `POST` and answers `303 See Other`, so a refresh never repeats it.
 
@@ -210,7 +210,7 @@ Accompanying headers on every `/dashboard` response: `Referrer-Policy: no-referr
 
 `POST /dashboard/session` is the one unauthenticated write surface M3 adds.
 
-- Per-source-IP token bucket, in memory only, never persisted, never logged — the M2-S-10 rule. Proposed default 5 attempts/minute, burst 10 (`OPENMMP_DASHBOARD_LOGIN_RATE_RPM`, `_BURST`).
+- Per-source-IP token bucket, in memory only, never persisted, never logged — the M2-S-10 rule. Proposed default 5 attempts/minute, burst 10 (`OPENMASU_DASHBOARD_LOGIN_RATE_RPM`, `_BURST`).
 - A global bucket as a backstop against a distributed attempt: 60/minute.
 - Constant-time verification, already true of `verifyAdminKey`.
 - The response for a wrong key and for a well-formed-but-unknown key is byte-identical.
@@ -308,7 +308,7 @@ The honest limit, to be recorded: **if M5 or later wants interactive drill-down,
 
 The tempting security argument for (b) — isolate the cookie surface from the token surface — **does not work**, because cookies ignore the port. Only (c) achieves it, and it costs an operator a second hostname and a second TLS certificate in a project whose first-run promise is "one command, no configuration". So the isolation is built in the server instead (M3-D-06), where it is one rule and one test.
 
-Record (c) as a documented hardening for operators who want it: run a second API process with `OPENMMP_DASHBOARD_ENABLED=false` on the public hostname and the dashboard on an internal one. That is a deployment topology, not a code change, and it is worth one paragraph in the docs.
+Record (c) as a documented hardening for operators who want it: run a second API process with `OPENMASU_DASHBOARD_ENABLED=false` on the public hostname and the dashboard on an internal one. That is a deployment topology, not a code change, and it is worth one paragraph in the docs.
 
 ### M3-D-13. A route table with declared authentication, replacing the if-chain
 
@@ -333,7 +333,7 @@ Second — and this is what makes it worth doing in M3 rather than later — **t
 
 (c) adds a dependency tree to the runtime SBOM for routing that fits in one file, and neither framework would give the declared-auth property for free.
 
-**The reader pool.** `db/schema.sql` already defines `openmmp_reader` with `SELECT`-only grants across `control` and `ledger`, `bootstrap.ts` already generates a reader password, and `.env.example` already carries `OPENMMP_READER_DATABASE_URL` — but the container runtime environment does not export it. Adding `createReaderPool()` to `@open-mmp/runtime` and exporting that variable to the `api` service is a few lines, and it converts "read endpoints do not write" from a review comment into a database permission. A `mutates: false` handler that attempts an INSERT fails with insufficient privilege, in a test, loudly.
+**The reader pool.** `db/schema.sql` already defines `openmasu_reader` with `SELECT`-only grants across `control` and `ledger`, `bootstrap.ts` already generates a reader password, and `.env.example` already carries `OPENMASU_READER_DATABASE_URL` — but the container runtime environment does not export it. Adding `createReaderPool()` to `@openmasu/runtime` and exporting that variable to the `api` service is a few lines, and it converts "read endpoints do not write" from a review comment into a database permission. A `mutates: false` handler that attempts an INSERT fails with insufficient privilege, in a test, loudly.
 
 This is also why M3-D-04 refuses a sliding session window: it is the one design choice that would have forced a write onto a read path.
 
@@ -363,7 +363,7 @@ English only, per `AGENTS.md`.
 
 This is the largest structural finding in M3, and it is a prerequisite for the roadmap's own first M3 bullet ("App registration").
 
-**What is true today.** `createRequestHandler` calls `verifyAdminKey(pool, { tenantId: dependencies.maxConfig.tenantId, appId: dependencies.maxConfig.appId }, header)` — the scope comes from **environment variables** (`OPENMMP_MAX_TENANT_ID`, `OPENMMP_MAX_APP_ID`), not from the key. `control.admin_keys` carries `app_id NOT NULL` with a composite foreign key to `control.apps`, and the only code that inserts into `control.apps` is `ensureAdminKeys` at boot. **There is no route that registers an app, and a second app would be unreachable if there were one.**
+**What is true today.** `createRequestHandler` calls `verifyAdminKey(pool, { tenantId: dependencies.maxConfig.tenantId, appId: dependencies.maxConfig.appId }, header)` — the scope comes from **environment variables** (`OPENMASU_MAX_TENANT_ID`, `OPENMASU_MAX_APP_ID`), not from the key. `control.admin_keys` carries `app_id NOT NULL` with a composite foreign key to `control.apps`, and the only code that inserts into `control.apps` is `ensureAdminKeys` at boot. **There is no route that registers an app, and a second app would be unreachable if there were one.**
 
 **Options**
 
@@ -373,7 +373,7 @@ This is the largest structural finding in M3, and it is a prerequisite for the r
 
 **Decided (R-25): (b).** (a) fails the milestone item outright, and an app-registration screen that cannot produce a usable app is the kind of fake feature that erodes trust in everything next to it. (c) means the operator pastes a different key to look at a different app, which makes "one screen every morning" impossible and multiplies the credential surface by the app count.
 
-**Why (b) does not weaken isolation, and what documentation it corrects.** `docs/architecture.md:158` currently says: *"The authenticated scope, not request parameters, fixes the tenant and app."* Read strictly, (b) contradicts it. But M1 S-8 already established the real design: RLS enforces the **tenant** boundary through `SET LOCAL open_mmp.tenant_id`, while *"`app_id` is enforced by constraints and by the repository layer rather than by a second policy, so that cross-app reporting inside one organization stays a normal query."* So the app boundary was never an RLS boundary. The sentence in `architecture.md` is stronger than the design it describes, and M3 should correct it to: **the authenticated scope fixes the tenant; the app is a request parameter validated against that tenant's registered apps.** That is a documentation correction, not a security relaxation — and leaving the old sentence while shipping (b) would be the drift `AGENTS.md` forbids.
+**Why (b) does not weaken isolation, and what documentation it corrects.** `docs/architecture.md:158` currently says: *"The authenticated scope, not request parameters, fixes the tenant and app."* Read strictly, (b) contradicts it. But M1 S-8 already established the real design: RLS enforces the **tenant** boundary through `SET LOCAL openmasu.tenant_id`, while *"`app_id` is enforced by constraints and by the repository layer rather than by a second policy, so that cross-app reporting inside one organization stays a normal query."* So the app boundary was never an RLS boundary. The sentence in `architecture.md` is stronger than the design it describes, and M3 should correct it to: **the authenticated scope fixes the tenant; the app is a request parameter validated against that tenant's registered apps.** That is a documentation correction, not a security relaxation — and leaving the old sentence while shipping (b) would be the drift `AGENTS.md` forbids.
 
 **Migration.** Forward-only SQL, in M1 D-27's style:
 
@@ -386,7 +386,7 @@ This is the largest structural finding in M3, and it is a prerequisite for the r
 
 ### M3-D-17. What app registration actually creates
 
-Registering an app that cannot receive events is a half-feature. `control.sdk_keys` are provisioned at boot from `OPENMMP_SDK_KEY` for the single configured app; a newly registered app would have no SDK key and no way to get one without editing `.env` and restarting.
+Registering an app that cannot receive events is a half-feature. `control.sdk_keys` are provisioned at boot from `OPENMASU_SDK_KEY` for the single configured app; a newly registered app would have no SDK key and no way to get one without editing `.env` and restarting.
 
 **Options**
 
@@ -465,7 +465,7 @@ Implementation note worth pinning: `supersedes_metric_run_id` points at the **ol
 
 **Decided (R-25): (c).** The natural key is already unique: `(tenant_id, app_id, metric_name, metric_definition_version, grouping_digest, input_snapshot_id)`, and `metric_run_id` is the primary key. Order by `(metric_name, grouping_digest, metric_run_id)` and carry the last tuple as an opaque cursor. (b) drifts under concurrent writes — and this table receives writes from the worker while an operator is paging — producing duplicated or skipped rows with no error. (a) is unbounded: a year of daily cohorts × campaigns × countries × twelve definitions is a response nobody wants to render or transfer.
 
-Defaults: `limit` 200, maximum 1000 (`OPENMMP_REPORT_MAX_ROWS`), and a CSV export path that streams beyond the page limit under an explicit `export=true` with its own maximum, so that "export the range" does not require paging by hand.
+Defaults: `limit` 200, maximum 1000 (`OPENMASU_REPORT_MAX_ROWS`), and a CSV export path that streams beyond the page limit under an explicit `export=true` with its own maximum, so that "export the range" does not require paging by hand.
 
 ### M3-D-21. Widened row model, and CSV additivity
 
@@ -562,13 +562,13 @@ M1 B8 established that an undefined ROAS is emitted with `value_state=undefined`
 
 ## Data model additions
 
-Same conventions as M1 and M2: `control.identifier`, `control.canonical_timestamp`, forced RLS with `SET LOCAL open_mmp.tenant_id`, append-only in `ledger` and `control`, deletable only in `ephemeral`.
+Same conventions as M1 and M2: `control.identifier`, `control.canonical_timestamp`, forced RLS with `SET LOCAL openmasu.tenant_id`, append-only in `ledger` and `control`, deletable only in `ephemeral`.
 
 - `ephemeral.dashboard_sessions` — as in M3-D-04. Tenant-scoped, no foreign key to `control.apps`, deletable, swept by the worker.
 - `ledger.audit_logs` — `target_scope` CHECK gains `session`. New `action` values are runtime vocabulary and need no DDL.
 - `control.admin_keys` / `control.admin_key_states` — `app_id` becomes nullable and the composite FK to `control.apps` is dropped (M3-D-16).
 - `ledger.metric_runs` — a partial index on `supersedes_metric_run_id` (M3-D-19), and an index supporting `(tenant_id, app_id, metric_name, grouping_digest, metric_run_id)` keyset order if `EXPLAIN` shows the existing unique index does not serve it.
-- `openmmp_reader` — `USAGE` on `ephemeral` and `SELECT` on `ephemeral.dashboard_sessions`; everything else it needs is already granted.
+- `openmasu_reader` — `USAGE` on `ephemeral` and `SELECT` on `ephemeral.dashboard_sessions`; everything else it needs is already granted.
 
 `docs/architecture.md` gains a `dashboard` component identifier, and `docs/threat-model.md` gains the matching row, or `npm run check:threat-model` fails — which is the intended behaviour, not an obstacle.
 
@@ -584,7 +584,7 @@ Bootstrap output gains one line: the dashboard URL, printed next to the admin ke
 
 New environment variables, all of which must appear in `.env.example` with a generator or a default because `npm run test:env-coverage` (M1 A13) fails otherwise:
 
-`OPENMMP_DASHBOARD_ENABLED` (default `true`), `OPENMMP_DASHBOARD_SESSION_TTL_SECONDS` (`43200`), `OPENMMP_DASHBOARD_LOGIN_RATE_RPM` (`5`), `OPENMMP_DASHBOARD_LOGIN_RATE_BURST` (`10`), `OPENMMP_REPORT_MAX_ROWS` (`1000`), `OPENMMP_REPORT_EXPORT_MAX_ROWS` (`200000`). Plus exporting the already-existing `OPENMMP_READER_DATABASE_URL` into the `api` service environment (M3-D-13).
+`OPENMASU_DASHBOARD_ENABLED` (default `true`), `OPENMASU_DASHBOARD_SESSION_TTL_SECONDS` (`43200`), `OPENMASU_DASHBOARD_LOGIN_RATE_RPM` (`5`), `OPENMASU_DASHBOARD_LOGIN_RATE_BURST` (`10`), `OPENMASU_REPORT_MAX_ROWS` (`1000`), `OPENMASU_REPORT_EXPORT_MAX_ROWS` (`200000`). Plus exporting the already-existing `OPENMASU_READER_DATABASE_URL` into the `api` service environment (M3-D-13).
 
 ### CI (M3-D-29)
 
@@ -592,7 +592,7 @@ New environment variables, all of which must appear in `.env.example` with a gen
 
 **And that fact should be a gate, not a claim.** M3-D-11's whole argument is "no new dependency"; the way to keep it true in six months is to assert it:
 
-> The CycloneDX component list for `@open-mmp/api` produced by `npm run sbom` contains the same set of runtime components before and after M3. CI fails if the set grows.
+> The CycloneDX component list for `@openmasu/api` produced by `npm run sbom` contains the same set of runtime components before and after M3. CI fails if the set grows.
 
 This costs a few lines on top of the existing per-workspace SBOM gate (M1 D-29) and it is the only thing that will stop a future "just add one small library" from quietly reversing the decision.
 
@@ -618,9 +618,9 @@ Written as commands and observable outcomes; "verify" means the output goes into
 
 **C-05 — CSRF.** A `/dashboard` POST without the token returns `403` and writes an audit row; with a token belonging to a different session returns `403`; with an `Origin` header naming another host returns `403`; with the correct token succeeds.
 
-**C-06 — login abuse refuses before insert.** Exceeding `OPENMMP_DASHBOARD_LOGIN_RATE_RPM` returns `429`, and `SELECT count(*) FROM ledger.audit_logs` is **unchanged** across the throttled attempts. A full-text scan of every table and payload object after the run finds no occurrence of the source IP used.
+**C-06 — login abuse refuses before insert.** Exceeding `OPENMASU_DASHBOARD_LOGIN_RATE_RPM` returns `429`, and `SELECT count(*) FROM ledger.audit_logs` is **unchanged** across the throttled attempts. A full-text scan of every table and payload object after the run finds no occurrence of the source IP used.
 
-**C-07 — boot self-check.** Starting with `OPENMMP_PUBLIC_BASE_URL=http://198.51.100.10:8080` and the dashboard enabled exits non-zero with a named error; `http://localhost:8080` and `https://example.invalid` start.
+**C-07 — boot self-check.** Starting with `OPENMASU_PUBLIC_BASE_URL=http://198.51.100.10:8080` and the dashboard enabled exits non-zero with a named error; `http://localhost:8080` and `https://example.invalid` start.
 
 **C-08 — app registration.** `POST /v1/admin/apps` creates a `control.apps` row, writes `app_registered` and `sdk_key_issued` audit rows, and returns the SDK secret once; a second read never returns it and it appears in no audit row and no log line. Reporting for the new app returns an empty result set with a `200`, not an error. An unregistered `app_id` and another tenant's `app_id` return the identical `404`.
 
@@ -648,7 +648,7 @@ Written as commands and observable outcomes; "verify" means the output goes into
 
 **C-19 — chart purity.** The SVG generator is deterministic for a given series; its output parses as well-formed XML; a series containing `undefined` produces a discontinuous path; the output contains no `<script>` and no external reference.
 
-**C-20 — no new dependency.** The CycloneDX runtime component set for `@open-mmp/api` is unchanged from the pre-M3 baseline. CI fails if it grows.
+**C-20 — no new dependency.** The CycloneDX runtime component set for `@openmasu/api` is unchanged from the pre-M3 baseline. CI fails if it grows.
 
 **C-21 — first run.** `docker compose up -d --wait` exits 0; `docker compose logs api` contains the dashboard URL; `GET /dashboard` unauthenticated returns `200` with a login form and no data; every data route without a session returns `401` or a redirect to the login page; after `npm run seed` and one metric run, the cohort page shows a number.
 
@@ -681,7 +681,7 @@ Results, campaign identifiers, and values stay outside the public repository, as
 | M3-D-10 | DSAR promise | Ship operator export only and rewrite `privacy-security.md:87` in the same change; DSAR needs its own contract work (M3-S-8) |
 | M3-D-11 | Rendering model | Server-rendered HTML from TypeScript, no framework, no bundler, no client JavaScript |
 | M3-D-12 | Placement | Routes under `/dashboard` inside `apps/api`; separate hostname documented as operator hardening |
-| M3-D-13 | Routing | Declarative route table with `auth` and `mutates`; read handlers get the `openmmp_reader` pool |
+| M3-D-13 | Routing | Declarative route table with `auth` and `mutates`; read handlers get the `openmasu_reader` pool |
 | M3-D-14 | Charts | One server-rendered inline SVG primitive from a pure function; undefined is a gap, never zero |
 | M3-D-15 | Styling and assets | One CSS file, system fonts, no external requests, readable without CSS |
 | M3-D-16 | Identity scope | Admin key becomes tenant-scoped; `app_id` becomes a validated request parameter; correct `architecture.md:158` |
@@ -721,7 +721,7 @@ Results, campaign identifiers, and values stay outside the public repository, as
 | `docs/privacy-security.md:87` | Rewrite the DSAR sentence (M3-D-10). **Owner check.** |
 | `docs/roadmap.md` M3 | State that "match under identical filters" means *at one fixed input watermark*, so the gate is not read as a wall-clock comparison. Keep the milestone name byte-identical across roadmap, project-plan, privacy-security, and threat-model. |
 | `docs/project-plan.md` Phase 3 | Keep the crosswalk in step, per `AGENTS.md`. |
-| `.env.example` | Six new variables plus `OPENMMP_READER_DATABASE_URL` in the api service environment. |
+| `.env.example` | Six new variables plus `OPENMASU_READER_DATABASE_URL` in the api service environment. |
 
 ### To M5
 
@@ -745,16 +745,16 @@ Repository facts used as premises, read on 2026-08-20 from `review/wo-6-m2`:
 
 - `apps/api/src/reporting.ts` — `metricReport` selects every `ledger.metric_runs` row for the tenant/app with no filter, no pagination, and no supersession handling.
 - `apps/api/src/router.ts` — the admin-key verification block appears three times; the scope passed to `verifyAdminKey` comes from `maxConfig` (environment variables), not from the key.
-- `db/schema.sql` — `control.admin_keys.app_id` is `NOT NULL` with a composite FK to `control.apps`; `ledger.audit_logs.target_scope` has a closed `CHECK` list without `session`; `openmmp_reader` holds `SELECT` on `control` and `ledger`; `ephemeral` grants `SELECT, INSERT, DELETE` on `request_nonces` to `openmmp_app`.
+- `db/schema.sql` — `control.admin_keys.app_id` is `NOT NULL` with a composite FK to `control.apps`; `ledger.audit_logs.target_scope` has a closed `CHECK` list without `session`; `openmasu_reader` holds `SELECT` on `control` and `ledger`; `ephemeral` grants `SELECT, INSERT, DELETE` on `request_nonces` to `openmasu_app`.
 - `schemas/metric-run.schema.json` — `metric_name` is an open pattern (`^[a-z][a-z0-9_]{2,127}$`) with no registry, so new metric names are not a contract change; `grouping.dimensions` is closed to five properties with `additionalProperties: false`, so a new dimension is.
-- `.env.example` and `apps/runtime/src/bootstrap.ts` — `OPENMMP_READER_DATABASE_URL` already exists and a reader password is already generated, but the variable is not exported into the container runtime environment.
+- `.env.example` and `apps/runtime/src/bootstrap.ts` — `OPENMASU_READER_DATABASE_URL` already exists and a reader password is already generated, but the variable is not exported into the container runtime environment.
 - No HTML, CSS, or bundler exists anywhere in the repository today.
 
 ## Verified during WO-7
 
 Checked in the PostgreSQL-backed Runtime workflow on **2026-08-20**.
 
-1. `openmmp_reader` executes the reporting and session lookups under forced RLS with `SET LOCAL open_mmp.tenant_id`. An unset tenant sees no app rows, the selected tenant sees its row, and a deliberate `INSERT` fails with SQLSTATE `42501`. No fallback to `openmmp_app` is used.
+1. `openmasu_reader` executes the reporting and session lookups under forced RLS with `SET LOCAL openmasu.tenant_id`. An unset tenant sees no app rows, the selected tenant sees its row, and a deliberate `INSERT` fails with SQLSTATE `42501`. No fallback to `openmasu_app` is used.
 2. `cohort_install_count` groups organic, non-organic, and unattributed installs into disjoint rows whose counts sum to the ungrouped count. An install with no attribution row is classified as unattributed. The SQL result remains JCS-identical to the contract evaluator.
 
 ## Not verified

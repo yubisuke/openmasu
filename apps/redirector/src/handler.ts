@@ -5,8 +5,8 @@ import {
   resolveRedirect,
   type RedirectResolution,
   type TrackingLink,
-} from "@open-mmp/redirector-core";
-import { appendDurableBatch, uuidV7, withTenant, type PayloadStore } from "@open-mmp/runtime";
+} from "@openmasu/redirector-core";
+import { appendDurableBatch, uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 
 export type RedirectRateLimiter = { allow(key: string): boolean };
 
@@ -43,7 +43,7 @@ async function persistClick(dependencies: RedirectorDependencies, result: Redire
   if (!result.click) return;
   const click = result.click;
   const record = {
-    contract_version: "0.3.0",
+    contract_version: "0.4.0",
     record_id: `record:${uuidV7()}`,
     delivery_id: `delivery:${uuidV7()}`,
     tenant_id: click.tenant_id,
@@ -52,7 +52,7 @@ async function persistClick(dependencies: RedirectorDependencies, result: Redire
     producer_version: "0.1.0",
     event_id: `event:click:${click.click_id}`,
     event_name: "click",
-    schema_version: "0.3.0",
+    schema_version: "0.4.0",
     occurred_at: click.redirector_click_at,
     occurred_at_source: "server",
     received_at: click.redirector_click_at,
@@ -82,7 +82,7 @@ export function createRedirectorHandler(dependencies: RedirectorDependencies): R
   const fallback = fallbackResponse(dependencies.fallbackUrl);
   return (request: IncomingMessage, response: ServerResponse) => {
     void (async () => {
-      const target = new URL(request.url ?? "/", "http://open-mmp.local");
+      const target = new URL(request.url ?? "/", "http://openmasu.local");
       const match = request.method === "GET" ? /^\/r\/([A-Za-z0-9_-]{12,64})$/.exec(target.pathname) : null;
       if (!match) return send(response, fallback);
       const remoteAddress = request.socket.remoteAddress ?? "unknown";

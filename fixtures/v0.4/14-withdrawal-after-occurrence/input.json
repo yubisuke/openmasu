@@ -1,0 +1,95 @@
+{
+  "contract_version": "0.4.0",
+  "fx_policy": {
+    "policy_version": "fx-v0.1",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "100000000",
+        "rate_scale": 8,
+        "source": "synthetic-fixture-rate",
+        "as_of": "2026-08-12T00:00:00.000Z"
+      }
+    ]
+  },
+  "metric_evaluations": [],
+  "reconciliation_inputs": [],
+  "privacy_requests": [],
+  "server_context": {
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-12T00:00:00.000Z",
+    "policy_digest": "policy-v0.1",
+    "processing_purposes": [
+      {
+        "processing_purpose_id": "analytics",
+        "consent_required": true,
+        "policy_version": "consent-v1"
+      }
+    ],
+    "withdrawals": [
+      {
+        "processing_purpose_id": "analytics",
+        "withdrawal_recognized_at": "2026-08-12T00:00:00.000Z",
+        "withdrawal_recognized_sequence": 7
+      }
+    ],
+    "alternative_legal_bases": [
+      {
+        "alternative_legal_basis_id": "basis-queued",
+        "processing_purpose_id": "analytics",
+        "legal_basis": "documented-purpose",
+        "policy_version": "basis-v1",
+        "effective_at": "2026-08-12T00:00:00.000Z"
+      }
+    ]
+  },
+  "records": [
+    {
+      "contract_version": "0.4.0",
+      "record_id": "queued-before-withdrawal",
+      "delivery_id": "delivery:queued-before-withdrawal",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.1",
+      "event_id": "event:queued-before-withdrawal",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-11T23:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-12T00:01:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 7,
+      "payload": {
+        "installation_id": "installation:withdrawal",
+        "session_id": "queued"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "queued-explicit-basis",
+      "delivery_id": "delivery:queued-explicit-basis",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.1",
+      "event_id": "event:queued-explicit-basis",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-11T23:01:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-12T00:02:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 8,
+      "payload": {
+        "installation_id": "installation:withdrawal",
+        "session_id": "allowed"
+      },
+      "alternative_legal_basis_id": "basis-queued"
+    }
+  ]
+}

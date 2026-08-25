@@ -2,11 +2,11 @@
 import PackageDescription
 
 let package = Package(
-  name: "OpenMmpProviderCompileProbe",
+  name: "OpenMasuProviderCompileProbe",
   platforms: [.iOS(.v16)],
-  products: [.library(name: "OpenMmpProviderCompileProbe", targets: ["OpenMmpProviderCompileProbe"])],
+  products: [.library(name: "OpenMasuProviderCompileProbe", targets: ["OpenMasuProviderCompileProbe"])],
   dependencies: [
-    .package(name: "OpenMmpIOS", path: ".."),
+    .package(name: "OpenMasuIOS", path: ".."),
     .package(
       url: "https://github.com/AppLovin/AppLovin-MAX-Swift-Package.git",
       exact: "13.6.4"
@@ -14,9 +14,9 @@ let package = Package(
   ],
   targets: [
     .target(
-      name: "OpenMmpProviderCompileProbe",
+      name: "OpenMasuProviderCompileProbe",
       dependencies: [
-        .product(name: "OpenMmpMax", package: "OpenMmpIOS"),
+        .product(name: "OpenMasuMax", package: "OpenMasuIOS"),
         .product(name: "AppLovinSDK", package: "applovin-max-swift-package"),
       ]
     ),

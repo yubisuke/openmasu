@@ -14,5 +14,5 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "openmmp-android"
+rootProject.name = "openmasu-android"
 include(":core", ":installreferrer", ":metareferrer", ":max", ":sample")

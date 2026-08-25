@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:runtime-schema:import-mapping:v1",
-  "title": "Open MMP runtime import mapping",
+  "$id": "urn:openmasu:runtime-schema:import-mapping:v1",
+  "title": "OpenMasu runtime import mapping",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "kind", "source_id", "tenant_id", "app_id", "format", "rules"],
@@ -87,7 +87,7 @@
           "additionalProperties": false,
           "required": ["scale"],
           "properties": {
-            "input": { "const": "integer" },
+            "input": { "enum": ["integer", "decimal"] },
             "scale": { "type": "integer", "minimum": 0, "maximum": 18 },
             "currency_source": { "type": "string", "minLength": 1 },
             "currency_default": { "type": "string", "pattern": "^[A-Z]{3}$" }

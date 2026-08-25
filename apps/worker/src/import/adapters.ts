@@ -1,4 +1,4 @@
-import type { SecretStore } from "@open-mmp/runtime";
+import type { SecretStore } from "@openmasu/runtime";
 import { decimalToUnscaled, type CostInput } from "./cost.js";
 
 type Any = Record<string, any>;
@@ -33,7 +33,7 @@ export async function fetchMetaInsights(options: {
   apiVersion?: string;
   scope: CostScope;
 }): Promise<CostInput[]> {
-  const token = options.secrets.require("OPENMMP_META_ACCESS_TOKEN");
+  const token = options.secrets.require("OPENMASU_META_ACCESS_TOKEN");
   const version = options.apiVersion ?? "v26.0";
   const fields = "campaign_id,adset_id,ad_id,spend,date_start,date_stop";
   const url = new URL(`https://graph.facebook.com/${version}/act_${options.accountId}/insights`);
@@ -75,8 +75,8 @@ export async function fetchGoogleAds(options: {
   scope: CostScope;
   countries: Readonly<Record<string, string>>;
 }): Promise<CostInput[]> {
-  const token = options.secrets.require("OPENMMP_GOOGLE_ADS_ACCESS_TOKEN");
-  const developerToken = options.secrets.require("OPENMMP_GOOGLE_ADS_DEVELOPER_TOKEN");
+  const token = options.secrets.require("OPENMASU_GOOGLE_ADS_ACCESS_TOKEN");
+  const developerToken = options.secrets.require("OPENMASU_GOOGLE_ADS_DEVELOPER_TOKEN");
   const version = options.apiVersion ?? "v25";
   const response = await options.fetch(
     `https://googleads.googleapis.com/${version}/customers/${options.customerId}/googleAds:searchStream`,
@@ -113,7 +113,7 @@ export async function fetchMaxReportingBackfill(options: {
   end: string;
   scope: CostScope;
 }): Promise<CostInput[]> {
-  const reportKey = options.secrets.require("OPENMMP_MAX_REPORT_KEY");
+  const reportKey = options.secrets.require("OPENMASU_MAX_REPORT_KEY");
   const url = new URL("https://r.applovin.com/maxReport");
   url.searchParams.set("api_key", reportKey);
   url.searchParams.set("start", options.start);

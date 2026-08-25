@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:event-install:v0.3",
-  "title": "Open MMP Install Event v0.3",
+  "$id": "urn:openmasu:schema:event-install:v0.4",
+  "title": "OpenMasu Install Event v0.4",
   "type": "object",
   "additionalProperties": false,
   "required": ["event_name", "installation_id", "referrer_status", "install_type"],

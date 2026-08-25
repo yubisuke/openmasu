@@ -1,6 +1,6 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import type { Pool } from "pg";
-import { withTenant } from "@open-mmp/runtime";
+import { withTenant } from "@openmasu/runtime";
 
 export type AdminRole = "admin" | "operator" | "read_only";
 export type AdminIdentity = { keyId: string; tenantId: string; role: AdminRole };

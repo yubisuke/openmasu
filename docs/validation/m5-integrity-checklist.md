@@ -1,6 +1,6 @@
 # M5 Play Integrity and App Attest Operator Checklist
 
-Contract v0.3.5 reserves optional `integrity_verdict` evidence only. Open MMP
+Contract v0.3.5 reserves optional `integrity_verdict` evidence only. OpenMasu
 does not ship a live Play Integrity or App Attest integration and never treats
 one verdict as deterministic attribution or as a complete fraud decision.
 

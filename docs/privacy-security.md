@@ -134,7 +134,7 @@ Each decision records its reason, evidence references, policy digest, evaluation
 
 ## Release gates
 
-The initial public [threat model](threat-model.md) maps the M0.3 Contract v0.3 controls and the residual risks that only a runtime release can address.
+The initial public [threat model](threat-model.md) maps the M0.4 Contract v0.4 controls and the residual risks that only a runtime release can address.
 
 - Threat model
 - Complete SDK field inventory
@@ -148,7 +148,7 @@ Gate ownership follows the canonical [roadmap](roadmap.md):
 
 | Gate | Required milestone |
 | --- | --- |
-| Initial threat model, retention/redaction contract, and replay/conflict/redaction fixtures | M0.3 Contract v0.3 |
+| Initial threat model, retention/redaction contract, replay/conflict/redaction fixtures, and identity-migration proof | M0.4 Contract v0.4 |
 | Private vulnerability-reporting path, TLS 1.2-or-later transport evidence, ledger isolation tests, deletion recalculation, envelope-encryption evidence, and an SBOM for every runtime artifact | M1a Shadow ledger and import foundation |
 | Complete Android SDK field inventory, Google Play Data safety mapping, consent-queue tests, and backup/restore exclusion for `installation_id` | M2 Android, Unity, and redirector |
 | Apple Privacy Manifest and App Privacy Details mapping | M4a iOS first-party measurement |
@@ -161,4 +161,4 @@ The M1a runtime gates continue to apply to every later runtime milestone. M5 add
 
 The management path accepts `tenant_admin_api` deletion requests only after scrypt-verifier bearer authentication. M2a also opens the separate `on_device_sdk` route only after HMAC authentication with the per-installation credential, and authorizes deletion against the tenant/app keyed digest bound to that credential. Both paths append lifecycle state, tombstone and correction artifacts, purge matching protected object/key entries, append replacement D0 runs when prior runs exist, and record an opaque authentication reference in the runtime audit ledger. The completed privacy artifact never retains `deletion_subject_ref`. M5 adds a restore-time job that reapplies completed requests and recalculates replay-manifest-backed SQL metrics before traffic. Real backup custody, backup lineage, scheduling, and large asynchronous deletion operations remain deployment responsibilities.
 
-Redirector source IP is used ephemerally for an in-process token bucket and is never written to the application database, payload store, or application logs. With `OPENMMP_REDIRECTOR_GEO=off` (the default), the redirector does not derive `click.country`. Operators enabling country derivation must update their Google Play Data safety declaration. The current Google Play guidance was checked on 2026-08-19: https://support.google.com/googleplay/android-developer/answer/10787469?hl=en.
+Redirector source IP is used ephemerally for an in-process token bucket and is never written to the application database, payload store, or application logs. With `OPENMASU_REDIRECTOR_GEO=off` (the default), the redirector does not derive `click.country`. Operators enabling country derivation must update their Google Play Data safety declaration. The current Google Play guidance was checked on 2026-08-19: https://support.google.com/googleplay/android-developer/answer/10787469?hl=en.

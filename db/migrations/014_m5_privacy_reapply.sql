@@ -14,14 +14,14 @@ CREATE TABLE control.metric_replay_manifests (
 ALTER TABLE control.metric_replay_manifests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE control.metric_replay_manifests FORCE ROW LEVEL SECURITY;
 CREATE POLICY metric_replay_manifests_tenant ON control.metric_replay_manifests
-  USING (tenant_id = current_setting('open_mmp.tenant_id', true))
-  WITH CHECK (tenant_id = current_setting('open_mmp.tenant_id', true));
+  USING (tenant_id = current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id = current_setting('openmasu.tenant_id', true));
 
 CREATE TRIGGER metric_replay_manifests_append_only
   BEFORE UPDATE OR DELETE ON control.metric_replay_manifests
   FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
 
 REVOKE ALL ON control.metric_replay_manifests FROM PUBLIC;
-REVOKE SELECT ON control.metric_replay_manifests FROM openmmp_reader;
-GRANT SELECT, INSERT ON control.metric_replay_manifests TO openmmp_app;
-GRANT TRUNCATE ON control.metric_replay_manifests TO openmmp_seed;
+REVOKE SELECT ON control.metric_replay_manifests FROM openmasu_reader;
+GRANT SELECT, INSERT ON control.metric_replay_manifests TO openmasu_app;
+GRANT TRUNCATE ON control.metric_replay_manifests TO openmasu_seed;

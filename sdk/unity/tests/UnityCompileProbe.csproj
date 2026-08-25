@@ -5,10 +5,10 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <LangVersion>9.0</LangVersion>
-    <DefineConstants>$(DefineConstants);OPENMMP_APPLOVIN_MAX;UNITY_EDITOR</DefineConstants>
+    <DefineConstants>$(DefineConstants);OPENMASU_APPLOVIN_MAX;UNITY_EDITOR</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\com.openmmp.sdk\Runtime\*.cs" Link="Runtime\%(Filename)%(Extension)" />
-    <Compile Include="..\com.openmmp.sdk\Editor\OpenMmpIOSPostprocessor.cs" Link="Editor\OpenMmpIOSPostprocessor.cs" />
+    <Compile Include="..\com.openmasu.sdk\Runtime\*.cs" Link="Runtime\%(Filename)%(Extension)" />
+    <Compile Include="..\com.openmasu.sdk\Editor\OpenMasuIOSPostprocessor.cs" Link="Editor\OpenMasuIOSPostprocessor.cs" />
   </ItemGroup>
 </Project>

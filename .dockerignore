@@ -1,11 +1,11 @@
 .git
 .env
-.openmmp
+.openmasu
 node_modules
 tools/__pycache__
 fixtures/.candidates
 docs/review
-open-mmp-lab
+openmasu-lab
 **/real-data
 **/input
 *.csv

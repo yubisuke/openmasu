@@ -1,7 +1,7 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
 import type { Pool } from "pg";
-import { uuidV7, withTenant, type PayloadStore } from "@open-mmp/runtime";
+import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 
 type Principal = {
   tenantId: string;
@@ -56,7 +56,7 @@ export function sdkCanonicalString(input: {
   body: Buffer;
 }): string {
   return [
-    "open-mmp-sdk-v1",
+    "openmasu-sdk-v1",
     input.method.toUpperCase(),
     input.path,
     input.sdkKeyId,
@@ -146,12 +146,12 @@ export async function verifySdkRequest(input: {
   requireInstallation: boolean;
 }): Promise<SdkAuthResult> {
   const requestDigest = sdkBodyDigest(input.body);
-  const sdkKeyId = headerValue(input.headers, "x-openmmp-sdk-key-id");
-  const installationHeader = headerValue(input.headers, "x-openmmp-installation-key-id");
+  const sdkKeyId = headerValue(input.headers, "x-openmasu-sdk-key-id");
+  const installationHeader = headerValue(input.headers, "x-openmasu-installation-key-id");
   const installationKeyId = installationHeader && installationHeader !== "-" ? installationHeader : undefined;
-  const timestampText = headerValue(input.headers, "x-openmmp-timestamp-ms");
-  const nonce = headerValue(input.headers, "x-openmmp-nonce");
-  const signature = headerValue(input.headers, "x-openmmp-signature");
+  const timestampText = headerValue(input.headers, "x-openmasu-timestamp-ms");
+  const nonce = headerValue(input.headers, "x-openmasu-nonce");
+  const signature = headerValue(input.headers, "x-openmasu-signature");
   const actorRef = installationKeyId ? `sdk_installation:${installationKeyId}` : `sdk_key:${sdkKeyId || "unknown"}`;
   const timestampMs = Number(timestampText);
   if (!/^[A-Za-z0-9._:-]{1,128}$/.test(sdkKeyId)

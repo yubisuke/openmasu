@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:event-custom-event:v0.3",
-  "title": "Open MMP Custom Event v0.3",
+  "$id": "urn:openmasu:schema:event-custom-event:v0.4",
+  "title": "OpenMasu Custom Event v0.4",
   "type": "object",
   "additionalProperties": false,
   "required": ["event_name", "installation_id", "event_key"],
@@ -11,7 +11,7 @@
     "event_key": {
       "anyOf": [
         { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
-        { "const": "openmmp.conversion_value_updated" }
+        { "const": "openmasu.conversion_value_updated" }
       ]
     },
     "money": { "$ref": "../common.schema.json#/$defs/money" },

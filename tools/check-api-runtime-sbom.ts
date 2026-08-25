@@ -23,6 +23,6 @@ const runtimeComponents = sbom.components
 assert.deepEqual(
   runtimeComponents,
   [...baseline].sort(),
-  "@open-mmp/api runtime component set grew or shrank; review the M3 zero-dependency invariant",
+  "@openmasu/api runtime component set grew or shrank; review the M3 zero-dependency invariant",
 );
 console.log(`API runtime SBOM baseline passed: ${runtimeComponents.length} required components.`);

@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
-import { sha256 } from "@open-mmp/attribution-core";
-import { uuidV7, withTenant, type PayloadStore } from "@open-mmp/runtime";
+import { sha256 } from "@openmasu/attribution-core";
+import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 
 type Any = Record<string, any>;
@@ -191,7 +191,7 @@ export async function executePrivacyRequest(
       ? identity.deletionSubjectDigest
       : sha256([body.tenant_id, body.app_id, body.deletion_scope, body.deletion_subject_ref]);
     const artifact = {
-      contract_version: "0.3.0",
+      contract_version: "0.4.0",
       tenant_id: body.tenant_id,
       app_id: body.app_id,
       privacy_request_id: requestId,
@@ -214,7 +214,7 @@ export async function executePrivacyRequest(
     );
     for (const recordId of records) {
       const tombstone = {
-        contract_version: "0.3.0", tenant_id: body.tenant_id, app_id: body.app_id,
+        contract_version: "0.4.0", tenant_id: body.tenant_id, app_id: body.app_id,
         privacy_request_id: requestId, record_id: recordId, lifecycle_status: "purged",
         reason_code: "privacy_deletion", policy_version: "privacy-v0.2",
         provenance_digest: sha256([requestId, recordId, completedAt]), created_at: completedAt,
@@ -235,7 +235,7 @@ export async function executePrivacyRequest(
         [body.tenant_id, body.app_id, requestId, recordId, completedAt, JSON.stringify(tombstone)],
       );
       const correction = {
-        contract_version: "0.3.0", tenant_id: body.tenant_id, app_id: body.app_id,
+        contract_version: "0.4.0", tenant_id: body.tenant_id, app_id: body.app_id,
         correction_id: `correction:${sha256([requestId, recordId]).slice(0, 48)}`,
         corrects_record_id: recordId, correction_type: "redaction",
         correction_reason: "privacy_deletion", effective_at: completedAt,

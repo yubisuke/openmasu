@@ -1,16 +1,16 @@
 using System;
 using System.Linq;
 using System.Threading;
-using OpenMmp.Unity;
+using OpenMasu.Unity;
 
 internal static class Program
 {
     private static int Main()
     {
         var mainThread = Environment.CurrentManagedThreadId;
-        var dispatcher = new OpenMmpDispatcher(20_000);
+        var dispatcher = new OpenMasuDispatcher(20_000);
         using (var platform = new SyntheticPlatform())
-        using (var client = new OpenMmpClient(platform, dispatcher))
+        using (var client = new OpenMasuClient(platform, dispatcher))
         {
             var received = 0;
             for (var index = 0; index < 10_000; index++)
@@ -28,18 +28,18 @@ internal static class Program
             Require(received == 10_000, "Unity callback count mismatch");
             Require(dispatcher.DroppedCount == 0, "Unity dispatcher dropped callbacks");
         }
-        Require(OpenMmpAndroidPlatform.ActiveAndroidObjectCount == 0, "AndroidJavaObject lease leaked");
+        Require(OpenMasuAndroidPlatform.ActiveAndroidObjectCount == 0, "AndroidJavaObject lease leaked");
         ExerciseIosCallbackPath(mainThread);
-        Require(OpenMmpiOSPlatform.ActiveCallbackCount == 0, "iOS function-pointer callback leaked");
+        Require(OpenMasuiOSPlatform.ActiveCallbackCount == 0, "iOS function-pointer callback leaked");
         Require(MaxRevenueSubscriptions.Formats.SequenceEqual(new[] { "Interstitial", "Rewarded", "Banner", "MRec" }), "MAX format subscription table is incomplete");
-        OpenMmpMaxUnityAdapter.Subscribe();
-        OpenMmpMaxUnityAdapter.Unsubscribe();
-        var plist = OpenMmp.Unity.Editor.OpenMmpIosPlistSettings.Apply(
+        OpenMasuMaxUnityAdapter.Subscribe();
+        OpenMasuMaxUnityAdapter.Unsubscribe();
+        var plist = OpenMasu.Unity.Editor.OpenMasuIosPlistSettings.Apply(
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict/></plist>",
             "https://synthetic.example", "https://copy.synthetic.example");
         Require(plist.Contains("NSAdvertisingAttributionReportEndpoint"), "SKAN endpoint was not written");
         Require(plist.Contains("AttributionCopyEndpoint"), "AdAttributionKit endpoint was not written");
-        Require(plist.Contains("OpenMmpCollectionEnabledDefault"), "collection default was not written");
+        Require(plist.Contains("OpenMasuCollectionEnabledDefault"), "collection default was not written");
         Require(plist.Contains("<false"), "collection default must be disabled unless explicitly enabled");
         Console.WriteLine("Unity bridge probe passed: Android and iOS 10000-callback paths, main-thread dispatch, zero callback/object leaks, both Apple plist keys, 4 MAX formats.");
         return 0;
@@ -47,9 +47,9 @@ internal static class Program
 
     private static void ExerciseIosCallbackPath(int mainThread)
     {
-        var dispatcher = new OpenMmpDispatcher(20_000);
-        using (var platform = new OpenMmpiOSPlatform())
-        using (var client = new OpenMmpClient(platform, dispatcher))
+        var dispatcher = new OpenMasuDispatcher(20_000);
+        using (var platform = new OpenMasuiOSPlatform())
+        using (var client = new OpenMasuClient(platform, dispatcher))
         {
             var received = 0;
             for (var index = 0; index < 10_000; index++)
@@ -78,10 +78,10 @@ internal static class Program
         if (!value) throw new InvalidOperationException(message);
     }
 
-    private sealed class SyntheticPlatform : IOpenMmpPlatform
+    private sealed class SyntheticPlatform : IOpenMasuPlatform
     {
         private readonly CountdownEvent callbacks = new CountdownEvent(10_000);
-        public void Initialize(OpenMmpOptions options) { }
+        public void Initialize(OpenMasuOptions options) { }
         public void TrackCustomEvent(string eventKey) { }
         public void StartSession() { }
         public void SetCollectionEnabled(bool enabled) { }

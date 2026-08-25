@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:event-session-start:v0.3",
-  "title": "Open MMP Session Start Event v0.3",
+  "$id": "urn:openmasu:schema:event-session-start:v0.4",
+  "title": "OpenMasu Session Start Event v0.4",
   "type": "object",
   "additionalProperties": false,
   "required": ["event_name", "installation_id", "session_id"],

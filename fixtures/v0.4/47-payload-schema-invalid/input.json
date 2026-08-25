@@ -1,0 +1,34 @@
+{
+  "contract_version": "0.4.0",
+  "fx_policy": {
+    "policy_version": "fx-v0.1",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "100000000",
+        "rate_scale": 8,
+        "source": "synthetic-fixture-rate",
+        "as_of": "2026-08-20T12:00:00.000Z"
+      }
+    ]
+  },
+  "metric_evaluations": [],
+  "reconciliation_inputs": [],
+  "privacy_requests": [],
+  "pre_ingestion_rejections": [
+    {
+      "delivery_id": "delivery:invalid-payload-47",
+      "record_id": "record:invalid-payload-47",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "received_at": "2026-08-20T12:00:00.000Z",
+      "reason_code": "payload_schema_invalid",
+      "processing_purpose_id": "analytics",
+      "consent_evaluation_policy_version": "consent-v0.1",
+      "consent_decision_reason_code": "consent_not_required"
+    }
+  ]
+}

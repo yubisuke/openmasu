@@ -2,13 +2,13 @@
 import PackageDescription
 
 let package = Package(
-  name: "OpenMmpQueueCrashProbePackage",
+  name: "OpenMasuQueueCrashProbePackage",
   platforms: [.macOS(.v13)],
-  dependencies: [.package(name: "OpenMmpIOS", path: "..")],
+  dependencies: [.package(name: "OpenMasuIOS", path: "..")],
   targets: [
     .executableTarget(
-      name: "OpenMmpQueueCrashProbe",
-      dependencies: [.product(name: "OpenMmpCore", package: "OpenMmpIOS")]
+      name: "OpenMasuQueueCrashProbe",
+      dependencies: [.product(name: "OpenMasuCore", package: "OpenMasuIOS")]
     ),
   ]
 )

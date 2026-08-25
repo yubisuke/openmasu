@@ -19,7 +19,7 @@ function normalizeNewlines(value: string): string {
 function render(): string {
   const files = readdirSync(migrationDirectory).filter((name) => migrationPattern.test(name)).sort();
   const header = [
-    "-- Open MMP schema snapshot.",
+    "-- OpenMasu schema snapshot.",
     "-- Generated deterministically from db/migrations; do not edit by hand.",
     "",
   ].join("\n");
@@ -38,7 +38,7 @@ if (!existsSync(snapshotPath) || normalizeNewlines(readFileSync(snapshotPath, "u
   throw new Error("db/schema.sql differs from the forward-only migration snapshot");
 }
 
-const connectionString = process.env.OPENMMP_MIGRATION_DATABASE_URL;
+const connectionString = process.env.OPENMASU_MIGRATION_DATABASE_URL;
 if (connectionString) {
   const client = new Client({ connectionString });
   await client.connect();

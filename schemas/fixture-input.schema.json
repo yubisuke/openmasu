@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:fixture-input:v0.3",
-  "title": "Open MMP Contract Fixture Input v0.3",
+  "$id": "urn:openmasu:schema:fixture-input:v0.4",
+  "title": "OpenMasu Contract Fixture Input v0.4",
   "type": "object",
   "additionalProperties": false,
   "required": ["contract_version", "fx_policy", "metric_evaluations", "privacy_requests"],
   "properties": {
-    "contract_version": { "const": "0.3.0" },
+    "contract_version": { "const": "0.4.0" },
     "server_context": { "$ref": "#/$defs/serverContext" },
     "records": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/record" } },
     "batches": {
@@ -57,11 +57,11 @@
     "fx_policy": { "$ref": "#/$defs/fxPolicy" },
     "cost_records": {
       "type": "array",
-      "items": { "$ref": "urn:open-mmp:schema:cost-record:v0.3" }
+      "items": { "$ref": "urn:openmasu:schema:cost-record:v0.4" }
     },
     "metric_definitions": {
       "type": "array",
-      "items": { "$ref": "urn:open-mmp:schema:metric-definition:v0.3" }
+      "items": { "$ref": "urn:openmasu:schema:metric-definition:v0.4" }
     },
     "metric_evaluations": {
       "type": "array",
@@ -105,11 +105,11 @@
     },
     "privacy_requests": {
       "type": "array",
-      "items": { "$ref": "urn:open-mmp:schema:privacy-request:v0.3" }
+      "items": { "$ref": "urn:openmasu:schema:privacy-request:v0.4" }
     },
     "correction_inputs": {
       "type": "array",
-      "items": { "$ref": "urn:open-mmp:schema:correction:v0.3" }
+      "items": { "$ref": "urn:openmasu:schema:correction:v0.4" }
     },
     "pre_ingestion_rejections": {
       "type": "array",
@@ -272,7 +272,7 @@
         "occurred_at_source", "received_at", "payload", "processing_sequence"
       ],
       "properties": {
-        "contract_version": { "const": "0.3.0" },
+        "contract_version": { "const": "0.4.0" },
         "record_id": { "$ref": "common.schema.json#/$defs/id" },
         "delivery_id": { "$ref": "common.schema.json#/$defs/id" },
         "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
@@ -283,7 +283,7 @@
         "wrapper_version": { "type": "string", "minLength": 1, "maxLength": 128 },
         "event_id": { "$ref": "common.schema.json#/$defs/id" },
         "event_name": { "enum": ["click", "install", "session_start", "ad_impression", "ad_view", "ad_revenue", "purchase", "refund", "consent_changed", "custom_event", "skan_postback", "adattributionkit_postback"] },
-        "schema_version": { "const": "0.3.0" },
+        "schema_version": { "const": "0.4.0" },
         "occurred_at": { "$ref": "#/$defs/ingressDateTimeSyntax" },
         "occurred_at_source": { "enum": ["device", "server", "import"] },
         "received_at": { "$ref": "common.schema.json#/$defs/dateTime" },

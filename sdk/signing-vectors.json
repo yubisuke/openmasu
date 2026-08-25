@@ -1,5 +1,5 @@
 {
-  "version": "open-mmp-sdk-v1",
+  "version": "openmasu-sdk-v1",
   "vectors": [
     {
       "name": "enroll",
@@ -12,8 +12,8 @@
       "body": "{\"installation_id\":\"installation:synthetic\"}",
       "secret": "synthetic-sdk-secret-32-bytes-long",
       "body_sha256": "604172edf20262033e0dd23a44e905fa297ce90b2d21cad1580e1645f0ee4cf1",
-      "canonical": "open-mmp-sdk-v1\nPOST\n/v1/installations\nsdk-key:synthetic\n-\n1787097600123\nNonce_abcdefghijklmnopqrstu\n604172edf20262033e0dd23a44e905fa297ce90b2d21cad1580e1645f0ee4cf1",
-      "signature": "37bb1c242186f41c904c7b5c146cdbf8cf8d54ad481c79818f22f2f40a91fcde"
+      "canonical": "openmasu-sdk-v1\nPOST\n/v1/installations\nsdk-key:synthetic\n-\n1787097600123\nNonce_abcdefghijklmnopqrstu\n604172edf20262033e0dd23a44e905fa297ce90b2d21cad1580e1645f0ee4cf1",
+      "signature": "6e4443249d28b5256ef4db161ca4d16d4613de76873d72bb07b450128cd650bb"
     },
     {
       "name": "batch",
@@ -26,8 +26,8 @@
       "body": "{\"events\":[{\"event_name\":\"session_start\"}]}",
       "secret": "synthetic-installation-secret-32-bytes",
       "body_sha256": "361c778a9502f47833b95779d65afc7a51e4edd2eba696a0d3f751d03ec91c27",
-      "canonical": "open-mmp-sdk-v1\nPOST\n/v1/events/batch\nsdk-key:synthetic\ninstallation-key:synthetic\n1787097600456\nNonce_zyxwvutsrqponmlkjihgfe\n361c778a9502f47833b95779d65afc7a51e4edd2eba696a0d3f751d03ec91c27",
-      "signature": "a3f72df66cc60e95d8c73d0621a4266ed75a4474a90737b32600022dbb1c10f1"
+      "canonical": "openmasu-sdk-v1\nPOST\n/v1/events/batch\nsdk-key:synthetic\ninstallation-key:synthetic\n1787097600456\nNonce_zyxwvutsrqponmlkjihgfe\n361c778a9502f47833b95779d65afc7a51e4edd2eba696a0d3f751d03ec91c27",
+      "signature": "c494f2cdf7a9b063def2aaf43d27bfca88cfe475ec7e534843a7e64ff87da18f"
     }
   ]
 }

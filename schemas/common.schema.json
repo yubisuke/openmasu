@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:common:v0.3",
-  "title": "Open MMP Common Types v0.3",
+  "$id": "urn:openmasu:schema:common:v0.4",
+  "title": "OpenMasu Common Types v0.4",
   "$defs": {
     "id": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
     "clickId": {

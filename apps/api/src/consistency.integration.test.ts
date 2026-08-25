@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import type { Pool } from "pg";
-import { createAppPool, createReaderPool, createSeedPool } from "@open-mmp/runtime";
+import { createAppPool, createReaderPool, createSeedPool } from "@openmasu/runtime";
 import { buildDashboardView } from "./dashboard/view.js";
 import { renderDashboard } from "./dashboard/render.js";
 import { parseMetricQuery } from "./report-query.js";
@@ -23,7 +23,7 @@ const identity = { keyId: "key:synthetic-consistency", tenantId: "tenant-a", app
 
 function fixture(): Any {
   const input = JSON.parse(readFileSync(
-    join(process.cwd(), "fixtures", "v0.3", "42-daily-metric-date", "input.json"),
+    join(process.cwd(), "fixtures", "v0.4", "42-daily-metric-date", "input.json"),
     "utf8",
   ));
   const click = input.records.find((record: Any) => record.event_name === "click");

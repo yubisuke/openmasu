@@ -7,7 +7,7 @@ import { EncryptedFilePayloadStore } from "./payload-store.js";
 
 describe("encrypted payload store references", () => {
   it("rejects path traversal before reading or purging", async () => {
-    const root = mkdtempSync(join(tmpdir(), "openmmp-payload-"));
+    const root = mkdtempSync(join(tmpdir(), "openmasu-payload-"));
     try {
       const store = new EncryptedFilePayloadStore(root, "synthetic-master-key-that-is-long-enough");
       await assert.rejects(store.read("encrypted:../../outside"), /invalid payload reference/);

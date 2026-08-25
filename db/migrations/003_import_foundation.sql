@@ -102,7 +102,7 @@ BEGIN
     EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', item.table_schema, item.table_name);
     EXECUTE format('ALTER TABLE %I.%I FORCE ROW LEVEL SECURITY', item.table_schema, item.table_name);
     EXECUTE format(
-      'CREATE POLICY %I_tenant ON %I.%I USING (tenant_id = current_setting(''open_mmp.tenant_id'', true)) WITH CHECK (tenant_id = current_setting(''open_mmp.tenant_id'', true))',
+      'CREATE POLICY %I_tenant ON %I.%I USING (tenant_id = current_setting(''openmasu.tenant_id'', true)) WITH CHECK (tenant_id = current_setting(''openmasu.tenant_id'', true))',
       item.table_name,
       item.table_schema,
       item.table_name
@@ -121,9 +121,9 @@ CREATE TRIGGER ingest_inbox_states_append_only
 REVOKE ALL ON control.import_files, control.import_attempts, control.import_row_rejections,
   ledger.ingest_inbox, ledger.ingest_inbox_states FROM PUBLIC;
 GRANT SELECT, INSERT ON control.import_files, control.import_attempts, control.import_row_rejections,
-  ledger.ingest_inbox, ledger.ingest_inbox_states TO openmmp_app;
+  ledger.ingest_inbox, ledger.ingest_inbox_states TO openmasu_app;
 GRANT SELECT ON control.import_files, control.import_attempts, control.import_row_rejections,
-  ledger.ingest_inbox, ledger.ingest_inbox_states TO openmmp_reader;
-GRANT USAGE, SELECT ON SEQUENCE ledger.ingest_inbox_states_inbox_state_seq_seq TO openmmp_app;
-GRANT SELECT ON SEQUENCE ledger.ingest_inbox_states_inbox_state_seq_seq TO openmmp_reader;
-GRANT TRUNCATE ON ledger.ingest_inbox, ledger.ingest_inbox_states TO openmmp_seed;
+  ledger.ingest_inbox, ledger.ingest_inbox_states TO openmasu_reader;
+GRANT USAGE, SELECT ON SEQUENCE ledger.ingest_inbox_states_inbox_state_seq_seq TO openmasu_app;
+GRANT SELECT ON SEQUENCE ledger.ingest_inbox_states_inbox_state_seq_seq TO openmasu_reader;
+GRANT TRUNCATE ON ledger.ingest_inbox, ledger.ingest_inbox_states TO openmasu_seed;

@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { withTenant } from "@open-mmp/runtime";
+import { withTenant } from "@openmasu/runtime";
 import type { RouteHandler } from "./routes.js";
 
 type RouteLabel = RouteHandler | "unmatched";
@@ -44,26 +44,26 @@ export class OperationalMetrics {
 
   renderProcessMetrics(): string[] {
     const lines = [
-      "# HELP openmmp_http_requests_total Bounded API requests by route, method, and status class.",
-      "# TYPE openmmp_http_requests_total counter",
+      "# HELP openmasu_http_requests_total Bounded API requests by route, method, and status class.",
+      "# TYPE openmasu_http_requests_total counter",
     ];
     for (const [key, count] of [...this.requests].sort(([left], [right]) => left.localeCompare(right))) {
       const [route, method, status] = key.split("\u0000");
-      lines.push(`openmmp_http_requests_total${labels({ route, method, status_class: status })} ${count}`);
+      lines.push(`openmasu_http_requests_total${labels({ route, method, status_class: status })} ${count}`);
     }
     lines.push(
-      "# HELP openmmp_http_request_duration_seconds API request processing duration.",
-      "# TYPE openmmp_http_request_duration_seconds histogram",
+      "# HELP openmasu_http_request_duration_seconds API request processing duration.",
+      "# TYPE openmasu_http_request_duration_seconds histogram",
     );
     for (const [key, counts] of [...this.durationCounts].sort(([left], [right]) => left.localeCompare(right))) {
       const [route, method] = key.split("\u0000");
       durationBuckets.forEach((bucket, index) => {
-        lines.push(`openmmp_http_request_duration_seconds_bucket${labels({ route, method, le: String(bucket) })} ${counts[index]}`);
+        lines.push(`openmasu_http_request_duration_seconds_bucket${labels({ route, method, le: String(bucket) })} ${counts[index]}`);
       });
       const count = this.requestsForRouteMethod(route as RouteLabel, method as MethodLabel);
-      lines.push(`openmmp_http_request_duration_seconds_bucket${labels({ route, method, le: "+Inf" })} ${count}`);
-      lines.push(`openmmp_http_request_duration_seconds_sum${labels({ route, method })} ${this.durationSums.get(key) ?? 0}`);
-      lines.push(`openmmp_http_request_duration_seconds_count${labels({ route, method })} ${count}`);
+      lines.push(`openmasu_http_request_duration_seconds_bucket${labels({ route, method, le: "+Inf" })} ${count}`);
+      lines.push(`openmasu_http_request_duration_seconds_sum${labels({ route, method })} ${this.durationSums.get(key) ?? 0}`);
+      lines.push(`openmasu_http_request_duration_seconds_count${labels({ route, method })} ${count}`);
     }
     return lines;
   }
@@ -109,16 +109,16 @@ export async function renderOperationalMetrics(
   });
   const lines = metrics.renderProcessMetrics();
   lines.push(
-    "# HELP openmmp_ingest_backlog Pending durable ingest work by bounded queue.",
-    "# TYPE openmmp_ingest_backlog gauge",
-    `openmmp_ingest_backlog${labels({ queue: "max_inbox" })} ${backlog.inbox.count}`,
-    `openmmp_ingest_backlog${labels({ queue: "sdk_batches" })} ${backlog.batches.count}`,
-    `openmmp_ingest_backlog${labels({ queue: "adservices" })} ${backlog.adservices.count}`,
-    "# HELP openmmp_ingest_oldest_pending_seconds Age of the oldest pending item in a bounded queue.",
-    "# TYPE openmmp_ingest_oldest_pending_seconds gauge",
-    `openmmp_ingest_oldest_pending_seconds${labels({ queue: "max_inbox" })} ${backlog.inbox.oldest}`,
-    `openmmp_ingest_oldest_pending_seconds${labels({ queue: "sdk_batches" })} ${backlog.batches.oldest}`,
-    `openmmp_ingest_oldest_pending_seconds${labels({ queue: "adservices" })} ${backlog.adservices.oldest}`,
+    "# HELP openmasu_ingest_backlog Pending durable ingest work by bounded queue.",
+    "# TYPE openmasu_ingest_backlog gauge",
+    `openmasu_ingest_backlog${labels({ queue: "max_inbox" })} ${backlog.inbox.count}`,
+    `openmasu_ingest_backlog${labels({ queue: "sdk_batches" })} ${backlog.batches.count}`,
+    `openmasu_ingest_backlog${labels({ queue: "adservices" })} ${backlog.adservices.count}`,
+    "# HELP openmasu_ingest_oldest_pending_seconds Age of the oldest pending item in a bounded queue.",
+    "# TYPE openmasu_ingest_oldest_pending_seconds gauge",
+    `openmasu_ingest_oldest_pending_seconds${labels({ queue: "max_inbox" })} ${backlog.inbox.oldest}`,
+    `openmasu_ingest_oldest_pending_seconds${labels({ queue: "sdk_batches" })} ${backlog.batches.oldest}`,
+    `openmasu_ingest_oldest_pending_seconds${labels({ queue: "adservices" })} ${backlog.adservices.oldest}`,
   );
   return `${lines.join("\n")}\n`;
 }

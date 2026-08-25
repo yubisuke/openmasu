@@ -1,6 +1,6 @@
-import type { OpenMMPMetricRunV03 } from "../../../packages/contracts/src/generated/contract-types.js";
+import type { OpenMasuMetricRunV04 } from "../../../packages/contracts/src/generated/contract-types.js";
 
-type MetricGrouping = NonNullable<OpenMMPMetricRunV03["grouping"]>["dimensions"];
+type MetricGrouping = NonNullable<OpenMasuMetricRunV04["grouping"]>["dimensions"];
 export type GroupingDimension = keyof MetricGrouping;
 
 export const groupingDimensionAllowlist: Readonly<Record<GroupingDimension, true>> = {

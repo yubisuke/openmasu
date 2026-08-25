@@ -1,0 +1,17 @@
+[
+  {
+    "reconciliation_id": "reconciliation:22",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "input_snapshot_id": "internal-snapshot:22",
+    "external_snapshot_id": "external-snapshot:22",
+    "difference_reason_code": "join_key_missing",
+    "difference_reason_version": "0.4.0",
+    "matching_keys": [],
+    "candidates": [],
+    "exclusions": [],
+    "windows": [],
+    "joins": [],
+    "freshness": "current"
+  }
+]

@@ -2,10 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.INTERNET" />
   <application
-    android:dataExtractionRules="@xml/openmmp_data_extraction_rules"
-    android:fullBackupContent="@xml/openmmp_backup_rules">
+    android:dataExtractionRules="@xml/openmasu_data_extraction_rules"
+    android:fullBackupContent="@xml/openmasu_backup_rules">
     <meta-data
-      android:name="dev.openmmp.COLLECTION_ENABLED_DEFAULT"
+      android:name="dev.openmasu.COLLECTION_ENABLED_DEFAULT"
       android:value="true" />
   </application>
 </manifest>

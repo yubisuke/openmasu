@@ -22,11 +22,11 @@ JOIN control.admin_key_states AS state ON state.key_id = key.key_id
 ORDER BY key.key_id, state.admin_key_state_seq DESC;
 
 REVOKE ALL ON control.admin_key_roles_current FROM PUBLIC;
-REVOKE SELECT ON control.admin_keys_current FROM openmmp_reader;
-REVOKE SELECT ON control.admin_keys, control.admin_key_states FROM openmmp_reader;
-GRANT SELECT ON control.admin_key_roles_current TO openmmp_reader;
-GRANT SELECT (key_id, tenant_id, role) ON control.admin_keys TO openmmp_reader;
-GRANT SELECT (key_id, tenant_id, status, admin_key_state_seq) ON control.admin_key_states TO openmmp_reader;
+REVOKE SELECT ON control.admin_keys_current FROM openmasu_reader;
+REVOKE SELECT ON control.admin_keys, control.admin_key_states FROM openmasu_reader;
+GRANT SELECT ON control.admin_key_roles_current TO openmasu_reader;
+GRANT SELECT (key_id, tenant_id, role) ON control.admin_keys TO openmasu_reader;
+GRANT SELECT (key_id, tenant_id, status, admin_key_state_seq) ON control.admin_key_states TO openmasu_reader;
 
 CREATE TABLE control.rule_bundle_revisions (
   rule_bundle_revision_id control.identifier PRIMARY KEY,
@@ -82,8 +82,8 @@ CREATE UNIQUE INDEX rule_bundle_revisions_single_root_idx
 ALTER TABLE control.rule_bundle_revisions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE control.rule_bundle_revisions FORCE ROW LEVEL SECURITY;
 CREATE POLICY rule_bundle_revisions_tenant ON control.rule_bundle_revisions
-  USING (tenant_id = current_setting('open_mmp.tenant_id', true))
-  WITH CHECK (tenant_id = current_setting('open_mmp.tenant_id', true));
+  USING (tenant_id = current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id = current_setting('openmasu.tenant_id', true));
 
 CREATE TRIGGER rule_bundle_revisions_append_only
   BEFORE UPDATE OR DELETE ON control.rule_bundle_revisions
@@ -98,6 +98,6 @@ ALTER TABLE ledger.audit_logs ADD CONSTRAINT audit_logs_target_scope_check
   ));
 
 REVOKE ALL ON control.rule_bundle_revisions FROM PUBLIC;
-GRANT SELECT, INSERT ON control.rule_bundle_revisions TO openmmp_app;
-GRANT SELECT ON control.rule_bundle_revisions TO openmmp_reader;
-GRANT TRUNCATE ON control.rule_bundle_revisions TO openmmp_seed;
+GRANT SELECT, INSERT ON control.rule_bundle_revisions TO openmasu_app;
+GRANT SELECT ON control.rule_bundle_revisions TO openmasu_reader;
+GRANT TRUNCATE ON control.rule_bundle_revisions TO openmasu_seed;

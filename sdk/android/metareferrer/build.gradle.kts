@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-  namespace = "dev.openmmp.sdk.metareferrer"
+  namespace = "dev.openmasu.sdk.metareferrer"
   compileSdk = 36
   defaultConfig { minSdk = 24 }
   compileOptions {

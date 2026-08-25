@@ -14,6 +14,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22.18.0
@@ -29,7 +31,7 @@ jobs:
           set -euo pipefail
           offenders=$(git ls-files -z | tr '\0' '\n' | grep -Ei '\.(csv|tsv|xlsx|xls|parquet)$' || true)
           if [ -n "$offenders" ]; then echo "Tabular files are not allowed:"; echo "$offenders"; exit 1; fi
-          offenders=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)(open-mmp-lab|real-data|input)(/|$)' || true)
+          offenders=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)(openmasu-lab|real-data|input)(/|$)' || true)
           if [ -n "$offenders" ]; then echo "Forbidden directory segment:"; echo "$offenders"; exit 1; fi
           offenders=$(git ls-files -z -- fixtures | tr '\0' '\n' | grep -Ev '\.json$|(^|/)README\.md$' || true)
           if [ -n "$offenders" ]; then echo "fixtures/ may only contain .json and README.md:"; echo "$offenders"; exit 1; fi
@@ -37,4 +39,5 @@ jobs:
       - run: npm install --global npm@11.6.2
       - run: npm ci
       - run: python -m pip install --require-hashes --requirement requirements-contract.txt
+      - run: npm run verify:contract-rename
       - run: npm run validate

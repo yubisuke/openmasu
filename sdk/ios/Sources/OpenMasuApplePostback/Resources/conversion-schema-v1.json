@@ -1,0 +1,23 @@
+{
+  "schema_version": "openmasu-default-v1",
+  "rules": [
+    {
+      "minimum_event_count": 0,
+      "fine_value": 0,
+      "coarse_value": "low",
+      "lock_postback": false
+    },
+    {
+      "minimum_event_count": 3,
+      "fine_value": 21,
+      "coarse_value": "medium",
+      "lock_postback": false
+    },
+    {
+      "minimum_event_count": 10,
+      "fine_value": 42,
+      "coarse_value": "high",
+      "lock_postback": true
+    }
+  ]
+}

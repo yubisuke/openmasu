@@ -18,7 +18,7 @@ Contract v0.3 is the active contract line. The original M1 contract handoffs rem
 
 ### Who M1 is for
 
-Open MMP is self-hosted open-source software. The users are the ones already named in `docs/product-scope.md`:
+OpenMasu is self-hosted open-source software. The users are the ones already named in `docs/product-scope.md`:
 
 - developers operating their own mobile apps,
 - growth operators validating campaign-level installs,
@@ -111,7 +111,7 @@ There is **no IP allowlist and no request signature header** documented. The onl
 - (b) `{EVENT_TOKEN}` verification (covers the event ID only).
 - (c) `{EVENT_TOKEN_ALL}` verification (covers every macro sent) + secret path segment.
 
-**Decided (R-22): (c).** `{EVENT_TOKEN}` authenticates the event ID and nothing else, so revenue and country can be altered by anyone who observes one postback. `{EVENT_TOKEN_ALL}` is a MAC over the whole macro set, which is what a revenue feed needs. Keep (b) as a configurable fallback (`OPENMMP_MAX_TOKEN_MODE=all|event`) because token availability is an account-team setting the operator may not control, and record the mode on every accepted record so an audit can tell which guarantee applied. Compare in constant time.
+**Decided (R-22): (c).** `{EVENT_TOKEN}` authenticates the event ID and nothing else, so revenue and country can be altered by anyone who observes one postback. `{EVENT_TOKEN_ALL}` is a MAC over the whole macro set, which is what a revenue feed needs. Keep (b) as a configurable fallback (`OPENMASU_MAX_TOKEN_MODE=all|event`) because token availability is an account-team setting the operator may not control, and record the mode on every accepted record so an audit can tell which guarantee applied. Compare in constant time.
 
 **No-retry consequence — this drives the receiver architecture.** The receiver must:
 
@@ -202,7 +202,7 @@ The deployment is one organization, but the ledger is app-scoped and the contrac
 **Options**
 
 - (a) Application-level scoping only: every query carries `WHERE tenant_id = $1 AND app_id = $2`.
-- (b) PostgreSQL Row-Level Security with a per-transaction GUC: `SET LOCAL open_mmp.tenant_id = $1`, policies `USING (tenant_id = current_setting('open_mmp.tenant_id', true))`.
+- (b) PostgreSQL Row-Level Security with a per-transaction GUC: `SET LOCAL openmasu.tenant_id = $1`, policies `USING (tenant_id = current_setting('openmasu.tenant_id', true))`.
 - (c) A database role or schema per tenant.
 
 **Decided (R-22): (b), from the first migration.** The cost on day one is a transaction wrapper, one `ALTER TABLE ... ENABLE/FORCE ROW LEVEL SECURITY` and one policy per table, and one test — roughly a day. The cost of retrofitting is auditing every query written in the meantime, and the failure it prevents is silent cross-scope leakage in a product whose entire value proposition is that you can trust its numbers. (a)'s failure mode is a missing `WHERE` clause in one of a hundred queries and no signal. (c) multiplies migration and connection management by tenant count for a deployment that has one tenant.
@@ -258,13 +258,13 @@ Relationship to the contract: `target_ref` uses `common#/$defs/id`; `occurred_at
 
 | Surface | Unit | Proposed default | Env variable |
 | --- | --- | --- | --- |
-| MAX receiver | token bucket per app key | 200 req/s, burst 500 | `OPENMMP_MAX_RATE_RPS`, `_BURST` |
-| MAX receiver | query string size / param count | 8 KiB / 40 params | `OPENMMP_MAX_QUERY_BYTES`, `_PARAMS` |
-| Admin API | token bucket per admin key | 10 req/s, burst 30 | `OPENMMP_ADMIN_RATE_RPS` |
-| Import | rows per file | 20,000,000 | `OPENMMP_IMPORT_MAX_ROWS` |
-| Import | bytes per file | 4 GiB | `OPENMMP_IMPORT_MAX_BYTES` |
-| Import | bytes per row | 64 KiB | `OPENMMP_IMPORT_MAX_ROW_BYTES` |
-| Import | commit batch | 5,000 rows | `OPENMMP_IMPORT_BATCH_ROWS` |
+| MAX receiver | token bucket per app key | 200 req/s, burst 500 | `OPENMASU_MAX_RATE_RPS`, `_BURST` |
+| MAX receiver | query string size / param count | 8 KiB / 40 params | `OPENMASU_MAX_QUERY_BYTES`, `_PARAMS` |
+| Admin API | token bucket per admin key | 10 req/s, burst 30 | `OPENMASU_ADMIN_RATE_RPS` |
+| Import | rows per file | 20,000,000 | `OPENMASU_IMPORT_MAX_ROWS` |
+| Import | bytes per file | 4 GiB | `OPENMASU_IMPORT_MAX_BYTES` |
+| Import | bytes per row | 64 KiB | `OPENMASU_IMPORT_MAX_ROW_BYTES` |
+| Import | commit batch | 5,000 rows | `OPENMASU_IMPORT_BATCH_ROWS` |
 
 **Decided (R-22):** in-process token buckets, no Redis. A single-instance Compose deployment does not need distributed rate limiting, and adding Redis to Compose for this is a real cost against the self-host goal. Document that horizontally scaled deployments must move the limiter to the proxy.
 
@@ -282,7 +282,7 @@ Limits are refused **before** any row is inserted, so a rejected import leaves t
 
 Requirements: `.env.example` lists **every** variable the code reads, with a generator command for each secret; `npm run bootstrap` writes a `.env` with fresh random secrets if none exists; a mechanical test enumerates `process.env` reads in the source and fails if any is missing from `.env.example`.
 
-Initial variable set: `OPENMMP_DATABASE_URL` (app role), `OPENMMP_MIGRATION_DATABASE_URL` (owner role), `OPENMMP_ADMIN_KEY` / `OPENMMP_ADMIN_KEY_PREVIOUS`, `OPENMMP_MAX_EVENT_KEY`, `OPENMMP_MAX_TOKEN_MODE`, `OPENMMP_MAX_PATH_SECRET`, `OPENMMP_PAYLOAD_KEY`, `OPENMMP_PAYLOAD_KEY_ID`, `OPENMMP_PAYLOAD_STORE_URI`, `OPENMMP_IMPORT_INBOX_URI`, `OPENMMP_MAPPINGS_DIR`, `META_APP_ID` / `META_APP_SECRET` / `META_ACCESS_TOKEN` / `META_AD_ACCOUNT_ID`, `GOOGLE_ADS_DEVELOPER_TOKEN` / `GOOGLE_ADS_CLIENT_ID` / `GOOGLE_ADS_CLIENT_SECRET` / `GOOGLE_ADS_REFRESH_TOKEN` / `GOOGLE_ADS_CUSTOMER_ID`, plus the limit variables above.
+Initial variable set: `OPENMASU_DATABASE_URL` (app role), `OPENMASU_MIGRATION_DATABASE_URL` (owner role), `OPENMASU_ADMIN_KEY` / `OPENMASU_ADMIN_KEY_PREVIOUS`, `OPENMASU_MAX_EVENT_KEY`, `OPENMASU_MAX_TOKEN_MODE`, `OPENMASU_MAX_PATH_SECRET`, `OPENMASU_PAYLOAD_KEY`, `OPENMASU_PAYLOAD_KEY_ID`, `OPENMASU_PAYLOAD_STORE_URI`, `OPENMASU_IMPORT_INBOX_URI`, `OPENMASU_MAPPINGS_DIR`, `META_APP_ID` / `META_APP_SECRET` / `META_ACCESS_TOKEN` / `META_AD_ACCOUNT_ID`, `GOOGLE_ADS_DEVELOPER_TOKEN` / `GOOGLE_ADS_CLIENT_ID` / `GOOGLE_ADS_CLIENT_SECRET` / `GOOGLE_ADS_REFRESH_TOKEN` / `GOOGLE_ADS_CUSTOMER_ID`, plus the limit variables above.
 
 ### S-13. Threat-model update rule
 
@@ -366,13 +366,13 @@ Not final DDL — the shape and the invariants that WO-4 must implement. All ide
 ### Roles and append-only enforcement (D-16)
 
 ```sql
-CREATE ROLE openmmp_owner  NOLOGIN;              -- owns the schema; used only by migrations
-CREATE ROLE openmmp_app    LOGIN NOINHERIT;      -- api + worker
-CREATE ROLE openmmp_reader LOGIN NOINHERIT;      -- read-only reporting
+CREATE ROLE openmasu_owner  NOLOGIN;              -- owns the schema; used only by migrations
+CREATE ROLE openmasu_app    LOGIN NOINHERIT;      -- api + worker
+CREATE ROLE openmasu_reader LOGIN NOINHERIT;      -- read-only reporting
 
-GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA ledger TO openmmp_app;
-REVOKE UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA ledger FROM openmmp_app;
-GRANT SELECT ON ALL TABLES IN SCHEMA ledger TO openmmp_reader;
+GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA ledger TO openmasu_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA ledger FROM openmasu_app;
+GRANT SELECT ON ALL TABLES IN SCHEMA ledger TO openmasu_reader;
 ```
 
 **Options for append-only**
@@ -603,11 +603,11 @@ Applied to every table in `ledger` and `control`:
 ALTER TABLE ledger.raw_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ledger.raw_records FORCE  ROW LEVEL SECURITY;
 CREATE POLICY raw_records_tenant ON ledger.raw_records
-  USING      (tenant_id = current_setting('open_mmp.tenant_id', true))
-  WITH CHECK (tenant_id = current_setting('open_mmp.tenant_id', true));
+  USING      (tenant_id = current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id = current_setting('openmasu.tenant_id', true));
 ```
 
-The repository layer exposes only `withTenant(tenantId, fn)`, which opens a transaction, issues `SET LOCAL open_mmp.tenant_id`, and runs `fn`. There is no code path to a pooled connection outside that wrapper.
+The repository layer exposes only `withTenant(tenantId, fn)`, which opens a transaction, issues `SET LOCAL openmasu.tenant_id`, and runs `fn`. There is no code path to a pooled connection outside that wrapper.
 
 ---
 
@@ -617,14 +617,14 @@ All three share one contract-facing shape: read source rows → map to contract 
 
 ### I-1. Existing-MMP raw export
 
-Source: CSV or newline-JSON from a local directory or an S3-compatible bucket (`OPENMMP_IMPORT_INBOX_URI`). Adjust writes hourly CSV to S3; AppsFlyer Data Locker writes to cloud storage on Enterprise plans, and lower plans export CSV by hand — the file-based shape serves all of them.
+Source: CSV or newline-JSON from a local directory or an S3-compatible bucket (`OPENMASU_IMPORT_INBOX_URI`). Adjust writes hourly CSV to S3; AppsFlyer Data Locker writes to cloud storage on Enterprise plans, and lower plans export CSV by hand — the file-based shape serves all of them.
 
 The **public** Shadow Import Profile is the neutral column contract already promised in `spec` §Shadow reconciliation. The **deployment-private** provider mapping translates a provider's actual columns into it.
 
 **D-20. Where the provider mapping lives**
 
 - (a) A `provider_mappings` table, edited through the admin API.
-- (b) JSON/YAML files under `OPENMMP_MAPPINGS_DIR` (default `./config/mappings`, gitignored), validated against a published JSON Schema, with worked examples committed under `examples/mappings/`.
+- (b) JSON/YAML files under `OPENMASU_MAPPINGS_DIR` (default `./config/mappings`, gitignored), validated against a published JSON Schema, with worked examples committed under `examples/mappings/`.
 - (c) Both.
 
 **Decided (R-22): (b).** A mapping is a configuration artifact an operator wants in their own private git repository, diffable and reviewable; a database row without an editor is not usable until M3 builds one. Publishing a JSON Schema for the mapping file means a typo fails at load with a pointer instead of producing silently wrong attribution. (a) additionally needs admin CRUD, audit entries per field, and a migration path — real work with no M1 payoff.
@@ -647,7 +647,7 @@ Selection criteria: what a small self-hosting team actually spends on, and how o
 **Decided (R-22): (b).** Meta and Google are the two networks nearly every small app team buys from, and both expose read access to one's own account without partner status:
 
 - **Meta Marketing API Insights** — requires the `ads_read` permission and an app; insights are available at `account`, `campaign`, `adset`, and `ad` level; `time_increment` accepts an integer of 1–90 days, so `time_increment=1` gives daily rows; `country` is a supported breakdown; large pulls use the asynchronous flow (POST returns a `report_run_id` to poll). Verified 2026-08-19 against the current `v26.0` documentation.
-- **Google Ads API** — requires a developer token. A **test-account** token cannot read production accounts; **Basic Access** covers production at 15,000 operations/day; daily campaign cost comes from a GAQL query with `metrics.cost_micros` and `segments.date`, and country segmentation uses `geographic_view.country_criterion_id`. The importer resolves that criterion through `geo_target_constant.country_code`, which is ISO-3166-1 alpha-2. Verified 2026-08-19 against `v25`. Setting App campaign `ad_group_id` to null is an Open MMP normalization decision, not a verified Google guarantee.
+- **Google Ads API** — requires a developer token. A **test-account** token cannot read production accounts; **Basic Access** covers production at 15,000 operations/day; daily campaign cost comes from a GAQL query with `metrics.cost_micros` and `segments.date`, and country segmentation uses `geographic_view.country_criterion_id`. The importer resolves that criterion through `geo_target_constant.country_code`, which is ISO-3166-1 alpha-2. Verified 2026-08-19 against `v25`. Setting App campaign `ad_group_id` to null is an OpenMasu normalization decision, not a verified Google guarantee.
 
 Two integration facts that must be in the WO, not discovered during implementation:
 
@@ -782,7 +782,7 @@ The worker records rows/day, table size, and aggregation duration so the trigger
 
 ### Recorded M1b performance floor
 
-On 2026-08-19, `OPENMMP_BENCHMARK_ROWS=10000000 npm run benchmark:metric-floor` inserted 10,000,000 synthetic one-day revenue rows in **4,703.702 ms** and ran the per-event half-even aggregate in **5,028.475 ms**. The unlogged benchmark relation occupied **521,953,280 bytes** and produced the independently checked integer result `10000010000000`. The script rolls the table back after recording the measurement.
+On 2026-08-19, `OPENMASU_BENCHMARK_ROWS=10000000 npm run benchmark:metric-floor` inserted 10,000,000 synthetic one-day revenue rows in **4,703.702 ms** and ran the per-event half-even aggregate in **5,028.475 ms**. The unlogged benchmark relation occupied **521,953,280 bytes** and produced the independently checked integer result `10000010000000`. The script rolls the table back after recording the measurement.
 
 Environment: Node.js 22.18.0; PostgreSQL 17.11 (`x86_64-pc-linux-musl`); Windows host with 24 logical CPUs and 33,413,771,264 bytes RAM; PostgreSQL cgroup CPU and memory limits were `max`; the benchmark session allowed at most three parallel workers plus the leader and used `work_mem=64MB`. Observed container memory after aggregation was 854,376,448 bytes. This proves the arithmetic floor is far below the ten-minute trigger on the measured machine, but it is **not** an exact 4-vCPU/8-GB cgroup run. That exact capacity run remains an operator/environment verification item; no performance claim is made for real data or the full production join path. CI runs the same instrument with 100,000 synthetic rows to catch functional regressions without turning pull requests into capacity tests.
 
@@ -815,7 +815,7 @@ Optional profiles: `proxy` (Caddy, TLS for the MAX receiver), `s3` (MinIO, to ex
 
 **Decided (R-22): (c).** The DDL is part of what an auditor of this project reads; a schema generated from TypeScript models hides the RLS policies, the role grants, and the append-only triggers that are the actual security properties. The runner is roughly 120 lines, adds no dependency, and behaves identically in CI and in Compose. (a) is a reasonable second choice and cheaper to write; (b) couples the schema to an ORM this project has not chosen.
 
-Migrations run as `openmmp_owner` via `OPENMMP_MIGRATION_DATABASE_URL`; the application never has DDL rights. `db/schema.sql` is a committed snapshot, regenerated by `npm run db:schema:dump` and drift-checked in CI.
+Migrations run as `openmasu_owner` via `OPENMASU_MIGRATION_DATABASE_URL`; the application never has DDL rights. `db/schema.sql` is a committed snapshot, regenerated by `npm run db:schema:dump` and drift-checked in CI.
 
 ### Seed
 
@@ -874,13 +874,13 @@ Re-running with the byte-identical file additionally records a skipped import ru
 (iv) A postback carrying `idfa=<value>` is rejected, and a full scan of the database and the payload store finds no occurrence of `<value>`.
 (v) Boot fails with a clear error when the configured URL template contains `{IDFA}`, `{IDFV}`, or `{IP}`.
 
-**A7 — tenant isolation.** As `openmmp_app` without setting the GUC: `SELECT count(*) FROM ledger.raw_records` returns `0`. With tenant A set, selecting a known tenant-B `record_id` returns 0 rows. Inserting a row whose `tenant_id` differs from the GUC raises a policy violation.
+**A7 — tenant isolation.** As `openmasu_app` without setting the GUC: `SELECT count(*) FROM ledger.raw_records` returns `0`. With tenant A set, selecting a known tenant-B `record_id` returns 0 rows. Inserting a row whose `tenant_id` differs from the GUC raises a policy violation.
 
-**A8 — append-only.** As `openmmp_app`, `UPDATE` and `DELETE` on each ledger table raise insufficient privilege. The redaction path inserts a new `raw_payload_states` row plus a tombstone and leaves the `raw_records` row byte-identical (compared by row digest before and after); the payload object no longer decrypts.
+**A8 — append-only.** As `openmasu_app`, `UPDATE` and `DELETE` on each ledger table raise insufficient privilege. The redaction path inserts a new `raw_payload_states` row plus a tombstone and leaves the `raw_records` row byte-identical (compared by row digest before and after); the payload object no longer decrypts.
 
 **A9 — deletion, admin path.** `POST /v1/admin/privacy-requests` with the admin key produces tombstones, corrections, a superseding metric run, and an audit row naming the actor. The same request with `requested_via=on_device_sdk` returns 501 with `on_device_path_not_implemented`.
 
-**A10 — limits.** A file above `OPENMMP_IMPORT_MAX_ROWS` is refused before any INSERT (`SELECT count(*)` unchanged). A postback above the parameter limit returns 400. Exceeding the token bucket returns 429.
+**A10 — limits.** A file above `OPENMASU_IMPORT_MAX_ROWS` is refused before any INSERT (`SELECT count(*)` unchanged). A postback above the parameter limit returns 400. Exceeding the token bucket returns 429.
 
 **A11 — SBOM.** `npm run sbom` produces `sbom/<workspace>.cdx.json` for every workspace; CI fails when one is missing.
 
@@ -943,7 +943,7 @@ Resolved by R-22. The table records the selected recommendation for each decisio
 | D-17 | `delivery_id` as a key | Server-assigned `delivery_attempt_id` PK; `delivery_id` non-unique |
 | D-18 | Timestamp storage | Canonical text authoritative + generated `timestamptz` |
 | D-19 | Cost versioning and dimension key | Append-only with `as_of` + `cost_key_digest` |
-| D-20 | Provider mapping location | Schema-validated files under `OPENMMP_MAPPINGS_DIR` |
+| D-20 | Provider mapping location | Schema-validated files under `OPENMASU_MAPPINGS_DIR` |
 | D-21 | Cost adapters in M1 | Meta + Google + `manual-csv`; port only for the rest |
 | D-22 | Unanchored / aggregate MAX revenue | Store with NULL anchor, exclude from cohort metrics, report separately |
 | D-23 | Metric engine split | Decisions in the evaluator with a candidate provider; cohorts in SQL; parity gate |
@@ -993,7 +993,7 @@ All URLs fetched and checked on **2026-08-19** unless noted.
 - Whether `{EVENT_TOKEN_ALL}` is available on every MAX account or requires a specific account-team setting.
 - Whether `{USER_ID}` is populated by default for a publisher that has not set it — assumed absent.
 - Whether a live Google Ads v25 `geographic_view` query accepts every selected Stage 3 field combination; credentials and real account data were intentionally not used.
-- Whether App campaign ad-group cost is always absent. Open MMP normalizes this dimension to null; the official documentation did not establish that as a platform guarantee.
+- Whether App campaign ad-group cost is always absent. OpenMasu normalizes this dimension to null; the official documentation did not establish that as a platform guarantee.
 - Meta Insights rate limits and the row-count threshold above which the asynchronous flow becomes mandatory.
 - Whether any provider's Shadow Import Profile export contains activity/session events, which decides whether retention is computable in M1 (see H-11).
 - Actual row volumes for any target deployment. Every scale statement here is a threshold, not a measurement.

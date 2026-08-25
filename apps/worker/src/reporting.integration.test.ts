@@ -7,18 +7,18 @@ import { ensureAdminKeys } from "../../api/src/admin-auth.js";
 import { metricColumns } from "../../api/src/reporting.js";
 import { createRequestHandler } from "../../api/src/router.js";
 import type { MaxReceiverConfig } from "../../api/src/max-receiver.js";
-import type { PayloadStore } from "@open-mmp/runtime";
-import { createAppPool, createReaderPool, createSeedPool, withTenant } from "@open-mmp/runtime";
+import type { PayloadStore } from "@openmasu/runtime";
+import { createAppPool, createReaderPool, createSeedPool, withTenant } from "@openmasu/runtime";
 import type { Pool } from "pg";
 import { ingestFixture } from "./ingestion.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
-import { sha256 } from "@open-mmp/attribution-core";
+import { sha256 } from "@openmasu/attribution-core";
 
 type Any = Record<string, any>;
 const adminKey = "synthetic-report-admin-key-000000000000000000000001";
 
 function fixture(name: string): Any {
-  return JSON.parse(readFileSync(join(process.cwd(), "fixtures", "v0.3", name, "input.json"), "utf8"));
+  return JSON.parse(readFileSync(join(process.cwd(), "fixtures", "v0.4", name, "input.json"), "utf8"));
 }
 
 function csvRow(text: string): Record<string, string> {
@@ -188,7 +188,7 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
       },
     ];
     mutation.privacy_requests = [{
-      contract_version: "0.3.0",
+      contract_version: "0.4.0",
       tenant_id: "tenant-a",
       app_id: "app-a",
       privacy_request_id: "privacy:m3-supersession",

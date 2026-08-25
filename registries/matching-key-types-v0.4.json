@@ -1,0 +1,13 @@
+{
+  "contract_version": "0.4.0",
+  "types": [
+    { "type": "external_row_id", "scope": "tenant_app", "normalization": "identity", "cardinality": "one_to_one", "protected": true },
+    { "type": "provider_install_id", "scope": "tenant_app", "normalization": "identity", "cardinality": "one_to_one", "protected": true, "value_encoding": "sha256", "access_class": "protected" },
+    { "type": "provider_click_id", "scope": "tenant_app", "normalization": "identity", "cardinality": "one_to_one", "protected": true, "value_encoding": "sha256", "access_class": "protected" },
+    { "type": "tracking_link_id", "scope": "tenant_app", "normalization": "identity", "cardinality": "one_to_many", "protected": false },
+    { "type": "campaign_id", "scope": "tenant_app", "normalization": "identity", "cardinality": "one_to_many", "protected": false },
+    { "type": "transaction_id", "scope": "tenant_app", "normalization": "identity", "cardinality": "one_to_one", "protected": true },
+    { "type": "impression_id", "scope": "tenant_app", "normalization": "identity", "cardinality": "one_to_one", "protected": true },
+    { "type": "tenant_app_composite", "scope": "tenant_app", "normalization": "lowercase_ascii", "cardinality": "one_to_many", "protected": true }
+  ]
+}

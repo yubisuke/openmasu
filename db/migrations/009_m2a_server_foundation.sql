@@ -1,7 +1,7 @@
-CREATE SCHEMA ephemeral AUTHORIZATION openmmp_owner;
+CREATE SCHEMA ephemeral AUTHORIZATION openmasu_owner;
 
 REVOKE ALL ON SCHEMA ephemeral FROM PUBLIC;
-GRANT USAGE ON SCHEMA ephemeral TO openmmp_app;
+GRANT USAGE ON SCHEMA ephemeral TO openmasu_app;
 
 CREATE TABLE control.tracking_links (
   tracking_link_id control.identifier PRIMARY KEY,
@@ -222,7 +222,7 @@ BEGIN
     EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', item.table_schema, item.table_name);
     EXECUTE format('ALTER TABLE %I.%I FORCE ROW LEVEL SECURITY', item.table_schema, item.table_name);
     EXECUTE format(
-      'CREATE POLICY %I_tenant ON %I.%I USING (tenant_id = current_setting(''open_mmp.tenant_id'', true)) WITH CHECK (tenant_id = current_setting(''open_mmp.tenant_id'', true))',
+      'CREATE POLICY %I_tenant ON %I.%I USING (tenant_id = current_setting(''openmasu.tenant_id'', true)) WITH CHECK (tenant_id = current_setting(''openmasu.tenant_id'', true))',
       item.table_name,
       item.table_schema,
       item.table_name
@@ -274,9 +274,9 @@ GRANT SELECT, INSERT ON
   control.installation_credentials, control.installation_credential_states,
   ledger.ingest_batches, ledger.ingest_batch_states, ledger.ingest_batch_records,
   ledger.custom_event_facts
-TO openmmp_app;
+TO openmasu_app;
 
-GRANT SELECT, INSERT, DELETE ON ephemeral.request_nonces TO openmmp_app;
+GRANT SELECT, INSERT, DELETE ON ephemeral.request_nonces TO openmasu_app;
 
 GRANT SELECT ON
   control.tracking_links, control.tracking_link_states,
@@ -284,7 +284,7 @@ GRANT SELECT ON
   control.installation_credentials, control.installation_credential_states,
   ledger.ingest_batches, ledger.ingest_batch_states, ledger.ingest_batch_records,
   ledger.custom_event_facts
-TO openmmp_reader;
+TO openmasu_reader;
 
 GRANT USAGE, SELECT ON SEQUENCE
   control.tracking_link_states_tracking_link_state_seq_seq,
@@ -292,7 +292,7 @@ GRANT USAGE, SELECT ON SEQUENCE
   control.installation_credential_state_seq,
   ledger.ingest_batches_inbox_seq_seq,
   ledger.ingest_batch_states_ingest_batch_state_seq_seq
-TO openmmp_app;
+TO openmasu_app;
 
 GRANT SELECT ON SEQUENCE
   control.tracking_link_states_tracking_link_state_seq_seq,
@@ -300,10 +300,10 @@ GRANT SELECT ON SEQUENCE
   control.installation_credential_state_seq,
   ledger.ingest_batches_inbox_seq_seq,
   ledger.ingest_batch_states_ingest_batch_state_seq_seq
-TO openmmp_reader;
+TO openmasu_reader;
 
 GRANT TRUNCATE ON
   ledger.ingest_batches, ledger.ingest_batch_states, ledger.ingest_batch_records,
   ledger.custom_event_facts,
   ephemeral.request_nonces
-TO openmmp_seed;
+TO openmasu_seed;

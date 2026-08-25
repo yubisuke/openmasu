@@ -41,6 +41,16 @@ An integer source stays a base-10 string and is paired with the declared scale. 
 
 See `examples/mappings/synthetic-integer-cost.json`.
 
+## Decimal money
+
+A decimal input must be a non-negative base-10 string without exponent notation. The mapper appends zeros up to the declared scale and never passes the value through binary floating point. If the source has more fractional digits than the declared scale, the row is rejected instead of rounded. Numeric JSON values are rejected in decimal mode so their original decimal representation cannot be lost.
+
+```json
+{ "source": "cost_decimal", "money": { "input": "decimal", "scale": 6, "currency_source": "currency" } }
+```
+
+For example, `1.23` at scale 6 becomes `amount_unscaled=1230000` and `amount_scale=6`. See `examples/mappings/synthetic-decimal-cost.json`.
+
 The operator entry points are `npm run import:cost -- --file=<csv> --mapping=<json>` and `npm run metrics:run -- --date=<YYYY-MM-DD> --definitions=<json>`. The definitions document supplies tenant/app scope, one fixed FX policy, and one or more metric-name/grouping requests; the CLI supplies the cohort date and next-day UTC watermark. Both commands use the same persistence and cohort-engine functions as the integration tests.
 
 ## Producer-wide event IDs

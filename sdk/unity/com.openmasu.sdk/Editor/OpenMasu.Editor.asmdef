@@ -1,0 +1,6 @@
+{
+  "name": "OpenMasu.Editor",
+  "references": ["OpenMasu.Runtime"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}

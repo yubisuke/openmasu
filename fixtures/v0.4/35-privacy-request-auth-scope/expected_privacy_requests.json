@@ -1,0 +1,37 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "privacy_request_id": "privacy-admin-35",
+    "deletion_subject_digest": "3535353535353535353535353535353535353535353535353535353535353535",
+    "deletion_scope": "installation",
+    "requested_via": "tenant_admin_api",
+    "requester_auth_ref": "admin_key:synthetic-key-35",
+    "requested_at": "2026-08-19T00:01:00.000Z",
+    "status": "completed",
+    "reason_code": "privacy_deletion",
+    "policy_version": "privacy-v0.2",
+    "affected_records": [
+      { "record_id": "session-admin-35", "lifecycle_status": "purged" }
+    ],
+    "completed_at": "2026-08-19T00:02:00.000Z"
+  },
+  {
+    "contract_version": "0.4.0",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "privacy_request_id": "privacy-device-35",
+    "deletion_subject_ref": "installation:device-35",
+    "deletion_scope": "installation",
+    "requested_via": "on_device_sdk",
+    "requester_auth_ref": "device_auth:synthetic-device-35",
+    "requested_at": "2026-08-19T00:03:00.000Z",
+    "status": "received",
+    "reason_code": "privacy_deletion",
+    "policy_version": "privacy-v0.2",
+    "affected_records": [
+      { "record_id": "session-device-35", "lifecycle_status": "redacted" }
+    ]
+  }
+]

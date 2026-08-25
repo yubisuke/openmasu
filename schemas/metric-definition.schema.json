@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:metric-definition:v0.3",
-  "title": "Open MMP Metric Definition v0.3",
+  "$id": "urn:openmasu:schema:metric-definition:v0.4",
+  "title": "OpenMasu Metric Definition v0.4",
   "type": "object",
   "additionalProperties": false,
   "required": ["metric_name", "metric_definition_version", "anchor_event", "aggregation_time_zone", "value_type", "definition", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash"],

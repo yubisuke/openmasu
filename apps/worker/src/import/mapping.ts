@@ -16,7 +16,7 @@ export type MappingExpression = {
   boolean?: { true_values: unknown[]; false_values: unknown[]; default?: boolean };
   uppercase?: boolean;
   timestamp?: { default_timezone: "UTC"; timezone_source?: string; truncate_to_milliseconds: true };
-  money?: { input?: "integer"; scale: number; currency_source?: string; currency_default?: string };
+  money?: { input?: "integer" | "decimal"; scale: number; currency_source?: string; currency_default?: string };
   object?: Record<string, MappingExpression>;
 };
 
@@ -136,11 +136,25 @@ function booleanValue(value: unknown, config: NonNullable<MappingExpression["boo
 }
 
 function moneyValue(value: unknown, config: NonNullable<MappingExpression["money"]>, row: Any): Any {
-  const amount = typeof value === "number"
-    ? (Number.isSafeInteger(value) && value >= 0 ? String(value) : "")
-    : String(value ?? "").trim();
-  if (!/^[0-9]+$/.test(amount)) {
-    throw new MappingError("money source must be a non-negative base-10 integer without exponent notation");
+  const input = config.input ?? "integer";
+  let amount: string;
+  if (input === "decimal") {
+    const decimal = typeof value === "string" ? value.trim() : "";
+    if (!/^[0-9]+(?:\.[0-9]+)?$/.test(decimal)) {
+      throw new MappingError("money decimal source must be a non-negative base-10 decimal string without exponent notation");
+    }
+    const [whole, fraction = ""] = decimal.split(".");
+    if (fraction.length > config.scale) {
+      throw new MappingError("money decimal source exceeds the declared scale; rounding is not permitted");
+    }
+    amount = `${whole}${fraction.padEnd(config.scale, "0")}`;
+  } else {
+    amount = typeof value === "number"
+      ? (Number.isSafeInteger(value) && value >= 0 ? String(value) : "")
+      : String(value ?? "").trim();
+    if (!/^[0-9]+$/.test(amount)) {
+      throw new MappingError("money source must be a non-negative base-10 integer without exponent notation");
+    }
   }
   const currencyValue = config.currency_source ? sourceValue(row, config.currency_source) : undefined;
   const currency = String(currencyValue || config.currency_default || "").toUpperCase();

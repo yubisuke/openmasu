@@ -1,0 +1,16 @@
+plugins {
+    id 'com.android.library'
+}
+
+android {
+    namespace 'dev.openmasu.unity'
+    compileSdk 36
+    defaultConfig { minSdk 24 }
+}
+
+// OpenMasu does not publish Maven artifacts in M2. Build the Android SDK locally,
+// publish it to an operator-controlled repository, and substitute this coordinate.
+dependencies {
+    implementation 'dev.openmasu:core:0.1.0'
+    implementation 'dev.openmasu:max:0.1.0'
+}

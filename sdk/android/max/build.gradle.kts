@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-  namespace = "dev.openmmp.sdk.max"
+  namespace = "dev.openmasu.sdk.max"
   compileSdk = 36
   defaultConfig { minSdk = 24 }
   compileOptions {

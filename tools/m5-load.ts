@@ -50,16 +50,16 @@ async function concurrentMap<T, R>(values: readonly T[], concurrency: number, ta
   return output;
 }
 
-const eventCount = positiveInteger("OPENMMP_M5_LOAD_EVENTS", 100_000);
-const maxPostbackCount = positiveInteger("OPENMMP_M5_LOAD_MAX_POSTBACKS", 10_000);
-const concurrency = positiveInteger("OPENMMP_M5_LOAD_CONCURRENCY", 40);
+const eventCount = positiveInteger("OPENMASU_M5_LOAD_EVENTS", 100_000);
+const maxPostbackCount = positiveInteger("OPENMASU_M5_LOAD_MAX_POSTBACKS", 10_000);
+const concurrency = positiveInteger("OPENMASU_M5_LOAD_CONCURRENCY", 40);
 const batchSize = 100;
 const batchCount = Math.ceil(eventCount / batchSize);
-const baseUrl = process.env.OPENMMP_M5_LOAD_BASE_URL ?? "http://127.0.0.1:8080";
-const sdkKeyId = required("OPENMMP_SDK_KEY_ID");
-const sdkSecret = required("OPENMMP_SDK_KEY");
-const maxPathSecret = required("OPENMMP_MAX_PATH_SECRET");
-const maxEventKey = required("OPENMMP_MAX_EVENT_KEY");
+const baseUrl = process.env.OPENMASU_M5_LOAD_BASE_URL ?? "http://127.0.0.1:8080";
+const sdkKeyId = required("OPENMASU_SDK_KEY_ID");
+const sdkSecret = required("OPENMASU_SDK_KEY");
+const maxPathSecret = required("OPENMASU_MAX_PATH_SECRET");
+const maxEventKey = required("OPENMASU_MAX_EVENT_KEY");
 const run = nonce(`${Date.now()}-${process.pid}`).slice(0, 12);
 
 async function signedPost(
@@ -75,11 +75,11 @@ async function signedPost(
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-openmmp-sdk-key-id": sdkKeyId,
-      "x-openmmp-installation-key-id": installation?.installation_key_id ?? "-",
-      "x-openmmp-timestamp-ms": String(timestampMs),
-      "x-openmmp-nonce": requestNonce,
-      "x-openmmp-signature": signSdkRequest(installation?.installation_secret ?? sdkSecret, {
+      "x-openmasu-sdk-key-id": sdkKeyId,
+      "x-openmasu-installation-key-id": installation?.installation_key_id ?? "-",
+      "x-openmasu-timestamp-ms": String(timestampMs),
+      "x-openmasu-nonce": requestNonce,
+      "x-openmasu-signature": signSdkRequest(installation?.installation_secret ?? sdkSecret, {
         method: "POST",
         path,
         sdkKeyId,
@@ -154,7 +154,7 @@ const maxSamples = await concurrentMap(
 );
 
 const report = {
-  benchmark: "openmmp_m5_synthetic_http_load_v1",
+  benchmark: "openmasu_m5_synthetic_http_load_v1",
   environment: {
     runtime: "GitHub hosted ubuntu-24.04 compatible Compose",
     node: process.version,
@@ -174,5 +174,5 @@ if (report.sdk_ingestion.errors > 0 || report.max_postback.errors > 0) {
   throw new Error("M5 synthetic load recorded HTTP errors");
 }
 const rendered = `${JSON.stringify(report, null, 2)}\n`;
-if (process.env.OPENMMP_M5_LOAD_OUTPUT) writeFileSync(process.env.OPENMMP_M5_LOAD_OUTPUT, rendered, "utf8");
+if (process.env.OPENMASU_M5_LOAD_OUTPUT) writeFileSync(process.env.OPENMASU_M5_LOAD_OUTPUT, rendered, "utf8");
 process.stdout.write(rendered);

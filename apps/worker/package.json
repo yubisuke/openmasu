@@ -1,8 +1,8 @@
 {
-  "name": "@open-mmp/worker",
+  "name": "@openmasu/worker",
   "version": "0.1.0",
   "private": true,
-  "description": "Open MMP ingestion worker",
+  "description": "OpenMasu ingestion worker",
   "type": "module",
   "scripts": {
     "benchmark:metric-floor": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/metrics/benchmark.ts",
@@ -15,10 +15,10 @@
     "verify:parity": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/verify-parity.ts"
   },
   "dependencies": {
-    "@open-mmp/attribution-core": "0.3.6",
-    "@open-mmp/contracts": "0.3.6",
-    "@open-mmp/meta-install-referrer": "0.1.0",
-    "@open-mmp/runtime": "0.1.0",
+    "@openmasu/attribution-core": "0.4.0",
+    "@openmasu/contracts": "0.4.0",
+    "@openmasu/meta-install-referrer": "0.1.0",
+    "@openmasu/runtime": "0.1.0",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1"
   }

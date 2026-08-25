@@ -1,0 +1,30 @@
+[
+  {
+    "attribution_id": "attr:install-37",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:install-37",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-37",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-19T00:00:00.000Z",
+    "decided_at": "2026-08-19T01:00:00.000Z",
+    "input_cutoff_at": "2026-08-19T01:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "organic",
+    "method": "none",
+    "model": "none",
+    "reason_code": "no_referrer"
+  }
+]

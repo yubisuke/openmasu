@@ -1,0 +1,38 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:adapter:synthetic-network:event:adapter-click-31",
+    "record_id": "adapter-click-31",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "adapter:synthetic-network",
+    "event_id": "event:adapter-click-31",
+    "event_name": "click",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:import:synthetic-provider:event:import-modeled-31",
+    "record_id": "import-modeled-31",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "import:synthetic-provider",
+    "event_id": "event:import-modeled-31",
+    "event_name": "install",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:import:synthetic-provider:event:import-unattributed-31",
+    "record_id": "import-unattributed-31",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "import:synthetic-provider",
+    "event_id": "event:import-unattributed-31",
+    "event_name": "install",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  }
+]

@@ -1,7 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import { createHash } from "node:crypto";
-import { M1B_METRIC_DEFINITIONS } from "@open-mmp/contracts";
-import { jcs, sha256 } from "@open-mmp/attribution-core";
+import { M1B_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import { jcs, sha256 } from "@openmasu/attribution-core";
 
 type Any = Record<string, any>;
 type Queryable = Pick<PoolClient, "query">;
@@ -713,7 +713,7 @@ export async function computeSqlMetricRuns(
   const client = await pool.connect();
   try {
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
-    await client.query("SELECT set_config('open_mmp.tenant_id', $1, true)", [scope.tenant_id]);
+    await client.query("SELECT set_config('openmasu.tenant_id', $1, true)", [scope.tenant_id]);
     const output = await computeSqlMetricRunsWithClient(client, input, persist, scope);
     await client.query("COMMIT");
     return output;

@@ -4,10 +4,10 @@ plugins {
 }
 
 android {
-  namespace = "dev.openmmp.sample"
+  namespace = "dev.openmasu.sample"
   compileSdk = 36
   defaultConfig {
-    applicationId = "dev.openmmp.sample"
+    applicationId = "dev.openmasu.sample"
     minSdk = 24
     targetSdk = 36
     versionCode = 1
@@ -45,15 +45,15 @@ tasks.register("verifyMergedManifest") {
     listOf("com.facebook.katana", "com.instagram.android", "com.facebook.lite").forEach {
       check(text.contains("android:name=\"$it\"")) { "Merged manifest is missing Meta query package $it" }
     }
-    check(text.contains("android:dataExtractionRules=\"@xml/openmmp_data_extraction_rules\""))
-    check(text.contains("android:fullBackupContent=\"@xml/openmmp_backup_rules\""))
-    val modern = project(":core").file("src/main/res/xml/openmmp_data_extraction_rules.xml").readText()
+    check(text.contains("android:dataExtractionRules=\"@xml/openmasu_data_extraction_rules\""))
+    check(text.contains("android:fullBackupContent=\"@xml/openmasu_backup_rules\""))
+    val modern = project(":core").file("src/main/res/xml/openmasu_data_extraction_rules.xml").readText()
     check(modern.contains("<cloud-backup>"))
     check(modern.contains("<device-transfer>"))
-    check(modern.windowed(32, 1, partialWindows = true).any { it.contains("openmmp_private.xml") })
-    check(modern.contains("path=\"openmmp\""))
-    val legacy = project(":core").file("src/main/res/xml/openmmp_backup_rules.xml").readText()
-    check(legacy.contains("openmmp_private.xml") && legacy.contains("path=\"openmmp\""))
+    check(modern.windowed(32, 1, partialWindows = true).any { it.contains("openmasu_private.xml") })
+    check(modern.contains("path=\"openmasu\""))
+    val legacy = project(":core").file("src/main/res/xml/openmasu_backup_rules.xml").readText()
+    check(legacy.contains("openmasu_private.xml") && legacy.contains("path=\"openmasu\""))
     println("A-12/A-13 merged manifest and backup exclusions verified: ${manifest.relativeTo(rootProject.projectDir)}")
   }
 }

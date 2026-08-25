@@ -12,15 +12,15 @@ import {
   EncryptedFilePayloadStore,
   withTenant,
   type PayloadStore,
-} from "@open-mmp/runtime";
-import { decodeInstallReferrer } from "@open-mmp/redirector-core";
+} from "@openmasu/runtime";
+import { decodeInstallReferrer } from "@openmasu/redirector-core";
 import { createTrackingLink } from "../../api/src/tracking-links.js";
 import { createRedirectorHandler } from "./handler.js";
 
 const suffix = randomBytes(6).toString("hex");
 const tenantId = `tenant-redirect-${suffix}`;
 const appId = `app-redirect-${suffix}`;
-const root = mkdtempSync(join(tmpdir(), "open-mmp-redirect-"));
+const root = mkdtempSync(join(tmpdir(), "openmasu-redirect-"));
 const pool = createAppPool();
 const payloadStore = new EncryptedFilePayloadStore(root, `master-${randomBytes(32).toString("base64url")}`);
 const fallback = "https://safe.example/fallback";
@@ -39,7 +39,7 @@ describe("M2a redirector HTTP shell", () => {
       body: {
         destination_kind: "play_store",
         destination_url: "https://play.google.com/store/apps/details?id=invalid.placeholder",
-        play_package_name: "dev.openmmp.synthetic",
+        play_package_name: "dev.openmasu.synthetic",
         campaign_id: `campaign-${suffix}`,
       },
     });
@@ -69,7 +69,7 @@ describe("M2a redirector HTTP shell", () => {
     assert.equal(response.status, 302);
     const location = new URL(response.headers.get("location")!);
     assert.equal(location.hostname, "play.google.com");
-    assert.equal(location.searchParams.get("id"), "dev.openmmp.synthetic");
+    assert.equal(location.searchParams.get("id"), "dev.openmasu.synthetic");
     const referrer = location.searchParams.get("referrer")!;
     assert.ok(Buffer.byteLength(referrer, "utf8") < 64);
     assert.match(decodeInstallReferrer(referrer).cid, /^[A-Za-z0-9_-]{22,128}$/);

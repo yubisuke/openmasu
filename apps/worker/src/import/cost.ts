@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
-import { jcs, sha256 } from "@open-mmp/attribution-core";
-import { uuidV7, withTenant } from "@open-mmp/runtime";
+import { jcs, sha256 } from "@openmasu/attribution-core";
+import { uuidV7, withTenant } from "@openmasu/runtime";
 
 export type CostInput = {
   tenant_id: string;
@@ -42,7 +42,7 @@ function dimensionObject(row: CostInput): Record<string, unknown> {
 export function costArtifact(row: CostInput, reportSnapshotDigest: string): Record<string, unknown> {
   const dimensions = dimensionObject(row);
   return {
-    contract_version: "0.3.0",
+    contract_version: "0.4.0",
     cost_record_id: `cost:${sha256([dimensions, row.as_of, row.amount_unscaled, row.currency]).slice(0, 48)}`,
     tenant_id: row.tenant_id,
     app_id: row.app_id,

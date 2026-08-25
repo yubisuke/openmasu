@@ -50,7 +50,7 @@ After M4 an operator can:
 - `packages/apple-postback`: pure SKAdNetwork concatenation-signature verification and pure AdAttributionKit JWS verification.
 - Two public receiver routes in `apps/api` at Apple's fixed well-known paths, with transaction-level replay rejection.
 - Aggregate reporting kept in its own metric series.
-- Unity iOS bridge inside the existing `com.openmmp.sdk` UPM package.
+- Unity iOS bridge inside the existing `com.openmasu.sdk` UPM package.
 - Apple Privacy Manifest and an App Privacy Details mapping for integrators.
 - `docs/validation/m4-device-checklist.md`.
 
@@ -125,7 +125,7 @@ Apple's published keys (base64 X.509, verified 2026-08-20):
 
 The production SKAdNetwork key and the AdAttributionKit production key are the same string. Ship all four as compiled-in constants with the fetch date in a comment; they are public keys, not secrets, and fetching them at runtime would add a boot-time network dependency to a verification path.
 
-**The development keys are load-bearing and must be gated.** A postback signed with `apple-development-identifier/*` is a Developer Mode test postback. If a deployment accepts those in production, an operator can pollute a real aggregate series from any device with Developer Mode on. Recommendation: accept development `kid` values **only** when `OPENMMP_APPLE_ACCEPT_DEVELOPMENT_POSTBACKS=1`, default off, and record which key verified on the record. SKAdNetwork has no equivalent gate because its test path (a downloaded configuration profile) only shortens timing and still signs with the production key; the observable SKAdNetwork development marker is `source-app-id == 0`, which is evidence, not a control. Handoff M4-H-3 asks the contract for a typed place to record this.
+**The development keys are load-bearing and must be gated.** A postback signed with `apple-development-identifier/*` is a Developer Mode test postback. If a deployment accepts those in production, an operator can pollute a real aggregate series from any device with Developer Mode on. Recommendation: accept development `kid` values **only** when `OPENMASU_APPLE_ACCEPT_DEVELOPMENT_POSTBACKS=1`, default off, and record which key verified on the record. SKAdNetwork has no equivalent gate because its test path (a downloaded configuration profile) only shortens timing and still signs with the production key; the observable SKAdNetwork development marker is `source-app-id == 0`, which is evidence, not a control. Handoff M4-H-3 asks the contract for a typed place to record this.
 
 **Acceptance:** M4-A-01, M4-A-02, M4-A-03.
 
@@ -182,7 +182,7 @@ M2-S-4 returns `202`. `max-receiver` returns `204`. **Neither is acceptable here
 
 **The harder question is what to do with a postback that fails signature verification.** The contract models it as a first-class outcome (`signature_verified: boolean`, `unattributed/skan_signature_invalid`), so the ledger must be able to hold one. But writing to an append-only ledger on an *unauthenticated* request is a write-amplification vector.
 
-Decided (R-28): **record verification failures durably up to a bounded quota, then audit-only.** Concretely — a per-(tenant, app) hourly quota (`OPENMMP_POSTBACK_INVALID_LEDGER_QUOTA_PER_HOUR`, default 100); inside the quota the failure becomes a real batch with `signature_verified=false` so an operator can inspect actual forged traffic and so `skan_signature_invalid` is reachable in a real deployment; beyond it, one `ledger.audit_logs` row with `outcome=failed` and a counter. Respond `200` in both cases: a signature failure is not a transport failure and retrying it nine times helps nobody.
+Decided (R-28): **record verification failures durably up to a bounded quota, then audit-only.** Concretely — a per-(tenant, app) hourly quota (`OPENMASU_POSTBACK_INVALID_LEDGER_QUOTA_PER_HOUR`, default 100); inside the quota the failure becomes a real batch with `signature_verified=false` so an operator can inspect actual forged traffic and so `skan_signature_invalid` is reachable in a real deployment; beyond it, one `ledger.audit_logs` row with `outcome=failed` and a counter. Respond `200` in both cases: a signature failure is not a transport failure and retrying it nine times helps nobody.
 
 Malformed bodies (non-JSON, missing `jws-string`, over the size cap) get `400` and no write. They will be retried for nine days; that is harmless at this volume and a `400` in a proxy log is how an operator discovers a misconfigured endpoint.
 
@@ -194,11 +194,11 @@ Same instrument as M1 D-11 and M2-S-5: in-process token buckets, no Redis, refus
 
 | Surface | Unit | Proposed default | Env variable |
 | --- | --- | --- | --- |
-| both postback paths | per source IP, memory only | 20 req/s, burst 100 | `OPENMMP_POSTBACK_RATE_RPS`, `_BURST` |
-| both postback paths | per registered ADAM ID | 200 req/s, burst 1000 | `OPENMMP_POSTBACK_APP_RATE_RPS`, `_BURST` |
-| both postback paths | body bytes | 16 KiB | `OPENMMP_POSTBACK_MAX_BYTES` |
-| signature failures written to the ledger | per tenant/app per hour | 100 | `OPENMMP_POSTBACK_INVALID_LEDGER_QUOTA_PER_HOUR` |
-| AdServices lookup fan-out | per app, outbound to Apple | 10 req/s, burst 50 | `OPENMMP_ADSERVICES_LOOKUP_RATE_RPS`, `_BURST` |
+| both postback paths | per source IP, memory only | 20 req/s, burst 100 | `OPENMASU_POSTBACK_RATE_RPS`, `_BURST` |
+| both postback paths | per registered ADAM ID | 200 req/s, burst 1000 | `OPENMASU_POSTBACK_APP_RATE_RPS`, `_BURST` |
+| both postback paths | body bytes | 16 KiB | `OPENMASU_POSTBACK_MAX_BYTES` |
+| signature failures written to the ledger | per tenant/app per hour | 100 | `OPENMASU_POSTBACK_INVALID_LEDGER_QUOTA_PER_HOUR` |
+| AdServices lookup fan-out | per app, outbound to Apple | 10 req/s, burst 50 | `OPENMASU_ADSERVICES_LOOKUP_RATE_RPS`, `_BURST` |
 
 16 KiB is generous: a SKAdNetwork postback is a few hundred bytes and an AdAttributionKit one is a JWS of about a kilobyte. The source IP is held in memory only and never written or logged, identically to M2-S-10.
 
@@ -207,7 +207,7 @@ Same instrument as M1 D-11 and M2-S-5: in-process token buckets, no Redis, refus
 The iOS SDK uses the **same** canonical signing string, the same headers, the same enrollment route, and the same per-installation credential as the Android SDK. `apps/api/src/sdk-auth.ts` already implements it:
 
 ```
-open-mmp-sdk-v1\n<METHOD>\n<path>\n<sdk_key_id>\n<installation_key_id or "-">\n<timestamp_ms>\n<nonce>\n<sha256-hex of raw body>
+openmasu-sdk-v1\n<METHOD>\n<path>\n<sdk_key_id>\n<installation_key_id or "-">\n<timestamp_ms>\n<nonce>\n<sha256-hex of raw body>
 ```
 
 **No new authentication mechanism, no `sdk-ios`-specific route, no second verifier.** Every argument in M2-S-1 and M2-S-2 transfers verbatim, including the honest limit: the app-level secret ships inside the IPA and can be extracted, so HMAC buys integrity, revocability, and an authenticated `(tenant, app)` binding — not a defence against a determined attacker. App Attest is M5.
@@ -236,7 +236,7 @@ Ed25519 (M2-S-1 option (c), rejected on Android platform-availability grounds) i
 - Apple's documented retry behaviour — `404` can mean "you called too soon", best practice is 5-second intervals with a maximum of 3 attempts — is a server-side policy that must not be re-implemented (differently) in Swift, Kotlin, and C#.
 - `500` means Apple is down and the request should be retried later. On a device that means "hope the app is reopened"; on a server it means a bounded backoff queue.
 
-**The honest cost of (b), stated once:** the deployment makes an outbound call to Apple, which some self-hosters will need to allow through egress policy, and a server outage longer than the token's 24-hour TTL loses Apple Ads attribution for the installs in that window. Ship `OPENMMP_ADSERVICES_LOOKUP=on|off` (default `on`; it is the only deterministic iOS channel) and `OPENMMP_ADSERVICES_ENDPOINT` so the operator checklist can point it at a recorder.
+**The honest cost of (b), stated once:** the deployment makes an outbound call to Apple, which some self-hosters will need to allow through egress policy, and a server outage longer than the token's 24-hour TTL loses Apple Ads attribution for the installs in that window. Ship `OPENMASU_ADSERVICES_LOOKUP=on|off` (default `on`; it is the only deterministic iOS channel) and `OPENMASU_ADSERVICES_ENDPOINT` so the operator checklist can point it at a recorder.
 
 **A consequence of never calling ATT that must be written into the docs, not discovered.** Apple returns a *detailed* payload only when per-app tracking consent is **authorized**; in every other case — including `notDetermined`, which is where this project's SDK leaves every user — it returns the *standard* payload, which omits `clickDate` and `impressionDate`. Therefore `adservices_context.click_date` and `adservices_context.impression_date` **are unreachable for any deployment following this project's rules.** The fields stay in the schema (an operator who does call ATT in their own app will populate them) but no M4 code path depends on them, and `docs/privacy-security.md` should say so.
 
@@ -298,7 +298,7 @@ The requirement is M2-D-19's, restated for iOS: storage holding `installation_id
 **Options**
 
 - (a) Keychain, with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`.
-- (b) A file under `Library/Application Support/dev.openmmp/`, `isExcludedFromBackup = true` on the directory, `FileProtectionType.completeUntilFirstUserAuthentication`.
+- (b) A file under `Library/Application Support/dev.openmasu/`, `isExcludedFromBackup = true` on the directory, `FileProtectionType.completeUntilFirstUserAuthentication`.
 - (c) `identifierForVendor`.
 
 **Decided (R-28): (b).** (c) is forbidden by §M4-S-8. (a) is the iOS idiom and it is wrong here for a specific reason: **Keychain items are not deleted when the app is deleted.** An operator's "delete the app and reinstall to test a fresh install" would return the same `installation_id`, so a reinstall would be indistinguishable from a continuing installation, and a user who deleted the app to remove their data would find it re-attached. `…ThisDeviceOnly` fixes the backup half of the problem and not the deletion half. *(Keychain persistence across app deletion is long-standing observed iOS behaviour but was **not found stated on any Apple documentation page read in this pass** — flagged as unverified, and V-3 observes it.)*
@@ -327,7 +327,7 @@ Three iOS-specific notes:
 
 - There is no Play Install Referrer to avoid re-reading after a reset, so M2-D-22's "referrer consumed" flag has no analogue. The AdServices token **is** the analogue and behaves the same way: after a reset the SDK must not fetch a new attribution token, because Apple would re-attribute the same acquisition to the same campaign a second time. The consumed flag lives in the same excluded directory.
 - The Android SDK uses `PRAGMA secure_delete=ON` and M2-S-12 describes precisely what that does and does not mean. The same pragma applies here (§M4-D-16 keeps SQLite), and the same precise wording must be reused rather than reinvented.
-- Collection disablement must be honoured **before** any initialisation, including before the AdServices token fetch and before the first `updateConversionValue` call. The Android SDK reads a manifest meta-data key for this; the iOS analogue is an `Info.plist` key (`OpenMmpCollectionEnabledDefault`, Boolean). Without it, a consent-gated app performs an Apple Ads lookup on first launch before the user has said anything.
+- Collection disablement must be honoured **before** any initialisation, including before the AdServices token fetch and before the first `updateConversionValue` call. The Android SDK reads a manifest meta-data key for this; the iOS analogue is an `Info.plist` key (`OpenMasuCollectionEnabledDefault`, Boolean). Without it, a consent-gated app performs an Apple Ads lookup on first launch before the user has said anything.
 
 ### M4-S-12 (M4-D-14). What M4 does *not* claim
 
@@ -353,9 +353,9 @@ apps/
 packages/
   apple-postback/         # NEW: pure SKAN concatenation verify + pure AAK JWS verify, no I/O
 sdk/
-  ios/                    # NEW: Swift Package — OpenMmpCore, OpenMmpAppleAds,
-                          #      OpenMmpApplePostback, OpenMmpMax, Sample
-  unity/com.openmmp.sdk/  # + Runtime/Plugins/iOS/, OpenMmpiOSPlatform.cs, build post-processor
+  ios/                    # NEW: Swift Package — OpenMasuCore, OpenMasuAppleAds,
+                          #      OpenMasuApplePostback, OpenMasuMax, Sample
+  unity/com.openmasu.sdk/  # + Runtime/Plugins/iOS/, OpenMasuiOSPlatform.cs, build post-processor
 docs/validation/
   m4-device-checklist.md  # NEW
 ```
@@ -432,7 +432,7 @@ A conversion value is 6 bits whose meaning is a deployment policy. The postback 
 
 **Decided (R-28): (b).** (a) makes the mapping unversioned and unauditable, and it guarantees that the server's decode and the client's encode drift. (c) puts a network round trip in front of the most time-critical call in the whole framework — the first `updateConversionValue`, which must happen on first launch to register the install — and a launch with no network would then register no conversion at all.
 
-Under (b): `openmmp-conversion-schema.json` carries a `schema_version` and a list of rules over first-party event keys and cumulative revenue thresholds; the SDK evaluates it locally; the operator registers the identical file in `control.conversion_schemas`; the SDK sends the file's SHA-256 as evidence on `install` so a mismatch between the shipped app and the registered schema is *observable* rather than silent.
+Under (b): `openmasu-conversion-schema.json` carries a `schema_version` and a list of rules over first-party event keys and cumulative revenue thresholds; the SDK evaluates it locally; the operator registers the identical file in `control.conversion_schemas`; the SDK sends the file's SHA-256 as evidence on `install` so a mismatch between the shipped app and the registered schema is *observable* rather than silent.
 
 **No contract change.** The decode is a server-side join from `(tenant, app, schema_version, postback_sequence_index, conversion_value)` to meaning, using an append-only registry. Putting `conversion_schema_version` into the postback envelope would be wrong on its face — Apple's postback cannot know our schema version — and putting it on `install` as a typed field would be a contract change to carry a deployment-private value. The digest goes in `install.extensions`, which the contract permits for non-attribution evidence. This is a deliberate decision **not** to change the contract; it is recorded in the decisions memo so it is not re-opened.
 
@@ -442,7 +442,7 @@ The SDK calls Apple locally. Our server learns the value only when Apple's postb
 
 **Options:** (a) never report; (b) report as a first-party event, default on; (c) report as a first-party event, default off.
 
-**Decided (R-28): (c)** — a `custom_event` with the reserved `event_key` `openmmp.conversion_value_updated`, gated by `conversionValueLoggingEnabled` (default `false`).
+**Decided (R-28): (c)** — a `custom_event` with the reserved `event_key` `openmasu.conversion_value_updated`, gated by `conversionValueLoggingEnabled` (default `false`).
 
 (a) makes debugging a conversion schema nearly impossible: an operator who sees no `conversion-value` in postbacks cannot tell whether the SDK never called Apple, called with 0, or was suppressed by crowd anonymity. (b) is wrong as a *default* for the reason `docs/privacy-security.md` states first: data that is never collected is the safest data. And there is a second reason specific to M4: an installation-level record of "this installation set conversion value 24 at 14:02" is precisely the join key that would let someone reconstruct installation identity from an aggregate postback. The join is impossible inside a contract artifact (§M4-D-19) but the temptation should not be created by default. Default off, documented as a diagnostic to enable while validating a schema and to disable afterwards.
 
@@ -576,23 +576,23 @@ ALTER TABLE control.sdk_keys ADD COLUMN platform text CHECK (platform IN ('andro
 ```text
 sdk/ios/
   Sources/
-    OpenMmpCore/            # queue, delivery, HMAC signing, consent, identity — no Apple ad frameworks
+    OpenMasuCore/            # queue, delivery, HMAC signing, consent, identity — no Apple ad frameworks
       PrivacyInfo.xcprivacy #   declared as .process(...) in Package.swift
-    OpenMmpAppleAds/        # AdServices token only
-    OpenMmpApplePostback/   # SKAdNetwork + AdAttributionKit conversion-value updates
-    OpenMmpMax/             # MAAdRevenueDelegate → ad_revenue
-    OpenMmpObjC/            # extern "C" surface for the Unity bridge
+    OpenMasuAppleAds/        # AdServices token only
+    OpenMasuApplePostback/   # SKAdNetwork + AdAttributionKit conversion-value updates
+    OpenMasuMax/             # MAAdRevenueDelegate → ad_revenue
+    OpenMasuObjC/            # extern "C" surface for the Unity bridge
   Tests/
   Sample/
   Package.swift
 ```
 
-The module split is the Android split with the same rule: `OpenMmpCore` links nothing but Foundation, so an app that wants first-party LTV and no Apple ad frameworks pulls one product. `OpenMmpApplePostback` is the only module that links StoreKit and AdAttributionKit; `OpenMmpMax` is the only one that links AppLovin.
+The module split is the Android split with the same rule: `OpenMasuCore` links nothing but Foundation, so an app that wants first-party LTV and no Apple ad frameworks pulls one product. `OpenMasuApplePostback` is the only module that links StoreKit and AdAttributionKit; `OpenMasuMax` is the only one that links AppLovin.
 
 | Android | iOS | Same file, same tests |
 | --- | --- | --- |
-| `OpenMmpStorage.kt` | `OpenMmpStorage.swift` | identity, credential, consent, flags |
-| `QueueDatabase.kt` (Room) | `OpenMmpQueue.swift` (system SQLite) | durable queue |
+| `OpenMasuStorage.kt` | `OpenMasuStorage.swift` | identity, credential, consent, flags |
+| `QueueDatabase.kt` (Room) | `OpenMasuQueue.swift` (system SQLite) | durable queue |
 | `HmacHttpTransport.kt` | `HmacHttpTransport.swift` | **shared canonical-string vectors** |
 | `EventFactory.kt` | `EventFactory.swift` | envelope construction |
 | `Ports.kt` | `Ports.swift` | reader/transport protocols |
@@ -656,9 +656,9 @@ The delegate **protocol name and the property used to register it** (`MAAdRevenu
 
 **Decided (R-28): (b), with (a) as the fallback decided by building.** This is M2-D-25 repeated with the same reasoning: `.androidlib` was chosen because it keeps Kotlin sources visible and buildable inside the Unity project, "which matters for an open-source SDK whose selling point is that you can audit it". Shipping a binary framework for iOS while shipping sources for Android would be an inconsistency with no justification. (c) reintroduces CocoaPods for integrators who have escaped it.
 
-Unity does not consume Swift Packages, so the package vendors the same Swift sources the SPM package builds, plus a thin `OpenMmpObjC` layer. **Whether Unity 6 compiles Swift source plugins without a build post-processor setting `SWIFT_VERSION`, `CLANG_ENABLE_MODULES`, and the bridging header is unverified**; it is the exact analogue of M2-D-25's unresolved `.androidlib`-under-UPM question and gets the same treatment — WO-8's first Unity task is to build the sample and record what actually worked, falling back to (a) built in CI from the same sources.
+Unity does not consume Swift Packages, so the package vendors the same Swift sources the SPM package builds, plus a thin `OpenMasuObjC` layer. **Whether Unity 6 compiles Swift source plugins without a build post-processor setting `SWIFT_VERSION`, `CLANG_ENABLE_MODULES`, and the bridging header is unverified**; it is the exact analogue of M2-D-25's unresolved `.androidlib`-under-UPM question and gets the same treatment — WO-8's first Unity task is to build the sample and record what actually worked, falling back to (a) built in CI from the same sources.
 
-**Callbacks:** a C function pointer registered from C# with `[MonoPInvokeCallback]`, not `UnitySendMessage`. `UnitySendMessage` requires a named GameObject to exist, is string-only, and silently no-ops if the object is renamed. The pointer is marshalled onto the Unity main thread through the **existing** `OpenMmpDispatcher.cs`, which M2b already built for the Android bridge — so the Unity layer gains a platform, not a second architecture.
+**Callbacks:** a C function pointer registered from C# with `[MonoPInvokeCallback]`, not `UnitySendMessage`. `UnitySendMessage` requires a named GameObject to exist, is string-only, and silently no-ops if the object is renamed. The pointer is marshalled onto the Unity main thread through the **existing** `OpenMasuDispatcher.cs`, which M2b already built for the Android bridge — so the Unity layer gains a platform, not a second architecture.
 
 **Info.plist injection:** an `OnPostProcessBuild` step using `UnityEditor.iOS.Xcode.PlistDocument` and `PBXProject` writes `NSAdvertisingAttributionReportEndpoint` and `AttributionCopyEndpoint` from UPM package settings, so an integrator does not hand-edit a generated project. Apple's current AdAttributionKit verification and advertised-app configuration pages explicitly publish the literal `AttributionCopyEndpoint`; this was rechecked on 2026-08-20.
 
@@ -678,7 +678,7 @@ Choosing 16.0 also puts the floor at or above any plausible current-Xcode minimu
 
 ### M4-D-29. Distribution and SBOM
 
-Swift Package Manager, `Package.swift` at `sdk/ios/`, `PrivacyInfo.xcprivacy` declared as `resources: [.process("PrivacyInfo.xcprivacy")]` on `OpenMmpCore`. Publishing to a package index, an XCFramework release, and code signing are **out of M4**, exactly as M2-D-31 puts Maven Central out of M2 — those are release-engineering decisions with their own credentials.
+Swift Package Manager, `Package.swift` at `sdk/ios/`, `PrivacyInfo.xcprivacy` declared as `resources: [.process("PrivacyInfo.xcprivacy")]` on `OpenMasuCore`. Publishing to a package index, an XCFramework release, and code signing are **out of M4**, exactly as M2-D-31 puts Maven Central out of M2 — those are release-engineering decisions with their own credentials.
 
 SBOM: `npm sbom` does not see SPM, and the Gradle CycloneDX plugin does not either. The SDK has **no third-party runtime dependencies by design** (§M4-D-22), so `sbom/sdk-ios.cdx.json` is generated from `Package.resolved` — which will be empty of runtime dependencies — and CI fails if the file is missing. **An empty dependency list is the strongest possible SBOM and the gate exists to prove it stays empty.**
 
@@ -688,7 +688,7 @@ SBOM: `npm sbom` does not see SPM, and the Gradle CycloneDX plugin does not eith
 
 ### Compose and configuration
 
-No new service. New variables, all in `.env.example` with a generator command because `npm run test:env-coverage` fails otherwise: `OPENMMP_APPLE_ACCEPT_DEVELOPMENT_POSTBACKS`, `OPENMMP_POSTBACK_MAX_BYTES`, `OPENMMP_POSTBACK_RATE_RPS`/`_BURST`, `OPENMMP_POSTBACK_APP_RATE_RPS`/`_BURST`, `OPENMMP_POSTBACK_INVALID_LEDGER_QUOTA_PER_HOUR`, `OPENMMP_ADSERVICES_LOOKUP`, `OPENMMP_ADSERVICES_ENDPOINT`, `OPENMMP_ADSERVICES_LOOKUP_RATE_RPS`/`_BURST`.
+No new service. New variables, all in `.env.example` with a generator command because `npm run test:env-coverage` fails otherwise: `OPENMASU_APPLE_ACCEPT_DEVELOPMENT_POSTBACKS`, `OPENMASU_POSTBACK_MAX_BYTES`, `OPENMASU_POSTBACK_RATE_RPS`/`_BURST`, `OPENMASU_POSTBACK_APP_RATE_RPS`/`_BURST`, `OPENMASU_POSTBACK_INVALID_LEDGER_QUOTA_PER_HOUR`, `OPENMASU_ADSERVICES_LOOKUP`, `OPENMASU_ADSERVICES_ENDPOINT`, `OPENMASU_ADSERVICES_LOOKUP_RATE_RPS`/`_BURST`.
 
 Bootstrap prints both well-known URLs alongside the admin key, the redirector URL, and the MAX template, so an operator can paste them straight into Xcode.
 
@@ -718,7 +718,7 @@ Written as commands and observable outcomes. The M1 D-30 principle applies: **an
 
 **M4-A-01 — SKAdNetwork signature verification against generated vectors.** A P-256 key pair is generated *inside the test*; a v4.0 and a v3.0 postback are signed over the documented concatenation; both verify. Flipping one byte of any signed field, reordering two fields, substituting `"True"` for `"true"`, or replacing the separator with U+0020 each fail. A vector signed with the generated key fails against **Apple's real published key**, proving the key is actually consulted rather than the verification being a no-op. A vector with `source-app-id` absent verifies under the shortened order.
 
-**M4-A-02 — AdAttributionKit JWS verification.** A compact JWS is generated in the test with `alg: ES256` and each of the three `kid` values; production verifies always, development verifies only when `OPENMMP_APPLE_ACCEPT_DEVELOPMENT_POSTBACKS=1` and is rejected with `development_postback_rejected` otherwise. An unknown `kid`, a two-segment JWS, an `alg: none` JWS, and an `alg: HS256` JWS whose signature is an HMAC under the public key all fail.
+**M4-A-02 — AdAttributionKit JWS verification.** A compact JWS is generated in the test with `alg: ES256` and each of the three `kid` values; production verifies always, development verifies only when `OPENMASU_APPLE_ACCEPT_DEVELOPMENT_POSTBACKS=1` and is rejected with `development_postback_rejected` otherwise. An unknown `kid`, a two-segment JWS, an `alg: none` JWS, and an `alg: HS256` JWS whose signature is an HMAC under the public key all fail.
 
 **M4-A-03 — unsigned fields do not become evidence.** A verified postback whose `conversion-value` (SKAdNetwork) or whose outer `conversion-value` / `country-code` (AdAttributionKit) is modified after signing still verifies — Apple does not sign them — and the test asserts that the code path *records* this rather than treating those fields as authenticated. The documentation string asserted by this test is the one an operator reads.
 
@@ -726,7 +726,7 @@ Written as commands and observable outcomes. The M1 D-30 principle applies: **an
 
 **M4-A-05 — replay rejection.** The same `transaction-id` delivered nine times yields one logical event and nine deliveries, eight classified `duplicate_delivery`. Three SKAdNetwork 4 postbacks with distinct `transaction-id` values and `postback-sequence-index` 0/1/2 yield **three** logical events. A different payload under the same `transaction-id` yields `event_id_conflict`.
 
-**M4-A-06 — response codes.** Success, signature failure, and unregistered app all return `200`. A body over `OPENMMP_POSTBACK_MAX_BYTES`, a non-JSON body, and a body with no `jws-string` return `400` with no ledger write. A forced database failure returns `500` so Apple's retry can recover it. `curl -w '%{time_total}'` is under 0.2 s on the success path.
+**M4-A-06 — response codes.** Success, signature failure, and unregistered app all return `200`. A body over `OPENMASU_POSTBACK_MAX_BYTES`, a non-JSON body, and a body with no `jws-string` return `400` with no ledger write. A forced database failure returns `500` so Apple's retry can recover it. `curl -w '%{time_total}'` is under 0.2 s on the success path.
 
 **M4-A-07 — invalid-signature quota.** With the quota set to 3, the first three forged postbacks produce ledger batches with `signature_verified=false`; the fourth through hundredth produce audit rows only; all one hundred return `200`; the counter reads 100.
 
@@ -768,7 +768,7 @@ Written as commands and observable outcomes. The M1 D-30 principle applies: **an
 
 **M4-A-30 — conversion schema is a pure function.** A table of schema versions × event sequences produces a fixed `(fineValue, coarseValue, lockPostback)` triple; a fine value outside `0…63` is rejected before the Apple call; the schema digest reported on `install` equals the SHA-256 of the bundled file; a schema whose version is not registered server-side produces a named operational error and **not** a silent default.
 
-**M4-A-31 — conversion-value logging is off by default.** With default configuration no `openmmp.conversion_value_updated` event is produced; with it enabled exactly one is produced per update.
+**M4-A-31 — conversion-value logging is off by default.** With default configuration no `openmasu.conversion_value_updated` event is produced; with it enabled exactly one is produced per update.
 
 **M4-A-32 — Unity bridge round trip.** A C# call reaches Swift and a Swift callback raised on a background queue reaches C# with intact values, observed on the Unity main thread; 10,000 round trips leak nothing (asserted by an allocation counter); the post-processor writes both Info.plist keys into a generated project fixture.
 
@@ -901,8 +901,8 @@ Repository facts used as premises, read on 2026-08-20 from `main` at `e5df088`:
 - `packages/attribution-core/src/evaluator.ts` — `makeAggregatePostbackAttribution` already implements the whole aggregate branch, and `adservices_context.status` is read at two places only.
 - `db/schema.sql` — `control.sdk_keys` has **no** `platform` column; the credential table is `control.installation_credentials` with `installation_id_digest`; `ledger.ingest_inbox.token_mode` is `CHECK (token_mode IN ('all','event','reporting_api'))`; `ledger.ingest_batches` has the drain index M4-D-16 relies on; `control.identifier` is `^[A-Za-z0-9._:-]{1,128}$`.
 - `schemas/events/skan-postback.schema.json`, `adattributionkit-postback.schema.json`, `install.schema.json` — the field sets quoted throughout §Contract touchpoints.
-- `registries/compatibility-v0.3.json` — contains `installation_level × none × none × [organic, unattributed]`, so M4-H-2 needs no compatibility row.
-- `sdk/android/` and `sdk/unity/com.openmmp.sdk/` — the module layout and `OpenMmpDispatcher.cs` that M4a mirrors and reuses.
+- `registries/compatibility-v0.4.json` — contains `installation_level × none × none × [organic, unattributed]`, so M4-H-2 needs no compatibility row.
+- `sdk/android/` and `sdk/unity/com.openmasu.sdk/` — the module layout and `OpenMasuDispatcher.cs` that M4a mirrors and reuses.
 - `.github/workflows/sdk-android.yml` — the CI shape `sdk-ios.yml` follows, including SHA-pinned `actions/*` only.
 
 ## Not verified
@@ -921,6 +921,6 @@ The former plist-key uncertainty is resolved: Apple primary documentation now ex
 8. **Whether the system `libsqlite3`'s internal `stat` calls count as SDK use of a Required Reason API.** §M4-S-9 removes the dependency on the answer by generating the manifest from a symbol audit of the built binary rather than from a reading of the rule.
 9. **Whether `DispatchTime.now()` is outside the system-boot-time category.** It uses the same clock as `mach_absolute_time()` but is not a listed symbol. Same resolution as (8): the audit decides, not the reading.
 10. **The minimum deployment target the current Xcode accepts.** Not verified. M4-D-27 chooses iOS 16.0, which is at or above any plausible floor, so the decision cannot be invalidated by the answer.
-11. **Rate limits on `api-adservices.apple.com`.** Not documented. `OPENMMP_ADSERVICES_LOOKUP_RATE_RPS` is a proposed default and a self-imposed courtesy limit, not a measurement.
+11. **Rate limits on `api-adservices.apple.com`.** Not documented. `OPENMASU_ADSERVICES_LOOKUP_RATE_RPS` is a proposed default and a self-imposed courtesy limit, not a measurement.
 12. **Every number in the M4-S-5 limits table.** Proposed defaults and thresholds, not measurements — the same status as M2-S-5's table.
 13. **Whether App Store review accepts `NSPrivacyTracking = false` for this SDK.** The reasoning in §M4-S-9 is sound and follows Apple's definition, but only M4-V-5 settles it, and a rejection would be a design-level finding rather than a documentation fix.

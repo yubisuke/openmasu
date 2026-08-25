@@ -10,9 +10,9 @@
 
 ## Current state
 
-- M0.3 Contract v0.3.4, M1a Shadow ledger/import foundation, M1b cohort metrics/difference audit, M2 Android/Unity measurement, M3 dashboard, and M4 Apple measurement are implemented and validated with synthetic evidence. Runtime services, PostgreSQL, HTTP APIs, Kotlin and Swift SDKs, Unity bridges, and separate deterministic/SKAdNetwork/AdAttributionKit reporting exist. Real-device, live-provider, Unity-export, App Store, and production-deployment evidence does not yet exist.
-- The active contract lives in `schemas/`, `schemas/events/`, `registries/`, `fixtures/v0.3/`, and `spec/event-metric-contract-v0.3.md`. The spec is normative for current contract behavior. Earlier complete contract lines remain at the `contract-v0.1` and `contract-v0.2.1` tags. Issue drafts are historical records, not live checklists.
-- The next implementation milestone is M5 Production and limited adapter boundary. Do not start later scope out of order without checking `docs/roadmap.md` first.
+- M0.4 Contract v0.4.0 and the M1 through M5 synthetic implementation milestones are complete. Runtime services, PostgreSQL, HTTP APIs, Kotlin and Swift SDKs, Unity bridges, and separate deterministic/SKAdNetwork/AdAttributionKit reporting exist. Real-device, live-provider, Unity-export, App Store, and production-deployment evidence does not yet exist.
+- The active contract lives in `schemas/`, `schemas/events/`, `registries/`, `fixtures/v0.4/`, and `spec/event-metric-contract-v0.4.md`. The spec is normative for current contract behavior. Earlier complete contract lines remain at the `contract-v0.1`, `contract-v0.2.1`, and `contract-v0.3.6` tags. Issue drafts are historical records, not live checklists.
+- Future work must follow `docs/roadmap.md` and preserve the residual boundaries in `docs/STATUS.md`.
 
 ## Running validation
 
@@ -28,18 +28,18 @@
 - Type-check only (faster, partial signal): `npm run typecheck`.
 - Android/Unity synthetic gates: `./sdk/android/gradlew -p sdk/android androidAcceptance verifySdkSbom`, an API 36 emulator running `:sample:connectedDebugAndroidTest`, and `dotnet run --project sdk/unity/tests/UnityCompileProbe.csproj --configuration Release`.
 - iOS synthetic gates run on macOS: `swift test --package-path sdk/ios`, iOS Simulator builds of the shipping products and sample, the pinned AppLovin provider compile probe, `node tools/check-ios-sdk.mjs --built-root <DerivedData>`, and the Unity C# bridge probe. The pinned `sdk-ios` workflow is the Windows development environment's authoritative Xcode evidence.
-- `npm run validate` is strictly read-only: it never writes, regenerates, or reformats fixture files. If a change requires a new or updated golden fixture, follow the candidate and human-review workflow in `fixtures/v0.3/README.md`, hand-edit the `fixtures/v0.3/<NN-name>/expected_*.json` files, and explain in your report exactly how each expected value was derived.
+- `npm run validate` is strictly read-only: it never writes, regenerates, or reformats fixture files. If a change requires a new or updated golden fixture, follow the candidate and human-review workflow in `fixtures/v0.4/README.md`, hand-edit the `fixtures/v0.4/<NN-name>/expected_*.json` files, and explain in your report exactly how each expected value was derived.
 
 ## What must not change casually
 
-- `fixtures/v0.3/<NN-name>/expected_*.json` files are reviewed, immutable golden artifacts (see `fixtures/v0.3/README.md`). Editing one changes what "passing" means for that scenario. Treat it as a contract-behavior change, not a routine test update, and call it out explicitly in your report even if `npm run validate` still passes afterward.
-- Schema `$id` values (`urn:open-mmp:schema:<artifact>:v0.3`) and the `contract_version` / `schema_version` constants are part of the public contract identity. Do not change an existing `$id`, or bump `schema_version`, without following `docs/schema-versioning.md`, updating every dependent fixture and evaluator path, and explicitly flagging the compatibility impact.
-- Registry files (`registries/*.json`) are referenced both by `$ref`/enum from schemas and by name in prose inside `spec/event-metric-contract-v0.3.md`, `docs/`, and `issue-drafts/`. If you add, rename, or remove a registry value, grep for every place that value (or the full enumeration it belongs to) appears in prose and update all of them in the same change — do not update only the registry file.
+- `fixtures/v0.4/<NN-name>/expected_*.json` files are reviewed, immutable golden artifacts (see `fixtures/v0.4/README.md`). Editing one changes what "passing" means for that scenario. Treat it as a contract-behavior change, not a routine test update, and call it out explicitly in your report even if `npm run validate` still passes afterward.
+- Schema `$id` values (`urn:openmasu:schema:<artifact>:v0.4`) and the `contract_version` / `schema_version` constants are part of the public contract identity. Do not change an existing `$id`, or bump `schema_version`, without following `docs/schema-versioning.md`, updating every dependent fixture and evaluator path, and explicitly flagging the compatibility impact.
+- Registry files (`registries/*.json`) are referenced both by `$ref`/enum from schemas and by name in prose inside `spec/event-metric-contract-v0.4.md`, `docs/`, and `issue-drafts/`. If you add, rename, or remove a registry value, grep for every place that value (or the full enumeration it belongs to) appears in prose and update all of them in the same change — do not update only the registry file.
 
 ## Documents to update together
 
 - `docs/roadmap.md` and `docs/project-plan.md`: the milestone/phase crosswalk (already required above).
-- `spec/event-metric-contract-v0.3.md`'s validation-gate summary (schema count, registry count, fixture count, golden-artifact count, scenario-assertion count, acceptance-criteria count) must match the literal final-line output of `tools/validate.ts`. If you add or remove an `AC##` entry in `tools/validate.ts`, a fixture directory, or a schema file, update this prose in the same change — do not let the two drift.
+- `spec/event-metric-contract-v0.4.md`'s validation-gate summary (schema count, registry count, fixture count, golden-artifact count, scenario-assertion count, acceptance-criteria count) must match the literal final-line output of `tools/validate.ts`. If you add or remove an `AC##` entry in `tools/validate.ts`, a fixture directory, or a schema file, update this prose in the same change — do not let the two drift.
 - Any registry value list written out in prose inside `spec/`, `docs/`, or `issue-drafts/` must match its source registry file in `registries/` exactly, field for field. Update every prose enumeration in the same change as the registry file.
 - `docs/privacy-security.md`'s release-gate table and `docs/threat-model.md`'s residual-risk section both reference `docs/roadmap.md` gate ownership by milestone name; keep the milestone names byte-identical across all three documents.
 

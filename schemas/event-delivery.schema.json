@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:event-delivery:v0.3",
-  "title": "Open MMP Event Delivery v0.3",
+  "$id": "urn:openmasu:schema:event-delivery:v0.4",
+  "title": "OpenMasu Event Delivery v0.4",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -11,7 +11,7 @@
     "consent_decision_reason_code"
   ],
   "properties": {
-    "contract_version": { "const": "0.3.0" },
+    "contract_version": { "const": "0.4.0" },
     "delivery_id": { "$ref": "common.schema.json#/$defs/id" },
     "record_id": { "$ref": "common.schema.json#/$defs/id" },
     "canonical_record_id": { "$ref": "common.schema.json#/$defs/id" },

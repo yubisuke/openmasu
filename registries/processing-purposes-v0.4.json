@@ -1,0 +1,34 @@
+{
+  "contract_version": "0.4.0",
+  "legal_notice": "Illustrative contract defaults only. Each deployment must document and approve its purpose-specific legal basis and consent policy for every applicable jurisdiction.",
+  "purposes": [
+    {
+      "processing_purpose_id": "attribution",
+      "meaning": "Associate eligible measurement evidence with an installation-level or aggregate attribution result.",
+      "default_consent_required": true,
+      "assumed_legal_basis_category": "consent",
+      "deployment_override_allowed": true
+    },
+    {
+      "processing_purpose_id": "fraud_prevention",
+      "meaning": "Detect and respond to measurement abuse, replay, injection, and invalid traffic.",
+      "default_consent_required": false,
+      "assumed_legal_basis_category": "legitimate_interests",
+      "deployment_override_allowed": true
+    },
+    {
+      "processing_purpose_id": "analytics",
+      "meaning": "Produce product and measurement analytics that are not a provider-reported attribution decision.",
+      "default_consent_required": true,
+      "assumed_legal_basis_category": "consent",
+      "deployment_override_allowed": true
+    },
+    {
+      "processing_purpose_id": "revenue_measurement",
+      "meaning": "Process purchase, refund, advertising revenue, and cost evidence for financial measurement.",
+      "default_consent_required": false,
+      "assumed_legal_basis_category": "legitimate_interests",
+      "deployment_override_allowed": true
+    }
+  ]
+}

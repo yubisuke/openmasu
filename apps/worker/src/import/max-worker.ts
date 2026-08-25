@@ -1,8 +1,8 @@
 import type { Pool } from "pg";
-import { sha256, type CandidateAttempt } from "@open-mmp/attribution-core";
+import { sha256, type CandidateAttempt } from "@openmasu/attribution-core";
 import { decimalToUnscaled } from "./cost.js";
 import { ingestRuntimeBatch } from "../ingestion.js";
-import { uuidV7, withTenant, type PayloadStore } from "@open-mmp/runtime";
+import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 
 type Any = Record<string, any>;
 
@@ -45,7 +45,7 @@ function attemptFromInbox(inbox: Any, query: URLSearchParams): CandidateAttempt 
       alternative_legal_bases: [],
     },
     record: {
-      contract_version: "0.3.0",
+      contract_version: "0.4.0",
       record_id: `record:max:${inbox.inbox_id}`,
       delivery_id: `delivery:max:${inbox.inbox_id}`,
       tenant_id: inbox.tenant_id,
@@ -54,7 +54,7 @@ function attemptFromInbox(inbox: Any, query: URLSearchParams): CandidateAttempt 
       producer_version: "max-s2s-v1",
       event_id: inbox.event_id,
       event_name: "ad_revenue",
-      schema_version: "0.3.0",
+      schema_version: "0.4.0",
       occurred_at: occurredAt,
       occurred_at_source: "import",
       received_at: inbox.received_at,

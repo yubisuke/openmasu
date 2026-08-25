@@ -14,26 +14,26 @@ jobs:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_DB: openmmp
+          POSTGRES_DB: openmasu
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres-synthetic-ci
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d openmmp"
+          --health-cmd "pg_isready -U postgres -d openmasu"
           --health-interval 2s
           --health-timeout 3s
           --health-retries 30
     env:
-      OPENMMP_MIGRATION_DATABASE_URL: postgresql://postgres:postgres-synthetic-ci@localhost:5432/openmmp
-      OPENMMP_APP_DATABASE_PASSWORD: app-synthetic-ci-password
-      OPENMMP_READER_DATABASE_PASSWORD: reader-synthetic-ci-password
-      OPENMMP_SEED_DATABASE_PASSWORD: seed-synthetic-ci-password
-      OPENMMP_APP_DATABASE_URL: postgresql://openmmp_app:app-synthetic-ci-password@localhost:5432/openmmp
-      OPENMMP_READER_DATABASE_URL: postgresql://openmmp_reader:reader-synthetic-ci-password@localhost:5432/openmmp
-      OPENMMP_SEED_DATABASE_URL: postgresql://openmmp_seed:seed-synthetic-ci-password@localhost:5432/openmmp
-      OPENMMP_POSTGRES_HOST_PORT: "55432"
-      OPENMMP_API_HOST_PORT: "8080"
+      OPENMASU_MIGRATION_DATABASE_URL: postgresql://postgres:postgres-synthetic-ci@localhost:5432/openmasu
+      OPENMASU_APP_DATABASE_PASSWORD: app-synthetic-ci-password
+      OPENMASU_READER_DATABASE_PASSWORD: reader-synthetic-ci-password
+      OPENMASU_SEED_DATABASE_PASSWORD: seed-synthetic-ci-password
+      OPENMASU_APP_DATABASE_URL: postgresql://openmasu_app:app-synthetic-ci-password@localhost:5432/openmasu
+      OPENMASU_READER_DATABASE_URL: postgresql://openmasu_reader:reader-synthetic-ci-password@localhost:5432/openmasu
+      OPENMASU_SEED_DATABASE_URL: postgresql://openmasu_seed:seed-synthetic-ci-password@localhost:5432/openmasu
+      OPENMASU_POSTGRES_HOST_PORT: "55432"
+      OPENMASU_API_HOST_PORT: "8080"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -57,7 +57,7 @@ jobs:
           npm run test:db-invariants
           npm run test:env-coverage
       - name: Verify backup restore and completed privacy reapplication
-        run: OPENMMP_M5_BACKUP_RESTORE=1 OPENMMP_M5_PG_TOOLS=docker npm run test:backup-restore
+        run: OPENMASU_M5_BACKUP_RESTORE=1 OPENMASU_M5_PG_TOOLS=docker npm run test:backup-restore
       - name: Run M2a redirector, signed-ingestion, replay, worker, and deletion gates
         run: npm run test:m2a
       - name: Reproduce contract goldens through PostgreSQL
@@ -67,27 +67,27 @@ jobs:
       - name: Verify raw, API, dashboard-view, and HTML consistency
         run: npm run verify:consistency
       - name: Run reduced synthetic metric performance floor
-        run: OPENMMP_BENCHMARK_ROWS=100000 npm run benchmark:metric-floor
+        run: OPENMASU_BENCHMARK_ROWS=100000 npm run benchmark:metric-floor
       - name: Check threat-model coverage
         run: npm run check:threat-model
       - name: Compose first-run smoke
         run: |
-          export OPENMMP_MAX_TENANT_ID=tenant-a
-          export OPENMMP_MAX_APP_ID=app-a
-          export OPENMMP_ENROLL_RATE_RPS=10000
-          export OPENMMP_ENROLL_RATE_BURST=2000
-          export OPENMMP_INGEST_RATE_RPS=10
-          export OPENMMP_INGEST_RATE_BURST=20
-          export OPENMMP_INGEST_APP_RATE_RPS=10000
-          export OPENMMP_INGEST_APP_RATE_BURST=2000
-          export OPENMMP_MAX_RATE_RPS=20000
-          export OPENMMP_MAX_RATE_BURST=12000
+          export OPENMASU_MAX_TENANT_ID=tenant-a
+          export OPENMASU_MAX_APP_ID=app-a
+          export OPENMASU_ENROLL_RATE_RPS=10000
+          export OPENMASU_ENROLL_RATE_BURST=2000
+          export OPENMASU_INGEST_RATE_RPS=10
+          export OPENMASU_INGEST_RATE_BURST=20
+          export OPENMASU_INGEST_APP_RATE_RPS=10000
+          export OPENMASU_INGEST_APP_RATE_BURST=2000
+          export OPENMASU_MAX_RATE_RPS=20000
+          export OPENMASU_MAX_RATE_BURST=12000
           docker compose up -d --wait
           docker compose --env-file /dev/null --profile seed run --rm seed
-          docker compose --env-file /dev/null exec -T api sh -c 'set -a && . /run/openmmp/app/runtime.env && set +a && OPENMMP_API_HOST_PORT=8080 node --import tsx tools/runtime-smoke.ts'
+          docker compose --env-file /dev/null exec -T api sh -c 'set -a && . /run/openmasu/app/runtime.env && set +a && OPENMASU_API_HOST_PORT=8080 node --import tsx tools/runtime-smoke.ts'
       - name: Measure synthetic ingestion and MAX postback load
         run: |
-          docker compose --env-file /dev/null exec -T api sh -c 'set -a && . /run/openmmp/app/runtime.env && set +a && node --import tsx tools/m5-load.ts' > m5-load.json
+          docker compose --env-file /dev/null exec -T api sh -c 'set -a && . /run/openmasu/app/runtime.env && set +a && node --import tsx tools/m5-load.ts' > m5-load.json
           cat m5-load.json
       - name: Upload M5 load evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

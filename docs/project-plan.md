@@ -1,8 +1,8 @@
-# Open MMP Project Plan
+# OpenMasu Project Plan
 
 ## Product hypothesis
 
-Open MMP does not begin by copying every feature of an established MMP. It begins by solving two problems: measurements that cannot be explained and economics that cannot be tied to visible processing and storage costs.
+OpenMasu does not begin by copying every feature of an established MMP. It begins by solving two problems: measurements that cannot be explained and economics that cannot be tied to visible processing and storage costs.
 
 The product therefore starts as a Shadow MMP alongside an existing provider.
 
@@ -48,6 +48,10 @@ Contract v0.2 is complete and its local validation gate passes. It includes the 
 ### Phase 0.3: Contract v0.3
 
 Contract v0.3 is complete and locally validated. It adds only the closed Android/Unity/Meta evidence required by Phase 2, including third-party referrer classification, typed Meta Install Referrer evidence, attribution-status grouping, custom events, click-injection classification, revenue precision, and wrapper provenance. It does not claim an SDK, device run, live campaign, or production integration.
+
+### Phase 0.4: Contract v0.4
+
+Contract v0.4.0 completes the identity-only OpenMasu namespace migration. A tag preserves the complete v0.3.6 baseline, and a mechanical verifier proves that schema structure, registry vocabularies, fixture semantics, metric/rule versions, and evaluator behavior do not drift. This phase adds no measurement capability and no production-readiness claim.
 
 ### Phase 1a: Shadow ledger and import foundation
 
@@ -122,7 +126,7 @@ recalculation/export evidence, rule-bundle history, and release runbooks.
 - Play Integrity and App Attest are reserved as optional evidence and remain operator-configured; they are not live integrations.
 - Supported attribution evidence is limited to first-party links, Meta Install Referrer, and Apple Ads/Apple aggregate paths.
 - AppLovin MAX remains revenue evidence. TikTok, AppLovin, Unity Ads, and Mintegral user-level attribution is unsupported where partner-MMP or non-public evidence is required.
-- Production TLS, real backup recovery, real load, provider/device delivery, integrity projects, incident response, and trademark clearance remain operator-owned gates.
+- Production TLS, real backup recovery, real load, provider/device delivery, integrity projects, incident response, and formal trademark clearance before registration remain operator-owned gates.
 
 ## Evidence gates
 

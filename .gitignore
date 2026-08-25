@@ -2,7 +2,7 @@ node_modules/
 tools/__pycache__/
 fixtures/.candidates/
 .env
-.openmmp/
+.openmasu/
 sbom/
 
 # Android/Gradle and Unity generated state.
@@ -18,7 +18,7 @@ sdk/unity/**/obj/
 # Tabular exports and any lab/input directories must never be committed.
 # If a future importer needs a synthetic CSV fixture, allow-list that exact path
 # here with a leading "!" and extend the guardrail test in tools/validate.ts.
-open-mmp-lab/
+openmasu-lab/
 **/real-data/
 **/input/
 *.csv

@@ -57,7 +57,7 @@ Over a private observation window, classify installs into provider unavailable, 
 2. Export an Android Gradle project from each.
 3. Confirm the `.androidlib` under the UPM package is resolved and that the operator-controlled local Maven coordinates are present.
 4. Build and run the sample, then confirm callbacks are marshalled to the Unity main thread.
-5. If `.androidlib` resolution fails, use a locally built Open MMP AAR and record the exact fallback privately.
+5. If `.androidlib` resolution fails, use a locally built OpenMasu AAR and record the exact fallback privately.
 
 UPM-package `.androidlib` resolution remains **unverified** until both exports are recorded.
 

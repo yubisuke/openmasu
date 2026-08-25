@@ -12,10 +12,10 @@ export type IntegrityVerdict = {
   policy_version: string;
   evidence_ref?: string;
 };
-export type OpenMMPEventDeliveryV03 = {
+export type OpenMasuEventDeliveryV04 = {
   [k: string]: unknown;
 } & {
-  contract_version: "0.3.0";
+  contract_version: "0.4.0";
   delivery_id: string;
   record_id: string;
   canonical_record_id?: string;
@@ -50,10 +50,10 @@ export type OpenMMPEventDeliveryV03 = {
   staleness_policy_digest?: string;
   staleness_authority?: "server";
 };
-export type OpenMMPPrivacyRequestV03 = {
+export type OpenMasuPrivacyRequestV04 = {
   [k: string]: unknown;
 } & {
-  contract_version: "0.3.0";
+  contract_version: "0.4.0";
   tenant_id: string;
   app_id: string;
   privacy_request_id: string;
@@ -75,7 +75,7 @@ export type OpenMMPPrivacyRequestV03 = {
     lifecycle_status: "redacted" | "purged";
   }[];
 };
-export type OpenMMPAttributionResultV03 = {
+export type OpenMasuAttributionResultV04 = {
   [k: string]: unknown;
 } & {
   attribution_id: string;
@@ -124,7 +124,7 @@ export type OpenMMPAttributionResultV03 = {
     | "postback_not_winner"
     | "crowd_anonymity_suppressed"
     | "conversion_value_null";
-  reason_code_version: "0.3.0";
+  reason_code_version: "0.4.0";
   evidence_refs: EvidenceRef[];
   effective_at: string;
   decided_at: string;
@@ -135,8 +135,8 @@ export type OpenMMPAttributionResultV03 = {
   rule_bundle_hash: string;
   supersedes_attribution_id?: string;
 };
-export type OpenMMPCostRecordV03 = Money & {
-  contract_version: "0.3.0";
+export type OpenMasuCostRecordV04 = Money & {
+  contract_version: "0.4.0";
   cost_record_id: string;
   tenant_id: string;
   app_id: string;
@@ -153,7 +153,7 @@ export type OpenMMPCostRecordV03 = Money & {
   report_snapshot_digest: string;
   dimension_digest: string;
 };
-export type OpenMMPMetricDefinitionV03 = {
+export type OpenMasuMetricDefinitionV04 = {
   [k: string]: unknown;
 } & {
   metric_name: string;
@@ -204,7 +204,7 @@ export type OpenMMPMetricDefinitionV03 = {
   rule_bundle_version: string;
   rule_bundle_hash: string;
 };
-export type OpenMMPMetricRunV03 = {
+export type OpenMasuMetricRunV04 = {
   [k: string]: unknown;
 } & {
   metric_run_id: string;
@@ -252,10 +252,10 @@ export type OpenMMPMetricRunV03 = {
   supersedes_metric_run_id?: string;
   evidence_refs: EvidenceRef[];
 };
-export type OpenMMPRejectionV03 = {
+export type OpenMasuRejectionV04 = {
   [k: string]: unknown;
 } & {
-  contract_version: "0.3.0";
+  contract_version: "0.4.0";
   delivery_id: string;
   record_id: string;
   tenant_id: string;
@@ -269,7 +269,7 @@ export type OpenMMPRejectionV03 = {
     | "payload_schema_invalid"
     | "timestamp_invalid"
     | "timestamp_stale";
-  reason_code_version: "0.3.0";
+  reason_code_version: "0.4.0";
   payload_disposition: "discarded" | "protected";
   retained: "non_identifying_metadata" | "protected_conflict_evidence";
   processing_purpose_id?: "attribution" | "fraud_prevention" | "analytics" | "revenue_measurement";
@@ -284,7 +284,7 @@ export type OpenMMPRejectionV03 = {
   staleness_policy_digest?: string;
   staleness_authority?: "server";
 };
-export type OpenMMPReconciliationResultV03 = {
+export type OpenMasuReconciliationResultV04 = {
   [k: string]: unknown;
 } & {
   reconciliation_id: string;
@@ -305,7 +305,7 @@ export type OpenMMPReconciliationResultV03 = {
     | "currency_policy_mismatch"
     | "scope_mismatch"
     | "provider_modeled_conversion";
-  difference_reason_version: "0.3.0";
+  difference_reason_version: "0.4.0";
   matching_keys: {
     [k: string]: unknown;
   }[];
@@ -317,23 +317,23 @@ export type OpenMMPReconciliationResultV03 = {
   supersedes_reconciliation_id?: string;
 };
 
-export interface OpenMMPEvaluationOutputV03 {
-  raw_records: OpenMMPRawRecordV03[];
-  deliveries: OpenMMPEventDeliveryV03[];
-  logical_events: OpenMMPLogicalEventV03[];
-  corrections: OpenMMPCorrectionV03[];
-  privacy_requests: OpenMMPPrivacyRequestV03[];
-  privacy_tombstones: OpenMMPPrivacyTombstoneV03[];
-  attributions: OpenMMPAttributionResultV03[];
-  cost_records: OpenMMPCostRecordV03[];
-  metric_definitions: OpenMMPMetricDefinitionV03[];
-  metric_runs: OpenMMPMetricRunV03[];
-  fraud_decisions: OpenMMPFraudDecisionV03[];
-  rejections: OpenMMPRejectionV03[];
-  reconciliation: OpenMMPReconciliationResultV03[];
+export interface OpenMasuEvaluationOutputV04 {
+  raw_records: OpenMasuRawRecordV04[];
+  deliveries: OpenMasuEventDeliveryV04[];
+  logical_events: OpenMasuLogicalEventV04[];
+  corrections: OpenMasuCorrectionV04[];
+  privacy_requests: OpenMasuPrivacyRequestV04[];
+  privacy_tombstones: OpenMasuPrivacyTombstoneV04[];
+  attributions: OpenMasuAttributionResultV04[];
+  cost_records: OpenMasuCostRecordV04[];
+  metric_definitions: OpenMasuMetricDefinitionV04[];
+  metric_runs: OpenMasuMetricRunV04[];
+  fraud_decisions: OpenMasuFraudDecisionV04[];
+  rejections: OpenMasuRejectionV04[];
+  reconciliation: OpenMasuReconciliationResultV04[];
 }
-export interface OpenMMPRawRecordV03 {
-  contract_version: "0.3.0";
+export interface OpenMasuRawRecordV04 {
+  contract_version: "0.4.0";
   record_id: string;
   tenant_id: string;
   app_id: string;
@@ -356,7 +356,7 @@ export interface OpenMMPRawRecordV03 {
     | "custom_event"
     | "skan_postback"
     | "adattributionkit_postback";
-  schema_version: "0.3.0";
+  schema_version: "0.4.0";
   payload_sha256: string;
   occurred_at: string;
   occurred_at_source: "device" | "server" | "import";
@@ -375,8 +375,8 @@ export interface OpenMMPRawRecordV03 {
   alternative_legal_basis_id?: string;
   alternative_legal_basis_policy_version?: string;
 }
-export interface OpenMMPLogicalEventV03 {
-  contract_version: "0.3.0";
+export interface OpenMasuLogicalEventV04 {
+  contract_version: "0.4.0";
   logical_event_id: string;
   record_id: string;
   tenant_id: string;
@@ -399,8 +399,8 @@ export interface OpenMMPLogicalEventV03 {
   record_lifecycle: "active" | "retracted";
   timeliness: "on_time" | "late";
 }
-export interface OpenMMPCorrectionV03 {
-  contract_version: "0.3.0";
+export interface OpenMasuCorrectionV04 {
+  contract_version: "0.4.0";
   tenant_id: string;
   app_id: string;
   correction_id: string;
@@ -409,8 +409,8 @@ export interface OpenMMPCorrectionV03 {
   correction_reason: "refund" | "privacy_deletion" | "retention_expiry" | "duplicate_source";
   effective_at: string;
 }
-export interface OpenMMPPrivacyTombstoneV03 {
-  contract_version: "0.3.0";
+export interface OpenMasuPrivacyTombstoneV04 {
+  contract_version: "0.4.0";
   tenant_id: string;
   app_id: string;
   privacy_request_id: string;
@@ -434,13 +434,13 @@ export interface Money {
   currency: string;
   [k: string]: unknown;
 }
-export interface OpenMMPFraudDecisionV03 {
+export interface OpenMasuFraudDecisionV04 {
   fraud_decision_id: string;
   subject_ref: string;
   decision: "clear" | "suspected" | "confirmed";
   action: "allow" | "flag" | "exclude" | "quarantine";
   reason_code: "bot_prefetch" | "replay_suspected" | "click_injection_suspected";
-  reason_code_version: "0.3.0";
+  reason_code_version: "0.4.0";
   evidence: {
     type: string;
     captured_at: string;

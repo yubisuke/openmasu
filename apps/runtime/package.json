@@ -1,8 +1,8 @@
 {
-  "name": "@open-mmp/runtime",
+  "name": "@openmasu/runtime",
   "version": "0.1.0",
   "private": true,
-  "description": "Open MMP PostgreSQL runtime and migration tooling",
+  "description": "OpenMasu PostgreSQL runtime and migration tooling",
   "type": "module",
   "exports": {
     ".": {

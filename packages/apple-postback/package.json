@@ -1,5 +1,5 @@
 {
-  "name": "@open-mmp/apple-postback",
+  "name": "@openmasu/apple-postback",
   "version": "0.1.0",
   "private": true,
   "description": "Pure Apple aggregate postback signature verification",

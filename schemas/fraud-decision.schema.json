@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:fraud-decision:v0.3",
-  "title": "Open MMP Fraud Decision v0.3",
+  "$id": "urn:openmasu:schema:fraud-decision:v0.4",
+  "title": "OpenMasu Fraud Decision v0.4",
   "type": "object",
   "additionalProperties": false,
   "required": ["fraud_decision_id", "subject_ref", "decision", "action", "reason_code", "reason_code_version", "evidence", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash", "evaluated_at"],
@@ -11,7 +11,7 @@
     "decision": { "enum": ["clear", "suspected", "confirmed"] },
     "action": { "enum": ["allow", "flag", "exclude", "quarantine"] },
     "reason_code": { "enum": ["bot_prefetch", "replay_suspected", "click_injection_suspected"] },
-    "reason_code_version": { "const": "0.3.0" },
+    "reason_code_version": { "const": "0.4.0" },
     "evidence": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["type", "captured_at", "digest", "access_class"], "properties": { "type": { "type": "string" }, "captured_at": { "$ref": "common.schema.json#/$defs/dateTime" }, "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "access_class": { "enum": ["public", "protected", "private"] } } } },
     "rule_bundle_id": { "$ref": "common.schema.json#/$defs/id" },
     "rule_bundle_version": { "type": "string", "minLength": 1 },

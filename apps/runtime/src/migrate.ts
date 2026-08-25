@@ -21,16 +21,16 @@ function checksum(source: string): string {
 
 async function ensureRoles(client: Client): Promise<void> {
   const appPassword = requireEnvironment(
-    "OPENMMP_APP_DATABASE_PASSWORD",
-    process.env.OPENMMP_APP_DATABASE_PASSWORD,
+    "OPENMASU_APP_DATABASE_PASSWORD",
+    process.env.OPENMASU_APP_DATABASE_PASSWORD,
   );
   const readerPassword = requireEnvironment(
-    "OPENMMP_READER_DATABASE_PASSWORD",
-    process.env.OPENMMP_READER_DATABASE_PASSWORD,
+    "OPENMASU_READER_DATABASE_PASSWORD",
+    process.env.OPENMASU_READER_DATABASE_PASSWORD,
   );
   const seedPassword = requireEnvironment(
-    "OPENMMP_SEED_DATABASE_PASSWORD",
-    process.env.OPENMMP_SEED_DATABASE_PASSWORD,
+    "OPENMASU_SEED_DATABASE_PASSWORD",
+    process.env.OPENMASU_SEED_DATABASE_PASSWORD,
   );
   const identity = await client.query<{ current_user: string; current_database: string }>(
     "SELECT current_user, current_database()",
@@ -40,32 +40,32 @@ async function ensureRoles(client: Client): Promise<void> {
   await client.query(`
     DO $$
     BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openmmp_owner') THEN
-        CREATE ROLE openmmp_owner NOLOGIN NOINHERIT NOBYPASSRLS;
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openmasu_owner') THEN
+        CREATE ROLE openmasu_owner NOLOGIN NOINHERIT NOBYPASSRLS;
       END IF;
-      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openmmp_app') THEN
-        CREATE ROLE openmmp_app LOGIN NOINHERIT NOBYPASSRLS;
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openmasu_app') THEN
+        CREATE ROLE openmasu_app LOGIN NOINHERIT NOBYPASSRLS;
       END IF;
-      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openmmp_reader') THEN
-        CREATE ROLE openmmp_reader LOGIN NOINHERIT NOBYPASSRLS;
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openmasu_reader') THEN
+        CREATE ROLE openmasu_reader LOGIN NOINHERIT NOBYPASSRLS;
       END IF;
-      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openmmp_seed') THEN
-        CREATE ROLE openmmp_seed LOGIN NOINHERIT NOBYPASSRLS;
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openmasu_seed') THEN
+        CREATE ROLE openmasu_seed LOGIN NOINHERIT NOBYPASSRLS;
       END IF;
     END
     $$
   `);
-  await client.query("ALTER ROLE openmmp_owner NOLOGIN NOINHERIT NOBYPASSRLS");
-  await client.query(`ALTER ROLE openmmp_app LOGIN NOINHERIT NOBYPASSRLS PASSWORD ${quoteLiteral(appPassword)}`);
-  await client.query(`ALTER ROLE openmmp_reader LOGIN NOINHERIT NOBYPASSRLS PASSWORD ${quoteLiteral(readerPassword)}`);
-  await client.query(`ALTER ROLE openmmp_seed LOGIN NOINHERIT NOBYPASSRLS PASSWORD ${quoteLiteral(seedPassword)}`);
-  await client.query("REVOKE openmmp_owner FROM openmmp_app, openmmp_reader, openmmp_seed");
-  await client.query("REVOKE openmmp_app FROM openmmp_reader, openmmp_seed");
-  await client.query("REVOKE openmmp_reader FROM openmmp_app, openmmp_seed");
-  await client.query("REVOKE openmmp_seed FROM openmmp_app, openmmp_reader");
-  await client.query(`GRANT openmmp_owner TO ${quoteIdentifier(currentUser)}`);
-  await client.query(`GRANT CONNECT, CREATE ON DATABASE ${quoteIdentifier(database)} TO openmmp_owner`);
-  await client.query(`GRANT CONNECT ON DATABASE ${quoteIdentifier(database)} TO openmmp_app, openmmp_reader, openmmp_seed`);
+  await client.query("ALTER ROLE openmasu_owner NOLOGIN NOINHERIT NOBYPASSRLS");
+  await client.query(`ALTER ROLE openmasu_app LOGIN NOINHERIT NOBYPASSRLS PASSWORD ${quoteLiteral(appPassword)}`);
+  await client.query(`ALTER ROLE openmasu_reader LOGIN NOINHERIT NOBYPASSRLS PASSWORD ${quoteLiteral(readerPassword)}`);
+  await client.query(`ALTER ROLE openmasu_seed LOGIN NOINHERIT NOBYPASSRLS PASSWORD ${quoteLiteral(seedPassword)}`);
+  await client.query("REVOKE openmasu_owner FROM openmasu_app, openmasu_reader, openmasu_seed");
+  await client.query("REVOKE openmasu_app FROM openmasu_reader, openmasu_seed");
+  await client.query("REVOKE openmasu_reader FROM openmasu_app, openmasu_seed");
+  await client.query("REVOKE openmasu_seed FROM openmasu_app, openmasu_reader");
+  await client.query(`GRANT openmasu_owner TO ${quoteIdentifier(currentUser)}`);
+  await client.query(`GRANT CONNECT, CREATE ON DATABASE ${quoteIdentifier(database)} TO openmasu_owner`);
+  await client.query(`GRANT CONNECT ON DATABASE ${quoteIdentifier(database)} TO openmasu_app, openmasu_reader, openmasu_seed`);
   await client.query(`
     CREATE TABLE IF NOT EXISTS public.schema_migrations (
       version text PRIMARY KEY,
@@ -74,20 +74,20 @@ async function ensureRoles(client: Client): Promise<void> {
       applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
     )
   `);
-  await client.query("ALTER TABLE public.schema_migrations OWNER TO openmmp_owner");
-  await client.query("REVOKE ALL ON public.schema_migrations FROM PUBLIC, openmmp_app, openmmp_reader");
+  await client.query("ALTER TABLE public.schema_migrations OWNER TO openmasu_owner");
+  await client.query("REVOKE ALL ON public.schema_migrations FROM PUBLIC, openmasu_app, openmasu_reader");
 }
 
 const connectionString = requireEnvironment(
-  "OPENMMP_MIGRATION_DATABASE_URL",
-  process.env.OPENMMP_MIGRATION_DATABASE_URL,
+  "OPENMASU_MIGRATION_DATABASE_URL",
+  process.env.OPENMASU_MIGRATION_DATABASE_URL,
 );
 const client = new Client({ connectionString });
 await client.connect();
 
 try {
   await ensureRoles(client);
-  await client.query("SELECT pg_advisory_lock(hashtext('open-mmp:migrations'))");
+  await client.query("SELECT pg_advisory_lock(hashtext('openmasu:migrations'))");
   const applied = await client.query<{ version: string; checksum: string }>(
     "SELECT version, checksum FROM public.schema_migrations ORDER BY version",
   );
@@ -107,7 +107,7 @@ try {
     }
     await client.query("BEGIN");
     try {
-      await client.query("SET LOCAL ROLE openmmp_owner");
+      await client.query("SET LOCAL ROLE openmasu_owner");
       await client.query(source);
       await client.query(
         "INSERT INTO public.schema_migrations (version, name, checksum) VALUES ($1, $2, $3)",
@@ -124,7 +124,7 @@ try {
   console.log(count === 0 ? "Database migrations: no pending migrations." : `Database migrations applied: ${count}.`);
 } finally {
   try {
-    await client.query("SELECT pg_advisory_unlock(hashtext('open-mmp:migrations'))");
+    await client.query("SELECT pg_advisory_unlock(hashtext('openmasu:migrations'))");
   } finally {
     await client.end();
   }

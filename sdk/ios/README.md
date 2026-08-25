@@ -1,4 +1,4 @@
-# Open MMP iOS SDK
+# OpenMasu iOS SDK
 
 The iOS SDK is a source-distributed Swift Package for first-party event
 delivery, AdServices token handoff, Apple conversion-value updates, and MAX
@@ -8,17 +8,17 @@ applications.
 
 ## Products
 
-- `OpenMmpCore`: excluded SQLite queue, installation credential, HMAC
+- `OpenMasuCore`: excluded SQLite queue, installation credential, HMAC
   transport, consent, collection lifecycle, and deletion-first reset.
-- `OpenMmpAppleAds`: `AAAttribution.attributionToken()` provider. The token is
+- `OpenMasuAppleAds`: `AAAttribution.attributionToken()` provider. The token is
   delivered as protected evidence and is interpreted only by the server.
-- `OpenMmpApplePostback`: versioned conversion schema and independent
+- `OpenMasuApplePostback`: versioned conversion schema and independent
   SKAdNetwork and AdAttributionKit update calls.
-- `OpenMmpMax`: provider-neutral MAX revenue mapper. The shipping product does
+- `OpenMasuMax`: provider-neutral MAX revenue mapper. The shipping product does
   not depend on the AppLovin SDK; the compile-only probe verifies the adapter
   surface against the exact pinned provider package.
-- `OpenMmpObjC`: C ABI used by the Unity iOS source bridge.
-- `OpenMmpSample`: synthetic integration sketch compiled by CI.
+- `OpenMasuObjC`: C ABI used by the Unity iOS source bridge.
+- `OpenMasuSample`: synthetic integration sketch compiled by CI.
 
 ## Local synthetic gates
 
@@ -28,8 +28,8 @@ or later SDK:
 ```bash
 swift test --package-path sdk/ios
 cd sdk/ios
-xcodebuild -scheme OpenMmpObjC -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
-xcodebuild -scheme OpenMmpSample -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+xcodebuild -scheme OpenMasuObjC -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+xcodebuild -scheme OpenMasuSample -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
 
 The `sdk-ios` workflow also builds `ProviderCompileProbe` against the exact
@@ -46,7 +46,7 @@ uses WAL, `synchronous=NORMAL`, and `secure_delete=ON`. Committed pages survive
 process death; abrupt power loss between WAL sync points is not guaranteed.
 
 Consent-gated applications must set the Boolean Info.plist key
-`OpenMmpCollectionEnabledDefault` to `false` and enable collection only after
+`OpenMasuCollectionEnabledDefault` to `false` and enable collection only after
 their own policy allows it. Unity's postprocessor writes `false` unless the
 operator explicitly changes the project setting. Disabling collection performs
 no network or AdServices read. Withdrawal purges consent-required queued events.

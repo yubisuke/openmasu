@@ -1,0 +1,17 @@
+[
+  {
+    "reconciliation_id": "reconciliation:import:import-modeled-38",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "input_snapshot_id": "snapshot:internal:import-modeled-38",
+    "external_snapshot_id": "snapshot:provider:import-modeled-38",
+    "difference_reason_code": "provider_modeled_conversion",
+    "difference_reason_version": "0.4.0",
+    "matching_keys": [],
+    "candidates": [],
+    "exclusions": [],
+    "windows": [],
+    "joins": [],
+    "freshness": "current"
+  }
+]

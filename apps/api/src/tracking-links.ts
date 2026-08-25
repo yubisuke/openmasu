@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
-import { assertAllowedDestination, randomSlug } from "@open-mmp/redirector-core";
-import { uuidV7, withTenant } from "@open-mmp/runtime";
+import { assertAllowedDestination, randomSlug } from "@openmasu/redirector-core";
+import { uuidV7, withTenant } from "@openmasu/runtime";
 import { recordDashboardAudit } from "./session.js";
 
 type Any = Record<string, any>;

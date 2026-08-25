@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:event-skan-postback:v0.3",
-  "title": "Open MMP SKAdNetwork Postback Event v0.3",
+  "$id": "urn:openmasu:schema:event-skan-postback:v0.4",
+  "title": "OpenMasu SKAdNetwork Postback Event v0.4",
   "type": "object",
   "additionalProperties": false,
   "required": [

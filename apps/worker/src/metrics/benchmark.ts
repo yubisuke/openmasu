@@ -1,17 +1,17 @@
 import { performance } from "node:perf_hooks";
 import { cpus, totalmem } from "node:os";
 import { Client } from "pg";
-import { requireEnvironment } from "@open-mmp/runtime";
+import { requireEnvironment } from "@openmasu/runtime";
 
-const requestedRows = Number(process.env.OPENMMP_BENCHMARK_ROWS ?? "100000");
+const requestedRows = Number(process.env.OPENMASU_BENCHMARK_ROWS ?? "100000");
 if (!Number.isSafeInteger(requestedRows) || requestedRows < 1 || requestedRows > 10_000_000) {
-  throw new Error("OPENMMP_BENCHMARK_ROWS must be an integer between 1 and 10000000");
+  throw new Error("OPENMASU_BENCHMARK_ROWS must be an integer between 1 and 10000000");
 }
 
 const client = new Client({
   connectionString: requireEnvironment(
-    "OPENMMP_MIGRATION_DATABASE_URL",
-    process.env.OPENMMP_MIGRATION_DATABASE_URL,
+    "OPENMASU_MIGRATION_DATABASE_URL",
+    process.env.OPENMASU_MIGRATION_DATABASE_URL,
   ),
 });
 await client.connect();
@@ -36,7 +36,7 @@ const environmentBase = {
 };
 try {
   await client.query("BEGIN");
-  await client.query("SET LOCAL ROLE openmmp_owner");
+  await client.query("SET LOCAL ROLE openmasu_owner");
   await client.query(`DROP TABLE IF EXISTS ${table}`);
   await client.query(`
     CREATE UNLOGGED TABLE ${table} (

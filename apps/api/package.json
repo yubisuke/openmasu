@@ -1,13 +1,13 @@
 {
-  "name": "@open-mmp/api",
+  "name": "@openmasu/api",
   "version": "0.1.0",
   "private": true,
-  "description": "Open MMP HTTP API",
+  "description": "OpenMasu HTTP API",
   "type": "module",
   "dependencies": {
-    "@open-mmp/apple-postback": "0.1.0",
-    "@open-mmp/redirector-core": "0.1.0",
-    "@open-mmp/runtime": "0.1.0",
+    "@openmasu/apple-postback": "0.1.0",
+    "@openmasu/redirector-core": "0.1.0",
+    "@openmasu/runtime": "0.1.0",
     "pg": "8.23.0"
   },
   "devDependencies": {

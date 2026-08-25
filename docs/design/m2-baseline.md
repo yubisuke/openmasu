@@ -94,7 +94,7 @@ M1 D-01 recorded the handoff verbatim: "SDK key as public identifier + HMAC-SHA2
 **Signing string.** One canonical string, newline-separated, with every component length-unambiguous:
 
 ```
-open-mmp-sdk-v1\n
+openmasu-sdk-v1\n
 <http-method>\n
 <path>\n
 <sdk_key_id>\n
@@ -106,7 +106,7 @@ open-mmp-sdk-v1\n
 
 The header carries `sdk_key_id`, `installation_key_id`, `timestamp_ms`, `nonce`, and the signature. The body digest, not the body, is signed, so the server can verify before parsing JSON — an important ordering property, because it means malformed or hostile JSON is rejected by an authenticated path rather than by the parser.
 
-**Server-side secret storage.** HMAC verification needs the secret in recoverable form, unlike the admin key's scrypt verifier. Store the SDK secret **envelope-encrypted with the existing `OPENMMP_PAYLOAD_MASTER_KEY` mechanism** (`apps/runtime/src/payload-store.ts`), not in plaintext, and record the residual risk explicitly in `docs/threat-model.md`: a compromise of both the database and the KEK permits forgery. Do not invent a second key-management mechanism for this.
+**Server-side secret storage.** HMAC verification needs the secret in recoverable form, unlike the admin key's scrypt verifier. Store the SDK secret **envelope-encrypted with the existing `OPENMASU_PAYLOAD_MASTER_KEY` mechanism** (`apps/runtime/src/payload-store.ts`), not in plaintext, and record the residual risk explicitly in `docs/threat-model.md`: a compromise of both the database and the KEK permits forgery. Do not invent a second key-management mechanism for this.
 
 **Rotation.** Two active SDK keys at a time, mirroring `control.admin_keys` exactly (`active` / `retired` through a `*_states` table and a `*_current` view). An app build pins one `sdk_key_id`; a rotation therefore has to overlap for as long as the old build is in the field, which is longer than an operator expects. Say that in the documentation: the overlap window is an app-release-adoption window, not an operations window.
 
@@ -147,9 +147,9 @@ M1 D-06 chose permanent DB uniqueness on `(tenant_id, app_id, producer, event_id
 - Nonce retention: **15 minutes** (window + margin). A nonce older than the window is rejected by the timestamp check before the cache is consulted, so retention beyond window+margin buys nothing.
 - Nonce: 16 random bytes, base64url.
 
-**Where it lives — this is the structural question.** The nonce cache needs eviction, and the M1 ledger revokes `UPDATE`, `DELETE`, and `TRUNCATE` from `openmmp_app` on **both** `control` and `ledger` (`db/schema.sql`). At 300k DAU this table takes on the order of 10^6 rows per day; keeping it forever is not an option.
+**Where it lives — this is the structural question.** The nonce cache needs eviction, and the M1 ledger revokes `UPDATE`, `DELETE`, and `TRUNCATE` from `openmasu_app` on **both** `control` and `ledger` (`db/schema.sql`). At 300k DAU this table takes on the order of 10^6 rows per day; keeping it forever is not an option.
 
-- (a) A new `ephemeral` schema with RLS enabled and `SELECT, INSERT, DELETE` granted to `openmmp_app`, documented as explicitly *not* evidence and outside the append-only guarantee.
+- (a) A new `ephemeral` schema with RLS enabled and `SELECT, INSERT, DELETE` granted to `openmasu_app`, documented as explicitly *not* evidence and outside the append-only guarantee.
 - (b) A time-partitioned table in `ledger` whose old partitions are dropped by an owner-privileged maintenance job.
 - (c) Redis.
 
@@ -181,14 +181,14 @@ Same instrument as M1 D-11: in-process token buckets, no Redis, refuse **before*
 
 | Surface | Unit | Proposed default | Env variable |
 | --- | --- | --- | --- |
-| `POST /v1/events/batch` | per `installation_key_id` | 1 req/s, burst 20 | `OPENMMP_INGEST_RATE_RPS`, `_BURST` |
-| `POST /v1/events/batch` | per `sdk_key_id` | 500 req/s, burst 1000 | `OPENMMP_INGEST_APP_RATE_RPS`, `_BURST` |
-| `POST /v1/events/batch` | body bytes | 256 KiB | `OPENMMP_INGEST_MAX_BYTES` |
-| `POST /v1/events/batch` | events per batch | 100 | `OPENMMP_INGEST_MAX_EVENTS` |
-| `POST /v1/installations` | per `sdk_key_id` | 20 req/s, burst 100 | `OPENMMP_ENROLL_RATE_RPS`, `_BURST` |
-| `POST /v1/privacy/on-device` | per `installation_key_id` | 1 req/min, burst 3 | `OPENMMP_DEVICE_PRIVACY_RATE_RPM` |
-| `GET /r/{slug}` | per source IP, in memory only | 20 req/s, burst 100 | `OPENMMP_REDIRECT_RATE_RPS`, `_BURST` |
-| `GET /r/{slug}` | per slug | 2000 req/s, burst 5000 | `OPENMMP_REDIRECT_SLUG_RATE_RPS` |
+| `POST /v1/events/batch` | per `installation_key_id` | 1 req/s, burst 20 | `OPENMASU_INGEST_RATE_RPS`, `_BURST` |
+| `POST /v1/events/batch` | per `sdk_key_id` | 500 req/s, burst 1000 | `OPENMASU_INGEST_APP_RATE_RPS`, `_BURST` |
+| `POST /v1/events/batch` | body bytes | 256 KiB | `OPENMASU_INGEST_MAX_BYTES` |
+| `POST /v1/events/batch` | events per batch | 100 | `OPENMASU_INGEST_MAX_EVENTS` |
+| `POST /v1/installations` | per `sdk_key_id` | 20 req/s, burst 100 | `OPENMASU_ENROLL_RATE_RPS`, `_BURST` |
+| `POST /v1/privacy/on-device` | per `installation_key_id` | 1 req/min, burst 3 | `OPENMASU_DEVICE_PRIVACY_RATE_RPM` |
+| `GET /r/{slug}` | per source IP, in memory only | 20 req/s, burst 100 | `OPENMASU_REDIRECT_RATE_RPS`, `_BURST` |
+| `GET /r/{slug}` | per slug | 2000 req/s, burst 5000 | `OPENMASU_REDIRECT_SLUG_RATE_RPS` |
 
 The enrollment bucket is the one that matters for abuse: it is the rate at which fake installations can be created. Deliberately generous relative to a real app's install rate and deliberately finite.
 
@@ -264,7 +264,7 @@ Click flooding is the same shape: the redirector's per-slug bucket (M2-S-5) is t
 - (b) Populate it from a bundled offline GeoIP database; store only the two-letter code; never store or log the IP.
 - (c) (b) always on.
 
-**Decided (R-24): (b), defaulting to off** (`OPENMMP_REDIRECTOR_GEO=off|country`). Two facts drive it. First, `docs/privacy-security.md` forbids deriving a **fingerprint** from IP; a country code is not a fingerprint, so the principle does not forbid (b) — but it is close enough to the line that it should be the operator's decision and not a default. Second, and decisively for a self-hosting operator: Google Play's Data safety guidance states that where developers use IP addresses to determine location, that data type must be declared. **Defaulting to off means the default deployment's Data safety mapping does not have to declare location.** Turning it on is a documented, one-line change with a documented disclosure consequence. Shipping (c) would silently change every operator's Play declaration.
+**Decided (R-24): (b), defaulting to off** (`OPENMASU_REDIRECTOR_GEO=off|country`). Two facts drive it. First, `docs/privacy-security.md` forbids deriving a **fingerprint** from IP; a country code is not a fingerprint, so the principle does not forbid (b) — but it is close enough to the line that it should be the operator's decision and not a default. Second, and decisively for a self-hosting operator: Google Play's Data safety guidance states that where developers use IP addresses to determine location, that data type must be declared. **Defaulting to off means the default deployment's Data safety mapping does not have to declare location.** Turning it on is a documented, one-line change with a documented disclosure consequence. Shipping (c) would silently change every operator's Play declaration.
 
 The same page's ephemeral-processing exception ("stored in memory and retained for no longer than necessary to service the specific request in real-time... will not be disclosed in your app's Data safety section") is the reason the *rate limiter's* in-memory use of the IP needs no declaration. Cite it in `docs/privacy-security.md` rather than asserting the conclusion.
 
@@ -284,7 +284,7 @@ Verified on 2026-08-19 from the primary page: the key is a 64-character hex stri
 
 The device therefore reads the ContentProvider, extracts `install_referrer` / `is_ct` / `actual_timestamp` verbatim, and sends them as protected payload. The device never sees a decryption key and never parses Meta's structure.
 
-**Rotation.** Not documented by Meta, so design for it defensively: accept `OPENMMP_META_IR_DECRYPTION_KEY` and `OPENMMP_META_IR_DECRYPTION_KEY_PREVIOUS`, try the current key first and the previous key on authentication-tag failure, and record which key succeeded on the raw record. Cost is a dozen lines; the alternative is an unrecoverable gap on the day the key is rotated.
+**Rotation.** Not documented by Meta, so design for it defensively: accept `OPENMASU_META_IR_DECRYPTION_KEY` and `OPENMASU_META_IR_DECRYPTION_KEY_PREVIOUS`, try the current key first and the previous key on authentication-tag failure, and record which key succeeded on the raw record. Cost is a dozen lines; the alternative is an unrecoverable gap on the day the key is rotated.
 
 **A trap worth naming.** The `<queries>` package names and the ContentProvider authorities do not match, and mixing them silently yields "no Meta app" on every device:
 
@@ -442,7 +442,7 @@ Neither is acceptable. `unknown_click_id` means "a click ID was presented and di
 
 ## Data model additions
 
-Same conventions as M1: identifiers are `control.identifier`, contract timestamps are `control.canonical_timestamp` with a generated `timestamptz` for range queries, RLS is `FORCE`d with `SET LOCAL open_mmp.tenant_id`, and lifecycle is expressed by append-only `*_states` tables plus a `*_current` view. Nothing below deviates.
+Same conventions as M1: identifiers are `control.identifier`, contract timestamps are `control.canonical_timestamp` with a generated `timestamptz` for range queries, RLS is `FORCE`d with `SET LOCAL openmasu.tenant_id`, and lifecycle is expressed by append-only `*_states` tables plus a `*_current` view. Nothing below deviates.
 
 ### Control plane
 
@@ -503,7 +503,7 @@ Two properties are deliberate.
 ### Ephemeral (new schema)
 
 ```sql
-CREATE SCHEMA ephemeral AUTHORIZATION openmmp_owner;
+CREATE SCHEMA ephemeral AUTHORIZATION openmasu_owner;
 
 CREATE TABLE ephemeral.request_nonces (
   tenant_id control.identifier NOT NULL,
@@ -517,7 +517,7 @@ CREATE TABLE ephemeral.request_nonces (
 );
 CREATE INDEX request_nonces_sweep_idx ON ephemeral.request_nonces (received_at_ts);
 
-GRANT SELECT, INSERT, DELETE ON ephemeral.request_nonces TO openmmp_app;
+GRANT SELECT, INSERT, DELETE ON ephemeral.request_nonces TO openmasu_app;
 ```
 
 RLS applies exactly as in `ledger` and `control`. The schema name is the documentation: `ephemeral` holds no evidence, is outside the append-only guarantee, and may be truncated at any time with no loss of contract meaning. That is a claim a reader of `db/schema.sql` can check.
@@ -696,7 +696,7 @@ Under (c) the sequence is: the SDK issues a signed on-device deletion request fo
 
 Simpler, and it should stay simple. `setCollectionEnabled(false)`: stop generating events, stop delivering, retain the queue (this is not a consent withdrawal, so the M2-S-12 purge does not apply), persist the flag in the backup-excluded subtree, and honour it before any other initialisation so that a disabled SDK performs no Install Referrer read, no Meta provider query, and no network call. Re-enabling resumes delivery of whatever was queued. `docs/product-scope.md` evidence gate 6 — "the SDK sends no new events after collection is disabled" — is A-17.
 
-The one trap: `setCollectionEnabled(false)` called before `init()` must be honoured. A flag that only works after initialisation means the first launch always reads the referrer. Recommend a manifest meta-data key (`com.openmmp.COLLECTION_ENABLED_DEFAULT=false`) so an app can start disabled, which is what a consent-gated app actually needs.
+The one trap: `setCollectionEnabled(false)` called before `init()` must be honoured. A flag that only works after initialisation means the first launch always reads the referrer. Recommend a manifest meta-data key (`com.openmasu.COLLECTION_ENABLED_DEFAULT=false`) so an app can start disabled, which is what a consent-gated app actually needs.
 
 ### M2-D-24. MAX impression-level ad revenue
 
@@ -800,7 +800,7 @@ Proposed shape for H-3, deliberately narrow: `event_name = "custom_event"` with 
 
 One new service, `redirector`, on its own port, `depends_on: migrate`. Bootstrap prints the redirector base URL alongside the admin key and the MAX postback template. The first-run promise is unchanged: `docker compose up` on a clean clone, no manual step.
 
-New environment variables — all of them in `.env.example` with a generator command, because `npm run test:env-coverage` fails otherwise (M1 A13): `OPENMMP_REDIRECTOR_PORT`, `OPENMMP_REDIRECTOR_BASE_URL`, `OPENMMP_REDIRECTOR_FALLBACK_URL`, `OPENMMP_REDIRECTOR_DESTINATION_ALLOWLIST`, `OPENMMP_REDIRECTOR_GEO`, `OPENMMP_SDK_KEY` / `_FILE`, `OPENMMP_SDK_KEY_PREVIOUS` / `_FILE`, `OPENMMP_META_IR_DECRYPTION_KEY` / `_FILE`, `OPENMMP_META_IR_DECRYPTION_KEY_PREVIOUS` / `_FILE`, `OPENMMP_INGEST_SKEW_MS`, `OPENMMP_NONCE_TTL_MS`, plus every limit in the M2-S-5 table.
+New environment variables — all of them in `.env.example` with a generator command, because `npm run test:env-coverage` fails otherwise (M1 A13): `OPENMASU_REDIRECTOR_PORT`, `OPENMASU_REDIRECTOR_BASE_URL`, `OPENMASU_REDIRECTOR_FALLBACK_URL`, `OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST`, `OPENMASU_REDIRECTOR_GEO`, `OPENMASU_SDK_KEY` / `_FILE`, `OPENMASU_SDK_KEY_PREVIOUS` / `_FILE`, `OPENMASU_META_IR_DECRYPTION_KEY` / `_FILE`, `OPENMASU_META_IR_DECRYPTION_KEY_PREVIOUS` / `_FILE`, `OPENMASU_INGEST_SKEW_MS`, `OPENMASU_NONCE_TTL_MS`, plus every limit in the M2-S-5 table.
 
 ### CI
 
@@ -844,9 +844,9 @@ Written as commands and observable outcomes; "verify" means the output goes into
 
 **A-05 — signature verification.** A correctly signed batch returns `202`. Flipping one byte of the body, of `sdk_key_id`, of `timestamp_ms`, of the nonce, or of the signature returns `401` and writes an `audit_logs` row with `outcome=failed`. Verification happens before JSON parsing: a batch with a valid signature over a malformed body returns `400`, while the same malformed body unsigned returns `401`.
 
-**A-06 — replay rejection.** Replaying a byte-identical valid request returns `401` with `nonce_reused`. A signature whose `timestamp_ms` is 6 minutes old returns `401` with `timestamp_out_of_window`. After `OPENMMP_NONCE_TTL_MS`, the sweep has removed the nonce row and the stale request is still rejected by the timestamp check — proving the two controls are independent.
+**A-06 — replay rejection.** Replaying a byte-identical valid request returns `401` with `nonce_reused`. A signature whose `timestamp_ms` is 6 minutes old returns `401` with `timestamp_out_of_window`. After `OPENMASU_NONCE_TTL_MS`, the sweep has removed the nonce row and the stale request is still rejected by the timestamp check — proving the two controls are independent.
 
-**A-07 — limits refuse before insert.** A batch over `OPENMMP_INGEST_MAX_BYTES` or `OPENMMP_INGEST_MAX_EVENTS` returns `413`/`400` and `SELECT count(*) FROM ledger.ingest_batches` is unchanged. Exceeding either bucket returns `429`.
+**A-07 — limits refuse before insert.** A batch over `OPENMASU_INGEST_MAX_BYTES` or `OPENMASU_INGEST_MAX_EVENTS` returns `413`/`400` and `SELECT count(*) FROM ledger.ingest_batches` is unchanged. Exceeding either bucket returns `429`.
 
 **A-08 — durable receipt.** A valid batch returns `202` with `curl -w '%{time_total}'` below 0.2 s; the row is present in `ledger.ingest_batches` before the response; killing the worker before it drains and restarting it still produces the logical events.
 
@@ -864,7 +864,7 @@ Written as commands and observable outcomes; "verify" means the output goes into
 
 **A-22 — on-device deletion is authorised, not merely authenticated.** Unsigned → `401`. Signed with installation A's credential but naming installation B → `403`, no tombstone, an `audit_logs` row with `outcome=failed`. Signed for itself → tombstones, corrections, a superseding metric run, and `requester_auth_ref` matching `^sdk_auth:`; the credential object and its wrapped key are gone from the payload store and no longer decrypt; the `privacy_request` artifact contains no `deletion_subject_ref` and does contain `deletion_subject_digest`.
 
-**A-24 — IP is never persisted.** After a full redirector and ingestion test run, a full-text scan of every database table and every payload-store object finds no occurrence of the source IP used. With `OPENMMP_REDIRECTOR_GEO=off`, `click.country` is absent.
+**A-24 — IP is never persisted.** After a full redirector and ingestion test run, a full-text scan of every database table and every payload-store object finds no occurrence of the source IP used. With `OPENMASU_REDIRECTOR_GEO=off`, `click.country` is absent.
 
 **A-25 — contract gate untouched.** `npm run validate` prints its unchanged summary line and `git diff --stat -- fixtures/` is empty. (If contract v0.3 lands first, the summary line changes exactly once, in the contract work order, and never in WO-6.)
 

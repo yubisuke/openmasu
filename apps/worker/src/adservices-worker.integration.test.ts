@@ -10,7 +10,7 @@ import {
   createAppPool,
   EncryptedFilePayloadStore,
   withTenant,
-} from "@open-mmp/runtime";
+} from "@openmasu/runtime";
 import { createRequestHandler } from "../../api/src/router.js";
 import { KeyedTokenBucket } from "../../api/src/rate-limit.js";
 import { ensureSdkKeys, signSdkRequest } from "../../api/src/sdk-auth.js";
@@ -24,7 +24,7 @@ const sdkKeyId = `sdk-key-ios-${run}`;
 const sdkSecret = `sdk-secret-${randomBytes(32).toString("base64url")}`;
 const masterKey = `master-${randomBytes(32).toString("base64url")}`;
 const digestKey = `digest-${randomBytes(32).toString("base64url")}`;
-const root = mkdtempSync(join(tmpdir(), "open-mmp-m4-adservices-"));
+const root = mkdtempSync(join(tmpdir(), "openmasu-m4-adservices-"));
 const pool = createAppPool();
 const payloadStore = new EncryptedFilePayloadStore(root, masterKey);
 const authConfig = {
@@ -59,11 +59,11 @@ async function signed(input: {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-openmmp-sdk-key-id": sdkKeyId,
-      "x-openmmp-installation-key-id": input.installationKeyId ?? "-",
-      "x-openmmp-timestamp-ms": String(timestampMs),
-      "x-openmmp-nonce": nonce,
-      "x-openmmp-signature": signature,
+      "x-openmasu-sdk-key-id": sdkKeyId,
+      "x-openmasu-installation-key-id": input.installationKeyId ?? "-",
+      "x-openmasu-timestamp-ms": String(timestampMs),
+      "x-openmasu-nonce": nonce,
+      "x-openmasu-signature": signature,
     },
     body,
   });

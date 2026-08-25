@@ -1,0 +1,53 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "delivery_id": "delivery:install-17",
+    "record_id": "install-17",
+    "canonical_record_id": "install-17",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-12T00:01:00.000Z",
+    "ingestion_status": "accepted",
+    "duplicate_resolution": "unique",
+    "timeliness": "on_time",
+    "clock_skew_suspected": false,
+    "payload_disposition": "protected",
+    "processing_purpose_id": "analytics",
+    "consent_evaluation_policy_version": "consent-v0.1",
+    "consent_decision_reason_code": "consent_not_required"
+  },
+  {
+    "contract_version": "0.4.0",
+    "delivery_id": "delivery:revenue-17",
+    "record_id": "revenue-17",
+    "canonical_record_id": "revenue-17",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-12T01:01:00.000Z",
+    "ingestion_status": "accepted",
+    "duplicate_resolution": "unique",
+    "timeliness": "on_time",
+    "clock_skew_suspected": false,
+    "payload_disposition": "protected",
+    "processing_purpose_id": "analytics",
+    "consent_evaluation_policy_version": "consent-v0.1",
+    "consent_decision_reason_code": "consent_not_required"
+  },
+  {
+    "contract_version": "0.4.0",
+    "delivery_id": "delivery:session-purge-17",
+    "record_id": "session-purge-17",
+    "canonical_record_id": "session-purge-17",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-12T00:31:00.000Z",
+    "ingestion_status": "accepted",
+    "duplicate_resolution": "unique",
+    "timeliness": "on_time",
+    "clock_skew_suspected": false,
+    "payload_disposition": "protected",
+    "processing_purpose_id": "analytics",
+    "consent_evaluation_policy_version": "consent-v0.1",
+    "consent_decision_reason_code": "consent_not_required"
+  }
+]

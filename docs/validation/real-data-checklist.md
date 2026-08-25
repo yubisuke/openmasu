@@ -11,8 +11,8 @@ This procedure is an operator-owned M1.5 input. Run it only in a private deploym
 
 ## 1. D7 ROAS comparison
 
-1. Select one authorized campaign cohort and freeze the Open MMP watermark, metric-definition version, rule-bundle version, timezone, FX snapshot, and cost snapshot.
-2. Compute D7 ROAS in Open MMP and obtain the corresponding existing-MMP result through an authorized private export or dashboard.
+1. Select one authorized campaign cohort and freeze the OpenMasu watermark, metric-definition version, rule-bundle version, timezone, FX snapshot, and cost snapshot.
+2. Compute D7 ROAS in OpenMasu and obtain the corresponding existing-MMP result through an authorized private export or dashboard.
 3. Record both values, denominators, coverage limits, snapshot identifiers, and percentage difference only in the private validation record. Never paste values, campaign identifiers, screenshots, or exports into this repository.
 4. Classify the difference using candidates, exclusions, windows, joins, freshness, import limits, redaction, currency policy, or modeled-conversion evidence. Do not describe either provider as correct or incorrect.
 5. Treat an unexplained difference or a difference outside the owner-approved tolerance as an M1.5 decision input, not as evidence to silently change a public metric definition.

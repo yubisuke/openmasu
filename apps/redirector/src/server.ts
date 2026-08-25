@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { createAppPool, EncryptedFilePayloadStore, EnvironmentSecretStore } from "@open-mmp/runtime";
+import { createAppPool, EncryptedFilePayloadStore, EnvironmentSecretStore } from "@openmasu/runtime";
 import { createRedirectorHandler } from "./handler.js";
 
 class BoundedIpBucket {
@@ -19,25 +19,25 @@ class BoundedIpBucket {
   }
 }
 
-const port = Number(process.env.OPENMMP_REDIRECTOR_PORT ?? "8090");
+const port = Number(process.env.OPENMASU_REDIRECTOR_PORT ?? "8090");
 const secrets = new EnvironmentSecretStore({
-  OPENMMP_PAYLOAD_MASTER_KEY: { value: process.env.OPENMMP_PAYLOAD_MASTER_KEY, file: process.env.OPENMMP_PAYLOAD_MASTER_KEY_FILE },
+  OPENMASU_PAYLOAD_MASTER_KEY: { value: process.env.OPENMASU_PAYLOAD_MASTER_KEY, file: process.env.OPENMASU_PAYLOAD_MASTER_KEY_FILE },
 });
 const payloadStore = new EncryptedFilePayloadStore(
-  process.env.OPENMMP_PAYLOAD_STORE_DIR ?? ".openmmp/payloads",
-  secrets.require("OPENMMP_PAYLOAD_MASTER_KEY"),
+  process.env.OPENMASU_PAYLOAD_STORE_DIR ?? ".openmasu/payloads",
+  secrets.require("OPENMASU_PAYLOAD_MASTER_KEY"),
 );
-const geoMode = process.env.OPENMMP_REDIRECTOR_GEO ?? "off";
-if (geoMode !== "off" && geoMode !== "country") throw new Error("OPENMMP_REDIRECTOR_GEO must be off or country");
+const geoMode = process.env.OPENMASU_REDIRECTOR_GEO ?? "off";
+if (geoMode !== "off" && geoMode !== "country") throw new Error("OPENMASU_REDIRECTOR_GEO must be off or country");
 const server = createServer(createRedirectorHandler({
   pool: createAppPool(),
   payloadStore,
-  tenantId: process.env.OPENMMP_REDIRECTOR_TENANT_ID ?? "tenant-local",
-  fallbackUrl: process.env.OPENMMP_REDIRECTOR_FALLBACK_URL ?? "https://play.google.com/store",
+  tenantId: process.env.OPENMASU_REDIRECTOR_TENANT_ID ?? "tenant-local",
+  fallbackUrl: process.env.OPENMASU_REDIRECTOR_FALLBACK_URL ?? "https://play.google.com/store",
   geoMode,
   limiter: new BoundedIpBucket(
-    Number(process.env.OPENMMP_REDIRECTOR_RATE_RPS ?? "20"),
-    Number(process.env.OPENMMP_REDIRECTOR_RATE_BURST ?? "50"),
+    Number(process.env.OPENMASU_REDIRECTOR_RATE_RPS ?? "20"),
+    Number(process.env.OPENMASU_REDIRECTOR_RATE_BURST ?? "50"),
   ),
 }));
 

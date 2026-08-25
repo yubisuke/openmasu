@@ -1,12 +1,12 @@
 {
-  "name": "@open-mmp/redirector",
+  "name": "@openmasu/redirector",
   "version": "0.1.0",
   "private": true,
-  "description": "Portable Open MMP redirector HTTP service",
+  "description": "Portable OpenMasu redirector HTTP service",
   "type": "module",
   "dependencies": {
-    "@open-mmp/redirector-core": "0.1.0",
-    "@open-mmp/runtime": "0.1.0",
+    "@openmasu/redirector-core": "0.1.0",
+    "@openmasu/runtime": "0.1.0",
     "pg": "8.23.0"
   },
   "devDependencies": {

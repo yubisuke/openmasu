@@ -1,6 +1,7 @@
-import type { OpenMMPMetricDefinitionV03 } from "./generated/contract-types.js";
+import type { OpenMasuMetricDefinitionV04 } from "./generated/contract-types.js";
 
-const CONTRACT_VERSION = "0.3.0";
+// Metric and rule-bundle identifiers are independent of the contract namespace.
+const METRIC_DEFINITION_VERSION = "0.3.0";
 const RULE_BUNDLE_ID = "metric-stage-b";
 const RULE_BUNDLE_HASH = "2".repeat(64);
 const AGGREGATION_TIME_ZONE = "UTC";
@@ -13,21 +14,21 @@ const METRIC_GROUPING_DIMENSIONS = ["campaign_id", "network", "country", "cohort
 export const M1B_DEFAULT_ACTIVITY_EVENTS = ["session_start"] as const;
 
 function ruleBundle(): Pick<
-  OpenMMPMetricDefinitionV03,
+  OpenMasuMetricDefinitionV04,
   "rule_bundle_id" | "rule_bundle_version" | "rule_bundle_hash" | "grouping_dimensions"
 > {
   return {
     rule_bundle_id: RULE_BUNDLE_ID,
-    rule_bundle_version: CONTRACT_VERSION,
+    rule_bundle_version: METRIC_DEFINITION_VERSION,
     rule_bundle_hash: RULE_BUNDLE_HASH,
     grouping_dimensions: [...METRIC_GROUPING_DIMENSIONS],
   };
 }
 
-function roas(day: (typeof COHORT_DAYS)[number]): OpenMMPMetricDefinitionV03 {
+function roas(day: (typeof COHORT_DAYS)[number]): OpenMasuMetricDefinitionV04 {
   return {
     metric_name: `d${day}_roas`,
-    metric_definition_version: CONTRACT_VERSION,
+    metric_definition_version: METRIC_DEFINITION_VERSION,
     anchor_event: "install",
     aggregation_time_zone: AGGREGATION_TIME_ZONE,
     value_type: "ratio",
@@ -43,10 +44,10 @@ function roas(day: (typeof COHORT_DAYS)[number]): OpenMMPMetricDefinitionV03 {
   };
 }
 
-function retention(day: 1 | 7): OpenMMPMetricDefinitionV03 {
+function retention(day: 1 | 7): OpenMasuMetricDefinitionV04 {
   return {
     metric_name: `retention_d${day}`,
-    metric_definition_version: CONTRACT_VERSION,
+    metric_definition_version: METRIC_DEFINITION_VERSION,
     anchor_event: "install",
     aggregation_time_zone: AGGREGATION_TIME_ZONE,
     value_type: "ratio",
@@ -62,10 +63,10 @@ function retention(day: 1 | 7): OpenMMPMetricDefinitionV03 {
   };
 }
 
-function ltv(day: (typeof COHORT_DAYS)[number]): OpenMMPMetricDefinitionV03 {
+function ltv(day: (typeof COHORT_DAYS)[number]): OpenMasuMetricDefinitionV04 {
   return {
     metric_name: `cohort_ltv_d${day}_usd`,
-    metric_definition_version: CONTRACT_VERSION,
+    metric_definition_version: METRIC_DEFINITION_VERSION,
     anchor_event: "install",
     aggregation_time_zone: AGGREGATION_TIME_ZONE,
     value_type: "money",
@@ -81,14 +82,14 @@ function ltv(day: (typeof COHORT_DAYS)[number]): OpenMMPMetricDefinitionV03 {
   };
 }
 
-export const M1B_METRIC_DEFINITIONS: ReadonlyArray<OpenMMPMetricDefinitionV03> = [
+export const M1B_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricDefinitionV04> = [
   ...COHORT_DAYS.map(roas),
   retention(1),
   retention(7),
   ...COHORT_DAYS.map(ltv),
   {
     metric_name: "cohort_install_count",
-    metric_definition_version: CONTRACT_VERSION,
+    metric_definition_version: METRIC_DEFINITION_VERSION,
     anchor_event: "install",
     aggregation_time_zone: AGGREGATION_TIME_ZONE,
     value_type: "count",

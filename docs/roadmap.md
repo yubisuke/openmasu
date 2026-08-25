@@ -6,6 +6,7 @@ This is the canonical milestone sequence. `docs/project-plan.md` is a phase summ
 | --- | --- | --- |
 | M0.2 Contract v0.2 | Phase 0.2 | Contract, registries, fixtures, and evaluators |
 | M0.3 Contract v0.3 | Phase 0.3 | Narrow Android/Unity/Meta contract extensions required by M2 |
+| M0.4 Contract v0.4 | Phase 0.4 | Identity-only OpenMasu namespace migration and release baseline |
 | M1a Shadow ledger and import foundation | Phase 1a | Received-evidence ledger, three import paths, and runtime security foundation |
 | M1b Cohort metrics and difference audit | Phase 1b | Recalculable decision metrics and neutral reconciliation |
 | M1.5 Continuation decision gate | Phase 1.5 | Owner decision based on operator-run validation; no code deliverable |
@@ -26,7 +27,7 @@ Contract v0.2 is complete and the full local contract validation suite passes. I
 - Synthetic duplicate, conflict, late, missing, import, aggregate, and platform fixtures
 - Public fraud-evidence schema and private live-policy boundary
 - Independently implemented TypeScript and Python evaluators
-- Apache-2.0 licensing is complete; name and trademark clearance remains a release prerequisite owned by the project maintainer before the first public release
+- Apache-2.0 licensing is complete; preliminary name clearance was completed on 2026-08-20, while formal trademark clearance remains required before any trademark registration
 - A public `SECURITY.md` and a maintainer-approved private reporting path are required before M1a accepts runtime code
 
 Evidence gate: Independently implemented evaluators reproduce the same reviewed canonical outputs from the same synthetic fixtures and policy versions.
@@ -36,6 +37,12 @@ Evidence gate: Independently implemented evaluators reproduce the same reviewed 
 Contract v0.3 is complete and locally validated. It preserves the M0.2 audit model while adding only the vocabulary and closed evidence shapes required by M2: third-party referrer classification, typed Meta Install Referrer evidence and precedence, imported click evidence, attribution-status metric grouping, a closed custom event, public click-injection classification, revenue precision, and wrapper provenance. The immutable v0.2.1 baseline is the `contract-v0.2.1` Git tag.
 
 Evidence gate: 27 schemas, 8 registries, 47 reviewed synthetic fixtures, both independent evaluators, registry/schema equality, CTIT boundary mutations, optional integrity evidence, and runtime payload-schema rejection pass without real data or credentials.
+
+## M0.4 Contract v0.4
+
+Contract v0.4.0 is complete and mechanically proven equivalent to the immutable `contract-v0.3.6` baseline except for contract-owned identifiers, the OpenMasu namespace, and the resulting fixture-45 digests. The active schemas, registries, fixtures, specification, generated types, and both evaluators use the v0.4 identity as one unit. Metric, attribution, privacy, reconciliation, and fraud semantics are unchanged.
+
+Evidence gate: `npm run verify:contract-rename` reports `SEMANTIC_DIFF=0`, `npm run validate` preserves TypeScript/Python JCS parity across all 47 synthetic fixtures, and the full CI suite passes without real data or credentials.
 
 ## M1a Shadow ledger and import foundation
 

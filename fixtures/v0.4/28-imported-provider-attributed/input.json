@@ -1,0 +1,82 @@
+{
+  "contract_version": "0.4.0",
+  "fx_policy": {
+    "policy_version": "fx-v0.2",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [{ "currency": "USD", "rate_unscaled": "100000000", "rate_scale": 8, "source": "synthetic-fixture-rate", "as_of": "2026-08-18T00:00:00.000Z" }]
+  },
+  "metric_evaluations": [],
+  "reconciliation_inputs": [],
+  "privacy_requests": [],
+  "server_context": {
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-18T01:00:00.000Z",
+    "policy_digest": "policy-v0.2",
+    "processing_purposes": [{ "processing_purpose_id": "analytics", "consent_required": false, "policy_version": "consent-v0.2" }],
+    "withdrawals": [],
+    "alternative_legal_bases": []
+  },
+  "records": [
+    {
+      "contract_version": "0.4.0",
+      "record_id": "import-click-28",
+      "delivery_id": "delivery:import-click-28",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "redirector",
+      "producer_version": "fixture-v0.2",
+      "event_id": "event:import-click-28",
+      "event_name": "click",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-18T00:00:00.000Z",
+      "occurred_at_source": "server",
+      "received_at": "2026-08-18T01:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "click_id": "synthetic_click_ref_0028",
+        "tracking_link_id": "tracking-28",
+        "campaign_id": "campaign-28",
+        "network": "synthetic-network",
+        "remote_click_ref": "provider-click-28",
+        "redirector_time_status": "missing"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "import-install-28",
+      "delivery_id": "delivery:import-install-28",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "import:synthetic-provider",
+      "producer_version": "fixture-v0.2",
+      "event_id": "event:import-install-28",
+      "event_name": "install",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-18T00:05:00.000Z",
+      "occurred_at_source": "import",
+      "received_at": "2026-08-18T01:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 2,
+      "payload": {
+        "installation_id": "installation:import-28",
+        "install_type": "first_install",
+        "referrer_status": "unavailable",
+        "import_context": {
+          "provider": "synthetic-provider",
+          "provider_attributed": true,
+          "provider_attribution_strategy": "self_attributed_network",
+          "provider_install_ref": "provider-install-28",
+          "provider_click_ref": "provider-click-28",
+          "provider_campaign_ref": "provider-campaign-28",
+          "provider_network": "synthetic-network",
+          "provider_country": "US",
+          "provider_confirmed_at": "2026-08-18T00:10:00.000Z"
+        }
+      }
+    }
+  ]
+}

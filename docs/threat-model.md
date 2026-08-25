@@ -1,6 +1,6 @@
 # Initial Threat Model
 
-This is the public M0.3 Contract v0.3 threat model for the contract and its reference evaluators. It describes security properties and release gates, not live defenses, incident response timing, credentials, or personal data.
+This is the public M0.4 Contract v0.4 threat model for the contract and its reference evaluators. It describes security properties and release gates, not live defenses, incident response timing, credentials, or personal data.
 
 ## Assets and trust boundaries
 
@@ -12,7 +12,7 @@ This is the public M0.3 Contract v0.3 threat model for the contract and its refe
 
 Untrusted inputs cross the SDK, redirector, import, and fixture boundaries. The PostgreSQL ledger is the authoritative received-evidence store in the future runtime architecture. Edge delivery may be deployed close to users, but must preserve the same authenticated scope, immutable ledger semantics, and portable contract behavior.
 
-## M0.3 Contract v0.3 threats and contract controls
+## M0.4 Contract v0.4 threats and contract controls
 
 | Threat | Contract control | Evidence |
 | --- | --- | --- |
@@ -37,7 +37,7 @@ Untrusted inputs cross the SDK, redirector, import, and fixture boundaries. The 
 
 ## Deterministic selection policy
 
-Contract v0.3 does not select among multiple accepted clicks with one `click_id`: it returns `ambiguous_click_id`. If a later, explicitly versioned contract permits multiple candidates, it must first sort candidates by `redirector_click_at` descending, then `received_at` descending, then `record_id` ascending, and record the selected candidate and all exclusions. That future rule is not active in v0.3.
+Contract v0.4 does not select among multiple accepted clicks with one `click_id`: it returns `ambiguous_click_id`. If a later, explicitly versioned contract permits multiple candidates, it must first sort candidates by `redirector_click_at` descending, then `received_at` descending, then `record_id` ascending, and record the selected candidate and all exclusions. That future rule is not active in v0.4.
 
 ## M1a runtime threat table
 
@@ -102,4 +102,4 @@ Contract v0.3 does not select among multiple accepted clicks with one `click_id`
 
 M1-M5 now have local network services, a tenant database, authenticated and role-scoped admin paths, envelope-encrypted protected-object storage, Android/iOS SDKs, Apple receivers, synthetic restore/privacy/load gates, operational metrics, and release inventories. They still cannot prove production TLS termination, external secret-manager operation, real provider/device delivery, representative capacity, availability, backup operations, live integrity or fraud controls, App Store review, or incident response. Those remain operator gates.
 
-The M0.3 Contract v0.3 gate requires the complete fixture and mutation suite. The M1a local gate adds the [privacy and security release-gate crosswalk](privacy-security.md#release-gates), ledger-isolation and deletion tests, envelope-encryption evidence, runtime CI, and one SBOM per workspace. M5 adds disposable restore/privacy-reapply, RBAC, observability, and informational synthetic-load evidence. Production transport and operator evidence remain unverified until recorded outside this repository.
+The M0.4 Contract v0.4 gate requires the complete fixture and mutation suite plus the identity-only migration proof. The M1a local gate adds the [privacy and security release-gate crosswalk](privacy-security.md#release-gates), ledger-isolation and deletion tests, envelope-encryption evidence, runtime CI, and one SBOM per workspace. M5 adds disposable restore/privacy-reapply, RBAC, observability, and informational synthetic-load evidence. Production transport and operator evidence remain unverified until recorded outside this repository.

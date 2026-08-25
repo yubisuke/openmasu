@@ -11,7 +11,7 @@ import {
   createReaderPool,
   EncryptedFilePayloadStore,
   withTenant,
-} from "@open-mmp/runtime";
+} from "@openmasu/runtime";
 import { ensureAdminKeys, verifyAdminKey, type AppAdminIdentity } from "./admin-auth.js";
 import { createRequestHandler } from "./router.js";
 import { OperationalMetrics } from "./operational-metrics.js";
@@ -42,7 +42,7 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
     appPool = createAppPool();
     migrationPool = createMigrationPool();
     readerPool = createReaderPool();
-    payloadRoot = mkdtempSync(join(tmpdir(), "openmmp-m5-controls-"));
+    payloadRoot = mkdtempSync(join(tmpdir(), "openmasu-m5-controls-"));
     payloadStore = new EncryptedFilePayloadStore(
       payloadRoot,
       "synthetic-m5-master-key-00000000000000000000000",
@@ -136,7 +136,7 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
       3600,
       new Date("2026-08-20T00:00:00.000Z"),
     );
-    const cookie = `openmmp_dashboard=${session.token}`;
+    const cookie = `openmasu_dashboard=${session.token}`;
     assert.equal((await verifyDashboardSession(
       readerPool,
       tenantId,
@@ -175,8 +175,8 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
     assert.equal(response.status, 200);
     assert.match(response.headers.get("content-type") ?? "", /^text\/plain; version=0\.0\.4/);
     const body = await response.text();
-    assert.match(body, /openmmp_http_requests_total/);
-    assert.match(body, /openmmp_ingest_backlog\{queue="sdk_batches"\}/);
+    assert.match(body, /openmasu_http_requests_total/);
+    assert.match(body, /openmasu_ingest_backlog\{queue="sdk_batches"\}/);
     for (const forbidden of ["tenant_id", "app_id", "installation_id", "record_id", "payload", "authorization", "cookie"]) {
       assert.equal(body.includes(forbidden), false);
     }

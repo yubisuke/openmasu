@@ -1,9 +1,9 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
-import { uuidV7, withTenant } from "@open-mmp/runtime";
+import { uuidV7, withTenant } from "@openmasu/runtime";
 import type { AdminRole } from "./admin-auth.js";
 
-const csrfPurpose = "open-mmp-dashboard-csrf-v1";
+const csrfPurpose = "openmasu-dashboard-csrf-v1";
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
 
 export type DashboardSession = {
@@ -20,7 +20,7 @@ export function assertDashboardBaseUrl(enabled: boolean, publicBaseUrl: string):
   const localHosts = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
   if (enabled && parsed.protocol === "http:" && !localHosts.has(parsed.hostname)) {
     throw new Error(
-      "OPENMMP_DASHBOARD_INSECURE_ORIGIN: use the proxy Compose profile for non-localhost dashboard access",
+      "OPENMASU_DASHBOARD_INSECURE_ORIGIN: use the proxy Compose profile for non-localhost dashboard access",
     );
   }
   return parsed;
@@ -28,8 +28,8 @@ export function assertDashboardBaseUrl(enabled: boolean, publicBaseUrl: string):
 
 export function dashboardCookieName(publicBaseUrl: string): string {
   return new URL(publicBaseUrl).protocol === "https:"
-    ? "__Host-openmmp_dashboard"
-    : "openmmp_dashboard";
+    ? "__Host-openmasu_dashboard"
+    : "openmasu_dashboard";
 }
 
 export function dashboardSessionCookie(

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent Python evaluator for Open MMP Contract v0.3 fixtures."""
+"""Independent Python evaluator for OpenMasu Contract v0.4 fixtures."""
 
 from __future__ import annotations
 
@@ -12,7 +12,9 @@ from typing import Any
 
 import rfc8785
 
-CONTRACT_VERSION = "0.3.0"
+CONTRACT_VERSION = "0.4.0"
+# Rule bundles and metric definitions retain their independent v0.3 identities.
+REFERENCE_RULE_VERSION = "0.3.0"
 ZERO_HASH = "0" * 64
 DAY_MS = 86_400_000
 
@@ -496,7 +498,7 @@ def attribution(
         "input_cutoff_at": server["received_at"],
         "finality": "final",
         "rule_bundle_id": "attribution-default",
-        "rule_bundle_version": CONTRACT_VERSION,
+        "rule_bundle_version": REFERENCE_RULE_VERSION,
         "rule_bundle_hash": ZERO_HASH,
     }
 
@@ -650,7 +652,7 @@ def aggregate_postback_attribution(
         "input_cutoff_at": server["received_at"],
         "finality": "final",
         "rule_bundle_id": "apple-postback-default",
-        "rule_bundle_version": CONTRACT_VERSION,
+        "rule_bundle_version": REFERENCE_RULE_VERSION,
         "rule_bundle_hash": ZERO_HASH,
     }
 
@@ -703,13 +705,13 @@ def base_metric_definitions() -> list[dict[str, Any]]:
             "metric_name": metric_name,
             "aggregation_time_zone": zone,
             "definition": definition,
-            "metric_definition_version": CONTRACT_VERSION,
+            "metric_definition_version": REFERENCE_RULE_VERSION,
             "anchor_event": "install",
             "value_type": "money",
             "currency": "USD",
             "amount_scale": 6,
             "rule_bundle_id": "metric-default",
-            "rule_bundle_version": CONTRACT_VERSION,
+            "rule_bundle_version": REFERENCE_RULE_VERSION,
             "rule_bundle_hash": ZERO_HASH,
         }
         for metric_name, zone, definition in definitions
@@ -1212,7 +1214,7 @@ def reconciliation_results(value: dict[str, Any], accepted: list[dict[str, Any]]
             "input_snapshot_id": item["input_snapshot_id"],
             "external_snapshot_id": item["external_snapshot_id"],
             "difference_reason_code": reason,
-            "difference_reason_version": "0.3.0" if reason == "provider_modeled_conversion" else CONTRACT_VERSION,
+            "difference_reason_version": "0.4.0" if reason == "provider_modeled_conversion" else CONTRACT_VERSION,
             "matching_keys": matching_keys,
             "candidates": sorted((candidate["candidate_id"] for candidate in matched), key=utf16_key),
             "exclusions": sorted((candidate["exclusion_reason"] for candidate in matched if candidate["excluded"]), key=utf16_key),
@@ -1396,7 +1398,7 @@ def evaluate(value: dict[str, Any]) -> dict[str, Any]:
                 "access_class": "protected",
             }],
             "rule_bundle_id": "fraud-public-envelope",
-            "rule_bundle_version": CONTRACT_VERSION,
+            "rule_bundle_version": REFERENCE_RULE_VERSION,
             "rule_bundle_hash": ZERO_HASH,
             "evaluated_at": attempt["record"]["received_at"],
         }
@@ -1446,7 +1448,7 @@ def evaluate(value: dict[str, Any]) -> dict[str, Any]:
                 "access_class": "protected",
             }],
             "rule_bundle_id": "fraud-public-envelope",
-            "rule_bundle_version": CONTRACT_VERSION,
+            "rule_bundle_version": REFERENCE_RULE_VERSION,
             "rule_bundle_hash": ZERO_HASH,
             "evaluated_at": attempt["record"]["received_at"],
         })

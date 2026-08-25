@@ -1,0 +1,21 @@
+{
+  "name": "com.openmasu.sdk",
+  "version": "0.1.0",
+  "displayName": "OpenMasu SDK",
+  "description": "Auditable OpenMasu Android and iOS bridge for Unity.",
+  "unity": "2022.3",
+  "license": "Apache-2.0",
+  "keywords": ["analytics", "attribution", "android", "ios"],
+  "samples": [
+    {
+      "displayName": "Android measurement sample",
+      "description": "Initialises the Android bridge and sends one synthetic custom event.",
+      "path": "Samples~/AndroidMeasurement"
+    },
+    {
+      "displayName": "iOS measurement sample",
+      "description": "Initialises the iOS function-pointer bridge with deployment placeholders.",
+      "path": "Samples~/iOSMeasurement"
+    }
+  ]
+}

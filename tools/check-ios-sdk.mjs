@@ -26,7 +26,7 @@ function symbolPattern(symbol) {
   return new RegExp(`(?:^|[^A-Za-z0-9])_?${escaped}(?:$|[^A-Za-z0-9])`, "m");
 }
 
-const manifestPath = join(root, "sdk", "ios", "Sources", "OpenMmpCore", "PrivacyInfo.xcprivacy");
+const manifestPath = join(root, "sdk", "ios", "Sources", "OpenMasuCore", "PrivacyInfo.xcprivacy");
 const manifest = readFileSync(manifestPath, "utf8");
 check(/<key>NSPrivacyTracking<\/key>\s*<false\/>/.test(manifest), "NSPrivacyTracking must be false");
 check(!manifest.includes("NSPrivacyTrackingDomains"), "NSPrivacyTrackingDomains must be absent");
@@ -55,7 +55,7 @@ check(packageText.includes('.process("PrivacyInfo.xcprivacy")'), "privacy manife
 const sourceFiles = [
   ...filesUnder(join(root, "sdk", "ios", "Sources"), (path) => /\.(swift|h|m|mm)$/.test(path)),
   ...filesUnder(join(root, "sdk", "ios", "Sample"), (path) => /\.swift$/.test(path)),
-  ...filesUnder(join(root, "sdk", "unity", "com.openmmp.sdk", "Runtime"), (path) => /\.(swift|h|m|mm|cs)$/.test(path)),
+  ...filesUnder(join(root, "sdk", "unity", "com.openmasu.sdk", "Runtime"), (path) => /\.(swift|h|m|mm|cs)$/.test(path)),
 ];
 const sourceText = sourceFiles.map((path) => readFileSync(path, "utf8")).join("\n");
 for (const value of symbols.forbidden_symbols) check(!sourceText.includes(value), `forbidden source symbol found: ${value}`);
@@ -64,7 +64,7 @@ for (const entry of symbols.required_reason_apis) {
 }
 
 const originalSources = join(root, "sdk", "ios", "Sources");
-const vendoredSources = join(root, "sdk", "unity", "com.openmmp.sdk", "Runtime", "Plugins", "iOS", "Sources");
+const vendoredSources = join(root, "sdk", "unity", "com.openmasu.sdk", "Runtime", "Plugins", "iOS", "Sources");
 const originalFiles = filesUnder(originalSources).map((path) => relative(originalSources, path).replaceAll("\\", "/"));
 const vendoredFiles = filesUnder(vendoredSources).map((path) => relative(vendoredSources, path).replaceAll("\\", "/"));
 check(JSON.stringify(originalFiles) === JSON.stringify(vendoredFiles), "Unity vendored Swift source inventory differs from sdk/ios");
@@ -74,12 +74,12 @@ for (const name of originalFiles) {
   check(digest(original) === digest(vendored), `Unity vendored Swift source differs: ${name}`);
 }
 check(
-  digest(readFileSync(manifestPath)) === digest(readFileSync(join(root, "sdk", "unity", "com.openmmp.sdk", "Runtime", "Plugins", "iOS", "PrivacyInfo.xcprivacy"))),
+  digest(readFileSync(manifestPath)) === digest(readFileSync(join(root, "sdk", "unity", "com.openmasu.sdk", "Runtime", "Plugins", "iOS", "PrivacyInfo.xcprivacy"))),
   "Unity root privacy manifest differs from the Swift package manifest"
 );
 
-const schemaPath = join(root, "sdk", "ios", "Sources", "OpenMmpApplePostback", "Resources", "conversion-schema-v1.json");
-const fixture = JSON.parse(readFileSync(join(root, "fixtures", "v0.3", "45-ios-conversion-schema", "input.json"), "utf8"));
+const schemaPath = join(root, "sdk", "ios", "Sources", "OpenMasuApplePostback", "Resources", "conversion-schema-v1.json");
+const fixture = JSON.parse(readFileSync(join(root, "fixtures", "v0.4", "45-ios-conversion-schema", "input.json"), "utf8"));
 const install = fixture.records.find((record) => record.event_name === "install");
 check(install?.payload?.extensions?.conversion_schema_sha256 === digest(readFileSync(schemaPath)), "fixture 45 conversion schema digest differs from the bundled schema");
 
@@ -96,7 +96,7 @@ if (builtRoot) {
   for (const builtManifest of builtManifests) {
     check(digest(readFileSync(builtManifest)) === digest(readFileSync(manifestPath)), `built privacy manifest differs: ${builtManifest}`);
   }
-  const targetMarkers = ["OpenMmpCore.build", "OpenMmpAppleAds.build", "OpenMmpApplePostback.build", "OpenMmpMax.build", "OpenMmpObjC.build"];
+  const targetMarkers = ["OpenMasuCore.build", "OpenMasuAppleAds.build", "OpenMasuApplePostback.build", "OpenMasuMax.build", "OpenMasuObjC.build"];
   const objects = filesUnder(builtRoot, (path) => path.endsWith(".o") && targetMarkers.some((marker) => path.includes(marker)));
   check(objects.length > 0, "no shipping iOS object files found for symbol audit");
   builtObjectCount = objects.length;

@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import type { Pool } from "pg";
-import { createAppPool } from "@open-mmp/runtime";
+import { createAppPool } from "@openmasu/runtime";
 import { persistCostImport, type CostImportResult, type CostInput } from "./cost.js";
 import { loadMapping, mapRow, rowMatches } from "./mapping.js";
 import { readRows, type ImportLimits } from "./source.js";

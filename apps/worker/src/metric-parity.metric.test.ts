@@ -2,15 +2,15 @@ import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import { evaluate, jcs, roundHalfEven, sha256 } from "@open-mmp/attribution-core";
-import { createAppPool, createSeedPool, requireEnvironment, withTenant } from "@open-mmp/runtime";
+import { evaluate, jcs, roundHalfEven, sha256 } from "@openmasu/attribution-core";
+import { createAppPool, createSeedPool, requireEnvironment, withTenant } from "@openmasu/runtime";
 import { Client, type Pool } from "pg";
 import { ingestFixture } from "./ingestion.js";
 import { computeSqlMetricRuns, computeSqlMetricRunsWithClient } from "./metrics/cohort.js";
 
 type Any = Record<string, any>;
 const fixtureName = "33-stage-b-cohort-metrics";
-const fixtureDirectory = join(process.cwd(), "fixtures", "v0.3", fixtureName);
+const fixtureDirectory = join(process.cwd(), "fixtures", "v0.4", fixtureName);
 const input: Any = JSON.parse(readFileSync(join(fixtureDirectory, "input.json"), "utf8"));
 const goldenPath = join(fixtureDirectory, "expected_metric_runs.json");
 const goldenBefore = readFileSync(goldenPath);
@@ -99,15 +99,15 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
   it("B3 half-up mutation fails SQL/evaluator parity and rolls back", async () => {
     const client = new Client({
       connectionString: requireEnvironment(
-        "OPENMMP_MIGRATION_DATABASE_URL",
-        process.env.OPENMMP_MIGRATION_DATABASE_URL,
+        "OPENMASU_MIGRATION_DATABASE_URL",
+        process.env.OPENMASU_MIGRATION_DATABASE_URL,
       ),
     });
     await client.connect();
     try {
       await client.query("BEGIN");
-      await client.query("SET LOCAL ROLE openmmp_owner");
-      await client.query("SELECT set_config('open_mmp.tenant_id', $1, true)", [input.server_context.tenant_id]);
+      await client.query("SET LOCAL ROLE openmasu_owner");
+      await client.query("SELECT set_config('openmasu.tenant_id', $1, true)", [input.server_context.tenant_id]);
       await client.query(`
         CREATE OR REPLACE FUNCTION ledger.half_even_div(numerator numeric, denominator numeric)
         RETURNS numeric
@@ -304,7 +304,7 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
       },
     ];
     mutation.privacy_requests = [{
-      contract_version: "0.3.0",
+      contract_version: "0.4.0",
       tenant_id: input.server_context.tenant_id,
       app_id: input.server_context.app_id,
       privacy_request_id: "privacy:redaction-33",
@@ -346,7 +346,7 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
   it("B8 persists undefined ROAS with an explicit reason", async () => {
     const undefinedFixture = "37-undefined-organic-roas";
     const undefinedInput: Any = JSON.parse(readFileSync(
-      join(process.cwd(), "fixtures", "v0.3", undefinedFixture, "input.json"),
+      join(process.cwd(), "fixtures", "v0.4", undefinedFixture, "input.json"),
       "utf8",
     ));
     await ingestFixture(fixtureName, undefinedInput, appPool, seedPool);
@@ -371,7 +371,7 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
 
   it("C13 reproduces reviewed daily click and install runs without ledger sequence input", async () => {
     const dailyFixture = "42-daily-metric-date";
-    const dailyDirectory = join(process.cwd(), "fixtures", "v0.3", dailyFixture);
+    const dailyDirectory = join(process.cwd(), "fixtures", "v0.4", dailyFixture);
     const dailyInput: Any = JSON.parse(readFileSync(join(dailyDirectory, "input.json"), "utf8"));
     const dailyGolden: Any[] = JSON.parse(readFileSync(
       join(dailyDirectory, "expected_metric_runs.json"),
@@ -402,7 +402,7 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
   it("C13 applies the UTC calendar day as a lower-inclusive, upper-exclusive window", async () => {
     const dailyFixture = "42-daily-metric-date-boundary";
     const source: Any = JSON.parse(readFileSync(
-      join(process.cwd(), "fixtures", "v0.3", "42-daily-metric-date", "input.json"),
+      join(process.cwd(), "fixtures", "v0.4", "42-daily-metric-date", "input.json"),
       "utf8",
     ));
     const click = source.records.find((record: Any) => record.event_name === "click");
@@ -439,15 +439,15 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
   it("C13 separates and sums organic, non-organic, and unattributed installs", async () => {
     const fixture = "42-daily-attribution-status";
     const daily: Any = JSON.parse(readFileSync(
-      join(process.cwd(), "fixtures", "v0.3", "42-daily-metric-date", "input.json"),
+      join(process.cwd(), "fixtures", "v0.4", "42-daily-metric-date", "input.json"),
       "utf8",
     ));
     const paid: Any = JSON.parse(readFileSync(
-      join(process.cwd(), "fixtures", "v0.3", "01-valid-install-referrer", "input.json"),
+      join(process.cwd(), "fixtures", "v0.4", "01-valid-install-referrer", "input.json"),
       "utf8",
     ));
     const unknown: Any = JSON.parse(readFileSync(
-      join(process.cwd(), "fixtures", "v0.3", "03-unknown-click", "input.json"),
+      join(process.cwd(), "fixtures", "v0.4", "03-unknown-click", "input.json"),
       "utf8",
     ));
     const paidClick = structuredClone(paid.records.find((record: Any) => record.event_name === "click"));
@@ -523,7 +523,7 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
 
   it("M4 reproduces qualified Apple aggregate counts and receipt-date buckets", async () => {
     const appleFixture = "44-apple-aggregate-metrics";
-    const appleDirectory = join(process.cwd(), "fixtures", "v0.3", appleFixture);
+    const appleDirectory = join(process.cwd(), "fixtures", "v0.4", appleFixture);
     const appleInput: Any = JSON.parse(readFileSync(join(appleDirectory, "input.json"), "utf8"));
     const appleGolden: Any[] = JSON.parse(readFileSync(
       join(appleDirectory, "expected_metric_runs.json"),

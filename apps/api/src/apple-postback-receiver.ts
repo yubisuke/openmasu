@@ -5,8 +5,8 @@ import {
   verifyAdAttributionKitPostback,
   verifySkAdNetworkPostback,
   type VerificationResult,
-} from "@open-mmp/apple-postback";
-import { appendDurableBatch, uuidV7, withTenant, type PayloadStore } from "@open-mmp/runtime";
+} from "@openmasu/apple-postback";
+import { appendDurableBatch, uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 import type { KeyedTokenBucket } from "./rate-limit.js";
 
 type JsonObject = Record<string, unknown>;
@@ -270,7 +270,7 @@ function normalizedRecord(
     : `aak:${String(payload.postback_identifier)}`;
   const producer = kind === "skadnetwork" ? "postback:skadnetwork" : "postback:adattributionkit";
   return {
-    contract_version: "0.3.0",
+    contract_version: "0.4.0",
     record_id: `apple-postback:${uuidV7(Date.parse(receivedAt))}`,
     delivery_id: `delivery:${uuidV7(Date.parse(receivedAt))}`,
     tenant_id: scope.tenantId,
@@ -279,7 +279,7 @@ function normalizedRecord(
     producer_version: kind === "skadnetwork" ? String(payload.version) : "adattributionkit-jws-v1",
     event_id: eventId,
     event_name: kind === "skadnetwork" ? "skan_postback" : "adattributionkit_postback",
-    schema_version: "0.3.0",
+    schema_version: "0.4.0",
     occurred_at: receivedAt,
     occurred_at_source: "server",
     received_at: receivedAt,

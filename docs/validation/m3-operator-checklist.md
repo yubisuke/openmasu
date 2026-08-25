@@ -19,13 +19,13 @@ For five working days, an authorized operator opens the dashboard once and recor
 
 - [ ] Current Chrome accepts the session cookie and renders headings, tables, CSV links, and SVG gaps
 - [ ] Current Firefox accepts the session cookie and renders the same aggregate values
-- [ ] Current Safari accepts the `__Host-openmmp_dashboard` cookie on HTTPS
+- [ ] Current Safari accepts the `__Host-openmasu_dashboard` cookie on HTTPS
 - [ ] The page remains legible with the stylesheet blocked
 - [ ] No browser request is made to an external asset, script, font, or analytics endpoint
 
 ## V-3: TLS deployment
 
-- [ ] The deployment uses HTTPS and the `__Host-openmmp_dashboard` cookie name
+- [ ] The deployment uses HTTPS and the `__Host-openmasu_dashboard` cookie name
 - [ ] The cookie attributes are `HttpOnly`, `Secure`, `SameSite=Strict`, and `Path=/`
 - [ ] A non-loopback HTTP base URL fails the boot self-check
 - [ ] Reverse-proxy access-log retention and redaction are documented privately

@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { withTenant } from "@open-mmp/runtime";
+import { withTenant } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import {
   buildDifferenceQuery,

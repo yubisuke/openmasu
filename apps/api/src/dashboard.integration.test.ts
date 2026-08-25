@@ -10,7 +10,7 @@ import {
   createReaderPool,
   EncryptedFilePayloadStore,
   withTenant,
-} from "@open-mmp/runtime";
+} from "@openmasu/runtime";
 import { ensureAdminKeys } from "./admin-auth.js";
 import { KeyedTokenBucket, TokenBucket } from "./rate-limit.js";
 import { createRequestHandler } from "./router.js";
@@ -89,7 +89,7 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
   before(async () => {
     appPool = createAppPool();
     readerPool = createReaderPool();
-    payloadRoot = mkdtempSync(join(tmpdir(), "openmmp-m3-"));
+    payloadRoot = mkdtempSync(join(tmpdir(), "openmasu-m3-"));
     payloadStore = new EncryptedFilePayloadStore(payloadRoot, "synthetic-m3-master-key-000000000000000000000000");
     await ensureAdminKeys(appPool, { tenantId, appId }, [adminKeyA, adminKeyB]);
     ({ server, baseUrl } = await start());
@@ -107,7 +107,7 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
       const response = await login(key);
       assert.equal(response.status, 303);
       const setCookie = response.headers.get("set-cookie") ?? "";
-      assert.match(setCookie, /^openmmp_dashboard=[A-Za-z0-9_-]{43};/);
+      assert.match(setCookie, /^openmasu_dashboard=[A-Za-z0-9_-]{43};/);
       for (const attribute of ["HttpOnly", "Secure", "SameSite=Strict", "Path=/"]) assert.ok(setCookie.includes(attribute));
       assert.equal(response.headers.get("location"), "/dashboard");
     }
@@ -133,7 +133,7 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     const sessionCookie = cookie(response);
     const page = await fetch(`${baseUrl}/dashboard`, { headers: { cookie: sessionCookie } });
     const html = await page.text();
-    assert.match(html, /Open MMP dashboard/);
+    assert.match(html, /OpenMasu dashboard/);
     const csrf = /name="csrf_token" value="([^"]+)"/.exec(html)?.[1];
     assert.ok(csrf);
 
@@ -167,7 +167,7 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
       60,
       new Date("2026-08-19T00:00:00.000Z"),
     );
-    const expiredCookie = `openmmp_dashboard=${expired.token}`;
+    const expiredCookie = `openmasu_dashboard=${expired.token}`;
     assert.equal(await verifyDashboardSession(
       readerPool,
       tenantId,
@@ -314,8 +314,8 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
       body: new URLSearchParams({
         csrf_token: csrf,
         destination_kind: "play_store",
-        destination_url: "https://play.google.com/store/apps/details?id=dev.openmmp.synthetic",
-        play_package_name: "dev.openmmp.synthetic",
+        destination_url: "https://play.google.com/store/apps/details?id=dev.openmasu.synthetic",
+        play_package_name: "dev.openmasu.synthetic",
         campaign_id: "synthetic-campaign",
       }),
     });

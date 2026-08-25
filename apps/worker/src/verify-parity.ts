@@ -1,8 +1,8 @@
 import { strict as assert } from "node:assert";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { jcs, sha256 } from "@open-mmp/attribution-core";
-import { createSeedPool } from "@open-mmp/runtime";
+import { jcs, sha256 } from "@openmasu/attribution-core";
+import { createSeedPool } from "@openmasu/runtime";
 import { parityKinds, parityLedgerTable, type ParityKind } from "./ingestion.js";
 
 type Any = Record<string, any>;
@@ -11,7 +11,7 @@ const d0Metrics = new Set([
   "d0_utc_install_calendar_ad_revenue_usd",
   "d0_jst_install_calendar_ad_revenue_usd",
 ]);
-const fixtureRoot = join(process.cwd(), "fixtures", "v0.3");
+const fixtureRoot = join(process.cwd(), "fixtures", "v0.4");
 const fixtureNames = readdirSync(fixtureRoot, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)

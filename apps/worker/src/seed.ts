@@ -1,13 +1,13 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { sha256 } from "@open-mmp/attribution-core";
-import { createAppPool, createSeedPool } from "@open-mmp/runtime";
+import { sha256 } from "@openmasu/attribution-core";
+import { createAppPool, createSeedPool } from "@openmasu/runtime";
 import { ingestFixture } from "./ingestion.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
 
 type Any = Record<string, any>;
 
-const fixtureRoot = join(process.cwd(), "fixtures", "v0.3");
+const fixtureRoot = join(process.cwd(), "fixtures", "v0.4");
 const fixtureNames = readdirSync(fixtureRoot, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)

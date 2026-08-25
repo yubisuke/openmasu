@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { compile, type JSONSchema } from "@open-mmp/contracts/type-generation";
+import { compile, type JSONSchema } from "@openmasu/contracts/type-generation";
 
 const root = process.cwd();
 const schemaRoot = join(root, "schemas");
@@ -24,7 +24,7 @@ const artifacts = {
 
 const schema: JSONSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
-  title: "Open MMP Evaluation Output v0.3",
+  title: "OpenMasu Evaluation Output v0.4",
   type: "object",
   additionalProperties: false,
   required: Object.keys(artifacts),

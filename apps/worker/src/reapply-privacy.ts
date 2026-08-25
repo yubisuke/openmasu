@@ -2,7 +2,7 @@ import {
   createAppPool,
   EncryptedFilePayloadStore,
   EnvironmentSecretStore,
-} from "@open-mmp/runtime";
+} from "@openmasu/runtime";
 import { reapplyCompletedPrivacyRequests } from "./privacy-reapply.js";
 
 function option(name: string): string | undefined {
@@ -15,9 +15,9 @@ if (!tenantId || !/^[A-Za-z0-9._:-]{1,128}$/.test(tenantId)) {
   throw new Error("db:reapply-privacy requires --tenant <tenant-id>");
 }
 const secrets = new EnvironmentSecretStore({
-  OPENMMP_PAYLOAD_MASTER_KEY: {
-    value: process.env.OPENMMP_PAYLOAD_MASTER_KEY,
-    file: process.env.OPENMMP_PAYLOAD_MASTER_KEY_FILE,
+  OPENMASU_PAYLOAD_MASTER_KEY: {
+    value: process.env.OPENMASU_PAYLOAD_MASTER_KEY,
+    file: process.env.OPENMASU_PAYLOAD_MASTER_KEY_FILE,
   },
 });
 const pool = createAppPool();
@@ -25,8 +25,8 @@ try {
   const result = await reapplyCompletedPrivacyRequests({
     pool,
     payloadStore: new EncryptedFilePayloadStore(
-      process.env.OPENMMP_PAYLOAD_STORE_DIR ?? ".openmmp/payloads",
-      secrets.require("OPENMMP_PAYLOAD_MASTER_KEY"),
+      process.env.OPENMASU_PAYLOAD_STORE_DIR ?? ".openmasu/payloads",
+      secrets.require("OPENMASU_PAYLOAD_MASTER_KEY"),
     ),
     tenantId,
   });

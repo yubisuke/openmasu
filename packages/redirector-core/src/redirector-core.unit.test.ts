@@ -18,7 +18,7 @@ const activeLink: TrackingLink = {
   slug: "AbCdEf0123_-",
   destination_kind: "play_store",
   destination_url: "https://play.google.com/store/apps/details?id=example.invalid",
-  play_package_name: "dev.openmmp.synthetic",
+  play_package_name: "dev.openmasu.synthetic",
   campaign_id: "campaign-synthetic",
   status: "active",
 };

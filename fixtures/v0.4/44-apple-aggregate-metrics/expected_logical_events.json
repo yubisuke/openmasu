@@ -1,0 +1,38 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:postback:synthetic-adattributionkit:event:aak-fine-44",
+    "record_id": "aak-fine-44",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "postback:synthetic-adattributionkit",
+    "event_id": "event:aak-fine-44",
+    "event_name": "adattributionkit_postback",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:postback:synthetic-skan:event:skan-coarse-44",
+    "record_id": "skan-coarse-44",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "postback:synthetic-skan",
+    "event_id": "event:skan-coarse-44",
+    "event_name": "skan_postback",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:postback:synthetic-skan:event:skan-fine-44",
+    "record_id": "skan-fine-44",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "postback:synthetic-skan",
+    "event_id": "event:skan-fine-44",
+    "event_name": "skan_postback",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  }
+]

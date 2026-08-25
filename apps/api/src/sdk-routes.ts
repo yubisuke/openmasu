@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
-import { appendDurableBatch, uuidV7, type PayloadStore } from "@open-mmp/runtime";
+import { appendDurableBatch, uuidV7, type PayloadStore } from "@openmasu/runtime";
 import { executePrivacyRequest, type PrivacyRequestBody } from "./privacy.js";
 import { type KeyedTokenBucket } from "./rate-limit.js";
 import { parseJsonBody, readRawBody, RequestBodyError } from "./raw-body.js";
@@ -53,7 +53,7 @@ async function authenticate(
   dependencies: SdkRouteDependencies,
   requireInstallation: boolean,
 ): Promise<VerifiedSdkRequest | undefined> {
-  const path = new URL(request.url ?? "/", "http://open-mmp.local").pathname;
+  const path = new URL(request.url ?? "/", "http://openmasu.local").pathname;
   const result = await verifySdkRequest({
     pool: dependencies.pool,
     payloadStore: dependencies.payloadStore,
@@ -104,7 +104,7 @@ function normalizedRecord(
   })();
   const recordId = `record:${uuidV7()}`;
   return {
-    contract_version: "0.3.0",
+    contract_version: "0.4.0",
     record_id: recordId,
     delivery_id: `delivery:${uuidV7()}`,
     tenant_id: identity.tenantId,
@@ -115,7 +115,7 @@ function normalizedRecord(
     ...(source.wrapper_version ? { wrapper_version: source.wrapper_version } : {}),
     event_id: source.event_id,
     event_name: source.event_name,
-    schema_version: "0.3.0",
+    schema_version: "0.4.0",
     occurred_at: source.occurred_at,
     occurred_at_source: source.occurred_at_source,
     received_at: receivedAt,

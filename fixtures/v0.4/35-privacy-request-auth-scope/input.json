@@ -1,0 +1,122 @@
+{
+  "contract_version": "0.4.0",
+  "fx_policy": {
+    "policy_version": "fx-v0.2",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "100000000",
+        "rate_scale": 8,
+        "source": "synthetic-fixture-rate",
+        "as_of": "2026-08-19T00:00:00.000Z"
+      }
+    ]
+  },
+  "metric_evaluations": [],
+  "reconciliation_inputs": [],
+  "privacy_requests": [
+    {
+      "contract_version": "0.4.0",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "privacy_request_id": "privacy-admin-35",
+      "deletion_subject_digest": "3535353535353535353535353535353535353535353535353535353535353535",
+      "deletion_scope": "installation",
+      "requested_via": "tenant_admin_api",
+      "requester_auth_ref": "admin_key:synthetic-key-35",
+      "requested_at": "2026-08-19T00:01:00.000Z",
+      "completed_at": "2026-08-19T00:02:00.000Z",
+      "status": "completed",
+      "reason_code": "privacy_deletion",
+      "policy_version": "privacy-v0.2",
+      "affected_records": [
+        {
+          "record_id": "session-admin-35",
+          "lifecycle_status": "purged"
+        }
+      ]
+    },
+    {
+      "contract_version": "0.4.0",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "privacy_request_id": "privacy-device-35",
+      "deletion_subject_ref": "installation:device-35",
+      "deletion_scope": "installation",
+      "requested_via": "on_device_sdk",
+      "requester_auth_ref": "device_auth:synthetic-device-35",
+      "requested_at": "2026-08-19T00:03:00.000Z",
+      "status": "received",
+      "reason_code": "privacy_deletion",
+      "policy_version": "privacy-v0.2",
+      "affected_records": [
+        {
+          "record_id": "session-device-35",
+          "lifecycle_status": "redacted"
+        }
+      ]
+    }
+  ],
+  "server_context": {
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-19T00:00:00.000Z",
+    "policy_digest": "policy-v0.2",
+    "processing_purposes": [
+      {
+        "processing_purpose_id": "analytics",
+        "consent_required": false,
+        "policy_version": "consent-v0.2"
+      }
+    ],
+    "withdrawals": [],
+    "alternative_legal_bases": []
+  },
+  "records": [
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session-admin-35",
+      "delivery_id": "delivery:session-admin-35",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.2",
+      "event_id": "event:session-admin-35",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-19T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-19T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:admin-35",
+        "session_id": "session:admin-35"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session-device-35",
+      "delivery_id": "delivery:session-device-35",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.2",
+      "event_id": "event:session-device-35",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-19T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-19T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 2,
+      "payload": {
+        "installation_id": "installation:device-35",
+        "session_id": "session:device-35"
+      }
+    }
+  ]
+}

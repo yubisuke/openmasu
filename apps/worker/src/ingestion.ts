@@ -7,9 +7,9 @@ import {
   sha256,
   type CandidateAttempt,
   type CandidateProvider,
-} from "@open-mmp/attribution-core";
-import { validateEventPayload } from "@open-mmp/contracts";
-import { uuidV7, withTenant } from "@open-mmp/runtime";
+} from "@openmasu/attribution-core";
+import { validateEventPayload } from "@openmasu/contracts";
+import { uuidV7, withTenant } from "@openmasu/runtime";
 
 type Any = Record<string, any>;
 export const parityKinds = [
@@ -762,7 +762,7 @@ function schemaInvalidArtifacts(attempt: CandidateAttempt): {
       ? "consent_valid_before_withdrawal"
       : "consent_withdrawn";
   const common = {
-    contract_version: "0.3.0",
+    contract_version: "0.4.0",
     delivery_id: attempt.record.delivery_id,
     record_id: attempt.record.record_id,
     tenant_id: attempt.server.tenant_id,
@@ -785,7 +785,7 @@ function schemaInvalidArtifacts(attempt: CandidateAttempt): {
     },
     rejection: {
       ...common,
-      reason_code_version: "0.3.0",
+      reason_code_version: "0.4.0",
       retained: "non_identifying_metadata",
     },
     failure: {
@@ -798,7 +798,7 @@ function schemaInvalidArtifacts(attempt: CandidateAttempt): {
 
 function runtimeInput(attempts: readonly CandidateAttempt[]): Any {
   return {
-    contract_version: "0.3.0",
+    contract_version: "0.4.0",
     batches: attempts.map((attempt, index) => ({
       batch_id: attempt.batch_id || `runtime-batch-${index}`,
       server_context: attempt.server,

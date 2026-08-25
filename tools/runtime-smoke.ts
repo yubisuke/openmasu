@@ -22,10 +22,10 @@ const required = (name: string): string => {
   if (!value) throw new Error(`missing runtime smoke variable ${name}`);
   return value;
 };
-const port = process.env.OPENMMP_API_HOST_PORT ?? env.OPENMMP_API_HOST_PORT ?? "8080";
+const port = process.env.OPENMASU_API_HOST_PORT ?? env.OPENMASU_API_HOST_PORT ?? "8080";
 const base = `http://127.0.0.1:${port}`;
-const redirectorPort = process.env.OPENMMP_REDIRECTOR_HOST_PORT ?? env.OPENMMP_REDIRECTOR_HOST_PORT ?? "8090";
-const redirectorBase = process.env.OPENMMP_REDIRECTOR_BASE_URL ?? env.OPENMMP_REDIRECTOR_BASE_URL
+const redirectorPort = process.env.OPENMASU_REDIRECTOR_HOST_PORT ?? env.OPENMASU_REDIRECTOR_HOST_PORT ?? "8090";
+const redirectorBase = process.env.OPENMASU_REDIRECTOR_BASE_URL ?? env.OPENMASU_REDIRECTOR_BASE_URL
   ?? `http://127.0.0.1:${redirectorPort}`;
 const health = await fetch(`${base}/health`);
 if (!health.ok) throw new Error(`health smoke failed with ${health.status}`);
@@ -42,17 +42,17 @@ const dashboardLogin = await fetch(`${base}/dashboard/session`, {
   method: "POST",
   redirect: "manual",
   headers: { "content-type": "application/x-www-form-urlencoded" },
-  body: new URLSearchParams({ admin_key: required("OPENMMP_ADMIN_KEY") }),
+  body: new URLSearchParams({ admin_key: required("OPENMASU_ADMIN_KEY") }),
 });
 const dashboardCookie = (dashboardLogin.headers.get("set-cookie") ?? "").split(";", 1)[0];
 if (dashboardLogin.status !== 303 || !dashboardCookie) {
   throw new Error(`dashboard login smoke returned ${dashboardLogin.status}`);
 }
 const dashboardHome = await fetch(`${base}/dashboard`, { headers: { cookie: dashboardCookie } });
-if (dashboardHome.status !== 200 || !(await dashboardHome.text()).includes("Open MMP dashboard")) {
+if (dashboardHome.status !== 200 || !(await dashboardHome.text()).includes("OpenMasu dashboard")) {
   throw new Error(`authenticated dashboard smoke returned ${dashboardHome.status}`);
 }
-const configuredAppId = required("OPENMMP_MAX_APP_ID");
+const configuredAppId = required("OPENMASU_MAX_APP_ID");
 const dashboardApp = await fetch(`${base}/dashboard/apps/${encodeURIComponent(configuredAppId)}`, {
   headers: { cookie: dashboardCookie },
 });
@@ -68,8 +68,8 @@ const parameters = new URLSearchParams({
   network: "synthetic-smoke-network",
   cc: "US",
 });
-parameters.set("event_token_all", expectedMaxTokenAll(parameters, required("OPENMMP_MAX_EVENT_KEY")));
-const path = `/v1/ingest/max/${required("OPENMMP_MAX_PATH_SECRET")}`;
+parameters.set("event_token_all", expectedMaxTokenAll(parameters, required("OPENMASU_MAX_EVENT_KEY")));
+const path = `/v1/ingest/max/${required("OPENMASU_MAX_PATH_SECRET")}`;
 const accepted = await fetch(`${base}${path}?${parameters}`);
 if (accepted.status !== 204) throw new Error(`valid MAX smoke returned ${accepted.status}`);
 parameters.set("event_token_all", "0".repeat(64));
@@ -78,12 +78,12 @@ if (tampered.status !== 401) throw new Error(`tampered MAX smoke returned ${tamp
 
 const linkResponse = await fetch(`${base}/v1/admin/tracking-links`, {
   method: "POST",
-  headers: { authorization: `Bearer ${required("OPENMMP_ADMIN_KEY")}`, "content-type": "application/json" },
+  headers: { authorization: `Bearer ${required("OPENMASU_ADMIN_KEY")}`, "content-type": "application/json" },
   body: JSON.stringify({
     app_id: configuredAppId,
     destination_kind: "play_store",
-    destination_url: "https://play.google.com/store/apps/details?id=dev.openmmp.synthetic",
-    play_package_name: "dev.openmmp.synthetic",
+    destination_url: "https://play.google.com/store/apps/details?id=dev.openmasu.synthetic",
+    play_package_name: "dev.openmasu.synthetic",
     campaign_id: "campaign-runtime-smoke",
   }),
 });
@@ -96,8 +96,8 @@ if (redirected.status !== 302 || !redirected.headers.get("location")?.startsWith
   throw new Error(`redirector smoke returned ${redirected.status}`);
 }
 
-const sdkKeyId = required("OPENMMP_SDK_KEY_ID");
-const sdkSecret = required("OPENMMP_SDK_KEY");
+const sdkKeyId = required("OPENMASU_SDK_KEY_ID");
+const sdkSecret = required("OPENMASU_SDK_KEY");
 const signedPost = async (path: string, value: unknown, installation?: { keyId: string; secret: string }): Promise<Response> => {
   const body = Buffer.from(JSON.stringify(value), "utf8");
   const timestampMs = Date.now();
@@ -107,11 +107,11 @@ const signedPost = async (path: string, value: unknown, installation?: { keyId: 
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-openmmp-sdk-key-id": sdkKeyId,
-      "x-openmmp-installation-key-id": installationKeyId ?? "-",
-      "x-openmmp-timestamp-ms": String(timestampMs),
-      "x-openmmp-nonce": nonce,
-      "x-openmmp-signature": signSdkRequest(installation?.secret ?? sdkSecret, {
+      "x-openmasu-sdk-key-id": sdkKeyId,
+      "x-openmasu-installation-key-id": installationKeyId ?? "-",
+      "x-openmasu-timestamp-ms": String(timestampMs),
+      "x-openmasu-nonce": nonce,
+      "x-openmasu-signature": signSdkRequest(installation?.secret ?? sdkSecret, {
         method: "POST", path, sdkKeyId, installationKeyId, timestampMs, nonce, body,
       }),
     },

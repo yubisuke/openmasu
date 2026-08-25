@@ -20,7 +20,7 @@ describe("runtime import mapping", () => {
   });
 
   it("parses quoted CSV and enforces row byte limits", () => {
-    const directory = mkdtempSync(join(tmpdir(), "openmmp-import-"));
+    const directory = mkdtempSync(join(tmpdir(), "openmasu-import-"));
     try {
       const file = join(directory, "synthetic.csv");
       writeFileSync(file, 'network,campaign_id,country,date,cost_micros,currency\n"network, one",campaign-1,us,2026-08-18,1000000,USD\n');
@@ -79,6 +79,39 @@ describe("runtime import mapping", () => {
     });
     assert.throws(() => mapRow(mapping, { ...base, cost_micros: "-1" }), /non-negative base-10 integer/);
     assert.throws(() => mapRow(mapping, { ...base, cost_micros: Number.MAX_SAFE_INTEGER + 1 }), /non-negative base-10 integer/);
+  });
+
+  it("WO12 converts an exact decimal money source at the declared scale", () => {
+    const mapping = loadMapping("examples/mappings/synthetic-decimal-cost.json");
+    const mapped = mapRow(mapping, {
+      network: "synthetic-decimal-network", campaign_id: "synthetic-decimal-campaign", country: "us",
+      date: "2026-08-20", cost_decimal: "1.23", currency: "USD",
+      as_of: "2026-08-20T12:00:00.000Z",
+    });
+    assert.deepEqual(mapped.money, {
+      amount_unscaled: "1230000", amount_scale: 6, currency: "USD",
+    });
+  });
+
+  it("WO12 rejects decimal precision beyond the declared scale without rounding", () => {
+    const mapping = loadMapping("examples/mappings/synthetic-decimal-cost.json");
+    const row = {
+      network: "synthetic-decimal-network", campaign_id: "synthetic-decimal-campaign", country: "us",
+      date: "2026-08-20", cost_decimal: "1.2345678", currency: "USD",
+      as_of: "2026-08-20T12:00:00.000Z",
+    };
+    assert.throws(() => mapRow(mapping, row), /exceeds the declared scale; rounding is not permitted/);
+  });
+
+  it("WO12 rejects non-decimal and negative decimal money sources", () => {
+    const mapping = loadMapping("examples/mappings/synthetic-decimal-cost.json");
+    const base = {
+      network: "synthetic-decimal-network", campaign_id: "synthetic-decimal-campaign", country: "us",
+      date: "2026-08-20", currency: "USD", as_of: "2026-08-20T12:00:00.000Z",
+    };
+    assert.throws(() => mapRow(mapping, { ...base, cost_decimal: "not-a-number" }), /non-negative base-10 decimal string/);
+    assert.throws(() => mapRow(mapping, { ...base, cost_decimal: "-1.23" }), /non-negative base-10 decimal string/);
+    assert.throws(() => mapRow(mapping, { ...base, cost_decimal: 1.23 }), /non-negative base-10 decimal string/);
   });
 });
 

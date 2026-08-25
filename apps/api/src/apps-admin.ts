@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { Pool } from "pg";
-import { uuidV7, withTenant, type PayloadStore } from "@open-mmp/runtime";
+import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 import type { AdminIdentity, AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAudit } from "./session.js";
 import { ensureSdkKeys } from "./sdk-auth.js";

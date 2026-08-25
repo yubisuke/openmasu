@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Pool } from "pg";
-import { sha256 } from "@open-mmp/attribution-core";
-import { createAppPool } from "@open-mmp/runtime";
+import { sha256 } from "@openmasu/attribution-core";
+import { createAppPool } from "@openmasu/runtime";
 import { computeSqlMetricRuns, type MetricScope } from "./cohort.js";
 
 type Any = Record<string, any>;
@@ -35,7 +35,7 @@ export async function runMetricDefinitionsFile(options: {
     throw new Error("definitions file requires fx_policy and at least one evaluation");
   }
   const input = {
-    contract_version: "0.3.0",
+    contract_version: "0.4.0",
     fx_policy: config.fx_policy,
     metric_definitions: config.metric_definitions ?? [],
     metric_evaluations: config.evaluations.map((evaluation: Any, index: number) => {

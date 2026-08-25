@@ -3,14 +3,14 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { join } from "node:path";
 
 const workspaces = [
-  "@open-mmp/api",
-  "@open-mmp/runtime",
-  "@open-mmp/worker",
-  "@open-mmp/redirector",
-  "@open-mmp/attribution-core",
-  "@open-mmp/contracts",
-  "@open-mmp/meta-install-referrer",
-  "@open-mmp/redirector-core",
+  "@openmasu/api",
+  "@openmasu/runtime",
+  "@openmasu/worker",
+  "@openmasu/redirector",
+  "@openmasu/attribution-core",
+  "@openmasu/contracts",
+  "@openmasu/meta-install-referrer",
+  "@openmasu/redirector-core",
 ];
 const root = join(process.cwd(), "sbom");
 rmSync(root, { recursive: true, force: true });
@@ -26,14 +26,14 @@ for (const workspace of workspaces) {
   if (value.bomFormat !== "CycloneDX" || !Array.isArray(value.components)) {
     throw new Error(`SBOM for ${workspace} is not a CycloneDX document`);
   }
-  const name = workspace.replace("@open-mmp/", "");
+  const name = workspace.replace("@openmasu/", "");
   writeFileSync(join(root, `${name}.cdx.json`), `${JSON.stringify(value, null, 2)}\n`);
 }
 for (const workspace of workspaces) {
-  const name = workspace.replace("@open-mmp/", "");
+  const name = workspace.replace("@openmasu/", "");
   JSON.parse(readFileSync(join(root, `${name}.cdx.json`), "utf8"));
 }
-const iosRef = "pkg:swift/dev.openmmp/OpenMmpIOS@0.1.0";
+const iosRef = "pkg:swift/dev.openmasu/OpenMasuIOS@0.1.0";
 const iosPackage = readFileSync(join(process.cwd(), "sdk", "ios", "Package.swift"), "utf8");
 if (iosPackage.includes(".package(")) {
   throw new Error("shipping iOS Package.swift gained a runtime dependency");
@@ -54,7 +54,7 @@ const ios = {
   version: 1,
   metadata: {
     component: {
-      type: "library", "bom-ref": iosRef, group: "dev.openmmp", name: "OpenMmpIOS", version: "0.1.0",
+      type: "library", "bom-ref": iosRef, group: "dev.openmasu", name: "OpenMasuIOS", version: "0.1.0",
     },
   },
   components: iosComponents,

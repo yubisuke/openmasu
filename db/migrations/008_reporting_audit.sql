@@ -34,14 +34,14 @@ CREATE INDEX reconciliation_results_scope_idx
 ALTER TABLE ledger.reconciliation_results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ledger.reconciliation_results FORCE ROW LEVEL SECURITY;
 CREATE POLICY reconciliation_results_tenant ON ledger.reconciliation_results
-  USING (tenant_id = current_setting('open_mmp.tenant_id', true))
-  WITH CHECK (tenant_id = current_setting('open_mmp.tenant_id', true));
+  USING (tenant_id = current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id = current_setting('openmasu.tenant_id', true));
 
 CREATE TRIGGER reconciliation_results_append_only
   BEFORE UPDATE OR DELETE ON ledger.reconciliation_results
   FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
 
 REVOKE ALL ON ledger.reconciliation_results FROM PUBLIC;
-GRANT SELECT, INSERT ON ledger.reconciliation_results TO openmmp_app;
-GRANT SELECT ON ledger.reconciliation_results TO openmmp_reader;
-GRANT TRUNCATE ON ledger.reconciliation_results TO openmmp_seed;
+GRANT SELECT, INSERT ON ledger.reconciliation_results TO openmasu_app;
+GRANT SELECT ON ledger.reconciliation_results TO openmasu_reader;
+GRANT TRUNCATE ON ledger.reconciliation_results TO openmasu_seed;

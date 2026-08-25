@@ -1,0 +1,19 @@
+{
+  "contract_version": "0.4.0",
+  "fx_policy": { "policy_version": "fx-v0.1", "target_currency": "USD", "target_scale": 6, "rounding_mode": "half_even", "rates": [{ "currency": "USD", "rate_unscaled": "100000000", "rate_scale": 8, "source": "synthetic-fixture-rate", "as_of": "2026-08-12T00:00:00.000Z" }] },
+  "metric_evaluations": [],
+  "reconciliation_inputs": [{
+    "reconciliation_id": "reconciliation:22", "tenant_id": "tenant-a", "app_id": "app-a",
+    "input_snapshot_id": "internal-snapshot:22", "external_snapshot_id": "external-snapshot:22",
+    "matching_keys": [],
+    "candidates": [{ "candidate_id": "install-22", "tenant_id": "tenant-a", "app_id": "app-a", "matching_keys": [{ "type": "provider_install_id", "value": "401de65d3444761bb478026c7b60da370d89f6bfc8920239c7187345b594126e", "scope": "tenant_app", "normalization": "identity", "cardinality": "one_to_one", "protected": true, "value_encoding": "sha256", "access_class": "protected" }], "window_status": "in_window", "freshness": "current", "excluded": false }],
+    "freshness": "current", "privacy_effect": "none"
+  }],
+  "privacy_requests": [],
+  "server_context": { "tenant_id": "tenant-a", "app_id": "app-a", "received_at": "2026-08-12T00:00:00.000Z", "policy_digest": "policy-v0.2", "processing_purposes": [{ "processing_purpose_id": "analytics", "consent_required": false, "policy_version": "consent-v0.2" }], "withdrawals": [], "alternative_legal_bases": [] },
+  "records": [{
+    "contract_version": "0.4.0", "record_id": "install-22", "delivery_id": "delivery:install-22", "tenant_id": "tenant-a", "app_id": "app-a", "producer": "sdk-android", "producer_version": "fixture-v0.2", "event_id": "event:install-22", "event_name": "install", "schema_version": "0.4.0",
+    "occurred_at": "2026-08-12T00:00:00.000Z", "occurred_at_source": "device", "received_at": "2026-08-12T00:00:00.000Z", "processing_purpose_id": "analytics", "processing_sequence": 1,
+    "payload": { "installation_id": "installation:install-22", "install_type": "first_install", "referrer_status": "none", "click_id": "click-a_0000000000000022", "install_begin_at_server_status": "missing" }
+  }]
+}

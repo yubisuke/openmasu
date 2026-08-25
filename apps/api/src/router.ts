@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { IncomingMessage, RequestListener, ServerResponse } from "node:http";
 import type { Pool } from "pg";
-import type { PayloadStore } from "@open-mmp/runtime";
+import type { PayloadStore } from "@openmasu/runtime";
 import { registerAppleApp, registerConversionSchema } from "./apple-admin.js";
 import {
   receiveApplePostback,
@@ -82,7 +82,7 @@ export type RequestHandlerDependencies = {
 };
 
 function loginPage(error?: string): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Open MMP login</title><link rel="stylesheet" href="/dashboard/app.css"></head><body><main><h1>Open MMP</h1>${error ? `<p role="alert">${escapeHtml(error)}</p>` : ""}<form method="post" action="/dashboard/session"><label>Admin key <input name="admin_key" type="password" autocomplete="current-password" required></label><button type="submit">Sign in</button></form></main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>OpenMasu login</title><link rel="stylesheet" href="/dashboard/app.css"></head><body><main><h1>OpenMasu</h1>${error ? `<p role="alert">${escapeHtml(error)}</p>` : ""}<form method="post" action="/dashboard/session"><label>Admin key <input name="admin_key" type="password" autocomplete="current-password" required></label><button type="submit">Sign in</button></form></main></body></html>`;
 }
 
 const dashboardCssEtag = `"${createHash("sha256").update(dashboardCss).digest("hex")}"`;
@@ -209,7 +209,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
     let routeLabel: RouteDefinition["handler"] | "unmatched" = "unmatched";
     let internalError = false;
     void (async () => {
-      const target = new URL(request.url ?? "/", "http://open-mmp.local");
+      const target = new URL(request.url ?? "/", "http://openmasu.local");
       const route = matchRoute(request.method, target.pathname);
       routeLabel = route?.handler ?? "unmatched";
       if (!route || (!dependencies.dashboard.enabled && route.handler.startsWith("dashboard_"))) {
@@ -457,7 +457,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             const range = `${parsed.query.dateFrom ?? "all"}-${parsed.query.dateTo ?? "all"}`;
             response.writeHead(200, {
               "content-type": encoded.contentType,
-              "content-disposition": `attachment; filename="open-mmp-${appIdentity.appId}-${range}-${first?.input_snapshot_id.slice(0, 8) ?? "empty"}.csv"`,
+              "content-disposition": `attachment; filename="openmasu-${appIdentity.appId}-${range}-${first?.input_snapshot_id.slice(0, 8) ?? "empty"}.csv"`,
               "cache-control": "no-store",
               "x-content-type-options": "nosniff",
             });
@@ -632,7 +632,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
               "cache-control": "no-store",
               "x-content-type-options": "nosniff",
               ...(format === "csv" ? {
-                "content-disposition": `attachment; filename="open-mmp-${appIdentity.appId}-${range}-${first?.input_snapshot_id?.slice(0, 8) ?? "empty"}.csv"`,
+                "content-disposition": `attachment; filename="openmasu-${appIdentity.appId}-${range}-${first?.input_snapshot_id?.slice(0, 8) ?? "empty"}.csv"`,
               } : {}),
             });
             response.end(encoded.body);

@@ -1,4 +1,4 @@
-name: open-mmp
+name: openmasu
 
 x-app: &app
   build:
@@ -18,28 +18,28 @@ services:
       - tsx
       - apps/runtime/src/bootstrap.ts
     environment:
-      OPENMMP_REPOSITORY_ROOT: /repository
-      OPENMMP_RUNTIME_SECRET_ROOT: /run/openmmp
-      OPENMMP_PUBLIC_BASE_URL: http://localhost:8080
-      OPENMMP_DATABASE_HOST: postgres
-      OPENMMP_DATABASE_PORT: "5432"
-      OPENMMP_DATABASE_NAME: openmmp
-      OPENMMP_MAX_TENANT_ID: ${OPENMMP_MAX_TENANT_ID:-tenant-local}
-      OPENMMP_MAX_APP_ID: ${OPENMMP_MAX_APP_ID:-app-local}
-      OPENMMP_ENROLL_RATE_RPS: ${OPENMMP_ENROLL_RATE_RPS:-50}
-      OPENMMP_ENROLL_RATE_BURST: ${OPENMMP_ENROLL_RATE_BURST:-100}
-      OPENMMP_INGEST_RATE_RPS: ${OPENMMP_INGEST_RATE_RPS:-1}
-      OPENMMP_INGEST_RATE_BURST: ${OPENMMP_INGEST_RATE_BURST:-20}
-      OPENMMP_INGEST_APP_RATE_RPS: ${OPENMMP_INGEST_APP_RATE_RPS:-500}
-      OPENMMP_INGEST_APP_RATE_BURST: ${OPENMMP_INGEST_APP_RATE_BURST:-1000}
-      OPENMMP_MAX_RATE_RPS: ${OPENMMP_MAX_RATE_RPS:-200}
-      OPENMMP_MAX_RATE_BURST: ${OPENMMP_MAX_RATE_BURST:-500}
+      OPENMASU_REPOSITORY_ROOT: /repository
+      OPENMASU_RUNTIME_SECRET_ROOT: /run/openmasu
+      OPENMASU_PUBLIC_BASE_URL: http://localhost:8080
+      OPENMASU_DATABASE_HOST: postgres
+      OPENMASU_DATABASE_PORT: "5432"
+      OPENMASU_DATABASE_NAME: openmasu
+      OPENMASU_MAX_TENANT_ID: ${OPENMASU_MAX_TENANT_ID:-tenant-local}
+      OPENMASU_MAX_APP_ID: ${OPENMASU_MAX_APP_ID:-app-local}
+      OPENMASU_ENROLL_RATE_RPS: ${OPENMASU_ENROLL_RATE_RPS:-50}
+      OPENMASU_ENROLL_RATE_BURST: ${OPENMASU_ENROLL_RATE_BURST:-100}
+      OPENMASU_INGEST_RATE_RPS: ${OPENMASU_INGEST_RATE_RPS:-1}
+      OPENMASU_INGEST_RATE_BURST: ${OPENMASU_INGEST_RATE_BURST:-20}
+      OPENMASU_INGEST_APP_RATE_RPS: ${OPENMASU_INGEST_APP_RATE_RPS:-500}
+      OPENMASU_INGEST_APP_RATE_BURST: ${OPENMASU_INGEST_APP_RATE_BURST:-1000}
+      OPENMASU_MAX_RATE_RPS: ${OPENMASU_MAX_RATE_RPS:-200}
+      OPENMASU_MAX_RATE_BURST: ${OPENMASU_MAX_RATE_BURST:-500}
     volumes:
       - .:/repository
-      - migration-secrets:/run/openmmp/migration
-      - app-secrets:/run/openmmp/app
-      - seed-secrets:/run/openmmp/seed
-      - postgres-secrets:/run/openmmp/postgres
+      - migration-secrets:/run/openmasu/migration
+      - app-secrets:/run/openmasu/app
+      - seed-secrets:/run/openmasu/seed
+      - postgres-secrets:/run/openmasu/postgres
     restart: "no"
 
   postgres:
@@ -48,28 +48,28 @@ services:
       bootstrap:
         condition: service_completed_successfully
     environment:
-      POSTGRES_DB: openmmp
+      POSTGRES_DB: openmasu
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD_FILE: /run/openmmp/postgres/password
+      POSTGRES_PASSWORD_FILE: /run/openmasu/postgres/password
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d openmmp"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d openmasu"]
       interval: 2s
       timeout: 3s
       retries: 30
     ports:
-      - "127.0.0.1:${OPENMMP_POSTGRES_HOST_PORT:-5432}:5432"
+      - "127.0.0.1:${OPENMASU_POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - postgres-secrets:/run/openmmp/postgres:ro
+      - postgres-secrets:/run/openmasu/postgres:ro
     networks:
       - backend
       - database-host
 
   migrate:
     <<: *app
-    command: ["/bin/sh", "-c", "set -a && . /run/openmmp/migration/runtime.env && set +a && npm run db:migrate"]
+    command: ["/bin/sh", "-c", "set -a && . /run/openmasu/migration/runtime.env && set +a && npm run db:migrate"]
     volumes:
-      - migration-secrets:/run/openmmp/migration:ro
+      - migration-secrets:/run/openmasu/migration:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -77,15 +77,15 @@ services:
 
   api:
     <<: *app
-    command: ["/bin/sh", "-c", "set -a && . /run/openmmp/app/runtime.env && set +a && node --import tsx apps/api/src/server.ts"]
+    command: ["/bin/sh", "-c", "set -a && . /run/openmasu/app/runtime.env && set +a && node --import tsx apps/api/src/server.ts"]
     volumes:
-      - app-secrets:/run/openmmp/app:ro
-      - payload-objects:/run/openmmp/payloads
+      - app-secrets:/run/openmasu/app:ro
+      - payload-objects:/run/openmasu/payloads
     depends_on:
       migrate:
         condition: service_completed_successfully
     ports:
-      - "${OPENMMP_API_HOST_PORT:-8080}:8080"
+      - "${OPENMASU_API_HOST_PORT:-8080}:8080"
     networks:
       - backend
       - edge
@@ -97,25 +97,25 @@ services:
 
   worker:
     <<: *app
-    command: ["/bin/sh", "-c", "set -a && . /run/openmmp/app/runtime.env && set +a && node --import tsx apps/worker/src/main.ts"]
+    command: ["/bin/sh", "-c", "set -a && . /run/openmasu/app/runtime.env && set +a && node --import tsx apps/worker/src/main.ts"]
     volumes:
-      - app-secrets:/run/openmmp/app:ro
-      - payload-objects:/run/openmmp/payloads
+      - app-secrets:/run/openmasu/app:ro
+      - payload-objects:/run/openmasu/payloads
     depends_on:
       migrate:
         condition: service_completed_successfully
 
   redirector:
     <<: *app
-    command: ["/bin/sh", "-c", "set -a && . /run/openmmp/app/runtime.env && set +a && node --import tsx apps/redirector/src/server.ts"]
+    command: ["/bin/sh", "-c", "set -a && . /run/openmasu/app/runtime.env && set +a && node --import tsx apps/redirector/src/server.ts"]
     volumes:
-      - app-secrets:/run/openmmp/app:ro
-      - payload-objects:/run/openmmp/payloads
+      - app-secrets:/run/openmasu/app:ro
+      - payload-objects:/run/openmasu/payloads
     depends_on:
       migrate:
         condition: service_completed_successfully
     ports:
-      - "${OPENMMP_REDIRECTOR_HOST_PORT:-8090}:8090"
+      - "${OPENMASU_REDIRECTOR_HOST_PORT:-8090}:8090"
     networks:
       - backend
       - edge
@@ -123,9 +123,9 @@ services:
   seed:
     <<: *app
     profiles: ["seed"]
-    command: ["/bin/sh", "-c", "set -a && . /run/openmmp/seed/runtime.env && set +a && npm run seed"]
+    command: ["/bin/sh", "-c", "set -a && . /run/openmasu/seed/runtime.env && set +a && npm run seed"]
     volumes:
-      - seed-secrets:/run/openmmp/seed:ro
+      - seed-secrets:/run/openmasu/seed:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -147,8 +147,8 @@ services:
     profiles: ["s3"]
     command: server /data --console-address :9001
     environment:
-      MINIO_ROOT_USER: openmmp-local
-      MINIO_ROOT_PASSWORD: openmmp-local-synthetic-only
+      MINIO_ROOT_USER: openmasu-local
+      MINIO_ROOT_PASSWORD: openmasu-local-synthetic-only
     volumes:
       - minio-data:/data
     networks:

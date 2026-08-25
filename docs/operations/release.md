@@ -1,6 +1,6 @@
 # Release Runbook
 
-Open MMP currently ships source and reproducible evidence. This runbook does
+OpenMasu currently ships source and reproducible evidence. This runbook does
 not publish packages, container images, Maven artifacts, Swift packages, UPM
 packages, or npm packages to a public registry.
 
@@ -56,5 +56,5 @@ the operator; do not use destructive schema rollback commands.
 
 Branch protection, secret scanning, production TLS, external secret managers,
 real backup recovery, real capacity, incident response, distribution signing,
-and trademark clearance are not established by this repository. Track them in
+and formal trademark clearance for any registration are not established by this repository. Track them in
 `docs/validation/m5-operator-checklist.md`.

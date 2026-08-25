@@ -1,9 +1,9 @@
-CREATE SCHEMA control AUTHORIZATION openmmp_owner;
-CREATE SCHEMA ledger AUTHORIZATION openmmp_owner;
+CREATE SCHEMA control AUTHORIZATION openmasu_owner;
+CREATE SCHEMA ledger AUTHORIZATION openmasu_owner;
 
 REVOKE ALL ON SCHEMA control, ledger FROM PUBLIC;
-GRANT USAGE ON SCHEMA control, ledger TO openmmp_app, openmmp_reader;
-GRANT USAGE ON SCHEMA ledger TO openmmp_seed;
+GRANT USAGE ON SCHEMA control, ledger TO openmasu_app, openmasu_reader;
+GRANT USAGE ON SCHEMA ledger TO openmasu_seed;
 
 CREATE DOMAIN control.identifier AS text
   CHECK (VALUE ~ '^[A-Za-z0-9._:-]{1,128}$');
@@ -420,7 +420,7 @@ BEGIN
     EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', item.table_schema, item.table_name);
     EXECUTE format('ALTER TABLE %I.%I FORCE ROW LEVEL SECURITY', item.table_schema, item.table_name);
     EXECUTE format(
-      'CREATE POLICY %I_tenant ON %I.%I USING (tenant_id = current_setting(''open_mmp.tenant_id'', true)) WITH CHECK (tenant_id = current_setting(''open_mmp.tenant_id'', true))',
+      'CREATE POLICY %I_tenant ON %I.%I USING (tenant_id = current_setting(''openmasu.tenant_id'', true)) WITH CHECK (tenant_id = current_setting(''openmasu.tenant_id'', true))',
       item.table_name,
       item.table_schema,
       item.table_name
@@ -433,18 +433,18 @@ REVOKE ALL ON ALL TABLES IN SCHEMA control, ledger FROM PUBLIC;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA control, ledger FROM PUBLIC;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA control, ledger FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION control.canonical_timestamp_value(control.canonical_timestamp)
-  TO openmmp_app, openmmp_reader;
+  TO openmasu_app, openmasu_reader;
 
-GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA control, ledger TO openmmp_app;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA control, ledger TO openmmp_app;
-REVOKE UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA control, ledger FROM openmmp_app;
-GRANT TRUNCATE ON ALL TABLES IN SCHEMA ledger TO openmmp_seed;
-GRANT SELECT ON ALL TABLES IN SCHEMA control, ledger TO openmmp_reader;
-GRANT SELECT ON ALL SEQUENCES IN SCHEMA control, ledger TO openmmp_reader;
+GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA control, ledger TO openmasu_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA control, ledger TO openmasu_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA control, ledger FROM openmasu_app;
+GRANT TRUNCATE ON ALL TABLES IN SCHEMA ledger TO openmasu_seed;
+GRANT SELECT ON ALL TABLES IN SCHEMA control, ledger TO openmasu_reader;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA control, ledger TO openmasu_reader;
 
-ALTER DEFAULT PRIVILEGES FOR ROLE openmmp_owner IN SCHEMA control, ledger
-  GRANT SELECT, INSERT ON TABLES TO openmmp_app;
-ALTER DEFAULT PRIVILEGES FOR ROLE openmmp_owner IN SCHEMA control, ledger
-  GRANT USAGE, SELECT ON SEQUENCES TO openmmp_app;
-ALTER DEFAULT PRIVILEGES FOR ROLE openmmp_owner IN SCHEMA control, ledger
-  GRANT SELECT ON TABLES TO openmmp_reader;
+ALTER DEFAULT PRIVILEGES FOR ROLE openmasu_owner IN SCHEMA control, ledger
+  GRANT SELECT, INSERT ON TABLES TO openmasu_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE openmasu_owner IN SCHEMA control, ledger
+  GRANT USAGE, SELECT ON SEQUENCES TO openmasu_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE openmasu_owner IN SCHEMA control, ledger
+  GRANT SELECT ON TABLES TO openmasu_reader;

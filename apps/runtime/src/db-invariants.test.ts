@@ -16,7 +16,7 @@ const migrationPool = createMigrationPool();
 const appClient = await appPool.connect();
 
 async function setTenant(tenantId: string): Promise<void> {
-  await appClient.query("SELECT set_config('open_mmp.tenant_id', $1, true)", [tenantId]);
+  await appClient.query("SELECT set_config('openmasu.tenant_id', $1, true)", [tenantId]);
 }
 
 async function savepointFailure(name: string, operation: () => Promise<unknown>): Promise<string> {
@@ -80,54 +80,54 @@ try {
         SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'ledger' AND c.relowner = r.oid
       ) AS owns_ledger,
-      has_database_privilege('openmmp_app', current_database(), 'CREATE') AS can_create,
-      (SELECT rolbypassrls FROM pg_roles WHERE rolname = 'openmmp_seed') AS seed_bypass,
+      has_database_privilege('openmasu_app', current_database(), 'CREATE') AS can_create,
+      (SELECT rolbypassrls FROM pg_roles WHERE rolname = 'openmasu_seed') AS seed_bypass,
       EXISTS (
         SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'ledger'
-          AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname = 'openmmp_seed')
+          AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname = 'openmasu_seed')
       ) AS seed_owns_ledger,
-      has_table_privilege('openmmp_seed', 'ledger.raw_records', 'SELECT') AS seed_can_select_raw,
-      has_table_privilege('openmmp_seed', 'ledger.raw_records', 'TRUNCATE') AS seed_can_truncate_raw,
+      has_table_privilege('openmasu_seed', 'ledger.raw_records', 'SELECT') AS seed_can_select_raw,
+      has_table_privilege('openmasu_seed', 'ledger.raw_records', 'TRUNCATE') AS seed_can_truncate_raw,
       has_table_privilege(
-        'openmmp_seed',
+        'openmasu_seed',
         'testing.fixture_inputs',
         'SELECT,INSERT,UPDATE,DELETE'
       ) AS seed_can_manage_fixtures,
-      has_table_privilege('openmmp_app', 'ephemeral.request_nonces', 'DELETE') AS app_can_delete_nonce,
-      has_table_privilege('openmmp_app', 'ledger.ingest_batches', 'DELETE') AS app_can_delete_ledger,
-      (SELECT rolbypassrls FROM pg_roles WHERE rolname = 'openmmp_reader') AS reader_bypass,
+      has_table_privilege('openmasu_app', 'ephemeral.request_nonces', 'DELETE') AS app_can_delete_nonce,
+      has_table_privilege('openmasu_app', 'ledger.ingest_batches', 'DELETE') AS app_can_delete_ledger,
+      (SELECT rolbypassrls FROM pg_roles WHERE rolname = 'openmasu_reader') AS reader_bypass,
       EXISTS (
         SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'ledger'
-          AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname = 'openmmp_reader')
+          AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname = 'openmasu_reader')
       ) AS reader_owns_ledger,
-      has_database_privilege('openmmp_reader', current_database(), 'CREATE') AS reader_can_create,
-      has_table_privilege('openmmp_reader', 'ephemeral.dashboard_sessions', 'SELECT') AS reader_can_select_sessions,
-      has_table_privilege('openmmp_reader', 'ephemeral.dashboard_sessions', 'INSERT') AS reader_can_insert_sessions,
-      has_table_privilege('openmmp_app', 'control.public_postback_audits', 'INSERT') AS app_can_insert_public_postback_audit,
-      has_table_privilege('openmmp_app', 'control.public_postback_audits', 'SELECT') AS app_can_select_public_postback_audit,
-      has_table_privilege('openmmp_reader', 'control.public_postback_audits', 'SELECT') AS reader_can_select_public_postback_audit,
-      has_function_privilege('openmmp_app', 'control.resolve_apple_app_adam_id(bigint)', 'EXECUTE') AS app_can_resolve_apple_adam,
-      has_function_privilege('openmmp_app', 'control.list_apple_postback_tenants()', 'EXECUTE') AS app_can_list_apple_tenants,
+      has_database_privilege('openmasu_reader', current_database(), 'CREATE') AS reader_can_create,
+      has_table_privilege('openmasu_reader', 'ephemeral.dashboard_sessions', 'SELECT') AS reader_can_select_sessions,
+      has_table_privilege('openmasu_reader', 'ephemeral.dashboard_sessions', 'INSERT') AS reader_can_insert_sessions,
+      has_table_privilege('openmasu_app', 'control.public_postback_audits', 'INSERT') AS app_can_insert_public_postback_audit,
+      has_table_privilege('openmasu_app', 'control.public_postback_audits', 'SELECT') AS app_can_select_public_postback_audit,
+      has_table_privilege('openmasu_reader', 'control.public_postback_audits', 'SELECT') AS reader_can_select_public_postback_audit,
+      has_function_privilege('openmasu_app', 'control.resolve_apple_app_adam_id(bigint)', 'EXECUTE') AS app_can_resolve_apple_adam,
+      has_function_privilege('openmasu_app', 'control.list_apple_postback_tenants()', 'EXECUTE') AS app_can_list_apple_tenants,
       (SELECT relforcerowsecurity FROM pg_class WHERE oid='control.apple_app_registrations'::regclass) AS apple_registration_rls_forced,
       (SELECT relforcerowsecurity FROM pg_class WHERE oid='control.conversion_schemas'::regclass) AS conversion_schema_rls_forced,
       (SELECT relforcerowsecurity FROM pg_class WHERE oid='ephemeral.adservices_lookups'::regclass) AS adservices_lookup_rls_forced,
-      has_table_privilege('openmmp_app', 'ledger.adservices_lookup_results', 'SELECT') AS app_can_select_adservices_results,
-      has_table_privilege('openmmp_reader', 'ledger.adservices_lookup_results', 'SELECT') AS reader_can_select_adservices_results,
+      has_table_privilege('openmasu_app', 'ledger.adservices_lookup_results', 'SELECT') AS app_can_select_adservices_results,
+      has_table_privilege('openmasu_reader', 'ledger.adservices_lookup_results', 'SELECT') AS reader_can_select_adservices_results,
       (SELECT relforcerowsecurity FROM pg_class WHERE oid='ledger.adservices_lookup_results'::regclass) AS adservices_result_rls_forced,
-      has_function_privilege('openmmp_app', 'control.list_m4_work_tenants()', 'EXECUTE') AS app_can_list_m4_work_tenants,
-      has_table_privilege('openmmp_app', 'ledger.apple_postback_facts', 'SELECT') AS app_can_select_apple_postback_facts,
-      has_table_privilege('openmmp_reader', 'ledger.apple_postback_facts', 'SELECT') AS reader_can_select_apple_postback_facts,
+      has_function_privilege('openmasu_app', 'control.list_m4_work_tenants()', 'EXECUTE') AS app_can_list_m4_work_tenants,
+      has_table_privilege('openmasu_app', 'ledger.apple_postback_facts', 'SELECT') AS app_can_select_apple_postback_facts,
+      has_table_privilege('openmasu_reader', 'ledger.apple_postback_facts', 'SELECT') AS reader_can_select_apple_postback_facts,
       (SELECT relforcerowsecurity FROM pg_class WHERE oid='ledger.apple_postback_facts'::regclass) AS apple_postback_fact_rls_forced,
-      has_table_privilege('openmmp_reader', 'control.admin_key_roles_current', 'SELECT') AS reader_can_select_admin_roles,
-      has_column_privilege('openmmp_reader', 'control.admin_keys', 'scrypt_digest', 'SELECT') AS reader_can_select_admin_digest,
-      has_table_privilege('openmmp_app', 'control.rule_bundle_revisions', 'INSERT') AS app_can_insert_rule_bundles,
-      has_table_privilege('openmmp_reader', 'control.rule_bundle_revisions', 'SELECT') AS reader_can_select_rule_bundles,
-      has_table_privilege('openmmp_reader', 'control.rule_bundle_revisions', 'INSERT') AS reader_can_insert_rule_bundles,
+      has_table_privilege('openmasu_reader', 'control.admin_key_roles_current', 'SELECT') AS reader_can_select_admin_roles,
+      has_column_privilege('openmasu_reader', 'control.admin_keys', 'scrypt_digest', 'SELECT') AS reader_can_select_admin_digest,
+      has_table_privilege('openmasu_app', 'control.rule_bundle_revisions', 'INSERT') AS app_can_insert_rule_bundles,
+      has_table_privilege('openmasu_reader', 'control.rule_bundle_revisions', 'SELECT') AS reader_can_select_rule_bundles,
+      has_table_privilege('openmasu_reader', 'control.rule_bundle_revisions', 'INSERT') AS reader_can_insert_rule_bundles,
       (SELECT relforcerowsecurity FROM pg_class WHERE oid='control.rule_bundle_revisions'::regclass) AS rule_bundle_rls_forced
     FROM pg_roles r
-    WHERE rolname = 'openmmp_app'
+    WHERE rolname = 'openmasu_app'
   `);
   assert.equal(role.rows[0].bypass, false);
   assert.equal(role.rows[0].owns_ledger, false);

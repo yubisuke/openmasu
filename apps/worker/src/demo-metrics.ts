@@ -1,10 +1,10 @@
-import { createAppPool, withTenant } from "@open-mmp/runtime";
-import { evaluate } from "@open-mmp/attribution-core";
+import { createAppPool, withTenant } from "@openmasu/runtime";
+import { evaluate } from "@openmasu/attribution-core";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const tenantId = process.env.OPENMMP_MAX_TENANT_ID ?? "tenant-local";
-const appId = process.env.OPENMMP_MAX_APP_ID ?? "app-local";
+const tenantId = process.env.OPENMASU_MAX_TENANT_ID ?? "tenant-local";
+const appId = process.env.OPENMASU_MAX_APP_ID ?? "app-local";
 const pool = createAppPool();
 try {
   const summary = await withTenant(pool, tenantId, async (client) => {
@@ -17,7 +17,7 @@ try {
     return result.rows[0];
   });
   const syntheticInput = JSON.parse(readFileSync(
-    join(process.cwd(), "fixtures", "v0.3", "33-stage-b-cohort-metrics", "input.json"),
+    join(process.cwd(), "fixtures", "v0.4", "33-stage-b-cohort-metrics", "input.json"),
     "utf8",
   ));
   const syntheticPreview = evaluate(syntheticInput).metric_runs

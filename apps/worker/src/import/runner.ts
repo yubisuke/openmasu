@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import type { Pool } from "pg";
-import { sha256, type CandidateAttempt } from "@open-mmp/attribution-core";
-import { createAppPool, uuidV7, withTenant } from "@open-mmp/runtime";
+import { sha256, type CandidateAttempt } from "@openmasu/attribution-core";
+import { createAppPool, uuidV7, withTenant } from "@openmasu/runtime";
 import { ingestRuntimeBatch } from "../ingestion.js";
 import { lintMappings, loadMapping, mapRow, MappingError, rowMatches, type ImportMapping } from "./mapping.js";
 import { ImportLimitError, readRows, type ImportLimits } from "./source.js";
@@ -39,9 +39,9 @@ function limitsFromEnvironment(): ImportLimits {
     return value;
   };
   return {
-    maxBytes: integer("OPENMMP_IMPORT_MAX_BYTES", process.env.OPENMMP_IMPORT_MAX_BYTES, defaultImportLimits.maxBytes),
-    maxRows: integer("OPENMMP_IMPORT_MAX_ROWS", process.env.OPENMMP_IMPORT_MAX_ROWS, defaultImportLimits.maxRows),
-    maxRowBytes: integer("OPENMMP_IMPORT_MAX_ROW_BYTES", process.env.OPENMMP_IMPORT_MAX_ROW_BYTES, defaultImportLimits.maxRowBytes),
+    maxBytes: integer("OPENMASU_IMPORT_MAX_BYTES", process.env.OPENMASU_IMPORT_MAX_BYTES, defaultImportLimits.maxBytes),
+    maxRows: integer("OPENMASU_IMPORT_MAX_ROWS", process.env.OPENMASU_IMPORT_MAX_ROWS, defaultImportLimits.maxRows),
+    maxRowBytes: integer("OPENMASU_IMPORT_MAX_ROW_BYTES", process.env.OPENMASU_IMPORT_MAX_ROW_BYTES, defaultImportLimits.maxRowBytes),
   };
 }
 
@@ -58,7 +58,7 @@ function toAttempt(mapping: ImportMapping, mapped: Any, fileDigest: string, rowO
     throw new MappingError("mapped occurred_at is invalid", ["occurred_at"]);
   }
   const record = {
-    contract_version: "0.3.0",
+    contract_version: "0.4.0",
     record_id: identifier("record", [mapping.source_id, fileDigest, rowOrdinal]),
     delivery_id: identifier("delivery", [fileDigest, rowOrdinal]),
     tenant_id: mapping.tenant_id,
@@ -67,7 +67,7 @@ function toAttempt(mapping: ImportMapping, mapped: Any, fileDigest: string, rowO
     producer_version: `mapping:${mapping.version}`,
     event_id: eventId,
     event_name: eventName,
-    schema_version: "0.3.0",
+    schema_version: "0.4.0",
     occurred_at: new Date(occurredAt).toISOString(),
     occurred_at_source: "import",
     received_at: receivedAt,
@@ -241,7 +241,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
   if (!source || !file) throw new Error("usage: npm run import -- --source=<mapping-name-or-path> --file=<path>");
   const mappingPath = source.endsWith(".json") && (source.includes("/") || source.includes("\\"))
     ? resolve(source)
-    : join(resolve(process.env.OPENMMP_MAPPINGS_DIR ?? "examples/mappings"), source.endsWith(".json") ? source : `${source}.json`);
+    : join(resolve(process.env.OPENMASU_MAPPINGS_DIR ?? "examples/mappings"), source.endsWith(".json") ? source : `${source}.json`);
   const mappings = readdirSync(dirname(mappingPath), { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
     .map((entry) => loadMapping(join(dirname(mappingPath), entry.name)));

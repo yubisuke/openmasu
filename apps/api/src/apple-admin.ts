@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
-import { uuidV7, withTenant } from "@open-mmp/runtime";
+import { uuidV7, withTenant } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 
 const bundleIdPattern = /^[A-Za-z0-9][A-Za-z0-9.-]{2,254}$/;

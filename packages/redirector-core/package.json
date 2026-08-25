@@ -1,8 +1,8 @@
 {
-  "name": "@open-mmp/redirector-core",
+  "name": "@openmasu/redirector-core",
   "version": "0.1.0",
   "private": true,
-  "description": "Portable Open MMP measurement-link redirector core",
+  "description": "Portable OpenMasu measurement-link redirector core",
   "type": "module",
   "exports": {
     ".": {

@@ -6,7 +6,7 @@ contained no real user, campaign, device, or provider data.
 
 ## Recorded run
 
-- Workflow: [Runtime run 32348976645](https://github.com/yubisuke/open-mmp/actions/runs/32348976645)
+- Workflow: [Runtime run 32348976645](https://github.com/yubisuke/openmasu/actions/runs/32348976645)
 - Commit: `f5eaebfdc1bdd7fec87077ca918e7483d9bac830`
 - Completed: 2026-08-20 08:30:38 UTC
 - Environment: GitHub-hosted Ubuntu 24.04 runner, Docker Compose, Node.js
