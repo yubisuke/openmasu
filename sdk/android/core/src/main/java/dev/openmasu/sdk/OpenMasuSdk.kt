@@ -387,6 +387,19 @@ object OpenMasuSdkFactory {
   @JvmStatic
   fun create(context: Context, configuration: OpenMasuConfiguration): OpenMasuSdk =
     OpenMasuSdk.create(context, configuration)
+
+  @JvmStatic
+  fun create(
+    context: Context,
+    configuration: OpenMasuConfiguration,
+    playReader: PlayReferrerReader,
+    metaReader: MetaReferrerReader,
+  ): OpenMasuSdk = OpenMasuSdk.create(
+    context = context,
+    configuration = configuration,
+    playReader = playReader,
+    metaReader = metaReader,
+  )
 }
 
 class DeliveryWorker(context: Context, params: WorkerParameters) : Worker(context, params) {

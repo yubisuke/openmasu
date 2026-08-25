@@ -1,13 +1,20 @@
 package dev.openmasu.unity;
 
 import android.app.Activity;
+import android.content.ContentResolver;
+import android.content.Context;
 import dev.openmasu.sdk.OpenMasuConfiguration;
+import dev.openmasu.sdk.MetaReferrerEvidence;
+import dev.openmasu.sdk.MetaReferrerReader;
 import dev.openmasu.sdk.OpenMasuSdk;
 import dev.openmasu.sdk.OpenMasuSdkFactory;
+import dev.openmasu.sdk.PlayReferrerEvidence;
+import dev.openmasu.sdk.PlayReferrerReader;
 import dev.openmasu.sdk.max.OpenMasuMaxBridge;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.lang.reflect.Constructor;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import android.content.Intent;
@@ -22,11 +29,16 @@ public final class OpenMasuUnityBridge {
   private OpenMasuUnityBridge() {}
 
   public static void initialize(Activity activity, String endpoint, String keyId, String secret, String wrapperVersion,
-      String deepLinkHosts, String deepLinkSchemes) {
+      String deepLinkHosts, String deepLinkSchemes, boolean enablePlayReferrer, String metaAppId) {
+    Context context = activity.getApplicationContext();
     OpenMasuConfiguration configuration = new OpenMasuConfiguration(
         endpoint, keyId, secret, "0.1.0", wrapperVersion, 10_000,
         csvSet(deepLinkHosts), csvSet(deepLinkSchemes), 604_800);
-    sdk = OpenMasuSdkFactory.create(activity.getApplicationContext(), configuration);
+    sdk = OpenMasuSdkFactory.create(
+        context,
+        configuration,
+        createPlayReferrerReader(context, enablePlayReferrer),
+        createMetaReferrerReader(context.getContentResolver(), metaAppId));
     sdk.setDeepLinkListener(value -> {
       StringCallback callback = deepLinkCallback;
       if (callback != null) callback.onResult(encodeDeepLink(value));
@@ -92,6 +104,38 @@ public final class OpenMasuUnityBridge {
   public static boolean trackMaxRevenue(double revenue, String precision, String networkName,
       String adUnitId, String placement, String networkPlacement) {
     return OpenMasuMaxBridge.track(requireSdk(), revenue, precision, networkName, adUnitId, placement, networkPlacement);
+  }
+
+  static PlayReferrerReader createPlayReferrerReader(Context context, boolean enabled) {
+    if (!enabled) return unavailablePlayReader();
+    try {
+      Class<?> type = Class.forName("dev.openmasu.sdk.installreferrer.GooglePlayReferrerReader");
+      Constructor<?> constructor = type.getConstructor(Context.class, long.class);
+      return (PlayReferrerReader) constructor.newInstance(context.getApplicationContext(), 5L);
+    } catch (ReflectiveOperationException | LinkageError exception) {
+      return unavailablePlayReader();
+    }
+  }
+
+  static MetaReferrerReader createMetaReferrerReader(ContentResolver resolver, String metaAppId) {
+    if (metaAppId == null || metaAppId.trim().isEmpty()) return unavailableMetaReader();
+    try {
+      Class<?> type = Class.forName("dev.openmasu.sdk.metareferrer.MetaInstallReferrerReader");
+      Constructor<?> constructor = type.getConstructor(ContentResolver.class, String.class);
+      return (MetaReferrerReader) constructor.newInstance(resolver, metaAppId.trim());
+    } catch (ReflectiveOperationException | LinkageError exception) {
+      return unavailableMetaReader();
+    }
+  }
+
+  private static PlayReferrerReader unavailablePlayReader() {
+    return () -> new PlayReferrerEvidence(
+        "unavailable", "service_unavailable", null, null, null, null, null, null, null,
+        null, Collections.emptyMap(), null, false);
+  }
+
+  private static MetaReferrerReader unavailableMetaReader() {
+    return () -> new MetaReferrerEvidence("provider_unavailable", null, null, null, null);
   }
 
   private static OpenMasuSdk requireSdk() {
