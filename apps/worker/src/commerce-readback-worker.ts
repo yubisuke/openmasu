@@ -11,6 +11,7 @@ import {
 import { ingestRuntimeBatch } from "./ingestion.js";
 import { googleServiceAccountAccessToken } from "./google-service-account.js";
 import { callAppleStoreApi, type AppleStoreApiCredentials } from "./apple-store-api.js";
+import type { CandidateAttempt } from "@openmasu/attribution-core";
 
 type JsonObject = Record<string, unknown>;
 type ReadbackRow = {
@@ -365,13 +366,24 @@ async function appendVerifiedGoogleRefundForOrder(
     const binding = (await client.query<{
       purchase_record_id: string; installation_id: string; transaction_id: string; currency: string;
       amount_unscaled: string; amount_scale: number;
+      producer: string; producer_version: string; event_id: string; delivery_id: string;
+      schema_version: string; occurred_at: string; occurred_at_source: string; received_at: string;
+      processing_purpose_id: string; policy_digest: string; consent_evaluation_policy_version: string;
+      financial_status: string; original_transaction_id: string | null;
     }>(
     `SELECT binding.purchase_record_id, purchase.installation_id, purchase.transaction_id,
-            binding.currency, binding.amount_unscaled, binding.amount_scale
+            binding.currency, binding.amount_unscaled, binding.amount_scale,
+            raw.producer, raw.producer_version, raw.event_id, raw.delivery_id,
+            raw.schema_version, raw.occurred_at, raw.occurred_at_source, raw.received_at,
+            raw.processing_purpose_id, raw.policy_digest, raw.consent_evaluation_policy_version,
+            purchase.financial_status, purchase.original_transaction_id
        FROM control.commerce_purchase_bindings AS binding
        JOIN ledger.purchase_facts AS purchase
          ON purchase.tenant_id=binding.tenant_id AND purchase.app_id=binding.app_id
-        AND purchase.record_id=binding.purchase_record_id
+         AND purchase.record_id=binding.purchase_record_id
+       JOIN ledger.raw_records AS raw
+         ON raw.tenant_id=purchase.tenant_id AND raw.app_id=purchase.app_id
+        AND raw.record_id=purchase.record_id
       WHERE binding.provider='google_play' AND binding.tenant_id=$1 AND binding.app_id=$2
         AND binding.transaction_digest=$3`,
     [row.tenant_id, row.app_id, orderDigest],
@@ -402,7 +414,37 @@ async function appendVerifiedGoogleRefundForOrder(
   }
   const next = toBindingScale(event.amountUnscaled, event.amountScale);
   if (next === undefined || refunded + next > BigInt(resolved.binding.amount_unscaled)) return "invalid";
-  return await appendVerifiedGoogleRefundWithBinding(pool, row, resolved.binding, event, now)
+  const purchase = resolved.binding;
+  const historicalPurchase: CandidateAttempt = {
+    batch_id: `historical:${purchase.purchase_record_id}`,
+    record: {
+      contract_version: "0.4.0", record_id: purchase.purchase_record_id,
+      tenant_id: row.tenant_id, app_id: row.app_id,
+      producer: purchase.producer, producer_version: purchase.producer_version,
+      event_id: purchase.event_id, delivery_id: purchase.delivery_id, event_name: "purchase",
+      schema_version: purchase.schema_version, occurred_at: purchase.occurred_at,
+      occurred_at_source: purchase.occurred_at_source, received_at: purchase.received_at,
+      processing_purpose_id: purchase.processing_purpose_id, processing_sequence: 0,
+      payload: {
+        event_name: "purchase", installation_id: purchase.installation_id,
+        transaction_id: purchase.transaction_id,
+        ...(purchase.original_transaction_id ? { original_transaction_id: purchase.original_transaction_id } : {}),
+        amount_unscaled: purchase.amount_unscaled, amount_scale: purchase.amount_scale,
+        currency: purchase.currency, financial_status: purchase.financial_status,
+      },
+    },
+    server: {
+      tenant_id: row.tenant_id, app_id: row.app_id, received_at: purchase.received_at,
+      policy_digest: purchase.policy_digest,
+      processing_purposes: [{
+        processing_purpose_id: purchase.processing_purpose_id,
+        consent_required: false,
+        policy_version: purchase.consent_evaluation_policy_version,
+      }],
+      withdrawals: [], alternative_legal_bases: [], fraud_enabled: false, fraud_actions_enabled: false,
+    },
+  };
+  return await appendVerifiedGoogleRefundWithBinding(pool, row, purchase, historicalPurchase, event, now)
     ? "persisted" : "missing";
 }
 
@@ -410,6 +452,7 @@ async function appendVerifiedGoogleRefundWithBinding(
   pool: Pool,
   row: ReadbackRow,
   binding: { purchase_record_id: string; installation_id: string; transaction_id: string; currency: string },
+  historicalPurchase: CandidateAttempt,
   event: { readonly eventDigest: string; readonly eventTime: string; readonly amountUnscaled: string; readonly amountScale: number; readonly currency: string },
   now: Date,
 ): Promise<boolean> {
@@ -439,7 +482,7 @@ async function appendVerifiedGoogleRefundWithBinding(
       policy_digest: "verified-commerce-v1", processing_purposes: [{ processing_purpose_id: "revenue_measurement", consent_required: false, policy_version: "verified-commerce-v1" }],
       withdrawals: [], alternative_legal_bases: [], fraud_enabled: false, fraud_actions_enabled: false,
     },
-  }], pool);
+  }], pool, [historicalPurchase]);
   return output.logical_events.some((value) => value.record_id === recordId)
     || await withTenant(pool, row.tenant_id, async (client) => (await client.query(
       "SELECT 1 FROM ledger.refund_facts WHERE tenant_id=$1 AND app_id=$2 AND correction_target_record_id=$3 AND transaction_id=$4",
