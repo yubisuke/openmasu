@@ -1,6 +1,6 @@
 # Contract v0.4 Migration Guide
 
-Contract v0.4.0 is a planned, in-place identity migration from the immutable `contract-v0.3.6` tag at commit `d79bc49ea8f017e30a5bc61bcf38b301645548ed`. It changes the project and public contract namespace to OpenMasu. It does not change artifact shape, field meaning, attribution behavior, metric arithmetic, ordering, hashing rules, privacy semantics, or public fraud semantics.
+Contract v0.4.0 is a planned, in-place identity migration from the immutable `contract-v0.3.6` tag at commit `62e1288076925adf7384a7688c56d0b67fa789c7`. It changes the project and public contract namespace to OpenMasu. It does not change artifact shape, field meaning, attribution behavior, metric arithmetic, ordering, hashing rules, privacy semantics, or public fraud semantics.
 
 Consumers must move the complete contract set together:
 
@@ -54,7 +54,7 @@ Run `npm run verify:contract-rename`. The verifier reads the immutable tag throu
 The reviewed result is:
 
 ```text
-Contract v0.4 rename proof: contract-v0.3.6 (d79bc49ea8f017e30a5bc61bcf38b301645548ed)
+Contract v0.4 rename proof: contract-v0.3.6 (62e1288076925adf7384a7688c56d0b67fa789c7)
 Schemas: 27; SCHEMA_URN=31, CONTRACT_SEMVER=19, SCHEMA_TITLE=27, NAME_DERIVED=1; SEMANTIC_DIFF=0
 Registries: 8; PATH_RENAME=8; CONTRACT_SEMVER=8; SEMANTIC_DIFF=0
 Fixtures: 47 inputs=47 goldens=611 files=659
