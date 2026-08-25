@@ -1702,14 +1702,35 @@ describe("M2a signed SDK ingestion", () => {
   });
 
   it("WO20 returns a subject-scoped portable response without protected payload material", async () => {
+    const dsarInstallationId = `installation:dsar-${run}`;
+    const enrollment = await signed("/v1/installations", { installation_id: dsarInstallationId });
+    assert.equal(enrollment.status, 201);
+    const dsarCredential = await enrollment.json() as {
+      installation_key_id: string;
+      installation_secret: string;
+    };
+    const dsarSigned = (path: string, body: unknown) => signed(path, body, {
+      secret: dsarCredential.installation_secret,
+      installationKeyId: dsarCredential.installation_key_id,
+    });
+    const open = sourceEvent(`event:dsar-deep-link:${run}`, "deep_link_open", {
+      installation_id: dsarInstallationId,
+      open_source: "android_app_link",
+      destination_status: "delivered",
+      link_slug: "unknownDsarSlug",
+      deep_link_value: "/synthetic/dsar",
+    }, "2026-08-19T05:00:00.000Z");
+    assert.equal((await dsarSigned("/v1/events/batch", { records: [open] })).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+
     const before = await withTenant(pool, tenantId, async (client) => Number((await client.query<{ count: string }>(
       "SELECT count(*)::text AS count FROM ledger.privacy_requests WHERE tenant_id=$1 AND app_id=$2",
       [tenantId, appId],
     )).rows[0].count));
-    const response = await signed("/v1/privacy/access", {
-      installation_id: installationId,
+    const response = await dsarSigned("/v1/privacy/access", {
+      installation_id: dsarInstallationId,
       request_type: "portability",
-    }, { secret: installationSecret, installationKeyId });
+    });
     const text = await response.text();
     assert.equal(response.status, 200, text);
     assert.equal(response.headers.get("cache-control"), "no-store");
@@ -1723,10 +1744,10 @@ describe("M2a signed SDK ingestion", () => {
       "purchase_token", "tracking_link_id", "deep_link_value",
     ]) assert.doesNotMatch(JSON.stringify(artifact), new RegExp(forbidden));
 
-    const other = await signed("/v1/privacy/access", {
+    const other = await dsarSigned("/v1/privacy/access", {
       installation_id: `installation:other-dsar-${run}`,
       request_type: "access",
-    }, { secret: installationSecret, installationKeyId });
+    });
     assert.equal(other.status, 403);
     const evidence = await withTenant(pool, tenantId, async (client) => ({
       privacyRows: Number((await client.query<{ count: string }>(
