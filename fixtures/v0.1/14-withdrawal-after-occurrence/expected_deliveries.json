@@ -1,0 +1,41 @@
+[
+  {
+    "contract_version": "0.1.0",
+    "delivery_id": "delivery:queued-before-withdrawal",
+    "record_id": "queued-before-withdrawal",
+    "canonical_record_id": "queued-before-withdrawal",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-12T00:01:00.000Z",
+    "ingestion_status": "rejected",
+    "duplicate_resolution": "unique",
+    "timeliness": "on_time",
+    "clock_skew_suspected": false,
+    "payload_disposition": "discarded",
+    "processing_purpose_id": "analytics",
+    "consent_evaluation_policy_version": "consent-v1",
+    "consent_decision_reason_code": "consent_withdrawn",
+    "withdrawal_recognized_at": "2026-08-12T00:00:00.000Z",
+    "reason_code": "consent_withdrawn"
+  },
+  {
+    "contract_version": "0.1.0",
+    "delivery_id": "delivery:queued-explicit-basis",
+    "record_id": "queued-explicit-basis",
+    "canonical_record_id": "queued-explicit-basis",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-12T00:02:00.000Z",
+    "ingestion_status": "accepted",
+    "duplicate_resolution": "unique",
+    "timeliness": "on_time",
+    "clock_skew_suspected": false,
+    "payload_disposition": "protected",
+    "processing_purpose_id": "analytics",
+    "consent_evaluation_policy_version": "consent-v1",
+    "consent_decision_reason_code": "documented_alternative_legal_basis",
+    "withdrawal_recognized_at": "2026-08-12T00:00:00.000Z",
+    "alternative_legal_basis_id": "basis-queued",
+    "alternative_legal_basis_policy_version": "basis-v1"
+  }
+]

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-mmp:schema:event-install:v0.1",
+  "title": "Open MMP Install Event v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_name", "installation_id", "referrer_status", "install_type"],
+  "properties": {
+    "event_name": { "const": "install" },
+    "installation_id": { "$ref": "../common.schema.json#/$defs/id" },
+    "prior_installation_id": { "$ref": "../common.schema.json#/$defs/id" },
+    "install_type": { "enum": ["first_install", "reinstall", "redownload"] },
+    "click_id": { "type": "string" },
+    "referrer_status": { "enum": ["available", "none", "unsupported", "unavailable"] },
+    "protected_referrer_evidence_ref": { "type": "string" },
+    "referrer_click_at_device": { "$ref": "../common.schema.json#/$defs/dateTime" },
+    "referrer_click_at_server": { "$ref": "../common.schema.json#/$defs/dateTime" },
+    "install_begin_at_device": { "$ref": "../common.schema.json#/$defs/dateTime" },
+    "install_begin_at_server": { "$ref": "../common.schema.json#/$defs/dateTime" },
+    "install_begin_at_server_status": { "enum": ["available", "missing", "invalid"] },
+    "referrer_read_at": { "$ref": "../common.schema.json#/$defs/dateTime" },
+    "occurred_at_device": { "$ref": "../common.schema.json#/$defs/dateTime" },
+    "extensions": { "type": "object", "additionalProperties": true }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "install_type": { "enum": ["reinstall", "redownload"] } }, "required": ["install_type"] },
+      "then": {
+        "properties": { "prior_installation_id": {} },
+        "required": ["prior_installation_id"]
+      }
+    },
+    {
+      "if": { "properties": { "install_type": { "const": "first_install" } }, "required": ["install_type"] },
+      "then": {
+        "not": {
+          "properties": { "prior_installation_id": {} },
+          "required": ["prior_installation_id"]
+        }
+      }
+    }
+  ]
+}

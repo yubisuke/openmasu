@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-mmp:schema:attribution-result:v0.1",
+  "title": "Open MMP Attribution Result v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["attribution_id", "tenant_id", "app_id", "subject_scope", "subject_ref", "status", "method", "model", "reason_code", "reason_code_version", "evidence_refs", "effective_at", "decided_at", "input_cutoff_at", "finality", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash"],
+  "properties": {
+    "attribution_id": { "$ref": "common.schema.json#/$defs/id" },
+    "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
+    "app_id": { "$ref": "common.schema.json#/$defs/id" },
+    "subject_scope": { "enum": ["installation_level", "aggregate"] },
+    "subject_ref": { "$ref": "common.schema.json#/$defs/id" },
+    "status": { "enum": ["organic", "non_organic", "unattributed"] },
+    "method": { "enum": ["install_referrer", "aggregate_privacy", "none"] },
+    "model": { "enum": ["last_click", "aggregate", "none"] },
+    "reason_code": { "type": "string" },
+    "reason_code_version": { "const": "0.1.0" },
+    "evidence_refs": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/evidenceRef" } },
+    "effective_at": { "$ref": "common.schema.json#/$defs/dateTime" },
+    "decided_at": { "$ref": "common.schema.json#/$defs/dateTime" },
+    "input_cutoff_at": { "$ref": "common.schema.json#/$defs/dateTime" },
+    "finality": { "enum": ["pending", "provisional", "final", "superseded", "retracted"] },
+    "rule_bundle_id": { "$ref": "common.schema.json#/$defs/id" },
+    "rule_bundle_version": { "type": "string" },
+    "rule_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "supersedes_attribution_id": { "$ref": "common.schema.json#/$defs/id" }
+  }
+}

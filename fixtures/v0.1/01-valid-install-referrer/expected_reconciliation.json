@@ -1,0 +1,32 @@
+[
+  {
+    "reconciliation_id": "reconciliation:01",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "input_snapshot_id": "internal-snapshot:01",
+    "external_snapshot_id": "external-snapshot:01",
+    "difference_reason_code": "matched",
+    "difference_reason_version": "0.1.0",
+    "matching_keys": [
+      {
+        "type": "provider_install_id",
+        "value": "synthetic-install-1",
+        "scope": "tenant_app",
+        "normalization": "identity",
+        "cardinality": "one_to_one",
+        "protected": true
+      }
+    ],
+    "candidates": [
+      "install-1"
+    ],
+    "exclusions": [],
+    "windows": [
+      "install-1:in_window"
+    ],
+    "joins": [
+      "provider_install_id:synthetic-install-1=>install-1"
+    ],
+    "freshness": "current"
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-mmp:schema:logical-event:v0.1",
+  "title": "Open MMP Logical Event v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "logical_event_id", "record_id", "tenant_id", "app_id", "producer", "event_id", "event_name", "lifecycle", "timeliness"],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "logical_event_id": { "$ref": "common.schema.json#/$defs/id" },
+    "record_id": { "$ref": "common.schema.json#/$defs/id" },
+    "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
+    "app_id": { "$ref": "common.schema.json#/$defs/id" },
+    "producer": { "type": "string" },
+    "event_id": { "$ref": "common.schema.json#/$defs/id" },
+    "event_name": { "enum": ["click", "install", "session_start", "ad_impression", "ad_revenue", "purchase", "refund", "consent_changed"] },
+    "lifecycle": { "enum": ["active", "retracted", "redacted"] },
+    "timeliness": { "enum": ["on_time", "late"] }
+  }
+}

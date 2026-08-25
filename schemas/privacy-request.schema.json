@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-mmp:schema:privacy-request:v0.1",
+  "title": "Open MMP Privacy Request v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "tenant_id", "app_id", "privacy_request_id", "deletion_subject_ref", "deletion_scope", "requested_at", "status", "reason_code", "policy_version", "affected_records"],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
+    "app_id": { "$ref": "common.schema.json#/$defs/id" },
+    "privacy_request_id": { "$ref": "common.schema.json#/$defs/id" },
+    "deletion_subject_ref": { "$ref": "common.schema.json#/$defs/id" },
+    "deletion_scope": { "enum": ["installation", "app", "tenant"] },
+    "requested_at": { "$ref": "common.schema.json#/$defs/dateTime" },
+    "completed_at": { "$ref": "common.schema.json#/$defs/dateTime" },
+    "status": { "enum": ["received", "processing", "completed", "failed"] },
+    "reason_code": { "type": "string", "minLength": 1 },
+    "policy_version": { "type": "string", "minLength": 1 },
+    "affected_records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["record_id", "lifecycle_status"],
+        "properties": {
+          "record_id": { "$ref": "common.schema.json#/$defs/id" },
+          "lifecycle_status": { "enum": ["redacted", "purged"] }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "completed" } } },
+      "then": {
+        "properties": { "completed_at": {} },
+        "required": ["completed_at"]
+      }
+    }
+  ]
+}

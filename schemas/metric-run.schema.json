@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-mmp:schema:metric-run:v0.1",
+  "title": "Open MMP Metric Run v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "metric_run_id", "metric_name", "metric_definition_version", "input_snapshot_id",
+    "input_received_at_watermark", "input_ledger_position", "computed_at", "data_freshness",
+    "aggregation_time_zone", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash",
+    "fx_rate", "fx_rate_source", "fx_rate_as_of", "fx_rate_snapshot_id",
+    "fx_policy_version", "rounding_mode", "reproducibility_status", "value_unscaled",
+    "amount_scale", "currency", "evidence_refs"
+  ],
+  "properties": {
+    "metric_run_id": { "$ref": "common.schema.json#/$defs/id" },
+    "metric_name": { "enum": ["d0_install_to_24h_ad_revenue_usd", "d0_utc_install_calendar_ad_revenue_usd", "d0_jst_install_calendar_ad_revenue_usd"] },
+    "metric_definition_version": { "const": "0.1.0" },
+    "input_snapshot_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "input_ledger_position": { "type": "string", "minLength": 1 },
+    "input_received_at_watermark": { "$ref": "common.schema.json#/$defs/dateTime" },
+    "computed_at": { "$ref": "common.schema.json#/$defs/dateTime" },
+    "data_freshness": { "enum": ["complete", "late_excluded", "recalculated"] },
+    "aggregation_time_zone": { "enum": ["UTC", "Asia/Tokyo"] },
+    "rule_bundle_id": { "$ref": "common.schema.json#/$defs/id" },
+    "rule_bundle_version": { "const": "0.1.0" },
+    "rule_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "fx_rate": { "type": "string", "minLength": 1 },
+    "fx_rate_source": { "type": "string", "minLength": 1 },
+    "fx_rate_as_of": { "$ref": "common.schema.json#/$defs/dateTime" },
+    "fx_rate_snapshot_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "fx_policy_version": { "type": "string", "minLength": 1 },
+    "rounding_mode": { "const": "half_even" },
+    "reproducibility_status": { "enum": ["fully_reproducible", "redaction_affected", "retention_affected"] },
+    "value_unscaled": { "type": "string", "pattern": "^-?[0-9]+$" },
+    "amount_scale": { "type": "integer", "minimum": 0, "maximum": 18 },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "supersedes_metric_run_id": { "$ref": "common.schema.json#/$defs/id" },
+    "evidence_refs": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/evidenceRef" } }
+  }
+}

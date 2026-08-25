@@ -1,0 +1,26 @@
+[
+  {
+    "contract_version": "0.1.0",
+    "record_id": "queued-explicit-basis",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "producer_version": "fixture-v0.1",
+    "event_id": "event:queued-explicit-basis",
+    "delivery_id": "delivery:queued-explicit-basis",
+    "event_name": "session_start",
+    "schema_version": "0.1.0",
+    "payload_sha256": "e718fff399640024e9d532431ac988008573e162272083078a5bfdb92287e766",
+    "occurred_at": "2026-08-11T23:01:00.000Z",
+    "occurred_at_source": "device",
+    "received_at": "2026-08-12T00:02:00.000Z",
+    "payload_lifecycle_status": "available",
+    "raw_payload_ref": "protected:queued-explicit-basis",
+    "processing_purpose_id": "analytics",
+    "consent_evaluation_policy_version": "consent-v1",
+    "consent_decision_reason_code": "documented_alternative_legal_basis",
+    "withdrawal_recognized_at": "2026-08-12T00:00:00.000Z",
+    "alternative_legal_basis_id": "basis-queued",
+    "alternative_legal_basis_policy_version": "basis-v1"
+  }
+]

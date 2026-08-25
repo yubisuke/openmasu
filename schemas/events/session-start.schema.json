@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-mmp:schema:event-session-start:v0.1",
+  "title": "Open MMP Session Start Event v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_name", "installation_id", "session_id"],
+  "properties": { "event_name": { "const": "session_start" }, "installation_id": { "type": "string" }, "session_id": { "type": "string" }, "extensions": { "type": "object", "additionalProperties": true } }
+}

@@ -1,0 +1,16 @@
+[
+  {
+    "contract_version": "0.1.0",
+    "delivery_id": "delivery:aggregate-invalid",
+    "record_id": "aggregate-invalid",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "reason_code": "aggregate_installation_join_forbidden",
+    "reason_code_version": "0.1.0",
+    "payload_disposition": "discarded",
+    "retained": "non_identifying_metadata",
+    "processing_purpose_id": "analytics",
+    "consent_evaluation_policy_version": "consent-v0.1",
+    "consent_decision_reason_code": "consent_not_required"
+  }
+]

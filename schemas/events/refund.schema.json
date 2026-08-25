@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-mmp:schema:event-refund:v0.1",
+  "title": "Open MMP Refund Event v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_name", "transaction_id", "original_transaction_id", "correction_target_record_id", "amount_unscaled", "amount_scale", "currency", "financial_status"],
+  "properties": {
+    "event_name": { "const": "refund" },
+    "transaction_id": { "$ref": "../common.schema.json#/$defs/id" },
+    "original_transaction_id": { "$ref": "../common.schema.json#/$defs/id" },
+    "correction_target_record_id": { "$ref": "../common.schema.json#/$defs/id" },
+    "amount_unscaled": { "type": "string", "pattern": "^[0-9]+$" },
+    "amount_scale": { "type": "integer", "minimum": 0, "maximum": 18 },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "financial_status": { "enum": ["settled", "pending", "reversed"] },
+    "extensions": { "type": "object", "additionalProperties": true }
+  }
+}

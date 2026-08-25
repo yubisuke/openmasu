@@ -1,0 +1,26 @@
+[
+  {
+    "contract_version": "0.1.0",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "privacy_request_id": "privacy-17",
+    "record_id": "revenue-17",
+    "lifecycle_status": "redacted",
+    "reason_digest": "54306c4dd0549f7f33177982efda95bcb38933fff77f029170dd1546441362dd",
+    "policy_digest": "f01410ee5082a84e2d2e552d049d613698039e34afb5eeec565ba4544ca78c97",
+    "provenance_digest": "8a7fe8fe932c10894c92331fdc02c8f015321109cf024a8f2b6ba78c5967e27c",
+    "created_at": "2026-08-12T02:00:00.000Z"
+  },
+  {
+    "contract_version": "0.1.0",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "privacy_request_id": "privacy-17",
+    "record_id": "session-purge-17",
+    "lifecycle_status": "purged",
+    "reason_digest": "54306c4dd0549f7f33177982efda95bcb38933fff77f029170dd1546441362dd",
+    "policy_digest": "f01410ee5082a84e2d2e552d049d613698039e34afb5eeec565ba4544ca78c97",
+    "provenance_digest": "dfe7e5e83a5750b14e3930a4719287cea2bf4b45ed4f2f30f4588078d98c4818",
+    "created_at": "2026-08-12T02:00:00.000Z"
+  }
+]

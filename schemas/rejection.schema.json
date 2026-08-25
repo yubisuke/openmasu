@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-mmp:schema:rejection:v0.1",
+  "title": "Open MMP Rejection v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "delivery_id", "record_id", "tenant_id", "app_id", "reason_code", "reason_code_version", "payload_disposition", "retained", "consent_evaluation_policy_version", "consent_decision_reason_code"],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "delivery_id": { "$ref": "common.schema.json#/$defs/id" },
+    "record_id": { "$ref": "common.schema.json#/$defs/id" },
+    "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
+    "app_id": { "$ref": "common.schema.json#/$defs/id" },
+    "reason_code": { "type": "string" },
+    "reason_code_version": { "const": "0.1.0" },
+    "payload_disposition": { "enum": ["discarded", "protected"] },
+    "retained": { "enum": ["non_identifying_metadata", "protected_conflict_evidence"] },
+    "processing_purpose_id": { "$ref": "common.schema.json#/$defs/id" },
+    "consent_evaluation_policy_version": { "type": "string", "minLength": 1 },
+    "consent_decision_reason_code": { "type": "string", "minLength": 1 },
+    "withdrawal_recognized_at": { "$ref": "common.schema.json#/$defs/dateTime" }
+  }
+}

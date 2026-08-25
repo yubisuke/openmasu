@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-mmp:schema:fixture-input:v0.1",
+  "title": "Open MMP Contract Fixture Input v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "fx_policy", "metric_evaluations", "reconciliation_inputs", "privacy_requests"],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "server_context": { "$ref": "#/$defs/serverContext" },
+    "records": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/record" } },
+    "batches": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["batch_id", "server_context", "records"],
+        "properties": {
+          "batch_id": { "$ref": "common.schema.json#/$defs/id" },
+          "server_context": { "$ref": "#/$defs/serverContext" },
+          "records": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/record" } }
+        }
+      }
+    },
+    "fx_policy": { "$ref": "#/$defs/fxPolicy" },
+    "metric_evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["metric_run_id_prefix", "input_received_at_watermark", "computed_at", "data_freshness", "privacy_state"],
+        "properties": {
+          "metric_run_id_prefix": { "$ref": "common.schema.json#/$defs/id" },
+          "input_received_at_watermark": { "$ref": "common.schema.json#/$defs/dateTime" },
+          "computed_at": { "$ref": "common.schema.json#/$defs/dateTime" },
+          "data_freshness": { "enum": ["complete", "late_excluded", "recalculated"] },
+          "privacy_state": { "enum": ["before", "after"] },
+          "supersedes_metric_run_id_prefix": { "$ref": "common.schema.json#/$defs/id" }
+        }
+      }
+    },
+    "reconciliation_inputs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/reconciliationInput" }
+    },
+    "privacy_requests": {
+      "type": "array",
+      "items": { "$ref": "urn:open-mmp:schema:privacy-request:v0.1" }
+    },
+    "correction_inputs": {
+      "type": "array",
+      "items": { "$ref": "urn:open-mmp:schema:correction:v0.1" }
+    }
+  },
+  "oneOf": [
+    {
+      "properties": { "server_context": {}, "records": {} },
+      "required": ["server_context", "records"],
+      "not": {
+        "properties": { "batches": {} },
+        "required": ["batches"]
+      }
+    },
+    {
+      "properties": { "batches": {} },
+      "required": ["batches"],
+      "not": {
+        "anyOf": [
+          { "properties": { "server_context": {} }, "required": ["server_context"] },
+          { "properties": { "records": {} }, "required": ["records"] }
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "serverContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tenant_id", "app_id", "received_at", "policy_digest", "processing_purposes", "withdrawals", "alternative_legal_bases"],
+      "properties": {
+        "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
+        "app_id": { "$ref": "common.schema.json#/$defs/id" },
+        "received_at": { "$ref": "common.schema.json#/$defs/dateTime" },
+        "policy_digest": { "type": "string", "minLength": 1 },
+        "processing_purposes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["processing_purpose_id", "consent_required", "policy_version"],
+            "properties": {
+              "processing_purpose_id": { "$ref": "common.schema.json#/$defs/id" },
+              "consent_required": { "type": "boolean" },
+              "policy_version": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "withdrawals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["processing_purpose_id", "withdrawal_recognized_at", "withdrawal_recognized_sequence"],
+            "properties": {
+              "processing_purpose_id": { "$ref": "common.schema.json#/$defs/id" },
+              "withdrawal_recognized_at": { "$ref": "common.schema.json#/$defs/dateTime" },
+              "withdrawal_recognized_sequence": { "type": "integer", "minimum": 0 }
+            }
+          }
+        },
+        "alternative_legal_bases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["alternative_legal_basis_id", "processing_purpose_id", "legal_basis", "policy_version", "effective_at"],
+            "properties": {
+              "alternative_legal_basis_id": { "$ref": "common.schema.json#/$defs/id" },
+              "processing_purpose_id": { "$ref": "common.schema.json#/$defs/id" },
+              "legal_basis": { "type": "string", "minLength": 1 },
+              "policy_version": { "type": "string", "minLength": 1 },
+              "effective_at": { "$ref": "common.schema.json#/$defs/dateTime" }
+            }
+          }
+        }
+      }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_version", "record_id", "delivery_id", "tenant_id", "app_id", "producer",
+        "producer_version", "event_id", "event_name", "schema_version", "occurred_at",
+        "occurred_at_source", "received_at", "payload", "processing_sequence"
+      ],
+      "properties": {
+        "contract_version": { "const": "0.1.0" },
+        "record_id": { "$ref": "common.schema.json#/$defs/id" },
+        "delivery_id": { "$ref": "common.schema.json#/$defs/id" },
+        "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
+        "app_id": { "$ref": "common.schema.json#/$defs/id" },
+        "producer": { "type": "string", "pattern": "^(sdk-android|redirector|import:[a-z0-9-]+)$" },
+        "producer_version": { "type": "string", "minLength": 1 },
+        "event_id": { "$ref": "common.schema.json#/$defs/id" },
+        "event_name": { "enum": ["click", "install", "session_start", "ad_impression", "ad_revenue", "purchase", "refund", "consent_changed"] },
+        "schema_version": { "const": "0.1.0" },
+        "occurred_at": { "$ref": "common.schema.json#/$defs/dateTime" },
+        "occurred_at_source": { "enum": ["device", "server", "import"] },
+        "received_at": { "$ref": "common.schema.json#/$defs/dateTime" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": true,
+          "$comment": "Closed by event_name dispatch to the matching event schema."
+        },
+        "late": { "type": "boolean" },
+        "subject_scope": { "enum": ["installation_level", "aggregate"] },
+        "processing_purpose_id": { "$ref": "common.schema.json#/$defs/id" },
+        "processing_sequence": { "type": "integer", "minimum": 0 },
+        "alternative_legal_basis_id": { "$ref": "common.schema.json#/$defs/id" }
+      }
+    },
+    "matchingKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "value", "scope", "normalization", "cardinality", "protected"],
+      "properties": {
+        "type": { "enum": ["external_row_id", "provider_install_id", "provider_click_id", "tracking_link_id", "campaign_id", "transaction_id", "impression_id", "tenant_app_composite"] },
+        "value": { "type": "string" },
+        "scope": { "enum": ["tenant", "tenant_app"] },
+        "normalization": { "enum": ["identity", "lowercase_ascii", "trim"] },
+        "cardinality": { "enum": ["one_to_one", "one_to_many"] },
+        "protected": { "type": "boolean" }
+      }
+    },
+    "reconciliationInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reconciliation_id", "tenant_id", "app_id", "input_snapshot_id", "external_snapshot_id", "matching_keys", "candidates", "freshness"],
+      "properties": {
+        "reconciliation_id": { "$ref": "common.schema.json#/$defs/id" },
+        "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
+        "app_id": { "$ref": "common.schema.json#/$defs/id" },
+        "input_snapshot_id": { "$ref": "common.schema.json#/$defs/id" },
+        "external_snapshot_id": { "$ref": "common.schema.json#/$defs/id" },
+        "matching_keys": { "type": "array", "items": { "$ref": "#/$defs/matchingKey" } },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["candidate_id", "tenant_id", "app_id", "matching_keys", "window_status", "freshness", "excluded"],
+            "properties": {
+              "candidate_id": { "$ref": "common.schema.json#/$defs/id" },
+              "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
+              "app_id": { "$ref": "common.schema.json#/$defs/id" },
+              "matching_keys": { "type": "array", "items": { "$ref": "#/$defs/matchingKey" } },
+              "window_status": { "enum": ["in_window", "out_of_window", "not_applicable"] },
+              "freshness": { "enum": ["current", "stale", "recalculated"] },
+              "excluded": { "type": "boolean" },
+              "exclusion_reason": { "type": "string" }
+            }
+          }
+        },
+        "freshness": { "enum": ["current", "stale", "recalculated"] },
+        "privacy_effect": { "enum": ["none", "redaction"] }
+      }
+    },
+    "fxPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy_version", "target_currency", "target_scale", "rounding_mode", "rates"],
+      "properties": {
+        "policy_version": { "type": "string", "minLength": 1 },
+        "target_currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "target_scale": { "type": "integer", "minimum": 0, "maximum": 18 },
+        "rounding_mode": { "const": "half_even" },
+        "rates": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["currency", "rate_unscaled", "rate_scale", "source", "as_of"],
+            "properties": {
+              "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+              "rate_unscaled": { "type": "string", "pattern": "^[0-9]+$" },
+              "rate_scale": { "type": "integer", "minimum": 0, "maximum": 18 },
+              "source": { "type": "string", "minLength": 1 },
+              "as_of": { "$ref": "common.schema.json#/$defs/dateTime" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

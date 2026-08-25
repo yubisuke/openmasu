@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-mmp:schema:metric-definition:v0.1",
+  "title": "Open MMP Metric Definition v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["metric_name", "metric_definition_version", "anchor_event", "aggregation_time_zone", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash"],
+  "properties": {
+    "metric_name": { "enum": ["d0_install_to_24h_ad_revenue_usd", "d0_utc_install_calendar_ad_revenue_usd", "d0_jst_install_calendar_ad_revenue_usd"] },
+    "metric_definition_version": { "const": "0.1.0" },
+    "anchor_event": { "const": "install" },
+    "aggregation_time_zone": { "type": "string", "minLength": 1 },
+    "rule_bundle_id": { "$ref": "common.schema.json#/$defs/id" },
+    "rule_bundle_version": { "type": "string" },
+    "rule_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

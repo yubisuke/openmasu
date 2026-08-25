@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-mmp:schema:event-click:v0.1",
+  "title": "Open MMP Click Event v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_name", "click_id", "tracking_link_id", "campaign_id", "redirector_time_status"],
+  "properties": {
+    "event_name": { "const": "click" },
+    "click_id": { "type": "string" },
+    "tracking_link_id": { "type": "string" },
+    "campaign_id": { "type": "string" },
+    "redirector_click_at": { "$ref": "../common.schema.json#/$defs/dateTime" },
+    "redirector_time_status": { "enum": ["available", "missing", "invalid"] },
+    "bot_prefetch": { "type": "boolean" },
+    "extensions": { "type": "object", "additionalProperties": true }
+  }
+}

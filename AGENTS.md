@@ -1,0 +1,62 @@
+# AGENTS.md
+
+## Project
+
+- This folder contains the development work for a self-hostable, open-source Mobile Measurement Partner.
+- Project documentation, GitHub issues, pull requests, and release notes must be written in English by default.
+- Code identifiers and API field names must use English.
+- The initial product entry point is a Shadow MMP. The first native attribution vertical slice targets Android and Unity.
+- `docs/roadmap.md` is the canonical milestone sequence. When a milestone, exit gate, or ordering changes, update its project-plan crosswalk in that file and the corresponding summary in `docs/project-plan.md` in the same change.
+
+## Current state
+
+- Milestone M0.1 (see `docs/roadmap.md`) is complete: the repository currently contains only the Event & Metric Contract v0.1 — JSON Schemas, registries, synthetic fixtures, and two independently implemented reference evaluators. There is no runtime service, database, HTTP API, SDK, or dashboard code yet. Do not assume any of those exist.
+- The contract lives in `schemas/`, `schemas/events/`, `registries/`, `fixtures/v0.1/`, and `spec/event-metric-contract-v0.1.md`. `spec/event-metric-contract-v0.1.md` is the normative document for current contract behavior. `issue-drafts/001-event-metric-contract-v0.1.md` is the original tracking Epic; treat it as a historical record of what was asked for, not a live checklist — new work items belong in `docs/roadmap.md` and `docs/project-plan.md`, and its own acceptance-criteria checkboxes should not be edited to match later hardening work.
+- The next milestone is M1 Shadow Ledger (PostgreSQL append-only received-evidence layer, normalization, difference-audit API). Do not start M2+ scope out of order without checking `docs/roadmap.md` first.
+
+## Running validation
+
+- Pinned tool versions: Node.js `22.18.0` from `.nvmrc`, npm `11.6.2` from `package.json` `engines`, and Python `3.13.5` from `.python-version`. `.npmrc` enforces the Node.js and npm engine versions.
+- Setup:
+
+  ```bash
+  npm ci
+  python -m pip install --require-hashes --requirement requirements-contract.txt
+  ```
+
+- Full validation gate: `npm run validate`. It type-checks the TypeScript, compiles every schema, validates every registry and fixture, runs both the TypeScript and Python evaluators, and checks RFC 8785 canonical output. It normally completes in a few seconds. Run it after any change under `schemas/`, `registries/`, `fixtures/`, `spec/`, or `tools/`, and paste its final summary line into your report.
+- Type-check only (faster, partial signal): `npm run typecheck`.
+- `npm run validate` is strictly read-only: it never writes, regenerates, or reformats fixture files. If a change requires a new or updated golden fixture, follow the candidate and human-review workflow in `fixtures/v0.1/README.md`, hand-edit the `fixtures/v0.1/<NN-name>/expected_*.json` files, and explain in your report exactly how each expected value was derived.
+
+## What must not change casually
+
+- `fixtures/v0.1/<NN-name>/expected_*.json` files are reviewed, immutable golden artifacts (see `fixtures/v0.1/README.md`). Editing one changes what "passing" means for that scenario. Treat it as a contract-behavior change, not a routine test update, and call it out explicitly in your report even if `npm run validate` still passes afterward.
+- Schema `$id` values (`urn:open-mmp:schema:<artifact>:v0.1`) and the `contract_version` / `schema_version` constants are part of the public contract identity. Do not change an existing `$id`, or bump `schema_version`, without updating every fixture and evaluator path that depends on it, and without explicitly flagging the change as breaking.
+- There is currently no written definition of what counts as a breaking vs. non-breaking schema change, even though `issue-drafts/001-event-metric-contract-v0.1.md` (Work package 1) calls for one. Until that document exists, treat any change to a required field, a closed enum's value set, or a schema's `additionalProperties: false` boundary as breaking by default, and say so explicitly in your report rather than silently narrowing or widening a schema.
+- Registry files (`registries/*.json`) are referenced both by `$ref`/enum from schemas and by name in prose inside `spec/event-metric-contract-v0.1.md`, `docs/`, and `issue-drafts/`. If you add, rename, or remove a registry value, grep for every place that value (or the full enumeration it belongs to) appears in prose and update all of them in the same change — do not update only the registry file.
+
+## Documents to update together
+
+- `docs/roadmap.md` and `docs/project-plan.md`: the milestone/phase crosswalk (already required above).
+- `spec/event-metric-contract-v0.1.md`'s validation-gate summary (schema count, registry count, fixture count, golden-artifact count, scenario-assertion count, acceptance-criteria count) must match the literal final-line output of `tools/validate.ts`. If you add or remove an `AC##` entry in `tools/validate.ts`, a fixture directory, or a schema file, update this prose in the same change — do not let the two drift.
+- Any registry value list written out in prose inside `spec/`, `docs/`, or `issue-drafts/` must match its source registry file in `registries/` exactly, field for field. Update every prose enumeration in the same change as the registry file.
+- `docs/privacy-security.md`'s release-gate table and `docs/threat-model.md`'s residual-risk section both reference `docs/roadmap.md` gate ownership by milestone name; keep the milestone names byte-identical across all three documents.
+
+## GitHub boundary
+
+- Use the `yubisuke` account only when the user explicitly authorizes that specific GitHub operation.
+- Without explicit authorization, do not authenticate with `gh`, read through the authenticated account, create or modify repositories, add or change remotes, run `git push`, or create issues, pull requests, or releases.
+- Do not infer a repository name or visibility setting.
+- Before any GitHub write, verify the account, exact `OWNER/REPO`, visibility, and operation.
+- Local design, implementation, and testing do not imply that anything has been published to GitHub.
+- Without GitHub write authorization, a finished task means: the change is committed on a local working branch (never directly on `main`), `npm run validate` passes, and the change and validation output are reported. Pushing, opening pull requests or issues, and any other remote write require explicit authorization.
+
+## Product constraints
+
+- Do not implement device fingerprinting.
+- The SDK must not collect personal data by default.
+- Advertising identifiers may be handled only when explicitly configured and permitted by platform rules and required consent.
+- Store and display deterministic, platform-assigned, aggregate privacy-preserving, estimated, and unknown attribution as distinct categories.
+- Use primary Apple, Google, and media-platform sources for behavior that depends on external specifications.
+- Keep received evidence append-only where lawful, but redact personal data when a valid deletion request requires it. Append-only is not a reason to retain identifiable deleted data.
+- Keep the measurement core open while separating deployment secrets and live fraud-defense policy.

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-mmp:schema:reconciliation-result:v0.1",
+  "title": "Open MMP Reconciliation Result v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "reconciliation_id", "tenant_id", "app_id", "input_snapshot_id", "external_snapshot_id",
+    "difference_reason_code", "difference_reason_version", "matching_keys", "candidates",
+    "exclusions", "windows", "joins", "freshness"
+  ],
+  "properties": {
+    "reconciliation_id": { "$ref": "common.schema.json#/$defs/id" },
+    "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
+    "app_id": { "$ref": "common.schema.json#/$defs/id" },
+    "input_snapshot_id": { "$ref": "common.schema.json#/$defs/id" },
+    "external_snapshot_id": { "$ref": "common.schema.json#/$defs/id" },
+    "difference_reason_code": { "enum": ["matched", "candidate_missing", "candidate_excluded", "window_mismatch", "join_key_missing", "join_key_ambiguous", "freshness_mismatch", "external_row_unmatched", "redaction_caused_recalculation", "currency_policy_mismatch", "scope_mismatch"] },
+    "difference_reason_version": { "const": "0.1.0" },
+    "matching_keys": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "value", "scope", "normalization", "cardinality", "protected"],
+        "properties": {
+          "type": { "enum": ["external_row_id", "provider_install_id", "provider_click_id", "tracking_link_id", "campaign_id", "transaction_id", "impression_id", "tenant_app_composite"] },
+          "value": { "type": "string" },
+          "scope": { "enum": ["tenant", "tenant_app"] },
+          "normalization": { "enum": ["identity", "lowercase_ascii", "trim"] },
+          "cardinality": { "enum": ["one_to_one", "one_to_many"] },
+          "protected": { "type": "boolean" }
+        }
+      }
+    },
+    "candidates": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/id" } },
+    "exclusions": { "type": "array", "items": { "type": "string" } },
+    "windows": { "type": "array", "items": { "type": "string" } },
+    "joins": { "type": "array", "items": { "type": "string" } },
+    "freshness": { "enum": ["current", "stale", "recalculated"] },
+    "supersedes_reconciliation_id": { "$ref": "common.schema.json#/$defs/id" }
+  }
+}

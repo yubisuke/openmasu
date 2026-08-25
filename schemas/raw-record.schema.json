@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-mmp:schema:raw-record:v0.1",
+  "title": "Open MMP Raw Record v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version", "record_id", "tenant_id", "app_id", "producer", "producer_version",
+    "event_id", "delivery_id", "event_name", "schema_version", "payload_sha256",
+    "occurred_at", "occurred_at_source", "received_at", "payload_lifecycle_status",
+    "raw_payload_ref", "consent_evaluation_policy_version", "consent_decision_reason_code"
+  ],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "record_id": { "$ref": "common.schema.json#/$defs/id" },
+    "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
+    "app_id": { "$ref": "common.schema.json#/$defs/id" },
+    "producer": { "type": "string", "pattern": "^(sdk-android|redirector|import:[a-z0-9-]+)$" },
+    "producer_version": { "type": "string", "minLength": 1 },
+    "event_id": { "$ref": "common.schema.json#/$defs/id" },
+    "delivery_id": { "$ref": "common.schema.json#/$defs/id" },
+    "event_name": { "enum": ["click", "install", "session_start", "ad_impression", "ad_revenue", "purchase", "refund", "consent_changed"] },
+    "schema_version": { "const": "0.1.0" },
+    "payload_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "occurred_at": { "$ref": "common.schema.json#/$defs/dateTime" },
+    "occurred_at_source": { "enum": ["device", "server", "import"] },
+    "received_at": { "$ref": "common.schema.json#/$defs/dateTime" },
+    "payload_lifecycle_status": { "enum": ["available", "redacted", "purged"] },
+    "raw_payload_ref": { "type": "string", "minLength": 1 },
+    "processing_purpose_id": { "$ref": "common.schema.json#/$defs/id" },
+    "consent_evaluation_policy_version": { "type": "string", "minLength": 1 },
+    "consent_decision_reason_code": { "type": "string", "minLength": 1 },
+    "withdrawal_recognized_at": { "$ref": "common.schema.json#/$defs/dateTime" },
+    "alternative_legal_basis_id": { "$ref": "common.schema.json#/$defs/id" },
+    "alternative_legal_basis_policy_version": { "type": "string", "minLength": 1 }
+  }
+}
