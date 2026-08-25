@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-mmp:schema:event-ad-view:v0.2",
+  "title": "Open MMP Advertiser-side Ad View Event v0.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_name", "view_id", "campaign_id", "network", "viewed_at"],
+  "properties": {
+    "event_name": { "const": "ad_view" },
+    "view_id": { "$ref": "../common.schema.json#/$defs/id" },
+    "campaign_id": { "$ref": "../common.schema.json#/$defs/id" },
+    "ad_group_id": { "$ref": "../common.schema.json#/$defs/id" },
+    "creative_id": { "$ref": "../common.schema.json#/$defs/id" },
+    "network": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "country": { "type": "string", "pattern": "^[A-Z]{2}$" },
+    "site_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "remote_click_ref": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "viewed_at": { "$ref": "../common.schema.json#/$defs/dateTime" },
+    "extensions": { "type": "object", "additionalProperties": true }
+  }
+}

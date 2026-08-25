@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:event-ad-impression:v0.1",
-  "title": "Open MMP Ad Impression Event v0.1",
+  "$id": "urn:open-mmp:schema:event-ad-impression:v0.2",
+  "title": "Open MMP Ad Impression Event v0.2",
   "type": "object",
   "additionalProperties": false,
   "required": ["event_name", "impression_id", "ad_unit_id", "ad_network"],

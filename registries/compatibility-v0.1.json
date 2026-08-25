@@ -1,8 +1,0 @@
-{
-  "contract_version": "0.1.0",
-  "attribution": [
-    { "subject_scope": "installation_level", "method": "install_referrer", "model": "last_click", "statuses": ["organic", "non_organic", "unattributed"] },
-    { "subject_scope": "aggregate", "method": "aggregate_privacy", "model": "aggregate", "statuses": ["unattributed"] },
-    { "subject_scope": "installation_level", "method": "none", "model": "none", "statuses": ["organic", "unattributed"] }
-  ]
-}

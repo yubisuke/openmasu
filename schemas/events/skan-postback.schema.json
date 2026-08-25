@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-mmp:schema:event-skan-postback:v0.2",
+  "title": "Open MMP SKAdNetwork Postback Event v0.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_name", "version", "ad_network_id", "app_id", "transaction_id",
+    "attribution_signature", "signature_verified", "did_win"
+  ],
+  "properties": {
+    "event_name": { "const": "skan_postback" },
+    "version": { "enum": ["3.0", "4.0"] },
+    "ad_network_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "app_id": { "type": "integer", "minimum": 0 },
+    "attribution_signature": { "type": "string", "minLength": 1 },
+    "signature_verified": { "type": "boolean" },
+    "source_identifier": { "type": "string", "pattern": "^[0-9]{2,4}$" },
+    "campaign_id": { "type": "integer", "minimum": 1, "maximum": 100 },
+    "source_app_id": { "type": "integer", "minimum": 0 },
+    "source_domain": { "type": "string", "minLength": 1, "maxLength": 253 },
+    "conversion_value": { "type": "integer", "minimum": 0, "maximum": 63 },
+    "coarse_conversion_value": { "enum": ["low", "medium", "high"] },
+    "postback_sequence_index": { "type": "integer", "minimum": 0, "maximum": 2 },
+    "redownload": { "type": "boolean" },
+    "transaction_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "country_code": { "type": "string", "pattern": "^[A-Z]{2}$" },
+    "did_win": { "type": "boolean" },
+    "fidelity_type": { "enum": [0, 1] },
+    "extensions": { "type": "object", "additionalProperties": true }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "version": { "type": "string", "pattern": "^[1-3](\\.|$)" } }, "required": ["version"] },
+      "then": {
+        "properties": { "campaign_id": {} },
+        "required": ["campaign_id"],
+        "not": {
+          "anyOf": [
+            { "properties": { "source_identifier": {} }, "required": ["source_identifier"] },
+            { "properties": { "postback_sequence_index": {} }, "required": ["postback_sequence_index"] },
+            { "properties": { "coarse_conversion_value": {} }, "required": ["coarse_conversion_value"] }
+          ]
+        }
+      }
+    },
+    {
+      "if": { "properties": { "version": { "type": "string", "pattern": "^4(\\.|$)" } }, "required": ["version"] },
+      "then": {
+        "properties": { "postback_sequence_index": {} },
+        "required": ["postback_sequence_index"],
+        "not": { "properties": { "campaign_id": {} }, "required": ["campaign_id"] }
+      }
+    },
+    {
+      "not": {
+        "properties": { "conversion_value": {}, "coarse_conversion_value": {} },
+        "required": ["conversion_value", "coarse_conversion_value"]
+      }
+    },
+    {
+      "if": { "properties": { "postback_sequence_index": { "type": "integer", "minimum": 1 } }, "required": ["postback_sequence_index"] },
+      "then": { "not": { "properties": { "conversion_value": {} }, "required": ["conversion_value"] } }
+    }
+  ]
+}

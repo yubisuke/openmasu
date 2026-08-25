@@ -1,10 +1,11 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { compile, type JSONSchema } from "json-schema-to-typescript";
+import { compile, type JSONSchema } from "@open-mmp/contracts/type-generation";
 
 const root = process.cwd();
 const schemaRoot = join(root, "schemas");
-const outputPath = join(root, "tools", "generated", "contract-types.ts");
+const outputDirectory = join(root, "packages", "contracts", "src", "generated");
+const outputPath = join(outputDirectory, "contract-types.ts");
 const artifacts = {
   raw_records: "raw-record.schema.json",
   deliveries: "event-delivery.schema.json",
@@ -13,6 +14,8 @@ const artifacts = {
   privacy_requests: "privacy-request.schema.json",
   privacy_tombstones: "privacy-tombstone.schema.json",
   attributions: "attribution-result.schema.json",
+  cost_records: "cost-record.schema.json",
+  metric_definitions: "metric-definition.schema.json",
   metric_runs: "metric-run.schema.json",
   fraud_decisions: "fraud-decision.schema.json",
   rejections: "rejection.schema.json",
@@ -21,7 +24,7 @@ const artifacts = {
 
 const schema: JSONSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
-  title: "Open MMP Evaluation Output v0.1",
+  title: "Open MMP Evaluation Output v0.2",
   type: "object",
   additionalProperties: false,
   required: Object.keys(artifacts),
@@ -52,6 +55,6 @@ const generated = await compile(schema, "EvaluationOutput", {
   },
 });
 
-mkdirSync(join(root, "tools", "generated"), { recursive: true });
+mkdirSync(outputDirectory, { recursive: true });
 writeFileSync(outputPath, generated, "utf8");
 console.log(`Generated ${Object.keys(artifacts).length} contract artifact types at ${outputPath}`);

@@ -10,7 +10,7 @@ Do not disclose suspected vulnerabilities, credentials, personal data, or live d
 
 Use GitHub's private vulnerability-reporting flow when it is enabled for this repository. If that flow is unavailable, contact the repository owner through a previously established private channel and include only the minimum information needed to arrange a secure report.
 
-A maintainer-approved private reporting path must be enabled before Milestone 1 accepts runtime code. Until then, the project is not ready for a runtime release.
+A maintainer-approved private reporting path must be enabled before M1a Shadow ledger and import foundation accepts runtime code. Until then, the project is not ready for a runtime release.
 
 ## Scope
 

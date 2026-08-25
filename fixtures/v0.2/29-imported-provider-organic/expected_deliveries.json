@@ -1,0 +1,53 @@
+[
+  {
+    "contract_version": "0.2.0",
+    "delivery_id": "delivery:import-install-29",
+    "record_id": "import-install-29",
+    "canonical_record_id": "import-install-29",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-18T02:00:00.000Z",
+    "ingestion_status": "accepted",
+    "duplicate_resolution": "unique",
+    "timeliness": "on_time",
+    "clock_skew_suspected": false,
+    "payload_disposition": "protected",
+    "processing_purpose_id": "analytics",
+    "consent_evaluation_policy_version": "consent-v0.2",
+    "consent_decision_reason_code": "consent_not_required"
+  },
+  {
+    "contract_version": "0.2.0",
+    "delivery_id": "delivery:import-session-29",
+    "record_id": "import-session-29",
+    "canonical_record_id": "import-session-29",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-18T02:00:00.000Z",
+    "ingestion_status": "accepted",
+    "duplicate_resolution": "unique",
+    "timeliness": "on_time",
+    "clock_skew_suspected": false,
+    "payload_disposition": "protected",
+    "processing_purpose_id": "analytics",
+    "consent_evaluation_policy_version": "consent-v0.2",
+    "consent_decision_reason_code": "consent_not_required"
+  },
+  {
+    "contract_version": "0.2.0",
+    "delivery_id": "delivery:sdk-ios-session-29",
+    "record_id": "sdk-ios-session-29",
+    "canonical_record_id": "sdk-ios-session-29",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-18T02:00:00.000Z",
+    "ingestion_status": "accepted",
+    "duplicate_resolution": "unique",
+    "timeliness": "on_time",
+    "clock_skew_suspected": false,
+    "payload_disposition": "protected",
+    "processing_purpose_id": "analytics",
+    "consent_evaluation_policy_version": "consent-v0.2",
+    "consent_decision_reason_code": "consent_not_required"
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "contract_version": "0.2.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:consent-control-after-withdrawal",
+    "record_id": "consent-control-after-withdrawal",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:consent-control-after-withdrawal",
+    "event_name": "consent_changed",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  }
+]

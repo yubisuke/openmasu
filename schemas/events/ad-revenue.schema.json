@@ -1,20 +1,42 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:event-ad-revenue:v0.1",
-  "title": "Open MMP Ad Revenue Event v0.1",
+  "$id": "urn:open-mmp:schema:event-ad-revenue:v0.2",
+  "title": "Open MMP Ad Revenue Event v0.2",
   "type": "object",
   "additionalProperties": false,
-  "required": ["event_name", "installation_id", "impression_id", "ad_unit_id", "ad_network", "amount_unscaled", "amount_scale", "currency", "revenue_source"],
+  "required": ["event_name", "subject_scope", "ad_network", "amount_unscaled", "amount_scale", "currency", "revenue_source"],
   "properties": {
     "event_name": { "const": "ad_revenue" },
+    "subject_scope": { "enum": ["installation_level", "aggregate"] },
     "installation_id": { "$ref": "../common.schema.json#/$defs/id" },
     "impression_id": { "$ref": "../common.schema.json#/$defs/id" },
     "ad_unit_id": { "$ref": "../common.schema.json#/$defs/id" },
     "ad_network": { "type": "string", "minLength": 1 },
-    "amount_unscaled": { "type": "string", "pattern": "^[0-9]+$" },
-    "amount_scale": { "type": "integer", "minimum": 0, "maximum": 18 },
-    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "mediation_provider": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "country": { "type": "string", "pattern": "^[A-Z]{2}$" },
+    "anchor_source": { "enum": ["provider_install_ref", "provider_click_ref", "server_user_ref"] },
+    "amount_unscaled": {},
+    "amount_scale": {},
+    "currency": {},
+    "currency_source": { "enum": ["reported", "default"] },
     "revenue_source": { "enum": ["client_estimated", "server_verified", "imported_reported"] },
-    "extensions": { "type": "object", "additionalProperties": true }
-  }
+    "import_context": { "$ref": "../common.schema.json#/$defs/importContext" },
+    "extensions": { "type": "object", "propertyNames": { "not": { "pattern": "^(import($|_)|imported($|_)|provider($|_))" } }, "additionalProperties": true }
+  },
+  "allOf": [
+    { "$ref": "../common.schema.json#/$defs/money" },
+    {
+      "if": { "properties": { "subject_scope": { "const": "installation_level" } }, "required": ["subject_scope"] },
+      "then": { "properties": { "installation_id": {} }, "required": ["installation_id"] }
+    },
+    {
+      "if": { "properties": { "subject_scope": { "const": "aggregate" } }, "required": ["subject_scope"] },
+      "then": {
+        "not": {
+          "properties": { "installation_id": {} },
+          "required": ["installation_id"]
+        }
+      }
+    }
+  ]
 }

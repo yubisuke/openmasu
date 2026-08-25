@@ -1,21 +1,28 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:privacy-request:v0.1",
-  "title": "Open MMP Privacy Request v0.1",
+  "$id": "urn:open-mmp:schema:privacy-request:v0.2",
+  "title": "Open MMP Privacy Request v0.2",
   "type": "object",
   "additionalProperties": false,
-  "required": ["contract_version", "tenant_id", "app_id", "privacy_request_id", "deletion_subject_ref", "deletion_scope", "requested_at", "status", "reason_code", "policy_version", "affected_records"],
+  "required": ["contract_version", "tenant_id", "app_id", "privacy_request_id", "deletion_scope", "requested_via", "requester_auth_ref", "requested_at", "status", "reason_code", "policy_version", "affected_records"],
   "properties": {
-    "contract_version": { "const": "0.1.0" },
+    "contract_version": { "const": "0.2.0" },
     "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
     "app_id": { "$ref": "common.schema.json#/$defs/id" },
     "privacy_request_id": { "$ref": "common.schema.json#/$defs/id" },
     "deletion_subject_ref": { "$ref": "common.schema.json#/$defs/id" },
+    "deletion_subject_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "deletion_scope": { "enum": ["installation", "app", "tenant"] },
+    "requested_via": { "enum": ["on_device_sdk", "tenant_admin_api"] },
+    "requester_auth_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "description": "Opaque, non-identifying reference to a server-side authentication decision. Raw credentials, tokens, installation IDs, device identifiers, and personal data are forbidden."
+    },
     "requested_at": { "$ref": "common.schema.json#/$defs/dateTime" },
     "completed_at": { "$ref": "common.schema.json#/$defs/dateTime" },
     "status": { "enum": ["received", "processing", "completed", "failed"] },
-    "reason_code": { "type": "string", "minLength": 1 },
+    "reason_code": { "enum": ["privacy_deletion", "retention_expiry"] },
     "policy_version": { "type": "string", "minLength": 1 },
     "affected_records": {
       "type": "array",
@@ -34,8 +41,19 @@
     {
       "if": { "properties": { "status": { "const": "completed" } } },
       "then": {
-        "properties": { "completed_at": {} },
-        "required": ["completed_at"]
+        "properties": { "completed_at": {}, "deletion_subject_digest": {} },
+        "required": ["completed_at", "deletion_subject_digest"],
+        "not": { "properties": { "deletion_subject_ref": {} }, "required": ["deletion_subject_ref"] }
+      },
+      "else": { "properties": { "deletion_subject_ref": {} }, "required": ["deletion_subject_ref"] }
+    },
+    {
+      "if": { "properties": { "requested_via": { "const": "on_device_sdk" } }, "required": ["requested_via"] },
+      "then": {
+        "properties": {
+          "deletion_scope": { "const": "installation" },
+          "deletion_subject_ref": { "type": "string", "pattern": "^installation:" }
+        }
       }
     }
   ]

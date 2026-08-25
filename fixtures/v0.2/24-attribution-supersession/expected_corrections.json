@@ -1,0 +1,12 @@
+[
+  {
+    "contract_version": "0.2.0",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "correction_id": "correction:privacy-24:click-24",
+    "corrects_record_id": "click-24",
+    "correction_type": "redaction",
+    "correction_reason": "privacy_deletion",
+    "effective_at": "2026-08-12T02:01:00.000Z"
+  }
+]

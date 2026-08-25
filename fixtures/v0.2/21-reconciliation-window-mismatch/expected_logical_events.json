@@ -1,0 +1,14 @@
+[
+  {
+    "contract_version": "0.2.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:install-21",
+    "record_id": "install-21",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:install-21",
+    "event_name": "install",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  }
+]

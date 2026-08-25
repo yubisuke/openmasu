@@ -1,0 +1,16 @@
+[
+  {
+    "event_type": "click",
+    "event_id": "synthetic-import-event-1",
+    "occurred_at": "2026-08-19T00:00:00",
+    "click_id": "synthetic-click-1",
+    "tracking_link_id": "synthetic-link-1",
+    "campaign_id": "synthetic-campaign-1",
+    "country": "us",
+    "prefetch": "no",
+    "attributed": "paid",
+    "strategy": "click",
+    "provider_click_ref": "synthetic-provider-click-1",
+    "confirmed_at": "2026-08-19T00:01:00"
+  }
+]

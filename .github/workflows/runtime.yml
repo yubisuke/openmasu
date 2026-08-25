@@ -1,0 +1,77 @@
+name: Runtime
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  runtime:
+    # Runtime containers are verified on Linux. Windows development uses Docker Desktop.
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: openmmp
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres-synthetic-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d openmmp"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      OPENMMP_MIGRATION_DATABASE_URL: postgresql://postgres:postgres-synthetic-ci@localhost:5432/openmmp
+      OPENMMP_APP_DATABASE_PASSWORD: app-synthetic-ci-password
+      OPENMMP_READER_DATABASE_PASSWORD: reader-synthetic-ci-password
+      OPENMMP_SEED_DATABASE_PASSWORD: seed-synthetic-ci-password
+      OPENMMP_APP_DATABASE_URL: postgresql://openmmp_app:app-synthetic-ci-password@localhost:5432/openmmp
+      OPENMMP_READER_DATABASE_URL: postgresql://openmmp_reader:reader-synthetic-ci-password@localhost:5432/openmmp
+      OPENMMP_SEED_DATABASE_URL: postgresql://openmmp_seed:seed-synthetic-ci-password@localhost:5432/openmmp
+      OPENMMP_POSTGRES_HOST_PORT: "55432"
+      OPENMMP_API_HOST_PORT: "8080"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.18.0
+          cache: npm
+      - name: Install pinned npm
+        run: npm install --global npm@11.6.2
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply migrations twice and check schema
+        run: |
+          npm run db:migrate
+          npm run db:migrate
+          npm run db:schema:check
+      - name: Run runtime unit and integration tests
+        run: |
+          npm test
+          npm run test:integration
+          npm run test:db-invariants
+          npm run test:env-coverage
+      - name: Reproduce contract goldens through PostgreSQL
+        run: npm run seed && npm run verify:parity
+      - name: Verify SQL cohort metrics against the contract evaluator
+        run: npm run test:metric-parity
+      - name: Run reduced synthetic metric performance floor
+        run: OPENMMP_BENCHMARK_ROWS=100000 npm run benchmark:metric-floor
+      - name: Check threat-model coverage
+        run: npm run check:threat-model
+      - name: Compose first-run smoke
+        run: |
+          docker compose up -d --wait
+          docker compose --env-file /dev/null exec -T api sh -c 'set -a && . /run/openmmp/app/runtime.env && set +a && OPENMMP_API_HOST_PORT=8080 node --import tsx tools/runtime-smoke.ts'
+      - name: Generate workspace SBOMs
+        run: npm run sbom
+      - name: Upload workspace SBOMs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: runtime-sbom
+          path: sbom/*.cdx.json
+          if-no-files-found: error

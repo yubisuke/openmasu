@@ -10,7 +10,9 @@ The product therefore starts as a Shadow MMP alongside an existing provider.
 - Normalize existing MMP and media outputs into a common contract
 - Recalculate attribution and revenue under explicit definitions
 - Explain neutral measurement differences through candidates, exclusion reasons, windows, joins, and freshness; these categories do not score provider quality
-- Move a measurement path to primary status only after a real shadow pilot validates it
+- Move a measurement path to primary status only after an operator-run shadow pilot validates it and the owner explicitly chooses that direction
+
+The project is an open-source product for self-hosting teams. No company-specific replacement is assumed. Real deployment data may be used by an operator outside the public repository to test whether the contract represents reality, but it is not a repository artifact or a public completion gate.
 
 ## Open and private boundaries
 
@@ -31,86 +33,74 @@ The product therefore starts as a Shadow MMP alongside an existing provider.
 - Detection-model weights
 - IP, device, and operator watchlists
 - Detection-response timing
-- Real user and campaign evidence
+- Real user, campaign, cost, revenue, and provider-export evidence
 
-Fraud decisions retain evidence references, reason codes, rule-bundle versions and digests, evaluation time, action, and supersession history. A later delayed-transparency policy for retired rules may be considered, but it is not part of v0.1.
+Fraud decisions retain evidence references, reason codes, rule-bundle versions and digests, evaluation time, action, and supersession history. A later delayed-transparency policy for retired rules may be considered, but it is not part of v0.2.
 
 ## Execution phases
 
 `docs/roadmap.md` is the canonical execution order and contains the project-plan crosswalk. This document is a phase summary and must be updated with that crosswalk when the roadmap changes.
 
-### Phase 0: Contract
+### Phase 0.2: Contract v0.2
 
-M0.1 hardening is complete and its local validation gate passes. The phase now has explicit paid reinstall/redownload semantics, global record-ID collision rejection, tenant/app-scoped defensive references, deterministic click ambiguity handling, unambiguous installation anchors, and an initial public [threat model](threat-model.md). M1 Shadow Ledger is next; this is not production-runtime readiness.
+Contract v0.2 is complete and its local validation gate passes. It includes the in-place consistency migration plus imported provider-reported attribution, automatic neutral reconciliation, typed reporting dimensions, cost and cohort metrics, Apple aggregate envelopes, a minimal verified Meta envelope, and the closed processing-purpose catalog. It remains contract evidence, not production-runtime readiness.
 
-Produce `Open MMP Event & Metric Contract v0.1`:
+### Phase 1a: Shadow ledger and import foundation
 
-- Raw-record envelope
-- Click, install, and session core events
-- Schema-only revenue, purchase, consent, privacy, and fraud extensions
-- Orthogonal lifecycle and quality states
-- Attribution result and reason registry
-- Shadow difference-reason registry and external-row matching-key types
-- Explicit D0 24-hour, UTC-calendar, and JST-calendar definitions
-- Synthetic fixtures and a pure reference evaluator
+M1a is implemented and locally validated with synthetic evidence. The public repository does not contain or claim real provider/account validation.
 
-### Phase 1: Shadow ledger
+- PostgreSQL received-evidence ledger, normalized logical records, corrections, and redactions
+- Docker Compose with portable Node.js API and worker services
+- Three runtime import paths: public Shadow Import Profile, media cost, and advertising revenue
+- Authenticated tenant scope, idempotency, payload and batch limits, baseline rate limiting, envelope encryption, audit logs, tests, and SBOMs
+- Runtime reproduction of reviewed synthetic contract fixtures
+- Private vulnerability reporting, TLS 1.2-or-later transport evidence, ledger-isolation tests, and deletion recalculation tests
 
-- PostgreSQL received-evidence ledger
-- Normalized logical records
-- Import API and CSV import
-- Public shadow-import profile and synthetic fixtures; provider mappings and certification remain deployment-private
-- Recalculable metric engine
-- Difference-audit API
+### Phase 1b: Cohort metrics and difference audit
 
-The first goal is to explain differences between existing MMP raw output and first-party evidence.
+Phase 1b is implemented for the v0.2.1 contract and locally validated with synthetic PostgreSQL data. Snapshot supersession, SQL/evaluator parity, redaction recalculation, undefined ROAS, JSON/CSV export, persisted difference evidence, a third oracle, and a 10-million-row arithmetic floor have executable evidence. Exact 4-vCPU/8-GB capacity validation and two contract vocabulary/grouping follow-ups remain outside the completed runtime change.
 
-### Phase 2: Android and Unity vertical slice
+- Recalculable D0, ROAS, retention, and cohort-LTV engine
+- Versioned cost, revenue, FX, grouping, and watermark handling
+- Difference-audit API for candidates, exclusions, windows, joins, freshness, and neutral reasons
+- Operator-facing validation checklist; its real-data results stay outside the public repository
 
-- Unity C# SDK
-- Android Kotlin bridge
-- Google Play Install Referrer
-- Deep links (not in the M2 exit gate; deferred)
-- MAX ad-revenue callback
-- Persistent queue, retry, and idempotency
-- Versioned last-click attribution
+### Phase 1.5: Continuation decision gate
 
-### Phase 3: Minimal dashboard
+There is no code deliverable. The owner uses the M1a/M1b evidence, operator-run validation, operating cost, and unresolved platform limits to choose one path: continue as an audit layer, proceed toward a first-party measurement layer, or stop further expansion.
 
-- App registration, measurement-link creation, and daily reporting
-- Raw/report/dashboard consistency under identical definitions
+### Phase 2: Android, Unity, and redirector
 
-### Phase 4: iOS privacy-preserving measurement
+- Unity C# SDK and Android Kotlin bridge
+- Google Play Install Referrer and versioned deterministic attribution
+- Portable Node.js redirector, with an optional Cloudflare Workers adapter only for that redirector
+- Meta Install Referrer decryption after primary-source field verification
+- Persistent queue, retry, idempotency, identifier reset, and sample application
 
-- AdAttributionKit and SKAdNetwork postback receipt and aggregate reporting
+### Phase 3: Metrics dashboard
+
+- App registration, measurement-link creation, and authenticated reporting
+- ROAS, retention, cohort, and attribution views
+- Raw, report, and dashboard consistency under identical definitions
+
+### Phase 4a: iOS first-party measurement
+
+- Swift SDK and Unity iOS bridge
+- First-party events, advertising revenue, persistent delivery, and consent controls
+- Apple AdServices evidence and required privacy disclosures
+
+### Phase 4b: Apple aggregate attribution
+
+- SKAdNetwork and AdAttributionKit developer postback-copy receipt
+- Verification, replay rejection, versioned conversion-value policy, and aggregate reporting
 - No mixing of aggregate iOS reports with deterministic installation-level attribution
 
-### Phase 5: Production, trust, fraud, and media adapters
+### Phase 5: Production and limited adapter boundary
 
-- Replay evidence using nonce, time, and event IDs
-- Play Integrity integration
-- Click and install time consistency
-- Append-only evidence and supersedable decisions
-- Signed, least-privilege media adapters
-- Adapter certification against public fixtures
-
-Add media adapters only with primary-source, current approval evidence. The initially proposed order is:
-
-1. First-party ads and referral URLs
-2. AppLovin MAX ad revenue
-3. Google Ads third-party provider flow
-4. Apple Ads
-5. AdAttributionKit
-6. Networks requiring additional approval or contracts
-
-Each adapter declares `official | approval_pending | experimental | unsupported`.
-
-- Three-to-five-month real-campaign shadow comparison
-- Missing, duplicate, delayed, and reinstall measurement
-- Consent withdrawal and deletion end-to-end tests
-- Backup and restore
-- Failure exercises and audit review
-- Decision on which paths, if any, can become primary
+- Tenant isolation, RBAC, rate limits, observability, load tests, backup and restore, and deletion exercises
+- Play Integrity, App Attest, rule-bundle versioning, and production security evidence
+- Signed, least-privilege adapters limited to first-party links, Meta, and Apple Ads
+- Other media-network adapters remain outside the roadmap unless a later owner decision and current primary-source evidence explicitly add them
 
 ## Evidence gates
 
@@ -119,13 +109,16 @@ A phase completes through measurable evidence, not code completion alone.
 - Raw counts and aggregates can be recalculated under identical conditions
 - Every exclusion has a reason code
 - A fixed policy version reproduces a historical decision
-- Duplicate, conflict, delay, deletion, and aggregate fixtures pass automatically
+- Duplicate, conflict, delay, deletion, import, aggregate, and platform fixtures pass automatically
+- Runtime fixture reproduction, operator-run validation, device validation, platform approval, and production validation remain distinct states
 - Platform approval, device validation, and campaign validation remain labeled unverified until actually completed
 
 ## Rough estimate
 
-- Contract and working prototype: 2–4 weeks
-- Production pilot: approximately 3–5 months with two backend/Unity contributors and part-time security support
-- Media approvals and campaign observation: additional elapsed time
+- M1a and M1b: approximately 8-12 weeks with two contributors, subject to implementation evidence
+- M2: approximately 6-10 weeks, excluding platform and device-validation elapsed time
+- M3: approximately 3-4 weeks
+- M4a and M4b: approximately 8-12 weeks, excluding Apple validation elapsed time
+- Production readiness and a shadow pilot require additional elapsed time and operational ownership
 
-AI can accelerate implementation, fixtures, documentation, adapters, and discrepancy analysis. It cannot shorten platform approval, device-signal delivery, real-campaign observation, consent behavior, or restore testing.
+AI can accelerate implementation, fixtures, documentation, adapters, and discrepancy analysis. It cannot shorten platform approval, device-signal delivery, real-campaign observation, consent behavior, restore testing, or the owner's continuation decision.

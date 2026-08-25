@@ -1,0 +1,93 @@
+[
+  {
+    "attribution_id": "attr:install-after",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:install-after",
+    "reason_code_version": "0.2.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-after",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-08T00:00:00.001Z",
+    "decided_at": "2026-08-12T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-12T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.2.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "unattributed",
+    "method": "none",
+    "model": "none",
+    "reason_code": "window_expired"
+  },
+  {
+    "attribution_id": "attr:install-before",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:install-before",
+    "reason_code_version": "0.2.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-4",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-before",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-07T23:59:59.999Z",
+    "decided_at": "2026-08-12T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-12T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.2.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "non_organic",
+    "method": "install_referrer",
+    "model": "last_click",
+    "reason_code": "valid_install_referrer"
+  },
+  {
+    "attribution_id": "attr:install-exact",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:install-exact",
+    "reason_code_version": "0.2.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-exact",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-08T00:00:00.000Z",
+    "decided_at": "2026-08-12T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-12T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.2.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "unattributed",
+    "method": "none",
+    "model": "none",
+    "reason_code": "window_expired"
+  }
+]

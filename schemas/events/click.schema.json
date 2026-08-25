@@ -1,18 +1,26 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:event-click:v0.1",
-  "title": "Open MMP Click Event v0.1",
+  "$id": "urn:open-mmp:schema:event-click:v0.2",
+  "title": "Open MMP Click Event v0.2",
   "type": "object",
   "additionalProperties": false,
   "required": ["event_name", "click_id", "tracking_link_id", "campaign_id", "redirector_time_status"],
   "properties": {
     "event_name": { "const": "click" },
-    "click_id": { "type": "string" },
-    "tracking_link_id": { "type": "string" },
-    "campaign_id": { "type": "string" },
+    "click_id": { "$ref": "../common.schema.json#/$defs/clickId" },
+    "tracking_link_id": { "$ref": "../common.schema.json#/$defs/id" },
+    "campaign_id": { "$ref": "../common.schema.json#/$defs/id" },
+    "ad_group_id": { "$ref": "../common.schema.json#/$defs/id" },
+    "creative_id": { "$ref": "../common.schema.json#/$defs/id" },
+    "network": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "country": { "type": "string", "pattern": "^[A-Z]{2}$" },
+    "site_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "remote_click_ref": { "type": "string", "minLength": 1, "maxLength": 256 },
     "redirector_click_at": { "$ref": "../common.schema.json#/$defs/dateTime" },
     "redirector_time_status": { "enum": ["available", "missing", "invalid"] },
     "bot_prefetch": { "type": "boolean" },
-    "extensions": { "type": "object", "additionalProperties": true }
+    "replay_suspected": { "type": "boolean" },
+    "import_context": { "$ref": "../common.schema.json#/$defs/importContext" },
+    "extensions": { "type": "object", "propertyNames": { "not": { "pattern": "^(import($|_)|imported($|_)|provider($|_))" } }, "additionalProperties": true }
   }
 }

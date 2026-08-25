@@ -1,4 +1,0 @@
-{
-  "contract_version": "0.1.0",
-  "event_names": ["click", "install", "session_start", "ad_impression", "ad_revenue", "purchase", "refund", "consent_changed"]
-}

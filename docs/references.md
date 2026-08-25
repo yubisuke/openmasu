@@ -28,7 +28,7 @@ Design implications:
 
 Design implications:
 
-- Android Phase 1 uses the referrer URL and timing evidence from Install Referrer.
+- M2 Android, Unity, and redirector uses the referrer URL and timing evidence from Install Referrer.
 - Google announced the retirement of Attribution Reporting (Android) on 2025-10-17 and no longer accepts enrollment; this project does not adopt it.
 - The initial MVP does not collect Advertising ID.
 - SDK providers and app developers remain responsible for identifier and user-data policy compliance.
@@ -55,21 +55,16 @@ Design implications:
 - Both reference evaluators must produce the same RFC 8785 UTF-8 bytes for shared conformance vectors.
 - The Python dependency is version- and hash-pinned; fixture validation does not contact a live provider.
 
-## Cloudflare reference deployment
+## Optional Cloudflare redirector
 
 - [Workers](https://developers.cloudflare.com/workers/)
-- [Queues](https://developers.cloudflare.com/queues/)
-- [R2](https://developers.cloudflare.com/r2/)
-- [Hyperdrive](https://developers.cloudflare.com/hyperdrive/)
-- [Containers](https://developers.cloudflare.com/containers/)
-- [D1](https://developers.cloudflare.com/d1/)
-- [Secrets Store](https://developers.cloudflare.com/secrets-store/)
 
 Design implications:
 
-- Cloudflare is the preferred reference deployment, while public contracts remain portable.
-- PostgreSQL remains the initial authoritative ledger; D1 is not a drop-in contract change.
-- Recheck product status, limits, data-location behavior, and pricing immediately before deployment.
+- M1 through M3 use Docker Compose, Node.js, and PostgreSQL without Cloudflare services.
+- A Cloudflare Worker is an optional M2 redirector adapter only. The portable Node.js redirector remains available, and no contract behavior depends on Workers.
+- Queues, R2, and D1 are not adopted by the current roadmap. A later infrastructure decision requires measured evidence, an explicit port, and contract-equivalence tests.
+- Recheck Workers product status, limits, data-location behavior, and pricing immediately before implementing the optional adapter.
 
 ## Media integration
 

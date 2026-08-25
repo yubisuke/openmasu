@@ -1,0 +1,22 @@
+[
+  {
+    "fraud_decision_id": "fraud:prefetch-click",
+    "subject_ref": "prefetch-click",
+    "decision": "suspected",
+    "action": "exclude",
+    "reason_code": "bot_prefetch",
+    "reason_code_version": "0.2.0",
+    "evidence": [
+      {
+        "type": "link_prefetch_category",
+        "captured_at": "2026-08-12T00:00:00.000Z",
+        "digest": "a1c91bf2f57e7823b76726bd9e97ccc3b89815bde0c7123328fed70a466e46f9",
+        "access_class": "protected"
+      }
+    ],
+    "rule_bundle_id": "fraud-public-envelope",
+    "rule_bundle_version": "0.2.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "evaluated_at": "2026-08-12T00:00:00.000Z"
+  }
+]

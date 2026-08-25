@@ -1,16 +1,23 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:common:v0.1",
-  "title": "Open MMP Common Types v0.1",
+  "$id": "urn:open-mmp:schema:common:v0.2",
+  "title": "Open MMP Common Types v0.2",
   "$defs": {
     "id": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
+    "clickId": {
+      "allOf": [
+        { "$ref": "#/$defs/id" },
+        { "type": "string", "pattern": "^[A-Za-z0-9_-]{22,128}$" }
+      ]
+    },
     "dateTime": { "type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$" },
+    "processingPurposeId": { "enum": ["attribution", "fraud_prevention", "analytics", "revenue_measurement"] },
     "money": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
       "required": ["amount_unscaled", "amount_scale", "currency"],
       "properties": {
-        "amount_unscaled": { "type": "string", "pattern": "^-?[0-9]+$" },
+        "amount_unscaled": { "type": "string", "pattern": "^[0-9]+$" },
         "amount_scale": { "type": "integer", "minimum": 0, "maximum": 18 },
         "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
       }
@@ -18,7 +25,7 @@
     "evidenceRef": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["tenant_id", "app_id", "ref", "lifecycle_status"],
+      "required": ["tenant_id", "app_id", "ref", "lifecycle_status", "access_class"],
       "properties": {
         "tenant_id": { "$ref": "#/$defs/id" },
         "app_id": { "$ref": "#/$defs/id" },
@@ -26,6 +33,33 @@
         "lifecycle_status": { "enum": ["available", "redacted", "purged"] },
         "access_class": { "enum": ["public", "protected", "private"] }
       }
+    },
+    "aggregationTimeZone": { "enum": ["UTC", "Asia/Tokyo"] },
+    "importContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "provider_attributed", "provider_attribution_strategy"],
+      "properties": {
+        "provider": { "type": "string", "pattern": "^[a-z0-9-]{1,64}$" },
+        "provider_attributed": { "type": "boolean" },
+        "provider_attribution_strategy": { "enum": ["click_through", "view_through", "modeled", "organic", "unattributed"] },
+        "provider_install_ref": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "provider_click_ref": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "provider_campaign_ref": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "provider_adgroup_ref": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "provider_creative_ref": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "provider_network": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "provider_site_ref": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "provider_country": { "type": "string", "pattern": "^[A-Z]{2}$" },
+        "provider_confirmed_at": { "$ref": "#/$defs/dateTime" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "provider_attributed": { "const": true } }, "required": ["provider_attributed"] },
+          "then": { "properties": { "provider_attribution_strategy": { "enum": ["click_through", "view_through", "modeled"] } } },
+          "else": { "properties": { "provider_attribution_strategy": { "enum": ["organic", "unattributed"] } } }
+        }
+      ]
     }
   }
 }

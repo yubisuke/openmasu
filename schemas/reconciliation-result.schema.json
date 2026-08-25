@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:reconciliation-result:v0.1",
-  "title": "Open MMP Reconciliation Result v0.1",
+  "$id": "urn:open-mmp:schema:reconciliation-result:v0.2",
+  "title": "Open MMP Reconciliation Result v0.2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -15,8 +15,8 @@
     "app_id": { "$ref": "common.schema.json#/$defs/id" },
     "input_snapshot_id": { "$ref": "common.schema.json#/$defs/id" },
     "external_snapshot_id": { "$ref": "common.schema.json#/$defs/id" },
-    "difference_reason_code": { "enum": ["matched", "candidate_missing", "candidate_excluded", "window_mismatch", "join_key_missing", "join_key_ambiguous", "freshness_mismatch", "external_row_unmatched", "redaction_caused_recalculation", "currency_policy_mismatch", "scope_mismatch"] },
-    "difference_reason_version": { "const": "0.1.0" },
+    "difference_reason_code": { "enum": ["matched", "candidate_missing", "candidate_excluded", "window_mismatch", "join_key_missing", "join_key_ambiguous", "freshness_mismatch", "external_row_unmatched", "redaction_caused_recalculation", "currency_policy_mismatch", "scope_mismatch", "provider_modeled_conversion"] },
+    "difference_reason_version": { "enum": ["0.2.0", "0.2.1"] },
     "matching_keys": {
       "type": "array",
       "items": {
@@ -29,8 +29,24 @@
           "scope": { "enum": ["tenant", "tenant_app"] },
           "normalization": { "enum": ["identity", "lowercase_ascii", "trim"] },
           "cardinality": { "enum": ["one_to_one", "one_to_many"] },
-          "protected": { "type": "boolean" }
-        }
+          "protected": { "type": "boolean" },
+          "value_encoding": { "enum": ["plain", "sha256"] },
+          "access_class": { "enum": ["public", "protected", "private"] }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "type": { "enum": ["provider_install_id", "provider_click_id"] } }, "required": ["type"] },
+            "then": {
+              "required": ["value_encoding", "access_class"],
+              "properties": {
+                "value": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                "protected": { "const": true },
+                "value_encoding": { "const": "sha256" },
+                "access_class": { "const": "protected" }
+              }
+            }
+          }
+        ]
       }
     },
     "candidates": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/id" } },
@@ -39,5 +55,19 @@
     "joins": { "type": "array", "items": { "type": "string" } },
     "freshness": { "enum": ["current", "stale", "recalculated"] },
     "supersedes_reconciliation_id": { "$ref": "common.schema.json#/$defs/id" }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "difference_reason_code": { "const": "provider_modeled_conversion" } },
+        "required": ["difference_reason_code"]
+      },
+      "then": {
+        "properties": { "difference_reason_version": { "const": "0.2.1" } }
+      },
+      "else": {
+        "properties": { "difference_reason_version": { "const": "0.2.0" } }
+      }
+    }
+  ]
 }

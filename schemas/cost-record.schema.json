@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-mmp:schema:cost-record:v0.2",
+  "title": "Open MMP Cost Record v0.2",
+  "type": "object",
+  "additionalProperties": false,
+  "allOf": [{ "$ref": "common.schema.json#/$defs/money" }],
+  "required": [
+    "contract_version", "cost_record_id", "tenant_id", "app_id", "network", "campaign_id",
+    "date", "amount_unscaled", "amount_scale", "currency", "source", "as_of",
+    "report_snapshot_digest", "dimension_digest"
+  ],
+  "properties": {
+    "contract_version": { "const": "0.2.0" },
+    "cost_record_id": { "$ref": "common.schema.json#/$defs/id" },
+    "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
+    "app_id": { "$ref": "common.schema.json#/$defs/id" },
+    "network": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "campaign_id": { "$ref": "common.schema.json#/$defs/id" },
+    "ad_group_id": { "$ref": "common.schema.json#/$defs/id" },
+    "country": { "type": "string", "pattern": "^[A-Z]{2}$" },
+    "date": { "type": "string", "format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "amount_unscaled": {},
+    "amount_scale": {},
+    "currency": {},
+    "source": { "const": "imported_reported" },
+    "as_of": { "$ref": "common.schema.json#/$defs/dateTime" },
+    "report_snapshot_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "dimension_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

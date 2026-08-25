@@ -1,0 +1,15 @@
+.git
+.env
+.openmmp
+node_modules
+tools/__pycache__
+fixtures/.candidates
+docs/review
+open-mmp-lab
+**/real-data
+**/input
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.parquet

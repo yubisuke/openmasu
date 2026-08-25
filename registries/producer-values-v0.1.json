@@ -1,8 +1,0 @@
-{
-  "contract_version": "0.1.0",
-  "values": [
-    { "value": "sdk-android", "event_id_scope": "tenant-app-producer" },
-    { "value": "redirector", "event_id_scope": "tenant-app-producer" },
-    { "value": "import:<provider>", "event_id_scope": "tenant-app-producer", "deployment_private_mapping": true }
-  ]
-}

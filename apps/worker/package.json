@@ -1,0 +1,21 @@
+{
+  "name": "@open-mmp/worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open MMP ingestion worker",
+  "type": "module",
+  "scripts": {
+    "benchmark:metric-floor": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/metrics/benchmark.ts",
+    "import": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/import/runner.ts",
+    "demo:metrics": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/demo-metrics.ts",
+    "seed": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/seed.ts",
+    "verify:parity": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/verify-parity.ts"
+  },
+  "dependencies": {
+    "@open-mmp/attribution-core": "0.2.1",
+    "@open-mmp/contracts": "0.2.1",
+    "@open-mmp/runtime": "0.1.0",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1"
+  }
+}

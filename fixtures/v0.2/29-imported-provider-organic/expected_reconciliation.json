@@ -1,0 +1,34 @@
+[
+  {
+    "reconciliation_id": "reconciliation:import:import-install-29",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "input_snapshot_id": "snapshot:internal:import-install-29",
+    "external_snapshot_id": "snapshot:provider:import-install-29",
+    "difference_reason_code": "matched",
+    "difference_reason_version": "0.2.0",
+    "matching_keys": [
+      {
+        "type": "provider_install_id",
+        "value": "4862d4ec3fc9716b858862a45d7a682208de9bebb441cb6b63306ce121d817f8",
+        "scope": "tenant_app",
+        "normalization": "identity",
+        "cardinality": "one_to_one",
+        "protected": true,
+        "value_encoding": "sha256",
+        "access_class": "protected"
+      }
+    ],
+    "candidates": [
+      "import-install-29"
+    ],
+    "exclusions": [],
+    "windows": [
+      "import-install-29:not_applicable"
+    ],
+    "joins": [
+      "provider_install_id:sha256:4862d4ec3fc9716b858862a45d7a682208de9bebb441cb6b63306ce121d817f8=>import-install-29"
+    ],
+    "freshness": "current"
+  }
+]

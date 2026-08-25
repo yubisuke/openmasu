@@ -4,7 +4,21 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # 2.0.1 is missing its published bundles and type declarations. Upgrade
+      # manually after upstream publishes and verifies a repaired release.
+      - dependency-name: json-canonicalize
+        versions: ["2.0.1"]
+      # Major npm upgrades may conflict with the pinned Node.js 22.18.0 and npm
+      # 11.6.2 toolchain. Review them manually with the engine pins.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: pip
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # Major Python package upgrades may conflict with the pinned Python 3.13.5
+      # runtime. Review them manually with the interpreter pin.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

@@ -1,0 +1,14 @@
+{
+  "name": "@open-mmp/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open MMP HTTP API",
+  "type": "module",
+  "dependencies": {
+    "@open-mmp/runtime": "0.1.0",
+    "pg": "8.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "8.23.1"
+  }
+}

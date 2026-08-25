@@ -1,0 +1,25 @@
+{
+  "name": "@open-mmp/runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open MMP PostgreSQL runtime and migration tooling",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "db:migrate": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/runtime/src/migrate.ts",
+    "db:schema:dump": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/runtime/src/schema-snapshot.ts --write",
+    "db:schema:check": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/runtime/src/schema-snapshot.ts --check",
+    "test:db-invariants": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/runtime/src/db-invariants.test.ts"
+  },
+  "dependencies": {
+    "pg": "8.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "8.23.1"
+  }
+}

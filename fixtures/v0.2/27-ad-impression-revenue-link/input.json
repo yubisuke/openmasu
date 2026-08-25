@@ -1,0 +1,25 @@
+{
+  "contract_version": "0.2.0",
+  "fx_policy": { "policy_version": "fx-v0.1", "target_currency": "USD", "target_scale": 6, "rounding_mode": "half_even", "rates": [{ "currency": "USD", "rate_unscaled": "100000000", "rate_scale": 8, "source": "synthetic-fixture-rate", "as_of": "2026-08-12T00:00:00.000Z" }] },
+  "metric_evaluations": [{ "metric_run_id_prefix": "run-27", "input_received_at_watermark": "2026-08-12T01:01:00.000Z", "computed_at": "2026-08-12T01:02:00.000Z", "data_freshness": "complete", "privacy_state": "before" }],
+  "reconciliation_inputs": [],
+  "privacy_requests": [],
+  "server_context": { "tenant_id": "tenant-a", "app_id": "app-a", "received_at": "2026-08-12T00:00:00.000Z", "policy_digest": "policy-v0.2", "processing_purposes": [{ "processing_purpose_id": "analytics", "consent_required": false, "policy_version": "consent-v0.2" }], "withdrawals": [], "alternative_legal_bases": [] },
+  "records": [
+    {
+      "contract_version": "0.2.0", "record_id": "install-27", "delivery_id": "delivery:install-27", "tenant_id": "tenant-a", "app_id": "app-a", "producer": "sdk-android", "producer_version": "fixture-v0.2", "event_id": "event:install-27", "event_name": "install", "schema_version": "0.2.0",
+      "occurred_at": "2026-08-12T00:00:00.000Z", "occurred_at_source": "device", "received_at": "2026-08-12T00:01:00.000Z", "processing_purpose_id": "analytics", "processing_sequence": 1,
+      "payload": { "installation_id": "installation:install-27", "install_type": "first_install", "referrer_status": "none", "click_id": "click-a_0000000000000027", "install_begin_at_server_status": "missing" }
+    },
+    {
+      "contract_version": "0.2.0", "record_id": "impression-27", "delivery_id": "delivery:impression-27", "tenant_id": "tenant-a", "app_id": "app-a", "producer": "sdk-android", "producer_version": "fixture-v0.2", "event_id": "event:impression-27", "event_name": "ad_impression", "schema_version": "0.2.0",
+      "occurred_at": "2026-08-12T00:59:59.000Z", "occurred_at_source": "device", "received_at": "2026-08-12T01:00:00.000Z", "processing_purpose_id": "analytics", "processing_sequence": 1,
+      "payload": { "impression_id": "impression:27", "ad_unit_id": "ad-unit-27", "ad_network": "synthetic-network" }
+    },
+    {
+      "contract_version": "0.2.0", "record_id": "revenue-27", "delivery_id": "delivery:revenue-27", "tenant_id": "tenant-a", "app_id": "app-a", "producer": "sdk-android", "producer_version": "fixture-v0.2", "event_id": "event:revenue-27", "event_name": "ad_revenue", "schema_version": "0.2.0",
+      "occurred_at": "2026-08-12T01:00:00.000Z", "occurred_at_source": "device", "received_at": "2026-08-12T01:01:00.000Z", "processing_purpose_id": "analytics", "processing_sequence": 1,
+      "payload": { "subject_scope": "installation_level", "installation_id": "installation:install-27", "impression_id": "impression:27", "ad_unit_id": "ad-unit-27", "ad_network": "synthetic-network", "amount_unscaled": "3000000", "amount_scale": 6, "currency": "USD", "revenue_source": "server_verified" }
+    }
+  ]
+}

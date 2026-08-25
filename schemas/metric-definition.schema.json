@@ -1,17 +1,124 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:metric-definition:v0.1",
-  "title": "Open MMP Metric Definition v0.1",
+  "$id": "urn:open-mmp:schema:metric-definition:v0.2",
+  "title": "Open MMP Metric Definition v0.2",
   "type": "object",
   "additionalProperties": false,
-  "required": ["metric_name", "metric_definition_version", "anchor_event", "aggregation_time_zone", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash"],
+  "required": ["metric_name", "metric_definition_version", "anchor_event", "aggregation_time_zone", "value_type", "definition", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash"],
   "properties": {
-    "metric_name": { "enum": ["d0_install_to_24h_ad_revenue_usd", "d0_utc_install_calendar_ad_revenue_usd", "d0_jst_install_calendar_ad_revenue_usd"] },
-    "metric_definition_version": { "const": "0.1.0" },
-    "anchor_event": { "const": "install" },
-    "aggregation_time_zone": { "type": "string", "minLength": 1 },
+    "metric_name": { "type": "string", "pattern": "^[a-z][a-z0-9_]{2,127}$" },
+    "metric_definition_version": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "anchor_event": { "enum": ["install", "calendar_day"] },
+    "aggregation_time_zone": { "$ref": "common.schema.json#/$defs/aggregationTimeZone" },
+    "value_type": { "enum": ["money", "ratio", "count"] },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "amount_scale": { "type": "integer", "minimum": 0, "maximum": 18 },
+    "ratio_scale": { "type": "integer", "minimum": 0, "maximum": 18 },
+    "definition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["calculation", "window", "numerator"],
+      "properties": {
+        "calculation": { "enum": ["revenue_sum", "revenue_over_cost", "active_installations_over_cohort", "revenue_over_cohort", "cohort_size"] },
+        "window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "day"],
+          "properties": {
+            "type": { "enum": ["elapsed", "calendar_day", "activity_day"] },
+            "day": { "type": "integer", "minimum": 0, "maximum": 3650 }
+          }
+        },
+        "numerator": { "enum": ["revenue", "active_installations", "cohort_size"] },
+        "denominator": { "enum": ["cost", "cohort_size"] },
+        "cost_basis": { "const": "cohort_acquisition_day_current_snapshot" }
+      }
+    },
+    "activity_events": { "type": "array", "minItems": 1, "uniqueItems": true, "default": ["session_start"], "items": { "type": "string", "minLength": 1 } },
     "rule_bundle_id": { "$ref": "common.schema.json#/$defs/id" },
     "rule_bundle_version": { "type": "string" },
     "rule_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
-  }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "value_type": { "const": "money" } }, "required": ["value_type"] },
+      "then": { "properties": { "currency": {}, "amount_scale": {} }, "required": ["currency", "amount_scale"] },
+      "else": {
+        "not": {
+          "anyOf": [
+            { "properties": { "currency": {} }, "required": ["currency"] },
+            { "properties": { "amount_scale": {} }, "required": ["amount_scale"] }
+          ]
+        }
+      }
+    },
+    {
+      "if": { "properties": { "value_type": { "const": "ratio" } }, "required": ["value_type"] },
+      "then": { "properties": { "ratio_scale": {} }, "required": ["ratio_scale"] }
+    },
+    {
+      "if": {
+        "properties": { "definition": { "type": "object", "additionalProperties": true, "properties": { "calculation": { "const": "revenue_over_cost" } }, "required": ["calculation"] } },
+        "required": ["definition"]
+      },
+      "then": {
+        "properties": {
+          "value_type": { "const": "ratio" },
+          "definition": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["denominator", "cost_basis"],
+            "properties": { "numerator": { "const": "revenue" }, "denominator": { "const": "cost" }, "cost_basis": {} }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "definition": { "type": "object", "additionalProperties": true, "properties": { "calculation": { "const": "active_installations_over_cohort" } }, "required": ["calculation"] } },
+        "required": ["definition"]
+      },
+      "then": {
+        "properties": {
+          "activity_events": {},
+          "value_type": { "const": "ratio" },
+          "definition": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["denominator"],
+            "properties": { "numerator": { "const": "active_installations" }, "denominator": { "const": "cohort_size" } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "definition": { "type": "object", "additionalProperties": true, "properties": { "calculation": { "const": "revenue_over_cohort" } }, "required": ["calculation"] } },
+        "required": ["definition"]
+      },
+      "then": {
+        "properties": {
+          "value_type": { "const": "money" },
+          "definition": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["denominator"],
+            "properties": { "numerator": { "const": "revenue" }, "denominator": { "const": "cohort_size" } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "definition": { "type": "object", "additionalProperties": true, "properties": { "calculation": { "const": "cohort_size" } }, "required": ["calculation"] } },
+        "required": ["definition"]
+      },
+      "then": {
+        "properties": {
+          "value_type": { "const": "count" },
+          "definition": { "type": "object", "additionalProperties": true, "properties": { "numerator": { "const": "cohort_size" } } }
+        }
+      }
+    }
+  ]
 }

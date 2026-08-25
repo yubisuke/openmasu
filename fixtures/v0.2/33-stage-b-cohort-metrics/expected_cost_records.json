@@ -1,0 +1,36 @@
+[
+  {
+    "contract_version": "0.2.0",
+    "cost_record_id": "cost-33",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "network": "synthetic-network",
+    "campaign_id": "provider-campaign-33",
+    "country": "JP",
+    "date": "2026-08-01",
+    "amount_unscaled": "100000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "source": "imported_reported",
+    "as_of": "2026-08-08T00:00:00.000Z",
+    "report_snapshot_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+    "dimension_digest": "953315226bb75e01e5ed7f838cf9f044cbfe5fb899b5bfa5e42e300a87d2caff"
+  },
+  {
+    "contract_version": "0.2.0",
+    "cost_record_id": "cost-33-old",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "network": "synthetic-network",
+    "campaign_id": "provider-campaign-33",
+    "country": "JP",
+    "date": "2026-08-01",
+    "amount_unscaled": "90000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "source": "imported_reported",
+    "as_of": "2026-08-07T00:00:00.000Z",
+    "report_snapshot_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+    "dimension_digest": "953315226bb75e01e5ed7f838cf9f044cbfe5fb899b5bfa5e42e300a87d2caff"
+  }
+]

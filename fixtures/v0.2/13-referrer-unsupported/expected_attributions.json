@@ -1,0 +1,58 @@
+[
+  {
+    "attribution_id": "attr:install-unavailable",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:install-unavailable",
+    "reason_code_version": "0.2.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-unavailable",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-12T00:00:00.000Z",
+    "decided_at": "2026-08-12T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-12T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.2.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "unattributed",
+    "method": "none",
+    "model": "none",
+    "reason_code": "install_referrer_unavailable"
+  },
+  {
+    "attribution_id": "attr:install-unsupported",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:install-unsupported",
+    "reason_code_version": "0.2.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-unsupported",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-12T00:00:00.000Z",
+    "decided_at": "2026-08-12T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-12T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.2.0",
+    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "unattributed",
+    "method": "none",
+    "model": "none",
+    "reason_code": "install_referrer_unsupported"
+  }
+]

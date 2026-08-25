@@ -1,0 +1,11 @@
+{
+  "meta": {
+    "data": [{ "campaign_id": "1001", "adset_id": "2001", "ad_id": "3001", "country": "US", "spend": "12.345678", "date_start": "2026-08-18", "date_stop": "2026-08-18" }]
+  },
+  "google_ads": {
+    "results": [{ "campaign": { "id": "4001" }, "adGroup": { "id": "5001" }, "geographicView": { "countryCriterionId": "2840" }, "segments": { "date": "2026-08-18" }, "metrics": { "costMicros": "23456789" } }]
+  },
+  "max": {
+    "results": [{ "day": "2026-08-18", "country": "US", "ad_unit_id": "synthetic-ad-unit", "network": "synthetic-network", "estimated_revenue": "1.234567" }]
+  }
+}

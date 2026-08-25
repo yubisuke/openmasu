@@ -1,0 +1,145 @@
+name: open-mmp
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  networks:
+    - backend
+
+services:
+  bootstrap:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command:
+      - node
+      - --import
+      - tsx
+      - apps/runtime/src/bootstrap.ts
+    environment:
+      OPENMMP_REPOSITORY_ROOT: /repository
+      OPENMMP_RUNTIME_SECRET_ROOT: /run/openmmp
+      OPENMMP_PUBLIC_BASE_URL: http://localhost:8080
+      OPENMMP_DATABASE_HOST: postgres
+      OPENMMP_DATABASE_PORT: "5432"
+      OPENMMP_DATABASE_NAME: openmmp
+    volumes:
+      - .:/repository
+      - migration-secrets:/run/openmmp/migration
+      - app-secrets:/run/openmmp/app
+      - seed-secrets:/run/openmmp/seed
+      - postgres-secrets:/run/openmmp/postgres
+    restart: "no"
+
+  postgres:
+    image: postgres:17-alpine
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_DB: openmmp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/openmmp/postgres/password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d openmmp"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "127.0.0.1:${OPENMMP_POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - postgres-secrets:/run/openmmp/postgres:ro
+    networks:
+      - backend
+      - database-host
+
+  migrate:
+    <<: *app
+    command: ["/bin/sh", "-c", "set -a && . /run/openmmp/migration/runtime.env && set +a && npm run db:migrate"]
+    volumes:
+      - migration-secrets:/run/openmmp/migration:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *app
+    command: ["/bin/sh", "-c", "set -a && . /run/openmmp/app/runtime.env && set +a && node --import tsx apps/api/src/server.ts"]
+    volumes:
+      - app-secrets:/run/openmmp/app:ro
+      - payload-objects:/run/openmmp/payloads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${OPENMMP_API_HOST_PORT:-8080}:8080"
+    networks:
+      - backend
+      - edge
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  worker:
+    <<: *app
+    command: ["/bin/sh", "-c", "set -a && . /run/openmmp/app/runtime.env && set +a && node --import tsx apps/worker/src/main.ts"]
+    volumes:
+      - app-secrets:/run/openmmp/app:ro
+      - payload-objects:/run/openmmp/payloads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  seed:
+    <<: *app
+    profiles: ["seed"]
+    command: ["/bin/sh", "-c", "set -a && . /run/openmmp/seed/runtime.env && set +a && npm run seed"]
+    volumes:
+      - seed-secrets:/run/openmmp/seed:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  proxy:
+    image: caddy:2.11.4-alpine
+    profiles: ["proxy"]
+    ports:
+      - "8443:443"
+    volumes:
+      - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      - backend
+      - edge
+
+  s3:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    profiles: ["s3"]
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: openmmp-local
+      MINIO_ROOT_PASSWORD: openmmp-local-synthetic-only
+    volumes:
+      - minio-data:/data
+    networks:
+      - backend
+
+volumes:
+  postgres-data:
+  migration-secrets:
+  app-secrets:
+  seed-secrets:
+  postgres-secrets:
+  minio-data:
+  payload-objects:
+
+networks:
+  backend:
+    internal: true
+  database-host:
+  edge:

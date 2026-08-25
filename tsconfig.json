@@ -8,5 +8,5 @@
     "resolveJsonModule": true,
     "skipLibCheck": true
   },
-  "include": ["tools/**/*.ts"]
+  "include": ["tools/**/*.ts", "packages/**/*.ts", "apps/**/*.ts"]
 }

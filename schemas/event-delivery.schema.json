@@ -1,17 +1,17 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:event-delivery:v0.1",
-  "title": "Open MMP Event Delivery v0.1",
+  "$id": "urn:open-mmp:schema:event-delivery:v0.2",
+  "title": "Open MMP Event Delivery v0.2",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "contract_version", "delivery_id", "record_id", "canonical_record_id", "tenant_id",
+    "contract_version", "delivery_id", "record_id", "tenant_id",
     "app_id", "received_at", "ingestion_status", "duplicate_resolution", "timeliness",
     "clock_skew_suspected", "payload_disposition", "consent_evaluation_policy_version",
     "consent_decision_reason_code"
   ],
   "properties": {
-    "contract_version": { "const": "0.1.0" },
+    "contract_version": { "const": "0.2.0" },
     "delivery_id": { "$ref": "common.schema.json#/$defs/id" },
     "record_id": { "$ref": "common.schema.json#/$defs/id" },
     "canonical_record_id": { "$ref": "common.schema.json#/$defs/id" },
@@ -23,12 +23,28 @@
     "timeliness": { "enum": ["on_time", "late"] },
     "clock_skew_suspected": { "type": "boolean" },
     "payload_disposition": { "enum": ["protected", "discarded", "redacted"] },
-    "reason_code": { "type": "string" },
-    "processing_purpose_id": { "$ref": "common.schema.json#/$defs/id" },
+    "reason_code": { "enum": ["client_scope_mismatch", "consent_withdrawn", "aggregate_installation_join_forbidden", "event_id_conflict", "record_id_collision", "timestamp_invalid", "timestamp_stale"] },
+    "processing_purpose_id": { "$ref": "common.schema.json#/$defs/processingPurposeId" },
     "consent_evaluation_policy_version": { "type": "string", "minLength": 1 },
-    "consent_decision_reason_code": { "type": "string", "minLength": 1 },
+    "consent_decision_reason_code": { "enum": ["consent_not_required", "consent_valid_before_withdrawal", "documented_alternative_legal_basis", "consent_withdrawn"] },
     "withdrawal_recognized_at": { "$ref": "common.schema.json#/$defs/dateTime" },
     "alternative_legal_basis_id": { "$ref": "common.schema.json#/$defs/id" },
-    "alternative_legal_basis_policy_version": { "type": "string", "minLength": 1 }
-  }
+    "alternative_legal_basis_policy_version": { "type": "string", "minLength": 1 },
+    "staleness_policy_version": { "type": "string", "minLength": 1 },
+    "staleness_policy_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "staleness_authority": { "const": "server" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "reason_code": { "const": "timestamp_stale" } }, "required": ["reason_code"] },
+      "then": {
+        "properties": {
+          "staleness_policy_version": {},
+          "staleness_policy_digest": {},
+          "staleness_authority": {}
+        },
+        "required": ["staleness_policy_version", "staleness_policy_digest", "staleness_authority"]
+      }
+    }
+  ]
 }

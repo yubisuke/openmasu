@@ -1,0 +1,53 @@
+[
+  {
+    "contract_version": "0.2.0",
+    "delivery_id": "delivery:import-install-30",
+    "record_id": "import-install-30",
+    "canonical_record_id": "import-install-30",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-18T03:00:00.000Z",
+    "ingestion_status": "accepted",
+    "duplicate_resolution": "unique",
+    "timeliness": "on_time",
+    "clock_skew_suspected": false,
+    "payload_disposition": "protected",
+    "processing_purpose_id": "analytics",
+    "consent_evaluation_policy_version": "consent-v0.2",
+    "consent_decision_reason_code": "consent_not_required"
+  },
+  {
+    "contract_version": "0.2.0",
+    "delivery_id": "delivery:import-revenue-30",
+    "record_id": "import-revenue-30",
+    "canonical_record_id": "import-revenue-30",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-18T03:00:00.000Z",
+    "ingestion_status": "accepted",
+    "duplicate_resolution": "unique",
+    "timeliness": "on_time",
+    "clock_skew_suspected": false,
+    "payload_disposition": "protected",
+    "processing_purpose_id": "analytics",
+    "consent_evaluation_policy_version": "consent-v0.2",
+    "consent_decision_reason_code": "consent_not_required"
+  },
+  {
+    "contract_version": "0.2.0",
+    "delivery_id": "delivery:postback-revenue-30",
+    "record_id": "postback-revenue-30",
+    "canonical_record_id": "postback-revenue-30",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-18T03:00:00.000Z",
+    "ingestion_status": "accepted",
+    "duplicate_resolution": "unique",
+    "timeliness": "on_time",
+    "clock_skew_suspected": false,
+    "payload_disposition": "protected",
+    "processing_purpose_id": "analytics",
+    "consent_evaluation_policy_version": "consent-v0.2",
+    "consent_decision_reason_code": "consent_not_required"
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "contract_version": "0.2.0",
+    "logical_event_id": "logical:tenant-a:app-a:import:synthetic-provider:event:import-install-29",
+    "record_id": "import-install-29",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "import:synthetic-provider",
+    "event_id": "event:import-install-29",
+    "event_name": "install",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.2.0",
+    "logical_event_id": "logical:tenant-a:app-a:import:synthetic-provider:event:import-session-29",
+    "record_id": "import-session-29",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "import:synthetic-provider",
+    "event_id": "event:import-session-29",
+    "event_name": "session_start",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.2.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-ios:event:sdk-ios-session-29",
+    "record_id": "sdk-ios-session-29",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-ios",
+    "event_id": "event:sdk-ios-session-29",
+    "event_name": "session_start",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  }
+]

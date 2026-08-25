@@ -1,0 +1,15 @@
+{
+  "version": "1.0.0",
+  "kind": "manual_cost",
+  "source_id": "synthetic-manual-cost",
+  "tenant_id": "tenant-local",
+  "app_id": "app-local",
+  "format": "csv",
+  "rules": [
+    { "target": "network", "expression": { "source": "network" } },
+    { "target": "campaign_id", "expression": { "source": "campaign_id" } },
+    { "target": "country", "expression": { "source": "country", "uppercase": true } },
+    { "target": "date", "expression": { "source": "date" } },
+    { "target": "money", "expression": { "source": "cost_micros", "money": { "scale": 6, "currency_source": "currency" } } }
+  ]
+}

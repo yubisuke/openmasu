@@ -1,0 +1,36 @@
+{
+  "name": "@open-mmp/contracts",
+  "version": "0.2.1",
+  "private": true,
+  "description": "Open MMP contract schemas, registries, generated types, and validation dependencies",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./type-generation": {
+      "types": "./src/type-generation.ts",
+      "default": "./src/type-generation.ts"
+    },
+    "./validation-tooling": {
+      "types": "./src/validation-tooling.ts",
+      "default": "./src/validation-tooling.ts"
+    }
+  },
+  "scripts": {
+    "generate:types": "cd ../.. && tsx tools/generate-contract-types.ts",
+    "typecheck": "cd ../.. && tsc --noEmit",
+    "validate:test": "cd ../.. && tsx --test tools/validate.ts",
+    "validate:summary": "cd ../.. && tsx tools/validate.ts --summary"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.3",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "json-canonicalize": "2.0.0",
+    "json-schema-to-typescript": "15.0.4",
+    "tsx": "4.19.3",
+    "typescript": "5.8.3"
+  }
+}

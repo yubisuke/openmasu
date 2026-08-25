@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:open-mmp:schema:fixture-input:v0.1",
-  "title": "Open MMP Contract Fixture Input v0.1",
+  "$id": "urn:open-mmp:schema:fixture-input:v0.2",
+  "title": "Open MMP Contract Fixture Input v0.2",
   "type": "object",
   "additionalProperties": false,
-  "required": ["contract_version", "fx_policy", "metric_evaluations", "reconciliation_inputs", "privacy_requests"],
+  "required": ["contract_version", "fx_policy", "metric_evaluations", "privacy_requests"],
   "properties": {
-    "contract_version": { "const": "0.1.0" },
+    "contract_version": { "const": "0.2.0" },
     "server_context": { "$ref": "#/$defs/serverContext" },
     "records": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/record" } },
     "batches": {
@@ -20,10 +20,49 @@
           "batch_id": { "$ref": "common.schema.json#/$defs/id" },
           "server_context": { "$ref": "#/$defs/serverContext" },
           "records": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/record" } }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "server_context": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": { "audience": { "const": "child_directed" } },
+                  "required": ["audience"]
+                }
+              },
+              "required": ["server_context"]
+            },
+            "then": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "records": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "properties": { "payload": { "$ref": "#/$defs/advertisingIdentifierFreeValue" } }
+                  }
+                }
+              }
+            }
+          }
+        ]
       }
     },
     "fx_policy": { "$ref": "#/$defs/fxPolicy" },
+    "cost_records": {
+      "type": "array",
+      "items": { "$ref": "urn:open-mmp:schema:cost-record:v0.2" }
+    },
+    "metric_definitions": {
+      "type": "array",
+      "items": { "$ref": "urn:open-mmp:schema:metric-definition:v0.2" }
+    },
     "metric_evaluations": {
       "type": "array",
       "items": {
@@ -36,7 +75,24 @@
           "computed_at": { "$ref": "common.schema.json#/$defs/dateTime" },
           "data_freshness": { "enum": ["complete", "late_excluded", "recalculated"] },
           "privacy_state": { "enum": ["before", "after"] },
-          "supersedes_metric_run_id_prefix": { "$ref": "common.schema.json#/$defs/id" }
+          "supersedes_metric_run_id_prefix": { "$ref": "common.schema.json#/$defs/id" },
+          "metric_names": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]{2,127}$" }
+          },
+          "grouping": {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "campaign_id": { "$ref": "common.schema.json#/$defs/id" },
+              "network": { "type": "string", "minLength": 1, "maxLength": 128 },
+              "country": { "type": "string", "pattern": "^[A-Z]{2}$" },
+              "cohort_date": { "type": "string", "format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+            }
+          }
         }
       }
     },
@@ -46,11 +102,15 @@
     },
     "privacy_requests": {
       "type": "array",
-      "items": { "$ref": "urn:open-mmp:schema:privacy-request:v0.1" }
+      "items": { "$ref": "urn:open-mmp:schema:privacy-request:v0.2" }
     },
     "correction_inputs": {
       "type": "array",
-      "items": { "$ref": "urn:open-mmp:schema:correction:v0.1" }
+      "items": { "$ref": "urn:open-mmp:schema:correction:v0.2" }
+    },
+    "retention_expirations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/retentionExpiration" }
     }
   },
   "oneOf": [
@@ -73,6 +133,37 @@
       }
     }
   ],
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "server_context": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": { "audience": { "const": "child_directed" } },
+            "required": ["audience"]
+          }
+        },
+        "required": ["server_context"]
+      },
+      "then": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "records": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": { "payload": { "$ref": "#/$defs/advertisingIdentifierFreeValue" } }
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "serverContext": {
       "type": "object",
@@ -81,6 +172,11 @@
       "properties": {
         "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
         "app_id": { "$ref": "common.schema.json#/$defs/id" },
+        "audience": {
+          "enum": ["general", "mixed", "child_directed"],
+          "default": "general",
+          "description": "Application audience classification. Absence is semantically general."
+        },
         "received_at": { "$ref": "common.schema.json#/$defs/dateTime" },
         "policy_digest": { "type": "string", "minLength": 1 },
         "processing_purposes": {
@@ -90,7 +186,7 @@
             "additionalProperties": false,
             "required": ["processing_purpose_id", "consent_required", "policy_version"],
             "properties": {
-              "processing_purpose_id": { "$ref": "common.schema.json#/$defs/id" },
+              "processing_purpose_id": { "$ref": "common.schema.json#/$defs/processingPurposeId" },
               "consent_required": { "type": "boolean" },
               "policy_version": { "type": "string", "minLength": 1 }
             }
@@ -103,7 +199,7 @@
             "additionalProperties": false,
             "required": ["processing_purpose_id", "withdrawal_recognized_at", "withdrawal_recognized_sequence"],
             "properties": {
-              "processing_purpose_id": { "$ref": "common.schema.json#/$defs/id" },
+              "processing_purpose_id": { "$ref": "common.schema.json#/$defs/processingPurposeId" },
               "withdrawal_recognized_at": { "$ref": "common.schema.json#/$defs/dateTime" },
               "withdrawal_recognized_sequence": { "type": "integer", "minimum": 0 }
             }
@@ -117,11 +213,22 @@
             "required": ["alternative_legal_basis_id", "processing_purpose_id", "legal_basis", "policy_version", "effective_at"],
             "properties": {
               "alternative_legal_basis_id": { "$ref": "common.schema.json#/$defs/id" },
-              "processing_purpose_id": { "$ref": "common.schema.json#/$defs/id" },
+              "processing_purpose_id": { "$ref": "common.schema.json#/$defs/processingPurposeId" },
               "legal_basis": { "type": "string", "minLength": 1 },
               "policy_version": { "type": "string", "minLength": 1 },
               "effective_at": { "$ref": "common.schema.json#/$defs/dateTime" }
             }
+          }
+        },
+        "timestamp_stale_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["before", "authority", "policy_version", "policy_digest"],
+          "properties": {
+            "before": { "$ref": "common.schema.json#/$defs/dateTime" },
+            "authority": { "const": "server" },
+            "policy_version": { "type": "string", "minLength": 1 },
+            "policy_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
           }
         }
       }
@@ -135,17 +242,17 @@
         "occurred_at_source", "received_at", "payload", "processing_sequence"
       ],
       "properties": {
-        "contract_version": { "const": "0.1.0" },
+        "contract_version": { "const": "0.2.0" },
         "record_id": { "$ref": "common.schema.json#/$defs/id" },
         "delivery_id": { "$ref": "common.schema.json#/$defs/id" },
         "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
         "app_id": { "$ref": "common.schema.json#/$defs/id" },
-        "producer": { "type": "string", "pattern": "^(sdk-android|redirector|import:[a-z0-9-]+)$" },
+        "producer": { "type": "string", "pattern": "^(sdk-android|sdk-ios|redirector|import:[a-z0-9-]+|adapter:[a-z0-9-]+|postback:[a-z0-9-]+)$" },
         "producer_version": { "type": "string", "minLength": 1 },
         "event_id": { "$ref": "common.schema.json#/$defs/id" },
-        "event_name": { "enum": ["click", "install", "session_start", "ad_impression", "ad_revenue", "purchase", "refund", "consent_changed"] },
-        "schema_version": { "const": "0.1.0" },
-        "occurred_at": { "$ref": "common.schema.json#/$defs/dateTime" },
+        "event_name": { "enum": ["click", "install", "session_start", "ad_impression", "ad_view", "ad_revenue", "purchase", "refund", "consent_changed", "skan_postback", "adattributionkit_postback"] },
+        "schema_version": { "const": "0.2.0" },
+        "occurred_at": { "$ref": "#/$defs/ingressDateTimeSyntax" },
         "occurred_at_source": { "enum": ["device", "server", "import"] },
         "received_at": { "$ref": "common.schema.json#/$defs/dateTime" },
         "payload": {
@@ -155,9 +262,26 @@
         },
         "late": { "type": "boolean" },
         "subject_scope": { "enum": ["installation_level", "aggregate"] },
-        "processing_purpose_id": { "$ref": "common.schema.json#/$defs/id" },
+        "processing_purpose_id": { "$ref": "common.schema.json#/$defs/processingPurposeId" },
         "processing_sequence": { "type": "integer", "minimum": 0 },
         "alternative_legal_basis_id": { "$ref": "common.schema.json#/$defs/id" }
+      }
+    },
+    "ingressDateTimeSyntax": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "retentionExpiration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tenant_id", "app_id", "record_id", "expired_at", "policy_version", "lifecycle_status"],
+      "properties": {
+        "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
+        "app_id": { "$ref": "common.schema.json#/$defs/id" },
+        "record_id": { "$ref": "common.schema.json#/$defs/id" },
+        "expired_at": { "$ref": "common.schema.json#/$defs/dateTime" },
+        "policy_version": { "type": "string", "minLength": 1 },
+        "lifecycle_status": { "const": "purged" }
       }
     },
     "matchingKey": {
@@ -170,8 +294,24 @@
         "scope": { "enum": ["tenant", "tenant_app"] },
         "normalization": { "enum": ["identity", "lowercase_ascii", "trim"] },
         "cardinality": { "enum": ["one_to_one", "one_to_many"] },
-        "protected": { "type": "boolean" }
-      }
+        "protected": { "type": "boolean" },
+        "value_encoding": { "enum": ["plain", "sha256"] },
+        "access_class": { "enum": ["public", "protected", "private"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "enum": ["provider_install_id", "provider_click_id"] } }, "required": ["type"] },
+          "then": {
+            "required": ["value_encoding", "access_class"],
+            "properties": {
+              "value": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+              "protected": { "const": true },
+              "value_encoding": { "const": "sha256" },
+              "access_class": { "const": "protected" }
+            }
+          }
+        }
+      ]
     },
     "reconciliationInput": {
       "type": "object",
@@ -205,6 +345,27 @@
         "freshness": { "enum": ["current", "stale", "recalculated"] },
         "privacy_effect": { "enum": ["none", "redaction"] }
       }
+    },
+    "advertisingIdentifierFreeValue": {
+      "oneOf": [
+        {
+          "type": "object",
+          "propertyNames": {
+            "not": {
+              "pattern": "^(advertising_id|advertising_identifier|google_advertising_id|android_advertising_id|advertising_tracking_id|gaid|aaid|idfa|rdid)$"
+            }
+          },
+          "additionalProperties": { "$ref": "#/$defs/advertisingIdentifierFreeValue" }
+        },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/advertisingIdentifierFreeValue" }
+        },
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "null" }
+      ]
     },
     "fxPolicy": {
       "type": "object",
