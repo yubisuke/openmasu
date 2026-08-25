@@ -8,6 +8,12 @@ import { aggregateSourceDay, resolveExpiredQuarantines } from "./fraud-worker.js
 import { processIntegrityVerifications, type IntegrityProvider } from "./integrity-verifier.js";
 import { processGooglePlayProductVerifications } from "./google-play-product-verifier.js";
 import { discoverGoogleConversionDeliveries, processGoogleConversionDeliveries } from "./google-conversion-worker.js";
+import {
+  createAppleCommerceReadbackClient,
+  createGoogleCommerceReadbackClient,
+  processCommerceReadbacks,
+} from "./commerce-readback-worker.js";
+import { appleLeafKeyFromChain, verifyCompactJws } from "@openmasu/commerce-lifecycle";
 
 const connectionString = process.env.OPENMASU_APP_DATABASE_URL;
 if (!connectionString) throw new Error("OPENMASU_APP_DATABASE_URL is required");
@@ -35,12 +41,44 @@ const secrets = new EnvironmentSecretStore({
     value: process.env.OPENMASU_GOOGLE_DATA_MANAGER_SERVICE_ACCOUNT_JSON,
     file: process.env.OPENMASU_GOOGLE_DATA_MANAGER_SERVICE_ACCOUNT_JSON_FILE,
   },
+  OPENMASU_APP_STORE_API_PRIVATE_KEY: {
+    value: process.env.OPENMASU_APP_STORE_API_PRIVATE_KEY,
+    file: process.env.OPENMASU_APP_STORE_API_PRIVATE_KEY_FILE,
+  },
 });
 const payloadStore = new EncryptedFilePayloadStore(
   process.env.OPENMASU_PAYLOAD_STORE_DIR ?? ".openmasu/payloads",
   secrets.require("OPENMASU_PAYLOAD_MASTER_KEY"),
 );
 const fraudEnabled = process.env.OPENMASU_FRAUD_ENABLED !== "0";
+const appleRootFingerprints = new Set(
+  (process.env.OPENMASU_APPLE_ROOT_SHA256 ?? "")
+    .split(",").map((value) => value.replaceAll(":", "").trim().toLowerCase())
+    .filter((value) => /^[a-f0-9]{64}$/.test(value)),
+);
+const googleCommerceClient = process.env.OPENMASU_COMMERCE_READBACKS === "on"
+  && secrets.read("OPENMASU_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON")
+  ? createGoogleCommerceReadbackClient({
+      credentialsJson: secrets.read("OPENMASU_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON")!,
+      apiBaseUrl: process.env.OPENMASU_GOOGLE_PLAY_ANDROID_PUBLISHER_BASE_URL,
+      tokenUrl: process.env.OPENMASU_GOOGLE_PLAY_OAUTH_TOKEN_URL,
+    })
+  : undefined;
+const appleCommerceClient = process.env.OPENMASU_COMMERCE_READBACKS === "on"
+  && secrets.read("OPENMASU_APP_STORE_API_PRIVATE_KEY")
+  && process.env.OPENMASU_APP_STORE_API_ISSUER_ID && process.env.OPENMASU_APP_STORE_API_KEY_ID
+  ? createAppleCommerceReadbackClient({
+      credentials: {
+        privateKey: secrets.read("OPENMASU_APP_STORE_API_PRIVATE_KEY")!,
+        issuerId: process.env.OPENMASU_APP_STORE_API_ISSUER_ID,
+        keyId: process.env.OPENMASU_APP_STORE_API_KEY_ID,
+      },
+      baseUrl: process.env.OPENMASU_APP_STORE_API_BASE_URL,
+    })
+  : undefined;
+const verifyAppleCommerce = appleRootFingerprints.size > 0
+  ? (value: string) => verifyCompactJws(value, appleLeafKeyFromChain(value, appleRootFingerprints, new Date()))
+  : undefined;
 const integrityProviderMode = (() => {
   const value = process.env.OPENMASU_INTEGRITY_PROVIDER ?? "off";
   if (!["off", "play_integrity", "app_attest", "both"].includes(value)) {
@@ -107,6 +145,16 @@ const tick = async (): Promise<void> => {
         apiBaseUrl: process.env.OPENMASU_GOOGLE_PLAY_ANDROID_PUBLISHER_BASE_URL,
         tokenUrl: process.env.OPENMASU_GOOGLE_PLAY_OAUTH_TOKEN_URL,
       });
+      if (process.env.OPENMASU_COMMERCE_READBACKS === "on") {
+        const commerce = await processCommerceReadbacks(pool, payloadStore, tenantId, {
+          googleClient: googleCommerceClient,
+          appleClient: appleCommerceClient,
+          verifyAppleSignedData: verifyAppleCommerce,
+        });
+        if (commerce.processed + commerce.deferred + commerce.failed > 0) {
+          process.stdout.write(`${JSON.stringify({ event: "commerce_readback_cycle", component: "worker", tenant_id: tenantId, ...commerce })}\n`);
+        }
+      }
       if (process.env.OPENMASU_GOOGLE_DATA_MANAGER_ENABLED === "on") {
         await discoverGoogleConversionDeliveries(pool, payloadStore, tenantId);
         await processGoogleConversionDeliveries(pool, payloadStore, tenantId, {

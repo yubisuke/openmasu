@@ -50,6 +50,10 @@ import { registerAppLinkIdentity, registerLinkDomain } from "./link-domains.js";
 import { receiveGooglePlayRtdn, type GooglePlayRtdnReceiverDependencies } from "./google-play-rtdn-receiver.js";
 import { configureGoogleDataManagerDestination } from "./google-data-manager-admin.js";
 import { issueSdkKey, listSdkKeys, retireSdkKey } from "./sdk-auth.js";
+import {
+  receiveAppleStoreNotification,
+  type AppleStoreNotificationDependencies,
+} from "./apple-store-notifications-receiver.js";
 
 export const dashboardHeaders = {
   "content-security-policy": "default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
@@ -84,6 +88,7 @@ export type RequestHandlerDependencies = {
   readonly reportMaximumExportRows?: number;
   readonly applePostback?: ApplePostbackReceiverDependencies;
   readonly googlePlayRtdn?: GooglePlayRtdnReceiverDependencies;
+  readonly appleStoreNotifications?: AppleStoreNotificationDependencies;
   readonly operationalMetrics?: OperationalMetrics;
   readonly operationalLogWriter?: OperationalLogWriter;
 };
@@ -293,6 +298,14 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
           return;
         }
         await receiveGooglePlayRtdn(request, response, dependencies.googlePlayRtdn);
+        return;
+      }
+      if (route.handler === "apple_store_notification") {
+        if (!dependencies.appleStoreNotifications) {
+          json(response, 503, { error: "apple_store_notification_receiver_unavailable" });
+          return;
+        }
+        await receiveAppleStoreNotification(request, response, dependencies.appleStoreNotifications);
         return;
       }
       if (route.handler === "sdk_enrollment" && dependencies.sdk) return handleSdkEnrollment(request, response, dependencies.sdk);
