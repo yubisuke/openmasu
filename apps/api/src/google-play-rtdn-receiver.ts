@@ -2,6 +2,8 @@ import { createHash, createPublicKey, verify, type JsonWebKey as CryptoJsonWebKe
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
 import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
+import { googleSubscriptionLifecycle, sha256 as commerceSha256 } from "@openmasu/commerce-lifecycle";
+import { recordCommerceNotification } from "./commerce-notifications.js";
 
 type JsonObject = Record<string, unknown>;
 type Fetch = typeof fetch;
@@ -182,17 +184,6 @@ export async function receiveGooglePlayRtdn(
     const notification = parseJson(decoded, "rtdn_notification");
     exactKeys(notification, ["version", "packageName", "eventTimeMillis", "subscriptionNotification",
       "oneTimeProductNotification", "voidedPurchaseNotification", "testNotification", "pendingRefundReviewNotification"], "rtdn_notification");
-    const subscription = notification.subscriptionNotification;
-    if (!subscription || typeof subscription !== "object" || Array.isArray(subscription)) {
-      empty(response, 204);
-      return;
-    }
-    const subscriptionNotification = subscription as JsonObject;
-    exactKeys(subscriptionNotification, ["version", "notificationType", "purchaseToken"], "rtdn_subscription");
-    if (subscriptionNotification.notificationType !== 2) {
-      empty(response, 204);
-      return;
-    }
     const packageName = string(notification.packageName, "rtdn_package", 255);
     if (!/^[A-Za-z][A-Za-z0-9_.]{2,254}$/.test(packageName)) throw new RtdnRequestError(400, "rtdn_package_invalid");
     const eventMillis = string(notification.eventTimeMillis, "rtdn_event_time", 32);
@@ -201,12 +192,76 @@ export async function receiveGooglePlayRtdn(
     }
     const eventTime = new Date(Number(eventMillis));
     if (!Number.isFinite(eventTime.getTime())) throw new RtdnRequestError(400, "rtdn_event_time_invalid");
-    const purchaseToken = string(subscriptionNotification.purchaseToken, "rtdn_purchase_token", 64 * 1024);
     const resolved = await dependencies.pool.query<{ tenant_id: string; app_id: string }>(
       "SELECT tenant_id, app_id FROM control.resolve_android_package($1)", [packageName],
     );
     const identity = resolved.rows[0];
     if (!identity) {
+      empty(response, 204);
+      return;
+    }
+    const notificationDigest = commerceSha256(`${dependencies.expectedServiceAccountEmail}\0${messageId}`);
+    const subscription = notification.subscriptionNotification;
+    const oneTime = notification.oneTimeProductNotification;
+    const voided = notification.voidedPurchaseNotification;
+    const arms = [subscription, oneTime, voided, notification.pendingRefundReviewNotification, notification.testNotification]
+      .filter((value) => value !== undefined);
+    if (arms.length !== 1) throw new RtdnRequestError(400, "rtdn_notification_arm_invalid");
+    let eventKind: string;
+    let subjectDigest: string | undefined;
+    let purchaseToken: string | undefined;
+    let readbackOperation: "google_subscription" | "google_order_refund" | undefined;
+    let subscriptionNotification: JsonObject | undefined;
+    if (subscription && typeof subscription === "object" && !Array.isArray(subscription)) {
+      subscriptionNotification = subscription as JsonObject;
+      exactKeys(subscriptionNotification, ["version", "notificationType", "purchaseToken"], "rtdn_subscription");
+      if (!Number.isInteger(subscriptionNotification.notificationType)) throw new RtdnRequestError(400, "rtdn_subscription_type_invalid");
+      try { eventKind = googleSubscriptionLifecycle(Number(subscriptionNotification.notificationType)); }
+      catch { throw new RtdnRequestError(400, "rtdn_subscription_type_unsupported"); }
+      purchaseToken = string(subscriptionNotification.purchaseToken, "rtdn_purchase_token", 64 * 1024);
+      subjectDigest = commerceSha256(purchaseToken);
+      readbackOperation = "google_subscription";
+    } else if (oneTime && typeof oneTime === "object" && !Array.isArray(oneTime)) {
+      const value = oneTime as JsonObject;
+      exactKeys(value, ["version", "notificationType", "purchaseToken", "sku"], "rtdn_one_time");
+      if (value.notificationType !== 1 && value.notificationType !== 2) throw new RtdnRequestError(400, "rtdn_one_time_type_unsupported");
+      eventKind = value.notificationType === 1 ? "one_time_product_purchased" : "one_time_product_canceled";
+      purchaseToken = string(value.purchaseToken, "rtdn_purchase_token", 64 * 1024);
+      subjectDigest = commerceSha256(purchaseToken);
+    } else if (voided && typeof voided === "object" && !Array.isArray(voided)) {
+      const value = voided as JsonObject;
+      exactKeys(value, ["purchaseToken", "orderId", "productType", "refundType"], "rtdn_voided_purchase");
+      purchaseToken = string(value.purchaseToken, "rtdn_purchase_token", 64 * 1024);
+      const orderId = string(value.orderId, "rtdn_order_id", 255);
+      eventKind = value.refundType === 2 ? "purchase_partially_refunded" : "purchase_voided";
+      subjectDigest = commerceSha256(orderId);
+      readbackOperation = "google_order_refund";
+    } else if (notification.pendingRefundReviewNotification !== undefined) {
+      eventKind = "refund_review_pending";
+    } else {
+      empty(response, 204);
+      return;
+    }
+    await recordCommerceNotification({
+      pool: dependencies.pool,
+      payloadStore: dependencies.payloadStore,
+      tenantId: identity.tenant_id,
+      appId: identity.app_id,
+      payload: decoded,
+      notificationDigest,
+      ...(subjectDigest ? { subjectDigest } : {}),
+      event: {
+        provider: "google_play",
+        eventKind,
+        subscriptionState: eventKind.startsWith("subscription_") ? eventKind : undefined,
+        financialEffect: "none",
+        externalEventDigest: notificationDigest,
+        effectiveAt: eventTime.toISOString(),
+      },
+      receivedAt: now,
+      ...(readbackOperation ? { readbackOperation } : {}),
+    });
+    if (!subscriptionNotification || subscriptionNotification.notificationType !== 2 || !purchaseToken) {
       empty(response, 204);
       return;
     }

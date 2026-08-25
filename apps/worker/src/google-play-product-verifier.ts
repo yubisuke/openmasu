@@ -509,6 +509,17 @@ async function complete(
         );
         if (marked.rowCount !== 1) throw new Error("google_play_renewal_order_claim_lost");
       }
+      if (outcome.verdict === "verified" && orderDigest && claim && money) {
+        await client.query(
+          `INSERT INTO control.commerce_purchase_bindings (
+             provider, tenant_id, app_id, transaction_digest, original_transaction_digest,
+             purchase_record_id, installation_digest, amount_unscaled, amount_scale, currency, quantity, bound_at
+           ) VALUES ('google_play',$1,$2,$3,$3,$4,$5,$6,$7,$8,1,$9) ON CONFLICT DO NOTHING`,
+          [row.tenant_id, row.app_id, orderDigest, row.verified_record_id,
+            sha256(`${row.tenant_id}\0${row.app_id}\0${claim.installationId}`),
+            money.amountUnscaled, money.amountScale, money.currency, now.toISOString()],
+        );
+      }
       await client.query(
         `DELETE FROM ephemeral.google_play_product_verifications
           WHERE tenant_id=$1 AND app_id=$2 AND verification_id=$3`,
@@ -728,7 +739,7 @@ export async function processGooglePlayProductVerifications(
       continue;
     }
     let effectiveRow = row;
-    let orderDigest: string | undefined;
+    let orderDigest: string | undefined = sha256(normalized.orderId!);
     if (row.purchase_kind === "subscription_renewal") {
       const claimResult = await claimRenewalOrder(pool, row, normalized.orderId!, now);
       if (!claimResult.owned) {

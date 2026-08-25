@@ -173,4 +173,10 @@ M7 adds tenant-owned link hosts, deterministic Android and Apple association fil
 
 Evidence gate: contract/evaluator parity, association generation and route precedence, host isolation, referrer budget, typed SDK parsers, consent behavior, engagement/install separation, Android toolchain, iOS simulator/build audit, and the Unity compile probe pass with synthetic values. Real hosts, signing identities, devices, store tracks, propagation, reinstall behavior, and four-week re-engagement observation remain in the [M7 operator checklist](validation/deeplink-device-checklist.md).
 
+## Post-M7 verified commerce lifecycle
+
+The verified-commerce slice expands Google Play from initial/renewal verification to authenticated lifecycle state and exact full/partial refund correction, and adds App Store Server Notifications V2 plus revision-based transaction/refund history. Provider notifications remain non-financial signals; only authoritative read-back can create settled purchase or refund money. Protected evidence and cursors are encrypted, while public lifecycle facts contain bounded state and digests.
+
+Evidence gate: synthetic outer/nested Apple signature vectors, Google OIDC and lifecycle mapping, durable retry/revision pagination, exact one-time refund correction, RLS, privacy purge, and provider-secret scans pass. Live credentials, delivery, quota/root rotation, complete missed-renewal reconstruction, Apple installation-level revenue binding, entitlement, tax, and payout remain outside the code gate.
+
 Run the operator checklists and a controlled shadow pilot. Real provider connectivity, device validation, platform approval, production TLS, backup operations, capacity, integrity-service configuration, and incident response remain separate states.

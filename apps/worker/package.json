@@ -7,6 +7,7 @@
   "scripts": {
     "benchmark:metric-floor": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/metrics/benchmark.ts",
     "benchmark:import": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/import/benchmark.ts",
+    "commerce:backfill": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/commerce-backfill.ts",
     "import": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/import/runner.ts",
     "import:cost": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/import/cost-cli.ts",
     "import:cost:google": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/import/google-cost-cli.ts",
@@ -21,6 +22,7 @@
   "dependencies": {
     "@openmasu/attribution-core": "0.4.0",
     "@openmasu/contracts": "0.4.0",
+    "@openmasu/commerce-lifecycle": "0.1.0",
     "@openmasu/fraud-rules": "0.1.0",
     "@openmasu/meta-install-referrer": "0.1.0",
     "@openmasu/runtime": "0.1.0",

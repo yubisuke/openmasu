@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createSign, generateKeyPairSync, randomBytes } from "node:crypto";
+import { createSign, generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -21,12 +21,14 @@ import {
   processGooglePlayProductVerifications,
   queueGooglePlayProductVerification,
 } from "../../worker/src/google-play-product-verifier.js";
+import { processCommerceReadbacks } from "../../worker/src/commerce-readback-worker.js";
 import { createRequestHandler } from "./router.js";
 import { KeyedTokenBucket } from "./rate-limit.js";
 import { parseMetricQuery } from "./report-query.js";
 import { encodeMetricReport, metricReport } from "./reporting.js";
 import { ensureSdkKeys, signSdkRequest } from "./sdk-auth.js";
 import { createTrackingLink } from "./tracking-links.js";
+import { verifyCompactJws } from "@openmasu/commerce-lifecycle";
 
 const run = randomBytes(6).toString("hex");
 const tenantId = `tenant-m2a-${run}`;
@@ -52,10 +54,23 @@ const playPackageName = `dev.openmasu.synthetic${run}`;
 const playSubscriptionToken = `synthetic-google-play-subscription-token-${run}`;
 const playSubscriptionProductId = `subscription.synthetic.${run}`;
 const playSubscriptionStartTime = "2026-08-24T02:03:04.000Z";
+const verifiedRenewalOrderId = `order:subscription:renewal:synthetic:${run}`;
 const rtdnAudience = "https://synthetic.invalid/v1/google-play/rtdn";
 const rtdnEmail = "synthetic-rtdn@synthetic-project.iam.gserviceaccount.com";
 const rtdnKeyPair = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const rtdnJwk = { ...rtdnKeyPair.publicKey.export({ format: "jwk" }), kid: "synthetic-rtdn-key", alg: "RS256", use: "sig" };
+const appleCommerceKeyPair = generateKeyPairSync("ec", { namedCurve: "P-256" });
+const appleBundleId = `dev.openmasu.synthetic.${run}`;
+const appleAppId = 900000000 + Number.parseInt(run.slice(0, 6), 16);
+
+function appleCommerceJws(payload: Record<string, unknown>): string {
+  const header = Buffer.from(JSON.stringify({ alg: "ES256", kid: "synthetic-commerce" })).toString("base64url");
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = sign("sha256", Buffer.from(`${header}.${body}`), {
+    key: appleCommerceKeyPair.privateKey, dsaEncoding: "ieee-p1363",
+  });
+  return `${header}.${body}.${signature.toString("base64url")}`;
+}
 
 function rtdnToken(overrides: Record<string, unknown> = {}): string {
   const now = Math.floor(Date.now() / 1_000);
@@ -70,16 +85,22 @@ function rtdnToken(overrides: Record<string, unknown> = {}): string {
   return `${header}.${claims}.${signer.sign(rtdnKeyPair.privateKey).toString("base64url")}`;
 }
 
-function rtdnEnvelope(messageId: string): string {
+function rtdnEnvelopeFor(messageId: string, arm: Record<string, unknown>): string {
   const notification = {
     version: "1.0",
     packageName: playPackageName,
     eventTimeMillis: String(Date.now()),
-    subscriptionNotification: { version: "1.0", notificationType: 2, purchaseToken: playSubscriptionToken },
+    ...arm,
   };
   return JSON.stringify({
     message: { messageId, publishTime: new Date().toISOString(), data: Buffer.from(JSON.stringify(notification)).toString("base64") },
     subscription: "projects/synthetic-project/subscriptions/openmasu-renewals",
+  });
+}
+
+function rtdnEnvelope(messageId: string): string {
+  return rtdnEnvelopeFor(messageId, {
+    subscriptionNotification: { version: "1.0", notificationType: 2, purchaseToken: playSubscriptionToken },
   });
 }
 
@@ -164,6 +185,15 @@ async function waitForWorkerExit(child: ReturnType<typeof workerProcess>): Promi
 describe("M2a signed SDK ingestion", () => {
   before(async () => {
     await ensureSdkKeys(pool, payloadStore, { tenantId, appId }, [{ keyId: sdkKeyId, secret: sdkSecret }]);
+    await withTenant(pool, tenantId, async (client) => client.query(
+      `INSERT INTO control.apple_app_registrations (
+         tenant_id, app_id, apple_app_adam_id, apple_bundle_id, registered_at, artifact
+       ) VALUES ($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT DO NOTHING`,
+      [tenantId, appId, appleAppId, appleBundleId, new Date().toISOString(), JSON.stringify({
+        tenant_id: tenantId, app_id: appId, apple_app_adam_id: String(appleAppId),
+        apple_bundle_id: appleBundleId, registered_at: new Date().toISOString(),
+      })],
+    ));
     server = createServer(createRequestHandler({
       pool,
       readerPool: pool,
@@ -188,6 +218,13 @@ describe("M2a signed SDK ingestion", () => {
         fetch: async () => new Response(JSON.stringify({ keys: [rtdnJwk] }), {
           status: 200, headers: { "content-type": "application/json" },
         }),
+      },
+      appleStoreNotifications: {
+        pool,
+        payloadStore,
+        trustedRootFingerprints: new Set(),
+        maximumBytes: 512 * 1024,
+        verifySignedData: (value) => verifyCompactJws(value, appleCommerceKeyPair.publicKey),
       },
     }));
     server.listen(0, "127.0.0.1");
@@ -214,6 +251,82 @@ describe("M2a signed SDK ingestion", () => {
     installationSecret = value.installation_secret;
     assert.match(installationKeyId, /^installation-key:/);
     assert.ok(installationSecret.length >= 43);
+  });
+
+  it("WO19 accepts a fully verified App Store notification once and queues bounded read-back", async () => {
+    const transaction = appleCommerceJws({
+      transactionId: `apple-transaction-${run}`, originalTransactionId: `apple-original-${run}`,
+      bundleId: appleBundleId, environment: "Sandbox", purchaseDate: Date.now(),
+    });
+    const renewal = appleCommerceJws({ environment: "Sandbox", autoRenewStatus: 1 });
+    const notificationUuid = `00000000-0000-4000-8000-${run.padEnd(12, "0").slice(0, 12)}`;
+    const signedPayload = appleCommerceJws({
+      notificationType: "DID_RENEW", notificationUUID: notificationUuid, signedDate: Date.now(),
+      data: { bundleId: appleBundleId, environment: "Sandbox",
+        signedTransactionInfo: transaction, signedRenewalInfo: renewal },
+    });
+    const send = () => fetch(`${baseUrl}/v1/apple/app-store/notifications`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ signedPayload }),
+    });
+    assert.equal((await send()).status, 200);
+    assert.equal((await send()).status, 200);
+    const tamperedParts = signedPayload.split(".");
+    tamperedParts[1] = Buffer.from(JSON.stringify({
+      notificationType: "DID_RENEW", notificationUUID: `${notificationUuid}-tampered`, signedDate: Date.now(),
+      data: { bundleId: appleBundleId, environment: "Sandbox",
+        signedTransactionInfo: transaction, signedRenewalInfo: renewal },
+    })).toString("base64url");
+    assert.equal((await fetch(`${baseUrl}/v1/apple/app-store/notifications`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ signedPayload: tamperedParts.join(".") }),
+    })).status, 200, "invalid signatures must be non-enumerating and must not persist");
+    const stored = await withTenant(pool, tenantId, async (client) => ({
+      notifications: Number((await client.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM control.commerce_provider_notifications WHERE tenant_id=$1 AND app_id=$2 AND provider='app_store'",
+        [tenantId, appId],
+      )).rows[0].count),
+      facts: Number((await client.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM ledger.commerce_lifecycle_facts WHERE tenant_id=$1 AND app_id=$2 AND provider='app_store'",
+        [tenantId, appId],
+      )).rows[0].count),
+      readbacks: Number((await client.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM ephemeral.commerce_provider_readbacks WHERE tenant_id=$1 AND app_id=$2 AND provider='app_store'",
+        [tenantId, appId],
+      )).rows[0].count),
+    }));
+    assert.deepEqual(stored, { notifications: 1, facts: 1, readbacks: 1 });
+    assert.equal(await payloadStore.scanFor(`apple-transaction-${run}`), false);
+
+    let page = 0;
+    const readback = async () => processCommerceReadbacks(pool, payloadStore, tenantId, {
+      now: new Date(Date.now() + 60_000 + page),
+      verifyAppleSignedData: (value) => verifyCompactJws(value, appleCommerceKeyPair.publicKey),
+      appleClient: async () => {
+        page += 1;
+        const signed = appleCommerceJws({
+          transactionId: `apple-history-${page}-${run}`, originalTransactionId: `apple-original-${run}`,
+          bundleId: appleBundleId, environment: "Sandbox", purchaseDate: Date.now(),
+          ...(page === 2 ? { revocationDate: Date.now() + 1_000 } : {}),
+        });
+        return { status: 200, body: Buffer.from(JSON.stringify({
+          signedTransactions: [signed], hasMore: page === 1, ...(page === 1 ? { revision: "synthetic-revision-1" } : {}),
+        })) };
+      },
+    });
+    assert.deepEqual(await readback(), { processed: 1, deferred: 0, failed: 0 });
+    assert.deepEqual(await readback(), { processed: 1, deferred: 0, failed: 0 });
+    const afterReadback = await withTenant(pool, tenantId, async (client) => ({
+      facts: (await client.query<{ event_kind: string; financial_effect: string }>(
+        `SELECT event_kind, financial_effect FROM ledger.commerce_lifecycle_facts
+          WHERE tenant_id=$1 AND app_id=$2 AND provider='app_store' ORDER BY event_kind`, [tenantId, appId],
+      )).rows,
+      pending: Number((await client.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM ephemeral.commerce_provider_readbacks WHERE tenant_id=$1 AND app_id=$2 AND provider='app_store'",
+        [tenantId, appId],
+      )).rows[0].count),
+    }));
+    assert.equal(afterReadback.pending, 0);
+    assert.deepEqual(afterReadback.facts.map((value) => value.financial_effect).sort(), ["none", "purchase", "refund"]);
   });
 
   it("F-A-14 rejects parsed integrity claims and protects accepted raw tokens", async () => {
@@ -554,8 +667,9 @@ describe("M2a signed SDK ingestion", () => {
     });
     assert.equal((await request()).status, 204);
     assert.equal((await request()).status, 204, "Pub/Sub redelivery must be idempotent");
-    const renewalOrderId = `order:subscription:renewal:synthetic:${run}`;
-    const renewalStart = "2026-09-24T02:03:04.000Z";
+    const renewalOrderId = verifiedRenewalOrderId;
+    const renewalStart = new Date(Date.now() - 120_000).toISOString();
+    const renewalEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1_000).toISOString();
     const operations: string[] = [];
     const outcome = await processGooglePlayProductVerifications(pool, payloadStore, tenantId, {
       enabled: true,
@@ -575,9 +689,9 @@ describe("M2a signed SDK ingestion", () => {
           lineItems: [{
             productId: playSubscriptionProductId,
             total: { currencyCode: "JPY", units: "920", nanos: 0 },
-            subscriptionDetails: {
-              servicePeriodStartTime: renewalStart,
-              servicePeriodEndTime: "2026-10-24T02:03:04.000Z",
+              subscriptionDetails: {
+                servicePeriodStartTime: renewalStart,
+                servicePeriodEndTime: renewalEnd,
             },
           }],
         })) };
@@ -634,7 +748,7 @@ describe("M2a signed SDK ingestion", () => {
         : { status: 200, body: Buffer.from(JSON.stringify({
             orderId: renewalOrderId, purchaseToken: playSubscriptionToken, state: "PROCESSED",
             lineItems: [{ productId: playSubscriptionProductId, total: { currencyCode: "JPY", units: "920", nanos: 0 },
-              subscriptionDetails: { servicePeriodStartTime: renewalStart, servicePeriodEndTime: "2026-10-24T02:03:04.000Z" } }],
+              subscriptionDetails: { servicePeriodStartTime: renewalStart, servicePeriodEndTime: renewalEnd } }],
           })) },
     });
     assert.deepEqual(duplicate, { verified: 0, failed: 1, unavailable: 0, deferred: 0 });
@@ -647,6 +761,119 @@ describe("M2a signed SDK ingestion", () => {
          AND result.purchase_kind='subscription_renewal' AND result.verdict='verified'`,
       [tenantId, appId],
     )).rowCount), 1);
+    assert.deepEqual(await processCommerceReadbacks(pool, payloadStore, tenantId, {
+      now: new Date(Date.now() + 150_000),
+      googleClient: async ({ operation }) => {
+        assert.equal(operation, "subscription");
+        return { status: 200, body: Buffer.from(JSON.stringify({
+          subscriptionState: "SUBSCRIPTION_STATE_ACTIVE",
+        })) };
+      },
+    }), { processed: 2, deferred: 0, failed: 0 },
+    "each distinct authenticated RTDN delivery must complete its own state read-back");
+  });
+
+  it("WO19 reads a voided order authoritatively and records its exact refund once", async () => {
+    const partialRefundAt = new Date(Date.now() - 60_000).toISOString();
+    const fullRefundAt = new Date(Date.now() - 30_000).toISOString();
+    const messageId = `synthetic-rtdn-void-${run}`;
+    const envelope = rtdnEnvelopeFor(messageId, {
+      voidedPurchaseNotification: {
+        purchaseToken: playSubscriptionToken,
+        orderId: verifiedRenewalOrderId,
+        productType: 1,
+        refundType: 2,
+      },
+    });
+    const send = () => fetch(`${baseUrl}/v1/google-play/rtdn`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${rtdnToken()}`, "content-type": "application/json" },
+      body: envelope,
+    });
+    assert.equal((await send()).status, 204);
+    assert.equal((await send()).status, 204);
+    const outcome = await processCommerceReadbacks(pool, payloadStore, tenantId, {
+      now: new Date(Date.now() + 180_000),
+      googleClient: async ({ operation, orderId }) => {
+        if (operation === "subscription") return { status: 200, body: Buffer.from(JSON.stringify({
+          subscriptionState: "SUBSCRIPTION_STATE_ACTIVE",
+        })) };
+        assert.equal(orderId, verifiedRenewalOrderId);
+        return { status: 200, body: Buffer.from(JSON.stringify({
+          orderId: verifiedRenewalOrderId,
+          orderHistory: { partialRefundEvents: [{
+            state: "PROCESSED_SUCCESSFULLY",
+            processTime: partialRefundAt,
+            refundDetails: { total: { currencyCode: "JPY", units: "120", nanos: 0 } },
+          }] },
+        })) };
+      },
+    });
+    assert.deepEqual(outcome, { processed: 1, deferred: 0, failed: 0 });
+    assert.deepEqual(await processCommerceReadbacks(pool, payloadStore, tenantId, {
+      now: new Date(Date.now() + 240_000), googleClient: async () => { throw new Error("must not repeat"); },
+    }), { processed: 0, deferred: 0, failed: 0 });
+    const refunds = await withTenant(pool, tenantId, async (client) => (await client.query<{
+      amount_unscaled: string; amount_scale: number; currency: string;
+    }>(
+      `SELECT amount_unscaled, amount_scale, currency FROM ledger.refund_facts
+        WHERE tenant_id=$1 AND app_id=$2 AND transaction_id LIKE 'refund:google-play:%'`, [tenantId, appId],
+    )).rows);
+    assert.deepEqual(refunds, [{ amount_unscaled: "120000000000", amount_scale: 9, currency: "JPY" }]);
+    assert.equal(await payloadStore.scanFor(verifiedRenewalOrderId), false);
+
+    const excessiveMessage = `synthetic-rtdn-over-refund-${run}`;
+    assert.equal((await fetch(`${baseUrl}/v1/google-play/rtdn`, {
+      method: "POST", headers: { authorization: `Bearer ${rtdnToken()}`, "content-type": "application/json" },
+      body: rtdnEnvelopeFor(excessiveMessage, { voidedPurchaseNotification: {
+        purchaseToken: playSubscriptionToken, orderId: verifiedRenewalOrderId, productType: 1, refundType: 1,
+      } }),
+    })).status, 204);
+    const excessive = await processCommerceReadbacks(pool, payloadStore, tenantId, {
+      now: new Date(Date.now() + 300_000),
+      googleClient: async () => ({ status: 200, body: Buffer.from(JSON.stringify({
+        orderId: verifiedRenewalOrderId,
+        orderHistory: { refundEvent: { eventTime: fullRefundAt,
+          refundDetails: { total: { currencyCode: "JPY", units: "920", nanos: 0 } } } },
+      })) }),
+    });
+    assert.deepEqual(excessive, { processed: 0, deferred: 0, failed: 1 },
+      "cumulative refunds above the verified purchase must fail closed");
+    assert.equal(await withTenant(pool, tenantId, async (client) => (await client.query(
+      `SELECT 1 FROM ledger.refund_facts WHERE tenant_id=$1 AND app_id=$2
+        AND transaction_id LIKE 'refund:google-play:%'`, [tenantId, appId],
+    )).rowCount), 1);
+  });
+
+  it("WO19 retains a terminal safe failure after a bounded provider outage", async () => {
+    const messageId = `synthetic-rtdn-unavailable-${run}`;
+    assert.equal((await fetch(`${baseUrl}/v1/google-play/rtdn`, {
+      method: "POST", headers: { authorization: `Bearer ${rtdnToken()}`, "content-type": "application/json" },
+      body: rtdnEnvelopeFor(messageId, { subscriptionNotification: {
+        version: "1.0", notificationType: 3, purchaseToken: playSubscriptionToken,
+      } }),
+    })).status, 204);
+    await withTenant(pool, tenantId, async (client) => client.query(
+      `UPDATE ephemeral.commerce_provider_readbacks AS readback SET attempts=19
+        FROM control.commerce_provider_notifications AS notification
+       WHERE readback.provider=notification.provider AND readback.notification_digest=notification.notification_digest
+         AND readback.tenant_id=$1 AND notification.event_kind='subscription_canceled'`, [tenantId],
+    ));
+    assert.deepEqual(await processCommerceReadbacks(pool, payloadStore, tenantId, {
+      now: new Date(Date.now() + 360_000), googleClient: async () => ({ status: 503, body: Buffer.alloc(0) }),
+    }), { processed: 0, deferred: 0, failed: 1 });
+    const terminal = await withTenant(pool, tenantId, async (client) => ({
+      failures: Number((await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM ledger.commerce_lifecycle_facts
+          WHERE tenant_id=$1 AND app_id=$2 AND event_kind='readback_failed'`, [tenantId, appId],
+      )).rows[0].count),
+      queued: Number((await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM ephemeral.commerce_provider_readbacks
+          WHERE tenant_id=$1 AND app_id=$2`, [tenantId, appId],
+      )).rows[0].count),
+    }));
+    assert.equal(terminal.failures >= 1, true);
+    assert.equal(terminal.queued, 0);
   });
 
   it("keeps pending, cancelled, mismatched, malformed, and unavailable Play responses out of settled revenue", async () => {
@@ -987,6 +1214,11 @@ describe("M2a signed SDK ingestion", () => {
   });
 
   it("assigns revenue purpose and resolves settled refunds without trusting a device target", async () => {
+    const rejectedBefore = await withTenant(pool, tenantId, async (client) => Number((await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM ledger.rejections
+        WHERE tenant_id=$1 AND app_id=$2 AND reason_code='refund_target_invalid'`,
+      [tenantId, appId],
+    )).rows[0].count));
     const originalTransactionId = `transaction:commerce-original-${run}`;
     const unscopedPurchase = sourceEvent(`event:commerce-purchase-unscoped:${run}`, "purchase", {
       transaction_id: `transaction:commerce-purchase-unscoped-${run}`,
@@ -1207,7 +1439,7 @@ describe("M2a signed SDK ingestion", () => {
     assert.equal(evidence.refund.financial_status, "settled");
     assert.equal(evidence.refund.correction_target_record_id, evidence.purchase.record_id);
     assert.deepEqual(evidence.correction, [{ corrects_record_id: evidence.purchase.record_id }]);
-    assert.equal(evidence.rejected.length, 5);
+    assert.equal(evidence.rejected.length - rejectedBefore, 5);
     assert.equal((await pool.query(
       "SELECT logical_event_id FROM ledger.refund_facts WHERE correction_target_record_id=$1",
       [evidence.purchase.record_id],
@@ -1503,6 +1735,8 @@ describe("M2a signed SDK ingestion", () => {
         },
       },
     }] }), "utf8"));
+    assert.match(legacyPrivacyTargetRecordId, /^record:[A-Za-z0-9._:-]+$/,
+      "the deletion fixture must retain its synthetic purchase record from the prior lifecycle test");
     await queueGooglePlayProductVerification(pool, {
       tenantId,
       appId,

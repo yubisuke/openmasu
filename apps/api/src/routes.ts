@@ -30,6 +30,7 @@ export type RouteHandler =
   | "apple_skan_postback"
   | "apple_aak_postback"
   | "google_play_rtdn"
+  | "apple_store_notification"
   | "dashboard_root"
   | "dashboard_css"
   | "dashboard_login"
@@ -74,6 +75,7 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "apple_skan_postback", method: "POST", pattern: /^\/\.well-known\/skadnetwork\/report-attribution\/$/, auth: "public", mutates: true },
   { handler: "apple_aak_postback", method: "POST", pattern: /^\/\.well-known\/appattribution\/report-attribution\/$/, auth: "public", mutates: true },
   { handler: "google_play_rtdn", method: "POST", pattern: /^\/v1\/google-play\/rtdn$/, auth: "google_oidc", mutates: true },
+  { handler: "apple_store_notification", method: "POST", pattern: /^\/v1\/apple\/app-store\/notifications$/, auth: "public", mutates: true },
   { handler: "admin_apps_list", method: "GET", pattern: /^\/v1\/admin\/apps$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_apps_create", method: "POST", pattern: /^\/v1\/admin\/apps$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_sdk_keys_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/sdk-keys$/, auth: "admin_bearer", mutates: false, capability: "administer" },

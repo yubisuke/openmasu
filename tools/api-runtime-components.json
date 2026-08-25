@@ -2,6 +2,7 @@
   "api",
   "app-association",
   "apple-postback",
+  "commerce-lifecycle",
   "fraud-rules",
   "json-canonicalize",
   "pg",

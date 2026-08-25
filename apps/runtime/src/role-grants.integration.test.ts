@@ -21,6 +21,9 @@ const readerNoTableSelect = new Set([
   "control.google_play_purchase_tokens",
   "control.google_play_rtdn_messages",
   "control.google_play_order_digests",
+  "control.commerce_provider_notifications",
+  "control.commerce_purchase_bindings",
+  "control.commerce_backfill_checkpoints",
   "control.google_data_manager_destinations",
   "control.metric_replay_manifests",
   "control.public_postback_audits",
@@ -32,6 +35,9 @@ const seedControlTruncate = new Set([
   "control.google_play_purchase_tokens",
   "control.google_play_rtdn_messages",
   "control.google_play_order_digests",
+  "control.commerce_provider_notifications",
+  "control.commerce_purchase_bindings",
+  "control.commerce_backfill_checkpoints",
   "control.google_data_manager_destinations",
   "control.app_link_identities",
   "control.link_domains",
@@ -61,6 +67,9 @@ const ephemeralExpected = new Map<string, Record<Role, Privilege[]>>([
   ["ephemeral.google_conversion_deliveries", {
     openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: [], openmasu_seed: ["TRUNCATE"],
   }],
+  ["ephemeral.commerce_provider_readbacks", {
+    openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: [], openmasu_seed: ["TRUNCATE"],
+  }],
 ]);
 
 function expected(row: Row): Privilege[] {
@@ -76,6 +85,7 @@ function expected(row: Row): Privilege[] {
   if (row.role_name === "openmasu_app") {
     if (qualified === "control.google_play_order_digests") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.google_data_manager_destinations") return ["SELECT", "INSERT", "UPDATE"];
+    if (qualified === "control.commerce_backfill_checkpoints") return ["SELECT", "INSERT", "UPDATE"];
     return qualified === "control.public_postback_audits" ? ["INSERT"] : ["SELECT", "INSERT"];
   }
   if (row.role_name === "openmasu_reader") {

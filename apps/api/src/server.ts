@@ -121,6 +121,19 @@ const server = createServer(createRequestHandler({
         maximumBytes: Number(process.env.OPENMASU_GOOGLE_PLAY_RTDN_MAX_BYTES ?? String(16 * 1024)),
       }
     : undefined,
+  appleStoreNotifications: process.env.OPENMASU_APPLE_STORE_NOTIFICATIONS === "on"
+    ? {
+        pool,
+        payloadStore,
+        trustedRootFingerprints: new Set(
+          (process.env.OPENMASU_APPLE_ROOT_SHA256 ?? "")
+            .split(",")
+            .map((value) => value.replaceAll(":", "").trim().toLowerCase())
+            .filter((value) => /^[a-f0-9]{64}$/.test(value)),
+        ),
+        maximumBytes: Number(process.env.OPENMASU_APPLE_STORE_NOTIFICATION_MAX_BYTES ?? String(512 * 1024)),
+      }
+    : undefined,
   operationalMetrics,
   operationalLogWriter,
   sdk: {

@@ -175,9 +175,36 @@ async function encryptedReferences(
       WHERE ${googleConversionScope} AND delivery.request_ref LIKE 'encrypted:%'`,
     values,
   );
+  const commerceScope = scope === "tenant"
+    ? "notification.tenant_id=$1"
+    : scope === "app"
+      ? "notification.tenant_id=$1 AND notification.app_id=$2"
+      : `notification.tenant_id=$1 AND notification.app_id=$2 AND notification.subject_digest IN (
+          SELECT token.token_digest
+            FROM control.google_play_purchase_tokens AS token
+            JOIN ledger.google_play_purchase_verification_results AS result
+              ON result.tenant_id=token.tenant_id AND result.app_id=token.app_id
+             AND result.verification_id=token.verification_id
+           WHERE result.subject_record_id=ANY($3::text[])
+          UNION
+          SELECT binding.transaction_digest FROM control.commerce_purchase_bindings AS binding
+           WHERE binding.tenant_id=$1 AND binding.app_id=$2 AND binding.purchase_record_id=ANY($3::text[])
+        )`;
+  const commerce = await client.query<{ reference: string }>(
+    `SELECT DISTINCT notification.evidence_ref AS reference
+       FROM control.commerce_provider_notifications AS notification
+      WHERE ${commerceScope} AND notification.evidence_ref LIKE 'encrypted:%'
+     UNION
+     SELECT DISTINCT readback.cursor_ref AS reference
+       FROM ephemeral.commerce_provider_readbacks AS readback
+       JOIN control.commerce_provider_notifications AS notification
+         ON notification.provider=readback.provider AND notification.notification_digest=readback.notification_digest
+      WHERE ${commerceScope} AND readback.cursor_ref LIKE 'encrypted:%'`,
+    values,
+  );
   return [...new Set([
     ...raw.rows, ...inbox.rows, ...batches.rows, ...results.rows, ...lookups.rows,
-    ...googleResults.rows, ...googleLookups.rows, ...googleRtdn.rows, ...googleConversions.rows,
+    ...googleResults.rows, ...googleLookups.rows, ...googleRtdn.rows, ...googleConversions.rows, ...commerce.rows,
   ].map((row) => row.reference))].sort();
 }
 
@@ -355,6 +382,26 @@ async function reapplyOne(
       WHERE tenant_id=$1
         AND ($2='tenant' OR ($2='app' AND app_id=$3)
           OR ($2='installation' AND app_id=$3 AND verified_record_id=ANY($4::text[])))`,
+    [request.tenant_id, scope, request.app_id, records],
+  );
+  await client.query(
+    `DELETE FROM ephemeral.commerce_provider_readbacks AS readback
+      USING control.commerce_provider_notifications AS notification
+      WHERE readback.provider=notification.provider
+        AND readback.notification_digest=notification.notification_digest
+        AND readback.tenant_id=$1
+        AND ($2='tenant' OR ($2='app' AND readback.app_id=$3)
+          OR ($2='installation' AND readback.app_id=$3 AND notification.subject_digest IN (
+            SELECT token.token_digest
+              FROM control.google_play_purchase_tokens AS token
+              JOIN ledger.google_play_purchase_verification_results AS result
+                ON result.tenant_id=token.tenant_id AND result.app_id=token.app_id
+               AND result.verification_id=token.verification_id
+             WHERE result.subject_record_id=ANY($4::text[])
+            UNION
+            SELECT binding.transaction_digest FROM control.commerce_purchase_bindings AS binding
+             WHERE binding.tenant_id=$1 AND binding.app_id=$3 AND binding.purchase_record_id=ANY($4::text[])
+          )))`,
     [request.tenant_id, scope, request.app_id, records],
   );
   const metrics = await recalculateMetrics(client, request, new Set(records));

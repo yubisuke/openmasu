@@ -146,6 +146,14 @@ Implemented in synthetic code/CI: tenant-owned link hosts, public association-fi
 - Device-reported opens are forgeable evidence and do not become redirector-observed clicks.
 - Real-domain verification, store delivery, devices, propagation, reinstall behavior, Unity export, and four-week observation remain operator gates.
 
+### Post-Phase 7: Verified commerce lifecycle
+
+Implemented in synthetic code/CI: authenticated Google Play lifecycle signals and exact Orders refunds; App Store Server Notifications V2 outer/nested JWS verification; encrypted durable read-back with ascending revision cursors; provider-neutral lifecycle facts; deletion coverage; and bounded count-only observability.
+
+- Notifications remain state signals and never create money directly.
+- Provider transaction/order identifiers, purchase tokens, signed payloads, and credentials remain protected and are absent from public artifacts.
+- Live stores, credentials, delivery, quotas, root/key rotation, complete historical recovery, Apple installation-level revenue binding, entitlement, tax, and payout remain operator/product gates.
+
 ## Evidence gates
 
 A phase completes through measurable evidence, not code completion alone.

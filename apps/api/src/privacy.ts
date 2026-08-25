@@ -1,9 +1,13 @@
 import type { Pool } from "pg";
+import { createHash } from "node:crypto";
 import { sha256 } from "@openmasu/attribution-core";
 import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 
 type Any = Record<string, any>;
+function commerceInstallationDigest(tenantId: string, appId: string, installationId: string): string {
+  return createHash("sha256").update(`${tenantId}\0${appId}\0${installationId}`).digest("hex");
+}
 export type PrivacyRequestBody = {
   tenant_id: string;
   app_id: string;
@@ -248,6 +252,37 @@ export async function executePrivacyRequest(
            WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3) ORDER BY request_ref`,
           [body.tenant_id, body.deletion_scope, body.app_id],
         );
+    const commercePayloads = body.deletion_scope === "installation"
+      ? await client.query<{ reference: string }>(
+          `SELECT DISTINCT notification.evidence_ref AS reference
+             FROM control.commerce_provider_notifications AS notification
+            WHERE notification.tenant_id=$1 AND notification.app_id=$2
+              AND notification.subject_digest IN (
+                SELECT token.token_digest
+                  FROM control.google_play_purchase_tokens AS token
+                  JOIN ledger.google_play_purchase_verification_results AS result
+                    ON result.tenant_id=token.tenant_id AND result.app_id=token.app_id
+                   AND result.verification_id=token.verification_id
+                  JOIN ledger.purchase_facts AS purchase
+                    ON purchase.tenant_id=result.tenant_id AND purchase.app_id=result.app_id
+                   AND purchase.record_id=result.verified_record_id
+                 WHERE purchase.installation_id=$3
+                UNION
+                SELECT binding.transaction_digest
+                  FROM control.commerce_purchase_bindings AS binding
+                 WHERE binding.tenant_id=$1 AND binding.app_id=$2 AND binding.installation_digest=$4
+              )`,
+          [body.tenant_id, body.app_id, body.deletion_subject_ref,
+            commerceInstallationDigest(body.tenant_id, body.app_id, body.deletion_subject_ref)],
+        )
+      : await client.query<{ reference: string }>(
+          `SELECT evidence_ref AS reference FROM control.commerce_provider_notifications
+            WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3)
+          UNION
+          SELECT cursor_ref AS reference FROM ephemeral.commerce_provider_readbacks
+            WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3) AND cursor_ref IS NOT NULL`,
+          [body.tenant_id, body.deletion_scope, body.app_id],
+        );
     for (const reference of new Set([
       ...rawPayloads.rows.map((payload) => payload.raw_payload_ref),
       ...payloads.rows.map((payload) => payload.raw_query_ref),
@@ -258,6 +293,7 @@ export async function executePrivacyRequest(
       ...pendingGooglePlayPayloads.rows.map((payload) => payload.token_ref),
       ...googlePlayRtdnPayloads.rows.map((payload) => payload.evidence_ref),
       ...googleConversionPayloads.rows.map((payload) => payload.request_ref),
+      ...commercePayloads.rows.map((payload) => payload.reference),
     ])) await payloadStore.purge(reference);
     if (body.deletion_scope === "installation") {
       await client.query(
@@ -295,6 +331,37 @@ export async function executePrivacyRequest(
       await client.query(
         `DELETE FROM ephemeral.google_play_product_verifications
          WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3)`,
+        [body.tenant_id, body.deletion_scope, body.app_id],
+      );
+    }
+    if (body.deletion_scope === "installation") {
+      await client.query(
+        `DELETE FROM ephemeral.commerce_provider_readbacks AS readback
+          USING control.commerce_provider_notifications AS notification
+          WHERE readback.provider=notification.provider
+            AND readback.notification_digest=notification.notification_digest
+            AND readback.tenant_id=$1 AND readback.app_id=$2
+            AND notification.subject_digest IN (
+              SELECT token.token_digest
+                FROM control.google_play_purchase_tokens AS token
+                JOIN ledger.google_play_purchase_verification_results AS result
+                  ON result.tenant_id=token.tenant_id AND result.app_id=token.app_id
+                 AND result.verification_id=token.verification_id
+                JOIN ledger.purchase_facts AS purchase
+                  ON purchase.tenant_id=result.tenant_id AND purchase.app_id=result.app_id
+                 AND purchase.record_id=result.verified_record_id
+               WHERE purchase.installation_id=$3
+              UNION
+              SELECT binding.transaction_digest FROM control.commerce_purchase_bindings AS binding
+               WHERE binding.tenant_id=$1 AND binding.app_id=$2 AND binding.installation_digest=$4
+            )`,
+        [body.tenant_id, body.app_id, body.deletion_subject_ref,
+          commerceInstallationDigest(body.tenant_id, body.app_id, body.deletion_subject_ref)],
+      );
+    } else {
+      await client.query(
+        `DELETE FROM ephemeral.commerce_provider_readbacks
+          WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3)`,
         [body.tenant_id, body.deletion_scope, body.app_id],
       );
     }
