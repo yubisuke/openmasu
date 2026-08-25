@@ -1,9 +1,13 @@
 import type { Pool } from "pg";
+import { createHash } from "node:crypto";
 import { sha256 } from "@openmasu/attribution-core";
 import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 
 type Any = Record<string, any>;
+function commerceInstallationDigest(tenantId: string, appId: string, installationId: string): string {
+  return createHash("sha256").update(`${tenantId}\0${appId}\0${installationId}`).digest("hex");
+}
 export type PrivacyRequestBody = {
   tenant_id: string;
   app_id: string;
@@ -266,9 +270,10 @@ export async function executePrivacyRequest(
                 UNION
                 SELECT binding.transaction_digest
                   FROM control.commerce_purchase_bindings AS binding
-                 WHERE binding.tenant_id=$1 AND binding.app_id=$2 AND binding.installation_id=$3
+                 WHERE binding.tenant_id=$1 AND binding.app_id=$2 AND binding.installation_digest=$4
               )`,
-          [body.tenant_id, body.app_id, body.deletion_subject_ref],
+          [body.tenant_id, body.app_id, body.deletion_subject_ref,
+            commerceInstallationDigest(body.tenant_id, body.app_id, body.deletion_subject_ref)],
         )
       : await client.query<{ reference: string }>(
           `SELECT evidence_ref AS reference FROM control.commerce_provider_notifications
@@ -348,9 +353,10 @@ export async function executePrivacyRequest(
                WHERE purchase.installation_id=$3
               UNION
               SELECT binding.transaction_digest FROM control.commerce_purchase_bindings AS binding
-               WHERE binding.tenant_id=$1 AND binding.app_id=$2 AND binding.installation_id=$3
+               WHERE binding.tenant_id=$1 AND binding.app_id=$2 AND binding.installation_digest=$4
             )`,
-        [body.tenant_id, body.app_id, body.deletion_subject_ref],
+        [body.tenant_id, body.app_id, body.deletion_subject_ref,
+          commerceInstallationDigest(body.tenant_id, body.app_id, body.deletion_subject_ref)],
       );
     } else {
       await client.query(

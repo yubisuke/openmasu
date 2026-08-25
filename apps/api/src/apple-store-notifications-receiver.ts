@@ -74,15 +74,17 @@ export async function receiveAppleStoreNotification(
     catch { throw new AppleStoreNotificationError(400, "apple_store_signed_payload_invalid"); }
     const untrustedData = object(untrusted.data, "apple_store_data");
     const bundleId = string(untrustedData.bundleId, "apple_store_bundle_id", 255);
-    const appAppleId = Number(untrustedData.appAppleId);
     const environment = untrustedData.environment;
-    if (!Number.isSafeInteger(appAppleId) || appAppleId <= 0 || !new Set(["Sandbox", "Production"]).has(String(environment))) {
+    const appAppleId = untrustedData.appAppleId === undefined ? undefined : Number(untrustedData.appAppleId);
+    if (!new Set(["Sandbox", "Production"]).has(String(environment))
+      || (environment === "Production" && (!Number.isSafeInteger(appAppleId) || Number(appAppleId) <= 0))
+      || (appAppleId !== undefined && (!Number.isSafeInteger(appAppleId) || appAppleId <= 0))) {
       throw new AppleStoreNotificationError(400, "apple_store_scope_invalid");
     }
     const resolved = await dependencies.pool.query<{ tenant_id: string; app_id: string }>(
-      "SELECT tenant_id, app_id FROM control.resolve_apple_store_registration($1,$2)", [bundleId, appAppleId],
+      "SELECT tenant_id, app_id FROM control.resolve_apple_store_registration($1,$2)", [bundleId, appAppleId ?? null],
     );
-    const identity = resolved.rows[0];
+    const identity = resolved.rows.length === 1 ? resolved.rows[0] : undefined;
     if (!identity) {
       // Keep the public provider endpoint non-enumerating.
       empty(response, 200);
@@ -99,7 +101,7 @@ export async function receiveAppleStoreNotification(
     try {
       normalized = normalizeAppleNotification(compact, verifySignedData, {
         bundleId,
-        appAppleId,
+        ...(appAppleId === undefined ? {} : { appAppleId }),
         environment: environment as "Sandbox" | "Production",
       });
     } catch {

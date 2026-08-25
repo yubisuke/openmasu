@@ -11,6 +11,7 @@ CREATE TABLE control.commerce_provider_notifications (
   occurred_at control.canonical_timestamp NOT NULL,
   received_at control.canonical_timestamp NOT NULL,
   PRIMARY KEY (provider, notification_digest),
+  UNIQUE (provider, notification_digest, tenant_id, app_id),
   FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id)
 );
 
@@ -26,8 +27,8 @@ CREATE TABLE ephemeral.commerce_provider_readbacks (
   next_attempt_at timestamptz NOT NULL,
   requested_at control.canonical_timestamp NOT NULL,
   last_status integer CHECK (last_status IS NULL OR last_status BETWEEN 100 AND 599),
-  FOREIGN KEY (provider, notification_digest)
-    REFERENCES control.commerce_provider_notifications (provider, notification_digest),
+  FOREIGN KEY (provider, notification_digest, tenant_id, app_id)
+    REFERENCES control.commerce_provider_notifications (provider, notification_digest, tenant_id, app_id),
   FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id),
   UNIQUE (provider, tenant_id, app_id, notification_digest, operation)
 );
@@ -38,6 +39,7 @@ CREATE TABLE ledger.commerce_lifecycle_facts (
   tenant_id control.identifier NOT NULL,
   app_id control.identifier NOT NULL,
   notification_digest text NOT NULL,
+  provider_event_digest text NOT NULL CHECK (provider_event_digest ~ '^[a-f0-9]{64}$'),
   event_kind text NOT NULL CHECK (event_kind ~ '^[a-z][a-z0-9_]{2,127}$'),
   subject_digest text CHECK (subject_digest IS NULL OR subject_digest ~ '^[a-f0-9]{64}$'),
   transaction_digest text CHECK (transaction_digest IS NULL OR transaction_digest ~ '^[a-f0-9]{64}$'),
@@ -48,8 +50,8 @@ CREATE TABLE ledger.commerce_lifecycle_facts (
   effective_at control.canonical_timestamp NOT NULL,
   recorded_at control.canonical_timestamp NOT NULL,
   artifact jsonb NOT NULL,
-  FOREIGN KEY (provider, notification_digest)
-    REFERENCES control.commerce_provider_notifications (provider, notification_digest),
+  FOREIGN KEY (provider, notification_digest, tenant_id, app_id)
+    REFERENCES control.commerce_provider_notifications (provider, notification_digest, tenant_id, app_id),
   FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id),
   UNIQUE (provider, notification_digest, event_kind, transaction_digest)
 );
@@ -61,7 +63,7 @@ CREATE TABLE control.commerce_purchase_bindings (
   transaction_digest text NOT NULL CHECK (transaction_digest ~ '^[a-f0-9]{64}$'),
   original_transaction_digest text CHECK (original_transaction_digest IS NULL OR original_transaction_digest ~ '^[a-f0-9]{64}$'),
   purchase_record_id control.identifier NOT NULL,
-  installation_id text NOT NULL,
+  installation_digest text NOT NULL CHECK (installation_digest ~ '^[a-f0-9]{64}$'),
   amount_unscaled text NOT NULL CHECK (amount_unscaled ~ '^[0-9]+$'),
   amount_scale integer NOT NULL CHECK (amount_scale BETWEEN 0 AND 18),
   currency text NOT NULL CHECK (currency ~ '^[A-Z]{3}$'),
@@ -97,8 +99,9 @@ AS $$
   SELECT registration.tenant_id, registration.app_id
     FROM control.apple_app_registrations AS registration
    WHERE registration.apple_bundle_id=_bundle_id
-     AND registration.apple_app_adam_id=_app_apple_id
-   LIMIT 1
+     AND (_app_apple_id IS NULL OR registration.apple_app_adam_id=_app_apple_id)
+   ORDER BY registration.tenant_id, registration.app_id
+   LIMIT 2
 $$;
 
 CREATE INDEX commerce_lifecycle_scope_time_idx
@@ -107,9 +110,7 @@ CREATE INDEX commerce_lifecycle_subject_idx
   ON ledger.commerce_lifecycle_facts (tenant_id, app_id, subject_digest)
   WHERE subject_digest IS NOT NULL;
 CREATE UNIQUE INDEX commerce_lifecycle_idempotency_idx
-  ON ledger.commerce_lifecycle_facts (
-    provider, notification_digest, event_kind, COALESCE(transaction_digest, '')
-  );
+  ON ledger.commerce_lifecycle_facts (provider, event_kind, provider_event_digest);
 CREATE INDEX commerce_readbacks_due_idx
   ON ephemeral.commerce_provider_readbacks (tenant_id, next_attempt_at, readback_id);
 

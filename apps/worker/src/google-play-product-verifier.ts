@@ -513,9 +513,10 @@ async function complete(
         await client.query(
           `INSERT INTO control.commerce_purchase_bindings (
              provider, tenant_id, app_id, transaction_digest, original_transaction_digest,
-             purchase_record_id, installation_id, amount_unscaled, amount_scale, currency, quantity, bound_at
+             purchase_record_id, installation_digest, amount_unscaled, amount_scale, currency, quantity, bound_at
            ) VALUES ('google_play',$1,$2,$3,$3,$4,$5,$6,$7,$8,1,$9) ON CONFLICT DO NOTHING`,
-          [row.tenant_id, row.app_id, orderDigest, row.verified_record_id, claim.installationId,
+          [row.tenant_id, row.app_id, orderDigest, row.verified_record_id,
+            sha256(`${row.tenant_id}\0${row.app_id}\0${claim.installationId}`),
             money.amountUnscaled, money.amountScale, money.currency, now.toISOString()],
         );
       }

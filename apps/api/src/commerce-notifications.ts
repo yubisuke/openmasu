@@ -47,12 +47,12 @@ export async function recordCommerceNotification(input: {
       };
       await client.query(
         `INSERT INTO ledger.commerce_lifecycle_facts (
-           lifecycle_fact_id, provider, tenant_id, app_id, notification_digest, event_kind,
+           lifecycle_fact_id, provider, tenant_id, app_id, notification_digest, provider_event_digest, event_kind,
            subject_digest, transaction_digest, original_transaction_digest, subscription_state,
            financial_effect, environment, effective_at, recorded_at, artifact
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)`,
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb)`,
         [artifact.lifecycle_fact_id, input.event.provider, input.tenantId, input.appId, input.notificationDigest,
-          input.event.eventKind, input.subjectDigest ?? null, input.event.transactionDigest ?? null,
+          input.event.externalEventDigest, input.event.eventKind, input.subjectDigest ?? null, input.event.transactionDigest ?? null,
           input.event.originalTransactionDigest ?? null, input.event.subscriptionState ?? null,
           input.event.financialEffect, input.event.environment ?? null, input.event.effectiveAt,
           input.receivedAt.toISOString(), JSON.stringify(artifact)],

@@ -108,9 +108,9 @@ export async function enqueueCommerceBackfill(input: {
         financial_effect: "none", effective_at: input.options.windowStart, recorded_at: now.toISOString() };
       await client.query(
         `INSERT INTO ledger.commerce_lifecycle_facts (
-           lifecycle_fact_id, provider, tenant_id, app_id, notification_digest, event_kind,
+           lifecycle_fact_id, provider, tenant_id, app_id, notification_digest, provider_event_digest, event_kind,
            subject_digest, financial_effect, effective_at, recorded_at, artifact
-         ) VALUES ($1,$2,$3,$4,$5,'operator_backfill_seed',$6,'none',$7,$8,$9::jsonb)`,
+         ) VALUES ($1,$2,$3,$4,$5,$5,'operator_backfill_seed',$6,'none',$7,$8,$9::jsonb)`,
         [lifecycleFactId, input.options.provider, input.options.tenantId, input.options.appId,
           notificationDigest, sha256(body), input.options.windowStart, now.toISOString(), JSON.stringify(artifact)],
       );
@@ -152,4 +152,3 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
     console.log(JSON.stringify({ queued: result.queued, notification_digest: result.notificationDigest }));
   } finally { await pool.end(); }
 }
-

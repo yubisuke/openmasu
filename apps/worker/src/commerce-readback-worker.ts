@@ -37,7 +37,7 @@ export type AppleCommerceReadbackClient = (input: {
   readonly transactionId: string;
   readonly revision?: string;
   readonly bundleId: string;
-  readonly appAppleId: number;
+  readonly appAppleId?: number;
   readonly environment: "Sandbox" | "Production";
 }) => Promise<CommerceReadbackResponse>;
 
@@ -109,6 +109,7 @@ function string(value: unknown, label: string, maximum = 64 * 1024): string {
 
 async function appendLifecycleFact(pool: Pool, row: ReadbackRow, input: {
   readonly eventKind: string;
+  readonly providerEventDigest?: string;
   readonly transactionDigest?: string;
   readonly originalTransactionDigest?: string;
   readonly subscriptionState?: string;
@@ -120,22 +121,35 @@ async function appendLifecycleFact(pool: Pool, row: ReadbackRow, input: {
   const artifact = {
     lifecycle_fact_id: uuidV7(input.now.getTime()), tenant_id: row.tenant_id, app_id: row.app_id,
     provider: row.provider, event_kind: input.eventKind, transaction_digest: input.transactionDigest,
+    provider_event_digest: input.providerEventDigest ?? row.notification_digest,
     original_transaction_digest: input.originalTransactionDigest, subscription_state: input.subscriptionState,
     financial_effect: input.financialEffect, environment: input.environment,
     effective_at: input.effectiveAt, recorded_at: input.now.toISOString(),
   };
   await withTenant(pool, row.tenant_id, async (client) => client.query(
     `INSERT INTO ledger.commerce_lifecycle_facts (
-       lifecycle_fact_id, provider, tenant_id, app_id, notification_digest, event_kind,
+       lifecycle_fact_id, provider, tenant_id, app_id, notification_digest, provider_event_digest, event_kind,
        subject_digest, transaction_digest, original_transaction_digest, subscription_state,
        financial_effect, environment, effective_at, recorded_at, artifact
-     ) VALUES ($1,$2,$3,$4,$5,$6,NULL,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,NULL,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)
      ON CONFLICT DO NOTHING`,
     [artifact.lifecycle_fact_id, row.provider, row.tenant_id, row.app_id, row.notification_digest,
-      input.eventKind, input.transactionDigest ?? null, input.originalTransactionDigest ?? null,
+      input.providerEventDigest ?? row.notification_digest, input.eventKind,
+      input.transactionDigest ?? null, input.originalTransactionDigest ?? null,
       input.subscriptionState ?? null, input.financialEffect, input.environment ?? null,
       input.effectiveAt, input.now.toISOString(), JSON.stringify(artifact)],
   ));
+}
+
+async function recordReadbackFailure(pool: Pool, row: ReadbackRow, now: Date): Promise<void> {
+  await appendLifecycleFact(pool, row, {
+    eventKind: "readback_failed",
+    providerEventDigest: sha256(`${row.notification_digest}\0${row.operation}\0failed`),
+    subscriptionState: "unavailable",
+    financialEffect: "none",
+    effectiveAt: now.toISOString(),
+    now,
+  });
 }
 
 async function defer(pool: Pool, row: ReadbackRow, now: Date, status?: number): Promise<void> {
@@ -146,6 +160,16 @@ async function defer(pool: Pool, row: ReadbackRow, now: Date, status?: number): 
       WHERE tenant_id=$1 AND app_id=$2 AND readback_id=$3`,
     [row.tenant_id, row.app_id, row.readback_id, now.toISOString(), String(delaySeconds), status ?? null],
   ));
+}
+
+async function retryOrFail(pool: Pool, row: ReadbackRow, now: Date, status?: number): Promise<"deferred" | "failed"> {
+  if (row.attempts < 19) {
+    await defer(pool, row, now, status);
+    return "deferred";
+  }
+  await recordReadbackFailure(pool, row, now);
+  await finish(pool, row, false, now);
+  return "failed";
 }
 
 function checkpointStream(row: ReadbackRow): string {
@@ -198,18 +222,23 @@ export async function processCommerceReadbacks(
     try {
       const raw = await payloadStore.read(row.evidence_ref);
       if (row.provider === "google_play") {
-        if (!options.googleClient) { await defer(pool, row, now); counts.deferred += 1; continue; }
+        if (!options.googleClient) { counts[await retryOrFail(pool, row, now)] += 1; continue; }
         const notification = parse(raw, "google_notification");
         const packageName = string(notification.packageName, "google_package", 255);
         if (row.operation === "google_subscription") {
           const subscription = object(notification.subscriptionNotification, "google_subscription");
           const purchaseToken = string(subscription.purchaseToken, "google_purchase_token");
           const response = await options.googleClient({ operation: "subscription", packageName, purchaseToken });
-          if (response.status === 429 || response.status >= 500) { await defer(pool, row, now, response.status); counts.deferred += 1; continue; }
-          if (response.status !== 200) { await finish(pool, row, false, now); counts.failed += 1; continue; }
+          if (response.status === 429 || response.status >= 500) {
+            counts[await retryOrFail(pool, row, now, response.status)] += 1; continue;
+          }
+          if (response.status !== 200) {
+            await recordReadbackFailure(pool, row, now); await finish(pool, row, false, now); counts.failed += 1; continue;
+          }
           const state = string(parse(response.body, "google_subscription_response").subscriptionState, "google_subscription_state", 128);
           await appendLifecycleFact(pool, row, {
             eventKind: "subscription_state_verified", subscriptionState: state.toLowerCase(), financialEffect: "none",
+            providerEventDigest: sha256(`${row.notification_digest}\0${state.toLowerCase()}`),
             effectiveAt: now.toISOString(), now,
           });
           await finish(pool, row, true, now); counts.processed += 1; continue;
@@ -217,35 +246,48 @@ export async function processCommerceReadbacks(
         const voided = object(notification.voidedPurchaseNotification, "google_voided_purchase");
         const orderId = string(voided.orderId, "google_order_id", 255);
         const response = await options.googleClient({ operation: "order", packageName, orderId });
-        if (response.status === 429 || response.status >= 500) { await defer(pool, row, now, response.status); counts.deferred += 1; continue; }
-        if (response.status !== 200) { await finish(pool, row, false, now); counts.failed += 1; continue; }
+        if (response.status === 429 || response.status >= 500) {
+          counts[await retryOrFail(pool, row, now, response.status)] += 1; continue;
+        }
+        if (response.status !== 200) {
+          await recordReadbackFailure(pool, row, now); await finish(pool, row, false, now); counts.failed += 1; continue;
+        }
         const orderDigest = sha256(orderId);
         const refundEvents = normalizeGoogleOrderRefunds(response.body, orderDigest);
         let allPersisted = refundEvents.length > 0;
+        let invalidRefund = false;
         for (const event of refundEvents) {
           const persisted = await appendVerifiedGoogleRefundForOrder(pool, row, orderDigest, event, now);
-          allPersisted &&= persisted;
-          if (persisted) await appendLifecycleFact(pool, row, {
-            eventKind: "refund_verified", transactionDigest: orderDigest, financialEffect: "refund",
+          if (persisted === "invalid") { invalidRefund = true; allPersisted = false; break; }
+          allPersisted &&= persisted === "persisted";
+          if (persisted === "persisted") await appendLifecycleFact(pool, row, {
+            eventKind: "refund_verified", providerEventDigest: event.eventDigest,
+            transactionDigest: orderDigest, financialEffect: "refund",
             effectiveAt: event.eventTime, now,
           });
         }
-        if (!allPersisted) { await defer(pool, row, now); counts.deferred += 1; continue; }
+        if (invalidRefund) {
+          await recordReadbackFailure(pool, row, now); await finish(pool, row, false, now); counts.failed += 1; continue;
+        }
+        if (!allPersisted) { counts[await retryOrFail(pool, row, now)] += 1; continue; }
         await finish(pool, row, true, now); counts.processed += 1; continue;
       }
-      if (!options.appleClient || !options.verifyAppleSignedData) { await defer(pool, row, now); counts.deferred += 1; continue; }
+      if (!options.appleClient || !options.verifyAppleSignedData) { counts[await retryOrFail(pool, row, now)] += 1; continue; }
       const envelope = parse(raw, "apple_envelope");
       const compact = string(envelope.signedPayload, "apple_signed_payload");
       const untrusted = decodeCompactJwsPayloadUnverified(compact);
       const data = object(untrusted.data, "apple_data");
       const bundleId = string(data.bundleId, "apple_bundle", 255);
-      const appAppleId = Number(data.appAppleId);
       const environment = data.environment as "Sandbox" | "Production";
-      if (!Number.isSafeInteger(appAppleId) || appAppleId <= 0
-        || !new Set(["Sandbox", "Production"]).has(String(environment))) {
+      const appAppleId = data.appAppleId === undefined ? undefined : Number(data.appAppleId);
+      if (!new Set(["Sandbox", "Production"]).has(String(environment))
+        || (environment === "Production" && (!Number.isSafeInteger(appAppleId) || Number(appAppleId) <= 0))
+        || (appAppleId !== undefined && (!Number.isSafeInteger(appAppleId) || appAppleId <= 0))) {
         throw new Error("apple_history_scope_invalid");
       }
-      const normalized = normalizeAppleNotification(compact, options.verifyAppleSignedData, { bundleId, appAppleId, environment });
+      const normalized = normalizeAppleNotification(compact, options.verifyAppleSignedData, {
+        bundleId, environment, ...(appAppleId === undefined ? {} : { appAppleId }),
+      });
       const transactionId = string(normalized.transaction?.originalTransactionId ?? normalized.transaction?.transactionId, "apple_transaction_id", 128);
       let revision: string | undefined;
       if (row.cursor_ref) {
@@ -254,10 +296,15 @@ export async function processCommerceReadbacks(
       }
       const response = await options.appleClient({
         operation: row.operation === "apple_refund_history" ? "refund_history" : "transaction_history",
-        transactionId, ...(revision ? { revision } : {}), bundleId, appAppleId, environment,
+        transactionId, ...(revision ? { revision } : {}), bundleId,
+        ...(appAppleId === undefined ? {} : { appAppleId }), environment,
       });
-      if (response.status === 429 || response.status >= 500) { await defer(pool, row, now, response.status); counts.deferred += 1; continue; }
-      if (response.status !== 200) { await finish(pool, row, false, now); counts.failed += 1; continue; }
+      if (response.status === 429 || response.status >= 500) {
+        counts[await retryOrFail(pool, row, now, response.status)] += 1; continue;
+      }
+      if (response.status !== 200) {
+        await recordReadbackFailure(pool, row, now); await finish(pool, row, false, now); counts.failed += 1; continue;
+      }
       const page = parse(response.body, "apple_history");
       if (!Array.isArray(page.signedTransactions)) throw new Error("apple_history_transactions_invalid");
       for (const signed of page.signedTransactions) {
@@ -266,10 +313,15 @@ export async function processCommerceReadbacks(
         const transactionDigest = sha256(string(transaction.transactionId, "apple_transaction_id", 128));
         const originalDigest = sha256(string(transaction.originalTransactionId, "apple_original_transaction_id", 128));
         const revoked = transaction.revocationDate !== undefined;
+        const financialEffect = normalized.event.financialEffect === "refund_reversal"
+          ? "refund_reversal" as const
+          : revoked ? "refund" as const : "purchase" as const;
         await appendLifecycleFact(pool, row, {
-          eventKind: revoked ? "refund_history_verified" : "transaction_history_verified",
+          eventKind: financialEffect === "refund_reversal" ? "refund_reversal_verified"
+            : revoked ? "refund_history_verified" : "transaction_history_verified",
+          providerEventDigest: transactionDigest,
           transactionDigest, originalTransactionDigest: originalDigest,
-          financialEffect: revoked ? "refund" : "purchase", environment,
+          financialEffect, environment,
           effectiveAt: new Date(Number(revoked ? transaction.revocationDate : transaction.purchaseDate)).toISOString(), now,
         });
       }
@@ -296,8 +348,7 @@ export async function processCommerceReadbacks(
       }
       counts.processed += 1;
     } catch {
-      if (row.attempts < 19) { await defer(pool, row, now); counts.deferred += 1; }
-      else { await finish(pool, row, false, now); counts.failed += 1; }
+      counts[await retryOrFail(pool, row, now)] += 1;
     }
   }
   return counts;
@@ -309,11 +360,14 @@ async function appendVerifiedGoogleRefundForOrder(
   orderDigest: string,
   event: { readonly eventDigest: string; readonly eventTime: string; readonly amountUnscaled: string; readonly amountScale: number; readonly currency: string },
   now: Date,
-): Promise<boolean> {
-  const binding = await withTenant(pool, row.tenant_id, async (client) => (await client.query<{
-    purchase_record_id: string; installation_id: string; transaction_id: string; currency: string;
-  }>(
-    `SELECT binding.purchase_record_id, binding.installation_id, purchase.transaction_id, binding.currency
+): Promise<"persisted" | "missing" | "invalid"> {
+  const resolved = await withTenant(pool, row.tenant_id, async (client) => {
+    const binding = (await client.query<{
+      purchase_record_id: string; installation_id: string; transaction_id: string; currency: string;
+      amount_unscaled: string; amount_scale: number;
+    }>(
+    `SELECT binding.purchase_record_id, purchase.installation_id, purchase.transaction_id,
+            binding.currency, binding.amount_unscaled, binding.amount_scale
        FROM control.commerce_purchase_bindings AS binding
        JOIN ledger.purchase_facts AS purchase
          ON purchase.tenant_id=binding.tenant_id AND purchase.app_id=binding.app_id
@@ -321,9 +375,35 @@ async function appendVerifiedGoogleRefundForOrder(
       WHERE binding.provider='google_play' AND binding.tenant_id=$1 AND binding.app_id=$2
         AND binding.transaction_digest=$3`,
     [row.tenant_id, row.app_id, orderDigest],
-  )).rows[0]);
-  if (!binding || binding.currency !== event.currency) return false;
-  return appendVerifiedGoogleRefundWithBinding(pool, row, binding, event, now);
+  )).rows[0];
+    if (!binding) return undefined;
+    const prior = (await client.query<{ transaction_id: string; amount_unscaled: string; amount_scale: number }>(
+      `SELECT transaction_id, amount_unscaled, amount_scale FROM ledger.refund_facts
+        WHERE tenant_id=$1 AND app_id=$2 AND correction_target_record_id=$3`,
+      [row.tenant_id, row.app_id, binding.purchase_record_id],
+    )).rows;
+    return { binding, prior };
+  });
+  if (!resolved) return "missing";
+  const refundTransactionId = `refund:google-play:${event.eventDigest.slice(0, 48)}`;
+  if (resolved.prior.some((value) => value.transaction_id === refundTransactionId)) return "persisted";
+  if (resolved.binding.currency !== event.currency) return "invalid";
+  const toBindingScale = (amount: string, scale: number): bigint | undefined => {
+    const value = BigInt(amount);
+    if (scale <= resolved.binding.amount_scale) return value * (10n ** BigInt(resolved.binding.amount_scale - scale));
+    const divisor = 10n ** BigInt(scale - resolved.binding.amount_scale);
+    return value % divisor === 0n ? value / divisor : undefined;
+  };
+  let refunded = 0n;
+  for (const prior of resolved.prior) {
+    const value = toBindingScale(prior.amount_unscaled, prior.amount_scale);
+    if (value === undefined) return "invalid";
+    refunded += value;
+  }
+  const next = toBindingScale(event.amountUnscaled, event.amountScale);
+  if (next === undefined || refunded + next > BigInt(resolved.binding.amount_unscaled)) return "invalid";
+  return await appendVerifiedGoogleRefundWithBinding(pool, row, resolved.binding, event, now)
+    ? "persisted" : "missing";
 }
 
 async function appendVerifiedGoogleRefundWithBinding(
