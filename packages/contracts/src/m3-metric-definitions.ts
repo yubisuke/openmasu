@@ -1,8 +1,9 @@
 import type { OpenMasuMetricDefinitionV04 } from "./generated/contract-types.js";
+import { nonFraudBundleHash } from "./rule-bundle-provenance.js";
 
 const CONTRACT_VERSION = "0.3.1";
 const RULE_BUNDLE_ID = "metric-stage-m3";
-const RULE_BUNDLE_HASH = "3".repeat(64);
+const RULE_BUNDLE_HASH = nonFraudBundleHash("metric-stage-m3");
 
 function dailyEventCount(
   metricName: string,

@@ -13,6 +13,7 @@ import {
 } from "@openmasu/fraud-rules";
 import {
   REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
+  nonFraudBundleHash,
   type OpenMasuEvaluationOutputV04 as EvaluationOutput,
 } from "@openmasu/contracts";
 
@@ -37,10 +38,23 @@ type LifecycleStatus = EvidenceRef["lifecycle_status"];
 const CONTRACT_VERSION = "0.4.0" as const;
 // Rule bundles and metric definitions retain their independent v0.3 identities.
 const REFERENCE_RULE_VERSION = "0.3.0" as const;
-const HASH = "0".repeat(64);
 const FRAUD_BUNDLE: FraudBundle = DEFAULT_FRAUD_BUNDLE;
 const FRAUD_BUNDLE_HASH = fraudBundleHash(FRAUD_BUNDLE);
 const DAY_MS = 86_400_000;
+
+function boundNonFraudBundle(server: Any, id: "attribution-default" | "apple-postback-default"): {
+  rule_bundle_id: string; rule_bundle_version: string; rule_bundle_hash: string;
+} {
+  const expectedVersion = REFERENCE_RULE_VERSION;
+  const expectedHash = nonFraudBundleHash(id);
+  const bound = server.non_fraud_rule_bundles?.[id];
+  if (!bound) return { rule_bundle_id: id, rule_bundle_version: expectedVersion, rule_bundle_hash: expectedHash };
+  if (bound.rule_bundle_id !== id || bound.rule_bundle_version !== expectedVersion
+    || bound.rule_bundle_hash !== expectedHash || bound.definition_digest !== expectedHash) {
+    throw new Error("non_fraud_rule_bundle_binding_mismatch");
+  }
+  return { rule_bundle_id: id, rule_bundle_version: expectedVersion, rule_bundle_hash: expectedHash };
+}
 
 export function jcs(value: unknown): string {
   return canonicalize(value);
@@ -777,6 +791,7 @@ function makeAttribution(
 ): Attribution {
   const { server, record: install } = attempt;
   const payload = install.payload;
+  const attributionBundle = boundNonFraudBundle(server, "attribution-default");
   const evidence = (ref: string): EvidenceRef => ({
     tenant_id: server.tenant_id,
     app_id: server.app_id,
@@ -796,9 +811,7 @@ function makeAttribution(
     decided_at: server.received_at,
     input_cutoff_at: server.received_at,
     finality: "final" as const,
-    rule_bundle_id: "attribution-default",
-    rule_bundle_version: REFERENCE_RULE_VERSION,
-    rule_bundle_hash: HASH,
+    ...attributionBundle,
   } satisfies Omit<Attribution, "status" | "method" | "model" | "reason_code">;
   const result = (
     status: Attribution["status"],
@@ -915,6 +928,7 @@ function makeAggregatePostbackAttribution(
 ): Attribution {
   const { server, record } = attempt;
   const payload = record.payload;
+  const postbackBundle = boundNonFraudBundle(server, "apple-postback-default");
   const isSkan = record.event_name === "skan_postback";
   const method: Attribution["method"] = isSkan ? "skadnetwork" : "adattributionkit";
   const evidence: EvidenceRef = {
@@ -955,9 +969,7 @@ function makeAggregatePostbackAttribution(
     decided_at: server.received_at,
     input_cutoff_at: server.received_at,
     finality: "final",
-    rule_bundle_id: "apple-postback-default",
-    rule_bundle_version: REFERENCE_RULE_VERSION,
-    rule_bundle_hash: HASH,
+    ...postbackBundle,
   };
 }
 
@@ -967,6 +979,7 @@ function makeDeepLinkAttribution(
 ): Attribution {
   const { server, record } = attempt;
   const resolution = server.deep_link_resolution ?? { status: "unknown" };
+  const attributionBundle = boundNonFraudBundle(server, "attribution-default");
   const reusedInstallClick = record.payload.open_source === "android_deferred_referrer"
     && resolution.install_attribution_click_id === record.payload.click_id;
   const status: Attribution["status"] = resolution.status === "active" && !reusedInstallClick
@@ -998,9 +1011,7 @@ function makeDeepLinkAttribution(
     decided_at: server.received_at,
     input_cutoff_at: server.received_at,
     finality: "final",
-    rule_bundle_id: "attribution-default",
-    rule_bundle_version: REFERENCE_RULE_VERSION,
-    rule_bundle_hash: HASH,
+    ...attributionBundle,
   };
 }
 
@@ -1057,7 +1068,8 @@ function validateMetricDefinitionSeries(definition: Any): void {
   if (definition.definition?.numerator === "purchase_net_revenue" || purchaseNetDays.has(definition.metric_name)) {
     const expectedDay = purchaseNetDays.get(definition.metric_name);
     const expectedVersion = expectedDay === 30 || expectedDay === 90 ? "0.4.9" : "0.4.8";
-    const expectedHash = expectedVersion === "0.4.9" ? "9".repeat(64) : "8".repeat(64);
+    const expectedHash = expectedVersion === "0.4.9"
+      ? nonFraudBundleHash("metric-total-net") : nonFraudBundleHash("metric-purchase-net");
     if (expectedDay === undefined || definition.metric_definition_version !== expectedVersion ||
         definition.anchor_event !== "install" || definition.aggregation_time_zone !== "UTC" ||
         definition.value_type !== "money" || definition.currency !== "USD" || definition.amount_scale !== 6 ||
@@ -1076,7 +1088,8 @@ function validateMetricDefinitionSeries(definition: Any): void {
         (expected.valueType === "money" && (definition.currency !== "USD" || definition.amount_scale !== 6)) ||
         (expected.valueType === "ratio" && definition.ratio_scale !== 6) ||
         definition.rule_bundle_id !== "metric-total-net" ||
-        definition.rule_bundle_version !== "0.4.9" || definition.rule_bundle_hash !== "9".repeat(64) ||
+        definition.rule_bundle_version !== "0.4.9"
+        || definition.rule_bundle_hash !== nonFraudBundleHash("metric-total-net") ||
         definition.definition?.calculation !== expected.calculation ||
         definition.definition?.numerator !== "total_net_revenue" ||
         definition.definition?.window?.type !== "elapsed" || definition.definition?.window?.day !== expected.day ||

@@ -29,6 +29,7 @@ import { encodeMetricReport, metricReport } from "./reporting.js";
 import { ensureSdkKeys, signSdkRequest } from "./sdk-auth.js";
 import { createTrackingLink } from "./tracking-links.js";
 import { verifyCompactJws } from "@openmasu/commerce-lifecycle";
+import { nonFraudBundleHash } from "@openmasu/contracts";
 
 const run = randomBytes(6).toString("hex");
 const tenantId = `tenant-m2a-${run}`;
@@ -1756,7 +1757,8 @@ describe("M2a signed SDK ingestion", () => {
       metric_definition_version: "0.3.0", input_snapshot_id: "1".repeat(64),
       input_received_at_watermark: "2026-08-19T02:00:00.000Z", input_ledger_position: "2026-08-19T02:00:00.000Z|record:before-delete",
       computed_at: "2026-08-19T02:01:00.000Z", data_freshness: "complete", aggregation_time_zone: "UTC",
-      rule_bundle_id: "metric-default", rule_bundle_version: "0.3.0", rule_bundle_hash: "0".repeat(64),
+      rule_bundle_id: "metric-default", rule_bundle_version: "0.3.0",
+      rule_bundle_hash: nonFraudBundleHash("metric-default"),
       rounding_mode: "half_even", reproducibility_status: "fully_reproducible", value_type: "money",
       value_state: "present", value_unscaled: "1", amount_scale: 6, currency: "USD",
     };

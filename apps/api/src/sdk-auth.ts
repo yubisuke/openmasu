@@ -204,7 +204,7 @@ export async function recordSdkAudit(
     actorType: "sdk_key" | "sdk_installation";
     actorRef: string;
     action: string;
-    targetScope: "sdk_key" | "installation" | "ingest_batch" | "privacy_request";
+    targetScope: "sdk_key" | "installation" | "ingest_batch" | "privacy_request" | "record";
     targetRef: string;
     requestDigest: string;
     outcome: "succeeded" | "failed";

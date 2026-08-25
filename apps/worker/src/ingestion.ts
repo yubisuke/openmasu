@@ -25,6 +25,12 @@ import {
   serverBundleContext,
 } from "./fraud-bundle-runtime.js";
 import { buildDeepLinkAuditEvidence } from "./deep-link-audit.js";
+import {
+  assertNonFraudArtifactBinding,
+  nonFraudServerContext,
+  resolveNonFraudBundle,
+  type BoundNonFraudBundle,
+} from "./non-fraud-bundle-runtime.js";
 
 type Any = Record<string, any>;
 export const parityKinds = [
@@ -718,7 +724,12 @@ async function persistPrivacyTombstone(appPool: Pool, artifact: Any): Promise<An
   ));
 }
 
-async function persistAttribution(appPool: Pool, artifact: Any): Promise<Any> {
+async function persistAttribution(
+  appPool: Pool,
+  artifact: Any,
+  expectedBinding?: BoundNonFraudBundle,
+): Promise<Any> {
+  if (expectedBinding) assertNonFraudArtifactBinding(artifact, expectedBinding);
   return withTenant(appPool, artifact.tenant_id, (client) => storedArtifact(
     client,
     `INSERT INTO ledger.attribution_results (
@@ -1380,6 +1391,7 @@ async function persistRuntimeBulk(
   selected: RuntimeIngestionResult,
   input: Any,
   activeRevision: Awaited<ReturnType<typeof resolveActiveFraudBundle>>,
+  nonFraudBindings: ReadonlyMap<string, BoundNonFraudBundle>,
   acceptedLogicals: readonly Any[],
 ): Promise<void> {
   const tenantId = attempts[0].server.tenant_id;
@@ -1391,6 +1403,11 @@ async function persistRuntimeBulk(
   const rejectionRows = selected.rejections.map((artifact) => ({ ...artifact, artifact }));
   const correctionRows = selected.corrections.map((artifact) => ({ ...artifact, artifact }));
   const attributionRows = selected.attributions.map((artifact) => ({ ...artifact, artifact }));
+  for (const artifact of selected.attributions) {
+    const binding = nonFraudBindings.get(artifact.rule_bundle_id);
+    if (!binding) throw new Error("non_fraud_rule_bundle_binding_missing");
+    assertNonFraudArtifactBinding(artifact, binding);
+  }
   const reconciliationRows = selected.reconciliation.map((artifact) => ({ ...artifact, artifact }));
   const projections = bulkProjectionRows(
     selected.logical_events,
@@ -1531,9 +1548,21 @@ export async function ingestRuntimeBatch(
   await ensureApps(appPool, runtimeInput(attempts));
   const [tenantId, appId] = scopes[0].split("\u0000");
   const activeRevision = await resolveActiveFraudBundle(appPool, tenantId, appId);
+  const attributionBinding = await resolveNonFraudBundle(appPool, tenantId, appId, "attribution-default");
+  const applePostbackBinding = await resolveNonFraudBundle(appPool, tenantId, appId, "apple-postback-default");
+  const nonFraudBindings = new Map<string, BoundNonFraudBundle>([
+    [attributionBinding.ruleBundleId, attributionBinding],
+    [applePostbackBinding.ruleBundleId, applePostbackBinding],
+  ]);
   const bind = (attempt: CandidateAttempt): CandidateAttempt => {
     const enabled = attempt.server.fraud_enabled !== false && activeRevision !== undefined;
-    if (!enabled) return { ...attempt, server: { ...attempt.server, fraud_enabled: false } };
+    const nonFraudRuleBundles = {
+      "attribution-default": nonFraudServerContext(attributionBinding),
+      "apple-postback-default": nonFraudServerContext(applePostbackBinding),
+    };
+    if (!enabled) return { ...attempt, server: {
+      ...attempt.server, fraud_enabled: false, non_fraud_rule_bundles: nonFraudRuleBundles,
+    } };
     const thresholdSeconds = fraudNumberParameter(activeRevision.definition, "ctit_lower_bound_seconds", 10);
     const policy = {
       threshold_seconds: thresholdSeconds,
@@ -1544,6 +1573,7 @@ export async function ingestRuntimeBatch(
       ...attempt,
       server: {
         ...attempt.server,
+        non_fraud_rule_bundles: nonFraudRuleBundles,
         fraud_enabled: true,
         fraud_rule_bundle: serverBundleContext(activeRevision),
         click_injection_policy: { ...policy, policy_digest: clickInjectionPolicyDigest(policy) },
@@ -1593,7 +1623,7 @@ export async function ingestRuntimeBatch(
     validation_failures: invalid.map(({ failure }) => failure),
   };
   if (options.bulkPersistence) {
-    await persistRuntimeBulk(appPool, attempts, selected, input, activeRevision, output.logical_events);
+    await persistRuntimeBulk(appPool, attempts, selected, input, activeRevision, nonFraudBindings, output.logical_events);
     return selected;
   }
   const rawByRecord = new Map(selected.raw_records.map((artifact) => [artifact.record_id, artifact]));
@@ -1636,7 +1666,9 @@ export async function ingestRuntimeBatch(
     });
   }
   for (const attribution of selected.attributions) {
-    await persistAttribution(appPool, attribution);
+    const binding = nonFraudBindings.get(attribution.rule_bundle_id);
+    if (!binding) throw new Error("non_fraud_rule_bundle_binding_missing");
+    await persistAttribution(appPool, attribution, binding);
   }
   for (const correction of selected.corrections) await persistCorrection(appPool, correction);
   for (const fraud of selected.fraud_decisions) {

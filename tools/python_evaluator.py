@@ -15,8 +15,26 @@ import rfc8785
 CONTRACT_VERSION = "0.4.0"
 # Rule bundles and metric definitions retain their independent v0.3 identities.
 REFERENCE_RULE_VERSION = "0.3.0"
-ZERO_HASH = "0" * 64
+ATTRIBUTION_BUNDLE_HASH = "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50"
+APPLE_POSTBACK_BUNDLE_HASH = "91181289d7e6604c8a73b7e83d6950334db9bc1067b78ab25216ecaa24bcb896"
+METRIC_DEFAULT_BUNDLE_HASH = "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
 DAY_MS = 86_400_000
+
+
+def bound_non_fraud_bundle(server: dict[str, Any], bundle_id: str, expected_hash: str) -> dict[str, str]:
+    bound = server.get("non_fraud_rule_bundles", {}).get(bundle_id)
+    if bound is not None and (
+        bound.get("rule_bundle_id") != bundle_id
+        or bound.get("rule_bundle_version") != REFERENCE_RULE_VERSION
+        or bound.get("rule_bundle_hash") != expected_hash
+        or bound.get("definition_digest") != expected_hash
+    ):
+        raise ValueError("non_fraud_rule_bundle_binding_mismatch")
+    return {
+        "rule_bundle_id": bundle_id,
+        "rule_bundle_version": REFERENCE_RULE_VERSION,
+        "rule_bundle_hash": expected_hash,
+    }
 
 
 def canonical(value: Any) -> str:
@@ -775,6 +793,7 @@ def attribution(
 ) -> dict[str, Any]:
     server, install = attempt["server"], attempt["record"]
     payload = install["payload"]
+    attribution_bundle = bound_non_fraud_bundle(server, "attribution-default", ATTRIBUTION_BUNDLE_HASH)
 
     def evidence(record_id: str) -> dict[str, Any]:
         return {
@@ -797,9 +816,7 @@ def attribution(
         "decided_at": server["received_at"],
         "input_cutoff_at": server["received_at"],
         "finality": "final",
-        "rule_bundle_id": "attribution-default",
-        "rule_bundle_version": REFERENCE_RULE_VERSION,
-        "rule_bundle_hash": ZERO_HASH,
+        **attribution_bundle,
     }
 
     def result(status: str, method: str, model: str, reason: str, extra: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -917,6 +934,7 @@ def aggregate_postback_attribution(
 ) -> dict[str, Any]:
     server, record = attempt["server"], attempt["record"]
     payload = record["payload"]
+    postback_bundle = bound_non_fraud_bundle(server, "apple-postback-default", APPLE_POSTBACK_BUNDLE_HASH)
     method = "skadnetwork" if record["event_name"] == "skan_postback" else "adattributionkit"
     status, reason = "non_organic", "skan_postback_verified"
     if not payload["signature_verified"]:
@@ -951,9 +969,7 @@ def aggregate_postback_attribution(
         "decided_at": server["received_at"],
         "input_cutoff_at": server["received_at"],
         "finality": "final",
-        "rule_bundle_id": "apple-postback-default",
-        "rule_bundle_version": REFERENCE_RULE_VERSION,
-        "rule_bundle_hash": ZERO_HASH,
+        **postback_bundle,
     }
 
 
@@ -963,6 +979,7 @@ def deep_link_attribution(
 ) -> dict[str, Any]:
     server, record = attempt["server"], attempt["record"]
     resolution = server.get("deep_link_resolution", {"status": "unknown"})
+    attribution_bundle = bound_non_fraud_bundle(server, "attribution-default", ATTRIBUTION_BUNDLE_HASH)
     reused = (
         record["payload"]["open_source"] == "android_deferred_referrer"
         and resolution.get("install_attribution_click_id") == record["payload"].get("click_id")
@@ -997,9 +1014,7 @@ def deep_link_attribution(
         "decided_at": server["received_at"],
         "input_cutoff_at": server["received_at"],
         "finality": "final",
-        "rule_bundle_id": "attribution-default",
-        "rule_bundle_version": REFERENCE_RULE_VERSION,
-        "rule_bundle_hash": ZERO_HASH,
+        **attribution_bundle,
     }
 
 
@@ -1058,7 +1073,7 @@ def base_metric_definitions() -> list[dict[str, Any]]:
             "amount_scale": 6,
             "rule_bundle_id": "metric-default",
             "rule_bundle_version": REFERENCE_RULE_VERSION,
-            "rule_bundle_hash": ZERO_HASH,
+            "rule_bundle_hash": METRIC_DEFAULT_BUNDLE_HASH,
         }
         for metric_name, zone, definition in definitions
     ]
