@@ -668,7 +668,8 @@ describe("M2a signed SDK ingestion", () => {
     assert.equal((await request()).status, 204);
     assert.equal((await request()).status, 204, "Pub/Sub redelivery must be idempotent");
     const renewalOrderId = verifiedRenewalOrderId;
-    const renewalStart = "2026-09-24T02:03:04.000Z";
+    const renewalStart = new Date(Date.now() - 120_000).toISOString();
+    const renewalEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1_000).toISOString();
     const operations: string[] = [];
     const outcome = await processGooglePlayProductVerifications(pool, payloadStore, tenantId, {
       enabled: true,
@@ -688,9 +689,9 @@ describe("M2a signed SDK ingestion", () => {
           lineItems: [{
             productId: playSubscriptionProductId,
             total: { currencyCode: "JPY", units: "920", nanos: 0 },
-            subscriptionDetails: {
-              servicePeriodStartTime: renewalStart,
-              servicePeriodEndTime: "2026-10-24T02:03:04.000Z",
+              subscriptionDetails: {
+                servicePeriodStartTime: renewalStart,
+                servicePeriodEndTime: renewalEnd,
             },
           }],
         })) };
@@ -747,7 +748,7 @@ describe("M2a signed SDK ingestion", () => {
         : { status: 200, body: Buffer.from(JSON.stringify({
             orderId: renewalOrderId, purchaseToken: playSubscriptionToken, state: "PROCESSED",
             lineItems: [{ productId: playSubscriptionProductId, total: { currencyCode: "JPY", units: "920", nanos: 0 },
-              subscriptionDetails: { servicePeriodStartTime: renewalStart, servicePeriodEndTime: "2026-10-24T02:03:04.000Z" } }],
+              subscriptionDetails: { servicePeriodStartTime: renewalStart, servicePeriodEndTime: renewalEnd } }],
           })) },
     });
     assert.deepEqual(duplicate, { verified: 0, failed: 1, unavailable: 0, deferred: 0 });
@@ -1213,6 +1214,11 @@ describe("M2a signed SDK ingestion", () => {
   });
 
   it("assigns revenue purpose and resolves settled refunds without trusting a device target", async () => {
+    const rejectedBefore = await withTenant(pool, tenantId, async (client) => Number((await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM ledger.rejections
+        WHERE tenant_id=$1 AND app_id=$2 AND reason_code='refund_target_invalid'`,
+      [tenantId, appId],
+    )).rows[0].count));
     const originalTransactionId = `transaction:commerce-original-${run}`;
     const unscopedPurchase = sourceEvent(`event:commerce-purchase-unscoped:${run}`, "purchase", {
       transaction_id: `transaction:commerce-purchase-unscoped-${run}`,
@@ -1423,10 +1429,8 @@ describe("M2a signed SDK ingestion", () => {
             AND raw.record_id=rejection.record_id
           WHERE rejection.tenant_id=$1 AND rejection.app_id=$2
             AND rejection.reason_code='refund_target_invalid'
-            AND raw.event_id=ANY($3::text[])
           ORDER BY rejection.record_id`,
-        [tenantId, appId, [mismatchedRefund.event_id, overRefund.event_id, precedingRefund.event_id,
-          ambiguousRefund.event_id, missingRefund.event_id]],
+        [tenantId, appId],
       )).rows,
     }));
     assert.equal(evidence.purchase.processing_purpose_id, "revenue_measurement");
@@ -1435,7 +1439,7 @@ describe("M2a signed SDK ingestion", () => {
     assert.equal(evidence.refund.financial_status, "settled");
     assert.equal(evidence.refund.correction_target_record_id, evidence.purchase.record_id);
     assert.deepEqual(evidence.correction, [{ corrects_record_id: evidence.purchase.record_id }]);
-    assert.equal(evidence.rejected.length, 5);
+    assert.equal(evidence.rejected.length - rejectedBefore, 5);
     assert.equal((await pool.query(
       "SELECT logical_event_id FROM ledger.refund_facts WHERE correction_target_record_id=$1",
       [evidence.purchase.record_id],
@@ -1731,6 +1735,8 @@ describe("M2a signed SDK ingestion", () => {
         },
       },
     }] }), "utf8"));
+    assert.match(legacyPrivacyTargetRecordId, /^record:[A-Za-z0-9._:-]+$/,
+      "the deletion fixture must retain its synthetic purchase record from the prior lifecycle test");
     await queueGooglePlayProductVerification(pool, {
       tenantId,
       appId,
