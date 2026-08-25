@@ -18,7 +18,7 @@ This project is licensed under the [Apache License 2.0](LICENSE); attribution is
 
 ## Current status
 
-This project contains the v0.4.9 contract and synthetic code milestones through M7: the Shadow ledger and import foundation, cohort metrics and difference audit, Android/Unity and Apple measurement paths, the server-rendered operator dashboard, production-control foundations, deterministic fraud controls, direct/deferred deep-link paths, settled purchase/refund net revenue, D30/D90 total-net ROAS and cohort LTV, and synthetic Google Play one-time-product, initial-subscription, and RTDN renewal verification slices. Real provider connectivity, real-device and campaign validation, Unity exports, App Store review, a production deployment, real backup operations, real production load, real integrity-service configuration, live purchase verification, and real link-domain verification have not been demonstrated. Immutable baselines are available at the `contract-v0.1`, `contract-v0.2.1`, and `contract-v0.3.6` Git tags. See [the current status](docs/STATUS.md) for the milestone-by-milestone boundary.
+This project contains the v0.4.9 contract and synthetic code milestones through M7: the Shadow ledger and import foundation, cohort metrics and difference audit, Android/Unity and Apple measurement paths, the server-rendered operator dashboard, production-control foundations, deterministic fraud controls, direct/deferred deep-link paths, settled purchase/refund net revenue, D30/D90 total-net ROAS and cohort LTV, and synthetic verified-commerce lifecycle paths for Google Play and the App Store. Real provider connectivity, real-device and campaign validation, Unity exports, App Store review, a production deployment, real backup operations, real production load, real integrity-service configuration, live purchase verification, and real link-domain verification have not been demonstrated. Immutable baselines are available at the `contract-v0.1`, `contract-v0.2.1`, and `contract-v0.3.6` Git tags. See [the current status](docs/STATUS.md) for the milestone-by-milestone boundary.
 
 The first product entry point is a Shadow MMP that runs alongside an existing provider. It normalizes first-party events, existing MMP exports, media cost, and revenue into a common contract, then explains neutral differences through candidate evidence, exclusion reasons, attribution windows, ID joins, and recalculation history. Difference reasons describe measurement semantics, not provider quality. It must not be treated as the primary MMP until a real shadow pilot has produced sufficient evidence.
 
@@ -255,7 +255,35 @@ OPENMASU_GOOGLE_PLAY_RTDN_AUDIENCE=https://measure.example.invalid/v1/google-pla
 OPENMASU_GOOGLE_PLAY_RTDN_SERVICE_ACCOUNT_EMAIL=openmasu-rtdn@example-project.iam.gserviceaccount.com
 ```
 
-Configure the Pub/Sub push endpoint as `https://<host>/v1/google-play/rtdn` with authentication enabled and the exact audience and user-managed service account above. The receiver verifies Google's OIDC signature and claims, resolves the registered package without trusting request tenant data, and durably queues only `SUBSCRIPTION_RENEWED`. The worker then re-reads SubscriptionPurchaseV2 and the processed order; only a period strictly after the original subscription start can become settled renewal revenue. Message, token, and order digests make redelivery idempotent. RTDN is a signal, not monetary truth. This slice sees only the latest successful order returned after a notification and does not claim historical backfill for missed notifications. Entitlements, acknowledgement, pause/hold/grace/cancel handling, refunds, revocation, and voided purchases remain outside it. Complete the [RTDN renewal checklist](docs/validation/google-play-rtdn-renewal-checklist.md) before enabling it.
+Configure the Pub/Sub push endpoint as `https://<host>/v1/google-play/rtdn` with authentication enabled and the exact audience and user-managed service account above. The receiver verifies Google's OIDC signature and claims, resolves the registered package without trusting request tenant data, and records every supported subscription lifecycle signal separately from money. The worker re-reads SubscriptionPurchaseV2 for current state. A voided/full/partial-refund signal is reconciled against Orders history; only a processed exact provider amount creates one `refund` correction. Message, token, notification, and order digests make retry and redelivery idempotent. Enable authenticated read-back with `OPENMASU_COMMERCE_READBACKS=on`. RTDN remains a signal, not monetary truth, and a latest subscription snapshot cannot reconstruct every missed intermediate renewal. Complete the [verified-commerce operator checklist](docs/validation/verified-commerce-operator-checklist.md) before enabling it.
+
+### App Store lifecycle notifications
+
+Register the app's bundle ID and App Apple ID, configure App Store Server Notifications V2 at `https://<host>/v1/apple/app-store/notifications`, and use secret files for the App Store Server API key:
+
+```dotenv
+OPENMASU_APPLE_STORE_NOTIFICATIONS=on
+OPENMASU_COMMERCE_READBACKS=on
+OPENMASU_APPLE_ROOT_SHA256=<trusted-root-certificate-sha256>
+OPENMASU_APP_STORE_API_ISSUER_ID=<issuer-id>
+OPENMASU_APP_STORE_API_KEY_ID=<key-id>
+OPENMASU_APP_STORE_API_PRIVATE_KEY_FILE=/run/secrets/app-store-api-private-key.p8
+```
+
+OpenMasu verifies the outer notification and nested transaction/renewal ES256 JWS material, exact environment and app scope, and replay UUID before retaining encrypted evidence. The worker verifies signed transaction/refund history again and stores only safe state and identifier digests. Notifications never create money directly. Live Apple credentials, roots, delivery, key rotation, quotas, installation-level transaction binding, and App Store behavior are not proven by CI; follow the [operator checklist](docs/validation/verified-commerce-operator-checklist.md).
+
+For a bounded operator-authorized recovery, put one provider subject in a protected JSON file outside this repository and enqueue it with a half-open evidence window:
+
+```bash
+npm run commerce:backfill -- \
+  --tenant=tenant-local --app=app-local \
+  --provider=google_play --operation=google_order_refund \
+  --subject-file=/run/secrets/synthetic-commerce-subject.json \
+  --window-start=2026-08-01T00:00:00.000Z \
+  --window-end=2026-08-25T00:00:00.000Z
+```
+
+Google subject files use the closed decoded-RTDN shape for `subscriptionNotification` or `voidedPurchaseNotification`; Apple subject files contain only `signedPayload`. The command encrypts the file before durable queuing, records an idempotent checkpoint, prints only safe status/digest metadata, and never copies it into repository fixtures. Cursor progress is encrypted and a successful terminal read marks the checkpoint complete.
 
 ### Verified conversion delivery to Google Data Manager
 
