@@ -2,6 +2,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypt
 import type { IncomingHttpHeaders } from "node:http";
 import type { Pool } from "pg";
 import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
+import { recordDashboardAuditWithClient } from "./session.js";
 
 type Principal = {
   tenantId: string;
@@ -282,6 +283,138 @@ export async function ensureSdkKeys(
     [scope.tenantId, scope.appId],
   ));
   if (active.rows[0].count > 2) throw new Error("SDK key overlap exceeds two active keys");
+}
+
+export type SdkKeyRecord = {
+  readonly sdk_key_id: string;
+  readonly platform: "android" | "ios";
+  readonly status: "active" | "retired";
+  readonly created_at: string;
+  readonly status_changed_at: string;
+};
+
+export async function listSdkKeys(
+  pool: Pool,
+  scope: { readonly tenantId: string; readonly appId: string },
+): Promise<readonly SdkKeyRecord[]> {
+  const result = await withTenant(pool, scope.tenantId, (client) => client.query<SdkKeyRecord>(
+    `SELECT sdk_key_id, platform, status, created_at, status_changed_at
+       FROM control.sdk_keys_current
+      WHERE tenant_id=$1 AND app_id=$2
+      ORDER BY created_at DESC, sdk_key_id COLLATE "C"`,
+    [scope.tenantId, scope.appId],
+  ));
+  return result.rows;
+}
+
+export async function issueSdkKey(input: {
+  readonly pool: Pool;
+  readonly payloadStore: PayloadStore;
+  readonly scope: { readonly tenantId: string; readonly appId: string };
+  readonly platform: "android" | "ios";
+  readonly actorRef: string;
+  readonly now?: Date;
+}): Promise<{ readonly sdk_key_id: string; readonly sdk_key: string; readonly platform: "android" | "ios" }> {
+  const now = input.now ?? new Date();
+  const sdkKeyId = `sdk-key:${uuidV7(now.getTime())}`;
+  const sdkKey = randomBytes(32).toString("base64url");
+  const secretRef = await input.payloadStore.write(
+    { tenantId: input.scope.tenantId, appId: input.scope.appId, objectId: `sdk-key-${sdkKeyId}` },
+    Buffer.from(sdkKey, "utf8"),
+  );
+  try {
+    await withTenant(input.pool, input.scope.tenantId, async (client) => {
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+        [JSON.stringify([input.scope.tenantId, input.scope.appId, "sdk-key-lifecycle"])],
+      );
+      const active = await client.query<{ count: number }>(
+        `SELECT count(*)::int AS count
+           FROM control.sdk_keys_current
+          WHERE tenant_id=$1 AND app_id=$2 AND status='active'`,
+        [input.scope.tenantId, input.scope.appId],
+      );
+      if ((active.rows[0]?.count ?? 0) >= 2) throw new Error("sdk_key_overlap_limit_reached");
+      const createdAt = now.toISOString();
+      await client.query(
+        `INSERT INTO control.sdk_keys (
+          sdk_key_id, tenant_id, app_id, secret_ref, created_at, platform, artifact
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)`,
+        [sdkKeyId, input.scope.tenantId, input.scope.appId, secretRef, createdAt, input.platform,
+          JSON.stringify({ sdk_key_id: sdkKeyId, tenant_id: input.scope.tenantId,
+            app_id: input.scope.appId, platform: input.platform, created_at: createdAt })],
+      );
+      await client.query(
+        `INSERT INTO control.sdk_key_states (
+          sdk_key_id, tenant_id, app_id, status, changed_at, artifact
+        ) VALUES ($1,$2,$3,'active',$4,$5::jsonb)`,
+        [sdkKeyId, input.scope.tenantId, input.scope.appId, createdAt,
+          JSON.stringify({ sdk_key_id: sdkKeyId, status: "active", changed_at: createdAt })],
+      );
+      await recordDashboardAuditWithClient(client, {
+        tenantId: input.scope.tenantId,
+        appId: input.scope.appId,
+        actorRef: input.actorRef,
+        action: "sdk_key_issued",
+        targetScope: "sdk_key",
+        targetRef: sdkKeyId,
+        outcome: "succeeded",
+        now,
+      });
+    });
+  } catch (error) {
+    await input.payloadStore.purge(secretRef);
+    throw error;
+  }
+  return { sdk_key_id: sdkKeyId, sdk_key: sdkKey, platform: input.platform };
+}
+
+export async function retireSdkKey(input: {
+  readonly pool: Pool;
+  readonly scope: { readonly tenantId: string; readonly appId: string };
+  readonly sdkKeyId: string;
+  readonly actorRef: string;
+  readonly now?: Date;
+}): Promise<{ readonly sdk_key_id: string; readonly status: "retired"; readonly changed_at: string }> {
+  const now = input.now ?? new Date();
+  const changedAt = now.toISOString();
+  return withTenant(input.pool, input.scope.tenantId, async (client) => {
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+      [JSON.stringify([input.scope.tenantId, input.scope.appId, "sdk-key-lifecycle"])],
+    );
+    const target = await client.query<{ status: "active" | "retired" }>(
+      `SELECT status FROM control.sdk_keys_current
+        WHERE tenant_id=$1 AND app_id=$2 AND sdk_key_id=$3`,
+      [input.scope.tenantId, input.scope.appId, input.sdkKeyId],
+    );
+    if (!target.rows[0]) throw new Error("sdk_key_not_found");
+    if (target.rows[0].status !== "active") throw new Error("sdk_key_not_active");
+    const active = await client.query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM control.sdk_keys_current
+        WHERE tenant_id=$1 AND app_id=$2 AND status='active'`,
+      [input.scope.tenantId, input.scope.appId],
+    );
+    if ((active.rows[0]?.count ?? 0) <= 1) throw new Error("last_active_sdk_key");
+    await client.query(
+      `INSERT INTO control.sdk_key_states (
+        sdk_key_id, tenant_id, app_id, status, changed_at, artifact
+      ) VALUES ($1,$2,$3,'retired',$4,$5::jsonb)`,
+      [input.sdkKeyId, input.scope.tenantId, input.scope.appId, changedAt,
+        JSON.stringify({ sdk_key_id: input.sdkKeyId, status: "retired", changed_at: changedAt })],
+    );
+    await recordDashboardAuditWithClient(client, {
+      tenantId: input.scope.tenantId,
+      appId: input.scope.appId,
+      actorRef: input.actorRef,
+      action: "sdk_key_retired",
+      targetScope: "sdk_key",
+      targetRef: input.sdkKeyId,
+      outcome: "succeeded",
+      now,
+    });
+    return { sdk_key_id: input.sdkKeyId, status: "retired", changed_at: changedAt };
+  });
 }
 
 export async function issueInstallationCredential(input: {

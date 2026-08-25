@@ -127,6 +127,52 @@ describe("M3 zero-JavaScript dashboard", () => {
     assert.equal(/(?:href|src)=/i.test(first), false);
   });
 
+  it("WO18 renders zero-JavaScript lifecycle forms only for permitted roles", () => {
+    const base = {
+      apps: [{ app_id: "app-one", created_at: "2026-08-20T00:00:00.000Z" }],
+      selectedAppId: "app-one",
+      trackingLinks: [{
+        tracking_link_id: "tracking-link:one",
+        measurement_url: "https://measure.example/r/synthetic",
+        destination_url: "https://destination.example/",
+        status: "active" as const,
+        created_at: "2026-08-20T00:00:00.000Z",
+      }],
+      sdkKeys: [{
+        sdk_key_id: "sdk-key:one", platform: "android" as const, status: "active" as const,
+        created_at: "2026-08-20T00:00:00.000Z", status_changed_at: "2026-08-20T00:00:00.000Z",
+      }],
+      csrfToken: "synthetic-csrf",
+    };
+    const readOnly = renderDashboard(buildDashboardView(base));
+    assert.doesNotMatch(readOnly, /Issue successor key|Register a link domain|>Pause<|>Archive</);
+    const operator = renderDashboard(buildDashboardView({ ...base, canOperate: true }));
+    assert.match(operator, />Pause</);
+    assert.match(operator, />Archive</);
+    assert.doesNotMatch(operator, /Issue successor key|Register a link domain/);
+    const admin = renderDashboard(buildDashboardView({ ...base, canOperate: true, canAdminister: true }));
+    assert.match(admin, /Issue successor key/);
+    assert.match(admin, /Register a link domain/);
+    assert.match(admin, /Complete activation request JSON/);
+    assert.equal(admin.includes("<script"), false);
+    assert.equal(/\son[a-z]+\s*=/i.test(admin), false);
+  });
+
+  it("WO18 never renders SDK secrets in key metadata", () => {
+    const secret = "synthetic-secret-that-must-not-be-rendered";
+    const html = renderDashboard(buildDashboardView({
+      apps: [], selectedAppId: "app-one", csrfToken: "synthetic-csrf", canAdminister: true,
+      sdkKeys: [{
+        sdk_key_id: "sdk-key:one", platform: "ios", status: "retired",
+        created_at: "2026-08-20T00:00:00.000Z", status_changed_at: "2026-08-21T00:00:00.000Z",
+      }],
+    }));
+    assert.match(html, /secrets are never listed/);
+    assert.match(html, /sdk-key:one/);
+    assert.equal(html.includes(secret), false);
+    assert.doesNotMatch(html, /secret_ref|SDK key <code>/);
+  });
+
   it("reports signed purchase net revenue without exposing purchase identifiers", () => {
     const netRevenue = metric({
       metric_run_id: "metric:purchase-net-negative",

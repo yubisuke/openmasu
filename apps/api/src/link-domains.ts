@@ -2,7 +2,7 @@ import type { Pool } from "pg";
 import { validateAppLinkIdentity, type AppLinkIdentity } from "@openmasu/app-association";
 import { withTenant } from "@openmasu/runtime";
 import type { AdminIdentity, AppAdminIdentity } from "./admin-auth.js";
-import { recordDashboardAudit } from "./session.js";
+import { recordDashboardAudit, recordDashboardAuditWithClient } from "./session.js";
 
 const hostPattern = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
 
@@ -51,15 +51,27 @@ export async function registerAppLinkIdentity(input: {
   validateAppLinkIdentity(identity);
   const now = input.now ?? new Date().toISOString();
   try {
-    await withTenant(input.pool, input.identity.tenantId, (client) => client.query(
-      `INSERT INTO control.app_link_identities (
+    await withTenant(input.pool, input.identity.tenantId, async (client) => {
+      await client.query(
+        `INSERT INTO control.app_link_identities (
          tenant_id, app_id, android_package_name, android_sha256_fingerprints,
          apple_team_id, apple_bundle_id, registered_at, artifact
        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
       [input.identity.tenantId, input.identity.appId, identity.android_package_name ?? null,
         identity.android_sha256_fingerprints ?? [], identity.apple_team_id ?? null,
         identity.apple_bundle_id ?? null, now, JSON.stringify({ ...identity, registered_at: now })],
-    ).then(() => undefined));
+      );
+      await recordDashboardAuditWithClient(client, {
+        tenantId: input.identity.tenantId,
+        appId: input.identity.appId,
+        actorRef: `admin_key:${input.identity.keyId}`,
+        action: "app_link_identity_registered",
+        targetScope: "app",
+        targetRef: input.identity.appId,
+        outcome: "succeeded",
+        now: new Date(now),
+      });
+    });
   } catch (error: any) {
     if (error?.code === "23505") throw new Error("app_link_identity_already_registered");
     throw error;

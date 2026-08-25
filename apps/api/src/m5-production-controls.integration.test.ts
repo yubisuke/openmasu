@@ -130,6 +130,16 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
     assert.equal((await request("admin", "/v1/admin/tracking-links", invalidTrackingLink)).status, 400);
     assert.equal((await request("operator", "/v1/admin/tracking-links", invalidTrackingLink)).status, 400);
     assert.equal((await request("read_only", "/v1/admin/tracking-links", { method: "POST" })).status, 403);
+
+    assert.equal((await request("admin", `/v1/admin/apps/${appId}/sdk-keys`)).status, 200);
+    assert.equal((await request("operator", `/v1/admin/apps/${appId}/sdk-keys`)).status, 403);
+    assert.equal((await request("read_only", `/v1/admin/apps/${appId}/sdk-keys`)).status, 403);
+    assert.equal((await request("operator", `/v1/admin/apps/${appId}/tracking-links/missing/pause`, {
+      method: "POST",
+    })).status, 404);
+    assert.equal((await request("read_only", `/v1/admin/apps/${appId}/tracking-links/missing/pause`, {
+      method: "POST",
+    })).status, 403);
   });
 
   it("invalidates dashboard sessions when the backing role key is retired", async () => {

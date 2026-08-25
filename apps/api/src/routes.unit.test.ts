@@ -51,4 +51,36 @@ describe("declarative API route security", () => {
     assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/rule-bundles")?.handler, "admin_rule_bundle");
     assert.equal(matchRoute("GET", "/metrics")?.handler, "operational_metrics");
   });
+
+  it("WO18 matches exact SDK lifecycle, link-state, and provider form routes", () => {
+    assert.equal(matchRoute("GET", "/v1/admin/apps/app-a/sdk-keys")?.handler, "admin_sdk_keys_list");
+    assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/sdk-keys")?.handler, "admin_sdk_keys_issue");
+    assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/sdk-keys/sdk-key%3Aone/retire")?.handler, "admin_sdk_keys_retire");
+    assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/tracking-links/tracking-link%3Aone/pause")?.handler, "admin_tracking_link_transition");
+    assert.equal(matchRoute("POST", "/dashboard/apps/app-a/tracking-links/tracking-link%3Aone/archive")?.handler, "dashboard_tracking_link_transition");
+    assert.equal(matchRoute("POST", "/dashboard/apps/app-a/sdk-keys")?.handler, "dashboard_sdk_keys_issue");
+    assert.equal(matchRoute("POST", "/dashboard/apps/app-a/sdk-keys/sdk-key%3Aone/retire")?.handler, "dashboard_sdk_keys_retire");
+    for (const path of [
+      "/dashboard/link-domain",
+      "/dashboard/apps/app-a/link-identity",
+      "/dashboard/apps/app-a/apple-registration",
+      "/dashboard/apps/app-a/conversion-schemas",
+      "/dashboard/apps/app-a/rule-bundles",
+      "/dashboard/apps/app-a/google-data-manager",
+    ]) assert.ok(matchRoute("POST", path));
+    assert.equal(matchRoute("GET", "/dashboard/apps/app-a/sdk-keys"), undefined);
+    assert.equal(matchRoute("POST", "/dashboard/apps/app-a/sdk-keys/key/retire/extra"), undefined);
+  });
+
+  it("WO18 binds key and provider mutations to administer and link states to operate", () => {
+    for (const handler of [
+      "admin_sdk_keys_list", "admin_sdk_keys_issue", "admin_sdk_keys_retire",
+      "dashboard_sdk_keys_issue", "dashboard_sdk_keys_retire", "dashboard_link_domain",
+      "dashboard_app_link_identity", "dashboard_apple_registration", "dashboard_conversion_schema",
+      "dashboard_rule_bundle", "dashboard_google_data_manager",
+    ]) assert.equal(routes.find((route) => route.handler === handler)?.capability, "administer", handler);
+    for (const handler of ["admin_tracking_link_transition", "dashboard_tracking_link_transition"]) {
+      assert.equal(routes.find((route) => route.handler === handler)?.capability, "operate", handler);
+    }
+  });
 });

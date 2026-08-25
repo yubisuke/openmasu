@@ -313,6 +313,38 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     const csrf = /name="csrf_token" value="([^"]+)"/.exec(appHtml)?.[1];
     assert.ok(csrf);
     assert.match(appHtml, /Create a tracking link/);
+    assert.match(appHtml, new RegExp(`/dashboard/apps/${newAppId}/sdk-keys`));
+    assert.match(appHtml, new RegExp(`/dashboard/apps/${newAppId}/apple-registration`));
+    assert.equal(appHtml.includes(issued.sdk_key), false);
+
+    const rejectedRotation = await fetch(`${baseUrl}/dashboard/apps/${newAppId}/sdk-keys`, {
+      method: "POST",
+      headers: { cookie: dashboardCookie, origin: configuredOrigin, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ csrf_token: "wrong-session-token", platform: "ios" }),
+    });
+    assert.equal(rejectedRotation.status, 403);
+    const dashboardRotation = await fetch(`${baseUrl}/dashboard/apps/${newAppId}/sdk-keys`, {
+      method: "POST",
+      headers: { cookie: dashboardCookie, origin: configuredOrigin, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ csrf_token: csrf, platform: "ios" }),
+    });
+    assert.equal(dashboardRotation.status, 201);
+    const rotationHtml = await dashboardRotation.text();
+    const successorSecret = /<dt>SDK key<\/dt><dd><code>([^<]+)<\/code>/.exec(rotationHtml)?.[1];
+    assert.ok(successorSecret);
+    const refreshedApp = await (await fetch(`${baseUrl}/dashboard/apps/${newAppId}`, {
+      headers: { cookie: dashboardCookie },
+    })).text();
+    assert.equal(refreshedApp.includes(successorSecret), false);
+    assert.match(refreshedApp, /secrets are never listed/);
+
+    const linkDomain = await fetch(`${baseUrl}/dashboard/link-domain`, {
+      method: "POST",
+      redirect: "manual",
+      headers: { cookie: dashboardCookie, origin: configuredOrigin, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ csrf_token: csrf, host: `wo18-${suffix}.synthetic.example` }),
+    });
+    assert.equal(linkDomain.status, 303);
     const trackingLink = await fetch(`${baseUrl}/dashboard/apps/${newAppId}/tracking-links`, {
       method: "POST",
       headers: { cookie: dashboardCookie, origin: configuredOrigin, "content-type": "application/x-www-form-urlencoded" },
@@ -415,5 +447,94 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
       [tenantId, appId],
     ));
     assert.deepEqual(stored.rows.map((row) => row.destination_url), ["https://links.synthetic.example/landing"]);
+  });
+
+  it("WO18 rotates SDK keys and transitions tracking links with append-only audit history", async () => {
+    const lifecycleApp = `lifecycle-${suffix}`;
+    const headers = { authorization: `Bearer ${adminKeyA}`, "content-type": "application/json" };
+    const registered = await fetch(`${baseUrl}/v1/admin/apps`, {
+      method: "POST", headers, body: JSON.stringify({ app_id: lifecycleApp, sdk_platform: "android" }),
+    });
+    assert.equal(registered.status, 201);
+    const first = await registered.json() as { sdk_key_id: string; sdk_key: string };
+
+    const issued = await fetch(`${baseUrl}/v1/admin/apps/${lifecycleApp}/sdk-keys`, {
+      method: "POST", headers, body: JSON.stringify({ platform: "ios" }),
+    });
+    assert.equal(issued.status, 201);
+    const second = await issued.json() as { sdk_key_id: string; sdk_key: string; platform: string };
+    assert.equal(second.platform, "ios");
+    assert.notEqual(second.sdk_key, first.sdk_key);
+
+    const listed = await fetch(`${baseUrl}/v1/admin/apps/${lifecycleApp}/sdk-keys`, { headers });
+    assert.equal(listed.status, 200);
+    const listText = await listed.text();
+    const list = JSON.parse(listText) as { data: Array<{ sdk_key_id: string; status: string }> };
+    assert.equal(list.data.length, 2);
+    assert.equal(list.data.every((key) => key.status === "active"), true);
+    assert.equal(listText.includes(first.sdk_key), false);
+    assert.equal(listText.includes(second.sdk_key), false);
+    assert.equal(listText.includes("secret_ref"), false);
+
+    const overlap = await fetch(`${baseUrl}/v1/admin/apps/${lifecycleApp}/sdk-keys`, {
+      method: "POST", headers, body: JSON.stringify({ platform: "android" }),
+    });
+    assert.equal(overlap.status, 409);
+    assert.deepEqual(await overlap.json(), { error: "sdk_key_overlap_limit_reached" });
+
+    const retire = await fetch(`${baseUrl}/v1/admin/apps/${lifecycleApp}/sdk-keys/${encodeURIComponent(first.sdk_key_id)}/retire`, {
+      method: "POST", headers, body: "{}",
+    });
+    assert.equal(retire.status, 200);
+    const lastActive = await fetch(`${baseUrl}/v1/admin/apps/${lifecycleApp}/sdk-keys/${encodeURIComponent(second.sdk_key_id)}/retire`, {
+      method: "POST", headers, body: "{}",
+    });
+    assert.equal(lastActive.status, 409);
+    assert.deepEqual(await lastActive.json(), { error: "last_active_sdk_key" });
+
+    const link = await fetch(`${baseUrl}/v1/admin/tracking-links`, {
+      method: "POST", headers, body: JSON.stringify({
+        app_id: lifecycleApp,
+        destination_kind: "custom_https",
+        destination_url: "https://links.synthetic.example/lifecycle",
+        campaign_id: "synthetic-lifecycle",
+      }),
+    });
+    assert.equal(link.status, 201);
+    const linkBody = await link.json() as { tracking_link_id: string };
+    const pause = await fetch(`${baseUrl}/v1/admin/apps/${lifecycleApp}/tracking-links/${encodeURIComponent(linkBody.tracking_link_id)}/pause`, {
+      method: "POST", headers, body: "{}",
+    });
+    assert.equal(pause.status, 200);
+    const archive = await fetch(`${baseUrl}/v1/admin/apps/${lifecycleApp}/tracking-links/${encodeURIComponent(linkBody.tracking_link_id)}/archive`, {
+      method: "POST", headers, body: "{}",
+    });
+    assert.equal(archive.status, 200);
+    const repeated = await fetch(`${baseUrl}/v1/admin/apps/${lifecycleApp}/tracking-links/${encodeURIComponent(linkBody.tracking_link_id)}/archive`, {
+      method: "POST", headers, body: "{}",
+    });
+    assert.equal(repeated.status, 409);
+
+    const history = await withTenant(appPool, tenantId, async (client) => {
+      const states = await client.query<{ status: string }>(
+        `SELECT status FROM control.tracking_link_states
+          WHERE tenant_id=$1 AND app_id=$2 AND tracking_link_id=$3
+          ORDER BY tracking_link_state_seq`,
+        [tenantId, lifecycleApp, linkBody.tracking_link_id],
+      );
+      const audits = await client.query<{ action: string; row_text: string }>(
+        `SELECT action, row_to_json(audit_logs)::text AS row_text FROM ledger.audit_logs
+          WHERE tenant_id=$1 AND app_id=$2
+            AND action IN ('sdk_key_issued','sdk_key_retired','tracking_link_paused','tracking_link_archived')
+          ORDER BY occurred_at, audit_log_id`,
+        [tenantId, lifecycleApp],
+      );
+      return { states: states.rows, audits: audits.rows };
+    });
+    assert.deepEqual(history.states.map((state) => state.status), ["active", "paused", "archived"]);
+    assert.equal(history.audits.some((audit) => audit.row_text.includes(first.sdk_key) || audit.row_text.includes(second.sdk_key)), false);
+    assert.equal(history.audits.some((audit) => audit.action === "sdk_key_retired"), true);
+    assert.equal(history.audits.some((audit) => audit.action === "tracking_link_paused"), true);
+    assert.equal(history.audits.some((audit) => audit.action === "tracking_link_archived"), true);
   });
 });

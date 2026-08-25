@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 import { assertAllowedDestination, assertDeepLinkValue, buildDeferredReferrer, randomSlug } from "@openmasu/redirector-core";
 import { uuidV7, withTenant } from "@openmasu/runtime";
-import { recordDashboardAudit } from "./session.js";
+import { recordDashboardAudit, recordDashboardAuditWithClient } from "./session.js";
 
 type Any = Record<string, any>;
 
@@ -177,4 +177,53 @@ export async function createTrackingLink(input: {
     now: new Date(now),
   });
   return artifact;
+}
+
+export async function transitionTrackingLink(input: {
+  readonly pool: Pool;
+  readonly tenantId: string;
+  readonly appId: string;
+  readonly trackingLinkId: string;
+  readonly actorRef: string;
+  readonly status: "paused" | "archived";
+  readonly now?: Date;
+}): Promise<{ readonly tracking_link_id: string; readonly status: "paused" | "archived"; readonly changed_at: string }> {
+  const now = input.now ?? new Date();
+  const changedAt = now.toISOString();
+  const result = await withTenant(input.pool, input.tenantId, async (client) => {
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+      [JSON.stringify([input.tenantId, input.appId, input.trackingLinkId])],
+    );
+    const current = await client.query<{ status: "active" | "paused" | "archived" }>(
+      `SELECT status FROM control.tracking_links_current
+        WHERE tenant_id=$1 AND app_id=$2 AND tracking_link_id=$3`,
+      [input.tenantId, input.appId, input.trackingLinkId],
+    );
+    const status = current.rows[0]?.status;
+    if (!status) throw new Error("tracking_link_not_found");
+    const allowed = status === "active"
+      ? new Set(["paused", "archived"])
+      : status === "paused" ? new Set(["archived"]) : new Set<string>();
+    if (!allowed.has(input.status)) throw new Error("tracking_link_transition_invalid");
+    await client.query(
+      `INSERT INTO control.tracking_link_states (
+        tracking_link_id, tenant_id, app_id, status, changed_at, artifact
+      ) VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
+      [input.trackingLinkId, input.tenantId, input.appId, input.status, changedAt,
+        JSON.stringify({ tracking_link_id: input.trackingLinkId, status: input.status, changed_at: changedAt })],
+    );
+    await recordDashboardAuditWithClient(client, {
+      tenantId: input.tenantId,
+      appId: input.appId,
+      actorRef: input.actorRef,
+      action: `tracking_link_${input.status}`,
+      targetScope: "tracking_link",
+      targetRef: input.trackingLinkId,
+      outcome: "succeeded",
+      now,
+    });
+    return { tracking_link_id: input.trackingLinkId, status: input.status, changed_at: changedAt } as const;
+  });
+  return result;
 }
