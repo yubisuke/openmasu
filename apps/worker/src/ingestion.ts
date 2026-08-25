@@ -24,6 +24,7 @@ import {
   resolveActiveFraudBundle,
   serverBundleContext,
 } from "./fraud-bundle-runtime.js";
+import { buildDeepLinkAuditEvidence } from "./deep-link-audit.js";
 
 type Any = Record<string, any>;
 export const parityKinds = [
@@ -473,7 +474,7 @@ async function persistProjectionWithClient(
       const daysSinceLastSession = previous.rows[0]
         ? Math.floor((Date.parse(attempt.record.occurred_at) - Date.parse(previous.rows[0].occurred_at_ts)) / 86_400_000)
         : null;
-      await client.query(
+      const inserted = await client.query(
         `INSERT INTO ledger.deep_link_open_facts (
           logical_event_id, tenant_id, app_id, installation_id, tracking_link_id,
           campaign_id, open_source, occurred_at, days_since_last_session, artifact
@@ -492,6 +493,24 @@ async function persistProjectionWithClient(
             days_since_last_session: daysSinceLastSession,
           })],
       );
+      if (inserted.rowCount === 1) {
+        const { reasonCode, digest } = buildDeepLinkAuditEvidence({
+          openSource: payload.open_source,
+          resolutionStatus: resolution.status,
+          claimedClickId: payload.click_id,
+          installAttributionClickId: resolution.install_attribution_click_id,
+        });
+        await client.query(
+          `INSERT INTO ledger.audit_logs (
+            audit_log_id,tenant_id,app_id,occurred_at,actor_type,actor_ref,action,
+            target_scope,target_ref,policy_version,request_digest,outcome,reason_code
+          ) VALUES ($1,$2,$3,$4,'system_job','worker:deep-link-audit',
+            'deep_link_device_claim_observed','record',$5,'deep-link-audit-v1',$6,'succeeded',$7)`,
+          [uuidV7(), logical.tenant_id, logical.app_id, attempt.record.received_at,
+            `record-digest:${sha256([logical.tenant_id, logical.app_id, logical.record_id]).slice(0, 64)}`,
+            digest, reasonCode],
+        );
+      }
     } else if (logical.event_name === "purchase") {
       await client.query(
         `INSERT INTO ledger.purchase_facts (

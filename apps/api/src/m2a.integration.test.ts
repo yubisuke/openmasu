@@ -1207,10 +1207,27 @@ describe("M2a signed SDK ingestion", () => {
           WHERE logical.tenant_id=$1 AND logical.app_id=$2 AND raw.event_id=$3`,
         [tenantId, appId, forged.event_id],
       )).rows[0].count,
+      acceptedAudits: (await client.query<{ reason_code: string; request_digest: string; target_ref: string }>(
+        `SELECT reason_code,request_digest,target_ref FROM ledger.audit_logs
+          WHERE tenant_id=$1 AND app_id=$2 AND action='deep_link_device_claim_observed'
+          ORDER BY occurred_at`, [tenantId, appId],
+      )).rows,
+      rejectedClaimAudits: (await client.query<{ reason_code: string; target_ref: string }>(
+        `SELECT reason_code,target_ref FROM ledger.audit_logs
+          WHERE tenant_id=$1 AND app_id=$2 AND action='deep_link_client_claim_rejected'
+          ORDER BY occurred_at`, [tenantId, appId],
+      )).rows,
     }));
     assert.deepEqual(isolation.foreign, { tracking_link_id: null, campaign_id: null });
     assert.equal(isolation.foreignReason, "deep_link_unknown_link");
     assert.equal(isolation.forgedLogical, 0);
+    assert.ok(isolation.acceptedAudits.some((row) => row.reason_code === "device_claim_observed"));
+    assert.ok(isolation.acceptedAudits.some((row) => row.reason_code === "deep_link_unknown_link"));
+    assert.ok(isolation.acceptedAudits.every((row) => /^[a-f0-9]{64}$/.test(row.request_digest)));
+    assert.ok(isolation.acceptedAudits.every((row) => /^record-digest:[a-f0-9]{64}$/.test(row.target_ref)));
+    assert.ok(isolation.rejectedClaimAudits.some((row) =>
+      row.reason_code === "device_deep_link_attribution_claim_forbidden"
+      && /^request-digest:[a-f0-9]{32}$/.test(row.target_ref)));
   });
 
   it("assigns revenue purpose and resolves settled refunds without trusting a device target", async () => {

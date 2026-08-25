@@ -256,7 +256,18 @@ export async function handleSdkBatch(
   const receivedAt = new Date().toISOString();
   let records: Any[];
   try { records = value.records.map((record: Any) => normalizedRecord(record, identity, receivedAt, dependencies.config)); }
-  catch (error) { return writeJson(response, 403, { error: error instanceof Error ? error.message : "record_invalid" }); }
+  catch (error) {
+    const reason = error instanceof Error ? error.message : "record_invalid";
+    if (reason === "device_deep_link_attribution_claim_forbidden") {
+      await recordSdkAudit(dependencies.pool, dependencies.config, {
+        actorType: "sdk_installation", actorRef: `sdk_installation:${identity.installationKeyId}`,
+        action: "deep_link_client_claim_rejected", targetScope: "record",
+        targetRef: `request-digest:${identity.requestDigest.slice(0, 32)}`,
+        requestDigest: identity.requestDigest, outcome: "failed", reasonCode: reason,
+      });
+    }
+    return writeJson(response, 403, { error: reason });
+  }
   const durableBody = Buffer.from(JSON.stringify({ records }), "utf8");
   const ingestBatchId = await appendDurableBatch(dependencies.pool, dependencies.payloadStore, {
     tenantId: identity.tenantId,
