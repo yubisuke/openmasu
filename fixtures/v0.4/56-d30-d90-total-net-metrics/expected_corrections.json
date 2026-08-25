@@ -1,0 +1,22 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "correction_id": "correction:refund-56-d30",
+    "corrects_record_id": "purchase-56-d0",
+    "correction_type": "correction",
+    "correction_reason": "refund",
+    "effective_at": "2026-08-31T00:00:00.000Z"
+  },
+  {
+    "contract_version": "0.4.0",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "correction_id": "correction:refund-56-d60",
+    "corrects_record_id": "purchase-56-d60",
+    "correction_type": "correction",
+    "correction_reason": "refund",
+    "effective_at": "2026-09-30T01:00:00.000Z"
+  }
+]

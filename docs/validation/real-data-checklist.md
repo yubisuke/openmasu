@@ -9,6 +9,20 @@ This procedure is an operator-owned M1.5 input. Run it only in a private deploym
 - Record tool versions, mapping version, source date range, timezone, currency, and input digests in a private validation record.
 - Use the public mappings only as templates; keep provider-specific mappings and certification evidence private.
 
+## Synthetic preflight
+
+1. Run `npm run test:integration` against the disposable database before loading private data.
+2. Confirm the test named `WO11 carries an attributed install, revenue, and cost through to non-zero D0 ROAS` passes.
+3. Treat this as a pipeline preflight only. It does not prove live provider connectivity or certify private mappings.
+
+## Execution and failure handling
+
+1. Run the existing-MMP import, media-cost import, revenue ingestion or backfill, and metric calculation in that order.
+2. Stop immediately if any step exits non-zero. Do not publish or compare a metric after an upstream failure.
+3. Configure the private scheduler or orchestrator to notify the operator when a step exits non-zero. Use the authenticated `openmasu_job_runs_total` and `openmasu_job_last_completion_timestamp_seconds` series for the fixed `mmp_import`, `cost_import`, `max_revenue_import`, and `metric_run` jobs, but keep thresholds, receivers, contact details, and credentials outside this repository.
+4. Confirm each operator CLI command produced exactly one terminal outcome at the intended tenant/app scope. The public metrics expose only fixed job/outcome labels; record input digest, date range, and output summary only in the private validation record.
+5. Use a first end-to-end cohort with both non-zero revenue and non-zero cost. A zero result requires source evidence and is not, by itself, proof that the full pipeline worked.
+
 ## 1. D7 ROAS comparison
 
 1. Select one authorized campaign cohort and freeze the OpenMasu watermark, metric-definition version, rule-bundle version, timezone, FX snapshot, and cost snapshot.
@@ -27,17 +41,22 @@ This procedure is an operator-owned M1.5 input. Run it only in a private deploym
 
 ## 3. Media cost
 
-1. Run the Meta and Google Ads adapters with least-privilege read credentials, or use the manual mapping for another authorized source.
-2. Record privately: requested date range, network/account currency, daily row counts, unmapped country criteria, schema errors, asynchronous-report behavior, and field omissions.
+1. Use the manual cost mapping with an authorized export, or one of the bounded Meta and Google Ads commands documented in `docs/import-mappings.md`. Both commands are executable and synthetically tested; live account connectivity remains unverified.
+2. For Google Ads, configure the access token and developer token privately, use the optional login-customer ID only for the intended manager hierarchy, and request one exact inclusive date range. Record privately: requested range, customer and manager context, network/account currency, daily row counts, unmapped country criteria, schema errors, API or report behavior, and field omissions.
 3. Import the same source snapshot twice, then one restatement. Confirm the first row remains, the repeated snapshot is idempotent, and `cost_records_current` selects the restatement.
 4. Compare totals with the source dashboard privately. A mismatch is a finding, not a repository edit or a provider-quality claim.
+5. For Meta, record any permission, timezone, pagination, or synchronous-report limitation privately. For Google Ads, confirm the allowlisted ad-group query retains ad groups; the three exact App subtypes, Performance Max, and Local Services omit them; all three queries use `LOCATION_OF_PRESENCE`; the reported customer currency matches the configured currency; and every country criterion resolves through the bounded lookup. Treat an unsupported residual campaign type as a failed run requiring an explicit adapter review, not as a row to skip.
+6. For both providers, distinguish executable wiring from live connectivity evidence. Record permissions, quotas, account hierarchy, field compatibility, and other provider-specific limitations privately; do not treat synthetic coverage as certification of a live account.
 
 ## 4. MAX revenue
 
 1. Configure the allowlisted postback template without IDFA, IDFV, or IP macros.
 2. Send a controlled authorized postback and verify 204, durable inbox receipt, worker processing, duplicate delivery classification, and aggregate behavior when no user anchor is present.
-3. Run the Reporting API backfill for the same UTC day and record privately any S2S coverage gap and reporting freshness.
-4. Exercise a deletion request and confirm the encrypted object and wrapped key entry are gone and cannot be decrypted.
+3. Configure `OPENMASU_MAX_REPORT_KEY` or its `_FILE` variant privately and run `npm run import:revenue:max -- --tenant=<id> --app=<id> --start=<YYYY-MM-DD> --end=<YYYY-MM-DD>`. The inclusive UTC dates must remain within the provider's current 45-day request window. Record only the requested range, row count, report snapshot digest, and command outcome in the private validation record.
+4. Import the same response twice, then a later restatement for the same retained dimension. Confirm the repeated snapshot inserts no row, history remains append-only, and `aggregate_revenue_snapshots_current` selects the later observation.
+5. Compare the provider-reported aggregate series with S2S totals privately, but never sum the two as independent revenue: the same impressions may be present in both. Confirm the reporting rows contain no installation identifier and do not change installation-level cohort metrics.
+6. The command and synthetic provider responses are tested; live MAX credentials, account access, response compatibility, recent-data completeness, and dashboard reconciliation remain unverified until this procedure is run privately.
+7. Exercise a deletion request and confirm the encrypted object and wrapped key entry are gone and cannot be decrypted. Aggregate provider snapshots contain no installation subject and therefore are not a substitute for subject-level deletion evidence.
 
 ## 5. D0 reproducibility
 

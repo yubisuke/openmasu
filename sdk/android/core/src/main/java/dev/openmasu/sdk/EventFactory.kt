@@ -26,6 +26,7 @@ internal object EventFactory {
     .put("referrer_client_response", play.clientResponse)
     .put("install_begin_at_server_status", if (play.installBeginAtServer == null) "missing" else "available")
     .put("sdk_version", sdkVersion)
+    .put("deferred_deep_link_status", play.deferredDeepLinkStatus ?: "not_applicable")
     .putOpt("click_id", play.clickId)
     .putOpt("referrer_click_at_device", play.referrerClickAtDevice)
     .putOpt("referrer_click_at_server", play.referrerClickAtServer)
@@ -50,6 +51,51 @@ internal object EventFactory {
     .put("installation_id", installationId)
     .put("session_id", sessionId)
 
+  fun purchase(
+    installationId: String?,
+    transactionId: String,
+    amountUnscaled: String,
+    amountScale: Int,
+    currency: String,
+    financialStatus: String = "settled",
+    extensions: JSONObject? = null,
+  ): JSONObject = JSONObject()
+    .put("event_name", "purchase")
+    .putOpt("installation_id", installationId)
+    .put("transaction_id", transactionId)
+    .put("amount_unscaled", amountUnscaled)
+    .put("amount_scale", amountScale)
+    .put("currency", currency)
+    .put("financial_status", financialStatus)
+    .putOpt("extensions", extensions)
+
+  fun refund(
+    installationId: String?,
+    transactionId: String,
+    originalTransactionId: String,
+    amountUnscaled: String,
+    amountScale: Int,
+    currency: String,
+  ): JSONObject = JSONObject()
+    .put("event_name", "refund")
+    .putOpt("installation_id", installationId)
+    .put("transaction_id", transactionId)
+    .put("original_transaction_id", originalTransactionId)
+    .put("amount_unscaled", amountUnscaled)
+    .put("amount_scale", amountScale)
+    .put("currency", currency)
+    .put("financial_status", "settled")
+
+  fun deepLink(installationId: String, value: OpenMasuDeepLink): JSONObject = JSONObject()
+    .put("event_name", "deep_link_open")
+    .put("installation_id", installationId)
+    .put("open_source", value.openSource)
+    .put("destination_status", value.destinationStatus)
+    .putOpt("link_slug", value.linkSlug)
+    .putOpt("click_id", value.clickId)
+    .putOpt("deep_link_value", value.value)
+    .put("deep_link_params", JSONObject(value.parameters))
+
   fun consent(state: String, policyVersion: String): JSONObject = JSONObject()
     .put("event_name", "consent_changed")
     .put("consent_state", state)
@@ -72,4 +118,73 @@ internal object EventFactory {
 
   fun newEventId(): String = "event:${UUID.randomUUID()}"
   fun newSessionId(): String = "session:${UUID.randomUUID()}"
+
+  fun commerceEventId(
+    eventName: String,
+    installationId: String,
+    transactionId: String,
+    originalTransactionId: String?,
+    amountUnscaled: String,
+    amountScale: Int,
+    currency: String,
+  ): String {
+    val canonical = listOf(
+      "openmasu-commerce-event-v2",
+      eventName,
+      installationId,
+      transactionId,
+      originalTransactionId ?: "",
+      amountUnscaled,
+      amountScale.toString(),
+      currency,
+      "settled",
+    ).joinToString("\n")
+    return "event:commerce:${SdkRequestSigner.sha256(canonical.toByteArray(Charsets.UTF_8))}"
+  }
+
+  fun googlePlayProductEventId(
+    installationId: String,
+    productId: String,
+    purchaseToken: String,
+    transactionId: String,
+    amountUnscaled: String,
+    amountScale: Int,
+    currency: String,
+  ): String {
+    val canonical = listOf(
+      "openmasu-google-play-product-v1",
+      installationId,
+      productId,
+      SdkRequestSigner.sha256(purchaseToken.toByteArray(Charsets.UTF_8)),
+      transactionId,
+      amountUnscaled,
+      amountScale.toString(),
+      currency,
+      "pending",
+    ).joinToString("\n")
+    return "event:commerce:${SdkRequestSigner.sha256(canonical.toByteArray(Charsets.UTF_8))}"
+  }
+
+  fun googlePlaySubscriptionEventId(
+    installationId: String,
+    productId: String,
+    purchaseToken: String,
+    transactionId: String,
+    amountUnscaled: String,
+    amountScale: Int,
+    currency: String,
+  ): String {
+    val canonical = listOf(
+      "openmasu-google-play-subscription-initial-v1",
+      installationId,
+      productId,
+      SdkRequestSigner.sha256(purchaseToken.toByteArray(Charsets.UTF_8)),
+      transactionId,
+      amountUnscaled,
+      amountScale.toString(),
+      currency,
+      "pending",
+    ).joinToString("\n")
+    return "event:commerce:${SdkRequestSigner.sha256(canonical.toByteArray(Charsets.UTF_8))}"
+  }
 }

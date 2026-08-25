@@ -1,0 +1,35 @@
+{
+  "contract_version": "0.4.0",
+  "fx_policy": {"policy_version":"fx-m7","target_currency":"USD","target_scale":6,"rounding_mode":"half_even","rates":[{"currency":"USD","rate_unscaled":"1","rate_scale":0,"source":"synthetic-fixture-rate","as_of":"2026-08-21T06:00:00.000Z"}]},
+  "metric_definitions": [
+    {"metric_name":"daily_deep_link_opens","metric_definition_version":"0.4.7","anchor_event":"calendar_day","aggregation_time_zone":"UTC","value_type":"count","definition":{"calculation":"event_count","window":{"type":"calendar_day","day":0},"numerator":"events"},"event_names":["deep_link_open"],"grouping_dimensions":["metric_date","campaign_id"],"rule_bundle_id":"metric-stage-m7","rule_bundle_version":"0.4.7","rule_bundle_hash":"7777777777777777777777777777777777777777777777777777777777777777"},
+    {"metric_name":"daily_deep_link_opens_by_status","metric_definition_version":"0.4.7","anchor_event":"calendar_day","aggregation_time_zone":"UTC","value_type":"count","definition":{"calculation":"event_count","window":{"type":"calendar_day","day":0},"numerator":"events"},"event_names":["deep_link_open"],"grouping_dimensions":["metric_date","campaign_id","attribution_status"],"rule_bundle_id":"metric-stage-m7","rule_bundle_version":"0.4.7","rule_bundle_hash":"7777777777777777777777777777777777777777777777777777777777777777"}
+  ],
+  "metric_evaluations": [
+    {"metric_run_id_prefix":"run-53-deep","input_received_at_watermark":"2026-08-21T06:10:00.000Z","computed_at":"2026-08-21T06:11:00.000Z","data_freshness":"complete","privacy_state":"before","metric_names":["daily_deep_link_opens"],"grouping":{"metric_date":"2026-08-21","campaign_id":"campaign-53"}},
+    {"metric_run_id_prefix":"run-53-status","input_received_at_watermark":"2026-08-21T06:10:00.000Z","computed_at":"2026-08-21T06:11:00.000Z","data_freshness":"complete","privacy_state":"before","metric_names":["daily_deep_link_opens_by_status"],"grouping":{"metric_date":"2026-08-21","campaign_id":"campaign-53","attribution_status":"non_organic"}}
+  ],
+  "privacy_requests": [],
+  "batches": [
+    {
+      "batch_id":"active-link",
+      "server_context":{"tenant_id":"tenant-a","app_id":"app-a","received_at":"2026-08-21T06:00:01.000Z","policy_digest":"policy-m7","deep_link_resolution":{"status":"active","tracking_link_id":"link-53","campaign_id":"campaign-53"},"processing_purposes":[{"processing_purpose_id":"attribution","consent_required":false,"policy_version":"consent-m7"}],"withdrawals":[],"alternative_legal_bases":[]},
+      "records":[{"contract_version":"0.4.0","record_id":"deep-link-open-53-active","delivery_id":"delivery:deep-link-open-53-active","tenant_id":"tenant-a","app_id":"app-a","producer":"sdk-android","producer_version":"fixture-m7","event_id":"event:deep-link-open-53-active","event_name":"deep_link_open","schema_version":"0.4.0","occurred_at":"2026-08-21T06:00:00.000Z","occurred_at_source":"device","received_at":"2026-08-21T06:00:01.000Z","processing_purpose_id":"attribution","processing_sequence":1,"payload":{"event_name":"deep_link_open","installation_id":"installation-53-active","session_id":"session-53-active","open_source":"android_app_link","link_slug":"synthetic53active","deep_link_value":"/shop/item/53","deep_link_params":{"source":"synthetic","priority":1,"preview":false},"destination_status":"delivered","opened_at_device":"2026-08-21T06:00:00.000Z"}}]
+    },
+    {
+      "batch_id":"inactive-link",
+      "server_context":{"tenant_id":"tenant-a","app_id":"app-a","received_at":"2026-08-21T06:01:01.000Z","policy_digest":"policy-m7","deep_link_resolution":{"status":"inactive","tracking_link_id":"link-53-inactive"},"processing_purposes":[{"processing_purpose_id":"attribution","consent_required":false,"policy_version":"consent-m7"}],"withdrawals":[],"alternative_legal_bases":[]},
+      "records":[{"contract_version":"0.4.0","record_id":"deep-link-open-53-inactive","delivery_id":"delivery:deep-link-open-53-inactive","tenant_id":"tenant-a","app_id":"app-a","producer":"sdk-ios","producer_version":"fixture-m7","event_id":"event:deep-link-open-53-inactive","event_name":"deep_link_open","schema_version":"0.4.0","occurred_at":"2026-08-21T06:01:00.000Z","occurred_at_source":"device","received_at":"2026-08-21T06:01:01.000Z","processing_purpose_id":"attribution","processing_sequence":1,"payload":{"event_name":"deep_link_open","installation_id":"installation-53-inactive","open_source":"ios_universal_link","link_slug":"synthetic53inactive","destination_status":"absent"}}]
+    },
+    {
+      "batch_id":"unknown-link",
+      "server_context":{"tenant_id":"tenant-a","app_id":"app-a","received_at":"2026-08-21T06:02:01.000Z","policy_digest":"policy-m7","deep_link_resolution":{"status":"unknown"},"processing_purposes":[{"processing_purpose_id":"attribution","consent_required":false,"policy_version":"consent-m7"}],"withdrawals":[],"alternative_legal_bases":[]},
+      "records":[{"contract_version":"0.4.0","record_id":"deep-link-open-53-unknown","delivery_id":"delivery:deep-link-open-53-unknown","tenant_id":"tenant-a","app_id":"app-a","producer":"sdk-android","producer_version":"fixture-m7","event_id":"event:deep-link-open-53-unknown","event_name":"deep_link_open","schema_version":"0.4.0","occurred_at":"2026-08-21T06:02:00.000Z","occurred_at_source":"device","received_at":"2026-08-21T06:02:01.000Z","processing_purpose_id":"attribution","processing_sequence":1,"payload":{"event_name":"deep_link_open","installation_id":"installation-53-unknown","open_source":"custom_scheme","link_slug":"synthetic53unknown","destination_status":"rejected"}}]
+    },
+    {
+      "batch_id":"reused-install-click",
+      "server_context":{"tenant_id":"tenant-a","app_id":"app-a","received_at":"2026-08-21T06:03:01.000Z","policy_digest":"policy-m7","deep_link_resolution":{"status":"active","tracking_link_id":"link-53-reused","install_attribution_click_id":"click-53_0000000000000000"},"processing_purposes":[{"processing_purpose_id":"attribution","consent_required":false,"policy_version":"consent-m7"}],"withdrawals":[],"alternative_legal_bases":[]},
+      "records":[{"contract_version":"0.4.0","record_id":"deep-link-open-53-reused","delivery_id":"delivery:deep-link-open-53-reused","tenant_id":"tenant-a","app_id":"app-a","producer":"sdk-android","producer_version":"fixture-m7","event_id":"event:deep-link-open-53-reused","event_name":"deep_link_open","schema_version":"0.4.0","occurred_at":"2026-08-21T06:03:00.000Z","occurred_at_source":"device","received_at":"2026-08-21T06:03:01.000Z","processing_purpose_id":"attribution","processing_sequence":1,"payload":{"event_name":"deep_link_open","installation_id":"installation-53-reused","open_source":"android_deferred_referrer","click_id":"click-53_0000000000000000","deep_link_value":"/deferred/53","destination_status":"delivered"}}]
+    }
+  ]
+}

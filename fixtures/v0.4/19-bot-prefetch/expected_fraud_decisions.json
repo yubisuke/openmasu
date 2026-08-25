@@ -14,9 +14,10 @@
         "access_class": "protected"
       }
     ],
-    "rule_bundle_id": "fraud-public-envelope",
-    "rule_bundle_version": "0.3.0",
-    "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "rule_bundle_id": "fraud-conservative",
+    "rule_bundle_version": "1.0.0",
+    "rule_bundle_hash": "dfc447604f961bc549af4e28985d8f4e5427bd8f56c26b208d35ccab9a04a1ed",
+    "rule_id": "transport-bot-prefetch-v1",
     "evaluated_at": "2026-08-12T00:00:00.000Z"
   }
 ]

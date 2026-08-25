@@ -128,6 +128,24 @@ recalculation/export evidence, rule-bundle history, and release runbooks.
 - AppLovin MAX remains revenue evidence. TikTok, AppLovin, Unity Ads, and Mintegral user-level attribution is unsupported where partner-MMP or non-public evidence is required.
 - Production TLS, real backup recovery, real load, provider/device delivery, integrity projects, incident response, and formal trademark clearance before registration remain operator-owned gates.
 
+### Phase 6: Deterministic fraud controls
+
+Implemented through a public, replayable rule package, source-day aggregates, real fraud-bundle JCS binding, gross/net cohort policy, deadline-bound quarantine, and an aggregate-only audit report. Play Integrity and App Attest are normalized through a protected server-verification boundary, but real provider projects and real devices remain operator evidence.
+
+- No device fingerprinting, third-party IP/device intelligence, device graph, or cross-advertiser history.
+- Real-device farms cannot be detected from the permitted evidence; reset fraud is intentionally not detected.
+- Default actions are conservative flags and do not change metrics.
+- Threshold calibration, real provider availability, and chargeback acceptance remain operator work.
+
+### Phase 7: Deep links and re-engagement
+
+Implemented in synthetic code/CI: tenant-owned link hosts, public association-file generation, closed deep-link destinations, Android App Links, iOS Universal Links, Android deferred delivery through Install Referrer, Unity callbacks, engagement-scope attribution, and separated daily metrics.
+
+- Direct deep linking is deterministic on both supported mobile platforms.
+- Deferred deep linking is deterministic on Android only; iOS deferred deep linking is not offered.
+- Device-reported opens are forgeable evidence and do not become redirector-observed clicks.
+- Real-domain verification, store delivery, devices, propagation, reinstall behavior, Unity export, and four-week observation remain operator gates.
+
 ## Evidence gates
 
 A phase completes through measurable evidence, not code completion alone.

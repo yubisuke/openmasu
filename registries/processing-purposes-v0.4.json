@@ -4,7 +4,7 @@
   "purposes": [
     {
       "processing_purpose_id": "attribution",
-      "meaning": "Associate eligible measurement evidence with an installation-level or aggregate attribution result.",
+      "meaning": "Associate eligible measurement evidence with an installation-level, engagement-level, or aggregate attribution result.",
       "default_consent_required": true,
       "assumed_legal_basis_category": "consent",
       "deployment_override_allowed": true

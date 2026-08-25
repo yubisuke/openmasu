@@ -4,7 +4,7 @@
   "title": "OpenMasu Click Event v0.4",
   "type": "object",
   "additionalProperties": false,
-  "required": ["event_name", "click_id", "tracking_link_id", "campaign_id", "redirector_time_status"],
+  "required": ["event_name", "tracking_link_id", "campaign_id", "redirector_time_status"],
   "properties": {
     "event_name": { "const": "click" },
     "click_id": { "$ref": "../common.schema.json#/$defs/clickId" },
@@ -20,7 +20,18 @@
     "redirector_time_status": { "enum": ["available", "missing", "invalid"] },
     "bot_prefetch": { "type": "boolean" },
     "replay_suspected": { "type": "boolean" },
+    "source_rate_class": { "enum": ["normal", "elevated", "saturated"] },
+    "client_class": { "enum": ["mobile_app_eligible", "bot", "other"] },
+    "deep_link_value": { "type": "string", "maxLength": 256, "pattern": "^(/[A-Za-z0-9._~-]{1,64}){1,8}$" },
+    "deferred_deep_link_status": { "enum": ["carried", "omitted_length", "omitted_platform", "not_configured"] },
     "import_context": { "$ref": "../common.schema.json#/$defs/importContext" },
     "extensions": { "type": "object", "propertyNames": { "not": { "pattern": "^(import($|_)|imported($|_)|provider($|_))" } }, "additionalProperties": true }
-  }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "bot_prefetch": { "const": true }, "client_class": { "const": "bot" } }, "required": ["bot_prefetch", "client_class"] },
+      "then": { "properties": { "click_id": {} } },
+      "else": { "properties": { "click_id": {} }, "required": ["click_id"] }
+    }
+  ]
 }

@@ -11,7 +11,7 @@
     "record_id": { "$ref": "common.schema.json#/$defs/id" },
     "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
     "app_id": { "$ref": "common.schema.json#/$defs/id" },
-    "reason_code": { "enum": ["client_scope_mismatch", "consent_withdrawn", "aggregate_installation_join_forbidden", "event_id_conflict", "record_id_collision", "payload_schema_invalid", "timestamp_invalid", "timestamp_stale"] },
+    "reason_code": { "enum": ["client_scope_mismatch", "consent_withdrawn", "aggregate_installation_join_forbidden", "event_id_conflict", "record_id_collision", "payload_schema_invalid", "timestamp_invalid", "timestamp_stale", "refund_target_invalid"] },
     "reason_code_version": { "const": "0.4.0" },
     "payload_disposition": { "enum": ["discarded", "protected"] },
     "retained": { "enum": ["non_identifying_metadata", "protected_conflict_evidence"] },

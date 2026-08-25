@@ -10,6 +10,9 @@ data class PlayReferrerEvidence(
   val installBeginAtDevice: String? = null,
   val installBeginAtServer: String? = null,
   val installVersion: String? = null,
+  val deepLinkValue: String? = null,
+  val deepLinkParameters: Map<String, String> = emptyMap(),
+  val deferredDeepLinkStatus: String? = null,
   val shouldRetry: Boolean = false,
 )
 

@@ -5,11 +5,25 @@ import {
   IndexedCandidateProvider,
   jcs,
   sha256,
+  sortCandidateAttempts,
   type CandidateAttempt,
   type CandidateProvider,
 } from "@openmasu/attribution-core";
 import { validateEventPayload } from "@openmasu/contracts";
+import {
+  clickInjectionPolicyDigest,
+  fraudBundleHash,
+  fraudNumberParameter,
+  sha256Jcs,
+  type FraudBundle,
+} from "@openmasu/fraud-rules";
 import { uuidV7, withTenant } from "@openmasu/runtime";
+import { retryDeadlockOnce } from "./seed-safety.js";
+import {
+  ensureSyntheticDefaultFraudBundle,
+  resolveActiveFraudBundle,
+  serverBundleContext,
+} from "./fraud-bundle-runtime.js";
 
 type Any = Record<string, any>;
 export const parityKinds = [
@@ -150,6 +164,14 @@ async function ensureApps(appPool: Pool, input: Any): Promise<void> {
   }
 }
 
+async function ensureFixtureFraudBundles(appPool: Pool, input: Any): Promise<void> {
+  const values = inputAttempts(input).map(({ server }) => [server.tenant_id, server.app_id] as const);
+  const unique = new Map(values.map(([tenantId, appId]) => [`${tenantId}\u0000${appId}`, [tenantId, appId] as const]));
+  for (const [tenantId, appId] of unique.values()) {
+    await ensureSyntheticDefaultFraudBundle(appPool, tenantId, appId, defaultTimestamp(input));
+  }
+}
+
 async function storedArtifact(
   client: PoolClient,
   insert: string,
@@ -252,7 +274,113 @@ async function persistLogical(appPool: Pool, artifact: Any): Promise<Any> {
   return withTenant(appPool, artifact.tenant_id, (client) => persistLogicalWithClient(client, artifact));
 }
 
-async function persistProjectionWithClient(client: PoolClient, logical: Any, input: Any): Promise<void> {
+function refundCorrectionTargets(corrections: readonly Any[]): Map<string, string> {
+  const prefix = "correction:";
+  return new Map(corrections
+    .filter((correction) => correction.correction_reason === "refund"
+      && typeof correction.correction_id === "string"
+      && correction.correction_id.startsWith(prefix)
+      && typeof correction.corrects_record_id === "string")
+    .map((correction) => [correction.correction_id.slice(prefix.length), correction.corrects_record_id]));
+}
+
+function isLegacyExplicitRefundPayload(payload: Any): boolean {
+  return typeof payload.installation_id !== "string"
+    && typeof payload.correction_target_record_id === "string";
+}
+
+function refundProjectionTargets(
+  logicals: readonly Any[],
+  input: Any,
+  corrections: readonly Any[],
+  acceptedLogicals: readonly Any[] = logicals,
+): Map<string, string> {
+  const targets = refundCorrectionTargets(corrections);
+  const attempts = sortCandidateAttempts(inputAttempts(input));
+  const acceptedLogicalRecords = new Set(acceptedLogicals.map((logical) => [
+    logical.tenant_id, logical.app_id, logical.record_id,
+  ].join("\u0000")));
+  const recordCounts = new Map<string, number>();
+  const firstByLogicalScope = new Map<string, CandidateAttempt>();
+  for (const attempt of attempts) {
+    recordCounts.set(attempt.record.record_id, (recordCounts.get(attempt.record.record_id) ?? 0) + 1);
+    const key = [
+      attempt.server.tenant_id, attempt.server.app_id,
+      attempt.record.producer, attempt.record.event_id,
+    ].join("\u0000");
+    if (!firstByLogicalScope.has(key)) firstByLogicalScope.set(key, attempt);
+  }
+  const purchases = attempts.filter((attempt) => {
+    if (attempt.record.event_name !== "purchase"
+        || typeof attempt.record.payload.installation_id !== "string"
+        || attempt.record.payload.financial_status !== "settled"
+        || attempt.record.tenant_id !== attempt.server.tenant_id
+        || attempt.record.app_id !== attempt.server.app_id
+        || !acceptedLogicalRecords.has([
+          attempt.server.tenant_id, attempt.server.app_id, attempt.record.record_id,
+        ].join("\u0000"))
+        || recordCounts.get(attempt.record.record_id) !== 1) return false;
+    const key = [
+      attempt.server.tenant_id, attempt.server.app_id,
+      attempt.record.producer, attempt.record.event_id,
+    ].join("\u0000");
+    return firstByLogicalScope.get(key) === attempt;
+  });
+  const attemptsByRecord = new Map(attempts.map((attempt) => [
+    `${attempt.server.tenant_id}\u0000${attempt.server.app_id}\u0000${attempt.record.record_id}`,
+    attempt,
+  ]));
+  for (const logical of logicals.filter((entry) => entry.event_name === "refund")) {
+    const refund = attemptsByRecord.get(
+      `${logical.tenant_id}\u0000${logical.app_id}\u0000${logical.record_id}`,
+    );
+    if (!refund) {
+      throw new Error(`missing_resolved_refund_target:${logical.record_id}`);
+    }
+    const payload = refund.record.payload;
+    if (isLegacyExplicitRefundPayload(payload)) {
+      // Legacy (v0.4.0) explicit corrections remain logical corrections only.
+      // They deliberately do not enter the v0.4.8 financial fact projection.
+      targets.delete(logical.record_id);
+      continue;
+    }
+    const explicitTarget = payload.correction_target_record_id;
+    if (explicitTarget === undefined && typeof payload.installation_id !== "string") {
+      throw new Error(`missing_resolved_refund_target:${logical.record_id}`);
+    }
+    const matches = purchases.filter((purchase) =>
+      purchase.server.tenant_id === refund.server.tenant_id
+      && purchase.server.app_id === refund.server.app_id
+      && typeof payload.installation_id === "string"
+      && purchase.record.payload.installation_id === payload.installation_id
+      && !(refund.server.refund_target_ineligible_record_ids ?? [])
+        .includes(purchase.record.record_id)
+      && (purchase.record.payload.original_transaction_id ?? purchase.record.payload.transaction_id)
+        === payload.original_transaction_id
+      && purchase.record.payload.currency === payload.currency
+      && purchase.record.occurred_at <= refund.record.occurred_at
+      && purchase.record.received_at <= refund.record.received_at);
+    if (matches.length !== 1) {
+      throw new Error(`missing_resolved_refund_target:${logical.record_id}`);
+    }
+    if (explicitTarget !== undefined && matches[0].record.record_id !== explicitTarget) {
+      throw new Error(`missing_resolved_refund_target:${logical.record_id}`);
+    }
+    const existing = targets.get(logical.record_id);
+    if (existing !== undefined && existing !== matches[0].record.record_id) {
+      throw new Error(`refund_target_resolution_mismatch:${logical.record_id}`);
+    }
+    targets.set(logical.record_id, matches[0].record.record_id);
+  }
+  return targets;
+}
+
+async function persistProjectionWithClient(
+  client: PoolClient,
+  logical: Any,
+  input: Any,
+  refundTargets: ReadonlyMap<string, string> = new Map(),
+): Promise<void> {
   const attempt = inputAttempts(input).find(({ server, record }) =>
     server.tenant_id === logical.tenant_id && server.app_id === logical.app_id && record.record_id === logical.record_id,
   );
@@ -264,21 +392,35 @@ async function persistProjectionWithClient(client: PoolClient, logical: Any, inp
       const campaignId = payload.campaign_id ?? importContext.provider_campaign_ref ?? null;
       const network = payload.network ?? importContext.provider_network ?? null;
       const country = payload.country ?? importContext.provider_country ?? null;
+      const trackingLinkId = attempt.record.producer === "redirector" && typeof payload.tracking_link_id === "string"
+        ? (await client.query<{ tracking_link_id: string }>(
+          `SELECT tracking_link_id FROM control.tracking_links
+            WHERE tenant_id=$1 AND app_id=$2 AND tracking_link_id=$3`,
+          [logical.tenant_id, logical.app_id, payload.tracking_link_id],
+        )).rows[0]?.tracking_link_id ?? null
+        : null;
       await client.query(
         `INSERT INTO ledger.click_facts (
           logical_event_id, tenant_id, app_id, click_id, redirector_click_at,
-          campaign_id, network, country, artifact
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) ON CONFLICT (logical_event_id) DO NOTHING`,
+          campaign_id, network, country, site_id, remote_click_ref, tracking_link_id, artifact
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb) ON CONFLICT (logical_event_id) DO NOTHING`,
         [
           logical.logical_event_id, logical.tenant_id, logical.app_id,
-          payload.click_id, payload.redirector_click_at ?? null,
-          campaignId, network, country,
+          payload.click_id ?? null, payload.redirector_click_at ?? null,
+          campaignId, network, country, payload.site_id ?? null, payload.remote_click_ref ?? null,
+          trackingLinkId,
           projected({
-            click_id: payload.click_id,
+            ...(payload.click_id ? { click_id: payload.click_id } : {}),
             redirector_click_at: payload.redirector_click_at ?? null,
             campaign_id: campaignId,
             network,
             country,
+            site_id: payload.site_id ?? null,
+            remote_click_ref: payload.remote_click_ref ?? null,
+            tracking_link_id: trackingLinkId,
+            bot_prefetch: payload.bot_prefetch === true,
+            source_rate_class: payload.source_rate_class ?? null,
+            client_class: payload.client_class ?? null,
           }),
         ],
       );
@@ -319,14 +461,84 @@ async function persistProjectionWithClient(client: PoolClient, logical: Any, inp
         ON CONFLICT (logical_event_id) DO NOTHING`,
         [logical.logical_event_id, logical.tenant_id, logical.app_id, payload.installation_id, payload.session_id, attempt.record.occurred_at, projected({ installation_id: payload.installation_id, session_id: payload.session_id })],
       );
+    } else if (logical.event_name === "deep_link_open") {
+      const resolution = attempt.server.deep_link_resolution ?? { status: "unknown" };
+      const previous = await client.query<{ occurred_at_ts: string }>(
+        `SELECT occurred_at_ts::text FROM ledger.session_facts
+          WHERE tenant_id=$1 AND app_id=$2 AND installation_id=$3
+            AND occurred_at_ts <= $4::timestamptz
+          ORDER BY occurred_at_ts DESC LIMIT 1`,
+        [logical.tenant_id, logical.app_id, payload.installation_id, attempt.record.occurred_at],
+      );
+      const daysSinceLastSession = previous.rows[0]
+        ? Math.floor((Date.parse(attempt.record.occurred_at) - Date.parse(previous.rows[0].occurred_at_ts)) / 86_400_000)
+        : null;
+      await client.query(
+        `INSERT INTO ledger.deep_link_open_facts (
+          logical_event_id, tenant_id, app_id, installation_id, tracking_link_id,
+          campaign_id, open_source, occurred_at, days_since_last_session, artifact
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
+        ON CONFLICT (logical_event_id) DO NOTHING`,
+        [logical.logical_event_id, logical.tenant_id, logical.app_id, payload.installation_id,
+          resolution.status === "active" ? resolution.tracking_link_id ?? null : null,
+          resolution.status === "active" ? resolution.campaign_id ?? null : null,
+          payload.open_source, attempt.record.occurred_at, daysSinceLastSession,
+          projected({
+            installation_id: payload.installation_id,
+            tracking_link_id: resolution.status === "active" ? resolution.tracking_link_id ?? null : null,
+            campaign_id: resolution.status === "active" ? resolution.campaign_id ?? null : null,
+            open_source: payload.open_source,
+            occurred_at: attempt.record.occurred_at,
+            days_since_last_session: daysSinceLastSession,
+          })],
+      );
     } else if (logical.event_name === "purchase") {
       await client.query(
         `INSERT INTO ledger.purchase_facts (
-          logical_event_id, tenant_id, app_id, installation_id, transaction_id,
-          amount_unscaled, amount_scale, currency, occurred_at, artifact
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
+          logical_event_id, record_id, tenant_id, app_id, installation_id, transaction_id,
+          original_transaction_id, amount_unscaled, amount_scale, currency,
+          financial_status, occurred_at, artifact
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)
         ON CONFLICT (logical_event_id) DO NOTHING`,
-        [logical.logical_event_id, logical.tenant_id, logical.app_id, payload.installation_id ?? null, payload.transaction_id, payload.amount_unscaled, payload.amount_scale, payload.currency, attempt.record.occurred_at, projected({ installation_id: payload.installation_id ?? null, transaction_id: payload.transaction_id, amount_unscaled: payload.amount_unscaled, amount_scale: payload.amount_scale, currency: payload.currency })],
+        [logical.logical_event_id, logical.record_id, logical.tenant_id, logical.app_id,
+          payload.installation_id ?? null, payload.transaction_id,
+          payload.original_transaction_id ?? null, payload.amount_unscaled,
+          payload.amount_scale, payload.currency, payload.financial_status,
+          attempt.record.occurred_at, projected({
+            installation_id: payload.installation_id ?? null,
+            transaction_id: payload.transaction_id,
+            original_transaction_id: payload.original_transaction_id ?? null,
+            amount_unscaled: payload.amount_unscaled,
+            amount_scale: payload.amount_scale,
+            currency: payload.currency,
+            financial_status: payload.financial_status,
+          })],
+      );
+    } else if (logical.event_name === "refund") {
+      if (typeof payload.installation_id !== "string") return;
+      const correctionTargetRecordId = refundTargets.get(logical.record_id);
+      if (!correctionTargetRecordId) throw new Error(`missing_resolved_refund_target:${logical.record_id}`);
+      await client.query(
+        `INSERT INTO ledger.refund_facts (
+          logical_event_id, tenant_id, app_id, installation_id, transaction_id,
+          original_transaction_id, correction_target_record_id, amount_unscaled,
+          amount_scale, currency, financial_status, occurred_at, artifact
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)
+        ON CONFLICT (logical_event_id) DO NOTHING`,
+        [logical.logical_event_id, logical.tenant_id, logical.app_id,
+          payload.installation_id ?? null, payload.transaction_id,
+          payload.original_transaction_id, correctionTargetRecordId,
+          payload.amount_unscaled, payload.amount_scale, payload.currency,
+          payload.financial_status, attempt.record.occurred_at, projected({
+            installation_id: payload.installation_id ?? null,
+            transaction_id: payload.transaction_id,
+            original_transaction_id: payload.original_transaction_id,
+            correction_target_record_id: correctionTargetRecordId,
+            amount_unscaled: payload.amount_unscaled,
+            amount_scale: payload.amount_scale,
+            currency: payload.currency,
+            financial_status: payload.financial_status,
+          })],
       );
     } else if (logical.event_name === "ad_revenue") {
       await client.query(
@@ -378,8 +590,14 @@ async function persistProjectionWithClient(client: PoolClient, logical: Any, inp
   }
 }
 
-async function persistProjection(appPool: Pool, logical: Any, input: Any): Promise<void> {
-  return withTenant(appPool, logical.tenant_id, (client) => persistProjectionWithClient(client, logical, input));
+async function persistProjection(
+  appPool: Pool,
+  logical: Any,
+  input: Any,
+  refundTargets: ReadonlyMap<string, string> = new Map(),
+): Promise<void> {
+  return withTenant(appPool, logical.tenant_id,
+    (client) => persistProjectionWithClient(client, logical, input, refundTargets));
 }
 
 async function persistFixtureCosts(appPool: Pool, input: Any): Promise<void> {
@@ -499,18 +717,66 @@ async function persistAttribution(appPool: Pool, artifact: Any): Promise<Any> {
   ));
 }
 
-async function persistFraud(appPool: Pool, artifact: Any, scope: { tenant_id: string; app_id: string }): Promise<Any> {
-  return withTenant(appPool, scope.tenant_id, (client) => storedArtifact(
-    client,
-    `INSERT INTO ledger.fraud_decisions (
-      fraud_decision_id, tenant_id, app_id, subject_ref, decision, action,
-      reason_code, evaluated_at, artifact
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)
+async function persistFraud(
+  appPool: Pool,
+  artifact: Any,
+  scope: { tenant_id: string; app_id: string },
+  expectedRevisionId?: string,
+): Promise<Any> {
+  return withTenant(appPool, scope.tenant_id, async (client) => {
+    const revision = await client.query<{
+      rule_bundle_revision_id: string;
+      rule_bundle_id: string;
+      rule_bundle_version: string;
+      rule_bundle_hash: string;
+      definition: FraudBundle | null;
+      definition_digest: string | null;
+    }>(
+      `SELECT rule_bundle_revision_id,rule_bundle_id,rule_bundle_version,rule_bundle_hash,
+              definition,definition_digest
+         FROM control.rule_bundle_revisions
+        WHERE tenant_id=$1 AND app_id=$2
+          AND ($3::text IS NULL OR rule_bundle_revision_id=$3)
+          AND rule_bundle_id=$4 AND rule_bundle_version=$5 AND rule_bundle_hash=$6
+        ORDER BY activated_at DESC,rule_bundle_revision_id DESC
+        LIMIT 2`,
+      [scope.tenant_id, scope.app_id, expectedRevisionId ?? null,
+        artifact.rule_bundle_id, artifact.rule_bundle_version, artifact.rule_bundle_hash],
+    );
+    if (revision.rows.length !== 1) throw new Error("fraud_rule_bundle_revision_mismatch");
+    const bound = revision.rows[0];
+    if (!bound.definition || !bound.definition_digest
+      || sha256Jcs(bound.definition) !== bound.definition_digest
+      || fraudBundleHash(bound.definition) !== bound.rule_bundle_hash) {
+      throw new Error("fraud_rule_bundle_definition_mismatch");
+    }
+    const stored = await storedArtifact(
+      client,
+      `INSERT INTO ledger.fraud_decisions (
+      fraud_decision_id, tenant_id, app_id, subject_ref, subject_scope, rule_id,
+      decision, action, reason_code, evaluated_at, resolution_deadline_at,
+      supersedes_fraud_decision_id, artifact
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)
     ON CONFLICT (fraud_decision_id) DO NOTHING RETURNING artifact`,
-    [artifact.fraud_decision_id, scope.tenant_id, scope.app_id, artifact.subject_ref, artifact.decision, artifact.action, artifact.reason_code, artifact.evaluated_at, JSON.stringify(artifact)],
-    "SELECT artifact FROM ledger.fraud_decisions WHERE fraud_decision_id = $1",
-    [artifact.fraud_decision_id],
-  ));
+      [artifact.fraud_decision_id, scope.tenant_id, scope.app_id, artifact.subject_ref,
+        artifact.subject_scope ?? "record", artifact.rule_id ?? null, artifact.decision,
+        artifact.action, artifact.reason_code, artifact.evaluated_at,
+        artifact.resolution_deadline_at ?? null, artifact.supersedes_fraud_decision_id ?? null,
+        JSON.stringify(artifact)],
+      "SELECT artifact FROM ledger.fraud_decisions WHERE fraud_decision_id = $1",
+      [artifact.fraud_decision_id],
+    );
+    if (artifact.action === "quarantine") {
+      await client.query(
+        `INSERT INTO ephemeral.fraud_quarantines (
+          fraud_decision_id,tenant_id,app_id,subject_ref,resolve_after
+        ) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (fraud_decision_id) DO NOTHING`,
+        [artifact.fraud_decision_id, scope.tenant_id, scope.app_id,
+          artifact.subject_ref, artifact.resolution_deadline_at],
+      );
+    }
+    return stored;
+  });
 }
 
 async function persistMetric(appPool: Pool, artifact: Any, scope: { tenant_id: string; app_id: string }): Promise<Any> {
@@ -580,7 +846,9 @@ async function persistLifecycle(appPool: Pool, input: Any): Promise<void> {
             privacy_request_id, privacy_tombstone_id
           ) VALUES ($1,$2,$3,$4,$5,$6,$7)
           ON CONFLICT (record_id, lifecycle_status) DO NOTHING`,
-          [request.tenant_id, request.app_id, affected.record_id, affected.lifecycle_status, request.completed_at, request.privacy_request_id, `tombstone:${request.privacy_request_id}:${affected.record_id}`],
+          [request.tenant_id, request.app_id, affected.record_id, affected.lifecycle_status,
+            request.completed_at, request.privacy_request_id,
+            `tombstone:${sha256([request.privacy_request_id, affected.record_id]).slice(0, 48)}`],
         );
       });
     }
@@ -610,14 +878,26 @@ function scopeForDerived(artifact: Any, baseOutput: Any, input: Any): { tenant_i
 }
 
 async function resetLedger(seedPool: Pool): Promise<void> {
-  const tables = await seedPool.query<{ table_name: string }>(
-    `SELECT table_name FROM information_schema.tables
-     WHERE table_schema = 'ledger' AND table_type = 'BASE TABLE'
-     ORDER BY table_name`,
-  );
-  if (tables.rowCount === 0) throw new Error("ledger schema contains no base tables");
-  const quoted = tables.rows.map(({ table_name }) => `ledger."${table_name.replaceAll('"', '""')}"`);
-  await seedPool.query(`TRUNCATE TABLE ${quoted.join(", ")} CASCADE`);
+  await retryDeadlockOnce(async () => {
+    const client = await seedPool.connect();
+    try {
+      await client.query("BEGIN");
+      const tables = await client.query<{ table_name: string }>(
+        `SELECT table_name FROM information_schema.tables
+         WHERE table_schema = 'ledger' AND table_type = 'BASE TABLE'
+         ORDER BY table_name`,
+      );
+      if (tables.rowCount === 0) throw new Error("ledger schema contains no base tables");
+      const quoted = tables.rows.map(({ table_name }) => `ledger."${table_name.replaceAll('"', '""')}"`);
+      await client.query(`TRUNCATE TABLE ${quoted.join(", ")} CASCADE`);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
 }
 
 async function capture(seedPool: Pool, fixtureName: string, kind: ParityKind, ordinal: number, artifact: Any): Promise<void> {
@@ -659,6 +939,7 @@ export async function ingestFixture(
 ): Promise<number> {
   await resetLedger(seedPool);
   await ensureApps(appPool, input);
+  await ensureFixtureFraudBundles(appPool, input);
   await seedPool.query(
     `INSERT INTO testing.fixture_inputs (fixture_name, input_digest, input)
      VALUES ($1,$2,$3::jsonb) ON CONFLICT (fixture_name)
@@ -678,6 +959,11 @@ export async function ingestFixture(
   };
   const baseOutput = evaluate(withoutLifecycleChanges(input), providerFactory);
   const output = evaluate(input, providerFactory);
+  const baseRefundTargets = refundProjectionTargets(
+    baseOutput.logical_events,
+    input,
+    baseOutput.corrections,
+  );
 
   await seedPool.query("DELETE FROM testing.fixture_artifacts WHERE fixture_name = $1", [fixtureName]);
   for (const raw of baseOutput.raw_records) {
@@ -696,7 +982,12 @@ export async function ingestFixture(
   for (const logical of baseOutput.logical_events) {
     const stored = await persistLogical(appPool, logical);
     assertRoundTrip(logical, stored, `${fixtureName}/base logical/${logical.logical_event_id}`);
-    await persistProjection(appPool, logical, input);
+  }
+  const projectionPriority = (logical: Any) =>
+    logical.event_name === "purchase" ? 0 : logical.event_name === "refund" ? 2 : 1;
+  for (const logical of [...baseOutput.logical_events].sort((left, right) =>
+    projectionPriority(left) - projectionPriority(right))) {
+    await persistProjection(appPool, logical, input, baseRefundTargets);
   }
   await persistFixtureCosts(appPool, input);
   await persistLifecycle(appPool, input);
@@ -736,6 +1027,7 @@ export type RuntimeIngestionResult = {
   raw_records: Any[];
   deliveries: Any[];
   logical_events: Any[];
+  corrections: Any[];
   rejections: Any[];
   attributions: Any[];
   fraud_decisions: Any[];
@@ -817,6 +1109,372 @@ function runtimeInput(attempts: readonly CandidateAttempt[]): Any {
   };
 }
 
+async function resolveDeepLinkAttempts(pool: Pool, attempts: readonly CandidateAttempt[]): Promise<CandidateAttempt[]> {
+  const resolved: CandidateAttempt[] = [];
+  for (const attempt of attempts) {
+    if (attempt.record.event_name !== "deep_link_open") { resolved.push(attempt); continue; }
+    const payload = attempt.record.payload;
+    const resolution = await withTenant(pool, attempt.server.tenant_id, async (client) => {
+      const link = payload.open_source === "android_deferred_referrer"
+        ? await client.query<{ tracking_link_id: string; campaign_id: string | null; status: string }>(
+            `SELECT link.tracking_link_id, link.campaign_id, link.status
+               FROM ledger.click_facts AS click
+               JOIN control.tracking_links_current AS link
+                 ON link.tenant_id=click.tenant_id AND link.app_id=click.app_id
+                AND link.tracking_link_id=click.tracking_link_id
+              WHERE click.tenant_id=$1 AND click.app_id=$2 AND click.click_id=$3
+              ORDER BY control.canonical_timestamp_value(click.redirector_click_at) DESC LIMIT 1`,
+            [attempt.server.tenant_id, attempt.server.app_id, payload.click_id],
+          )
+        : await client.query<{ tracking_link_id: string; campaign_id: string | null; status: string }>(
+            `SELECT tracking_link_id, campaign_id, status FROM control.tracking_links_current
+              WHERE tenant_id=$1 AND app_id=$2 AND slug=$3 LIMIT 1`,
+            [attempt.server.tenant_id, attempt.server.app_id, payload.link_slug],
+          );
+      const install = payload.open_source === "android_deferred_referrer"
+        ? await client.query<{ click_id: string | null }>(
+            `SELECT click_id FROM ledger.install_facts
+              WHERE tenant_id=$1 AND app_id=$2 AND installation_id=$3
+              ORDER BY occurred_at_ts DESC LIMIT 1`,
+            [attempt.server.tenant_id, attempt.server.app_id, payload.installation_id],
+          )
+        : undefined;
+      const row = link.rows[0];
+      if (!row) return { status: "unknown" as const, ...(install?.rows[0]?.click_id ? { install_attribution_click_id: install.rows[0].click_id } : {}) };
+      return {
+        status: row.status === "active" ? "active" as const : "inactive" as const,
+        tracking_link_id: row.tracking_link_id,
+        ...(row.campaign_id ? { campaign_id: row.campaign_id } : {}),
+        ...(install?.rows[0]?.click_id ? { install_attribution_click_id: install.rows[0].click_id } : {}),
+      };
+    });
+    resolved.push({ ...attempt, server: { ...attempt.server, deep_link_resolution: resolution } });
+  }
+  return resolved;
+}
+
+async function ineligibleHistoricalPurchaseTargetIds(
+  pool: Pool,
+  attempts: readonly CandidateAttempt[],
+): Promise<string[]> {
+  const purchases = attempts.filter((attempt) =>
+    attempt.record.event_name === "purchase"
+    && attempt.record.payload.financial_status === "settled"
+    && typeof attempt.record.payload.installation_id === "string");
+  if (purchases.length === 0) return [];
+  const first = purchases[0];
+  const rows = await withTenant(pool, first.server.tenant_id, (client) => client.query<{
+    record_id: string;
+    installation_id: string | null;
+    transaction_id: string;
+    original_transaction_id: string | null;
+    amount_unscaled: string;
+    amount_scale: number;
+    currency: string;
+    financial_status: string | null;
+    occurred_at_ts: string;
+  }>(
+    `SELECT record_id::text, installation_id, transaction_id, original_transaction_id,
+            amount_unscaled, amount_scale, currency, financial_status, occurred_at_ts::text
+       FROM ledger.purchase_facts
+      WHERE tenant_id=$1 AND app_id=$2 AND record_id::text = ANY($3::text[])`,
+    [first.server.tenant_id, first.server.app_id,
+      [...new Set(purchases.map((attempt) => attempt.record.record_id))]],
+  ));
+  const purchaseByRecord = new Map(purchases.map((attempt) => [attempt.record.record_id, attempt]));
+  const eligible = new Set(rows.rows.filter((row) => {
+    const purchase = purchaseByRecord.get(row.record_id);
+    if (!purchase) return false;
+    const payload = purchase.record.payload;
+    return row.financial_status === "settled"
+      && row.installation_id === payload.installation_id
+      && (row.original_transaction_id ?? row.transaction_id)
+        === (payload.original_transaction_id ?? payload.transaction_id)
+      && row.amount_unscaled === payload.amount_unscaled
+      && row.amount_scale === payload.amount_scale
+      && row.currency === payload.currency
+      && Date.parse(row.occurred_at_ts) === Date.parse(purchase.record.occurred_at);
+  }).map((row) => row.record_id));
+  return [...purchaseByRecord.keys()].filter((recordId) => !eligible.has(recordId)).sort();
+}
+
+const runtimeBulkChunkSize = 1_000;
+
+async function insertJsonRows(
+  client: PoolClient,
+  rows: readonly Any[],
+  statement: string,
+): Promise<void> {
+  for (let offset = 0; offset < rows.length; offset += runtimeBulkChunkSize) {
+    await client.query(statement, [JSON.stringify(rows.slice(offset, offset + runtimeBulkChunkSize))]);
+  }
+}
+
+function bulkProjectionRows(
+  logicals: readonly Any[],
+  input: Any,
+  refundTargets: ReadonlyMap<string, string>,
+): {
+  byTable: Map<string, Any[]>;
+  fallback: Any[];
+} {
+  const attempts = new Map(inputAttempts(input).map((attempt) => [
+    `${attempt.server.tenant_id}\u0000${attempt.server.app_id}\u0000${attempt.record.record_id}`,
+    attempt,
+  ]));
+  const byTable = new Map<string, Any[]>();
+  const fallback: Any[] = [];
+  const append = (table: string, row: Any): void => {
+    const rows = byTable.get(table) ?? [];
+    rows.push(row);
+    byTable.set(table, rows);
+  };
+  for (const logical of logicals) {
+    const attempt = attempts.get(`${logical.tenant_id}\u0000${logical.app_id}\u0000${logical.record_id}`);
+    if (!attempt) throw new Error(`missing input record for logical event ${logical.logical_event_id}`);
+    const payload = attempt.record.payload;
+    if (logical.event_name === "click") {
+      if (attempt.record.producer === "redirector") { fallback.push(logical); continue; }
+      const context = payload.import_context ?? {};
+      const campaignId = payload.campaign_id ?? context.provider_campaign_ref ?? null;
+      const network = payload.network ?? context.provider_network ?? null;
+      const country = payload.country ?? context.provider_country ?? null;
+      const artifact = {
+        ...(payload.click_id ? { click_id: payload.click_id } : {}),
+        redirector_click_at: payload.redirector_click_at ?? null,
+        campaign_id: campaignId, network, country,
+        site_id: payload.site_id ?? null, remote_click_ref: payload.remote_click_ref ?? null,
+        tracking_link_id: null, bot_prefetch: payload.bot_prefetch === true,
+        source_rate_class: payload.source_rate_class ?? null, client_class: payload.client_class ?? null,
+      };
+      append("click", {
+        logical_event_id: logical.logical_event_id, tenant_id: logical.tenant_id, app_id: logical.app_id,
+        click_id: payload.click_id ?? null, redirector_click_at: payload.redirector_click_at ?? null,
+        campaign_id: campaignId, network, country, site_id: payload.site_id ?? null,
+        remote_click_ref: payload.remote_click_ref ?? null, tracking_link_id: null, artifact,
+      });
+    } else if (logical.event_name === "install") {
+      const context = payload.import_context ?? {};
+      const campaignId = payload.campaign_id ?? context.provider_campaign_ref ?? null;
+      const network = payload.network ?? context.provider_network ?? null;
+      const country = payload.country ?? context.provider_country ?? null;
+      append("install", {
+        logical_event_id: logical.logical_event_id, tenant_id: logical.tenant_id, app_id: logical.app_id,
+        installation_id: payload.installation_id, prior_installation_id: payload.prior_installation_id ?? null,
+        install_type: payload.install_type, click_id: payload.click_id ?? null,
+        install_begin_at_server: payload.install_begin_at_server ?? null, occurred_at: attempt.record.occurred_at,
+        campaign_id: campaignId, network, country,
+        artifact: {
+          installation_id: payload.installation_id, prior_installation_id: payload.prior_installation_id ?? null,
+          install_type: payload.install_type, occurred_at: attempt.record.occurred_at,
+          campaign_id: campaignId, network, country,
+        },
+      });
+    } else if (logical.event_name === "session_start") {
+      append("session", {
+        logical_event_id: logical.logical_event_id, tenant_id: logical.tenant_id, app_id: logical.app_id,
+        installation_id: payload.installation_id, session_id: payload.session_id,
+        occurred_at: attempt.record.occurred_at,
+        artifact: { installation_id: payload.installation_id, session_id: payload.session_id },
+      });
+    } else if (logical.event_name === "purchase") {
+      append("purchase", {
+        logical_event_id: logical.logical_event_id, record_id: logical.record_id,
+        tenant_id: logical.tenant_id, app_id: logical.app_id,
+        installation_id: payload.installation_id ?? null, transaction_id: payload.transaction_id,
+        original_transaction_id: payload.original_transaction_id ?? null,
+        amount_unscaled: payload.amount_unscaled, amount_scale: payload.amount_scale, currency: payload.currency,
+        financial_status: payload.financial_status,
+        occurred_at: attempt.record.occurred_at,
+        artifact: {
+          installation_id: payload.installation_id ?? null, transaction_id: payload.transaction_id,
+          original_transaction_id: payload.original_transaction_id ?? null,
+          amount_unscaled: payload.amount_unscaled, amount_scale: payload.amount_scale, currency: payload.currency,
+          financial_status: payload.financial_status,
+        },
+      });
+    } else if (logical.event_name === "refund") {
+      if (typeof payload.installation_id !== "string") continue;
+      const correctionTargetRecordId = refundTargets.get(logical.record_id);
+      if (!correctionTargetRecordId) throw new Error(`missing_resolved_refund_target:${logical.record_id}`);
+      append("refund", {
+        logical_event_id: logical.logical_event_id, tenant_id: logical.tenant_id, app_id: logical.app_id,
+        installation_id: payload.installation_id ?? null, transaction_id: payload.transaction_id,
+        original_transaction_id: payload.original_transaction_id,
+        correction_target_record_id: correctionTargetRecordId,
+        amount_unscaled: payload.amount_unscaled, amount_scale: payload.amount_scale,
+        currency: payload.currency, financial_status: payload.financial_status,
+        occurred_at: attempt.record.occurred_at,
+        artifact: {
+          installation_id: payload.installation_id ?? null, transaction_id: payload.transaction_id,
+          original_transaction_id: payload.original_transaction_id,
+          correction_target_record_id: correctionTargetRecordId,
+          amount_unscaled: payload.amount_unscaled, amount_scale: payload.amount_scale,
+          currency: payload.currency, financial_status: payload.financial_status,
+        },
+      });
+    } else if (logical.event_name === "ad_revenue") {
+      append("ad_revenue", {
+        logical_event_id: logical.logical_event_id, tenant_id: logical.tenant_id, app_id: logical.app_id,
+        installation_id: payload.installation_id ?? null, anchor_source: payload.anchor_source ?? null,
+        impression_id: payload.impression_id ?? null, ad_unit_id: payload.ad_unit_id ?? null,
+        ad_network: payload.ad_network ?? null, amount_unscaled: payload.amount_unscaled,
+        amount_scale: payload.amount_scale, currency: payload.currency, revenue_source: payload.revenue_source,
+        country: payload.country ?? null, occurred_at: attempt.record.occurred_at,
+        artifact: {
+          installation_id: payload.installation_id ?? null, anchor_source: payload.anchor_source ?? null,
+          impression_id: payload.impression_id ?? null, amount_unscaled: payload.amount_unscaled,
+          amount_scale: payload.amount_scale, currency: payload.currency, revenue_source: payload.revenue_source,
+        },
+      });
+    } else if (logical.event_name === "custom_event") {
+      append("custom_event", {
+        logical_event_id: logical.logical_event_id, tenant_id: logical.tenant_id, app_id: logical.app_id,
+        installation_id: payload.installation_id, event_key: payload.event_key,
+        artifact: { installation_id: payload.installation_id, event_key: payload.event_key },
+      });
+    } else if (["skan_postback", "adattributionkit_postback"].includes(logical.event_name)) {
+      const conversionBucket = payload.conversion_value !== undefined
+        ? `fine:${payload.conversion_value}`
+        : payload.coarse_conversion_value !== undefined ? `coarse:${payload.coarse_conversion_value}` : null;
+      const artifact = {
+        event_name: logical.event_name, signature_verified: payload.signature_verified === true,
+        did_win: payload.did_win === true, source_identifier_present: payload.source_identifier !== undefined,
+        conversion_bucket: conversionBucket, received_at: attempt.record.received_at,
+      };
+      append("apple_postback", {
+        logical_event_id: logical.logical_event_id, tenant_id: logical.tenant_id, app_id: logical.app_id,
+        event_name: logical.event_name, signature_verified: artifact.signature_verified,
+        did_win: artifact.did_win, source_identifier_present: artifact.source_identifier_present,
+        conversion_bucket: conversionBucket, received_at: attempt.record.received_at, artifact,
+      });
+    } else if (logical.event_name === "deep_link_open") {
+      fallback.push(logical);
+    }
+  }
+  return { byTable, fallback };
+}
+
+async function persistRuntimeBulk(
+  appPool: Pool,
+  attempts: readonly CandidateAttempt[],
+  selected: RuntimeIngestionResult,
+  input: Any,
+  activeRevision: Awaited<ReturnType<typeof resolveActiveFraudBundle>>,
+  acceptedLogicals: readonly Any[],
+): Promise<void> {
+  const tenantId = attempts[0].server.tenant_id;
+  const rawRows: Any[] = selected.raw_records.map((artifact) => ({
+    ...artifact, policy_digest: policyDigestForRecord(input, artifact.record_id), artifact,
+  }));
+  const deliveryRows = selected.deliveries.map((artifact) => ({ ...artifact, delivery_attempt_id: uuidV7(), artifact }));
+  const logicalRows = selected.logical_events.map((artifact) => ({ ...artifact, artifact }));
+  const rejectionRows = selected.rejections.map((artifact) => ({ ...artifact, artifact }));
+  const correctionRows = selected.corrections.map((artifact) => ({ ...artifact, artifact }));
+  const attributionRows = selected.attributions.map((artifact) => ({ ...artifact, artifact }));
+  const reconciliationRows = selected.reconciliation.map((artifact) => ({ ...artifact, artifact }));
+  const projections = bulkProjectionRows(
+    selected.logical_events,
+    input,
+    refundProjectionTargets(selected.logical_events, input, selected.corrections, acceptedLogicals),
+  );
+
+  await withTenant(appPool, tenantId, async (client) => {
+    await insertJsonRows(client, rawRows, `INSERT INTO ledger.raw_records (
+      record_id,tenant_id,app_id,producer,producer_version,event_id,delivery_id,event_name,schema_version,
+      payload_sha256,occurred_at,occurred_at_source,received_at,raw_payload_ref,processing_purpose_id,
+      consent_evaluation_policy_version,consent_decision_reason_code,withdrawal_recognized_at,
+      alternative_legal_basis_id,alternative_legal_basis_policy_version,policy_digest,artifact)
+      SELECT record_id,tenant_id,app_id,producer,producer_version,event_id,delivery_id,event_name,schema_version,
+      payload_sha256,occurred_at,occurred_at_source,received_at,raw_payload_ref,processing_purpose_id,
+      consent_evaluation_policy_version,consent_decision_reason_code,withdrawal_recognized_at,
+      alternative_legal_basis_id,alternative_legal_basis_policy_version,policy_digest,artifact
+      FROM jsonb_populate_recordset(NULL::ledger.raw_records,$1::jsonb)
+      ON CONFLICT (record_id) DO NOTHING`);
+    await insertJsonRows(client, rawRows.map((row) => ({
+      tenant_id: row.tenant_id, app_id: row.app_id, record_id: row.record_id,
+      lifecycle_status: "available", changed_at: row.received_at,
+    })), `INSERT INTO ledger.raw_payload_states (tenant_id,app_id,record_id,lifecycle_status,changed_at)
+      SELECT tenant_id,app_id,record_id,lifecycle_status,changed_at
+      FROM jsonb_populate_recordset(NULL::ledger.raw_payload_states,$1::jsonb)
+      ON CONFLICT (record_id,lifecycle_status) DO NOTHING`);
+    await insertJsonRows(client, deliveryRows, `INSERT INTO ledger.event_deliveries (
+      delivery_attempt_id,delivery_id,record_id,canonical_record_id,tenant_id,app_id,received_at,
+      ingestion_status,duplicate_resolution,timeliness,clock_skew_suspected,payload_disposition,reason_code,
+      processing_purpose_id,consent_evaluation_policy_version,consent_decision_reason_code,
+      withdrawal_recognized_at,alternative_legal_basis_id,alternative_legal_basis_policy_version,artifact)
+      SELECT delivery_attempt_id,delivery_id,record_id,canonical_record_id,tenant_id,app_id,received_at,
+      ingestion_status,duplicate_resolution,timeliness,clock_skew_suspected,payload_disposition,reason_code,
+      processing_purpose_id,consent_evaluation_policy_version,consent_decision_reason_code,
+      withdrawal_recognized_at,alternative_legal_basis_id,alternative_legal_basis_policy_version,artifact
+      FROM jsonb_populate_recordset(NULL::ledger.event_deliveries,$1::jsonb)`);
+    await insertJsonRows(client, logicalRows, `INSERT INTO ledger.logical_events (
+      logical_event_id,record_id,tenant_id,app_id,producer,event_id,event_name,record_lifecycle,timeliness,artifact)
+      SELECT logical_event_id,record_id,tenant_id,app_id,producer,event_id,event_name,record_lifecycle,timeliness,artifact
+      FROM jsonb_populate_recordset(NULL::ledger.logical_events,$1::jsonb)
+      ON CONFLICT (logical_event_id) DO NOTHING`);
+
+    const projectionStatements: Record<string, string> = {
+      click: `INSERT INTO ledger.click_facts (logical_event_id,tenant_id,app_id,click_id,redirector_click_at,campaign_id,network,country,site_id,remote_click_ref,tracking_link_id,artifact)
+        SELECT logical_event_id,tenant_id,app_id,click_id,redirector_click_at,campaign_id,network,country,site_id,remote_click_ref,tracking_link_id,artifact FROM jsonb_populate_recordset(NULL::ledger.click_facts,$1::jsonb) ON CONFLICT (logical_event_id) DO NOTHING`,
+      install: `INSERT INTO ledger.install_facts (logical_event_id,tenant_id,app_id,installation_id,prior_installation_id,install_type,click_id,install_begin_at_server,occurred_at,campaign_id,network,country,artifact)
+        SELECT logical_event_id,tenant_id,app_id,installation_id,prior_installation_id,install_type,click_id,install_begin_at_server,occurred_at,campaign_id,network,country,artifact FROM jsonb_populate_recordset(NULL::ledger.install_facts,$1::jsonb) ON CONFLICT (logical_event_id) DO NOTHING`,
+      session: `INSERT INTO ledger.session_facts (logical_event_id,tenant_id,app_id,installation_id,session_id,occurred_at,artifact)
+        SELECT logical_event_id,tenant_id,app_id,installation_id,session_id,occurred_at,artifact FROM jsonb_populate_recordset(NULL::ledger.session_facts,$1::jsonb) ON CONFLICT (logical_event_id) DO NOTHING`,
+      purchase: `INSERT INTO ledger.purchase_facts (logical_event_id,record_id,tenant_id,app_id,installation_id,transaction_id,original_transaction_id,amount_unscaled,amount_scale,currency,financial_status,occurred_at,artifact)
+        SELECT logical_event_id,record_id,tenant_id,app_id,installation_id,transaction_id,original_transaction_id,amount_unscaled,amount_scale,currency,financial_status,occurred_at,artifact FROM jsonb_populate_recordset(NULL::ledger.purchase_facts,$1::jsonb) ON CONFLICT (logical_event_id) DO NOTHING`,
+      refund: `INSERT INTO ledger.refund_facts (logical_event_id,tenant_id,app_id,installation_id,transaction_id,original_transaction_id,correction_target_record_id,amount_unscaled,amount_scale,currency,financial_status,occurred_at,artifact)
+        SELECT logical_event_id,tenant_id,app_id,installation_id,transaction_id,original_transaction_id,correction_target_record_id,amount_unscaled,amount_scale,currency,financial_status,occurred_at,artifact FROM jsonb_populate_recordset(NULL::ledger.refund_facts,$1::jsonb) ON CONFLICT (logical_event_id) DO NOTHING`,
+      ad_revenue: `INSERT INTO ledger.ad_revenue_facts (logical_event_id,tenant_id,app_id,installation_id,anchor_source,impression_id,ad_unit_id,ad_network,amount_unscaled,amount_scale,currency,revenue_source,country,occurred_at,artifact)
+        SELECT logical_event_id,tenant_id,app_id,installation_id,anchor_source,impression_id,ad_unit_id,ad_network,amount_unscaled,amount_scale,currency,revenue_source,country,occurred_at,artifact FROM jsonb_populate_recordset(NULL::ledger.ad_revenue_facts,$1::jsonb) ON CONFLICT (logical_event_id) DO NOTHING`,
+      custom_event: `INSERT INTO ledger.custom_event_facts (logical_event_id,tenant_id,app_id,installation_id,event_key,artifact)
+        SELECT logical_event_id,tenant_id,app_id,installation_id,event_key,artifact FROM jsonb_populate_recordset(NULL::ledger.custom_event_facts,$1::jsonb) ON CONFLICT (logical_event_id) DO NOTHING`,
+      apple_postback: `INSERT INTO ledger.apple_postback_facts (logical_event_id,tenant_id,app_id,event_name,signature_verified,did_win,source_identifier_present,conversion_bucket,received_at,artifact)
+        SELECT logical_event_id,tenant_id,app_id,event_name,signature_verified,did_win,source_identifier_present,conversion_bucket,received_at,artifact FROM jsonb_populate_recordset(NULL::ledger.apple_postback_facts,$1::jsonb) ON CONFLICT (logical_event_id) DO NOTHING`,
+    };
+    const projectionOrder = [...projections.byTable.keys()].sort((left, right) => {
+      const priority = (table: string) => table === "purchase" ? 0 : table === "refund" ? 2 : 1;
+      return priority(left) - priority(right) || left.localeCompare(right);
+    });
+    for (const table of projectionOrder) {
+      await insertJsonRows(client, projections.byTable.get(table) ?? [], projectionStatements[table]);
+    }
+    for (const logical of projections.fallback) await persistProjectionWithClient(client, logical, input);
+
+    await insertJsonRows(client, correctionRows, `INSERT INTO ledger.corrections (correction_id,tenant_id,app_id,corrects_record_id,effective_at,artifact)
+      SELECT correction_id,tenant_id,app_id,corrects_record_id,effective_at,artifact FROM jsonb_populate_recordset(NULL::ledger.corrections,$1::jsonb)
+      ON CONFLICT (correction_id) DO NOTHING`);
+
+    await insertJsonRows(client, rejectionRows, `INSERT INTO ledger.rejections (tenant_id,app_id,delivery_id,record_id,reason_code,artifact)
+      SELECT tenant_id,app_id,delivery_id,record_id,reason_code,artifact FROM jsonb_populate_recordset(NULL::ledger.rejections,$1::jsonb)`);
+    await insertJsonRows(client, attributionRows, `INSERT INTO ledger.attribution_results (attribution_id,tenant_id,app_id,subject_scope,subject_ref,effective_at,decided_at,status,method,model,reason_code,artifact)
+      SELECT attribution_id,tenant_id,app_id,subject_scope,subject_ref,effective_at,decided_at,status,method,model,reason_code,artifact FROM jsonb_populate_recordset(NULL::ledger.attribution_results,$1::jsonb) ON CONFLICT (attribution_id) DO NOTHING`);
+
+    if (selected.fraud_decisions.length > 0) {
+      if (!activeRevision) throw new Error("fraud_rule_bundle_revision_mismatch");
+      for (const artifact of selected.fraud_decisions) {
+        if (artifact.rule_bundle_id !== activeRevision.ruleBundleId
+            || artifact.rule_bundle_version !== activeRevision.ruleBundleVersion
+            || artifact.rule_bundle_hash !== activeRevision.ruleBundleHash) {
+          throw new Error("fraud_rule_bundle_revision_mismatch");
+        }
+      }
+      const fraudRows: Any[] = selected.fraud_decisions.map((artifact) => ({
+        ...artifact, tenant_id: attempts[0].server.tenant_id, app_id: attempts[0].server.app_id, artifact,
+      }));
+      await insertJsonRows(client, fraudRows, `INSERT INTO ledger.fraud_decisions (fraud_decision_id,tenant_id,app_id,subject_ref,subject_scope,rule_id,decision,action,reason_code,evaluated_at,resolution_deadline_at,supersedes_fraud_decision_id,artifact)
+        SELECT fraud_decision_id,tenant_id,app_id,subject_ref,subject_scope,rule_id,decision,action,reason_code,evaluated_at,resolution_deadline_at,supersedes_fraud_decision_id,artifact FROM jsonb_populate_recordset(NULL::ledger.fraud_decisions,$1::jsonb) ON CONFLICT (fraud_decision_id) DO NOTHING`);
+      await insertJsonRows(client, fraudRows.filter((row) => row.action === "quarantine").map((row) => ({
+        fraud_decision_id: row.fraud_decision_id, tenant_id: row.tenant_id, app_id: row.app_id,
+        subject_ref: row.subject_ref, resolve_after: row.resolution_deadline_at,
+      })), `INSERT INTO ephemeral.fraud_quarantines (fraud_decision_id,tenant_id,app_id,subject_ref,resolve_after)
+        SELECT fraud_decision_id,tenant_id,app_id,subject_ref,resolve_after FROM jsonb_populate_recordset(NULL::ephemeral.fraud_quarantines,$1::jsonb) ON CONFLICT (fraud_decision_id) DO NOTHING`);
+    }
+    await insertJsonRows(client, reconciliationRows, `INSERT INTO ledger.reconciliation_results (reconciliation_id,tenant_id,app_id,input_snapshot_id,external_snapshot_id,difference_reason_code,difference_reason_version,freshness,supersedes_reconciliation_id,artifact)
+      SELECT reconciliation_id,tenant_id,app_id,input_snapshot_id,external_snapshot_id,difference_reason_code,difference_reason_version,freshness,supersedes_reconciliation_id,artifact FROM jsonb_populate_recordset(NULL::ledger.reconciliation_results,$1::jsonb) ON CONFLICT (reconciliation_id) DO NOTHING`);
+  });
+}
+
 /**
  * Persist a production import batch through the same evaluator and ledger writers used by
  * golden parity. Historical import attempts participate in candidate selection so retries are
@@ -826,20 +1484,76 @@ export async function ingestRuntimeBatch(
   attempts: readonly CandidateAttempt[],
   appPool: Pool,
   historicalAttempts: readonly CandidateAttempt[] = [],
+  options: { bulkPersistence?: boolean } = {},
 ): Promise<RuntimeIngestionResult> {
   if (attempts.length === 0) {
-    return { raw_records: [], deliveries: [], logical_events: [], rejections: [], attributions: [], fraud_decisions: [], reconciliation: [], validation_failures: [] };
+    return { raw_records: [], deliveries: [], logical_events: [], corrections: [], rejections: [], attributions: [], fraud_decisions: [], reconciliation: [], validation_failures: [] };
   }
-  const invalid = attempts.map(schemaInvalidArtifacts).filter((value): value is NonNullable<typeof value> => value !== undefined);
-  const invalidAttempts = new Set(invalid.map(({ failure }) => `${failure.record_id}\u0000${failure.delivery_id}`));
-  const validAttempts = attempts.filter((attempt) => !invalidAttempts.has(`${attempt.record.record_id}\u0000${attempt.record.delivery_id}`));
-  const validHistory = historicalAttempts.filter((attempt) => !schemaInvalidArtifacts(attempt));
-  const allAttempts = [...validHistory, ...validAttempts].sort(compareCandidateAttempts);
-  const input = runtimeInput(allAttempts);
+  const scopes = [...new Set(attempts.map((attempt) =>
+    `${attempt.server.tenant_id}\u0000${attempt.server.app_id}`))];
+  if (scopes.length > 1) {
+    const combined: RuntimeIngestionResult = {
+      raw_records: [], deliveries: [], logical_events: [], corrections: [], rejections: [], attributions: [],
+      fraud_decisions: [], reconciliation: [], validation_failures: [],
+    };
+    for (const scope of scopes.sort()) {
+      const [tenantId, appId] = scope.split("\u0000");
+      const scopedAttempts = attempts.filter((attempt) =>
+        attempt.server.tenant_id === tenantId && attempt.server.app_id === appId);
+      const scopedHistory = historicalAttempts.filter((attempt) =>
+        attempt.server.tenant_id === tenantId && attempt.server.app_id === appId);
+      const result = await ingestRuntimeBatch(scopedAttempts, appPool, scopedHistory, options);
+      for (const key of Object.keys(combined) as Array<keyof RuntimeIngestionResult>) {
+        (combined[key] as Any[]).push(...result[key]);
+      }
+    }
+    return combined;
+  }
   await ensureApps(appPool, runtimeInput(attempts));
+  const [tenantId, appId] = scopes[0].split("\u0000");
+  const activeRevision = await resolveActiveFraudBundle(appPool, tenantId, appId);
+  const bind = (attempt: CandidateAttempt): CandidateAttempt => {
+    const enabled = attempt.server.fraud_enabled !== false && activeRevision !== undefined;
+    if (!enabled) return { ...attempt, server: { ...attempt.server, fraud_enabled: false } };
+    const thresholdSeconds = fraudNumberParameter(activeRevision.definition, "ctit_lower_bound_seconds", 10);
+    const policy = {
+      threshold_seconds: thresholdSeconds,
+      authority: "server" as const,
+      policy_version: `${activeRevision.ruleBundleId}:${activeRevision.ruleBundleVersion}`,
+    };
+    return {
+      ...attempt,
+      server: {
+        ...attempt.server,
+        fraud_enabled: true,
+        fraud_rule_bundle: serverBundleContext(activeRevision),
+        click_injection_policy: { ...policy, policy_digest: clickInjectionPolicyDigest(policy) },
+      },
+    };
+  };
+  const boundAttempts = attempts.map(bind);
+  const boundHistory = historicalAttempts.map(bind);
+  const invalid = boundAttempts.map(schemaInvalidArtifacts).filter((value): value is NonNullable<typeof value> => value !== undefined);
+  const invalidAttempts = new Set(invalid.map(({ failure }) => `${failure.record_id}\u0000${failure.delivery_id}`));
+  const validAttempts = boundAttempts.filter((attempt) => !invalidAttempts.has(`${attempt.record.record_id}\u0000${attempt.record.delivery_id}`));
+  const validHistory = boundHistory.filter((attempt) => !schemaInvalidArtifacts(attempt));
+  const ineligiblePurchaseTargets = await ineligibleHistoricalPurchaseTargetIds(appPool, validHistory);
+  const withPurchaseEligibility = [...validHistory, ...validAttempts].map((attempt) =>
+    ineligiblePurchaseTargets.length === 0 ? attempt : {
+      ...attempt,
+      server: {
+        ...attempt.server,
+        refund_target_ineligible_record_ids: ineligiblePurchaseTargets,
+      },
+    });
+  const allAttempts = sortCandidateAttempts(await resolveDeepLinkAttempts(appPool, withPurchaseEligibility));
+  const input = runtimeInput(allAttempts);
   const output = evaluate(input, (values) => new IndexedCandidateProvider(values));
   const recordIds = new Set(validAttempts.map((attempt) => attempt.record.record_id));
   const deliveryIds = new Set(validAttempts.map((attempt) => attempt.record.delivery_id));
+  const refundCorrectionIds = new Set(validAttempts
+    .filter((attempt) => attempt.record.event_name === "refund")
+    .map((attempt) => `correction:${attempt.record.record_id}`));
   const belongsToCurrent = (artifact: Any): boolean =>
     recordIds.has(artifact.record_id)
     || recordIds.has(artifact.subject_ref)
@@ -850,6 +1564,8 @@ export async function ingestRuntimeBatch(
     raw_records: output.raw_records.filter(belongsToCurrent),
     deliveries: [...output.deliveries.filter(belongsToCurrent), ...invalid.map(({ delivery }) => delivery)],
     logical_events: output.logical_events.filter(belongsToCurrent),
+    corrections: output.corrections.filter((artifact: Any) =>
+      refundCorrectionIds.has(artifact.correction_id) || belongsToCurrent(artifact)),
     rejections: [...output.rejections.filter(belongsToCurrent), ...invalid.map(({ rejection }) => rejection)],
     attributions: output.attributions.filter(belongsToCurrent),
     fraud_decisions: output.fraud_decisions.filter(belongsToCurrent),
@@ -857,11 +1573,30 @@ export async function ingestRuntimeBatch(
       artifact.tenant_id === attempts[0].server.tenant_id && artifact.app_id === attempts[0].server.app_id),
     validation_failures: invalid.map(({ failure }) => failure),
   };
-  for (const attempt of attempts) {
-    const raw = selected.raw_records.find((artifact) => artifact.record_id === attempt.record.record_id);
-    const delivery = selected.deliveries.find((artifact) => artifact.delivery_id === attempt.record.delivery_id && artifact.record_id === attempt.record.record_id);
-    const logical = selected.logical_events.find((artifact) => artifact.record_id === attempt.record.record_id);
-    const rejection = selected.rejections.find((artifact) => artifact.delivery_id === attempt.record.delivery_id && artifact.record_id === attempt.record.record_id);
+  if (options.bulkPersistence) {
+    await persistRuntimeBulk(appPool, attempts, selected, input, activeRevision, output.logical_events);
+    return selected;
+  }
+  const rawByRecord = new Map(selected.raw_records.map((artifact) => [artifact.record_id, artifact]));
+  const deliveryByRecord = new Map(selected.deliveries.map((artifact) => [`${artifact.record_id}\u0000${artifact.delivery_id}`, artifact]));
+  const logicalByRecord = new Map(selected.logical_events.map((artifact) => [artifact.record_id, artifact]));
+  const refundTargets = refundProjectionTargets(
+    selected.logical_events,
+    input,
+    selected.corrections,
+    output.logical_events,
+  );
+  const rejectionByRecord = new Map(selected.rejections.map((artifact) => [`${artifact.record_id}\u0000${artifact.delivery_id}`, artifact]));
+  const persistenceAttempts = [...attempts].sort((left, right) => {
+    const priority = (attempt: CandidateAttempt) =>
+      attempt.record.event_name === "purchase" ? 0 : attempt.record.event_name === "refund" ? 2 : 1;
+    return priority(left) - priority(right) || compareCandidateAttempts(left, right);
+  });
+  for (const attempt of persistenceAttempts) {
+    const raw = rawByRecord.get(attempt.record.record_id);
+    const delivery = deliveryByRecord.get(`${attempt.record.record_id}\u0000${attempt.record.delivery_id}`);
+    const logical = logicalByRecord.get(attempt.record.record_id);
+    const rejection = rejectionByRecord.get(`${attempt.record.record_id}\u0000${attempt.record.delivery_id}`);
     await withTenant(appPool, attempt.server.tenant_id, async (client) => {
       if (raw) {
         await persistRawWithClient(client, raw, policyDigestForRecord(input, raw.record_id));
@@ -876,7 +1611,7 @@ export async function ingestRuntimeBatch(
       if (delivery) await persistDeliveryWithClient(client, delivery);
       if (logical) {
         await persistLogicalWithClient(client, logical);
-        await persistProjectionWithClient(client, logical, input);
+        await persistProjectionWithClient(client, logical, input, refundTargets);
       }
       if (rejection) await persistRejectionWithClient(client, rejection);
     });
@@ -884,8 +1619,20 @@ export async function ingestRuntimeBatch(
   for (const attribution of selected.attributions) {
     await persistAttribution(appPool, attribution);
   }
+  for (const correction of selected.corrections) await persistCorrection(appPool, correction);
   for (const fraud of selected.fraud_decisions) {
-    await persistFraud(appPool, fraud, { tenant_id: attempts[0].server.tenant_id, app_id: attempts[0].server.app_id });
+    const matchingScopes = attempts.filter((attempt) => {
+      const payload = attempt.record.payload ?? {};
+      return [attempt.record.record_id, attempt.record.event_id, payload.installation_id, payload.click_id]
+        .includes(fraud.subject_ref)
+        || (fraud.evidence ?? []).some((evidence: Any) =>
+          [attempt.record.record_id, attempt.record.event_id].includes(evidence.record_id ?? evidence.ref));
+    }).map((attempt) => ({ tenant_id: attempt.server.tenant_id, app_id: attempt.server.app_id }));
+    const uniqueScopes = [...new Map(matchingScopes.map((scope) => [
+      `${scope.tenant_id}\u0000${scope.app_id}`, scope,
+    ])).values()];
+    if (uniqueScopes.length !== 1) throw new Error(`fraud_scope_ambiguous:${fraud.fraud_decision_id}`);
+    await persistFraud(appPool, fraud, uniqueScopes[0], activeRevision?.ruleBundleRevisionId);
   }
   for (const reconciliation of selected.reconciliation) await persistReconciliation(appPool, reconciliation);
   return selected;

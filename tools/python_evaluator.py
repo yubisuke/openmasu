@@ -27,6 +27,69 @@ def digest(value: Any) -> str:
     return hashlib.sha256(rfc8785.dumps(value)).hexdigest()
 
 
+FRAUD_BUNDLE = {
+    "id": "fraud-conservative",
+    "version": "1.0.0",
+    "layers": {"base": {
+        "ctit_lower_bound_seconds": 10,
+        "ctit_negative_rate_threshold": 0.05,
+        "referrer_redirector_divergence_seconds": 300,
+        "source_day_min_clicks": 1000,
+        "source_day_cvr_median_multiplier": 0.2,
+        "source_day_ctit_p50_min_seconds": 86400,
+        "source_day_ctit_p95_p50_max_ratio": 3,
+        "quarantine_hours": 72,
+    }},
+    "rules": [
+        {"id": "transport-bot-prefetch-v1", "inputs": ["prefetch_signal"], "action": "exclude"},
+        {"id": "transport-replay-v1", "inputs": ["replay_signal"], "action": "exclude"},
+        {"id": "referrer-server-order-v1", "inputs": ["referrer_click_at_server", "install_begin_at_server"], "action": "flag"},
+        {"id": "ctit-lower-bound-v1", "inputs": ["redirector_click_at", "install_begin_at_server"], "action": "flag"},
+        {"id": "ctit-clock-anomaly-v1", "inputs": ["redirector_click_at", "install_begin_at_server"], "action": "allow"},
+        {"id": "referrer-redirector-divergence-v1", "inputs": ["referrer_click_at_server", "redirector_click_at"], "action": "flag"},
+        {"id": "source-day-click-flooding-v1", "inputs": ["source_day_aggregate"], "action": "flag"},
+        {"id": "device-integrity-combination-v1", "inputs": ["integrity_verdict", "ctit"], "action": "flag"},
+    ],
+}
+FRAUD_BUNDLE_HASH = digest(FRAUD_BUNDLE)
+
+
+def fraud_parameter(bundle: dict[str, Any], name: str, fallback: float) -> float:
+    value = bundle.get("layers", {}).get("base", {}).get(name, fallback)
+    return float(value) if isinstance(value, (int, float)) else fallback
+
+
+def fraud_action(bundle: dict[str, Any], rule_id: str, fallback: str) -> str:
+    return next((rule["action"] for rule in bundle.get("rules", []) if rule.get("id") == rule_id), fallback)
+
+
+def bound_fraud_bundle(server: dict[str, Any]) -> tuple[dict[str, Any], str] | None:
+    if server.get("fraud_enabled") is False:
+        return None
+    bound = server.get("fraud_rule_bundle")
+    if bound is None:
+        return FRAUD_BUNDLE, FRAUD_BUNDLE_HASH
+    definition = bound["definition"]
+    bundle_hash = digest({
+        "id": definition["id"], "version": definition["version"],
+        "layers": definition["layers"], "rules": definition["rules"],
+    })
+    if bound.get("rule_bundle_id") != definition["id"] or bound.get("rule_bundle_version") != definition["version"]:
+        raise ValueError("fraud_rule_bundle_identity_mismatch")
+    if bound.get("definition_digest") != digest(definition):
+        raise ValueError("fraud_rule_bundle_definition_digest_mismatch")
+    if bound.get("rule_bundle_hash") != bundle_hash:
+        raise ValueError("fraud_rule_bundle_hash_mismatch")
+    return definition, bundle_hash
+
+
+def quarantine_deadline(action: str, evaluated_at: str, bundle: dict[str, Any]) -> dict[str, str]:
+    if action != "quarantine":
+        return {}
+    hours = fraud_parameter(bundle, "quarantine_hours", 72)
+    return {"resolution_deadline_at": (timestamp(evaluated_at, "evaluated_at") + timedelta(hours=hours)).isoformat(timespec="milliseconds").replace("+00:00", "Z")}
+
+
 class TimestampInvalidError(ValueError):
     """A contract timestamp failed exact calendar round-trip validation."""
 
@@ -240,10 +303,219 @@ def assert_scoped_references(value: dict[str, Any], attempts: list[dict[str, Any
     for expiration in value.get("retention_expirations", []):
         if not exists(expiration["tenant_id"], expiration["app_id"], expiration["record_id"]):
             raise ValueError(f"cross-scope or missing retention reference: {expiration['record_id']}")
-    for attempt in (item for item in attempts if item["record"]["event_name"] == "refund"):
-        target = attempt["record"]["payload"]["correction_target_record_id"]
-        if not exists(attempt["server"]["tenant_id"], attempt["server"]["app_id"], target):
+    for attempt in (candidate for candidate in attempts if is_legacy_explicit_refund(candidate)):
+        if not exists(
+            attempt["server"]["tenant_id"],
+            attempt["server"]["app_id"],
+            attempt["record"]["payload"]["correction_target_record_id"],
+        ):
             raise ValueError(f"cross-scope or missing refund target: {attempt['record']['record_id']}")
+
+
+def canonical_purchase_original_transaction_id(attempt: dict[str, Any]) -> str | None:
+    if attempt["record"]["event_name"] != "purchase":
+        return None
+    payload = attempt["record"]["payload"]
+    return payload.get("original_transaction_id", payload["transaction_id"])
+
+
+def received_no_later_than(candidate: dict[str, Any], refund: dict[str, Any]) -> bool:
+    try:
+        return timestamp(candidate["record"]["received_at"], "received_at") <= timestamp(
+            refund["record"]["received_at"], "received_at"
+        )
+    except TimestampInvalidError:
+        return False
+
+
+def occurred_no_later_than(candidate: dict[str, Any], refund: dict[str, Any]) -> bool:
+    try:
+        return timestamp(candidate["record"]["occurred_at"], "occurred_at") <= timestamp(
+            refund["record"]["occurred_at"], "occurred_at"
+        )
+    except TimestampInvalidError:
+        return False
+
+
+def is_base_accepted_candidate(
+    attempt: dict[str, Any], candidates: list[dict[str, Any]],
+) -> bool:
+    server, record = attempt["server"], attempt["record"]
+    try:
+        timestamp(record["received_at"], "received_at")
+        timestamp(record["occurred_at"], "occurred_at")
+        if record["tenant_id"] != server["tenant_id"] or record["app_id"] != server["app_id"]:
+            return False
+        if sum(1 for other in candidates if other["record"]["record_id"] == record["record_id"]) != 1:
+            return False
+        if next((other for other in candidates if scope_key(other) == scope_key(attempt)), None) is not attempt:
+            return False
+        if not consent_decision(attempt)["allowed"]:
+            return False
+        stale_policy = server.get("timestamp_stale_policy")
+        if stale_policy and timestamp(record["occurred_at"], "occurred_at") < timestamp(
+            stale_policy["before"], "timestamp_stale_policy.before"
+        ):
+            return False
+        if record.get("subject_scope") == "aggregate" and record["payload"].get("installation_id"):
+            return False
+        return True
+    except (TimestampInvalidError, KeyError, TypeError, ValueError):
+        return False
+
+
+def is_anchored_commerce(attempt: dict[str, Any]) -> bool:
+    return (attempt["record"]["event_name"] in {"purchase", "refund"}
+            and isinstance(attempt["record"]["payload"].get("installation_id"), str))
+
+
+def is_legacy_explicit_refund(attempt: dict[str, Any]) -> bool:
+    payload = attempt["record"]["payload"]
+    return (attempt["record"]["event_name"] == "refund"
+            and not isinstance(payload.get("installation_id"), str)
+            and isinstance(payload.get("correction_target_record_id"), str))
+
+
+def legacy_refund_target(
+    refund: dict[str, Any], candidates: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not is_legacy_explicit_refund(refund):
+        return None
+    return next((
+        candidate for candidate in candidates
+        if candidate["server"]["tenant_id"] == refund["server"]["tenant_id"]
+        and candidate["server"]["app_id"] == refund["server"]["app_id"]
+        and candidate["record"]["record_id"] == refund["record"]["payload"]["correction_target_record_id"]
+    ), None)
+
+
+def canonical_purchase_business_attempts(
+    attempt: dict[str, Any], candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    record = attempt["record"]
+    if (record["event_name"] != "purchase" or not is_anchored_commerce(attempt)
+            or not isinstance(record["payload"].get("transaction_id"), str)):
+        return [attempt]
+    return [
+        candidate for candidate in candidates
+        if candidate["record"]["event_name"] == "purchase"
+        and is_anchored_commerce(candidate)
+        and candidate["server"]["tenant_id"] == attempt["server"]["tenant_id"]
+        and candidate["server"]["app_id"] == attempt["server"]["app_id"]
+        and candidate["record"]["tenant_id"] == candidate["server"]["tenant_id"]
+        and candidate["record"]["app_id"] == candidate["server"]["app_id"]
+        and candidate["record"]["payload"].get("transaction_id") == record["payload"]["transaction_id"]
+        and is_base_accepted_candidate(candidate, candidates)
+    ]
+
+
+def canonical_purchase_business_attempt(
+    attempt: dict[str, Any], candidates: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    group = canonical_purchase_business_attempts(attempt, candidates)
+    return group[0] if group else None
+
+
+def strict_refund_target_candidates(
+    refund: dict[str, Any], candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if refund["record"]["event_name"] != "refund":
+        return []
+    payload = refund["record"]["payload"]
+    if not isinstance(payload.get("installation_id"), str):
+        return []
+    return [
+        candidate for candidate in candidates
+        if candidate["record"]["event_name"] == "purchase"
+        and candidate["record"]["payload"]["financial_status"] == "settled"
+        and candidate["server"]["tenant_id"] == refund["server"]["tenant_id"]
+        and candidate["server"]["app_id"] == refund["server"]["app_id"]
+        and candidate["record"]["tenant_id"] == candidate["server"]["tenant_id"]
+        and candidate["record"]["app_id"] == candidate["server"]["app_id"]
+        and candidate["record"]["record_id"] not in refund["server"].get("refund_target_ineligible_record_ids", [])
+        and received_no_later_than(candidate, refund)
+        and occurred_no_later_than(candidate, refund)
+        and candidate["record"]["payload"].get("installation_id") == payload["installation_id"]
+        and canonical_purchase_original_transaction_id(candidate) == payload["original_transaction_id"]
+        and candidate["record"]["payload"]["currency"] == payload["currency"]
+        and is_base_accepted_candidate(candidate, candidates)
+        and canonical_purchase_business_attempt(candidate, candidates) is candidate
+    ]
+
+
+def resolve_refund_target_identity(
+    refund: dict[str, Any], candidates: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    explicit_target = refund["record"]["payload"].get("correction_target_record_id")
+    matches = strict_refund_target_candidates(refund, candidates)
+    if len(matches) != 1:
+        return None
+    if isinstance(explicit_target, str) and matches[0]["record"]["record_id"] != explicit_target:
+        return None
+    return matches[0]
+
+
+def exact_money_at_scale(payload: dict[str, Any], scale: int) -> int:
+    return int(payload["amount_unscaled"]) * 10 ** (scale - int(payload["amount_scale"]))
+
+
+def refund_business_key(refund: dict[str, Any]) -> tuple[str, str, str, str]:
+    return (
+        refund["server"]["tenant_id"], refund["server"]["app_id"],
+        refund["record"]["event_name"], refund["record"]["payload"]["transaction_id"],
+    )
+
+
+def admitted_refunds(
+    candidates: list[dict[str, Any]],
+) -> tuple[dict[tuple[str, ...], dict[str, Any]], dict[tuple[str, str, str, str], dict[str, Any]]]:
+    targets: dict[tuple[str, ...], dict[str, Any]] = {}
+    winners: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    settled_by_target: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    ordered = sorted([
+        candidate for candidate in candidates
+        if candidate["record"]["event_name"] == "refund"
+        and is_anchored_commerce(candidate)
+        and isinstance(candidate["record"]["payload"].get("transaction_id"), str)
+        and is_base_accepted_candidate(candidate, candidates)
+    ], key=lambda item: (
+        utf16_key(item["record"]["received_at"]), utf16_key(item["record"]["record_id"]),
+        utf16_key(item["record"]["delivery_id"]), utf16_key(item["server"]["tenant_id"]),
+        utf16_key(item["server"]["app_id"]), utf16_key(item["record"]["schema_version"]),
+        utf16_key(digest(item["record"])),
+    ))
+    for candidate in ordered:
+        business_key = refund_business_key(candidate)
+        if business_key in winners:
+            continue
+        target = resolve_refund_target_identity(candidate, candidates)
+        if target is None:
+            continue
+        if candidate["record"]["payload"]["financial_status"] == "settled":
+            target_key = attempt_decision_key(target)
+            prior = settled_by_target.get(target_key, [])
+            scale = max(
+                [int(target["record"]["payload"]["amount_scale"]),
+                 int(candidate["record"]["payload"]["amount_scale"])]
+                + [int(refund["record"]["payload"]["amount_scale"]) for refund in prior]
+            )
+            refunded = sum(exact_money_at_scale(refund["record"]["payload"], scale) for refund in prior)
+            if (refunded + exact_money_at_scale(candidate["record"]["payload"], scale)
+                    > exact_money_at_scale(target["record"]["payload"], scale)):
+                continue
+            settled_by_target[target_key] = [*prior, candidate]
+        winners[business_key] = candidate
+        targets[attempt_decision_key(candidate)] = target
+    return targets, winners
+
+
+def resolve_refund_target(
+    refund: dict[str, Any], candidates: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not is_anchored_commerce(refund):
+        return None
+    targets, _ = admitted_refunds(candidates)
+    return targets.get(attempt_decision_key(refund))
 
 
 def consent_decision(attempt: dict[str, Any]) -> dict[str, Any]:
@@ -368,9 +640,19 @@ def decide(attempt: dict[str, Any], attempts: list[dict[str, Any]]) -> dict[str,
         })
         if policy["policy_digest"] != expected_digest:
             raise ValueError("timestamp_stale_policy.policy_digest does not match its canonical policy fields")
+    if server.get("click_injection_policy"):
+        policy = server["click_injection_policy"]
+        expected_digest = digest({
+            "threshold_seconds": policy["threshold_seconds"],
+            "authority": policy["authority"],
+            "policy_version": policy["policy_version"],
+        })
+        if policy["policy_digest"] != expected_digest:
+            raise ValueError("click_injection_policy.policy_digest does not match its canonical policy fields")
     same_record_id = [candidate for candidate in attempts if candidate["record"]["record_id"] == record["record_id"]]
     matches = [candidate for candidate in attempts if scope_key(candidate) == scope_key(attempt)]
     first = matches[0]
+    canonical_attempt = first
     if len(same_record_id) > 1:
         duplicate = "record_id_collision"
     elif first is attempt:
@@ -379,6 +661,20 @@ def decide(attempt: dict[str, Any], attempts: list[dict[str, Any]]) -> dict[str,
         duplicate = "duplicate_delivery"
     else:
         duplicate = "event_id_conflict"
+    if duplicate == "unique" and record["event_name"] == "purchase" and is_anchored_commerce(attempt):
+        business = canonical_purchase_business_attempts(attempt, attempts)
+        business_first = business[0] if business else attempt
+        if business_first is not attempt:
+            duplicate = ("duplicate_delivery" if digest(business_first["record"]["payload"]) == digest(record["payload"])
+                         else "event_id_conflict")
+            canonical_attempt = business_first
+    if duplicate == "unique" and record["event_name"] == "refund" and is_anchored_commerce(attempt):
+        _, winners = admitted_refunds(attempts)
+        business_first = winners.get(refund_business_key(attempt))
+        if business_first is not None and attempts.index(business_first) < attempts.index(attempt):
+            duplicate = ("duplicate_delivery" if digest(business_first["record"]["payload"]) == digest(record["payload"])
+                         else "event_id_conflict")
+            canonical_attempt = business_first
     consent = consent_decision(attempt)
     status, reason = "accepted", None
     if record["tenant_id"] != server["tenant_id"] or record["app_id"] != server["app_id"]:
@@ -393,8 +689,12 @@ def decide(attempt: dict[str, Any], attempts: list[dict[str, Any]]) -> dict[str,
         status, reason = "rejected", "aggregate_installation_join_forbidden"
     elif duplicate == "event_id_conflict":
         status, reason = "rejected", "event_id_conflict"
+    elif (record["event_name"] == "refund" and duplicate == "unique"
+          and ((legacy_refund_target(attempt, attempts) if is_legacy_explicit_refund(attempt)
+                else resolve_refund_target(attempt, attempts)) is None)):
+        status, reason = "rejected", "refund_target_invalid"
     canonical_record_id = None if duplicate == "record_id_collision" else (
-        record["record_id"] if duplicate == "unique" else first["record"]["record_id"]
+        record["record_id"] if duplicate == "unique" else canonical_attempt["record"]["record_id"]
     )
     result = {
         "record_id": record["record_id"],
@@ -657,6 +957,52 @@ def aggregate_postback_attribution(
     }
 
 
+def deep_link_attribution(
+    attempt: dict[str, Any],
+    lifecycle: dict[tuple[str, str, str], str],
+) -> dict[str, Any]:
+    server, record = attempt["server"], attempt["record"]
+    resolution = server.get("deep_link_resolution", {"status": "unknown"})
+    reused = (
+        record["payload"]["open_source"] == "android_deferred_referrer"
+        and resolution.get("install_attribution_click_id") == record["payload"].get("click_id")
+    )
+    if reused:
+        status, reason = "unattributed", "deep_link_install_click_reused"
+    elif resolution["status"] == "active":
+        status, reason = "non_organic", "deep_link_open_attributed"
+    elif resolution["status"] == "inactive":
+        status, reason = "unattributed", "deep_link_link_inactive"
+    else:
+        status, reason = "unattributed", "deep_link_unknown_link"
+    return {
+        "attribution_id": f"attr:engagement:{record['record_id']}",
+        "tenant_id": server["tenant_id"],
+        "app_id": server["app_id"],
+        "subject_scope": "engagement_level",
+        "subject_ref": f"engagement:{record['record_id']}",
+        "status": status,
+        "method": "deep_link",
+        "model": "last_click",
+        "reason_code": reason,
+        "reason_code_version": CONTRACT_VERSION,
+        "evidence_refs": [{
+            "tenant_id": server["tenant_id"],
+            "app_id": server["app_id"],
+            "ref": record["record_id"],
+            "lifecycle_status": lifecycle.get(evidence_key(server["tenant_id"], server["app_id"], record["record_id"]), "available"),
+            "access_class": "protected",
+        }],
+        "effective_at": record["occurred_at"],
+        "decided_at": server["received_at"],
+        "input_cutoff_at": server["received_at"],
+        "finality": "final",
+        "rule_bundle_id": "attribution-default",
+        "rule_bundle_version": REFERENCE_RULE_VERSION,
+        "rule_bundle_hash": ZERO_HASH,
+    }
+
+
 def round_half_even(numerator: int, denominator: int) -> int:
     if denominator <= 0:
         raise ValueError("denominator must be positive")
@@ -732,6 +1078,22 @@ def metric_definitions(value: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def validate_metric_definition_series(definition: dict[str, Any]) -> None:
+    purchase_net_days = {
+        "cohort_purchase_net_revenue_d0_usd": 0,
+        "cohort_purchase_net_revenue_d1_usd": 1,
+        "cohort_purchase_net_revenue_d3_usd": 3,
+        "cohort_purchase_net_revenue_d7_usd": 7,
+        "cohort_purchase_net_revenue_d30_usd": 30,
+        "cohort_purchase_net_revenue_d90_usd": 90,
+    }
+    total_net_series = {
+        "cohort_total_net_revenue_d30_usd": (30, "revenue_sum", "money"),
+        "cohort_total_net_revenue_d90_usd": (90, "revenue_sum", "money"),
+        "d30_total_net_roas": (30, "revenue_over_cost", "ratio"),
+        "d90_total_net_roas": (90, "revenue_over_cost", "ratio"),
+        "cohort_total_net_ltv_d30_usd": (30, "revenue_over_cohort", "money"),
+        "cohort_total_net_ltv_d90_usd": (90, "revenue_over_cohort", "money"),
+    }
     aggregate_names = {
         "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
     }
@@ -743,6 +1105,56 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
     def fail() -> None:
         raise ValueError(f"metric_definition_series_mismatch:{metric_name}")
 
+    if definition.get("definition", {}).get("numerator") == "purchase_net_revenue" or metric_name in purchase_net_days:
+        expected_day = purchase_net_days.get(metric_name)
+        expected_version = "0.4.9" if expected_day in {30, 90} else "0.4.8"
+        expected_hash = ("9" if expected_version == "0.4.9" else "8") * 64
+        if (expected_day is None
+                or definition.get("metric_definition_version") != expected_version
+                or definition.get("anchor_event") != "install"
+                or definition.get("aggregation_time_zone") != "UTC"
+                or definition.get("value_type") != "money"
+                or definition.get("currency") != "USD"
+                or definition.get("amount_scale") != 6
+                or definition.get("rule_bundle_id") != "metric-purchase-net"
+                or definition.get("rule_bundle_version") != expected_version
+                or definition.get("rule_bundle_hash") != expected_hash
+                or definition.get("definition", {}).get("calculation") != "revenue_sum"
+                or definition.get("definition", {}).get("numerator") != "purchase_net_revenue"
+                or definition.get("definition", {}).get("window", {}).get("type") != "elapsed"
+                or definition.get("definition", {}).get("window", {}).get("day") != expected_day):
+            fail()
+        return
+
+    if definition.get("definition", {}).get("numerator") == "total_net_revenue" or metric_name in total_net_series:
+        expected = total_net_series.get(metric_name)
+        if expected is None:
+            fail()
+        expected_day, expected_calculation, expected_value_type = expected
+        metric_definition = definition.get("definition", {})
+        window = metric_definition.get("window", {})
+        if (definition.get("metric_definition_version") != "0.4.9"
+                or definition.get("anchor_event") != "install"
+                or definition.get("aggregation_time_zone") != "UTC"
+                or definition.get("value_type") != expected_value_type
+                or (expected_value_type == "money"
+                    and (definition.get("currency") != "USD" or definition.get("amount_scale") != 6))
+                or (expected_value_type == "ratio" and definition.get("ratio_scale") != 6)
+                or definition.get("rule_bundle_id") != "metric-total-net"
+                or definition.get("rule_bundle_version") != "0.4.9"
+                or definition.get("rule_bundle_hash") != "9" * 64
+                or metric_definition.get("calculation") != expected_calculation
+                or metric_definition.get("numerator") != "total_net_revenue"
+                or window.get("type") != "elapsed"
+                or window.get("day") != expected_day
+                or (expected_calculation == "revenue_over_cost"
+                    and (metric_definition.get("denominator") != "cost"
+                         or metric_definition.get("cost_basis") != "cohort_acquisition_day_current_snapshot"))
+                or (expected_calculation == "revenue_over_cohort"
+                    and metric_definition.get("denominator") != "cohort_size")):
+            fail()
+        return
+
     if metric_name in aggregate_names:
         expected_event = "adattributionkit_postback" if metric_name == "aak_attributed_installs" else "skan_postback"
         expected_grouping = (
@@ -753,6 +1165,18 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
                 or definition.get("definition", {}).get("numerator") != "events"
                 or definition.get("aggregation_time_zone") != "UTC"
                 or event_names != [expected_event]
+                or sorted(grouping) != sorted(expected_grouping)):
+            fail()
+        return
+    if metric_name in {"daily_deep_link_opens", "daily_deep_link_opens_by_status"}:
+        expected_grouping = (
+            ["metric_date", "campaign_id", "attribution_status"]
+            if metric_name == "daily_deep_link_opens_by_status"
+            else ["metric_date", "campaign_id"]
+        )
+        if (definition.get("definition", {}).get("calculation") != "event_count"
+                or definition.get("definition", {}).get("numerator") != "events"
+                or event_names != ["deep_link_open"]
                 or sorted(grouping) != sorted(expected_grouping)):
             fail()
         return
@@ -792,7 +1216,7 @@ def matches_grouping(
         return True
     payload = attempt["record"]["payload"]
     context = payload.get("import_context", {})
-    campaign = payload.get("campaign_id", context.get("provider_campaign_ref"))
+    campaign = payload.get("campaign_id", attempt["server"].get("deep_link_resolution", {}).get("campaign_id", context.get("provider_campaign_ref")))
     network = payload.get("network", payload.get("ad_network", context.get("provider_network")))
     if grouping.get("campaign_id") is not None and campaign != grouping["campaign_id"]:
         return False
@@ -802,11 +1226,16 @@ def matches_grouping(
         return False
     if grouping.get("cohort_date") is not None and attempt["record"]["event_name"] == "install" and day(attempt["record"]["occurred_at"], "UTC", "occurred_at") != grouping["cohort_date"]:
         return False
-    if grouping.get("attribution_status") is not None and attempt["record"]["event_name"] == "install":
+    if grouping.get("attribution_status") is not None and attempt["record"]["event_name"] in ("install", "deep_link_open"):
+        subject_ref = (
+            attempt["record"]["payload"]["installation_id"]
+            if attempt["record"]["event_name"] == "install"
+            else f"engagement:{attempt['record']['record_id']}"
+        )
         status = attribution_statuses.get((
             attempt["server"]["tenant_id"],
             attempt["server"]["app_id"],
-            attempt["record"]["payload"]["installation_id"],
+            subject_ref,
         ))
         if status != grouping["attribution_status"]:
             return False
@@ -828,14 +1257,16 @@ def metric_runs(
     decisions: dict[str, dict[str, Any]],
     lifecycle: dict[tuple[str, str, str], str],
     attributions: list[dict[str, Any]],
+    excluded_installation_ids: set[str] | None = None,
 ) -> list[dict[str, Any]]:
+    excluded_installation_ids = excluded_installation_ids or set()
     policy = value["fx_policy"]
     definitions = metric_definitions(value)
     definitions_by_name = {definition["metric_name"]: definition for definition in definitions}
     costs = cost_records(value)
     attribution_statuses = {
         (item["tenant_id"], item["app_id"], item["subject_ref"]): item["status"]
-        for item in attributions if item["subject_scope"] == "installation_level"
+        for item in attributions if item["subject_scope"] in ("installation_level", "engagement_level")
     }
     output: list[dict[str, Any]] = []
     for evaluation in value.get("metric_evaluations", []):
@@ -872,6 +1303,16 @@ def metric_runs(
             attempt for attempt in visible
             if attempt["record"]["event_name"] == "ad_revenue"
             and attempt["record"]["payload"].get("subject_scope") == "installation_level"
+        ]
+        purchases = [
+            attempt for attempt in visible
+            if attempt["record"]["event_name"] == "purchase"
+            and attempt["record"]["payload"]["financial_status"] == "settled"
+        ]
+        refunds = [
+            attempt for attempt in visible
+            if attempt["record"]["event_name"] == "refund"
+            and attempt["record"]["payload"]["financial_status"] == "settled"
         ]
         activities = visible
         states = [
@@ -932,6 +1373,11 @@ def metric_runs(
             if metric_name not in definitions_by_name:
                 raise ValueError(f"unknown metric definition: {metric_name}")
             definition = definitions_by_name[metric_name]
+            eligible_installs = [
+                item for item in installs
+                if definition.get("fraud_policy") != "net"
+                or item["record"]["payload"]["installation_id"] not in excluded_installation_ids
+            ]
             unsupported = [
                 dimension for dimension in evaluation.get("grouping", {})
                 if definition.get("grouping_dimensions") is not None
@@ -943,7 +1389,7 @@ def metric_runs(
             for item in revenue:
                 installation = next(
                     (
-                        candidate for candidate in installs
+                        candidate for candidate in eligible_installs
                         if candidate["server"]["tenant_id"] == item["server"]["tenant_id"]
                         and candidate["server"]["app_id"] == item["server"]["app_id"]
                         and candidate["record"]["payload"]["installation_id"] == item["record"]["payload"]["installation_id"]
@@ -952,13 +1398,43 @@ def metric_runs(
                 )
                 if installation and eligible_revenue(definition, installation["record"], item["record"]):
                     revenue_value += convert_money(item["record"]["payload"], policy)
-            cohort_ids = {install["record"]["payload"]["installation_id"] for install in installs}
+            purchase_net_revenue_value = 0
+            if definition["definition"]["numerator"] in {"purchase_net_revenue", "total_net_revenue"}:
+                for item in purchases:
+                    installation = next((
+                        candidate for candidate in eligible_installs
+                        if candidate["server"]["tenant_id"] == item["server"]["tenant_id"]
+                        and candidate["server"]["app_id"] == item["server"]["app_id"]
+                        and candidate["record"]["payload"]["installation_id"] == item["record"]["payload"].get("installation_id")
+                    ), None)
+                    if installation and eligible_revenue(definition, installation["record"], item["record"]):
+                        purchase_net_revenue_value += convert_money(item["record"]["payload"], policy)
+                for item in refunds:
+                    target = resolve_refund_target(item, visible)
+                    if target is None or target["record"]["payload"]["financial_status"] != "settled":
+                        continue
+                    installation = next((
+                        candidate for candidate in eligible_installs
+                        if candidate["server"]["tenant_id"] == target["server"]["tenant_id"]
+                        and candidate["server"]["app_id"] == target["server"]["app_id"]
+                        and candidate["record"]["payload"]["installation_id"] == target["record"]["payload"].get("installation_id")
+                    ), None)
+                    if installation and eligible_revenue(definition, installation["record"], item["record"]):
+                        purchase_net_revenue_value -= convert_money(item["record"]["payload"], policy)
+            selected_revenue_value = (
+                purchase_net_revenue_value
+                if definition["definition"]["numerator"] == "purchase_net_revenue"
+                else revenue_value + purchase_net_revenue_value
+                if definition["definition"]["numerator"] == "total_net_revenue"
+                else revenue_value
+            )
+            cohort_ids = {install["record"]["payload"]["installation_id"] for install in eligible_installs}
             cohort_size = len(cohort_ids)
             calculation = definition["definition"]["calculation"]
             amount: int | None = None
             undefined_reason: str | None = None
             if calculation == "revenue_sum":
-                amount = revenue_value
+                amount = selected_revenue_value
             elif calculation == "revenue_over_cost":
                 cost_value = 0
                 for cost in current_costs:
@@ -968,7 +1444,7 @@ def metric_runs(
                 if cost_value == 0:
                     undefined_reason = "no_attributed_cost"
                 else:
-                    amount = round_half_even(revenue_value * 10 ** int(definition.get("ratio_scale", 6)), cost_value)
+                    amount = round_half_even(selected_revenue_value * 10 ** int(definition.get("ratio_scale", 6)), cost_value)
             elif calculation == "active_installations_over_cohort":
                 if cohort_size == 0:
                     undefined_reason = "empty_cohort"
@@ -976,7 +1452,7 @@ def metric_runs(
                     event_names = set(definition.get("activity_events", ["session_start"]))
                     active: set[str] = set()
                     for activity in (item for item in activities if item["record"]["event_name"] in event_names):
-                        installation = next((candidate for candidate in installs
+                        installation = next((candidate for candidate in eligible_installs
                                              if candidate["server"]["tenant_id"] == activity["server"]["tenant_id"]
                                              and candidate["server"]["app_id"] == activity["server"]["app_id"]
                                              and candidate["record"]["payload"]["installation_id"] == activity["record"]["payload"].get("installation_id")), None)
@@ -990,7 +1466,7 @@ def metric_runs(
                 if cohort_size == 0:
                     undefined_reason = "empty_cohort"
                 else:
-                    amount = round_half_even(revenue_value, cohort_size)
+                    amount = round_half_even(selected_revenue_value, cohort_size)
             elif calculation == "cohort_size":
                 amount = cohort_size
             elif calculation == "event_count":
@@ -1000,7 +1476,7 @@ def metric_runs(
                 if metric_date is None:
                     raise ValueError(f"event_count requires metric_date grouping: {metric_name}")
                 if len(event_names) != 1 or event_name not in {
-                    "click", "install", "skan_postback", "adattributionkit_postback",
+                    "click", "install", "deep_link_open", "skan_postback", "adattributionkit_postback",
                 }:
                     raise ValueError(f"event_count requires exactly one supported event name: {metric_name}")
                 aggregate_postback = event_name in {"skan_postback", "adattributionkit_postback"}
@@ -1052,11 +1528,16 @@ def metric_runs(
                 else:
                     if evaluation.get("grouping", {}).get("apple_conversion_bucket") is not None:
                         raise ValueError(f"apple_conversion_bucket requires aggregate SKAN events: {metric_name}")
-                    if evaluation.get("grouping", {}).get("attribution_status") is not None and event_name != "install":
-                        raise ValueError(f"attribution_status event_count requires install events: {metric_name}")
+                    if evaluation.get("grouping", {}).get("attribution_status") is not None and event_name not in {"install", "deep_link_open"}:
+                        raise ValueError(f"attribution_status event_count requires install or deep_link_open events: {metric_name}")
                     amount = sum(
                         1 for item in visible
                         if item["record"]["event_name"] in event_names
+                        and (
+                            definition.get("fraud_policy") != "net"
+                            or item["record"]["event_name"] != "install"
+                            or item["record"]["payload"]["installation_id"] not in excluded_installation_ids
+                        )
                         and matches_grouping(item, evaluation.get("grouping"), attribution_statuses)
                         and day(item["record"]["occurred_at"], definition["aggregation_time_zone"], "occurred_at") == metric_date
                     )
@@ -1082,6 +1563,8 @@ def metric_runs(
                 "value_type": definition["value_type"],
                 "evidence_refs": evidence,
             }
+            if definition.get("fraud_policy"):
+                run["fraud_policy"] = definition["fraud_policy"]
             if amount is None:
                 run |= {"value_state": "undefined", "undefined_reason": undefined_reason}
             else:
@@ -1328,16 +1811,30 @@ def evaluate(value: dict[str, Any]) -> dict[str, Any]:
             for attempt in accepted
             if attempt["record"]["event_name"] in ("skan_postback", "adattributionkit_postback")
         ],
+        *[
+            deep_link_attribution(attempt, lifecycle)
+            for attempt in accepted if attempt["record"]["event_name"] == "deep_link_open"
+        ],
     ], attribution_sort_key)
     corrections: list[dict[str, Any]] = list(value.get("correction_inputs", []))
     for attempt in accepted:
         if attempt["record"]["event_name"] == "refund":
+            legacy = is_legacy_explicit_refund(attempt)
+            if not legacy and attempt["record"]["payload"]["financial_status"] != "settled":
+                continue
+            if legacy:
+                corrects_record_id = attempt["record"]["payload"].get("correction_target_record_id")
+            else:
+                target = resolve_refund_target(attempt, accepted)
+                corrects_record_id = target["record"]["record_id"] if target is not None else None
+            if not isinstance(corrects_record_id, str):
+                continue
             corrections.append({
                 "contract_version": CONTRACT_VERSION,
                 "tenant_id": attempt["server"]["tenant_id"],
                 "app_id": attempt["server"]["app_id"],
                 "correction_id": f"correction:{attempt['record']['record_id']}",
-                "corrects_record_id": attempt["record"]["payload"]["correction_target_record_id"],
+                "corrects_record_id": corrects_record_id,
                 "correction_type": "correction",
                 "correction_reason": "refund",
                 "effective_at": attempt["record"]["occurred_at"],
@@ -1380,79 +1877,231 @@ def evaluate(value: dict[str, Any]) -> dict[str, Any]:
         if request["status"] == "completed"
         for affected in request.get("affected_records", [])
     ], privacy_tombstone_sort_key)
-    fraud_values = [
-        {
+    fraud_values: list[dict[str, Any]] = []
+    for attempt in accepted:
+        payload = attempt["record"]["payload"]
+        if attempt["record"]["event_name"] != "click" or not (
+            payload.get("bot_prefetch") or payload.get("replay_suspected")
+        ):
+            continue
+        bound = bound_fraud_bundle(attempt["server"])
+        if bound is None:
+            continue
+        bundle, bundle_hash = bound
+        reason = "replay_suspected" if payload.get("replay_suspected") else "bot_prefetch"
+        rule_id = "transport-replay-v1" if reason == "replay_suspected" else "transport-bot-prefetch-v1"
+        action = fraud_action(bundle, rule_id, "exclude")
+        fraud_values.append({
             "fraud_decision_id": f"fraud:{attempt['record']['record_id']}",
             "subject_ref": attempt["record"]["record_id"],
             "decision": "suspected",
-            "action": "exclude",
-            "reason_code": "replay_suspected" if attempt["record"]["payload"].get("replay_suspected") else "bot_prefetch",
+            "action": action,
+            "reason_code": reason,
             "reason_code_version": CONTRACT_VERSION,
             "evidence": [{
-                "type": "replay_category" if attempt["record"]["payload"].get("replay_suspected") else "link_prefetch_category",
+                "type": "replay_category" if reason == "replay_suspected" else "link_prefetch_category",
                 "captured_at": attempt["record"]["received_at"],
-                "digest": digest([
-                    "replay_suspected" if attempt["record"]["payload"].get("replay_suspected") else "bot_prefetch",
-                    attempt["record"]["record_id"],
-                ]),
+                "digest": digest([reason, attempt["record"]["record_id"]]),
                 "access_class": "protected",
             }],
-            "rule_bundle_id": "fraud-public-envelope",
-            "rule_bundle_version": REFERENCE_RULE_VERSION,
-            "rule_bundle_hash": ZERO_HASH,
+            "rule_bundle_id": bundle["id"],
+            "rule_bundle_version": bundle["version"],
+            "rule_bundle_hash": bundle_hash,
+            "rule_id": rule_id,
             "evaluated_at": attempt["record"]["received_at"],
-        }
-        for attempt in accepted
-        if attempt["record"]["event_name"] == "click"
-        and (attempt["record"]["payload"].get("bot_prefetch") or attempt["record"]["payload"].get("replay_suspected"))
-    ]
+        } | quarantine_deadline(action, attempt["record"]["received_at"], bundle))
     for attempt in accepted:
         if attempt["record"]["event_name"] != "install":
             continue
-        payload = attempt["record"]["payload"]
-        if payload.get("referrer_status") != "available" or not payload.get("click_id") or not payload.get("install_begin_at_server"):
+        bound = bound_fraud_bundle(attempt["server"])
+        if bound is None:
             continue
+        bundle, bundle_hash = bound
+        payload = attempt["record"]["payload"]
         matching_clicks = [
             candidate for candidate in accepted
             if candidate["server"]["tenant_id"] == attempt["server"]["tenant_id"]
             and candidate["server"]["app_id"] == attempt["server"]["app_id"]
             and candidate["record"]["event_name"] == "click"
-            and candidate["record"]["payload"].get("click_id") == payload["click_id"]
+            and candidate["record"]["payload"].get("click_id") == payload.get("click_id")
             and candidate["record"]["payload"].get("redirector_time_status") != "invalid"
             and candidate["record"]["payload"].get("redirector_click_at")
         ]
-        if len(matching_clicks) != 1:
+        click = matching_clicks[0] if len(matching_clicks) == 1 else None
+        hits: list[tuple[str, str, str, str, str]] = []
+        if (
+            payload.get("referrer_click_at_server_status") == "available"
+            and payload.get("referrer_click_at_server")
+            and payload.get("install_begin_at_server")
+            and timestamp(payload["referrer_click_at_server"], "referrer_click_at_server")
+            >= timestamp(payload["install_begin_at_server"], "install_begin_at_server") + timedelta(seconds=1)
+        ):
+            hits.append(("referrer-server-order-v1", "confirmed", "referrer_time_inconsistent", "server_clock_order", "flag"))
+        if click is not None and payload.get("install_begin_at_server"):
+            try:
+                delta = timestamp(payload["install_begin_at_server"], "install_begin_at_server") - timestamp(
+                    click["record"]["payload"]["redirector_click_at"], "redirector_click_at"
+                )
+                threshold = attempt["server"].get("click_injection_policy", {}).get(
+                    "threshold_seconds", fraud_parameter(bundle, "ctit_lower_bound_seconds", 10)
+                )
+                if delta.total_seconds() < 0:
+                    hits.append(("ctit-clock-anomaly-v1", "clear", "ctit_clock_anomaly", "ctit_clock_diagnostic", "allow"))
+                elif delta.total_seconds() < threshold:
+                    hits.append(("ctit-lower-bound-v1", "suspected", "click_injection_suspected", "ctit_category", "flag"))
+                referrer_click = payload.get("referrer_click_at_server")
+                divergence = fraud_parameter(bundle, "referrer_redirector_divergence_seconds", 300)
+                if referrer_click and abs((timestamp(referrer_click, "referrer_click_at_server") - timestamp(
+                    click["record"]["payload"]["redirector_click_at"], "redirector_click_at"
+                )).total_seconds()) > divergence:
+                    hits.append(("referrer-redirector-divergence-v1", "suspected", "referrer_time_inconsistent", "server_clock_order", "flag"))
+            except ValueError:
+                hits = [hit for hit in hits if hit[0] == "referrer-server-order-v1"]
+        for rule_id, decision, reason, evidence_type, fallback_action in hits:
+            action = fraud_action(bundle, rule_id, fallback_action)
+            fraud_values.append({
+                "fraud_decision_id": (
+                    f"fraud:{attempt['record']['record_id']}:click-injection"
+                    if rule_id == "ctit-lower-bound-v1"
+                    else f"fraud:{attempt['record']['record_id']}:{rule_id}"
+                ),
+                "subject_ref": attempt["record"]["record_id"],
+                "decision": decision,
+                "action": action,
+                "reason_code": reason,
+                "reason_code_version": CONTRACT_VERSION,
+                "evidence": [{
+                    "type": evidence_type,
+                    "captured_at": attempt["record"]["received_at"],
+                    "digest": digest([rule_id, click["record"]["record_id"] if click else "no-redirector-click", attempt["record"]["record_id"]]),
+                    "access_class": "protected",
+                }],
+                "rule_bundle_id": bundle["id"],
+                "rule_bundle_version": bundle["version"],
+                "rule_bundle_hash": bundle_hash,
+                "rule_id": rule_id,
+                "evaluated_at": attempt["record"]["received_at"],
+            } | quarantine_deadline(action, attempt["record"]["received_at"], bundle))
+    for aggregate in value.get("source_day_aggregates", []):
+        scope_attempt = next((attempt for attempt in accepted
+                              if attempt["server"]["tenant_id"] == aggregate["tenant_id"]
+                              and attempt["server"]["app_id"] == aggregate["app_id"]), None)
+        bound = bound_fraud_bundle(scope_attempt["server"]) if scope_attempt else (FRAUD_BUNDLE, FRAUD_BUNDLE_HASH)
+        if bound is None:
             continue
-        click = matching_clicks[0]
-        try:
-            delta = timestamp(payload["install_begin_at_server"], "install_begin_at_server") - timestamp(
-                click["record"]["payload"]["redirector_click_at"], "redirector_click_at"
-            )
-        except ValueError:
-            # Invalid authority is classified by attribution and cannot support CTIT evidence.
-            continue
-        threshold_seconds = attempt["server"].get("click_injection_policy", {}).get("threshold_seconds", 10)
-        if delta.total_seconds() < 0 or delta.total_seconds() >= threshold_seconds:
-            continue
-        fraud_values.append({
-            "fraud_decision_id": f"fraud:{attempt['record']['record_id']}:click-injection",
-            "subject_ref": attempt["record"]["record_id"],
-            "decision": "suspected",
-            "action": "flag",
-            "reason_code": "click_injection_suspected",
-            "reason_code_version": CONTRACT_VERSION,
-            "evidence": [{
-                "type": "ctit_category",
-                "captured_at": attempt["record"]["received_at"],
-                "digest": digest(["click_injection_suspected", click["record"]["record_id"], attempt["record"]["record_id"]]),
-                "access_class": "protected",
-            }],
-            "rule_bundle_id": "fraud-public-envelope",
-            "rule_bundle_version": REFERENCE_RULE_VERSION,
-            "rule_bundle_hash": ZERO_HASH,
-            "evaluated_at": attempt["record"]["received_at"],
-        })
+        bundle, bundle_hash = bound
+        p50 = aggregate.get("ctitP50Ms")
+        p95 = aggregate.get("ctitP95Ms")
+        if (
+            aggregate["clicks"] >= fraud_parameter(bundle, "source_day_min_clicks", 1000)
+            and aggregate["installs"] / aggregate["clicks"] <= aggregate["medianCvr"] * fraud_parameter(bundle, "source_day_cvr_median_multiplier", 0.2)
+            and p50 is not None and p50 >= fraud_parameter(bundle, "source_day_ctit_p50_min_seconds", 86400) * 1000
+            and p95 is not None and p95 / p50 <= fraud_parameter(bundle, "source_day_ctit_p95_p50_max_ratio", 3)
+        ):
+            rule_id = "source-day-click-flooding-v1"
+            source_ref = ":".join([
+                "source", aggregate["tenant_id"], aggregate["app_id"], aggregate["metric_date"],
+                aggregate["campaign_id"], aggregate["network"], aggregate["site_id"],
+            ])
+            action = fraud_action(bundle, rule_id, "flag")
+            fraud_values.append({
+                "fraud_decision_id": f"fraud:{aggregate['input_snapshot_id']}",
+                "subject_scope": "source",
+                "subject_ref": source_ref,
+                "decision": "suspected",
+                "action": action,
+                "reason_code": "click_flooding_suspected",
+                "reason_code_version": CONTRACT_VERSION,
+                "evidence": [{
+                    "type": "source_day_distribution",
+                    "captured_at": aggregate["computed_at"],
+                    "digest": aggregate["input_snapshot_id"],
+                    "access_class": "protected",
+                }],
+                "rule_bundle_id": bundle["id"],
+                "rule_bundle_version": bundle["version"],
+                "rule_bundle_hash": bundle_hash,
+                "rule_id": rule_id,
+                "evaluated_at": aggregate["computed_at"],
+            } | quarantine_deadline(action, aggregate["computed_at"], bundle))
     fraud = sort_by_key(fraud_values, fraud_decision_sort_key)
+    provisional_clock_attributions: list[dict[str, Any]] = []
+    source_days: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for aggregate in value.get("source_day_aggregates", []):
+        key = (aggregate["tenant_id"], aggregate["app_id"], aggregate["metric_date"])
+        source_days.setdefault(key, []).append(aggregate)
+    for aggregates in source_days.values():
+        aggregate = aggregates[0]
+        scope_attempt = next((attempt for attempt in accepted
+                              if attempt["server"]["tenant_id"] == aggregate["tenant_id"]
+                              and attempt["server"]["app_id"] == aggregate["app_id"]), None)
+        bound = bound_fraud_bundle(scope_attempt["server"]) if scope_attempt else (FRAUD_BUNDLE, FRAUD_BUNDLE_HASH)
+        install_count = sum(item.get("installs", 0) for item in aggregates)
+        if bound is None or not install_count:
+            continue
+        bundle, _ = bound
+        negative_count = sum(item.get("ctitNegativeCount", 0) for item in aggregates)
+        negative_rate = negative_count / install_count
+        if negative_rate <= fraud_parameter(bundle, "ctit_negative_rate_threshold", 0.05):
+            continue
+        daily_snapshot_id = digest(sorted(str(item["input_snapshot_id"]) for item in aggregates))
+        computed_at = sorted(str(item["computed_at"]) for item in aggregates)[-1]
+        for install in (attempt for attempt in accepted
+                        if attempt["server"]["tenant_id"] == aggregate["tenant_id"]
+                        and attempt["server"]["app_id"] == aggregate["app_id"]
+                        and attempt["record"]["event_name"] == "install"
+                        and attempt["record"]["payload"].get("click_id")):
+            click = next((attempt for attempt in accepted
+                          if attempt["server"]["tenant_id"] == aggregate["tenant_id"]
+                          and attempt["server"]["app_id"] == aggregate["app_id"]
+                          and attempt["record"]["event_name"] == "click"
+                          and attempt["record"]["payload"].get("click_id") == install["record"]["payload"]["click_id"]
+                          and str(attempt["record"]["payload"].get("redirector_click_at", ""))[:10] == aggregate["metric_date"]), None)
+            if click is None:
+                continue
+            prior = next((item for item in attributions
+                          if item["subject_ref"] == install["record"]["payload"]["installation_id"]
+                          and item["reason_code"] == "valid_install_referrer"), None)
+            if prior is None:
+                continue
+            provisional_clock_attributions.append(prior | {
+                "attribution_id": f"{prior['attribution_id']}:ctit-clock-provisional:{daily_snapshot_id[:12]}",
+                "decided_at": computed_at,
+                "input_cutoff_at": computed_at,
+                "finality": "provisional",
+                "supersedes_attribution_id": prior["attribution_id"],
+            })
+    excluded_click_ids: dict[str, dict[str, Any]] = {}
+    for decision in fraud:
+        if decision["action"] != "exclude" or decision.get("subject_scope") == "source":
+            continue
+        click = next((item for item in accepted
+                      if item["record"]["record_id"] == decision["subject_ref"]
+                      and item["record"]["event_name"] == "click"), None)
+        if click and click["server"].get("fraud_actions_enabled") and click["record"]["payload"].get("click_id"):
+            excluded_click_ids[click["record"]["payload"]["click_id"]] = decision
+    excluded_installation_ids: set[str] = set()
+    fraud_attributions: list[dict[str, Any]] = []
+    for install in (item for item in accepted if item["record"]["event_name"] == "install"):
+        decision = excluded_click_ids.get(install["record"]["payload"].get("click_id"))
+        if decision is None:
+            continue
+        installation_id = install["record"]["payload"]["installation_id"]
+        prior = next((item for item in attributions if item["subject_ref"] == installation_id), None)
+        if prior is None:
+            continue
+        excluded_installation_ids.add(installation_id)
+        fraud_attributions.append(prior | {
+            "attribution_id": f"{prior['attribution_id']}:fraud",
+            "status": "unattributed",
+            "method": "none",
+            "model": "none",
+            "reason_code": "fraud_excluded",
+            "finality": "final",
+            "fraud_decision_ref": decision["fraud_decision_id"],
+            "supersedes_attribution_id": prior["attribution_id"],
+        })
+    attributions = sort_by_key(attributions + provisional_clock_attributions + fraud_attributions, attribution_sort_key)
     rejections = sort_by_key([
         {
             "contract_version": CONTRACT_VERSION,
@@ -1487,7 +2136,7 @@ def evaluate(value: dict[str, Any]) -> dict[str, Any]:
         "attributions": attributions,
         "cost_records": cost_records(value),
         "metric_definitions": metric_definitions(value),
-        "metric_runs": metric_runs(value, attempts, decisions, lifecycle, attributions),
+        "metric_runs": metric_runs(value, attempts, decisions, lifecycle, attributions, excluded_installation_ids),
         "fraud_decisions": fraud,
         "rejections": rejections,
         "reconciliation": reconciliation_results(value, accepted),

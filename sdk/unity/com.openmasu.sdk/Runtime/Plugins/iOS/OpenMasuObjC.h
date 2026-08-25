@@ -18,6 +18,23 @@ void openmasu_ios_track_custom_event(
   int64_t request_id,
   OpenMasuCStringCallback callback
 );
+void openmasu_ios_track_purchase(
+  const char *transaction_id,
+  const char *amount_unscaled,
+  int32_t amount_scale,
+  const char *currency,
+  int64_t request_id,
+  OpenMasuCStringCallback callback
+);
+void openmasu_ios_track_refund(
+  const char *transaction_id,
+  const char *original_transaction_id,
+  const char *amount_unscaled,
+  int32_t amount_scale,
+  const char *currency,
+  int64_t request_id,
+  OpenMasuCStringCallback callback
+);
 void openmasu_ios_track_max_revenue(
   double revenue,
   const char *precision,
@@ -34,6 +51,11 @@ void openmasu_ios_set_collection_enabled(bool enabled);
 void openmasu_ios_reset_installation(int64_t request_id, OpenMasuCStringCallback callback);
 void openmasu_ios_ping_from_background(
   const char *value,
+  int64_t request_id,
+  OpenMasuCStringCallback callback
+);
+void openmasu_ios_handle_deep_link(
+  const char *url,
   int64_t request_id,
   OpenMasuCStringCallback callback
 );

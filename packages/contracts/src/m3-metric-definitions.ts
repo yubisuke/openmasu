@@ -6,7 +6,7 @@ const RULE_BUNDLE_HASH = "3".repeat(64);
 
 function dailyEventCount(
   metricName: string,
-  eventName: "click" | "install",
+  eventName: "click" | "install" | "deep_link_open",
   groupingDimensions: OpenMasuMetricDefinitionV04["grouping_dimensions"],
 ): OpenMasuMetricDefinitionV04 {
   return {
@@ -31,4 +31,12 @@ function dailyEventCount(
 export const M3_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricDefinitionV04> = [
   dailyEventCount("daily_click_count", "click", ["metric_date", "campaign_id", "network", "country"]),
   dailyEventCount("daily_install_count", "install", ["metric_date", "campaign_id", "network", "country", "attribution_status"]),
+  {
+    ...dailyEventCount("daily_deep_link_opens", "deep_link_open", ["metric_date", "campaign_id"]),
+    metric_definition_version: "0.4.7",
+  },
+  {
+    ...dailyEventCount("daily_deep_link_opens_by_status", "deep_link_open", ["metric_date", "campaign_id", "attribution_status"]),
+    metric_definition_version: "0.4.7",
+  },
 ];

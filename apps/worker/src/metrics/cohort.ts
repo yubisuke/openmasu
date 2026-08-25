@@ -1,6 +1,9 @@
 import type { Pool, PoolClient } from "pg";
 import { createHash } from "node:crypto";
-import { M1B_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import {
+  M1B_METRIC_DEFINITIONS,
+  REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
+} from "@openmasu/contracts";
 import { jcs, sha256 } from "@openmasu/attribution-core";
 
 type Any = Record<string, any>;
@@ -168,7 +171,7 @@ async function eventCountValue(
   const eventNames = definition.event_names ?? [];
   const eventName = eventNames[0];
   if (eventNames.length !== 1 || ![
-    "click", "install", "skan_postback", "adattributionkit_postback",
+    "click", "install", "deep_link_open", "skan_postback", "adattributionkit_postback",
   ].includes(eventName)) {
     throw new Error("SQL event_count requires exactly one supported event");
   }
@@ -210,7 +213,7 @@ async function eventCountValue(
         AND fact.app_id=logical.app_id
         AND fact.logical_event_id=logical.logical_event_id
        JOIN LATERAL (
-         SELECT candidate.status
+         SELECT candidate.status, candidate.reason_code
          FROM ledger.attribution_results AS candidate
          WHERE candidate.tenant_id=logical.tenant_id
            AND candidate.app_id=logical.app_id
@@ -243,16 +246,24 @@ async function eventCountValue(
     );
     return { value_state: "present", value_unscaled: aggregate.rows[0].value_unscaled };
   }
-  if (grouping.attribution_status !== undefined && eventName !== "install") {
-    throw new Error("SQL event_count attribution_status applies only to install");
+  if (grouping.attribution_status !== undefined && !["install", "deep_link_open"].includes(eventName)) {
+    throw new Error("SQL event_count attribution_status applies only to install or deep_link_open");
   }
   const result = await client.query<{ value_unscaled: string }>(
     `WITH event AS (
        SELECT
-         CASE WHEN logical.event_name='click' THEN click.campaign_id ELSE install.campaign_id END AS campaign_id,
-         CASE WHEN logical.event_name='click' THEN click.network ELSE install.network END AS network,
-         CASE WHEN logical.event_name='click' THEN click.country ELSE install.country END AS country,
-         CASE WHEN logical.event_name='install' THEN coalesce(attribution.status, 'unattributed') END AS attribution_status
+         install.installation_id,
+         CASE WHEN logical.event_name='click' THEN click.campaign_id
+              WHEN logical.event_name='deep_link_open' THEN deep.campaign_id
+              ELSE install.campaign_id END AS campaign_id,
+         CASE WHEN logical.event_name='click' THEN click.network
+              WHEN logical.event_name='deep_link_open' THEN NULL
+              ELSE install.network END AS network,
+         CASE WHEN logical.event_name='click' THEN click.country
+              WHEN logical.event_name='deep_link_open' THEN NULL
+              ELSE install.country END AS country,
+         CASE WHEN logical.event_name IN ('install','deep_link_open')
+              THEN coalesce(attribution.status, 'unattributed') END AS attribution_status
        FROM ledger.logical_events AS logical
        JOIN ledger.raw_records_current AS raw
          ON raw.tenant_id=logical.tenant_id
@@ -260,17 +271,22 @@ async function eventCountValue(
         AND raw.record_id=logical.record_id
        LEFT JOIN ledger.click_facts AS click ON click.logical_event_id=logical.logical_event_id
        LEFT JOIN ledger.install_facts AS install ON install.logical_event_id=logical.logical_event_id
+       LEFT JOIN ledger.deep_link_open_facts AS deep ON deep.logical_event_id=logical.logical_event_id
        LEFT JOIN LATERAL (
          SELECT candidate.status
          FROM ledger.attribution_results AS candidate
          WHERE candidate.tenant_id=logical.tenant_id
            AND candidate.app_id=logical.app_id
-           AND candidate.subject_scope='installation_level'
-           AND candidate.subject_ref=install.installation_id
+           AND ((logical.event_name='install'
+                 AND candidate.subject_scope='installation_level'
+                 AND candidate.subject_ref=install.installation_id)
+             OR (logical.event_name='deep_link_open'
+                 AND candidate.subject_scope='engagement_level'
+                 AND candidate.subject_ref='engagement:' || raw.record_id))
            AND candidate.decided_at <= $3
          ORDER BY candidate.decided_at DESC, candidate.attribution_id DESC
          LIMIT 1
-       ) AS attribution ON logical.event_name='install'
+       ) AS attribution ON logical.event_name IN ('install','deep_link_open')
        WHERE logical.tenant_id=$1 AND logical.app_id=$2
          AND raw.received_at <= $3
          AND ($4='before' OR raw.payload_lifecycle_status='available')
@@ -285,7 +301,18 @@ async function eventCountValue(
      WHERE ($8::text IS NULL OR campaign_id=$8)
        AND ($9::text IS NULL OR network=$9)
        AND ($10::text IS NULL OR country=$10)
-       AND ($11::text IS NULL OR attribution_status=$11)`,
+       AND ($11::text IS NULL OR attribution_status=$11)
+       AND ($12::text='gross' OR NOT EXISTS (SELECT 1 FROM ledger.attribution_results AS excluded
+              WHERE excluded.tenant_id=$1 AND excluded.app_id=$2
+                AND excluded.reason_code='fraud_excluded'
+                AND excluded.subject_ref=event.installation_id
+                AND excluded.decided_at <= $3
+                AND NOT EXISTS (
+                  SELECT 1 FROM ledger.attribution_results AS newer
+                  WHERE newer.tenant_id=excluded.tenant_id AND newer.app_id=excluded.app_id
+                    AND newer.artifact->>'supersedes_attribution_id'=excluded.attribution_id
+                    AND newer.decided_at <= $3
+                )))`,
     [
       scope.tenant_id,
       scope.app_id,
@@ -298,9 +325,247 @@ async function eventCountValue(
       grouping.network ?? null,
       grouping.country ?? null,
       grouping.attribution_status ?? null,
+      definition.fraud_policy ?? "gross",
     ],
   );
   return { value_state: "present", value_unscaled: result.rows[0].value_unscaled };
+}
+
+async function purchaseNetRevenueValue(
+  client: Queryable,
+  scope: Scope,
+  watermark: string,
+  grouping: Any,
+  definition: Any,
+  fxPolicy: Any,
+  privacyState: "before" | "after",
+): Promise<{ value_state: "present"; value_unscaled: string }> {
+  if (definition.definition.calculation !== "revenue_sum"
+      || definition.definition.window?.type !== "elapsed") {
+    throw new Error(`SQL purchase net revenue definition is invalid: ${definition.metric_name}`);
+  }
+  const result = await client.query<{ value_unscaled: string; missing_fx_count: string }>(
+    `WITH
+       rates AS (
+         SELECT currency, rate_unscaled::numeric AS rate_unscaled, rate_scale
+         FROM jsonb_to_recordset($10::jsonb)
+           AS rate(currency text, rate_unscaled text, rate_scale integer)
+       ),
+       cohort AS (
+         SELECT install.installation_id, install.occurred_at_ts AS installed_at
+         FROM ledger.install_facts AS install
+         JOIN ledger.logical_events AS logical
+           ON logical.logical_event_id=install.logical_event_id
+          AND logical.tenant_id=install.tenant_id
+          AND logical.app_id=install.app_id
+         JOIN ledger.raw_records_current AS raw
+           ON raw.record_id=logical.record_id
+          AND raw.tenant_id=logical.tenant_id
+          AND raw.app_id=logical.app_id
+         LEFT JOIN LATERAL (
+           SELECT candidate.status, candidate.reason_code
+           FROM ledger.attribution_results AS candidate
+           WHERE candidate.tenant_id=install.tenant_id
+             AND candidate.app_id=install.app_id
+             AND candidate.subject_scope='installation_level'
+             AND candidate.subject_ref=install.installation_id
+           ORDER BY candidate.decided_at DESC, candidate.attribution_id DESC
+           LIMIT 1
+         ) AS attribution ON true
+         WHERE install.tenant_id=$1 AND install.app_id=$2 AND install.occurred_at IS NOT NULL
+           AND raw.received_at <= $3
+           AND ($12='before' OR raw.payload_lifecycle_status='available')
+           AND ($4::text IS NULL OR install.campaign_id=$4)
+           AND ($5::text IS NULL OR install.network=$5)
+           AND ($6::text IS NULL OR install.country=$6)
+           AND ($7::text IS NULL OR timezone($8, install.occurred_at_ts)::date::text=$7)
+           AND ($13::text IS NULL OR attribution.status=$13)
+           AND ($14='gross' OR attribution.reason_code IS DISTINCT FROM 'fraud_excluded')
+       ),
+       purchase_candidates AS (
+         SELECT purchase.amount_unscaled, purchase.amount_scale,
+                rate.rate_unscaled, rate.rate_scale, 1::numeric AS sign
+         FROM ledger.purchase_facts AS purchase
+         JOIN cohort ON cohort.installation_id=purchase.installation_id
+         JOIN ledger.logical_events AS logical
+           ON logical.logical_event_id=purchase.logical_event_id
+          AND logical.tenant_id=purchase.tenant_id
+          AND logical.app_id=purchase.app_id
+         JOIN ledger.raw_records_current AS raw
+           ON raw.record_id=logical.record_id
+          AND raw.tenant_id=logical.tenant_id
+          AND raw.app_id=logical.app_id
+         LEFT JOIN rates AS rate ON rate.currency=purchase.currency
+         WHERE purchase.tenant_id=$1 AND purchase.app_id=$2
+           AND purchase.financial_status='settled'
+           AND raw.received_at <= $3
+           AND ($12='before' OR raw.payload_lifecycle_status='available')
+           AND purchase.occurred_at_ts >= cohort.installed_at
+           AND purchase.occurred_at_ts < cohort.installed_at + (($9 + 1) * interval '1 day')
+       ),
+       refund_candidates AS (
+         SELECT refund.amount_unscaled, refund.amount_scale,
+                rate.rate_unscaled, rate.rate_scale, -1::numeric AS sign
+         FROM ledger.refund_facts AS refund
+         JOIN ledger.logical_events AS refund_logical
+           ON refund_logical.logical_event_id=refund.logical_event_id
+          AND refund_logical.tenant_id=refund.tenant_id
+          AND refund_logical.app_id=refund.app_id
+         JOIN ledger.raw_records_current AS refund_raw
+           ON refund_raw.record_id=refund_logical.record_id
+          AND refund_raw.tenant_id=refund_logical.tenant_id
+          AND refund_raw.app_id=refund_logical.app_id
+         JOIN ledger.logical_events AS target_logical
+           ON target_logical.tenant_id=refund.tenant_id
+          AND target_logical.app_id=refund.app_id
+          AND target_logical.record_id=refund.correction_target_record_id
+         JOIN ledger.purchase_facts AS purchase
+           ON purchase.logical_event_id=target_logical.logical_event_id
+          AND purchase.tenant_id=target_logical.tenant_id
+          AND purchase.app_id=target_logical.app_id
+         JOIN ledger.raw_records_current AS purchase_raw
+           ON purchase_raw.record_id=target_logical.record_id
+          AND purchase_raw.tenant_id=target_logical.tenant_id
+          AND purchase_raw.app_id=target_logical.app_id
+         JOIN cohort ON cohort.installation_id=purchase.installation_id
+         LEFT JOIN rates AS rate ON rate.currency=refund.currency
+         WHERE refund.tenant_id=$1 AND refund.app_id=$2
+           AND refund.financial_status='settled'
+           AND purchase.financial_status='settled'
+           AND refund.installation_id=purchase.installation_id
+           AND refund.currency=purchase.currency
+           AND refund_raw.received_at <= $3
+           AND purchase_raw.received_at <= $3
+           AND ($12='before' OR (refund_raw.payload_lifecycle_status='available'
+             AND purchase_raw.payload_lifecycle_status='available'))
+           AND refund.occurred_at_ts >= purchase.occurred_at_ts
+           AND refund.occurred_at_ts >= cohort.installed_at
+           AND refund.occurred_at_ts < cohort.installed_at + (($9 + 1) * interval '1 day')
+       ),
+       commerce AS (
+         SELECT * FROM purchase_candidates
+         UNION ALL
+         SELECT * FROM refund_candidates
+       )
+     SELECT coalesce(sum(sign * ledger.half_even_div(
+              amount_unscaled::numeric * rate_unscaled * power(10::numeric, $11),
+              power(10::numeric, amount_scale + rate_scale)
+            )), 0::numeric)::text AS value_unscaled,
+            count(*) FILTER (WHERE rate_unscaled IS NULL)::text AS missing_fx_count
+     FROM commerce`,
+    [
+      scope.tenant_id,
+      scope.app_id,
+      watermark,
+      grouping?.campaign_id ?? null,
+      grouping?.network ?? null,
+      grouping?.country ?? null,
+      grouping?.cohort_date ?? null,
+      definition.aggregation_time_zone,
+      definition.definition.window.day,
+      JSON.stringify(fxPolicy.rates),
+      fxPolicy.target_scale,
+      privacyState,
+      grouping?.attribution_status ?? null,
+      definition.fraud_policy ?? "gross",
+    ],
+  );
+  const row = result.rows[0];
+  if (row.missing_fx_count !== "0") throw new Error(`missing FX rate for ${definition.metric_name}`);
+  return { value_state: "present", value_unscaled: row.value_unscaled };
+}
+
+async function totalNetRevenueValue(
+  client: Queryable,
+  scope: Scope,
+  watermark: string,
+  grouping: Any,
+  definition: Any,
+  fxPolicy: Any,
+  privacyState: "before" | "after",
+): Promise<{ value_state: "present"; value_unscaled: string } | {
+  value_state: "undefined";
+  undefined_reason: "no_attributed_cost" | "empty_cohort";
+}> {
+  const revenueDefinition = {
+    ...definition,
+    definition: { calculation: "revenue_sum", window: definition.definition.window, numerator: "revenue" },
+  };
+  const purchaseDefinition = {
+    ...definition,
+    definition: {
+      calculation: "revenue_sum",
+      window: definition.definition.window,
+      numerator: "purchase_net_revenue",
+    },
+  };
+  const adRevenue = await metricValue(
+    client, scope, watermark, grouping, revenueDefinition, fxPolicy, privacyState,
+  );
+  const purchaseNet = await purchaseNetRevenueValue(
+    client, scope, watermark, grouping, purchaseDefinition, fxPolicy, privacyState,
+  );
+  if (adRevenue.value_state !== "present") throw new Error(`unexpected ad revenue state: ${definition.metric_name}`);
+  const total = BigInt(adRevenue.value_unscaled) + BigInt(purchaseNet.value_unscaled);
+  const calculation = definition.definition.calculation;
+  if (calculation === "revenue_sum") return { value_state: "present", value_unscaled: total.toString() };
+  if (calculation === "revenue_over_cohort") {
+    const cohort = await metricValue(client, scope, watermark, grouping, {
+      ...definition,
+      value_type: "count",
+      definition: { calculation: "cohort_size", window: definition.definition.window, numerator: "cohort_size" },
+    }, fxPolicy, privacyState);
+    if (cohort.value_state !== "present" || cohort.value_unscaled === "0") {
+      return { value_state: "undefined", undefined_reason: "empty_cohort" };
+    }
+    const value = await client.query<{ value_unscaled: string }>(
+      "SELECT ledger.half_even_div($1::numeric, $2::numeric)::text AS value_unscaled",
+      [total.toString(), cohort.value_unscaled],
+    );
+    return { value_state: "present", value_unscaled: value.rows[0].value_unscaled };
+  }
+  if (calculation !== "revenue_over_cost") {
+    throw new Error(`SQL total net definition is invalid: ${definition.metric_name}`);
+  }
+  const cost = await client.query<{
+    value_unscaled: string;
+    mismatched_currency_count: string;
+  }>(
+    `WITH current_cost AS (
+       SELECT * FROM (
+         SELECT DISTINCT ON (cost_key_digest) *
+         FROM ledger.cost_records
+         WHERE tenant_id=$1 AND app_id=$2 AND as_of <= $3
+           AND ($8::text IS NULL OR $8='non_organic')
+           AND ($4::text IS NULL OR campaign_id=$4)
+           AND ($5::text IS NULL OR network=$5)
+           AND ($6::text IS NULL OR country=$6)
+           AND ($7::date IS NULL OR cost_date=$7::date)
+         ORDER BY cost_key_digest, as_of DESC, cost_record_id DESC
+       ) AS selected
+     )
+     SELECT coalesce(sum(
+       CASE WHEN spend_scale <= $10
+         THEN spend_unscaled::numeric * power(10::numeric, $10 - spend_scale)
+         ELSE ledger.half_even_div(spend_unscaled::numeric, power(10::numeric, spend_scale - $10)) END
+       ), 0::numeric)::text AS value_unscaled,
+       count(*) FILTER (WHERE currency <> $9)::text AS mismatched_currency_count
+     FROM current_cost`,
+    [scope.tenant_id, scope.app_id, watermark, grouping?.campaign_id ?? null,
+      grouping?.network ?? null, grouping?.country ?? null, grouping?.cohort_date ?? null,
+      grouping?.attribution_status ?? null, fxPolicy.target_currency, fxPolicy.target_scale],
+  );
+  if (cost.rows[0].mismatched_currency_count !== "0") {
+    throw new Error(`cost currency mismatch for ${definition.metric_name}`);
+  }
+  if (cost.rows[0].value_unscaled === "0") {
+    return { value_state: "undefined", undefined_reason: "no_attributed_cost" };
+  }
+  const ratio = await client.query<{ value_unscaled: string }>(
+    "SELECT ledger.half_even_div($1::numeric * power(10::numeric, $3), $2::numeric)::text AS value_unscaled",
+    [total.toString(), cost.rows[0].value_unscaled, definition.ratio_scale ?? 6],
+  );
+  return { value_state: "present", value_unscaled: ratio.rows[0].value_unscaled };
 }
 
 async function metricValue(
@@ -316,6 +581,12 @@ async function metricValue(
   undefined_reason: "no_attributed_cost" | "empty_cohort";
 }> {
   const calculation = definition.definition.calculation;
+  if (definition.definition.numerator === "total_net_revenue") {
+    return totalNetRevenueValue(client, scope, watermark, grouping, definition, fxPolicy, privacyState);
+  }
+  if (definition.definition.numerator === "purchase_net_revenue") {
+    return purchaseNetRevenueValue(client, scope, watermark, grouping, definition, fxPolicy, privacyState);
+  }
   if (calculation === "event_count") {
     return eventCountValue(client, scope, watermark, grouping, definition, privacyState);
   }
@@ -345,7 +616,7 @@ async function metricValue(
           AND raw.tenant_id=logical.tenant_id
           AND raw.app_id=logical.app_id
          LEFT JOIN LATERAL (
-           SELECT candidate.status
+           SELECT candidate.status, candidate.reason_code
            FROM ledger.attribution_results AS candidate
            WHERE candidate.tenant_id=install.tenant_id
              AND candidate.app_id=install.app_id
@@ -362,6 +633,7 @@ async function metricValue(
            AND ($6::text IS NULL OR install.country=$6)
            AND ($7::text IS NULL OR timezone($8, install.occurred_at_ts)::date::text=$7)
            AND ($16::text IS NULL OR attribution.status=$16)
+           AND ($17='gross' OR attribution.reason_code IS DISTINCT FROM 'fraud_excluded')
        ),
        revenue_candidates AS (
          SELECT revenue.*, cohort.installed_at, rate.rate_unscaled, rate.rate_scale
@@ -470,6 +742,7 @@ async function metricValue(
       definition.ratio_scale ?? 0,
       privacyState,
       grouping?.attribution_status ?? null,
+      definition.fraud_policy ?? "gross",
     ],
   );
   const row = result.rows[0];
@@ -569,7 +842,8 @@ export async function computeSqlMetricRunsWithClient(
     throw new Error("v0.2 SQL metric runs require exactly one structured FX rate");
   }
   const definitions = new Map<string, Any>(
-    M1B_METRIC_DEFINITIONS.map((definition) => [definition.metric_name, definition]),
+    [...REFERENCE_AD_REVENUE_METRIC_DEFINITIONS, ...M1B_METRIC_DEFINITIONS]
+      .map((definition) => [definition.metric_name, definition]),
   );
   for (const definition of input.metric_definitions ?? []) {
     definitions.set(definition.metric_name, definition);
@@ -658,6 +932,7 @@ export async function computeSqlMetricRunsWithClient(
         rule_bundle_hash: definition.rule_bundle_hash,
         rounding_mode: fxPolicy.rounding_mode,
         reproducibility_status: reproducibilityStatus,
+        ...(definition.fraud_policy ? { fraud_policy: definition.fraud_policy } : {}),
         value_type: definition.value_type,
         ...(value.value_state === "undefined"
           ? { value_state: "undefined", undefined_reason: value.undefined_reason }
@@ -683,12 +958,63 @@ export async function computeSqlMetricRunsWithClient(
 }
 
 function assertMetricDefinitionSeries(definition: Any): void {
+  const purchaseNetDays = new Map<string, number>([
+    ["cohort_purchase_net_revenue_d0_usd", 0],
+    ["cohort_purchase_net_revenue_d1_usd", 1],
+    ["cohort_purchase_net_revenue_d3_usd", 3],
+    ["cohort_purchase_net_revenue_d7_usd", 7],
+    ["cohort_purchase_net_revenue_d30_usd", 30],
+    ["cohort_purchase_net_revenue_d90_usd", 90],
+  ]);
+  const totalNetSeries = new Map<string, { day: number; calculation: string; valueType: string }>([
+    ["cohort_total_net_revenue_d30_usd", { day: 30, calculation: "revenue_sum", valueType: "money" }],
+    ["cohort_total_net_revenue_d90_usd", { day: 90, calculation: "revenue_sum", valueType: "money" }],
+    ["d30_total_net_roas", { day: 30, calculation: "revenue_over_cost", valueType: "ratio" }],
+    ["d90_total_net_roas", { day: 90, calculation: "revenue_over_cost", valueType: "ratio" }],
+    ["cohort_total_net_ltv_d30_usd", { day: 30, calculation: "revenue_over_cohort", valueType: "money" }],
+    ["cohort_total_net_ltv_d90_usd", { day: 90, calculation: "revenue_over_cohort", valueType: "money" }],
+  ]);
   const aggregateNames = new Set([
     "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
   ]);
   const eventNames = definition.event_names ?? [];
   const grouping = definition.grouping_dimensions ?? [];
   const fail = () => { throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`); };
+  if (definition.definition?.numerator === "purchase_net_revenue" || purchaseNetDays.has(definition.metric_name)) {
+    const expectedDay = purchaseNetDays.get(definition.metric_name);
+    const expectedVersion = expectedDay === 30 || expectedDay === 90 ? "0.4.9" : "0.4.8";
+    const expectedHash = expectedVersion === "0.4.9" ? "9".repeat(64) : "8".repeat(64);
+    if (expectedDay === undefined || definition.metric_definition_version !== expectedVersion
+        || definition.anchor_event !== "install" || definition.aggregation_time_zone !== "UTC"
+        || definition.value_type !== "money" || definition.currency !== "USD"
+        || definition.amount_scale !== 6 || definition.rule_bundle_id !== "metric-purchase-net"
+        || definition.rule_bundle_version !== expectedVersion || definition.rule_bundle_hash !== expectedHash
+        || definition.definition?.calculation !== "revenue_sum"
+        || definition.definition?.numerator !== "purchase_net_revenue"
+        || definition.definition?.window?.type !== "elapsed"
+        || definition.definition?.window?.day !== expectedDay) fail();
+    return;
+  }
+  if (definition.definition?.numerator === "total_net_revenue" || totalNetSeries.has(definition.metric_name)) {
+    const expected = totalNetSeries.get(definition.metric_name);
+    if (!expected || definition.metric_definition_version !== "0.4.9"
+        || definition.anchor_event !== "install" || definition.aggregation_time_zone !== "UTC"
+        || definition.value_type !== expected.valueType
+        || (expected.valueType === "money" && (definition.currency !== "USD" || definition.amount_scale !== 6))
+        || (expected.valueType === "ratio" && definition.ratio_scale !== 6)
+        || definition.rule_bundle_id !== "metric-total-net"
+        || definition.rule_bundle_version !== "0.4.9" || definition.rule_bundle_hash !== "9".repeat(64)
+        || definition.definition?.calculation !== expected.calculation
+        || definition.definition?.numerator !== "total_net_revenue"
+        || definition.definition?.window?.type !== "elapsed"
+        || definition.definition?.window?.day !== expected.day
+        || (expected.calculation === "revenue_over_cost"
+          && (definition.definition?.denominator !== "cost"
+            || definition.definition?.cost_basis !== "cohort_acquisition_day_current_snapshot"))
+        || (expected.calculation === "revenue_over_cohort"
+          && definition.definition?.denominator !== "cohort_size")) fail();
+    return;
+  }
   if (aggregateNames.has(definition.metric_name)) {
     const expectedEvent = definition.metric_name === "aak_attributed_installs"
       ? "adattributionkit_postback" : "skan_postback";
@@ -696,6 +1022,15 @@ function assertMetricDefinitionSeries(definition: Any): void {
       ? ["metric_date", "apple_conversion_bucket"] : ["metric_date"];
     if (definition.definition?.calculation !== "event_count" || definition.definition?.numerator !== "events" ||
         definition.aggregation_time_zone !== "UTC" || eventNames.length !== 1 || eventNames[0] !== expectedEvent ||
+        grouping.length !== expectedGrouping.length || expectedGrouping.some((value) => !grouping.includes(value))) fail();
+    return;
+  }
+  if (["daily_deep_link_opens", "daily_deep_link_opens_by_status"].includes(definition.metric_name)) {
+    const expectedGrouping = definition.metric_name === "daily_deep_link_opens_by_status"
+      ? ["metric_date", "campaign_id", "attribution_status"]
+      : ["metric_date", "campaign_id"];
+    if (definition.definition?.calculation !== "event_count" || definition.definition?.numerator !== "events" ||
+        eventNames.length !== 1 || eventNames[0] !== "deep_link_open" ||
         grouping.length !== expectedGrouping.length || expectedGrouping.some((value) => !grouping.includes(value))) fail();
     return;
   }

@@ -1,0 +1,26 @@
+{
+  "id": "fraud-conservative",
+  "version": "1.0.0",
+  "layers": {
+    "base": {
+      "ctit_lower_bound_seconds": 10,
+      "ctit_negative_rate_threshold": 0.05,
+      "referrer_redirector_divergence_seconds": 300,
+      "source_day_min_clicks": 1000,
+      "source_day_cvr_median_multiplier": 0.2,
+      "source_day_ctit_p50_min_seconds": 86400,
+      "source_day_ctit_p95_p50_max_ratio": 3,
+      "quarantine_hours": 72
+    }
+  },
+  "rules": [
+    { "id": "transport-bot-prefetch-v1", "inputs": ["prefetch_signal"], "action": "exclude" },
+    { "id": "transport-replay-v1", "inputs": ["replay_signal"], "action": "exclude" },
+    { "id": "referrer-server-order-v1", "inputs": ["referrer_click_at_server", "install_begin_at_server"], "action": "flag" },
+    { "id": "ctit-lower-bound-v1", "inputs": ["redirector_click_at", "install_begin_at_server"], "action": "flag" },
+    { "id": "ctit-clock-anomaly-v1", "inputs": ["redirector_click_at", "install_begin_at_server"], "action": "allow" },
+    { "id": "referrer-redirector-divergence-v1", "inputs": ["referrer_click_at_server", "redirector_click_at"], "action": "flag" },
+    { "id": "source-day-click-flooding-v1", "inputs": ["source_day_aggregate"], "action": "flag" },
+    { "id": "device-integrity-combination-v1", "inputs": ["integrity_verdict", "ctit"], "action": "flag" }
+  ]
+}

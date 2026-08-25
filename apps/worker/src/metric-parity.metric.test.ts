@@ -5,7 +5,7 @@ import { after, before, describe, it } from "node:test";
 import { evaluate, jcs, roundHalfEven, sha256 } from "@openmasu/attribution-core";
 import { createAppPool, createSeedPool, requireEnvironment, withTenant } from "@openmasu/runtime";
 import { Client, type Pool } from "pg";
-import { ingestFixture } from "./ingestion.js";
+import { ingestFixture, ingestRuntimeBatch } from "./ingestion.js";
 import { computeSqlMetricRuns, computeSqlMetricRunsWithClient } from "./metrics/cohort.js";
 
 type Any = Record<string, any>;
@@ -521,6 +521,29 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
     assert.equal(parts, total);
   });
 
+  it("DL-A-23 and DL-A-24 keep engagement attribution and daily deep-link metrics JCS-identical", async () => {
+    const deepFixture = "54-deep-link-open-contract";
+    const deepDirectory = join(process.cwd(), "fixtures", "v0.4", deepFixture);
+    const deepInput: Any = JSON.parse(readFileSync(join(deepDirectory, "input.json"), "utf8"));
+    const deepGolden: Any[] = JSON.parse(readFileSync(join(deepDirectory, "expected_metric_runs.json"), "utf8"));
+    await ingestFixture(deepFixture, deepInput, appPool, seedPool);
+    const expected = evaluate(deepInput).metric_runs;
+    const actual = await computeSqlMetricRuns(appPool, deepInput, false);
+    assert.equal(jcs(expected), jcs(deepGolden));
+    assert.equal(jcs(actual), jcs(expected));
+    assert.deepEqual(actual.map((run) => [run.metric_name, run.value_unscaled]), [
+      ["daily_deep_link_opens", "1"],
+      ["daily_deep_link_opens_by_status", "1"],
+    ]);
+    const reasons = evaluate(deepInput).attributions.map((item: Any) => item.reason_code).sort();
+    assert.deepEqual(reasons, [
+      "deep_link_install_click_reused",
+      "deep_link_link_inactive",
+      "deep_link_open_attributed",
+      "deep_link_unknown_link",
+    ]);
+  });
+
   it("M4 reproduces qualified Apple aggregate counts and receipt-date buckets", async () => {
     const appleFixture = "44-apple-aggregate-metrics";
     const appleDirectory = join(process.cwd(), "fixtures", "v0.4", appleFixture);
@@ -612,5 +635,731 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
       assert.equal(disqualifiedActual.find((run) =>
         run.metric_name === "skan_attributed_installs")?.value_unscaled, "1");
     }
+  });
+
+  it("keeps ad revenue unchanged while SQL and evaluators agree on settled purchase/refund net revenue", async () => {
+    const commerceFixture = "55-purchase-refund-net-revenue";
+    const commerceInput: Any = JSON.parse(readFileSync(
+      join(process.cwd(), "fixtures", "v0.4", commerceFixture, "input.json"),
+      "utf8",
+    ));
+    await ingestFixture(commerceFixture, commerceInput, appPool, seedPool);
+    const expected = evaluate(commerceInput).metric_runs;
+    const actual = await computeSqlMetricRuns(appPool, commerceInput, false);
+    assert.equal(jcs(actual), jcs(expected));
+    assert.equal(actual.find((run) => run.metric_name === "d0_install_to_24h_ad_revenue_usd")?.value_unscaled,
+      "7000000", "purchase/refund facts changed the existing ad-revenue metric");
+    assert.deepEqual(
+      actual.filter((run) => run.metric_name.startsWith("cohort_purchase_net_revenue_"))
+        .map((run) => [run.metric_name, run.value_unscaled]),
+      [
+        ["cohort_purchase_net_revenue_d0_usd", "10000000"],
+        ["cohort_purchase_net_revenue_d1_usd", "6000000"],
+        ["cohort_purchase_net_revenue_d3_usd", "6000000"],
+        ["cohort_purchase_net_revenue_d7_usd", "6000000"],
+      ],
+    );
+    const facts = await withTenant(appPool, commerceInput.server_context.tenant_id, async (client) => ({
+      purchaseStatuses: (await client.query<{ financial_status: string; count: string }>(
+        `SELECT financial_status, count(*)::text AS count FROM ledger.purchase_facts
+          WHERE tenant_id=$1 AND app_id=$2 GROUP BY financial_status ORDER BY financial_status`,
+        [commerceInput.server_context.tenant_id, commerceInput.server_context.app_id],
+      )).rows,
+      refunds: (await client.query<{
+        transaction_id: string; correction_target_record_id: string; financial_status: string;
+      }>(
+        `SELECT transaction_id, correction_target_record_id, financial_status FROM ledger.refund_facts
+          WHERE tenant_id=$1 AND app_id=$2 ORDER BY transaction_id`,
+        [commerceInput.server_context.tenant_id, commerceInput.server_context.app_id],
+      )).rows,
+    }));
+    assert.ok(facts.purchaseStatuses.some((row) => row.financial_status === "pending"));
+    assert.ok(facts.purchaseStatuses.some((row) => row.financial_status === "reversed"));
+    assert.ok(facts.purchaseStatuses.some((row) => row.financial_status === "settled"));
+    assert.ok(facts.refunds.every((row) => row.correction_target_record_id.length > 0));
+
+    for (const [field, value] of [
+      ["rule_bundle_id", "metric-purchase-other"],
+      ["rule_bundle_version", "0.4.7"],
+      ["rule_bundle_hash", "7".repeat(64)],
+    ] as const) {
+      const wrongProvenance = structuredClone(commerceInput);
+      wrongProvenance.metric_definitions.find((definition: Any) =>
+        definition.metric_name === "cohort_purchase_net_revenue_d0_usd")[field] = value;
+      await assert.rejects(
+        () => computeSqlMetricRuns(appPool, wrongProvenance, false),
+        /metric_definition_series_mismatch:cohort_purchase_net_revenue_d0_usd/,
+        `SQL metric path accepted wrong purchase-net ${field}`,
+      );
+    }
+
+    const overLimit = structuredClone(commerceInput);
+    overLimit.metric_evaluations = [{
+      ...overLimit.metric_evaluations[0],
+      metric_run_id_prefix: "run-55-over-limit",
+    }];
+    const refund = overLimit.records.find((record: Any) => record.record_id === "refund-55-d0");
+    overLimit.records.push({
+      ...structuredClone(refund),
+      record_id: "refund-55-d2-cap-fill",
+      delivery_id: "delivery:refund-55-d2-cap-fill",
+      event_id: "event:refund-55-d2-cap-fill",
+      occurred_at: "2026-08-03T01:00:00.000Z",
+      received_at: "2026-08-03T01:00:01.000Z",
+      processing_sequence: 12,
+      payload: {
+        ...structuredClone(refund.payload),
+        transaction_id: "refund-transaction-55-d2-cap-fill",
+        amount_unscaled: "4800000",
+      },
+    }, {
+      ...structuredClone(refund),
+      record_id: "refund-55-cumulative-over-limit",
+      delivery_id: "delivery:refund-55-cumulative-over-limit",
+      event_id: "event:refund-55-cumulative-over-limit",
+      occurred_at: "2026-08-01T11:00:00.000Z",
+      received_at: "2026-08-03T02:00:01.000Z",
+      processing_sequence: 13,
+      payload: {
+        ...structuredClone(refund.payload),
+        transaction_id: "refund-transaction-55-cumulative-over-limit",
+        amount_unscaled: "4800000",
+      },
+    });
+    const overLimitOutput = evaluate(overLimit);
+    assert.ok(overLimitOutput.deliveries.some((delivery) =>
+      delivery.record_id === "refund-55-d2-cap-fill"
+      && delivery.ingestion_status === "accepted"));
+    assert.ok(overLimitOutput.deliveries.some((delivery) =>
+      delivery.record_id === "refund-55-cumulative-over-limit"
+      && delivery.ingestion_status === "rejected"
+      && delivery.reason_code === "refund_target_invalid"));
+    await ingestFixture("55-purchase-refund-over-limit", overLimit, appPool, seedPool);
+    const overLimitActual = await computeSqlMetricRuns(appPool, overLimit, false);
+    assert.equal(jcs(overLimitActual), jcs(overLimitOutput.metric_runs));
+    assert.deepEqual(
+      overLimitActual.filter((run) => run.metric_name.startsWith("cohort_purchase_net_revenue_"))
+        .map((run) => [run.metric_name, run.value_unscaled]),
+      [
+        ["cohort_purchase_net_revenue_d0_usd", "10000000"],
+        ["cohort_purchase_net_revenue_d1_usd", "6000000"],
+        ["cohort_purchase_net_revenue_d3_usd", "0"],
+        ["cohort_purchase_net_revenue_d7_usd", "0"],
+      ],
+      "SQL must preserve receipt-order cap semantics rather than reordering by occurrence time",
+    );
+    assert.equal((await withTenant(appPool, commerceInput.server_context.tenant_id, (client) => client.query(
+      `SELECT logical_event_id FROM ledger.refund_facts
+        WHERE tenant_id=$1 AND app_id=$2 AND transaction_id=$3`,
+      [commerceInput.server_context.tenant_id, commerceInput.server_context.app_id,
+        "refund-transaction-55-d2-cap-fill"],
+    ))).rowCount, 1, "receipt-order in-cap refund must reach the fact projection");
+    assert.equal((await withTenant(appPool, commerceInput.server_context.tenant_id, (client) => client.query(
+      `SELECT logical_event_id FROM ledger.refund_facts
+        WHERE tenant_id=$1 AND app_id=$2 AND transaction_id=$3`,
+      [commerceInput.server_context.tenant_id, commerceInput.server_context.app_id,
+        "refund-transaction-55-cumulative-over-limit"],
+    ))).rowCount, 0, "over-limit refund must not reach the fact projection");
+
+    const businessConflict = structuredClone(commerceInput);
+    businessConflict.metric_evaluations = [{
+      ...businessConflict.metric_evaluations[0], metric_run_id_prefix: "run-55-business-conflict",
+    }];
+    const purchase = businessConflict.records.find((record: Any) => record.record_id === "purchase-55-d0");
+    businessConflict.records.push({
+      ...structuredClone(purchase), record_id: "purchase-55-business-conflict",
+      delivery_id: "delivery:purchase-55-business-conflict", event_id: "event:purchase-55-business-conflict",
+      received_at: "2026-08-01T10:00:02.000Z", processing_sequence: 12,
+      payload: { ...structuredClone(purchase.payload), amount_unscaled: "8000001" },
+    });
+    const businessOutput = evaluate(businessConflict);
+    assert.ok(businessOutput.deliveries.some((delivery) =>
+      delivery.record_id === "purchase-55-d0" && delivery.ingestion_status === "accepted"));
+    assert.ok(businessOutput.deliveries.some((delivery) =>
+      delivery.record_id === "purchase-55-business-conflict" && delivery.reason_code === "event_id_conflict"));
+    await ingestFixture("55-purchase-business-conflict", businessConflict, appPool, seedPool);
+    const businessActual = await computeSqlMetricRuns(appPool, businessConflict, false);
+    assert.equal(jcs(businessActual), jcs(businessOutput.metric_runs));
+    assert.deepEqual(
+      businessActual.filter((run) => run.metric_name.startsWith("cohort_purchase_net_revenue_"))
+        .map((run) => run.value_unscaled),
+      ["10000000", "6000000", "6000000", "6000000"],
+      "later business conflict changed purchase-net SQL metrics",
+    );
+    assert.equal((await withTenant(appPool, commerceInput.server_context.tenant_id, (client) => client.query(
+      `SELECT count(*)::int AS count FROM ledger.purchase_facts
+        WHERE tenant_id=$1 AND app_id=$2 AND transaction_id='transaction-55-d0'`,
+      [commerceInput.server_context.tenant_id, commerceInput.server_context.app_id],
+    ))).rows[0].count, 1, "later business conflict created a second purchase fact");
+
+    const refundAdmission = structuredClone(commerceInput);
+    refundAdmission.metric_evaluations = [{
+      ...refundAdmission.metric_evaluations[0], metric_run_id_prefix: "run-55-refund-admission",
+    }];
+    const refundTemplate = refundAdmission.records.find((record: Any) => record.record_id === "refund-55-d0");
+    refundAdmission.records.push({
+      ...structuredClone(refundTemplate),
+      record_id: "refund-55-invalid-first",
+      delivery_id: "delivery:refund-55-invalid-first",
+      event_id: "event:refund-55-invalid-first",
+      occurred_at: "2026-08-03T01:00:00.000Z",
+      received_at: "2026-08-03T01:00:01.000Z",
+      processing_sequence: 12,
+      payload: {
+        ...structuredClone(refundTemplate.payload),
+        transaction_id: "refund-transaction-55-admission",
+        amount_unscaled: "6000000",
+      },
+    }, {
+      ...structuredClone(refundTemplate),
+      record_id: "refund-55-valid-after-invalid",
+      delivery_id: "delivery:refund-55-valid-after-invalid",
+      event_id: "event:refund-55-valid-after-invalid",
+      occurred_at: "2026-08-03T02:00:00.000Z",
+      received_at: "2026-08-03T02:00:01.000Z",
+      processing_sequence: 13,
+      payload: {
+        ...structuredClone(refundTemplate.payload),
+        transaction_id: "refund-transaction-55-admission",
+        amount_unscaled: "1000000",
+      },
+    });
+    const refundAdmissionOutput = evaluate(refundAdmission);
+    assert.ok(refundAdmissionOutput.deliveries.some((delivery) =>
+      delivery.record_id === "refund-55-invalid-first"
+      && delivery.reason_code === "refund_target_invalid"));
+    assert.ok(refundAdmissionOutput.deliveries.some((delivery) =>
+      delivery.record_id === "refund-55-valid-after-invalid"
+      && delivery.ingestion_status === "accepted"));
+    await ingestFixture("55-refund-fully-admissible-business", refundAdmission, appPool, seedPool);
+    const refundAdmissionActual = await computeSqlMetricRuns(appPool, refundAdmission, false);
+    assert.equal(jcs(refundAdmissionActual), jcs(refundAdmissionOutput.metric_runs));
+    assert.deepEqual(
+      refundAdmissionActual.filter((run) => run.metric_name.startsWith("cohort_purchase_net_revenue_"))
+        .map((run) => run.value_unscaled),
+      ["10000000", "6000000", "4750000", "4750000"],
+    );
+    assert.equal((await withTenant(appPool, commerceInput.server_context.tenant_id, (client) => client.query(
+      `SELECT logical_event_id FROM ledger.refund_facts
+        WHERE tenant_id=$1 AND app_id=$2 AND transaction_id=$3`,
+      [commerceInput.server_context.tenant_id, commerceInput.server_context.app_id,
+        "refund-transaction-55-admission"],
+    ))).rowCount, 1, "only the fully admissible refund may reserve and project the transaction");
+
+    const explicitFutureSql = structuredClone(commerceInput);
+    explicitFutureSql.metric_evaluations = [{
+      ...explicitFutureSql.metric_evaluations[0], metric_run_id_prefix: "run-55-explicit-future-sql",
+    }];
+    const explicitFutureSqlPurchase = explicitFutureSql.records.find((record: Any) =>
+      record.record_id === "purchase-55-d0");
+    const explicitFutureSqlRefund = explicitFutureSql.records.find((record: Any) =>
+      record.record_id === "refund-55-d0");
+    explicitFutureSqlRefund.payload.correction_target_record_id = explicitFutureSqlPurchase.record_id;
+    explicitFutureSql.records.push({
+      ...structuredClone(explicitFutureSqlPurchase),
+      record_id: "purchase-55-explicit-future-sql",
+      delivery_id: "delivery:purchase-55-explicit-future-sql",
+      event_id: "event:purchase-55-explicit-future-sql",
+      occurred_at: "2026-08-01T12:00:00.000Z",
+      received_at: "2026-08-03T00:00:00.000Z",
+      processing_sequence: 12,
+      payload: {
+        ...structuredClone(explicitFutureSqlPurchase.payload),
+        transaction_id: "transaction-55-explicit-future-sql",
+      },
+    });
+    const explicitFutureSqlOutput = evaluate(explicitFutureSql);
+    assert.ok(explicitFutureSqlOutput.deliveries.some((delivery) =>
+      delivery.record_id === explicitFutureSqlRefund.record_id
+      && delivery.ingestion_status === "accepted"));
+    await ingestFixture("55-explicit-future-received-sql", explicitFutureSql, appPool, seedPool);
+    assert.equal(jcs(await computeSqlMetricRuns(appPool, explicitFutureSql, false)),
+      jcs(explicitFutureSqlOutput.metric_runs));
+    assert.deepEqual((await withTenant(
+      appPool,
+      commerceInput.server_context.tenant_id,
+      (client) => client.query<{ correction_target_record_id: string }>(
+        `SELECT correction_target_record_id FROM ledger.refund_facts
+          WHERE tenant_id=$1 AND app_id=$2 AND transaction_id=$3`,
+        [commerceInput.server_context.tenant_id, commerceInput.server_context.app_id,
+          explicitFutureSqlRefund.payload.transaction_id],
+      ),
+    )).rows, [{ correction_target_record_id: explicitFutureSqlPurchase.record_id }],
+    "SQL projection must exclude a future-received candidate before checking the explicit record ID");
+
+    const explicitFutureTargetSql = structuredClone(explicitFutureSql);
+    explicitFutureTargetSql.metric_evaluations = [{
+      ...explicitFutureTargetSql.metric_evaluations[0],
+      metric_run_id_prefix: "run-55-explicit-future-target-sql",
+    }];
+    const explicitFutureTargetSqlRefund = explicitFutureTargetSql.records.find((record: Any) =>
+      record.record_id === "refund-55-d0");
+    explicitFutureTargetSqlRefund.payload.correction_target_record_id =
+      "purchase-55-explicit-future-sql";
+    const explicitFutureTargetSqlOutput = evaluate(explicitFutureTargetSql);
+    assert.ok(explicitFutureTargetSqlOutput.deliveries.some((delivery) =>
+      delivery.record_id === explicitFutureTargetSqlRefund.record_id
+      && delivery.reason_code === "refund_target_invalid"));
+    await ingestFixture(
+      "55-explicit-future-target-sql", explicitFutureTargetSql, appPool, seedPool,
+    );
+    assert.equal(jcs(await computeSqlMetricRuns(appPool, explicitFutureTargetSql, false)),
+      jcs(explicitFutureTargetSqlOutput.metric_runs));
+    assert.equal((await withTenant(
+      appPool,
+      commerceInput.server_context.tenant_id,
+      (client) => client.query(
+        `SELECT logical_event_id FROM ledger.refund_facts
+          WHERE tenant_id=$1 AND app_id=$2 AND transaction_id=$3`,
+        [commerceInput.server_context.tenant_id, commerceInput.server_context.app_id,
+          explicitFutureTargetSqlRefund.payload.transaction_id],
+      ),
+    )).rowCount, 0,
+    "SQL projection must reject an explicit target whose receipt follows the refund");
+
+    const explicitAmbiguousSql = structuredClone(commerceInput);
+    explicitAmbiguousSql.metric_evaluations = [{
+      ...explicitAmbiguousSql.metric_evaluations[0], metric_run_id_prefix: "run-55-explicit-ambiguous-sql",
+    }];
+    const explicitAmbiguousSqlPurchase = explicitAmbiguousSql.records.find((record: Any) =>
+      record.record_id === "purchase-55-d0");
+    const explicitAmbiguousSqlRefund = explicitAmbiguousSql.records.find((record: Any) =>
+      record.record_id === "refund-55-d0");
+    explicitAmbiguousSqlRefund.payload.correction_target_record_id = explicitAmbiguousSqlPurchase.record_id;
+    explicitAmbiguousSql.records.push({
+      ...structuredClone(explicitAmbiguousSqlPurchase),
+      record_id: "purchase-55-explicit-ambiguous-sql",
+      delivery_id: "delivery:purchase-55-explicit-ambiguous-sql",
+      event_id: "event:purchase-55-explicit-ambiguous-sql",
+      received_at: "2026-08-01T10:00:02.000Z",
+      processing_sequence: 12,
+      payload: {
+        ...structuredClone(explicitAmbiguousSqlPurchase.payload),
+        transaction_id: "transaction-55-explicit-ambiguous-sql",
+      },
+    });
+    const explicitAmbiguousSqlOutput = evaluate(explicitAmbiguousSql);
+    assert.ok(explicitAmbiguousSqlOutput.deliveries.some((delivery) =>
+      delivery.record_id === explicitAmbiguousSqlRefund.record_id
+      && delivery.reason_code === "refund_target_invalid"));
+    await ingestFixture("55-explicit-ambiguous-sql", explicitAmbiguousSql, appPool, seedPool);
+    assert.equal(jcs(await computeSqlMetricRuns(appPool, explicitAmbiguousSql, false)),
+      jcs(explicitAmbiguousSqlOutput.metric_runs));
+    assert.equal((await withTenant(
+      appPool,
+      commerceInput.server_context.tenant_id,
+      (client) => client.query(
+        `SELECT logical_event_id FROM ledger.refund_facts
+          WHERE tenant_id=$1 AND app_id=$2 AND transaction_id=$3`,
+        [commerceInput.server_context.tenant_id, commerceInput.server_context.app_id,
+          explicitAmbiguousSqlRefund.payload.transaction_id],
+      ),
+    )).rowCount, 0,
+    "an explicit record ID must not bypass strict SQL target ambiguity");
+
+    await ingestFixture("55-runtime-refund-admission-base", commerceInput, appPool, seedPool);
+    const runtimeInvalidRefund = {
+      ...structuredClone(refundTemplate),
+      record_id: "refund-55-runtime-invalid-first",
+      delivery_id: "delivery:refund-55-runtime-invalid-first",
+      event_id: "event:refund-55-runtime-invalid-first",
+      occurred_at: "2026-08-03T01:00:00.000Z",
+      received_at: "2026-08-03T01:00:01.000Z",
+      payload: {
+        ...structuredClone(refundTemplate.payload),
+        transaction_id: "refund-transaction-55-runtime-admission",
+        amount_unscaled: "6000000",
+      },
+    };
+    const runtimeValidRefund = {
+      ...structuredClone(runtimeInvalidRefund),
+      record_id: "refund-55-runtime-valid-after-invalid",
+      delivery_id: "delivery:refund-55-runtime-valid-after-invalid",
+      event_id: "event:refund-55-runtime-valid-after-invalid",
+      occurred_at: "2026-08-03T02:00:00.000Z",
+      received_at: "2026-08-03T02:00:01.000Z",
+      payload: {
+        ...structuredClone(runtimeInvalidRefund.payload),
+        amount_unscaled: "1000000",
+      },
+    };
+    const runtimeAdmission = await ingestRuntimeBatch(
+      [runtimeValidRefund, runtimeInvalidRefund].map((record) => ({
+        server: commerceInput.server_context, record, batch_id: "runtime-refund-admission",
+      })),
+      appPool,
+      commerceInput.records.map((record: Any) => ({
+        server: commerceInput.server_context, record, batch_id: "runtime-refund-history",
+      })),
+    );
+    assert.ok(runtimeAdmission.rejections.some((rejection) =>
+      rejection.record_id === runtimeInvalidRefund.record_id
+      && rejection.reason_code === "refund_target_invalid"));
+    assert.ok(runtimeAdmission.logical_events.some((logical) =>
+      logical.record_id === runtimeValidRefund.record_id));
+    assert.equal((await withTenant(appPool, commerceInput.server_context.tenant_id, (client) => client.query(
+      `SELECT logical_event_id FROM ledger.refund_facts
+        WHERE tenant_id=$1 AND app_id=$2 AND transaction_id=$3`,
+      [commerceInput.server_context.tenant_id, commerceInput.server_context.app_id,
+        runtimeValidRefund.payload.transaction_id],
+    ))).rowCount, 1, "runtime persistence must project only the later fully admissible payload");
+
+    const runtimeTargetPurchase = commerceInput.records.find((record: Any) =>
+      record.record_id === "purchase-55-d0");
+    const runtimeFuturePurchase = {
+      ...structuredClone(runtimeTargetPurchase),
+      record_id: "purchase-55-runtime-future-received",
+      delivery_id: "delivery:purchase-55-runtime-future-received",
+      event_id: "event:purchase-55-runtime-future-received",
+      occurred_at: "2026-08-01T12:00:00.000Z",
+      received_at: "2026-08-03T00:00:00.000Z",
+      payload: {
+        ...structuredClone(runtimeTargetPurchase.payload),
+        transaction_id: "transaction-55-runtime-future-received",
+      },
+    };
+    const runtimeFuturePurchaseResult = await ingestRuntimeBatch(
+      [{ server: commerceInput.server_context, record: runtimeFuturePurchase,
+        batch_id: "runtime-future-purchase" }],
+      appPool,
+      commerceInput.records.map((record: Any) => ({
+        server: commerceInput.server_context, record, batch_id: "runtime-future-purchase-history",
+      })),
+    );
+    assert.ok(runtimeFuturePurchaseResult.logical_events.some((logical) =>
+      logical.record_id === runtimeFuturePurchase.record_id));
+
+    const runtimeExplicitFutureRefund = {
+      ...structuredClone(refundTemplate),
+      record_id: "refund-55-runtime-explicit-future",
+      delivery_id: "delivery:refund-55-runtime-explicit-future",
+      event_id: "event:refund-55-runtime-explicit-future",
+      occurred_at: "2026-08-02T11:00:00.000Z",
+      received_at: "2026-08-02T12:00:00.000Z",
+      payload: {
+        ...structuredClone(refundTemplate.payload),
+        transaction_id: "refund-transaction-55-runtime-explicit-future",
+        correction_target_record_id: runtimeTargetPurchase.record_id,
+        amount_unscaled: "100000",
+      },
+    };
+    const runtimeExplicitFutureResult = await ingestRuntimeBatch(
+      [{ server: commerceInput.server_context, record: runtimeExplicitFutureRefund,
+        batch_id: "runtime-explicit-future-refund" }],
+      appPool,
+      [...commerceInput.records, runtimeFuturePurchase].map((record: Any) => ({
+        server: commerceInput.server_context, record, batch_id: "runtime-explicit-future-history",
+      })),
+    );
+    assert.ok(runtimeExplicitFutureResult.logical_events.some((logical) =>
+      logical.record_id === runtimeExplicitFutureRefund.record_id));
+    assert.deepEqual((await withTenant(
+      appPool,
+      commerceInput.server_context.tenant_id,
+      (client) => client.query<{ correction_target_record_id: string }>(
+        `SELECT correction_target_record_id FROM ledger.refund_facts
+          WHERE tenant_id=$1 AND app_id=$2 AND transaction_id=$3`,
+        [commerceInput.server_context.tenant_id, commerceInput.server_context.app_id,
+          runtimeExplicitFutureRefund.payload.transaction_id],
+      ),
+    )).rows, [{ correction_target_record_id: runtimeTargetPurchase.record_id }],
+    "runtime and the DB trigger must both exclude a future-received explicit-target candidate");
+
+    const runtimeExplicitFutureTargetRefund = {
+      ...structuredClone(runtimeExplicitFutureRefund),
+      record_id: "refund-55-runtime-explicit-future-target",
+      delivery_id: "delivery:refund-55-runtime-explicit-future-target",
+      event_id: "event:refund-55-runtime-explicit-future-target",
+      payload: {
+        ...structuredClone(runtimeExplicitFutureRefund.payload),
+        transaction_id: "refund-transaction-55-runtime-explicit-future-target",
+        correction_target_record_id: runtimeFuturePurchase.record_id,
+      },
+    };
+    const runtimeExplicitFutureTargetResult = await ingestRuntimeBatch(
+      [{ server: commerceInput.server_context, record: runtimeExplicitFutureTargetRefund,
+        batch_id: "runtime-explicit-future-target-refund" }],
+      appPool,
+      [...commerceInput.records, runtimeFuturePurchase].map((record: Any) => ({
+        server: commerceInput.server_context, record, batch_id: "runtime-explicit-future-target-history",
+      })),
+    );
+    assert.ok(runtimeExplicitFutureTargetResult.rejections.some((rejection) =>
+      rejection.record_id === runtimeExplicitFutureTargetRefund.record_id
+      && rejection.reason_code === "refund_target_invalid"));
+    assert.equal((await withTenant(
+      appPool,
+      commerceInput.server_context.tenant_id,
+      (client) => client.query(
+        `SELECT logical_event_id FROM ledger.refund_facts
+          WHERE tenant_id=$1 AND app_id=$2 AND transaction_id=$3`,
+        [commerceInput.server_context.tenant_id, commerceInput.server_context.app_id,
+          runtimeExplicitFutureTargetRefund.payload.transaction_id],
+      ),
+    )).rowCount, 0,
+    "runtime must reject an explicit target received after the refund even when another strict target is unique");
+
+    const runtimeExplicitAmbiguousRefund = {
+      ...structuredClone(runtimeExplicitFutureRefund),
+      record_id: "refund-55-runtime-explicit-ambiguous",
+      delivery_id: "delivery:refund-55-runtime-explicit-ambiguous",
+      event_id: "event:refund-55-runtime-explicit-ambiguous",
+      occurred_at: "2026-08-03T01:00:00.000Z",
+      received_at: "2026-08-04T00:00:00.000Z",
+      payload: {
+        ...structuredClone(runtimeExplicitFutureRefund.payload),
+        transaction_id: "refund-transaction-55-runtime-explicit-ambiguous",
+      },
+    };
+    const runtimeExplicitAmbiguousResult = await ingestRuntimeBatch(
+      [{ server: commerceInput.server_context, record: runtimeExplicitAmbiguousRefund,
+        batch_id: "runtime-explicit-ambiguous-refund" }],
+      appPool,
+      [...commerceInput.records, runtimeFuturePurchase, runtimeExplicitFutureRefund]
+        .map((record: Any) => ({
+          server: commerceInput.server_context, record, batch_id: "runtime-explicit-ambiguous-history",
+        })),
+    );
+    assert.ok(runtimeExplicitAmbiguousResult.rejections.some((rejection) =>
+      rejection.record_id === runtimeExplicitAmbiguousRefund.record_id
+      && rejection.reason_code === "refund_target_invalid"));
+    assert.equal((await withTenant(
+      appPool,
+      commerceInput.server_context.tenant_id,
+      (client) => client.query(
+        `SELECT logical_event_id FROM ledger.refund_facts
+          WHERE tenant_id=$1 AND app_id=$2 AND transaction_id=$3`,
+        [commerceInput.server_context.tenant_id, commerceInput.server_context.app_id,
+          runtimeExplicitAmbiguousRefund.payload.transaction_id],
+      ),
+    )).rowCount, 0,
+    "runtime must reject ambiguity before an explicit record ID can select a target");
+
+    const runtimeAmountPurchase = {
+      ...structuredClone(runtimeTargetPurchase),
+      record_id: "purchase-55-runtime-amount-provenance",
+      delivery_id: "delivery:purchase-55-runtime-amount-provenance",
+      event_id: "event:purchase-55-runtime-amount-provenance",
+      occurred_at: "2026-08-05T00:00:00.000Z",
+      received_at: "2026-08-05T00:00:01.000Z",
+      payload: {
+        ...structuredClone(runtimeTargetPurchase.payload),
+        transaction_id: "transaction-55-runtime-amount-provenance",
+        original_transaction_id: "original-55-runtime-amount-provenance",
+      },
+    };
+    const runtimeAmountPurchaseResult = await ingestRuntimeBatch(
+      [{ server: commerceInput.server_context, record: runtimeAmountPurchase,
+        batch_id: "runtime-amount-provenance-purchase" }],
+      appPool,
+    );
+    assert.ok(runtimeAmountPurchaseResult.logical_events.some((logical) =>
+      logical.record_id === runtimeAmountPurchase.record_id));
+
+    for (const [mismatch, mutateHistory] of [
+      ["unscaled", (history: Any) => { history.payload.amount_unscaled = "8000001"; }],
+      ["scale", (history: Any) => { history.payload.amount_scale = 7; }],
+    ] as const) {
+      const mismatchedHistory = structuredClone(runtimeAmountPurchase);
+      mutateHistory(mismatchedHistory);
+      const amountMismatchRefund = {
+        ...structuredClone(refundTemplate),
+        record_id: `refund-55-runtime-amount-${mismatch}`,
+        delivery_id: `delivery:refund-55-runtime-amount-${mismatch}`,
+        event_id: `event:refund-55-runtime-amount-${mismatch}`,
+        occurred_at: "2026-08-06T00:00:00.000Z",
+        received_at: "2026-08-06T00:00:01.000Z",
+        payload: {
+          ...structuredClone(refundTemplate.payload),
+          transaction_id: `refund-transaction-55-runtime-amount-${mismatch}`,
+          original_transaction_id: runtimeAmountPurchase.payload.original_transaction_id,
+          correction_target_record_id: runtimeAmountPurchase.record_id,
+          amount_unscaled: "100000",
+        },
+      };
+      const amountMismatchResult = await ingestRuntimeBatch(
+        [{ server: commerceInput.server_context, record: amountMismatchRefund,
+          batch_id: `runtime-amount-${mismatch}-refund` }],
+        appPool,
+        [{ server: commerceInput.server_context, record: mismatchedHistory,
+          batch_id: `runtime-amount-${mismatch}-history` }],
+      );
+      assert.ok(amountMismatchResult.rejections.some((rejection) =>
+        rejection.record_id === amountMismatchRefund.record_id
+        && rejection.reason_code === "refund_target_invalid"),
+      `historical purchase amount_${mismatch} drift must invalidate refund target provenance`);
+      assert.equal((await withTenant(
+        appPool,
+        commerceInput.server_context.tenant_id,
+        (client) => client.query(
+          `SELECT logical_event_id FROM ledger.refund_facts
+            WHERE tenant_id=$1 AND app_id=$2 AND transaction_id=$3`,
+          [commerceInput.server_context.tenant_id, commerceInput.server_context.app_id,
+            amountMismatchRefund.payload.transaction_id],
+        ),
+      )).rowCount, 0);
+    }
+
+    const historicalPurchase = {
+      ...structuredClone(purchase),
+      record_id: "purchase-55-pre-024",
+      delivery_id: "delivery:purchase-55-pre-024",
+      event_id: "event:purchase-55-pre-024",
+      payload: {
+        ...structuredClone(purchase.payload),
+        transaction_id: "transaction-55-pre-024",
+        original_transaction_id: "transaction-original-55-pre-024",
+      },
+    };
+    const historicalInput = structuredClone(commerceInput);
+    historicalInput.records = [historicalPurchase];
+    historicalInput.metric_evaluations = [];
+    const historicalEvaluation = evaluate(historicalInput);
+    const historicalRaw = historicalEvaluation.raw_records[0];
+    const historicalLogical = historicalEvaluation.logical_events[0];
+    await withTenant(appPool, commerceInput.server_context.tenant_id, async (client) => {
+      await client.query(
+        `INSERT INTO ledger.raw_records (
+           record_id,tenant_id,app_id,producer,producer_version,event_id,delivery_id,
+           event_name,schema_version,payload_sha256,occurred_at,occurred_at_source,
+           received_at,raw_payload_ref,processing_purpose_id,
+           consent_evaluation_policy_version,consent_decision_reason_code,
+           withdrawal_recognized_at,alternative_legal_basis_id,
+           alternative_legal_basis_policy_version,policy_digest,artifact
+         ) VALUES (
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb
+         )`,
+        [historicalRaw.record_id, historicalRaw.tenant_id, historicalRaw.app_id,
+          historicalRaw.producer, historicalRaw.producer_version, historicalRaw.event_id,
+          historicalRaw.delivery_id, historicalRaw.event_name, historicalRaw.schema_version,
+          historicalRaw.payload_sha256, historicalRaw.occurred_at, historicalRaw.occurred_at_source,
+          historicalRaw.received_at, historicalRaw.raw_payload_ref,
+          historicalRaw.processing_purpose_id, historicalRaw.consent_evaluation_policy_version,
+          historicalRaw.consent_decision_reason_code,
+          historicalRaw.withdrawal_recognized_at ?? null,
+          historicalRaw.alternative_legal_basis_id ?? null,
+          historicalRaw.alternative_legal_basis_policy_version ?? null,
+          commerceInput.server_context.policy_digest, JSON.stringify(historicalRaw)],
+      );
+      await client.query(
+        `INSERT INTO ledger.raw_payload_states (
+           tenant_id,app_id,record_id,lifecycle_status,changed_at
+         ) VALUES ($1,$2,$3,'available',$4)`,
+        [historicalRaw.tenant_id, historicalRaw.app_id, historicalRaw.record_id,
+          historicalRaw.received_at],
+      );
+      await client.query(
+        `INSERT INTO ledger.logical_events (
+           logical_event_id,record_id,tenant_id,app_id,producer,event_id,event_name,
+           record_lifecycle,timeliness,artifact
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)`,
+        [historicalLogical.logical_event_id, historicalLogical.record_id,
+          historicalLogical.tenant_id, historicalLogical.app_id, historicalLogical.producer,
+          historicalLogical.event_id, historicalLogical.event_name,
+          historicalLogical.record_lifecycle, historicalLogical.timeliness,
+          JSON.stringify(historicalLogical)],
+      );
+      await client.query(
+        `INSERT INTO ledger.purchase_facts (
+           logical_event_id,tenant_id,app_id,installation_id,transaction_id,
+           amount_unscaled,amount_scale,currency,occurred_at,artifact
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)`,
+        [historicalLogical.logical_event_id, historicalLogical.tenant_id, historicalLogical.app_id,
+          historicalPurchase.payload.installation_id, historicalPurchase.payload.transaction_id,
+          historicalPurchase.payload.amount_unscaled, historicalPurchase.payload.amount_scale,
+          historicalPurchase.payload.currency, historicalPurchase.occurred_at,
+          JSON.stringify({ legacy_pre_024_projection: true })],
+      );
+    });
+    const refundAgainstHistorical = {
+      ...structuredClone(refundTemplate),
+      record_id: "refund-55-against-pre-024",
+      delivery_id: "delivery:refund-55-against-pre-024",
+      event_id: "event:refund-55-against-pre-024",
+      received_at: "2026-08-03T04:00:00.000Z",
+      occurred_at: "2026-08-03T03:00:00.000Z",
+      payload: {
+        ...structuredClone(refundTemplate.payload),
+        transaction_id: "refund-transaction-55-against-pre-024",
+        original_transaction_id: historicalPurchase.payload.original_transaction_id,
+      },
+    };
+    const historicalResult = await ingestRuntimeBatch(
+      [{ server: commerceInput.server_context, record: refundAgainstHistorical, batch_id: "runtime-post-024-refund" }],
+      appPool,
+      [{ server: commerceInput.server_context, record: historicalPurchase, batch_id: "runtime-pre-024-history" }],
+    );
+    assert.ok(historicalResult.rejections.some((rejection) =>
+      rejection.record_id === refundAgainstHistorical.record_id
+      && rejection.reason_code === "refund_target_invalid"),
+    "a pre-024 purchase without eligible projected provenance must reject without crashing the batch");
+    assert.equal((await withTenant(appPool, commerceInput.server_context.tenant_id, (client) => client.query(
+      `SELECT logical_event_id FROM ledger.refund_facts
+        WHERE tenant_id=$1 AND app_id=$2 AND transaction_id=$3`,
+      [commerceInput.server_context.tenant_id, commerceInput.server_context.app_id,
+        refundAgainstHistorical.payload.transaction_id],
+    ))).rowCount, 0);
+
+    const legacyInput: Any = JSON.parse(readFileSync(
+      join(process.cwd(), "fixtures", "v0.4", "16-correction-refund", "input.json"),
+      "utf8",
+    ));
+    const legacyAttempts = [...legacyInput.records].reverse().map((record: Any) => ({
+      server: legacyInput.server_context, record, batch_id: "runtime-legacy-refund-16",
+    }));
+    const legacyOutput = await ingestRuntimeBatch(legacyAttempts, appPool);
+    assert.ok(legacyOutput.deliveries.some((delivery) =>
+      delivery.record_id === "refund-16" && delivery.ingestion_status === "accepted"));
+    const legacyProjection = await withTenant(appPool, legacyInput.server_context.tenant_id, async (client) => ({
+      refunds: (await client.query(
+        `SELECT logical_event_id FROM ledger.refund_facts
+          WHERE tenant_id=$1 AND app_id=$2 AND transaction_id='refund-a'`,
+        [legacyInput.server_context.tenant_id, legacyInput.server_context.app_id],
+      )).rowCount,
+      corrections: (await client.query<{ corrects_record_id: string }>(
+        `SELECT corrects_record_id FROM ledger.corrections
+          WHERE tenant_id=$1 AND app_id=$2 AND correction_id='correction:refund-16'`,
+        [legacyInput.server_context.tenant_id, legacyInput.server_context.app_id],
+      )).rows,
+    }));
+    assert.equal(legacyProjection.refunds, 0,
+      "legacy explicit refunds must not enter the v0.4.8 financial projection");
+    assert.deepEqual(legacyProjection.corrections, [{ corrects_record_id: "purchase-16" }],
+      "runtime correction must preserve the explicit legacy target when purchase receipt is later");
+  });
+
+  it("keeps D30/D90 total-net SQL metrics JCS-identical across elapsed-window boundaries", async () => {
+    const fixtureName = "56-d30-d90-total-net-metrics";
+    const input: Any = JSON.parse(readFileSync(
+      join(process.cwd(), "fixtures", "v0.4", fixtureName, "input.json"),
+      "utf8",
+    ));
+    await ingestFixture(fixtureName, input, appPool, seedPool);
+    const expected = evaluate(input).metric_runs;
+    const actual = await computeSqlMetricRuns(appPool, input, false);
+    assert.equal(jcs(actual), jcs(expected));
+    assert.deepEqual(
+      actual.map((run) => [run.metric_name, run.value_unscaled]),
+      [
+        ["cohort_purchase_net_revenue_d30_usd", "8000000"],
+        ["cohort_purchase_net_revenue_d90_usd", "30000000"],
+        ["cohort_total_net_ltv_d30_usd", "9000000"],
+        ["cohort_total_net_ltv_d90_usd", "37000000"],
+        ["cohort_total_net_revenue_d30_usd", "9000000"],
+        ["cohort_total_net_revenue_d90_usd", "37000000"],
+        ["d30_total_net_roas", "900000"],
+        ["d90_total_net_roas", "3700000"],
+      ],
+      "D31 belongs only to D90 and the D91 boundary belongs to neither horizon",
+    );
+
+    const wrongBundle = structuredClone(input);
+    wrongBundle.metric_definitions.find((definition: Any) =>
+      definition.metric_name === "d30_total_net_roas").rule_bundle_hash = "8".repeat(64);
+    await assert.rejects(
+      () => computeSqlMetricRuns(appPool, wrongBundle, false),
+      /metric_definition_series_mismatch:d30_total_net_roas/,
+      "SQL metric path accepted a mismatched total-net bundle",
+    );
   });
 });

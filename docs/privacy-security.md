@@ -50,10 +50,20 @@ The initial MVP does not collect them. A future adapter may handle one only when
 ## Android
 
 - M2 Android, Unity, and redirector uses Google Play Install Referrer.
+- The optional Google Play purchase verifiers receive a Play Billing token only through the authenticated encrypted batch or a Google-signed Pub/Sub push. Runtime artifacts retain SHA-256 replay-prevention digests and non-identifying verdict metadata, never the token, order ID, Pub/Sub message ID, buyer address, product title, IP address, User-Agent, or raw provider value. One-time products bind ProductPurchaseV2 to a processed one-time order line. Initial subscriptions bind SubscriptionPurchaseV2 to a processed subscription order line whose service-period start equals the subscription start. Renewals require an authenticated `SUBSCRIPTION_RENEWED` signal, then independently bind the current SubscriptionPurchaseV2 snapshot to a processed order whose service period starts after the original subscription. The exact matching line total is authoritative purchase money; client and notification values are not. A completed privacy request purges encrypted request/provider evidence and pending work. Deployment-global token, notification, and order digests remain append-only replay boundaries.
 - Preserve referrer read time, device and server referrer timestamps, and validation outcome. Window evaluation uses `redirector_click_at` and Google Play server `install_begin_at_server`; device `occurred_at` is evidence only.
 - Treat an unsupported or unavailable Install Referrer path as explicit unattributed evidence (`install_referrer_unsupported` or `install_referrer_unavailable`), not as an organic assertion.
 - Never reconnect a deleted advertising ID to an earlier ID or derived profile.
 - Google announced the retirement of Attribution Reporting (Android) on 2025-10-17 and no longer accepts enrollment; this project does not adopt it.
+
+## Deep links and re-engagement
+
+- A deep-link destination is routing data and is never attribution evidence. The server resolves campaign meaning from the authenticated tenant/app scope and stored link slug.
+- A direct `deep_link_open` is device-reported and can be fabricated by a compromised app or extracted SDK credential. Fraud rules may read this evidence, but forged opens can still inflate re-engagement counts; no deterministic fraud control currently removes that residual.
+- Routing to the host application is not suppressed when collection is disabled, because routing performs no collection or transmission. Measurement is suppressed: no `deep_link_open` is queued. Consent withdrawal purges queued attribution-purpose opens and the server rejects later consent-required delivery.
+- Android deferred destinations use Google Play Install Referrer and are delivered only when collection was enabled before the one-time referrer read. OpenMasu does not read the referrer merely to route a destination after collection was disabled.
+- iOS direct links use Universal Links. The SDK links no pasteboard API and does not derive a device identifier. iOS deferred deep linking is not offered.
+- `assetlinks.json` and `apple-app-site-association` are intentionally public verification documents. They contain Android package names and signing-certificate fingerprints or Apple team/bundle identifiers. They contain no secret, user, campaign, or destination value.
 
 ### Meta Install Referrer evidence
 
@@ -105,12 +115,28 @@ Before implementation, legal and operational requirements must validate these de
 - Encryption at rest for PostgreSQL volumes, object storage, backups, and logs is a deployment responsibility and must use the controls of the selected host or storage layer. The project does not claim that community PostgreSQL provides transparent data encryption.
 - M1a protected raw payloads use project-level AES-256-GCM envelope encryption. Every object receives a random 256-bit data key; the payload and wrapped data key use separate nonces and authentication tags, and tenant/app/object identity is authenticated as AAD. Each key entry is stored separately so lawful purge removes both the encrypted object and its wrapped key; integration tests prove the object cannot be decrypted afterwards.
 - Deployment secrets enter through the M1a `SecretStore` environment-or-`*_FILE` port and are never stored in fixtures, logs, audit artifacts, or the public repository.
+- Google Data Manager uses a credential boundary separate from Google Play verification. Its encrypted outbound request is eligible only from a Play-verified settled purchase and a source-qualified Google Ads click. A completed privacy request purges any queued request before dispatch. Once Google has accepted a request, provider retention and any supported retraction procedure are operator responsibilities and must not be represented as a local deletion guarantee.
 - Backups and logs that contain protected metadata remain encrypted, access-controlled, and covered by retention policy.
 - A restored database must not serve traffic until every completed privacy request present in the authoritative ledger has been reapplied with `npm run db:reapply-privacy`. The job purges restored encrypted objects, appends missing tombstone/correction state idempotently, and supersedes replay-manifest-backed metrics. It fails closed for affected metric runs that lack replay input.
 - A backup that predates a completed privacy request is insufficient by itself. The operator must first restore the later authoritative completed-request ledger or select a newer backup; the public CLI does not invent or import missing deletion requests.
 - Encryption keys and signing secrets remain deployment-private, are access-controlled, support rotation, and are separable from encrypted data. Docker Compose defaults are not production key-management evidence.
 
 ## Open-core fraud boundary
+
+### Fraud capability boundary
+
+OpenMasu detects deterministic inconsistencies in server timestamps, redirector evidence, replay controls, and source-day aggregates. It does not claim parity with a cross-advertiser commercial MMP.
+
+| Capability | OpenMasu boundary |
+| --- | --- |
+| Real-device device farms | Cannot be detected from the permitted evidence. |
+| Device-reset fraud | Intentionally not detected; a reset creates a new installation by design. |
+| Cross-advertiser intelligence | Structurally unavailable because a self-hosted deployment sees one advertiser. |
+| Third-party IP or device intelligence | Permanently not used. No reputation feed, device graph, watchlist, or fingerprint is introduced. |
+
+The only unkeyed, bounded edge classifications are `source_rate_class`, `bot_prefetch` evidence derived from `prefetch_signal`, and `client_class`. They use signals already present on the click request, introduce no new raw input or persistent IP/User-Agent storage, and are not identifiers. The residual risk is that a classification still describes aggregate co-resident traffic, especially behind carrier NAT or shared proxies; operators must treat it as weak evidence and never as an identity.
+
+Fraud prevention retains source-day aggregates for 90 days by default. Decisions remain with the attribution history they govern. Shorter tenant retention is supported; longer retention requires a documented purpose.
 
 Public:
 
@@ -131,6 +157,8 @@ Private and access-controlled:
 - Detection-response timing
 
 Each decision records its reason, evidence references, policy digest, evaluation time, action, and supersession history. Public auditability does not require publishing live attack thresholds.
+
+Only the fraud bundle is bound to its real composite JCS hash in M6. The remaining `attribution-default`, `metric-default`, and `apple-postback-default` bundles still use a 64-zero placeholder. This known, golden-changing repair is tracked as F-H-3 and is outside WO-14.
 
 ## Release gates
 
@@ -154,6 +182,8 @@ Gate ownership follows the canonical [roadmap](roadmap.md):
 | Apple Privacy Manifest and App Privacy Details mapping | M4a iOS first-party measurement |
 | Aggregate-postback signature, replay, and series-separation evidence | M4b Apple aggregate attribution |
 | Final threat-model review, all workspace/SDK SBOMs, tenant-isolation/replay/deletion exercises, authenticated operational metrics, and backup/restore privacy-reapply evidence | M5 Production and limited adapter boundary |
+| Replayable deterministic fraud rules, gross/net policy, quarantine resolution, protected integrity normalization, and honest capability gaps | M6 Deterministic fraud controls |
+| Public association files, closed destination grammar, no-navigation SDK audits, consent-aware open delivery, install/engagement separation, and a device checklist that leaves real domain verification unclaimed | M7 Deep links and re-engagement |
 
 The M1a runtime gates continue to apply to every later runtime milestone. M5 adds synthetic restore, load, RBAC, observability, and release evidence. Real Play, Meta, MAX, Apple, device-transfer, Unity-export, integrity-service, production-backup, and incident-response validation remains outside the public repository and does not become true because CI is green.
 

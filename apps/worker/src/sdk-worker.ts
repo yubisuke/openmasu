@@ -4,6 +4,11 @@ import { sha256, type CandidateAttempt } from "@openmasu/attribution-core";
 import { decryptMetaInstallReferrer, type MetaKey } from "@openmasu/meta-install-referrer";
 import { withTenant, type PayloadStore } from "@openmasu/runtime";
 import { queueAdServicesLookup, type PendingAdServicesLookup } from "./adservices-worker.js";
+import { queueIntegrityVerification, type PendingIntegrityVerification } from "./integrity-verifier.js";
+import {
+  queueGooglePlayProductVerification,
+  type PendingGooglePlayProductVerification,
+} from "./google-play-product-verifier.js";
 import { ingestRuntimeBatch } from "./ingestion.js";
 
 type Any = Record<string, any>;
@@ -41,7 +46,9 @@ function serverContext(row: InboxRow, record: Any, withdrawals: Withdrawal[]): A
     }],
     withdrawals,
     alternative_legal_bases: [],
-    click_injection_threshold_ms: 2_000,
+    fraud_enabled: process.env.OPENMASU_FRAUD_ENABLED !== "0",
+    fraud_actions_enabled: process.env.OPENMASU_FRAUD_ENABLED !== "0"
+      && process.env.OPENMASU_FRAUD_ACTIONS_ENABLED === "1",
   };
 }
 
@@ -130,6 +137,86 @@ function prepareAdServicesRecord(
   };
 }
 
+function prepareIntegrityRecord(
+  row: InboxRow,
+  sourceRecord: Any,
+): { readonly record: Any; readonly verification?: PendingIntegrityVerification } {
+  const record = structuredClone(sourceRecord);
+  const extensions = record.payload?.extensions;
+  const token = extensions?.integrity_token_protected;
+  if (token === undefined) return { record };
+  const expectedProvider = row.producer === "sdk-ios" ? "app_attest" : "play_integrity";
+  const provider = extensions.integrity_provider;
+  const binding = extensions.integrity_binding;
+  const expectedMode = record.event_name === "install" ? "challenge" : "request_hash";
+  if (provider !== expectedProvider || extensions.integrity_binding_mode !== expectedMode
+    || typeof token !== "string" || token.length < 1 || typeof binding !== "string") {
+    throw new Error("integrity_token_scope_invalid");
+  }
+  const sanitizedExtensions = { ...extensions };
+  delete sanitizedExtensions.integrity_token_protected;
+  delete sanitizedExtensions.integrity_binding;
+  delete sanitizedExtensions.integrity_binding_mode;
+  delete sanitizedExtensions.integrity_provider;
+  sanitizedExtensions.integrity_token_evidence_ref = row.body_ref;
+  record.payload.extensions = sanitizedExtensions;
+  return {
+    record,
+    verification: {
+      tenantId: row.tenant_id,
+      appId: row.app_id,
+      subjectRecordId: record.record_id,
+      provider,
+      tokenRef: row.body_ref,
+      bindingDigest: expectedMode === "request_hash"
+        ? binding
+        : createHash("sha256").update(binding, "utf8").digest("hex"),
+      requestedAt: row.received_at,
+    },
+  };
+}
+
+function prepareGooglePlayProductRecord(
+  row: InboxRow,
+  sourceRecord: Any,
+): { readonly record: Any; readonly verification?: PendingGooglePlayProductVerification } {
+  const record = structuredClone(sourceRecord);
+  const extensions = record.payload?.extensions;
+  const token = extensions?.google_play_purchase_token_protected;
+  const productId = extensions?.google_play_product_id_protected;
+  const purchaseKindValue = extensions?.google_play_purchase_kind;
+  const purchaseKind = purchaseKindValue ?? "one_time_product";
+  if (token === undefined && productId === undefined && purchaseKindValue === undefined) return { record };
+  if (row.producer !== "sdk-android" || record.event_name !== "purchase"
+    || record.payload?.financial_status !== "pending" || typeof record.payload?.installation_id !== "string"
+    || typeof token !== "string" || token.length < 1 || Buffer.byteLength(token, "utf8") > 64 * 1024
+    || typeof productId !== "string" || productId.length < 1 || productId.length > 255
+    || !["one_time_product", "subscription_initial"].includes(purchaseKind)) {
+    throw new Error("google_play_product_verification_scope_invalid");
+  }
+  const sanitizedExtensions = { ...extensions };
+  delete sanitizedExtensions.google_play_purchase_token_protected;
+  delete sanitizedExtensions.google_play_product_id_protected;
+  delete sanitizedExtensions.google_play_purchase_kind;
+  sanitizedExtensions.store_verification_provider = "google_play";
+  sanitizedExtensions.store_verification_state = "pending";
+  sanitizedExtensions.store_verification_evidence_ref = row.body_ref;
+  record.payload.extensions = sanitizedExtensions;
+  return {
+    record,
+    verification: {
+      tenantId: row.tenant_id,
+      appId: row.app_id,
+      subjectRecordId: record.record_id,
+      tokenRef: row.body_ref,
+      purchaseToken: token,
+      productId,
+      purchaseKind,
+      requestedAt: row.received_at,
+    },
+  };
+}
+
 function authoritativeSequence(row: InboxRow, index: number): number {
   const sequence = Number(row.inbox_seq) * 1_000 + index;
   if (!Number.isSafeInteger(sequence)) throw new Error("sdk_processing_sequence_out_of_range");
@@ -140,23 +227,34 @@ async function recordsFor(
   row: InboxRow,
   payloadStore: PayloadStore,
   metaKeys: readonly MetaKey[],
-): Promise<{ readonly records: Any[]; readonly adServicesLookups: PendingAdServicesLookup[] }> {
+): Promise<{
+  readonly records: Any[];
+  readonly adServicesLookups: PendingAdServicesLookup[];
+  readonly integrityVerifications: PendingIntegrityVerification[];
+  readonly googlePlayProductVerifications: PendingGooglePlayProductVerification[];
+}> {
   const body = await payloadStore.read(row.body_ref);
   if (createHash("sha256").update(body).digest("hex") !== row.body_digest) throw new Error("ingest_batch_digest_mismatch");
   const parsed = JSON.parse(body.toString("utf8")) as Any;
   if (!Array.isArray(parsed.records) || parsed.records.length < 1) throw new Error("ingest_batch_records_invalid");
   const adServicesLookups: PendingAdServicesLookup[] = [];
+  const integrityVerifications: PendingIntegrityVerification[] = [];
+  const googlePlayProductVerifications: PendingGooglePlayProductVerification[] = [];
   const records = parsed.records.map((sourceRecord: Any, index: number) => {
-    const prepared = prepareAdServicesRecord(row, prepareMetaRecord(row, sourceRecord, metaKeys));
-    const record = prepared.record;
+    const integrity = prepareIntegrityRecord(row, prepareMetaRecord(row, sourceRecord, metaKeys));
+    const prepared = prepareAdServicesRecord(row, integrity.record);
+    const googlePlay = prepareGooglePlayProductRecord(row, prepared.record);
+    const record = googlePlay.record;
     if (prepared.lookup) adServicesLookups.push(prepared.lookup);
+    if (integrity.verification) integrityVerifications.push(integrity.verification);
+    if (googlePlay.verification) googlePlayProductVerifications.push(googlePlay.verification);
     if (record.tenant_id !== row.tenant_id || record.app_id !== row.app_id || record.producer !== row.producer) {
       throw new Error("ingest_batch_scope_mismatch");
     }
     record.processing_sequence = authoritativeSequence(row, index);
     return record;
   });
-  return { records, adServicesLookups };
+  return { records, adServicesLookups, integrityVerifications, googlePlayProductVerifications };
 }
 
 function withdrawalsFor(rows: Array<{ row: InboxRow; records: Any[] }>): Map<string, Withdrawal[]> {
@@ -237,6 +335,8 @@ export async function processSdkInbox(
     row: InboxRow;
     records: Any[];
     adServicesLookups: PendingAdServicesLookup[];
+    integrityVerifications: PendingIntegrityVerification[];
+    googlePlayProductVerifications: PendingGooglePlayProductVerification[];
   }> = [];
   for (const row of rows.rows) {
     try {
@@ -262,10 +362,21 @@ export async function processSdkInbox(
     const acceptedInstallIds = new Set(output.logical_events
       .filter((logical) => logical.event_name === "install")
       .map((logical) => logical.record_id));
+    const acceptedRecordIds = new Set(output.logical_events.map((logical) => logical.record_id));
     for (const entry of decoded) {
       if (entry.row.status !== "pending") continue;
       for (const lookup of entry.adServicesLookups) {
         if (acceptedInstallIds.has(lookup.installRecordId)) await queueAdServicesLookup(pool, lookup);
+      }
+      for (const verification of entry.integrityVerifications) {
+        if (acceptedRecordIds.has(verification.subjectRecordId)) {
+          await queueIntegrityVerification(pool, verification);
+        }
+      }
+      for (const verification of entry.googlePlayProductVerifications) {
+        if (acceptedRecordIds.has(verification.subjectRecordId)) {
+          await queueGooglePlayProductVerification(pool, verification);
+        }
       }
     }
     const recordsByBatch = new Map<string, string[]>();

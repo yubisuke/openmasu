@@ -16,3 +16,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "openmasu-android"
 include(":core", ":installreferrer", ":metareferrer", ":max", ":sample")
+include(":unitybridge")
+project(":unitybridge").projectDir = file("../unity/com.openmasu.sdk/Runtime/OpenMasu.androidlib")

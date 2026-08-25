@@ -9,17 +9,18 @@
     "meta_referrer_decrypted", "meta_referrer_decrypt_failed",
     "adservices_attributed", "adservices_token_expired", "adservices_not_attributed", "adservices_lookup_unavailable",
     "skan_postback_verified", "skan_signature_invalid", "postback_not_winner",
-    "crowd_anonymity_suppressed", "conversion_value_null"
+    "crowd_anonymity_suppressed", "conversion_value_null", "fraud_excluded",
+    "deep_link_open_attributed", "deep_link_unknown_link", "deep_link_link_inactive", "deep_link_install_click_reused"
   ],
   "rejection": [
     "client_scope_mismatch", "consent_withdrawn",
     "aggregate_installation_join_forbidden", "event_id_conflict", "record_id_collision",
-    "payload_schema_invalid", "timestamp_invalid", "timestamp_stale"
+    "payload_schema_invalid", "timestamp_invalid", "timestamp_stale", "refund_target_invalid"
   ],
   "consent_decision": [
     "consent_not_required", "consent_valid_before_withdrawal",
     "documented_alternative_legal_basis", "consent_withdrawn"
   ],
   "correction": ["refund", "privacy_deletion", "retention_expiry", "duplicate_source"],
-  "fraud_public_categories": ["bot_prefetch", "replay_suspected", "click_injection_suspected"]
+  "fraud_public_categories": ["bot_prefetch", "replay_suspected", "click_injection_suspected", "ctit_clock_anomaly", "click_flooding_suspected", "referrer_time_inconsistent", "device_integrity_failed"]
 }

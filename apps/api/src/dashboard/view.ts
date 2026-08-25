@@ -5,6 +5,7 @@ import type {
   MetricReportRow,
   RecordCountRow,
 } from "../reporting.js";
+import type { FraudAuditRow } from "../fraud-reporting.js";
 
 export type DashboardApp = {
   readonly app_id: string;
@@ -40,6 +41,7 @@ export type DashboardView = {
   readonly deterministicCharts: readonly DashboardChart[];
   readonly appleAggregateCharts: readonly DashboardChart[];
   readonly trackingLinks: readonly DashboardTrackingLink[];
+  readonly fraudRows: readonly FraudAuditRow[];
   readonly csrfToken: string;
   readonly nextCursor?: string;
   readonly metadata: {
@@ -71,6 +73,7 @@ export function buildDashboardView(input: {
   readonly records?: readonly RecordCountRow[];
   readonly differences?: DifferenceAuditPage;
   readonly trackingLinks?: readonly DashboardTrackingLink[];
+  readonly fraudRows?: readonly FraudAuditRow[];
   readonly csrfToken: string;
 }): DashboardView {
   const rows = [...(input.metrics?.data ?? [])].sort(compare);
@@ -104,6 +107,7 @@ export function buildDashboardView(input: {
     trackingLinks: [...(input.trackingLinks ?? [])].sort((left, right) =>
       right.created_at.localeCompare(left.created_at, "en")
       || left.tracking_link_id.localeCompare(right.tracking_link_id, "en")),
+    fraudRows: [...(input.fraudRows ?? [])],
     csrfToken: input.csrfToken,
     ...(input.metrics?.next_cursor ? { nextCursor: input.metrics.next_cursor } : {}),
     metadata: {

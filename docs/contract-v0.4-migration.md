@@ -89,3 +89,21 @@ Fixture 45 has the only derived digest changes:
 | Conversion-update payload JCS | `b702b0728fbe7d6bf6155c711c515457c27c03e08a9fdd535cb657ed4bf98cba` |
 
 No attribution status, reason meaning, candidate set, window, join, metric value, money value, snapshot digest, grouping digest, evidence reference, privacy state, or fraud decision changes. `SEMANTIC_DIFF=0` is a hard failure condition, not a descriptive claim.
+
+## Additive M6 patch ledger
+
+The active v0.4 schema identifiers and artifact `contract_version` values remain unchanged under R-27. These release-package patches are additive and are exercised only by new synthetic fixtures:
+
+| Patch | Additive surface | Fixture |
+| --- | --- | --- |
+| `0.4.1` | Source-scoped fraud decisions, rule identity, quarantine deadline, and three produced public fraud categories | 48 |
+| `0.4.2` | `fraud_excluded` attribution provenance | 49 |
+| `0.4.3` | Optional `fraud_policy` on metric definitions and runs | 50 |
+| `0.4.4` | Explicit Play referrer click-time availability | 51 |
+| `0.4.5` | Server-assigned `source_rate_class` and `client_class` click evidence | 52 |
+| `0.4.6` | Registered fraud-bundle definition binding and the non-fraud `ctit_clock_anomaly` day guard | 53 |
+| `0.4.7` | Deep-link open events, engagement attribution vocabulary, deferred-destination evidence, and daily deep-link metrics | 54 |
+| `0.4.8` | Canonical purchase/refund targets and settled purchase-net D0/D1/D3/D7 revenue | 55 |
+| `0.4.9` | D30/D90 purchase-net plus total-net revenue, ROAS, and cohort LTV | 56 |
+
+Fixture 53 adds 13 reviewed golden files. The bundle-binding correction changes only `expected_fraud_decisions.json` in fixtures 19, 25, 41, 48, 49, 50, and 51: their rule-bundle ID/version/hash now name the same non-zero composite definition. No raw, delivery, logical-event, rejection, attribution, metric, cost, privacy, correction, or reconciliation golden in an existing fixture changes. Fixture 54 adds one independent event schema and 13 reviewed golden files without altering an earlier deep-link golden. Fixture 55 adds 13 reviewed golden files for purchase/refund net revenue. Fixture 56 adds 13 reviewed golden files for D30/D90 total-net metrics; its D31 and D91 boundary events are new synthetic evidence only. Fixture 16 remains byte-identical and proves explicit-target legacy compatibility when the purchase receipt follows the refund receipt and both installation IDs are absent. Fixtures 48 through 56 add 117 reviewed golden files, while fixtures 01 through 47 otherwise retain the v0.4.0 baseline.

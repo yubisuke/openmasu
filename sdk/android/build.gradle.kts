@@ -33,5 +33,31 @@ tasks.register("androidAcceptance") {
     ":max:testDebugUnitTest",
     ":sample:assembleDebug",
     ":sample:verifyMergedManifest",
+    ":unitybridge:assembleDebug",
+    "verifyDeepLinkPolicy",
   )
+}
+
+tasks.register("verifyDeepLinkPolicy") {
+  dependsOn(":core:assembleDebug", ":sample:assembleDebug")
+  doLast {
+    val forbidden = listOf("AdvertisingIdClient", "getAdvertisingIdInfo", "Build.FINGERPRINT", "startActivity(")
+    val sources = rootProject.fileTree(rootProject.projectDir) {
+      include("**/*.kt", "**/*.java")
+      exclude("**/build/**")
+    }
+    forbidden.forEach { symbol ->
+      check(sources.none { it.readText().contains(symbol) }) { "DL-A-14 forbidden Android source symbol: $symbol" }
+    }
+    val built = files(
+      rootProject.fileTree(rootProject.file("core/build")) { include("**/*.class", "**/*.jar") },
+      rootProject.fileTree(rootProject.file("installreferrer/build")) { include("**/*.class", "**/*.jar") },
+    )
+    forbidden.dropLast(1).forEach { symbol ->
+      check(built.none { String(it.readBytes(), Charsets.ISO_8859_1).contains(symbol) }) {
+        "DL-A-14 forbidden Android built symbol: $symbol"
+      }
+    }
+    println("DL-A-14 Android source and built-symbol audit passed")
+  }
 }

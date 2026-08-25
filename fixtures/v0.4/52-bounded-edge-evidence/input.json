@@ -1,0 +1,10 @@
+{
+  "contract_version": "0.4.0",
+  "fx_policy": { "policy_version": "fx-m6", "target_currency": "USD", "target_scale": 6, "rounding_mode": "half_even", "rates": [{ "currency": "USD", "rate_unscaled": "1", "rate_scale": 0, "source": "synthetic-fixture-rate", "as_of": "2026-08-21T00:00:00.000Z" }] },
+  "metric_evaluations": [], "privacy_requests": [],
+  "server_context": { "tenant_id": "tenant-a", "app_id": "app-a", "received_at": "2026-08-21T04:00:01.000Z", "policy_digest": "policy-m6", "processing_purposes": [{ "processing_purpose_id": "fraud_prevention", "consent_required": false, "policy_version": "consent-m6" }], "withdrawals": [], "alternative_legal_bases": [] },
+  "records": [{
+    "contract_version": "0.4.0", "record_id": "click-52", "delivery_id": "delivery:click-52", "tenant_id": "tenant-a", "app_id": "app-a", "producer": "redirector", "producer_version": "fixture-m6", "event_id": "event:click-52", "event_name": "click", "schema_version": "0.4.0", "occurred_at": "2026-08-21T04:00:00.000Z", "occurred_at_source": "server", "received_at": "2026-08-21T04:00:01.000Z", "processing_purpose_id": "fraud_prevention", "processing_sequence": 1,
+    "payload": { "click_id": "click-52_0000000000000000", "tracking_link_id": "link-52", "campaign_id": "campaign-52", "redirector_click_at": "2026-08-21T04:00:00.000Z", "redirector_time_status": "available", "network": "synthetic-network", "site_id": "synthetic-site", "remote_click_ref": "synthetic-remote-52", "source_rate_class": "saturated", "client_class": "mobile_app_eligible" }
+  }]
+}

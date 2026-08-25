@@ -68,10 +68,21 @@ class GooglePlayReferrerReader(
     val clickServer = value.referrerClickTimestampServerSeconds
     val installServer = value.installBeginTimestampServerSeconds
     val installVersion = value.installVersion
-    val clickId = referrer.split('&').mapNotNull { field ->
+    val fields = referrer.split('&').mapNotNull { field ->
       val pair = field.split('=', limit = 2)
-      if (pair.size == 2 && pair[0] == "cid") URLDecoder.decode(pair[1], StandardCharsets.UTF_8.name()) else null
-    }.firstOrNull()
+      if (pair.size == 2) URLDecoder.decode(pair[0], StandardCharsets.UTF_8.name()) to
+        URLDecoder.decode(pair[1], StandardCharsets.UTF_8.name()) else null
+    }.toMap()
+    val clickId = fields["cid"]
+    val deepLink = fields["dl"]?.takeIf {
+      it.length <= 256 && Regex("^/(?:[A-Za-z0-9._~-]{1,64})(?:/[A-Za-z0-9._~-]{1,64}){0,7}$").matches(it) &&
+        it.split('/').drop(1).none { segment -> segment == "." || segment == ".." }
+    }
+    val deepLinkParameters = fields.entries
+      .filter { (name, value) -> name.matches(Regex("^dlp_[a-z][a-z0-9_]{0,63}$")) && value.matches(Regex("^[A-Za-z0-9._~-]{1,64}$")) }
+      .sortedBy { it.key }
+      .take(10)
+      .associate { it.key.removePrefix("dlp_") to it.value }
     val status = if (referrer.isBlank()) "none" else if (clickId == null) "third_party" else "available"
     return PlayReferrerEvidence(
       status = status,
@@ -83,6 +94,13 @@ class GooglePlayReferrerReader(
       installBeginAtDevice = epochSeconds(installDevice),
       installBeginAtServer = epochSeconds(installServer),
       installVersion = installVersion + if (instant) "+instant" else "",
+      deepLinkValue = deepLink,
+      deepLinkParameters = deepLinkParameters,
+      deferredDeepLinkStatus = when {
+        fields["dl"] == null -> "absent"
+        deepLink == null -> "rejected"
+        else -> "delivered"
+      },
     )
   }
 

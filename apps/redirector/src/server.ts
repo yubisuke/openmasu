@@ -17,6 +17,12 @@ class BoundedIpBucket {
     while (this.buckets.size > this.maximum) this.buckets.delete(this.buckets.keys().next().value!);
     return allowed;
   }
+  classify(key: string): "normal" | "elevated" | "saturated" {
+    const current = this.buckets.get(key);
+    if (!current) return "normal";
+    if (current.tokens < 1) return "saturated";
+    return current.tokens < Math.max(2, this.burst / 4) ? "elevated" : "normal";
+  }
 }
 
 const port = Number(process.env.OPENMASU_REDIRECTOR_PORT ?? "8090");
@@ -35,6 +41,16 @@ const server = createServer(createRedirectorHandler({
   tenantId: process.env.OPENMASU_REDIRECTOR_TENANT_ID ?? "tenant-local",
   fallbackUrl: process.env.OPENMASU_REDIRECTOR_FALLBACK_URL ?? "https://play.google.com/store",
   geoMode,
+  clientClassEnabled: process.env.OPENMASU_REDIRECTOR_CLIENT_CLASS !== "off",
+  remoteClickParameter: process.env.OPENMASU_REDIRECTOR_REMOTE_CLICK_PARAM ?? "cid",
+  hostMode: process.env.OPENMASU_REDIRECTOR_LINK_HOST_MODE === "fixed_tenant" ? "fixed_tenant" : "host_header",
+  referrerMaximumEncodedCharacters: Number(process.env.OPENMASU_REFERRER_MAX_ENCODED_CHARS ?? "512"),
+  wellKnownCacheSeconds: Number(process.env.OPENMASU_WELLKNOWN_CACHE_SECONDS ?? "300"),
+  wellKnownMaximumBytes: Number(process.env.OPENMASU_WELLKNOWN_MAX_BYTES ?? "65536"),
+  wellKnownLimiter: new BoundedIpBucket(
+    Number(process.env.OPENMASU_WELLKNOWN_RATE_RPS ?? "5"),
+    Number(process.env.OPENMASU_WELLKNOWN_RATE_BURST ?? "20"),
+  ),
   limiter: new BoundedIpBucket(
     Number(process.env.OPENMASU_REDIRECTOR_RATE_RPS ?? "20"),
     Number(process.env.OPENMASU_REDIRECTOR_RATE_BURST ?? "50"),

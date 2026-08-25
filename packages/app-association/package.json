@@ -1,0 +1,13 @@
+{
+  "name": "@openmasu/app-association",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pure Android App Links and Apple Universal Links association generation",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  }
+}

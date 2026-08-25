@@ -1,0 +1,24 @@
+[
+  {
+    "fraud_decision_id": "fraud:4848484848484848484848484848484848484848484848484848484848484848",
+    "subject_scope": "source",
+    "subject_ref": "source:tenant-a:app-a:2026-08-21:campaign-48:synthetic-network:synthetic-site",
+    "decision": "suspected",
+    "action": "flag",
+    "reason_code": "click_flooding_suspected",
+    "reason_code_version": "0.4.0",
+    "evidence": [
+      {
+        "type": "source_day_distribution",
+        "captured_at": "2026-08-21T23:59:59.000Z",
+        "digest": "4848484848484848484848484848484848484848484848484848484848484848",
+        "access_class": "protected"
+      }
+    ],
+    "rule_bundle_id": "fraud-conservative",
+    "rule_bundle_version": "1.0.0",
+    "rule_bundle_hash": "dfc447604f961bc549af4e28985d8f4e5427bd8f56c26b208d35ccab9a04a1ed",
+    "rule_id": "source-day-click-flooding-v1",
+    "evaluated_at": "2026-08-21T23:59:59.000Z"
+  }
+]

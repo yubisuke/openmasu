@@ -22,6 +22,11 @@ Primary M4 verification recorded on 2026-08-20:
 - [Privacy collected-data type](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacycollecteddatatypes/nsprivacycollecteddatatype) and [collection purposes](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacycollecteddatatypes/nsprivacycollecteddatatypepurposes) define the exact manifest vocabulary used by the SDK.
 - [AppLovin MAX iOS advanced settings](https://developers.applovin.com/en/max/ios/overview/advanced-settings/) and the [pinned 13.6.4 Swift Package manifest](https://raw.githubusercontent.com/AppLovin/AppLovin-MAX-Swift-Package/13.6.4/Package.swift) define the impression-revenue fields and exact compile-only provider dependency.
 
+Primary M7 verification recorded on 2026-08-21:
+
+- [Supporting associated domains](https://developer.apple.com/documentation/xcode/supporting-associated-domains) defines the extensionless AASA path, HTTPS/no-redirect requirement, `applinks:` entitlement shape, Apple CDN behavior, and the prohibition on path/query/trailing-slash components in the entitlement.
+- [Debugging Universal Links](https://developer.apple.com/documentation/technotes/tn3155-debugging-universal-links) records same-domain Safari behavior and development-mode diagnostics.
+
 Primary M5 verification recorded on 2026-08-20:
 
 - [Apple DeviceCheck](https://developer.apple.com/documentation/devicecheck) defines App Attest as app-integrity evidence and cautions that no single policy eliminates fraud.
@@ -61,6 +66,37 @@ Primary M2 verification recorded on 2026-08-19:
 Primary M5 verification recorded on 2026-08-20:
 
 - [Play Integrity overview](https://developer.android.com/google/play/integrity/overview) defines app/device verdicts, request-hash or nonce binding, replay considerations, gradual enforcement, and the requirement to combine integrity evidence with other anti-abuse signals. Live Play project setup remains outside the code gate.
+
+Primary M6 verification recorded on 2026-08-21:
+
+- [Install Referrer AIDL response bundle](https://developer.android.com/google/play/installreferrer/igetinstallreferrerservice) defines `referrer_click_timestamp_server_seconds` as the server-side time when the referrer click happened and `install_begin_timestamp_server_seconds` as the server-side time when installation began. Both are seconds on Google's server clock. For a genuine referrer path, the click therefore precedes or shares the one-second bucket with install begin; a server click timestamp at least one second later is temporally inconsistent. The shipped rule remains observe-only until the operator records the real sign distribution required by F-V-1.
+- [Play Integrity standard requests](https://developer.android.com/google/play/integrity/standard) bind frequent requests with `requestHash`, receive an encrypted token on the device, and require the backend to send it to Google's `decodeIntegrityToken` endpoint. [Classic requests](https://developer.android.com/google/play/integrity/classic) use a server-checked nonce and are intended for infrequent high-value operations. [Integrity verdicts](https://developer.android.com/google/play/integrity/verdicts) require package, request binding, and freshness checks before verdict use. [Setup and quotas](https://developer.android.com/google/play/integrity/setup) records a default 10,000 token-request and 10,000 server-decryption daily quota per linked Cloud project; quota exhaustion and provider errors are treated as `unavailable`, never as fraud.
+- [Apple DeviceCheck](https://developer.apple.com/documentation/devicecheck), [Establishing your app's integrity](https://developer.apple.com/documentation/devicecheck/establishing-your-app-s-integrity), [Validating apps that connect to your server](https://developer.apple.com/documentation/devicecheck/validating-apps-that-connect-to-your-server), and the [Attestation Object Validation Guide](https://developer.apple.com/documentation/devicecheck/attestation-object-validation-guide) define a one-time server challenge, key attestation bound to the App ID and key identifier, certificate-chain and nonce verification, persisted public-key state, and later assertion verification with a monotonic counter. Unsupported clients bypass gracefully, reinstall starts a new registration, and no App Attest result is sufficient on its own to classify fraud.
+
+Primary Google Play one-time-product verification recorded on 2026-08-24:
+
+- [Fight fraud and abuse](https://developer.android.com/google/play/billing/security) recommends sending the globally unique purchase token to a secure backend and verifying it with the Google Play Developer API before granting value.
+- [`purchases.productsv2.getproductpurchasev2`](https://developers.google.com/android-publisher/api-ref/rest/v3/purchases.productsv2/getproductpurchasev2) identifies an in-app product purchase by package name and token and returns purchase state, completion time, order ID, and product line items.
+- [`orders.get`](https://developers.google.com/android-publisher/api-ref/rest/v3/orders/get) retrieves a package-scoped order by order ID. The [Order resource](https://developers.google.com/android-publisher/api-ref/rest/v3/orders) defines `PROCESSED` state and the line-item `total` as the amount paid by the customer after discounts and tax; OpenMasu converts that `Money` value exactly and does not use listing price or post-fee developer revenue.
+- [Integrate the Google Play Billing Library](https://developer.android.com/google/play/billing/integrate) requires pending transactions to remain ungranted until the state becomes `PURCHASED` and notes that order IDs are not present for every purchase.
+- [Integrate Google Play with your server backend](https://developer.android.com/google/play/billing/backend) defines service-account access through the Google Play Developer API and recommends RTDN for lifecycle synchronization. Subscriptions, RTDN, acknowledgement, consumption, refunds, and revocation are outside this one-time-product slice.
+
+Primary Google Play initial-subscription verification recorded on 2026-08-24:
+
+- [`purchases.subscriptionsv2.get`](https://developers.google.com/android-publisher/api-ref/rest/v3/purchases.subscriptionsv2/get) returns the current subscription state and typed line items for a package-scoped purchase token. The [SubscriptionPurchaseV2 resource](https://developers.google.com/android-publisher/api-ref/rest/v3/purchases.subscriptionsv2) defines `startTime`, `productId`, and `latestSuccessfulOrderId`.
+- The [Order resource](https://developers.google.com/android-publisher/api-ref/rest/v3/orders) defines subscription service-period start/end fields and the exact customer-paid line total. OpenMasu requires the order period start to equal SubscriptionPurchaseV2 `startTime`, so this slice cannot silently classify a later renewal as the initial order.
+- [Subscription lifecycle](https://developer.android.com/google/play/billing/subscriptions) and the [backend integration guide](https://developer.android.com/google/play/billing/backend) require lifecycle synchronization for renewals and state changes. Acknowledgement, entitlement, cancellation, hold, refund, and revocation behavior remain unimplemented and unverified.
+
+Primary Google Play RTDN renewal verification recorded on 2026-08-24:
+
+- The [RTDN reference](https://developer.android.com/google/play/billing/rtdn-reference) defines the base64 Pub/Sub envelope and `SUBSCRIPTION_RENEWED` notification, states that a notification contains incomplete state, and requires a subsequent Google Play Developer API read. It also states that each auto-renewal has a new order ID.
+- [Authenticated Pub/Sub push](https://cloud.google.com/pubsub/docs/authenticate-push-subscriptions) requires validation of the Google-signed OIDC JWT and its audience and verified service-account email claims.
+- [`purchases.subscriptionsv2.get`](https://developers.google.com/android-publisher/api-ref/rest/v3/purchases.subscriptionsv2/get) supplies the current product line and latest successful order ID. The [Orders resource](https://developers.google.com/android-publisher/api-ref/rest/v3/orders) supplies processed state, token binding, service period, and exact line money. Its published methods provide get and batch-get by known order ID, not arbitrary order-history listing; therefore OpenMasu does not claim missed-notification historical renewal backfill.
+
+Primary M7 verification recorded on 2026-08-21:
+
+- [About App Links](https://developer.android.com/training/app-links/about), [Add intent filters](https://developer.android.com/training/app-links/add-applinks), and [Verify App Links](https://developer.android.com/training/app-links/verify-applinks) define verified HTTP/HTTPS intents, `autoVerify`, Android 11 all-host behavior, Android 12+ per-host verification, and the Digital Asset Links fetch path.
+- [Configure website associations](https://developer.android.com/training/app-links/configure-assetlinks) defines the public `assetlinks.json` fields, uppercase signing fingerprints, Play App Signing distinction, HTTPS/content-type/no-redirect requirements, and one file per host.
 
 ## Operations
 

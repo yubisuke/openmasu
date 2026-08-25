@@ -1668,3 +1668,1025 @@ REVOKE ALL ON control.metric_replay_manifests FROM PUBLIC;
 REVOKE SELECT ON control.metric_replay_manifests FROM openmasu_reader;
 GRANT SELECT, INSERT ON control.metric_replay_manifests TO openmasu_app;
 GRANT TRUNCATE ON control.metric_replay_manifests TO openmasu_seed;
+
+-- 015_m6_fraud.sql
+-- M6 deterministic fraud controls.
+ALTER TABLE control.rule_bundle_revisions
+  ADD COLUMN definition jsonb,
+  ADD COLUMN definition_digest text CHECK (definition_digest IS NULL OR definition_digest ~ '^[a-f0-9]{64}$');
+
+ALTER TABLE ledger.click_facts
+  ALTER COLUMN click_id DROP NOT NULL,
+  ADD COLUMN site_id text,
+  ADD COLUMN remote_click_ref text;
+
+ALTER TABLE ledger.fraud_decisions
+  ADD COLUMN subject_scope text NOT NULL DEFAULT 'record'
+    CHECK (subject_scope IN ('record','source')),
+  ADD COLUMN rule_id text,
+  ADD COLUMN resolution_deadline_at control.canonical_timestamp,
+  ADD COLUMN supersedes_fraud_decision_id text,
+  ADD CONSTRAINT fraud_decision_subject_namespace CHECK (
+    (subject_scope='source' AND subject_ref LIKE 'source:%') OR
+    (subject_scope='record' AND subject_ref NOT LIKE 'source:%')
+  ),
+  ADD CONSTRAINT fraud_decision_quarantine_deadline CHECK (
+    action <> 'quarantine' OR resolution_deadline_at IS NOT NULL
+  );
+
+CREATE TABLE ledger.source_day_aggregates (
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  metric_date date NOT NULL,
+  campaign_id control.identifier NOT NULL,
+  network text NOT NULL,
+  site_id text NOT NULL,
+  clicks bigint NOT NULL CHECK (clicks >= 0),
+  installs bigint NOT NULL CHECK (installs >= 0),
+  ctit_p05_ms bigint,
+  ctit_p50_ms bigint,
+  ctit_p95_ms bigint,
+  ctit_negative_count bigint NOT NULL DEFAULT 0 CHECK (ctit_negative_count >= 0),
+  organic_share_unscaled bigint,
+  input_snapshot_id text NOT NULL CHECK (input_snapshot_id ~ '^[a-f0-9]{64}$'),
+  computed_at control.canonical_timestamp NOT NULL,
+  artifact jsonb NOT NULL,
+  PRIMARY KEY (tenant_id, app_id, metric_date, campaign_id, network, site_id, input_snapshot_id),
+  FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id)
+);
+
+CREATE TABLE ephemeral.fraud_quarantines (
+  fraud_decision_id text PRIMARY KEY,
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  subject_ref text NOT NULL,
+  resolve_after timestamptz NOT NULL,
+  FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id)
+);
+
+CREATE TABLE ephemeral.integrity_verifications (
+  verification_id uuid PRIMARY KEY,
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  provider text NOT NULL CHECK (provider IN ('play_integrity','app_attest')),
+  token_ref text NOT NULL CHECK (token_ref LIKE 'protected:%'),
+  subject_record_id control.identifier NOT NULL,
+  attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  next_attempt_at timestamptz NOT NULL,
+  challenge_digest text NOT NULL CHECK (challenge_digest ~ '^[a-f0-9]{64}$'),
+  FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id)
+);
+
+CREATE INDEX source_day_aggregates_lookup_idx
+  ON ledger.source_day_aggregates (tenant_id, app_id, metric_date, campaign_id, network, site_id);
+CREATE INDEX fraud_quarantines_due_idx ON ephemeral.fraud_quarantines (resolve_after);
+CREATE INDEX integrity_verifications_due_idx ON ephemeral.integrity_verifications (next_attempt_at);
+
+ALTER TABLE ledger.source_day_aggregates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ledger.source_day_aggregates FORCE ROW LEVEL SECURITY;
+CREATE POLICY source_day_aggregates_tenant ON ledger.source_day_aggregates
+  USING (tenant_id=current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+ALTER TABLE ephemeral.fraud_quarantines ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ephemeral.fraud_quarantines FORCE ROW LEVEL SECURITY;
+CREATE POLICY fraud_quarantines_tenant ON ephemeral.fraud_quarantines
+  USING (tenant_id=current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+ALTER TABLE ephemeral.integrity_verifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ephemeral.integrity_verifications FORCE ROW LEVEL SECURITY;
+CREATE POLICY integrity_verifications_tenant ON ephemeral.integrity_verifications
+  USING (tenant_id=current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+CREATE TRIGGER source_day_aggregates_append_only
+  BEFORE UPDATE OR DELETE ON ledger.source_day_aggregates
+  FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
+
+REVOKE ALL ON ledger.source_day_aggregates, ephemeral.fraud_quarantines, ephemeral.integrity_verifications FROM PUBLIC;
+GRANT SELECT, INSERT ON ledger.source_day_aggregates TO openmasu_app;
+GRANT SELECT, INSERT, DELETE ON ephemeral.fraud_quarantines, ephemeral.integrity_verifications TO openmasu_app;
+GRANT SELECT ON ledger.source_day_aggregates TO openmasu_reader;
+GRANT TRUNCATE ON ledger.source_day_aggregates, ephemeral.fraud_quarantines, ephemeral.integrity_verifications TO openmasu_seed;
+
+-- 016_m6_integrity.sql
+-- M6b platform-integrity verification results and replay protection.
+ALTER TABLE ephemeral.integrity_verifications
+  DROP CONSTRAINT integrity_verifications_token_ref_check,
+  ADD CONSTRAINT integrity_verifications_token_ref_check
+    CHECK (token_ref LIKE 'encrypted:%'),
+  ADD CONSTRAINT integrity_verifications_binding_once
+    UNIQUE (tenant_id, app_id, provider, challenge_digest);
+
+CREATE TABLE ledger.integrity_verification_results (
+  verification_result_id uuid PRIMARY KEY,
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  subject_record_id control.identifier NOT NULL,
+  provider text NOT NULL CHECK (provider IN ('play_integrity','app_attest')),
+  verdict text NOT NULL CHECK (verdict IN ('verified','failed','unavailable')),
+  evidence_ref text,
+  response_digest text,
+  binding_digest text NOT NULL CHECK (binding_digest ~ '^[a-f0-9]{64}$'),
+  decided_at control.canonical_timestamp NOT NULL,
+  artifact jsonb NOT NULL,
+  FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id),
+  CHECK (
+    (verdict IN ('verified','failed') AND evidence_ref LIKE 'encrypted:%'
+      AND response_digest ~ '^[a-f0-9]{64}$')
+    OR
+    (verdict='unavailable' AND evidence_ref IS NULL AND response_digest IS NULL)
+  )
+);
+
+CREATE INDEX integrity_results_subject_idx
+  ON ledger.integrity_verification_results (tenant_id, app_id, subject_record_id, decided_at);
+CREATE UNIQUE INDEX integrity_results_binding_once_idx
+  ON ledger.integrity_verification_results (tenant_id, app_id, provider, binding_digest);
+
+ALTER TABLE ledger.integrity_verification_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ledger.integrity_verification_results FORCE ROW LEVEL SECURITY;
+CREATE POLICY integrity_verification_results_tenant ON ledger.integrity_verification_results
+  USING (tenant_id=current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+CREATE TRIGGER integrity_verification_results_append_only
+  BEFORE UPDATE OR DELETE ON ledger.integrity_verification_results
+  FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
+
+REVOKE ALL ON ledger.integrity_verification_results FROM PUBLIC;
+GRANT SELECT, INSERT ON ledger.integrity_verification_results TO openmasu_app;
+GRANT SELECT ON ledger.integrity_verification_results TO openmasu_reader;
+GRANT UPDATE ON ephemeral.integrity_verifications TO openmasu_app;
+GRANT TRUNCATE ON ledger.integrity_verification_results TO openmasu_seed;
+
+-- 017_m6_fraud_bundle_view.sql
+-- Expose additive fraud definition columns through the current-revision view.
+-- PostgreSQL expands SELECT * when a view is created, so migration 015's new
+-- columns are not visible until the view definition is replaced explicitly.
+CREATE OR REPLACE VIEW control.rule_bundles_current
+WITH (security_invoker = true)
+AS
+SELECT revision.*
+FROM control.rule_bundle_revisions AS revision
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM control.rule_bundle_revisions AS successor
+  WHERE successor.tenant_id=revision.tenant_id
+    AND successor.app_id=revision.app_id
+    AND successor.supersedes_rule_bundle_revision_id=revision.rule_bundle_revision_id
+);
+
+-- 018_m7_deeplink.sql
+-- M7 link-domain registration, association identities, deferred-link definitions, and engagement projections.
+CREATE TABLE control.link_domains (
+  tenant_id control.identifier PRIMARY KEY,
+  host text NOT NULL CHECK (host ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$'),
+  registered_at control.canonical_timestamp NOT NULL,
+  artifact jsonb NOT NULL,
+  UNIQUE (host)
+);
+
+CREATE TABLE control.app_link_identities (
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  android_package_name text CHECK (android_package_name IS NULL OR android_package_name ~ '^[A-Za-z][A-Za-z0-9_.]{2,254}$'),
+  android_sha256_fingerprints text[] NOT NULL DEFAULT '{}',
+  apple_team_id text CHECK (apple_team_id IS NULL OR apple_team_id ~ '^[A-Z0-9]{10}$'),
+  apple_bundle_id text CHECK (apple_bundle_id IS NULL OR apple_bundle_id ~ '^[A-Za-z0-9][A-Za-z0-9.-]{2,254}$'),
+  registered_at control.canonical_timestamp NOT NULL,
+  artifact jsonb NOT NULL,
+  PRIMARY KEY (tenant_id, app_id),
+  FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id),
+  UNIQUE (android_package_name),
+  UNIQUE (apple_team_id, apple_bundle_id),
+  CHECK (cardinality(android_sha256_fingerprints) <= 8),
+  CHECK ((apple_team_id IS NULL AND apple_bundle_id IS NULL) OR (apple_team_id IS NOT NULL AND apple_bundle_id IS NOT NULL))
+);
+
+-- Host-based routing needs a deployment-wide lookup before a tenant RLS context exists.
+-- This boundary returns only the tenant identifier and never exposes registration rows.
+CREATE FUNCTION control.resolve_link_host(request_host text)
+RETURNS control.identifier
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, control
+AS $$
+  SELECT tenant_id
+    FROM control.link_domains
+   WHERE host = lower(trim(trailing '.' from request_host))
+   LIMIT 1
+$$;
+
+ALTER TABLE control.tracking_links
+  ADD COLUMN deep_link_value text
+    CHECK (deep_link_value IS NULL OR (length(deep_link_value) <= 256 AND deep_link_value ~ '^(/[A-Za-z0-9._~-]{1,64}){1,8}$')),
+  ADD COLUMN deep_link_param_names text[] NOT NULL DEFAULT '{}'
+    CHECK (cardinality(deep_link_param_names) <= 10),
+  ADD COLUMN deferred_deep_link_ttl_seconds integer NOT NULL DEFAULT 604800
+    CHECK (deferred_deep_link_ttl_seconds BETWEEN 0 AND 7776000);
+
+ALTER TABLE ledger.click_facts
+  ADD COLUMN tracking_link_id control.identifier REFERENCES control.tracking_links (tracking_link_id);
+
+CREATE TABLE ledger.deep_link_open_facts (
+  logical_event_id text PRIMARY KEY REFERENCES ledger.logical_events (logical_event_id),
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  installation_id text NOT NULL,
+  tracking_link_id control.identifier,
+  campaign_id text,
+  open_source text NOT NULL CHECK (open_source IN ('android_app_link','ios_universal_link','custom_scheme','android_deferred_referrer')),
+  occurred_at control.canonical_timestamp NOT NULL,
+  occurred_at_ts timestamptz GENERATED ALWAYS AS (control.canonical_timestamp_value(occurred_at)) STORED,
+  days_since_last_session integer CHECK (days_since_last_session IS NULL OR days_since_last_session >= 0),
+  artifact jsonb NOT NULL,
+  FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id)
+);
+
+CREATE INDEX deep_link_open_facts_dimensions_idx
+  ON ledger.deep_link_open_facts (tenant_id, app_id, campaign_id, occurred_at_ts);
+
+ALTER TABLE control.link_domains ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control.link_domains FORCE ROW LEVEL SECURITY;
+CREATE POLICY link_domains_tenant ON control.link_domains
+  USING (tenant_id=current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+ALTER TABLE control.app_link_identities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control.app_link_identities FORCE ROW LEVEL SECURITY;
+CREATE POLICY app_link_identities_tenant ON control.app_link_identities
+  USING (tenant_id=current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+ALTER TABLE ledger.deep_link_open_facts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ledger.deep_link_open_facts FORCE ROW LEVEL SECURITY;
+CREATE POLICY deep_link_open_facts_tenant ON ledger.deep_link_open_facts
+  USING (tenant_id=current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+CREATE TRIGGER link_domains_append_only BEFORE UPDATE OR DELETE ON control.link_domains
+  FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
+CREATE TRIGGER app_link_identities_append_only BEFORE UPDATE OR DELETE ON control.app_link_identities
+  FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
+CREATE TRIGGER deep_link_open_facts_append_only BEFORE UPDATE OR DELETE ON ledger.deep_link_open_facts
+  FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
+
+REVOKE ALL ON control.link_domains, control.app_link_identities, ledger.deep_link_open_facts FROM PUBLIC;
+REVOKE ALL ON FUNCTION control.resolve_link_host(text) FROM PUBLIC;
+GRANT SELECT, INSERT ON control.link_domains, control.app_link_identities, ledger.deep_link_open_facts TO openmasu_app;
+GRANT EXECUTE ON FUNCTION control.resolve_link_host(text) TO openmasu_app;
+GRANT SELECT ON control.link_domains, control.app_link_identities, ledger.deep_link_open_facts TO openmasu_reader;
+GRANT TRUNCATE ON control.link_domains, control.app_link_identities, ledger.deep_link_open_facts TO openmasu_seed;
+
+-- 019_m7_deeplink_view_refresh.sql
+-- Refresh the tracking-link projection after M7 added deep-link columns.
+-- PostgreSQL expands SELECT * when a view is created, so migration 018's
+-- additive base-table columns are not visible until the view is recreated.
+DROP VIEW control.tracking_links_current;
+
+CREATE VIEW control.tracking_links_current
+WITH (security_invoker = true)
+AS
+SELECT DISTINCT ON (link.tracking_link_id)
+  link.*, state.status, state.changed_at AS status_changed_at, state.reason_code
+FROM control.tracking_links AS link
+JOIN control.tracking_link_states AS state USING (tracking_link_id, tenant_id, app_id)
+ORDER BY link.tracking_link_id, state.tracking_link_state_seq DESC;
+
+-- 020_m7_link_host_resolver_policy.sql
+-- The SECURITY DEFINER host resolver is owned by openmasu_owner, which remains
+-- subject to FORCE RLS. Permit that non-login owner to read only link-domain
+-- registrations while keeping direct application access tenant-scoped.
+DROP POLICY link_domains_tenant ON control.link_domains;
+
+CREATE POLICY link_domains_tenant ON control.link_domains
+  USING (
+    tenant_id=current_setting('openmasu.tenant_id', true)
+    OR current_user='openmasu_owner'
+  )
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+-- 021_wo16_role_grants.sql
+-- WO-16 repairs grants for databases that applied M6/M7 before their role ACLs
+-- were complete. The statements are idempotent and intentionally narrow.
+GRANT USAGE ON SCHEMA control, ledger, ephemeral TO openmasu_app;
+GRANT USAGE ON SCHEMA control, ledger TO openmasu_reader;
+GRANT USAGE ON SCHEMA control, ledger, ephemeral TO openmasu_seed;
+
+GRANT SELECT, INSERT ON
+  control.rule_bundle_revisions,
+  control.link_domains,
+  control.app_link_identities,
+  ledger.fraud_decisions,
+  ledger.source_day_aggregates,
+  ledger.integrity_verification_results,
+  ledger.deep_link_open_facts
+TO openmasu_app;
+
+GRANT SELECT, INSERT, DELETE ON ephemeral.fraud_quarantines TO openmasu_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ephemeral.integrity_verifications TO openmasu_app;
+
+GRANT SELECT ON
+  control.rule_bundle_revisions,
+  control.link_domains,
+  control.app_link_identities,
+  ledger.fraud_decisions,
+  ledger.source_day_aggregates,
+  ledger.integrity_verification_results,
+  ledger.deep_link_open_facts
+TO openmasu_reader;
+
+GRANT TRUNCATE ON
+  control.rule_bundle_revisions,
+  control.link_domains,
+  control.app_link_identities,
+  ledger.fraud_decisions,
+  ledger.source_day_aggregates,
+  ledger.integrity_verification_results,
+  ledger.deep_link_open_facts,
+  ephemeral.fraud_quarantines,
+  ephemeral.integrity_verifications
+TO openmasu_seed;
+
+-- 022_wo16_fraud_quarantine_lock_grant.sql
+-- SELECT ... FOR UPDATE SKIP LOCKED requires UPDATE even though the worker
+-- resolves a quarantine row with a separate DELETE statement.
+GRANT UPDATE ON ephemeral.fraud_quarantines TO openmasu_app;
+
+-- 023_job_health.sql
+CREATE INDEX audit_logs_job_health_idx
+  ON ledger.audit_logs (tenant_id, actor_ref, outcome, occurred_at DESC)
+  WHERE actor_type = 'system_job'
+    AND action = 'job_completed'
+    AND policy_version = 'job-health-v1'
+    AND actor_ref IN ('job:mmp_import', 'job:cost_import', 'job:metric_run')
+    AND outcome IN ('succeeded', 'failed')
+    AND target_scope = 'app'
+    AND app_id = target_ref
+    AND (
+      (outcome = 'succeeded' AND reason_code IS NULL)
+      OR (outcome = 'failed' AND reason_code = 'job_failed')
+    );
+
+-- 024_purchase_refund_net_revenue.sql
+-- Provider-neutral purchase/refund projections used by the additive settled net-revenue metrics.
+-- Existing purchase rows predate financial-status projection and intentionally remain NULL;
+-- they are excluded from settled metrics until replayed from protected payload storage.
+ALTER TABLE ledger.logical_events
+  ADD CONSTRAINT logical_events_record_identity_unique
+    UNIQUE (tenant_id, app_id, logical_event_id, record_id);
+
+ALTER TABLE ledger.purchase_facts
+  ADD COLUMN record_id control.identifier,
+  ADD COLUMN original_transaction_id text
+    CHECK (original_transaction_id IS NULL OR original_transaction_id ~ '^[A-Za-z0-9._:-]{1,128}$'),
+  ADD COLUMN financial_status text
+    CHECK (financial_status IS NULL OR financial_status IN ('settled', 'pending', 'reversed'));
+
+ALTER TABLE ledger.purchase_facts
+  ADD CONSTRAINT purchase_facts_projected_record_required
+    CHECK (financial_status IS NULL OR record_id IS NOT NULL),
+  ADD CONSTRAINT purchase_facts_source_scope_fk
+    FOREIGN KEY (tenant_id, app_id, logical_event_id, record_id)
+    REFERENCES ledger.logical_events (tenant_id, app_id, logical_event_id, record_id)
+    DEFERRABLE INITIALLY DEFERRED,
+  ADD CONSTRAINT purchase_facts_record_scope_unique UNIQUE (tenant_id, app_id, record_id);
+
+CREATE INDEX purchase_facts_net_revenue_idx
+  ON ledger.purchase_facts (tenant_id, app_id, installation_id, occurred_at_ts)
+  WHERE financial_status = 'settled';
+
+CREATE INDEX purchase_facts_refund_target_idx
+  ON ledger.purchase_facts (
+    tenant_id, app_id, installation_id,
+    (COALESCE(original_transaction_id, transaction_id)), currency, occurred_at_ts
+  )
+  WHERE financial_status = 'settled';
+
+CREATE TABLE ledger.refund_facts (
+  logical_event_id text PRIMARY KEY,
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  installation_id text NOT NULL,
+  transaction_id text NOT NULL CHECK (transaction_id ~ '^[A-Za-z0-9._:-]{1,128}$'),
+  original_transaction_id text NOT NULL CHECK (original_transaction_id ~ '^[A-Za-z0-9._:-]{1,128}$'),
+  correction_target_record_id control.identifier NOT NULL,
+  amount_unscaled text NOT NULL CHECK (amount_unscaled ~ '^[0-9]+$'),
+  amount_scale integer NOT NULL CHECK (amount_scale BETWEEN 0 AND 18),
+  currency text NOT NULL CHECK (currency ~ '^[A-Z]{3}$'),
+  financial_status text NOT NULL CHECK (financial_status IN ('settled', 'pending', 'reversed')),
+  occurred_at control.canonical_timestamp NOT NULL,
+  occurred_at_ts timestamptz GENERATED ALWAYS AS (control.canonical_timestamp_value(occurred_at)) STORED,
+  artifact jsonb NOT NULL,
+  FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id),
+  CONSTRAINT refund_facts_source_scope_fk
+    FOREIGN KEY (tenant_id, app_id, logical_event_id)
+    REFERENCES ledger.logical_events (tenant_id, app_id, logical_event_id)
+    DEFERRABLE INITIALLY DEFERRED,
+  CONSTRAINT refund_facts_target_scope_fk
+    FOREIGN KEY (tenant_id, app_id, correction_target_record_id)
+    REFERENCES ledger.purchase_facts (tenant_id, app_id, record_id)
+    DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE FUNCTION ledger.enforce_refund_target_invariant()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  target_purchase record;
+  refund_received_at_ts timestamptz;
+  eligible_target_count bigint;
+BEGIN
+  SELECT raw.received_at_ts
+    INTO refund_received_at_ts
+    FROM ledger.logical_events AS logical_event
+    JOIN ledger.raw_records AS raw
+      ON raw.tenant_id = logical_event.tenant_id
+     AND raw.app_id = logical_event.app_id
+     AND raw.record_id = logical_event.record_id
+   WHERE logical_event.tenant_id = NEW.tenant_id
+     AND logical_event.app_id = NEW.app_id
+     AND logical_event.logical_event_id = NEW.logical_event_id;
+
+  -- A missing same-scope source is reported by refund_facts_source_scope_fk as 23503.
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT purchase.financial_status,
+         purchase.installation_id,
+         COALESCE(purchase.original_transaction_id, purchase.transaction_id) AS original_transaction_id,
+         purchase.currency,
+         purchase.occurred_at_ts,
+         raw.received_at_ts
+    INTO target_purchase
+    FROM ledger.purchase_facts AS purchase
+    JOIN ledger.raw_records AS raw
+      ON raw.tenant_id = purchase.tenant_id
+     AND raw.app_id = purchase.app_id
+     AND raw.record_id = purchase.record_id
+   WHERE purchase.tenant_id = NEW.tenant_id
+     AND purchase.app_id = NEW.app_id
+     AND purchase.record_id = NEW.correction_target_record_id;
+
+  -- A missing same-scope target is reported by refund_facts_target_scope_fk as 23503.
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+
+  IF target_purchase.financial_status IS DISTINCT FROM 'settled'
+     OR target_purchase.installation_id IS DISTINCT FROM NEW.installation_id
+     OR target_purchase.original_transaction_id IS DISTINCT FROM NEW.original_transaction_id
+     OR target_purchase.currency IS DISTINCT FROM NEW.currency
+     OR target_purchase.occurred_at_ts > NEW.occurred_at_ts
+     OR target_purchase.received_at_ts > refund_received_at_ts THEN
+    RAISE EXCEPTION 'refund target invariant violation'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'refund_facts_target_invariant';
+  END IF;
+
+  SELECT count(*)
+    INTO eligible_target_count
+    FROM ledger.purchase_facts AS purchase
+    JOIN ledger.raw_records AS raw
+      ON raw.tenant_id = purchase.tenant_id
+     AND raw.app_id = purchase.app_id
+     AND raw.record_id = purchase.record_id
+   WHERE purchase.tenant_id = NEW.tenant_id
+     AND purchase.app_id = NEW.app_id
+     AND purchase.financial_status = 'settled'
+     AND purchase.installation_id = NEW.installation_id
+     AND COALESCE(purchase.original_transaction_id, purchase.transaction_id) = NEW.original_transaction_id
+     AND purchase.currency = NEW.currency
+     AND purchase.occurred_at_ts <= NEW.occurred_at_ts
+     AND raw.received_at_ts <= refund_received_at_ts;
+
+  IF eligible_target_count IS DISTINCT FROM 1 THEN
+    RAISE EXCEPTION 'refund target resolution is ambiguous'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'refund_facts_target_invariant';
+  END IF;
+
+  RETURN NULL;
+END
+$$;
+
+REVOKE ALL ON FUNCTION ledger.enforce_refund_target_invariant() FROM PUBLIC;
+
+CREATE CONSTRAINT TRIGGER refund_facts_target_invariant
+  AFTER INSERT ON ledger.refund_facts
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW EXECUTE FUNCTION ledger.enforce_refund_target_invariant();
+
+CREATE INDEX refund_facts_net_revenue_idx
+  ON ledger.refund_facts (
+    tenant_id, app_id, installation_id, occurred_at_ts, correction_target_record_id
+  )
+  WHERE financial_status = 'settled';
+
+ALTER TABLE ledger.refund_facts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ledger.refund_facts FORCE ROW LEVEL SECURITY;
+CREATE POLICY refund_facts_tenant ON ledger.refund_facts
+  USING (tenant_id=current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+CREATE TRIGGER refund_facts_append_only BEFORE UPDATE OR DELETE ON ledger.refund_facts
+  FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
+
+REVOKE ALL ON ledger.refund_facts FROM PUBLIC;
+GRANT SELECT, INSERT ON ledger.refund_facts TO openmasu_app;
+GRANT SELECT ON ledger.refund_facts TO openmasu_reader;
+GRANT TRUNCATE ON ledger.refund_facts TO openmasu_seed;
+
+-- 025_google_play_product_verification.sql
+-- Protected Google Play one-time-product verification queue and append-only outcomes.
+CREATE TABLE control.google_play_purchase_tokens (
+  token_digest text PRIMARY KEY CHECK (token_digest ~ '^[a-f0-9]{64}$'),
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  verification_id uuid NOT NULL UNIQUE,
+  registered_at control.canonical_timestamp NOT NULL,
+  FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id)
+);
+
+CREATE TABLE ephemeral.google_play_product_verifications (
+  verification_id uuid PRIMARY KEY,
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  subject_record_id control.identifier NOT NULL,
+  token_ref text NOT NULL CHECK (token_ref LIKE 'encrypted:%'),
+  token_digest text NOT NULL CHECK (token_digest ~ '^[a-f0-9]{64}$'),
+  product_id text NOT NULL CHECK (length(product_id) BETWEEN 1 AND 255),
+  verified_record_id control.identifier NOT NULL,
+  attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  next_attempt_at timestamptz NOT NULL,
+  requested_at control.canonical_timestamp NOT NULL,
+  FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id),
+  UNIQUE (tenant_id, app_id, subject_record_id),
+  UNIQUE (token_digest)
+);
+
+CREATE INDEX google_play_product_verifications_due_idx
+  ON ephemeral.google_play_product_verifications (next_attempt_at, verification_id);
+
+CREATE TABLE ledger.google_play_purchase_verification_results (
+  verification_result_id uuid PRIMARY KEY,
+  verification_id uuid NOT NULL,
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  subject_record_id control.identifier NOT NULL,
+  verified_record_id control.identifier,
+  token_digest text NOT NULL CHECK (token_digest ~ '^[a-f0-9]{64}$'),
+  verdict text NOT NULL CHECK (verdict IN ('verified','failed','unavailable')),
+  provider_purchase_state text,
+  product_matched boolean NOT NULL,
+  evidence_ref text,
+  response_digest text,
+  decided_at control.canonical_timestamp NOT NULL,
+  artifact jsonb NOT NULL,
+  FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id),
+  UNIQUE (verification_id),
+  UNIQUE (token_digest),
+  CHECK (
+    (verdict IN ('verified','failed') AND evidence_ref LIKE 'encrypted:%'
+      AND response_digest ~ '^[a-f0-9]{64}$')
+    OR
+    (verdict='unavailable' AND evidence_ref IS NULL AND response_digest IS NULL)
+  ),
+  CHECK ((verdict='verified') = (verified_record_id IS NOT NULL))
+);
+
+CREATE INDEX google_play_purchase_results_subject_idx
+  ON ledger.google_play_purchase_verification_results (
+    tenant_id, app_id, subject_record_id, decided_at
+  );
+
+ALTER TABLE ephemeral.google_play_product_verifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ephemeral.google_play_product_verifications FORCE ROW LEVEL SECURITY;
+CREATE POLICY google_play_product_verifications_tenant
+  ON ephemeral.google_play_product_verifications
+  USING (tenant_id=current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+-- The worker discovers due work before it has a tenant RLS context. The
+-- SECURITY DEFINER function below returns tenant identifiers only.
+CREATE POLICY google_play_product_verifications_discovery_owner
+  ON ephemeral.google_play_product_verifications FOR SELECT TO openmasu_owner
+  USING (true);
+
+ALTER TABLE control.google_play_purchase_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control.google_play_purchase_tokens FORCE ROW LEVEL SECURITY;
+CREATE POLICY google_play_purchase_tokens_tenant
+  ON control.google_play_purchase_tokens
+  USING (tenant_id=current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+ALTER TABLE ledger.google_play_purchase_verification_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ledger.google_play_purchase_verification_results FORCE ROW LEVEL SECURITY;
+CREATE POLICY google_play_purchase_verification_results_tenant
+  ON ledger.google_play_purchase_verification_results
+  USING (tenant_id=current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+CREATE TRIGGER google_play_purchase_verification_results_append_only
+  BEFORE UPDATE OR DELETE ON ledger.google_play_purchase_verification_results
+  FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
+
+CREATE TRIGGER google_play_purchase_tokens_append_only
+  BEFORE UPDATE OR DELETE ON control.google_play_purchase_tokens
+  FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
+
+REVOKE ALL ON
+  ephemeral.google_play_product_verifications,
+  control.google_play_purchase_tokens,
+  ledger.google_play_purchase_verification_results
+FROM PUBLIC;
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON ephemeral.google_play_product_verifications TO openmasu_app;
+GRANT SELECT, INSERT ON control.google_play_purchase_tokens TO openmasu_app;
+REVOKE SELECT ON control.google_play_purchase_tokens FROM openmasu_reader;
+GRANT SELECT, INSERT
+  ON ledger.google_play_purchase_verification_results TO openmasu_app;
+GRANT SELECT
+  ON ledger.google_play_purchase_verification_results TO openmasu_reader;
+GRANT TRUNCATE
+  ON ephemeral.google_play_product_verifications,
+     control.google_play_purchase_tokens,
+     ledger.google_play_purchase_verification_results TO openmasu_seed;
+
+CREATE OR REPLACE FUNCTION control.list_m4_work_tenants()
+RETURNS SETOF control.identifier
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog
+AS $$
+  SELECT registration.tenant_id
+  FROM control.apple_app_registrations AS registration
+  UNION
+  SELECT batch.tenant_id
+  FROM ledger.ingest_batches_current AS batch
+  WHERE batch.status IN ('pending', 'processed')
+  UNION
+  SELECT lookup.tenant_id
+  FROM ephemeral.adservices_lookups AS lookup
+  UNION
+  SELECT verification.tenant_id
+  FROM ephemeral.google_play_product_verifications AS verification
+  ORDER BY 1
+$$;
+
+-- 026_google_play_subscription_verification.sql
+-- Extend the protected Google Play verification queue for initial subscription orders.
+ALTER TABLE ephemeral.google_play_product_verifications
+  ADD COLUMN purchase_kind text NOT NULL DEFAULT 'one_time_product'
+    CHECK (purchase_kind IN ('one_time_product', 'subscription_initial'));
+
+ALTER TABLE ledger.google_play_purchase_verification_results
+  ADD COLUMN purchase_kind text NOT NULL DEFAULT 'one_time_product'
+    CHECK (purchase_kind IN ('one_time_product', 'subscription_initial'));
+
+-- 027_google_play_rtdn_renewals.sql
+-- Authenticated Google Play RTDN renewal queue and deployment-wide replay boundaries.
+ALTER TABLE control.google_play_purchase_tokens
+  ADD COLUMN product_id text CHECK (product_id IS NULL OR length(product_id) BETWEEN 1 AND 255),
+  ADD COLUMN purchase_kind text CHECK (purchase_kind IS NULL OR purchase_kind IN ('one_time_product','subscription_initial'));
+
+ALTER TABLE ephemeral.google_play_product_verifications
+  DROP CONSTRAINT google_play_product_verifications_purchase_kind_check,
+  DROP CONSTRAINT google_play_product_verifications_token_digest_key,
+  ADD CONSTRAINT google_play_product_verifications_purchase_kind_check
+    CHECK (purchase_kind IN ('one_time_product','subscription_initial','subscription_renewal'));
+
+ALTER TABLE ledger.google_play_purchase_verification_results
+  DROP CONSTRAINT google_play_purchase_verification_results_purchase_kind_check,
+  DROP CONSTRAINT google_play_purchase_verification_results_token_digest_key,
+  ADD CONSTRAINT google_play_purchase_verification_results_purchase_kind_check
+    CHECK (purchase_kind IN ('one_time_product','subscription_initial','subscription_renewal'));
+
+CREATE TABLE control.google_play_rtdn_messages (
+  message_digest text PRIMARY KEY CHECK (message_digest ~ '^[a-f0-9]{64}$'),
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  verification_id uuid NOT NULL UNIQUE,
+  subject_record_id control.identifier NOT NULL,
+  token_digest text NOT NULL CHECK (token_digest ~ '^[a-f0-9]{64}$'),
+  evidence_ref text NOT NULL CHECK (evidence_ref LIKE 'encrypted:%'),
+  notification_type integer NOT NULL CHECK (notification_type = 2),
+  event_time control.canonical_timestamp NOT NULL,
+  received_at control.canonical_timestamp NOT NULL,
+  FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id)
+);
+
+CREATE TABLE control.google_play_order_digests (
+  order_digest text PRIMARY KEY CHECK (order_digest ~ '^[a-f0-9]{64}$'),
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  verification_id uuid NOT NULL UNIQUE,
+  token_digest text NOT NULL CHECK (token_digest ~ '^[a-f0-9]{64}$'),
+  product_id text NOT NULL CHECK (length(product_id) BETWEEN 1 AND 255),
+  status text NOT NULL CHECK (status IN ('pending','verified')),
+  claimed_at control.canonical_timestamp NOT NULL,
+  verified_at control.canonical_timestamp,
+  FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id),
+  CHECK ((status='verified') = (verified_at IS NOT NULL))
+);
+
+CREATE OR REPLACE FUNCTION control.resolve_android_package(request_package text)
+RETURNS TABLE (tenant_id control.identifier, app_id control.identifier)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, control
+AS $$
+  SELECT identity.tenant_id, identity.app_id
+    FROM control.app_link_identities AS identity
+   WHERE identity.android_package_name=request_package
+   LIMIT 1
+$$;
+
+DROP POLICY app_link_identities_tenant ON control.app_link_identities;
+CREATE POLICY app_link_identities_tenant ON control.app_link_identities
+  USING (
+    tenant_id=current_setting('openmasu.tenant_id', true)
+    OR current_user='openmasu_owner'
+  )
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+ALTER TABLE control.google_play_rtdn_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control.google_play_rtdn_messages FORCE ROW LEVEL SECURITY;
+CREATE POLICY google_play_rtdn_messages_tenant ON control.google_play_rtdn_messages
+  USING (tenant_id=current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+ALTER TABLE control.google_play_order_digests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control.google_play_order_digests FORCE ROW LEVEL SECURITY;
+CREATE POLICY google_play_order_digests_tenant ON control.google_play_order_digests
+  USING (tenant_id=current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+CREATE TRIGGER google_play_rtdn_messages_append_only
+  BEFORE UPDATE OR DELETE ON control.google_play_rtdn_messages
+  FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
+
+CREATE TRIGGER google_play_order_digests_append_only_delete
+  BEFORE DELETE ON control.google_play_order_digests
+  FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
+
+REVOKE ALL ON control.google_play_rtdn_messages, control.google_play_order_digests FROM PUBLIC;
+REVOKE ALL ON FUNCTION control.resolve_android_package(text) FROM PUBLIC;
+GRANT SELECT, INSERT ON control.google_play_rtdn_messages TO openmasu_app;
+GRANT SELECT, INSERT, UPDATE ON control.google_play_order_digests TO openmasu_app;
+GRANT EXECUTE ON FUNCTION control.resolve_android_package(text) TO openmasu_app;
+REVOKE SELECT ON control.google_play_rtdn_messages, control.google_play_order_digests FROM openmasu_reader;
+GRANT TRUNCATE ON control.google_play_rtdn_messages, control.google_play_order_digests TO openmasu_seed;
+
+-- 028_max_aggregate_revenue.sql
+-- Append-only MAX Reporting API aggregate-revenue snapshots.
+-- This provider-reported aggregate series is intentionally separate from
+-- installation-level and aggregate S2S ad-revenue evidence.
+CREATE TABLE ledger.aggregate_revenue_snapshots (
+  aggregate_revenue_snapshot_id control.identifier PRIMARY KEY,
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  provider control.identifier NOT NULL CHECK (provider = 'applovin-max'),
+  source_series text NOT NULL CHECK (source_series = 'provider_reported_aggregate'),
+  revenue_date date NOT NULL,
+  max_ad_unit_id text NOT NULL CHECK (length(max_ad_unit_id) BETWEEN 1 AND 256),
+  network text NOT NULL CHECK (length(network) BETWEEN 1 AND 256),
+  country text CHECK (country IS NULL OR country ~ '^[A-Z]{2}$'),
+  amount_unscaled text NOT NULL CHECK (amount_unscaled ~ '^[0-9]+$'),
+  amount_scale integer NOT NULL CHECK (amount_scale = 6),
+  currency text NOT NULL CHECK (currency = 'USD'),
+  as_of control.canonical_timestamp NOT NULL,
+  as_of_ts timestamptz GENERATED ALWAYS AS (control.canonical_timestamp_value(as_of)) STORED,
+  report_snapshot_digest text NOT NULL CHECK (report_snapshot_digest ~ '^[0-9a-f]{64}$'),
+  retained_dimension_digest text NOT NULL CHECK (retained_dimension_digest ~ '^[0-9a-f]{64}$'),
+  import_run_id uuid NOT NULL REFERENCES control.import_runs (import_run_id),
+  artifact jsonb NOT NULL,
+  FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id),
+  UNIQUE (tenant_id, app_id, report_snapshot_digest, retained_dimension_digest)
+);
+
+CREATE INDEX aggregate_revenue_snapshots_history_idx
+  ON ledger.aggregate_revenue_snapshots (
+    tenant_id, app_id, provider, source_series, retained_dimension_digest,
+    as_of_ts DESC, report_snapshot_digest DESC, aggregate_revenue_snapshot_id DESC
+  );
+
+ALTER TABLE ledger.aggregate_revenue_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ledger.aggregate_revenue_snapshots FORCE ROW LEVEL SECURITY;
+CREATE POLICY aggregate_revenue_snapshots_tenant ON ledger.aggregate_revenue_snapshots
+  USING (tenant_id=current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+CREATE TRIGGER aggregate_revenue_snapshots_append_only
+  BEFORE UPDATE OR DELETE ON ledger.aggregate_revenue_snapshots
+  FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
+
+CREATE VIEW ledger.aggregate_revenue_snapshots_current
+WITH (security_invoker = true)
+AS
+SELECT DISTINCT ON (
+  tenant_id, app_id, provider, source_series, retained_dimension_digest
+)
+  *
+FROM ledger.aggregate_revenue_snapshots
+ORDER BY
+  tenant_id, app_id, provider, source_series, retained_dimension_digest,
+  as_of_ts DESC, report_snapshot_digest DESC, aggregate_revenue_snapshot_id DESC;
+
+REVOKE ALL ON ledger.aggregate_revenue_snapshots FROM PUBLIC;
+REVOKE ALL ON ledger.aggregate_revenue_snapshots_current FROM PUBLIC;
+GRANT SELECT, INSERT ON ledger.aggregate_revenue_snapshots TO openmasu_app;
+GRANT SELECT ON ledger.aggregate_revenue_snapshots_current TO openmasu_app;
+GRANT SELECT ON ledger.aggregate_revenue_snapshots, ledger.aggregate_revenue_snapshots_current TO openmasu_reader;
+GRANT TRUNCATE ON ledger.aggregate_revenue_snapshots TO openmasu_seed;
+
+-- 029_max_revenue_job_health.sql
+DROP INDEX ledger.audit_logs_job_health_idx;
+
+CREATE INDEX audit_logs_job_health_idx
+  ON ledger.audit_logs (tenant_id, actor_ref, outcome, occurred_at DESC)
+  WHERE actor_type = 'system_job'
+    AND action = 'job_completed'
+    AND policy_version = 'job-health-v1'
+    AND actor_ref IN ('job:mmp_import', 'job:cost_import', 'job:max_revenue_import', 'job:metric_run')
+    AND outcome IN ('succeeded', 'failed')
+    AND target_scope = 'app'
+    AND app_id = target_ref
+    AND (
+      (outcome = 'succeeded' AND reason_code IS NULL)
+      OR (outcome = 'failed' AND reason_code = 'job_failed')
+    );
+
+-- 030_google_data_manager_delivery.sql
+-- Tenant-scoped Google Data Manager destinations and durable outbound conversion delivery.
+CREATE TABLE control.google_data_manager_destinations (
+  destination_id uuid PRIMARY KEY,
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  operating_account_id text NOT NULL CHECK (operating_account_id ~ '^[0-9]{1,32}$'),
+  conversion_action_id text NOT NULL CHECK (conversion_action_id ~ '^[0-9]{1,32}$'),
+  app_audience text NOT NULL CHECK (app_audience IN ('general','mixed','child_directed')),
+  enabled boolean NOT NULL DEFAULT false,
+  registered_at control.canonical_timestamp NOT NULL,
+  artifact jsonb NOT NULL,
+  FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id),
+  UNIQUE (tenant_id, app_id)
+);
+
+CREATE TABLE ephemeral.google_conversion_deliveries (
+  delivery_id uuid PRIMARY KEY,
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  destination_id uuid NOT NULL REFERENCES control.google_data_manager_destinations (destination_id),
+  verification_result_id uuid NOT NULL,
+  verified_record_id control.identifier NOT NULL,
+  request_ref text NOT NULL CHECK (request_ref LIKE 'encrypted:%'),
+  request_digest text NOT NULL CHECK (request_digest ~ '^[a-f0-9]{64}$'),
+  transaction_digest text NOT NULL CHECK (transaction_digest ~ '^[a-f0-9]{64}$'),
+  state text NOT NULL CHECK (state IN (
+    'queued','http_accepted','diagnostics_processing',
+    'succeeded','partial_success','failed','expired'
+  )),
+  attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  next_attempt_at timestamptz NOT NULL,
+  provider_request_id text CHECK (
+    provider_request_id IS NULL OR length(provider_request_id) BETWEEN 1 AND 256
+  ),
+  diagnostics_deadline_at timestamptz,
+  safe_reason text CHECK (safe_reason IS NULL OR safe_reason ~ '^[a-z0-9_]{1,64}$'),
+  created_at control.canonical_timestamp NOT NULL,
+  updated_at control.canonical_timestamp NOT NULL,
+  FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id),
+  FOREIGN KEY (verification_result_id)
+    REFERENCES ledger.google_play_purchase_verification_results (verification_result_id),
+  UNIQUE (tenant_id, app_id, verification_result_id, destination_id),
+  CHECK (
+    (state IN ('http_accepted','diagnostics_processing','succeeded','partial_success')
+      AND provider_request_id IS NOT NULL AND diagnostics_deadline_at IS NOT NULL)
+    OR
+    (state IN ('queued','failed','expired'))
+  )
+);
+
+CREATE INDEX google_conversion_deliveries_due_idx
+  ON ephemeral.google_conversion_deliveries (next_attempt_at, delivery_id)
+  WHERE state IN ('queued','http_accepted','diagnostics_processing');
+
+CREATE TABLE ledger.google_conversion_delivery_results (
+  delivery_result_id uuid PRIMARY KEY,
+  delivery_id uuid NOT NULL,
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  state text NOT NULL CHECK (state IN (
+    'queued','http_accepted','diagnostics_processing',
+    'succeeded','partial_success','failed','expired'
+  )),
+  attempt integer NOT NULL CHECK (attempt >= 0),
+  occurred_at control.canonical_timestamp NOT NULL,
+  request_digest text NOT NULL CHECK (request_digest ~ '^[a-f0-9]{64}$'),
+  provider_request_id text CHECK (
+    provider_request_id IS NULL OR length(provider_request_id) BETWEEN 1 AND 256
+  ),
+  reason_code text CHECK (reason_code IS NULL OR reason_code ~ '^[a-z0-9_]{1,64}$'),
+  artifact jsonb NOT NULL,
+  FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id)
+);
+
+ALTER TABLE control.google_data_manager_destinations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control.google_data_manager_destinations FORCE ROW LEVEL SECURITY;
+CREATE POLICY google_data_manager_destinations_tenant
+  ON control.google_data_manager_destinations
+  USING (tenant_id=current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+ALTER TABLE ephemeral.google_conversion_deliveries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ephemeral.google_conversion_deliveries FORCE ROW LEVEL SECURITY;
+CREATE POLICY google_conversion_deliveries_tenant
+  ON ephemeral.google_conversion_deliveries
+  USING (tenant_id=current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+CREATE POLICY google_conversion_deliveries_discovery_owner
+  ON ephemeral.google_conversion_deliveries FOR SELECT TO openmasu_owner
+  USING (true);
+
+ALTER TABLE ledger.google_conversion_delivery_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ledger.google_conversion_delivery_results FORCE ROW LEVEL SECURITY;
+CREATE POLICY google_conversion_delivery_results_tenant
+  ON ledger.google_conversion_delivery_results
+  USING (tenant_id=current_setting('openmasu.tenant_id', true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id', true));
+
+CREATE TRIGGER google_conversion_delivery_results_append_only
+  BEFORE UPDATE OR DELETE ON ledger.google_conversion_delivery_results
+  FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
+
+REVOKE ALL ON
+  control.google_data_manager_destinations,
+  ephemeral.google_conversion_deliveries,
+  ledger.google_conversion_delivery_results
+FROM PUBLIC;
+
+GRANT SELECT, INSERT, UPDATE ON control.google_data_manager_destinations TO openmasu_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ephemeral.google_conversion_deliveries TO openmasu_app;
+GRANT SELECT, INSERT ON ledger.google_conversion_delivery_results TO openmasu_app;
+GRANT SELECT ON ledger.google_conversion_delivery_results TO openmasu_reader;
+REVOKE SELECT ON control.google_data_manager_destinations FROM openmasu_reader;
+REVOKE SELECT ON ephemeral.google_conversion_deliveries FROM openmasu_reader;
+GRANT TRUNCATE ON
+  control.google_data_manager_destinations,
+  ephemeral.google_conversion_deliveries,
+  ledger.google_conversion_delivery_results
+TO openmasu_seed;
+
+CREATE OR REPLACE FUNCTION control.list_m4_work_tenants()
+RETURNS SETOF control.identifier
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog
+AS $$
+  SELECT registration.tenant_id
+  FROM control.apple_app_registrations AS registration
+  UNION
+  SELECT batch.tenant_id
+  FROM ledger.ingest_batches_current AS batch
+  WHERE batch.status IN ('pending', 'processed')
+  UNION
+  SELECT lookup.tenant_id
+  FROM ephemeral.adservices_lookups AS lookup
+  UNION
+  SELECT verification.tenant_id
+  FROM ephemeral.google_play_product_verifications AS verification
+  UNION
+  SELECT delivery.tenant_id
+  FROM ephemeral.google_conversion_deliveries AS delivery
+  WHERE delivery.state IN ('queued','http_accepted','diagnostics_processing')
+  ORDER BY 1
+$$;
+
+DROP INDEX ledger.audit_logs_job_health_idx;
+
+CREATE INDEX audit_logs_job_health_idx
+  ON ledger.audit_logs (tenant_id, actor_ref, outcome, occurred_at DESC)
+  WHERE actor_type = 'system_job'
+    AND action = 'job_completed'
+    AND policy_version = 'job-health-v1'
+    AND actor_ref IN (
+      'job:mmp_import', 'job:cost_import', 'job:max_revenue_import',
+      'job:google_conversion_delivery', 'job:metric_run'
+    )
+    AND outcome IN ('succeeded', 'failed')
+    AND target_scope = 'app'
+    AND app_id = target_ref
+    AND (
+      (outcome = 'succeeded' AND reason_code IS NULL)
+      OR (outcome = 'failed' AND reason_code = 'job_failed')
+    );

@@ -1,11 +1,25 @@
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import type { Pool } from "pg";
 import { sha256, type CandidateAttempt } from "@openmasu/attribution-core";
-import { createAppPool, uuidV7, withTenant } from "@openmasu/runtime";
-import { ingestRuntimeBatch } from "../ingestion.js";
-import { lintMappings, loadMapping, mapRow, MappingError, rowMatches, type ImportMapping } from "./mapping.js";
+import {
+  createAppPool,
+  recordJobOutcome,
+  runWithTerminalJobOutcome,
+  uuidV7,
+  withTenant,
+} from "@openmasu/runtime";
+import { ingestRuntimeBatch, type RuntimeIngestionResult } from "../ingestion.js";
+import {
+  lintMappings,
+  loadMapping,
+  loadMappingScope,
+  mapRow,
+  MappingError,
+  rowMatches,
+  type ImportMapping,
+} from "./mapping.js";
 import { ImportLimitError, readRows, type ImportLimits } from "./source.js";
 
 type Any = Record<string, any>;
@@ -19,6 +33,15 @@ export type ImportSummary = {
   deliveries: number;
   logical_events: number;
 };
+
+const importMetadataChunkSize = 1_000;
+const importEvaluationChunkSize = 5_000;
+
+async function insertMetadataRows(client: import("pg").PoolClient, rows: readonly Any[], statement: string): Promise<void> {
+  for (let offset = 0; offset < rows.length; offset += importMetadataChunkSize) {
+    await client.query(statement, [JSON.stringify(rows.slice(offset, offset + importMetadataChunkSize))]);
+  }
+}
 
 export const defaultImportLimits: ImportLimits = {
   maxBytes: 4 * 1024 * 1024 * 1024,
@@ -102,14 +125,20 @@ async function ensureApp(pool: Pool, mapping: ImportMapping, now: string): Promi
   ).then(() => undefined));
 }
 
-async function historicalAttempts(pool: Pool, mapping: ImportMapping): Promise<CandidateAttempt[]> {
+async function historicalAttempts(
+  pool: Pool,
+  mapping: ImportMapping,
+  eventIds: readonly string[],
+): Promise<CandidateAttempt[]> {
+  if (eventIds.length === 0) return [];
   return withTenant(pool, mapping.tenant_id, async (client) => {
     const result = await client.query<{ server_context: Any; record: Any; import_run_id: string }>(
       `SELECT server_context, record, import_run_id::text
        FROM control.import_attempts
        WHERE tenant_id=$1 AND app_id=$2 AND record->>'producer'=$3
+         AND record->>'event_id'=ANY($4::text[])
        ORDER BY created_at, row_ordinal, import_attempt_id`,
-      [mapping.tenant_id, mapping.app_id, `import:${mapping.provider}`],
+      [mapping.tenant_id, mapping.app_id, `import:${mapping.provider}`, eventIds],
     );
     return result.rows.map((row) => ({ server: row.server_context, record: row.record, batch_id: row.import_run_id }));
   });
@@ -158,9 +187,35 @@ export async function runMmpImport(options: {
     }
   }
   try {
-    const history = await historicalAttempts(options.pool, mapping);
-    const output = await ingestRuntimeBatch(attemptRows.map(({ attempt }) => attempt), options.pool, history);
-    const invalidKeys = new Set(output.validation_failures.map((failure) => `${failure.record_id}\u0000${failure.delivery_id}`));
+    const eventIds = [...new Set(attemptRows.map(({ attempt }) => String(attempt.record.event_id)))];
+    const history = await historicalAttempts(options.pool, mapping, eventIds);
+    const historyByEventId = new Map<string, CandidateAttempt[]>();
+    const appendHistory = (attempt: CandidateAttempt): void => {
+      const key = String(attempt.record.event_id);
+      const values = historyByEventId.get(key) ?? [];
+      values.push(attempt);
+      historyByEventId.set(key, values);
+    };
+    for (const attempt of history) appendHistory(attempt);
+    const validationFailures: RuntimeIngestionResult["validation_failures"] = [];
+    let deliveries = 0;
+    let logicalEvents = 0;
+    for (let offset = 0; offset < attemptRows.length; offset += importEvaluationChunkSize) {
+      const chunkRows = attemptRows.slice(offset, offset + importEvaluationChunkSize);
+      const chunkAttempts = chunkRows.map(({ attempt }) => attempt);
+      const chunkEventIds = new Set(chunkAttempts.map((attempt) => String(attempt.record.event_id)));
+      const chunkHistory = [...chunkEventIds].flatMap((eventId) => historyByEventId.get(eventId) ?? []);
+      const output = await ingestRuntimeBatch(chunkAttempts, options.pool, chunkHistory, { bulkPersistence: true });
+      validationFailures.push(...output.validation_failures);
+      deliveries += output.deliveries.length;
+      logicalEvents += output.logical_events.length;
+      const invalidChunkKeys = new Set(output.validation_failures.map((failure) =>
+        `${failure.record_id}\u0000${failure.delivery_id}`));
+      for (const attempt of chunkAttempts) {
+        if (!invalidChunkKeys.has(`${attempt.record.record_id}\u0000${attempt.record.delivery_id}`)) appendHistory(attempt);
+      }
+    }
+    const invalidKeys = new Set(validationFailures.map((failure) => `${failure.record_id}\u0000${failure.delivery_id}`));
     const acceptedRows = attemptRows.filter(({ attempt }) => !invalidKeys.has(`${attempt.record.record_id}\u0000${attempt.record.delivery_id}`));
     const rowByAttempt = new Map(attemptRows.map(({ ordinal, attempt }) => [
       `${attempt.record.record_id}\u0000${attempt.record.delivery_id}`,
@@ -168,7 +223,7 @@ export async function runMmpImport(options: {
     ]));
     const allFailures = [
       ...failures,
-      ...output.validation_failures.map((failure) => ({
+      ...validationFailures.map((failure) => ({
         ordinal: rowByAttempt.get(`${failure.record_id}\u0000${failure.delivery_id}`)!,
         reason: "row_schema_invalid",
         fields: [...failure.fields],
@@ -191,30 +246,28 @@ export async function runMmpImport(options: {
         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
         [uuidV7(options.now?.valueOf()), mapping.tenant_id, mapping.app_id, mapping.source_id, fileDigest, loaded.bytes, loaded.rows.length, now, runId],
       );
-      for (const { ordinal, attempt } of acceptedRows) {
-        await client.query(
-          `INSERT INTO control.import_attempts (
-            import_attempt_id, import_run_id, tenant_id, app_id, source_id,
-            row_ordinal, server_context, record, created_at
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9)`,
-          [uuidV7(), runId, mapping.tenant_id, mapping.app_id, mapping.source_id, ordinal, JSON.stringify(attempt.server), JSON.stringify(attempt.record), now],
-        );
-      }
-      for (const failure of allFailures) {
-        await client.query(
-          `INSERT INTO control.import_row_rejections (
-            import_rejection_id, import_run_id, tenant_id, app_id, source_id,
-            row_ordinal, reason_code, field_names, occurred_at
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)`,
-          [uuidV7(), runId, mapping.tenant_id, mapping.app_id, mapping.source_id, failure.ordinal, failure.reason, JSON.stringify(failure.fields), now],
-        );
-      }
+      await insertMetadataRows(client, acceptedRows.map(({ ordinal, attempt }) => ({
+        import_attempt_id: uuidV7(), import_run_id: runId, tenant_id: mapping.tenant_id,
+        app_id: mapping.app_id, source_id: mapping.source_id, row_ordinal: ordinal,
+        server_context: attempt.server, record: attempt.record, created_at: now,
+      })), `INSERT INTO control.import_attempts (
+        import_attempt_id,import_run_id,tenant_id,app_id,source_id,row_ordinal,server_context,record,created_at)
+        SELECT import_attempt_id,import_run_id,tenant_id,app_id,source_id,row_ordinal,server_context,record,created_at
+        FROM jsonb_populate_recordset(NULL::control.import_attempts,$1::jsonb)`);
+      await insertMetadataRows(client, allFailures.map((failure) => ({
+        import_rejection_id: uuidV7(), import_run_id: runId, tenant_id: mapping.tenant_id,
+        app_id: mapping.app_id, source_id: mapping.source_id, row_ordinal: failure.ordinal,
+        reason_code: failure.reason, field_names: failure.fields, occurred_at: now,
+      })), `INSERT INTO control.import_row_rejections (
+        import_rejection_id,import_run_id,tenant_id,app_id,source_id,row_ordinal,reason_code,field_names,occurred_at)
+        SELECT import_rejection_id,import_run_id,tenant_id,app_id,source_id,row_ordinal,reason_code,field_names,occurred_at
+        FROM jsonb_populate_recordset(NULL::control.import_row_rejections,$1::jsonb)`);
     });
     console.log(`Import ${basename(options.filePath)}: rows=${loaded.rows.length} accepted=${acceptedRows.length} rejected=${allFailures.length}`);
     return {
       status: "completed", import_run_id: runId, rows: loaded.rows.length,
       accepted: acceptedRows.length, rejected: allFailures.length,
-      deliveries: output.deliveries.length, logical_events: output.logical_events.length,
+      deliveries, logical_events: logicalEvents,
     };
   } catch (error) {
     // Projection writes are transaction-scoped per logical record. A terminal failed run
@@ -230,25 +283,55 @@ export async function runMmpImport(options: {
   }
 }
 
+export async function runMmpImportCommand(
+  options: Parameters<typeof runMmpImport>[0] & { lintDirectory?: string },
+): Promise<ImportSummary> {
+  const scope = loadMappingScope(options.mappingPath);
+  return runWithTerminalJobOutcome(
+    async () => {
+      const mappings = mappingsForLint(options.mappingPath, options.lintDirectory);
+      for (const warning of lintMappings(mappings)) console.warn(JSON.stringify({ level: "warning", ...warning }));
+      return runMmpImport(options);
+    },
+    (outcome) => recordJobOutcome({
+      pool: options.pool,
+      tenantId: scope.tenantId,
+      appId: scope.appId,
+      job: "mmp_import",
+      outcome,
+    }),
+  );
+}
+
 function argument(name: string): string | undefined {
   const prefix = `--${name}=`;
   return process.argv.slice(2).find((value) => value.startsWith(prefix))?.slice(prefix.length);
 }
 
+export function mappingsForLint(mappingPath: string, explicitDirectory?: string): ImportMapping[] {
+  if (!explicitDirectory) return [loadMapping(mappingPath)];
+  const directory = resolve(explicitDirectory);
+  return readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+    .map((entry) => loadMapping(join(directory, entry.name)));
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
   const source = argument("source");
   const file = argument("file");
+  const lintDirectory = argument("lint-directory");
   if (!source || !file) throw new Error("usage: npm run import -- --source=<mapping-name-or-path> --file=<path>");
   const mappingPath = source.endsWith(".json") && (source.includes("/") || source.includes("\\"))
     ? resolve(source)
     : join(resolve(process.env.OPENMASU_MAPPINGS_DIR ?? "examples/mappings"), source.endsWith(".json") ? source : `${source}.json`);
-  const mappings = readdirSync(dirname(mappingPath), { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
-    .map((entry) => loadMapping(join(dirname(mappingPath), entry.name)));
-  for (const warning of lintMappings(mappings)) console.warn(JSON.stringify({ level: "warning", ...warning }));
   const pool = createAppPool();
   try {
-    const summary = await runMmpImport({ pool, mappingPath, filePath: resolve(file) });
+    const summary = await runMmpImportCommand({
+      pool,
+      mappingPath,
+      filePath: resolve(file),
+      lintDirectory,
+    });
     console.log(JSON.stringify(summary));
   } catch (error) {
     if (error instanceof ImportLimitError) console.error(`Import refused before persistence: ${error.message}`);

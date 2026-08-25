@@ -39,6 +39,17 @@ function dimensionObject(row: CostInput): Record<string, unknown> {
   }).sort(([left], [right]) => left.localeCompare(right)));
 }
 
+export function prepareCostImportRows(rows: readonly CostInput[]): CostInput[] {
+  const keyed = rows.map((row) => ({ row, key: jcs(dimensionObject(row)) }));
+  keyed.sort((left, right) => left.key.localeCompare(right.key));
+  for (let index = 1; index < keyed.length; index += 1) {
+    if (keyed[index - 1].key === keyed[index].key) {
+      throw new Error("cost import contains a duplicate retained dimension key");
+    }
+  }
+  return keyed.map(({ row }) => row);
+}
+
 export function costArtifact(row: CostInput, reportSnapshotDigest: string): Record<string, unknown> {
   const dimensions = dimensionObject(row);
   return {

@@ -9,6 +9,7 @@
     { "subject_scope": "installation_level", "method": "meta_install_referrer", "model": "last_click", "statuses": ["organic", "non_organic", "unattributed"] },
     { "subject_scope": "installation_level", "method": "meta_install_referrer", "model": "view_through", "statuses": ["organic", "non_organic", "unattributed"] },
     { "subject_scope": "installation_level", "method": "apple_adservices", "model": "last_click", "statuses": ["organic", "non_organic", "unattributed"] },
-    { "subject_scope": "installation_level", "method": "none", "model": "none", "statuses": ["organic", "unattributed"] }
+    { "subject_scope": "installation_level", "method": "none", "model": "none", "statuses": ["organic", "unattributed"] },
+    { "subject_scope": "engagement_level", "method": "deep_link", "model": "last_click", "statuses": ["non_organic", "unattributed"] }
   ]
 }

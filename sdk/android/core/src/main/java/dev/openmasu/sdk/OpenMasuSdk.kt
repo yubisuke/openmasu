@@ -1,6 +1,7 @@
 package dev.openmasu.sdk
 
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.work.Constraints
@@ -14,14 +15,19 @@ import org.json.JSONObject
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.time.Duration
+import java.time.Instant
 
-data class OpenMasuConfiguration(
+data class OpenMasuConfiguration @JvmOverloads constructor(
   val endpoint: String,
   val sdkKeyId: String,
   val sdkSecret: String,
   val sdkVersion: String = OpenMasuStorage.SDK_VERSION,
   val wrapperVersion: String? = null,
   val timeoutMs: Int = 10_000,
+  val deepLinkHosts: Set<String> = emptySet(),
+  val deepLinkSchemes: Set<String> = emptySet(),
+  val deferredDeepLinkTtlSeconds: Long = 604800,
 )
 
 class OpenMasuSdk private constructor(
@@ -37,6 +43,7 @@ class OpenMasuSdk private constructor(
   private val executor = Executors.newSingleThreadExecutor()
   private val initialized = AtomicBoolean(false)
   private val defaultCollectionEnabled = manifestCollectionDefault(context)
+  @Volatile private var deepLinkListener: OpenMasuDeepLinkListener? = null
 
   fun initialize() {
     if (!initialized.compareAndSet(false, true)) return
@@ -45,9 +52,15 @@ class OpenMasuSdk private constructor(
     executor.execute {
       val installationId = storage.installationId()
       if (!storage.referrerConsumed()) {
-        val play = playReader.read()
+        val play = normalizeDeferred(playReader.read())
         val meta = metaReader.read()
         enqueueJson("install", "attribution", EventFactory.install(installationId, configuration.wrapperVersion ?: configuration.sdkVersion, play, meta, "play_first_launch"))
+        val deferred = DeepLinkParser.fromReferrer(play)
+        if (deferred != null && !storage.deferredDestinationConsumed()) {
+          deepLinkListener?.onDeepLink(deferred)
+          enqueueJson("deep_link_open", "attribution", EventFactory.deepLink(installationId, deferred))
+          storage.markDeferredDestinationConsumed()
+        }
         if (!play.shouldRetry) storage.markReferrerConsumed()
       }
       drain()
@@ -72,10 +85,165 @@ class OpenMasuSdk private constructor(
     }
   }
 
+  fun setDeepLinkListener(listener: OpenMasuDeepLinkListener?) {
+    deepLinkListener = listener
+  }
+
+  fun handleDeepLink(intent: Intent): Boolean {
+    val value = DeepLinkParser.direct(intent, configuration.deepLinkHosts, configuration.deepLinkSchemes) ?: return false
+    deepLinkListener?.onDeepLink(value)
+    if (isCollectionEnabled()) executor.execute {
+      enqueueJson("deep_link_open", "attribution", EventFactory.deepLink(storage.installationId(), value))
+      drain()
+    }
+    return true
+  }
+
   @JvmOverloads
   fun enqueueAdRevenue(payload: JSONObject, eventId: String? = null) {
     if (!isCollectionEnabled()) return
     executor.execute { enqueueJson("ad_revenue", "revenue_measurement", payload, eventId); drain() }
+  }
+
+  fun trackPurchase(
+    transactionId: String,
+    amountUnscaled: String,
+    amountScale: Int,
+    currency: String,
+  ) {
+    if (!isCollectionEnabled()) return
+    validateCommerceEvent(transactionId, amountUnscaled, amountScale, currency)
+    executor.execute {
+      val installationId = storage.installationId()
+      enqueueJson(
+        "purchase",
+        "revenue_measurement",
+        EventFactory.purchase(
+          installationId,
+          transactionId,
+          amountUnscaled,
+          amountScale,
+          currency,
+        ),
+        EventFactory.commerceEventId(
+          "purchase", installationId, transactionId, null, amountUnscaled, amountScale, currency,
+        ),
+      )
+      drain()
+    }
+  }
+
+  /** Queues a Google Play one-time-product purchase for protected server verification. */
+  fun trackGooglePlayProductPurchase(
+    purchaseToken: String,
+    productId: String,
+    transactionId: String,
+    amountUnscaled: String,
+    amountScale: Int,
+    currency: String,
+  ) {
+    if (!isCollectionEnabled()) return
+    validateCommerceEvent(transactionId, amountUnscaled, amountScale, currency)
+    require(purchaseToken.isNotEmpty() && purchaseToken.toByteArray(Charsets.UTF_8).size <= 64 * 1024) {
+      "google_play_purchase_token_invalid"
+    }
+    require(productId.matches(Regex("^[A-Za-z0-9._:-]{1,255}$"))) { "google_play_product_id_invalid" }
+    executor.execute {
+      val installationId = storage.installationId()
+      enqueueJson(
+        "purchase",
+        "revenue_measurement",
+        EventFactory.purchase(
+          installationId,
+          transactionId,
+          amountUnscaled,
+          amountScale,
+          currency,
+          "pending",
+          JSONObject()
+            .put("google_play_purchase_token_protected", purchaseToken)
+            .put("google_play_product_id_protected", productId),
+        ),
+        EventFactory.googlePlayProductEventId(
+          installationId, productId, purchaseToken, transactionId,
+          amountUnscaled, amountScale, currency,
+        ),
+      )
+      drain()
+    }
+  }
+
+  /** Queues a Google Play initial subscription purchase for protected server verification. */
+  fun trackGooglePlaySubscriptionPurchase(
+    purchaseToken: String,
+    productId: String,
+    transactionId: String,
+    amountUnscaled: String,
+    amountScale: Int,
+    currency: String,
+  ) {
+    if (!isCollectionEnabled()) return
+    validateCommerceEvent(transactionId, amountUnscaled, amountScale, currency)
+    require(purchaseToken.isNotEmpty() && purchaseToken.toByteArray(Charsets.UTF_8).size <= 64 * 1024) {
+      "google_play_purchase_token_invalid"
+    }
+    require(productId.matches(Regex("^[A-Za-z0-9._:-]{1,255}$"))) { "google_play_product_id_invalid" }
+    executor.execute {
+      val installationId = storage.installationId()
+      enqueueJson(
+        "purchase",
+        "revenue_measurement",
+        EventFactory.purchase(
+          installationId,
+          transactionId,
+          amountUnscaled,
+          amountScale,
+          currency,
+          "pending",
+          JSONObject()
+            .put("google_play_purchase_token_protected", purchaseToken)
+            .put("google_play_product_id_protected", productId)
+            .put("google_play_purchase_kind", "subscription_initial"),
+        ),
+        EventFactory.googlePlaySubscriptionEventId(
+          installationId, productId, purchaseToken, transactionId,
+          amountUnscaled, amountScale, currency,
+        ),
+      )
+      drain()
+    }
+  }
+
+  fun trackRefund(
+    transactionId: String,
+    originalTransactionId: String,
+    amountUnscaled: String,
+    amountScale: Int,
+    currency: String,
+  ) {
+    if (!isCollectionEnabled()) return
+    validateCommerceEvent(transactionId, amountUnscaled, amountScale, currency)
+    require(originalTransactionId.matches(IDENTIFIER_PATTERN)) { "original_transaction_id_invalid" }
+    executor.execute {
+      val installationId = storage.installationId()
+      enqueueJson(
+        "refund",
+        "revenue_measurement",
+        EventFactory.refund(
+          installationId,
+          transactionId,
+          originalTransactionId,
+          amountUnscaled,
+          amountScale,
+          currency,
+        ),
+        EventFactory.commerceEventId(
+          "refund", installationId, transactionId, originalTransactionId,
+          amountUnscaled, amountScale, currency,
+        ),
+      )
+      drain()
+    }
   }
 
   fun installationIdForMeasurement(): String = storage.installationId()
@@ -155,6 +323,15 @@ class OpenMasuSdk private constructor(
   private fun ensureCredential(installationId: String): InstallationCredential = storage.credential()
     ?: transport.enroll(installationId).also { storage.setCredential(it) }
 
+  private fun normalizeDeferred(value: PlayReferrerEvidence): PlayReferrerEvidence {
+    if (value.deepLinkValue == null) return value.copy(deferredDeepLinkStatus = value.deferredDeepLinkStatus ?: "absent")
+    val clicked = value.referrerClickAtServer?.let { runCatching { Instant.parse(it) }.getOrNull() }
+    if (clicked != null && Duration.between(clicked, Instant.now()).seconds > configuration.deferredDeepLinkTtlSeconds) {
+      return value.copy(deferredDeepLinkStatus = "expired")
+    }
+    return value.copy(deferredDeepLinkStatus = value.deferredDeepLinkStatus ?: "delivered")
+  }
+
   private fun enqueueJson(eventName: String, purpose: String, payload: JSONObject, eventId: String? = null) {
     if (!isCollectionEnabled() && eventName != "consent_changed") return
     val now = EventFactory.canonicalNow()
@@ -163,8 +340,23 @@ class OpenMasuSdk private constructor(
     )
   }
 
+  private fun validateCommerceEvent(
+    transactionId: String,
+    amountUnscaled: String,
+    amountScale: Int,
+    currency: String,
+  ) {
+    require(transactionId.matches(IDENTIFIER_PATTERN)) { "transaction_id_invalid" }
+    require(amountUnscaled.matches(NONNEGATIVE_UNSCALED_PATTERN)) { "amount_unscaled_invalid" }
+    require(amountScale in 0..18) { "amount_scale_invalid" }
+    require(currency.matches(CURRENCY_PATTERN)) { "currency_invalid" }
+  }
+
   companion object {
     private const val WORK_NAME = "openmasu-delivery"
+    private val IDENTIFIER_PATTERN = Regex("^[A-Za-z0-9._:-]{1,128}$")
+    private val NONNEGATIVE_UNSCALED_PATTERN = Regex("^[0-9]+$")
+    private val CURRENCY_PATTERN = Regex("^[A-Z]{3}$")
 
     fun create(
       context: Context,

@@ -93,6 +93,7 @@ const server = createServer(createRequestHandler({
   reportMaximumExportRows: Number(process.env.OPENMASU_REPORT_EXPORT_MAX_ROWS ?? "200000"),
   trackingDestinationAllowlist: (process.env.OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST ?? "")
     .split(",").map((value) => value.trim()).filter(Boolean),
+  referrerMaximumEncodedCharacters: Number(process.env.OPENMASU_REFERRER_MAX_ENCODED_CHARS ?? "512"),
   applePostback: {
     pool,
     payloadStore,
@@ -110,6 +111,16 @@ const server = createServer(createRequestHandler({
       Number(process.env.OPENMASU_POSTBACK_INVALID_LEDGER_QUOTA_PER_HOUR ?? "100"),
     ),
   },
+  googlePlayRtdn: process.env.OPENMASU_GOOGLE_PLAY_RTDN_AUDIENCE
+    && process.env.OPENMASU_GOOGLE_PLAY_RTDN_SERVICE_ACCOUNT_EMAIL
+    ? {
+        pool,
+        payloadStore,
+        expectedAudience: process.env.OPENMASU_GOOGLE_PLAY_RTDN_AUDIENCE,
+        expectedServiceAccountEmail: process.env.OPENMASU_GOOGLE_PLAY_RTDN_SERVICE_ACCOUNT_EMAIL,
+        maximumBytes: Number(process.env.OPENMASU_GOOGLE_PLAY_RTDN_MAX_BYTES ?? String(16 * 1024)),
+      }
+    : undefined,
   operationalMetrics,
   operationalLogWriter,
   sdk: {

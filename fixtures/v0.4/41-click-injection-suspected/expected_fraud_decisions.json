@@ -1,9 +1,23 @@
 [
   {
-    "fraud_decision_id": "fraud:install-41:click-injection", "subject_ref": "install-41", "decision": "suspected", "action": "flag",
-    "reason_code": "click_injection_suspected", "reason_code_version": "0.4.0",
-    "evidence": [{ "type": "ctit_category", "captured_at": "2026-08-19T02:00:10.000Z", "digest": "3a64366b0b05aad9f9a84570a85b0bf189f288b16637e8782c9213bf6ff82458", "access_class": "protected" }],
-    "rule_bundle_id": "fraud-public-envelope", "rule_bundle_version": "0.3.0", "rule_bundle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "fraud_decision_id": "fraud:install-41:click-injection",
+    "subject_ref": "install-41",
+    "decision": "suspected",
+    "action": "flag",
+    "reason_code": "click_injection_suspected",
+    "reason_code_version": "0.4.0",
+    "evidence": [
+      {
+        "type": "ctit_category",
+        "captured_at": "2026-08-19T02:00:10.000Z",
+        "digest": "b3de4a5161c1fee5c88202eb110488f5b91b0689370aa075346fbf9abfba2f6f",
+        "access_class": "protected"
+      }
+    ],
+    "rule_bundle_id": "fraud-conservative",
+    "rule_bundle_version": "1.0.0",
+    "rule_bundle_hash": "dfc447604f961bc549af4e28985d8f4e5427bd8f56c26b208d35ccab9a04a1ed",
+    "rule_id": "ctit-lower-bound-v1",
     "evaluated_at": "2026-08-19T02:00:10.000Z"
   }
 ]

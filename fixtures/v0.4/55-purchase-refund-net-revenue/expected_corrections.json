@@ -1,0 +1,2 @@
+
+[{"contract_version":"0.4.0","tenant_id":"tenant-a","app_id":"app-a","correction_id":"correction:refund-55-d0","corrects_record_id":"purchase-55-d0","correction_type":"correction","correction_reason":"refund","effective_at":"2026-08-02T01:00:00.000Z"}]

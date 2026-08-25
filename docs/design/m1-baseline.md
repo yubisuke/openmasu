@@ -670,6 +670,8 @@ Two paths, both required:
 
 **Reporting-API fallback** — because AppLovin performs **no retries** and times out at five seconds, any receiver downtime is permanent data loss on the S2S path. A nightly MAX Reporting API pull reconciles day × ad unit × country totals and backfills the gap. Backfilled revenue is inherently aggregate.
 
+**Implemented boundary (2026-08-24):** the executable `import:revenue:max` job writes provider-reported rows to an append-only aggregate snapshot series keyed by UTC day × MAX ad unit × network × country. An identical snapshot is idempotent and a later observation restates only the current view while preserving history. The series is not written to media cost, is not converted into installation-level events, and is not summed with the potentially overlapping S2S series. This closes the synthetic runtime wiring; live account connectivity and provider reconciliation remain operator-owned validation.
+
 **D-22. How unanchored and aggregate revenue is represented**
 
 - (a) Force an anchor by synthesizing one from `{EVENT_ID}` — creates a fake installation per impression; poisons every cohort metric.
@@ -974,7 +976,7 @@ All URLs fetched and checked on **2026-08-19** unless noted.
 | Topic | URL | What was confirmed |
 | --- | --- | --- |
 | AppLovin MAX S2S impression-level API | `https://support.applovin.com/en/max/advanced-features/s2s-impression-level-api/` | Enabled by the account team; HTTP/HTTPS `GET`; `{EVENT_ID}` = 40 hex chars; `{EVENT_TOKEN}` = `sha1(event-ID + event-key)`; `{EVENT_TOKEN_ALL}` = `sha256(all macros alphabetically as-is + event-key)`; **no retries**; 5 s timeout; macros include `{IDFA}`, `{IDFV}`, `{IP}`, `{CC}`, `{REVENUE}`, `{ALL_REVENUE}`, `{PRECISION}`, `{NETWORK}`, `{AD_UNIT_ID}`, `{USER_ID}`, `{TS}`. No IP allowlist or signature header documented. (Note: this URL resolves, unlike the `developers.applovin.com` URL Lane D found unreachable on 2026-08-17.) |
-| AppLovin MAX Revenue Reporting API | `https://support.applovin.com/en/max/reporting-apis/revenue-reporting-api` | `GET https://r.applovin.com/maxReport`; UTC; JSON/CSV; 45-day maximum range; daily, country, ad-unit, network, and estimated-revenue dimensions support aggregate backfill. |
+| AppLovin MAX Revenue Reporting API | `https://support.applovin.com/en/max/reporting-apis/revenue-reporting-api` | Re-verified 2026-08-24. `GET https://r.applovin.com/maxReport`; UTC; JSON/CSV; dates must be within the current 45-day request window; `limit`/`offset` pagination; daily, country, `max_ad_unit_id`, network, and estimated-revenue dimensions support aggregate backfill; the most recent 1–2 hours may be incomplete. |
 | Meta Marketing API — Insights | `https://developers.facebook.com/documentation/ads-commerce/marketing-api/insights` | `ads_read` permission required; levels `account`/`campaign`/`adset`/`ad`; asynchronous report runs exist; current examples use Graph API `v26.0`. |
 | Meta Marketing API — breakdowns | `https://developers.facebook.com/documentation/ads-commerce/marketing-api/insights/breakdowns` | `country` is a supported breakdown; combination restrictions apply. |
 | Meta Marketing API — ad account insights reference | `https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/ad-account/insights` | `time_increment` accepts an integer 1–90; level accepts ad/adset/campaign/account; async POST returns a report run. |

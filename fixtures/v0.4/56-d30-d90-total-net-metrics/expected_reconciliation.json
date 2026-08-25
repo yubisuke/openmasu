@@ -1,0 +1,44 @@
+[
+  {
+    "reconciliation_id": "reconciliation:import:install-56",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "input_snapshot_id": "snapshot:internal:install-56",
+    "external_snapshot_id": "snapshot:provider:install-56",
+    "difference_reason_code": "matched",
+    "difference_reason_version": "0.4.0",
+    "matching_keys": [
+      {
+        "type": "provider_click_id",
+        "value": "137329aa387449b5280e3e13345ba8f9bb051d944445b71122a0e6cf034db72a",
+        "scope": "tenant_app",
+        "normalization": "identity",
+        "cardinality": "one_to_one",
+        "protected": true,
+        "value_encoding": "sha256",
+        "access_class": "protected"
+      },
+      {
+        "type": "provider_install_id",
+        "value": "94df6b26600fb0b8e3eb0caa4dcc3aedda734f9be990f3a4d948e5edf0cf52f8",
+        "scope": "tenant_app",
+        "normalization": "identity",
+        "cardinality": "one_to_one",
+        "protected": true,
+        "value_encoding": "sha256",
+        "access_class": "protected"
+      }
+    ],
+    "candidates": [
+      "install-56"
+    ],
+    "exclusions": [],
+    "windows": [
+      "install-56:not_applicable"
+    ],
+    "joins": [
+      "provider_click_id:sha256:137329aa387449b5280e3e13345ba8f9bb051d944445b71122a0e6cf034db72a,provider_install_id:sha256:94df6b26600fb0b8e3eb0caa4dcc3aedda734f9be990f3a4d948e5edf0cf52f8=>install-56"
+    ],
+    "freshness": "current"
+  }
+]

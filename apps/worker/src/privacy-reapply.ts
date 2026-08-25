@@ -131,8 +131,53 @@ async function encryptedReferences(
       WHERE ${lookupScope} AND lookup.token_ref LIKE 'encrypted:%'`,
     values,
   );
+  const googleResultScope = scope === "tenant"
+    ? "result.tenant_id=$1"
+    : scope === "app"
+      ? "result.tenant_id=$1 AND result.app_id=$2"
+      : "result.tenant_id=$1 AND result.app_id=$2 AND result.subject_record_id=ANY($3::text[])";
+  const googleResults = await client.query<{ reference: string }>(
+    `SELECT DISTINCT result.evidence_ref AS reference
+       FROM ledger.google_play_purchase_verification_results AS result
+      WHERE ${googleResultScope} AND result.evidence_ref LIKE 'encrypted:%'`,
+    values,
+  );
+  const googleLookupScope = scope === "tenant"
+    ? "lookup.tenant_id=$1"
+    : scope === "app"
+      ? "lookup.tenant_id=$1 AND lookup.app_id=$2"
+      : "lookup.tenant_id=$1 AND lookup.app_id=$2 AND lookup.subject_record_id=ANY($3::text[])";
+  const googleLookups = await client.query<{ reference: string }>(
+    `SELECT DISTINCT lookup.token_ref AS reference
+       FROM ephemeral.google_play_product_verifications AS lookup
+      WHERE ${googleLookupScope} AND lookup.token_ref LIKE 'encrypted:%'`,
+    values,
+  );
+  const googleRtdnScope = scope === "tenant"
+    ? "message.tenant_id=$1"
+    : scope === "app"
+      ? "message.tenant_id=$1 AND message.app_id=$2"
+      : "message.tenant_id=$1 AND message.app_id=$2 AND message.subject_record_id=ANY($3::text[])";
+  const googleRtdn = await client.query<{ reference: string }>(
+    `SELECT DISTINCT message.evidence_ref AS reference
+       FROM control.google_play_rtdn_messages AS message
+      WHERE ${googleRtdnScope} AND message.evidence_ref LIKE 'encrypted:%'`,
+    values,
+  );
+  const googleConversionScope = scope === "tenant"
+    ? "delivery.tenant_id=$1"
+    : scope === "app"
+      ? "delivery.tenant_id=$1 AND delivery.app_id=$2"
+      : "delivery.tenant_id=$1 AND delivery.app_id=$2 AND delivery.verified_record_id=ANY($3::text[])";
+  const googleConversions = await client.query<{ reference: string }>(
+    `SELECT DISTINCT delivery.request_ref AS reference
+       FROM ephemeral.google_conversion_deliveries AS delivery
+      WHERE ${googleConversionScope} AND delivery.request_ref LIKE 'encrypted:%'`,
+    values,
+  );
   return [...new Set([
     ...raw.rows, ...inbox.rows, ...batches.rows, ...results.rows, ...lookups.rows,
+    ...googleResults.rows, ...googleLookups.rows, ...googleRtdn.rows, ...googleConversions.rows,
   ].map((row) => row.reference))].sort();
 }
 
@@ -156,7 +201,7 @@ async function appendPrivacyArtifacts(
   records: readonly string[],
 ): Promise<void> {
   for (const recordId of records) {
-    const tombstoneId = `tombstone:${request.privacy_request_id}:${recordId}`;
+    const tombstoneId = `tombstone:${sha256([request.privacy_request_id, recordId]).slice(0, 48)}`;
     const tombstone = {
       contract_version: "0.4.0",
       tenant_id: request.tenant_id,
@@ -296,6 +341,20 @@ async function reapplyOne(
       WHERE tenant_id=$1
         AND ($2='tenant' OR ($2='app' AND app_id=$3)
           OR ($2='installation' AND app_id=$3 AND install_record_id=ANY($4::text[])))`,
+    [request.tenant_id, scope, request.app_id, records],
+  );
+  await client.query(
+    `DELETE FROM ephemeral.google_play_product_verifications
+      WHERE tenant_id=$1
+        AND ($2='tenant' OR ($2='app' AND app_id=$3)
+          OR ($2='installation' AND app_id=$3 AND subject_record_id=ANY($4::text[])))`,
+    [request.tenant_id, scope, request.app_id, records],
+  );
+  await client.query(
+    `DELETE FROM ephemeral.google_conversion_deliveries
+      WHERE tenant_id=$1
+        AND ($2='tenant' OR ($2='app' AND app_id=$3)
+          OR ($2='installation' AND app_id=$3 AND verified_record_id=ANY($4::text[])))`,
     [request.tenant_id, scope, request.app_id, records],
   );
   const metrics = await recalculateMetrics(client, request, new Set(records));

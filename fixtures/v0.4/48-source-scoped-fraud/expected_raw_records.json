@@ -1,0 +1,23 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "record_id": "click-48",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "redirector",
+    "producer_version": "fixture-m6",
+    "event_id": "event:click-48",
+    "delivery_id": "delivery:click-48",
+    "event_name": "click",
+    "schema_version": "0.4.0",
+    "payload_sha256": "46cb8ecb330aca31f25fb0cc51dab71cae87a9fd3d7508145bb9564b4ae64f9a",
+    "occurred_at": "2026-08-21T00:00:00.000Z",
+    "occurred_at_source": "server",
+    "received_at": "2026-08-21T00:00:01.000Z",
+    "payload_lifecycle_status": "available",
+    "raw_payload_ref": "protected:click-48",
+    "processing_purpose_id": "fraud_prevention",
+    "consent_evaluation_policy_version": "consent-m6",
+    "consent_decision_reason_code": "consent_not_required"
+  }
+]

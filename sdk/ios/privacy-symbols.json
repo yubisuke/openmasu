@@ -32,6 +32,7 @@
     "ATTrackingManager",
     "identifierForVendor",
     "UIPasteboard",
-    "CLLocationManager"
+    "CLLocationManager",
+    "UIApplication.open"
   ]
 }

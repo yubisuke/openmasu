@@ -127,6 +127,33 @@ describe("M3 zero-JavaScript dashboard", () => {
     assert.equal(/(?:href|src)=/i.test(first), false);
   });
 
+  it("reports signed purchase net revenue without exposing purchase identifiers", () => {
+    const netRevenue = metric({
+      metric_run_id: "metric:purchase-net-negative",
+      metric_name: "cohort_purchase_net_revenue_d0_usd",
+      metric_definition_version: "0.4.8",
+      value_unscaled: "-2000000",
+      value_type: "money",
+      currency: "USD",
+      amount_scale: 6,
+      ratio_scale: null,
+    });
+    const page: MetricReportPage = { data: [netRevenue] };
+    const json = encodeMetricReport(page, "json").body;
+    const csv = encodeMetricReport(page, "csv").body;
+    const html = renderDashboard(buildDashboardView({
+      apps: [], selectedAppId: "app-one", metrics: page, csrfToken: "synthetic-csrf",
+    }));
+    for (const output of [json, csv, html]) {
+      assert.match(output, /cohort_purchase_net_revenue_d0_usd/);
+      assert.equal(output.includes("transaction_id"), false);
+      assert.equal(output.includes("installation_id"), false);
+      assert.equal(output.includes("correction_target_record_id"), false);
+    }
+    assert.match(json, /-2000000/);
+    assert.match(csv, /-2000000/);
+  });
+
   it("M4-A12 renders deterministic and Apple aggregate series without combining them", () => {
     const deterministic = metric({ metric_run_id: "metric:deterministic", metric_name: "daily_install_count" });
     const skan = metric({

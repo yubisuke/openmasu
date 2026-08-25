@@ -1,0 +1,122 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:import:synthetic-provider:event:install-56",
+    "record_id": "install-56",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "import:synthetic-provider",
+    "event_id": "event:install-56",
+    "event_name": "install",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:ad-revenue-56-d30",
+    "record_id": "ad-revenue-56-d30",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:ad-revenue-56-d30",
+    "event_name": "ad_revenue",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:ad-revenue-56-d31",
+    "record_id": "ad-revenue-56-d31",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:ad-revenue-56-d31",
+    "event_name": "ad_revenue",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:ad-revenue-56-d60",
+    "record_id": "ad-revenue-56-d60",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:ad-revenue-56-d60",
+    "event_name": "ad_revenue",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:purchase-56-d0",
+    "record_id": "purchase-56-d0",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:purchase-56-d0",
+    "event_name": "purchase",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:purchase-56-d31",
+    "record_id": "purchase-56-d31",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:purchase-56-d31",
+    "event_name": "purchase",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:purchase-56-d60",
+    "record_id": "purchase-56-d60",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:purchase-56-d60",
+    "event_name": "purchase",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:purchase-56-d91",
+    "record_id": "purchase-56-d91",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:purchase-56-d91",
+    "event_name": "purchase",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:refund-56-d30",
+    "record_id": "refund-56-d30",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:refund-56-d30",
+    "event_name": "refund",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:refund-56-d60",
+    "record_id": "refund-56-d60",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:refund-56-d60",
+    "event_name": "refund",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  }
+]

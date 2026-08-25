@@ -1,0 +1,23 @@
+[
+  {
+    "fraud_decision_id": "fraud:click-50",
+    "subject_ref": "click-50",
+    "decision": "suspected",
+    "action": "exclude",
+    "reason_code": "bot_prefetch",
+    "reason_code_version": "0.4.0",
+    "evidence": [
+      {
+        "type": "link_prefetch_category",
+        "captured_at": "2026-08-21T02:00:00.001Z",
+        "digest": "155503bb149c51339e7374421ccb3f272df65ff3fae32ace5914ddd54513e2ea",
+        "access_class": "protected"
+      }
+    ],
+    "rule_bundle_id": "fraud-conservative",
+    "rule_bundle_version": "1.0.0",
+    "rule_bundle_hash": "dfc447604f961bc549af4e28985d8f4e5427bd8f56c26b208d35ccab9a04a1ed",
+    "rule_id": "transport-bot-prefetch-v1",
+    "evaluated_at": "2026-08-21T02:00:00.001Z"
+  }
+]

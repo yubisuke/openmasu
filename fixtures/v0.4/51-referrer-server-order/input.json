@@ -1,0 +1,10 @@
+{
+  "contract_version": "0.4.0",
+  "fx_policy": { "policy_version": "fx-m6", "target_currency": "USD", "target_scale": 6, "rounding_mode": "half_even", "rates": [{ "currency": "USD", "rate_unscaled": "1", "rate_scale": 0, "source": "synthetic-fixture-rate", "as_of": "2026-08-21T00:00:00.000Z" }] },
+  "metric_evaluations": [], "privacy_requests": [],
+  "server_context": { "tenant_id": "tenant-a", "app_id": "app-a", "received_at": "2026-08-21T03:00:10.000Z", "policy_digest": "policy-m6", "processing_purposes": [{ "processing_purpose_id": "fraud_prevention", "consent_required": false, "policy_version": "consent-m6" }], "withdrawals": [], "alternative_legal_bases": [] },
+  "records": [{
+    "contract_version": "0.4.0", "record_id": "install-51", "delivery_id": "delivery:install-51", "tenant_id": "tenant-a", "app_id": "app-a", "producer": "sdk-android", "producer_version": "fixture-m6", "event_id": "event:install-51", "event_name": "install", "schema_version": "0.4.0", "occurred_at": "2026-08-21T03:00:00.000Z", "occurred_at_source": "device", "received_at": "2026-08-21T03:00:10.000Z", "processing_purpose_id": "fraud_prevention", "processing_sequence": 1,
+    "payload": { "installation_id": "installation:install-51", "install_type": "first_install", "referrer_status": "available", "click_id": "click-51_0000000000000000", "install_begin_at_server_status": "available", "install_begin_at_server": "2026-08-21T03:00:00.000Z", "referrer_click_at_server_status": "available", "referrer_click_at_server": "2026-08-21T03:00:01.000Z", "protected_referrer_evidence_ref": "protected:referrer:install-51" }
+  }]
+}

@@ -56,6 +56,8 @@ jobs:
           npm run test:integration
           npm run test:db-invariants
           npm run test:env-coverage
+          npm run check:fraud-sources
+          npm run check:fraud-artifacts
       - name: Verify backup restore and completed privacy reapplication
         run: OPENMASU_M5_BACKUP_RESTORE=1 OPENMASU_M5_PG_TOOLS=docker npm run test:backup-restore
       - name: Run M2a redirector, signed-ingestion, replay, worker, and deletion gates
@@ -68,6 +70,8 @@ jobs:
         run: npm run verify:consistency
       - name: Run reduced synthetic metric performance floor
         run: OPENMASU_BENCHMARK_ROWS=100000 npm run benchmark:metric-floor
+      - name: Import 100,000 synthetic MMP rows within the pilot floor
+        run: npm run benchmark:import
       - name: Check threat-model coverage
         run: npm run check:threat-model
       - name: Compose first-run smoke
@@ -84,6 +88,12 @@ jobs:
           export OPENMASU_MAX_RATE_BURST=12000
           docker compose up -d --wait
           docker compose --env-file /dev/null --profile seed run --rm seed
+          worker_id=$(docker compose --env-file /dev/null ps -aq worker)
+          test -n "$worker_id"
+          sleep 12
+          docker compose --env-file /dev/null logs --no-color worker
+          test "$(docker inspect --format '{{.State.Status}}' "$worker_id")" = running
+          test "$(docker inspect --format '{{.RestartCount}}' "$worker_id")" = 0
           docker compose --env-file /dev/null exec -T api sh -c 'set -a && . /run/openmasu/app/runtime.env && set +a && OPENMASU_API_HOST_PORT=8080 node --import tsx tools/runtime-smoke.ts'
       - name: Measure synthetic ingestion and MAX postback load
         run: |

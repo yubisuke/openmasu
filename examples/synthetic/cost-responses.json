@@ -1,9 +1,45 @@
 {
   "meta": {
-    "data": [{ "campaign_id": "1001", "adset_id": "2001", "ad_id": "3001", "country": "US", "spend": "12.345678", "date_start": "2026-08-18", "date_stop": "2026-08-18" }]
+    "data": [{ "account_currency": "USD", "campaign_id": "1001", "adset_id": "2001", "country": "US", "spend": "12.345678", "date_start": "2026-08-18", "date_stop": "2026-08-18" }]
   },
   "google_ads": {
-    "results": [{ "campaign": { "id": "4001" }, "adGroup": { "id": "5001" }, "geographicView": { "countryCriterionId": "2840" }, "segments": { "date": "2026-08-18" }, "metrics": { "costMicros": "23456789" } }]
+    "adGroup": [{
+      "results": [{
+        "customer": { "currencyCode": "USD" },
+        "campaign": { "id": "4001", "advertisingChannelType": "SEARCH", "advertisingChannelSubType": "SEARCH_MOBILE_APP" },
+        "adGroup": { "id": "5001" },
+        "geographicView": { "countryCriterionId": "2840", "locationType": "LOCATION_OF_PRESENCE" },
+        "segments": { "date": "2026-08-18" },
+        "metrics": { "costMicros": "23456789" }
+      }]
+    }],
+    "app": [{
+      "results": [{
+        "customer": { "currencyCode": "USD" },
+        "campaign": { "id": "4002", "advertisingChannelType": "MULTI_CHANNEL", "advertisingChannelSubType": "APP_CAMPAIGN" },
+        "geographicView": { "countryCriterionId": "2840", "locationType": "LOCATION_OF_PRESENCE" },
+        "segments": { "date": "2026-08-18" },
+        "metrics": { "costMicros": "1000000" }
+      }]
+    }],
+    "campaignOnly": [{
+      "results": [
+        {
+          "customer": { "currencyCode": "USD" },
+          "campaign": { "id": "4003", "advertisingChannelType": "PERFORMANCE_MAX" },
+          "geographicView": { "countryCriterionId": "2840", "locationType": "LOCATION_OF_PRESENCE" },
+          "segments": { "date": "2026-08-18" },
+          "metrics": { "costMicros": "2000000" }
+        },
+        {
+          "customer": { "currencyCode": "USD" },
+          "campaign": { "id": "4004", "advertisingChannelType": "LOCAL_SERVICES" },
+          "geographicView": { "countryCriterionId": "2840", "locationType": "LOCATION_OF_PRESENCE" },
+          "segments": { "date": "2026-08-18" },
+          "metrics": { "costMicros": "3000000" }
+        }
+      ]
+    }]
   },
   "max": {
     "results": [{ "day": "2026-08-18", "country": "US", "ad_unit_id": "synthetic-ad-unit", "network": "synthetic-network", "estimated_revenue": "1.234567" }]

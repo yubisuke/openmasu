@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmasu:schema:event-deep-link-open:v0.4",
+  "title": "OpenMasu Deep Link Open Event v0.4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_name", "installation_id", "open_source", "destination_status"],
+  "properties": {
+    "event_name": { "const": "deep_link_open" },
+    "installation_id": { "$ref": "../common.schema.json#/$defs/id" },
+    "session_id": { "$ref": "../common.schema.json#/$defs/id" },
+    "open_source": { "enum": ["android_app_link", "ios_universal_link", "custom_scheme", "android_deferred_referrer"] },
+    "link_slug": { "type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}$" },
+    "click_id": { "$ref": "../common.schema.json#/$defs/clickId" },
+    "deep_link_value": { "type": "string", "maxLength": 256, "pattern": "^(/[A-Za-z0-9._~-]{1,64}){1,8}$" },
+    "deep_link_params": {
+      "type": "object",
+      "maxProperties": 10,
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string", "maxLength": 256 },
+          { "type": "number" },
+          { "type": "boolean" },
+          { "type": "null" }
+        ]
+      }
+    },
+    "destination_status": { "enum": ["delivered", "absent", "expired", "rejected"] },
+    "opened_at_device": { "$ref": "../common.schema.json#/$defs/dateTime" },
+    "extensions": { "type": "object", "propertyNames": { "not": { "pattern": "^(import($|_)|imported($|_)|provider($|_))" } }, "additionalProperties": true }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "open_source": { "const": "android_deferred_referrer" } }, "required": ["open_source"] },
+      "then": {
+        "properties": { "click_id": {} },
+        "required": ["click_id"],
+        "not": { "properties": { "link_slug": {} }, "required": ["link_slug"] }
+      },
+      "else": {
+        "properties": { "link_slug": {} },
+        "required": ["link_slug"],
+        "not": { "properties": { "click_id": {} }, "required": ["click_id"] }
+      }
+    }
+  ]
+}

@@ -40,10 +40,42 @@ async function affectedRecordIds(client: any, body: PrivacyRequestBody): Promise
      LEFT JOIN ledger.install_facts AS install USING (logical_event_id, tenant_id, app_id)
      LEFT JOIN ledger.session_facts AS session USING (logical_event_id, tenant_id, app_id)
      LEFT JOIN ledger.purchase_facts AS purchase USING (logical_event_id, tenant_id, app_id)
-     LEFT JOIN ledger.ad_revenue_facts AS revenue USING (logical_event_id, tenant_id, app_id)
-     LEFT JOIN ledger.custom_event_facts AS custom USING (logical_event_id, tenant_id, app_id)
+     LEFT JOIN ledger.refund_facts AS refund USING (logical_event_id, tenant_id, app_id)
+     LEFT JOIN ledger.logical_events AS refund_target
+       ON refund_target.tenant_id=refund.tenant_id
+      AND refund_target.app_id=refund.app_id
+      AND refund_target.record_id=refund.correction_target_record_id
+     LEFT JOIN ledger.purchase_facts AS target_purchase
+       ON target_purchase.tenant_id=refund_target.tenant_id
+      AND target_purchase.app_id=refund_target.app_id
+      AND target_purchase.logical_event_id=refund_target.logical_event_id
+     LEFT JOIN ledger.corrections AS legacy_refund_correction
+       ON logical.event_name='refund'
+      AND refund.logical_event_id IS NULL
+      AND legacy_refund_correction.tenant_id=logical.tenant_id
+      AND legacy_refund_correction.app_id=logical.app_id
+      AND legacy_refund_correction.correction_id='correction:' || logical.record_id
+      AND legacy_refund_correction.artifact->>'correction_reason'='refund'
+     LEFT JOIN ledger.logical_events AS legacy_refund_target
+       ON legacy_refund_target.tenant_id=legacy_refund_correction.tenant_id
+      AND legacy_refund_target.app_id=legacy_refund_correction.app_id
+      AND legacy_refund_target.record_id=legacy_refund_correction.corrects_record_id
+     LEFT JOIN ledger.purchase_facts AS legacy_target_purchase
+       ON legacy_target_purchase.tenant_id=legacy_refund_target.tenant_id
+      AND legacy_target_purchase.app_id=legacy_refund_target.app_id
+      AND legacy_target_purchase.logical_event_id=legacy_refund_target.logical_event_id
+     LEFT JOIN ledger.ad_revenue_facts AS revenue
+       ON revenue.logical_event_id=logical.logical_event_id
+      AND revenue.tenant_id=logical.tenant_id
+      AND revenue.app_id=logical.app_id
+     LEFT JOIN ledger.custom_event_facts AS custom
+       ON custom.logical_event_id=logical.logical_event_id
+      AND custom.tenant_id=logical.tenant_id
+      AND custom.app_id=logical.app_id
      WHERE logical.tenant_id=$1 AND logical.app_id=$2
-       AND COALESCE(install.installation_id, session.installation_id, purchase.installation_id, revenue.installation_id, custom.installation_id)=$3
+       AND COALESCE(install.installation_id, session.installation_id, purchase.installation_id,
+         refund.installation_id, target_purchase.installation_id,
+         legacy_target_purchase.installation_id, revenue.installation_id, custom.installation_id)=$3
      ORDER BY logical.record_id`,
     [body.tenant_id, body.app_id, body.deletion_subject_ref],
   );
@@ -167,12 +199,65 @@ export async function executePrivacyRequest(
            ORDER BY token_ref`,
           [body.tenant_id, body.deletion_scope, body.app_id],
         );
+    const googlePlayResultPayloads = body.deletion_scope === "installation"
+      ? await client.query<{ evidence_ref: string }>(
+          `SELECT evidence_ref FROM ledger.google_play_purchase_verification_results
+           WHERE tenant_id=$1 AND app_id=$2 AND subject_record_id=ANY($3::text[])
+             AND evidence_ref IS NOT NULL ORDER BY evidence_ref`,
+          [body.tenant_id, body.app_id, records],
+        )
+      : await client.query<{ evidence_ref: string }>(
+          `SELECT evidence_ref FROM ledger.google_play_purchase_verification_results
+           WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3)
+             AND evidence_ref IS NOT NULL ORDER BY evidence_ref`,
+          [body.tenant_id, body.deletion_scope, body.app_id],
+        );
+    const pendingGooglePlayPayloads = body.deletion_scope === "installation"
+      ? await client.query<{ token_ref: string }>(
+          `SELECT token_ref FROM ephemeral.google_play_product_verifications
+           WHERE tenant_id=$1 AND app_id=$2 AND subject_record_id=ANY($3::text[])
+           ORDER BY token_ref`,
+          [body.tenant_id, body.app_id, records],
+        )
+      : await client.query<{ token_ref: string }>(
+          `SELECT token_ref FROM ephemeral.google_play_product_verifications
+           WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3) ORDER BY token_ref`,
+          [body.tenant_id, body.deletion_scope, body.app_id],
+        );
+    const googlePlayRtdnPayloads = body.deletion_scope === "installation"
+      ? await client.query<{ evidence_ref: string }>(
+          `SELECT evidence_ref FROM control.google_play_rtdn_messages
+           WHERE tenant_id=$1 AND app_id=$2 AND subject_record_id=ANY($3::text[])
+           ORDER BY evidence_ref`,
+          [body.tenant_id, body.app_id, records],
+        )
+      : await client.query<{ evidence_ref: string }>(
+          `SELECT evidence_ref FROM control.google_play_rtdn_messages
+           WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3) ORDER BY evidence_ref`,
+          [body.tenant_id, body.deletion_scope, body.app_id],
+        );
+    const googleConversionPayloads = body.deletion_scope === "installation"
+      ? await client.query<{ request_ref: string }>(
+          `SELECT request_ref FROM ephemeral.google_conversion_deliveries
+           WHERE tenant_id=$1 AND app_id=$2 AND verified_record_id=ANY($3::text[])
+           ORDER BY request_ref`,
+          [body.tenant_id, body.app_id, records],
+        )
+      : await client.query<{ request_ref: string }>(
+          `SELECT request_ref FROM ephemeral.google_conversion_deliveries
+           WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3) ORDER BY request_ref`,
+          [body.tenant_id, body.deletion_scope, body.app_id],
+        );
     for (const reference of new Set([
       ...rawPayloads.rows.map((payload) => payload.raw_payload_ref),
       ...payloads.rows.map((payload) => payload.raw_query_ref),
       ...batchPayloads.rows.map((payload) => payload.body_ref),
       ...adServicesPayloads.rows.map((payload) => payload.response_ref),
       ...pendingAdServicesPayloads.rows.map((payload) => payload.token_ref),
+      ...googlePlayResultPayloads.rows.map((payload) => payload.evidence_ref),
+      ...pendingGooglePlayPayloads.rows.map((payload) => payload.token_ref),
+      ...googlePlayRtdnPayloads.rows.map((payload) => payload.evidence_ref),
+      ...googleConversionPayloads.rows.map((payload) => payload.request_ref),
     ])) await payloadStore.purge(reference);
     if (body.deletion_scope === "installation") {
       await client.query(
@@ -183,6 +268,32 @@ export async function executePrivacyRequest(
     } else {
       await client.query(
         `DELETE FROM ephemeral.adservices_lookups
+         WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3)`,
+        [body.tenant_id, body.deletion_scope, body.app_id],
+      );
+    }
+    if (body.deletion_scope === "installation") {
+      await client.query(
+        `DELETE FROM ephemeral.google_conversion_deliveries
+         WHERE tenant_id=$1 AND app_id=$2 AND verified_record_id=ANY($3::text[])`,
+        [body.tenant_id, body.app_id, records],
+      );
+    } else {
+      await client.query(
+        `DELETE FROM ephemeral.google_conversion_deliveries
+         WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3)`,
+        [body.tenant_id, body.deletion_scope, body.app_id],
+      );
+    }
+    if (body.deletion_scope === "installation") {
+      await client.query(
+        `DELETE FROM ephemeral.google_play_product_verifications
+         WHERE tenant_id=$1 AND app_id=$2 AND subject_record_id=ANY($3::text[])`,
+        [body.tenant_id, body.app_id, records],
+      );
+    } else {
+      await client.query(
+        `DELETE FROM ephemeral.google_play_product_verifications
          WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3)`,
         [body.tenant_id, body.deletion_scope, body.app_id],
       );
@@ -225,7 +336,8 @@ export async function executePrivacyRequest(
           privacy_tombstone_id
         ) VALUES ($1,$2,$3,'purged',$4,$5,$6)
         ON CONFLICT (record_id, lifecycle_status) DO NOTHING`,
-        [body.tenant_id, body.app_id, recordId, completedAt, requestId, `tombstone:${requestId}:${recordId}`],
+        [body.tenant_id, body.app_id, recordId, completedAt, requestId,
+          `tombstone:${sha256([requestId, recordId]).slice(0, 48)}`],
       );
       await client.query(
         `INSERT INTO ledger.privacy_tombstones (
@@ -252,7 +364,19 @@ export async function executePrivacyRequest(
        WHERE tenant_id=$1 AND app_id=$2 AND metric_name IN (
          'd0_install_to_24h_ad_revenue_usd',
          'd0_utc_install_calendar_ad_revenue_usd',
-         'd0_jst_install_calendar_ad_revenue_usd'
+         'd0_jst_install_calendar_ad_revenue_usd',
+         'cohort_purchase_net_revenue_d0_usd',
+         'cohort_purchase_net_revenue_d1_usd',
+         'cohort_purchase_net_revenue_d3_usd',
+         'cohort_purchase_net_revenue_d7_usd',
+         'cohort_purchase_net_revenue_d30_usd',
+         'cohort_purchase_net_revenue_d90_usd',
+         'cohort_total_net_revenue_d30_usd',
+         'cohort_total_net_revenue_d90_usd',
+         'd30_total_net_roas',
+         'd90_total_net_roas',
+         'cohort_total_net_ltv_d30_usd',
+         'cohort_total_net_ltv_d90_usd'
        ) ORDER BY metric_name, computed_at DESC`,
       [body.tenant_id, body.app_id],
     );

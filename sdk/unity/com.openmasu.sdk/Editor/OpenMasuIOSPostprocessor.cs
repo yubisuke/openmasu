@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Collections.Generic;
 using System.Xml.Linq;
 
 namespace OpenMasu.Unity.Editor
@@ -11,7 +12,9 @@ namespace OpenMasu.Unity.Editor
             string xml,
             string skanEndpoint,
             string attributionCopyEndpoint,
-            bool collectionEnabledByDefault = false)
+            bool collectionEnabledByDefault = false,
+            IReadOnlyList<string> linkHosts = null,
+            IReadOnlyList<string> linkSchemes = null)
         {
             RequireHttps(skanEndpoint, nameof(skanEndpoint));
             RequireHttps(attributionCopyEndpoint, nameof(attributionCopyEndpoint));
@@ -20,7 +23,38 @@ namespace OpenMasu.Unity.Editor
             SetString(dictionary, "NSAdvertisingAttributionReportEndpoint", skanEndpoint);
             SetString(dictionary, "AttributionCopyEndpoint", attributionCopyEndpoint);
             SetBoolean(dictionary, "OpenMasuCollectionEnabledDefault", collectionEnabledByDefault);
+            SetStringArray(dictionary, "OpenMasuLinkHosts", ValidateLinkHosts(linkHosts));
+            SetStringArray(dictionary, "OpenMasuLinkSchemes", ValidateLinkSchemes(linkSchemes));
             return document.ToString(SaveOptions.DisableFormatting);
+        }
+
+        internal static string[] ValidateLinkHosts(IReadOnlyList<string> hosts) => (hosts ?? Array.Empty<string>())
+            .Select(value => (value ?? string.Empty).Trim().TrimEnd('.').ToLowerInvariant())
+            .Where(value => value.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .Select(value => value.Contains("?mode=") || !Uri.CheckHostName(value).Equals(UriHostNameType.Dns)
+                ? throw new ArgumentException("link_host_invalid") : value)
+            .ToArray();
+
+        internal static string[] ValidateLinkSchemes(IReadOnlyList<string> schemes) => (schemes ?? Array.Empty<string>())
+            .Select(value => (value ?? string.Empty).Trim().ToLowerInvariant())
+            .Where(value => value.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .Select(value => System.Text.RegularExpressions.Regex.IsMatch(value, "^[a-z][a-z0-9+.-]{1,63}$")
+                ? value : throw new ArgumentException("link_scheme_invalid"))
+            .ToArray();
+
+        private static void SetStringArray(XElement dictionary, string key, IReadOnlyList<string> values)
+        {
+            var array = new XElement("array", values.Select(value => new XElement("string", value)));
+            var nodes = dictionary.Elements().ToList();
+            for (var index = 0; index + 1 < nodes.Count; index++)
+            {
+                if (nodes[index].Name == "key" && nodes[index].Value == key) { nodes[index + 1].ReplaceWith(array); return; }
+            }
+            dictionary.Add(new XElement("key", key), array);
         }
 
         private static void SetString(XElement dictionary, string key, string value)
@@ -57,6 +91,27 @@ namespace OpenMasu.Unity.Editor
                 throw new ArgumentException("endpoint_must_be_https", name);
         }
     }
+
+    public static class OpenMasuAssociatedDomains
+    {
+        public static string Apply(string xml, IReadOnlyList<string> linkHosts)
+        {
+            var document = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
+            var dictionary = document.Root?.Element("dict") ?? throw new InvalidDataException("entitlements dictionary missing");
+            var values = OpenMasuIosPlistSettings.ValidateLinkHosts(linkHosts).Select(host => "applinks:" + host).ToArray();
+            var array = new XElement("array", values.Select(value => new XElement("string", value)));
+            var nodes = dictionary.Elements().ToList();
+            for (var index = 0; index + 1 < nodes.Count; index++)
+            {
+                if (nodes[index].Name == "key" && nodes[index].Value == "com.apple.developer.associated-domains") {
+                    nodes[index + 1].ReplaceWith(array);
+                    return document.ToString(SaveOptions.DisableFormatting);
+                }
+            }
+            dictionary.Add(new XElement("key", "com.apple.developer.associated-domains"), array);
+            return document.ToString(SaveOptions.DisableFormatting);
+        }
+    }
 }
 
 #if UNITY_EDITOR && UNITY_IOS
@@ -72,6 +127,8 @@ namespace OpenMasu.Unity.Editor
         public string skanEndpoint = string.Empty;
         public string attributionCopyEndpoint = string.Empty;
         public bool collectionEnabledByDefault = false;
+        public string[] linkHosts = Array.Empty<string>();
+        public string[] linkSchemes = Array.Empty<string>();
     }
 
     public static class OpenMasuIOSPostprocessor
@@ -86,7 +143,7 @@ namespace OpenMasu.Unity.Editor
             var plistPath = Path.Combine(projectPath, "Info.plist");
             File.WriteAllText(plistPath, OpenMasuIosPlistSettings.Apply(
                 File.ReadAllText(plistPath), settings.skanEndpoint, settings.attributionCopyEndpoint,
-                settings.collectionEnabledByDefault));
+                settings.collectionEnabledByDefault, settings.linkHosts, settings.linkSchemes));
 
             var pbxPath = PBXProject.GetPBXProjectPath(projectPath);
             var project = new PBXProject();
@@ -95,6 +152,12 @@ namespace OpenMasu.Unity.Editor
             project.SetBuildProperty(targetGuid, "SWIFT_VERSION", "5.0");
             project.SetBuildProperty(targetGuid, "CLANG_ENABLE_MODULES", "YES");
             project.AddBuildProperty(targetGuid, "OTHER_LDFLAGS", "-lsqlite3");
+            var entitlementsRelative = "OpenMasu/OpenMasu.entitlements";
+            var entitlementsPath = Path.Combine(projectPath, entitlementsRelative.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(entitlementsPath));
+            var emptyEntitlements = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict/></plist>";
+            File.WriteAllText(entitlementsPath, OpenMasuAssociatedDomains.Apply(emptyEntitlements, settings.linkHosts));
+            project.SetBuildProperty(targetGuid, "CODE_SIGN_ENTITLEMENTS", entitlementsRelative);
 
             var packageRoot = Path.Combine(
                 Directory.GetCurrentDirectory(), "Packages", "com.openmasu.sdk", "Runtime", "Plugins", "iOS");

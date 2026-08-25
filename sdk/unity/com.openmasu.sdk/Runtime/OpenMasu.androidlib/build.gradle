@@ -11,6 +11,11 @@ android {
 // OpenMasu does not publish Maven artifacts in M2. Build the Android SDK locally,
 // publish it to an operator-controlled repository, and substitute this coordinate.
 dependencies {
-    implementation 'dev.openmasu:core:0.1.0'
-    implementation 'dev.openmasu:max:0.1.0'
+    if (findProject(':core') != null && findProject(':max') != null) {
+        implementation project(':core')
+        implementation project(':max')
+    } else {
+        implementation 'dev.openmasu:core:0.1.0'
+        implementation 'dev.openmasu:max:0.1.0'
+    }
 }

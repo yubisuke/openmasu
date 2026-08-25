@@ -9,12 +9,12 @@
     "attribution_id": { "$ref": "common.schema.json#/$defs/id" },
     "tenant_id": { "$ref": "common.schema.json#/$defs/id" },
     "app_id": { "$ref": "common.schema.json#/$defs/id" },
-    "subject_scope": { "enum": ["installation_level", "aggregate"] },
+    "subject_scope": { "enum": ["installation_level", "aggregate", "engagement_level"] },
     "subject_ref": { "$ref": "common.schema.json#/$defs/id" },
     "status": { "enum": ["organic", "non_organic", "unattributed"] },
-    "method": { "enum": ["install_referrer", "aggregate_privacy", "imported", "skadnetwork", "adattributionkit", "meta_install_referrer", "apple_adservices", "none"] },
+    "method": { "enum": ["install_referrer", "aggregate_privacy", "imported", "skadnetwork", "adattributionkit", "meta_install_referrer", "apple_adservices", "deep_link", "none"] },
     "model": { "enum": ["last_click", "view_through", "aggregate", "provider_reported", "none"] },
-    "reason_code": { "enum": ["valid_install_referrer", "no_referrer", "no_first_party_referrer", "foreign_referrer_unresolved", "unknown_click_id", "window_expired", "authoritative_time_missing", "authoritative_time_invalid", "install_referrer_unsupported", "install_referrer_unavailable", "platform_referrer_not_available", "ambiguous_click_id", "bot_prefetch", "provider_attributed", "provider_organic", "provider_unattributed", "provider_time_authority_unavailable", "provider_modeled_conversion", "meta_referrer_decrypted", "meta_referrer_decrypt_failed", "adservices_attributed", "adservices_token_expired", "adservices_not_attributed", "adservices_lookup_unavailable", "skan_postback_verified", "skan_signature_invalid", "postback_not_winner", "crowd_anonymity_suppressed", "conversion_value_null"] },
+    "reason_code": { "enum": ["valid_install_referrer", "no_referrer", "no_first_party_referrer", "foreign_referrer_unresolved", "unknown_click_id", "window_expired", "authoritative_time_missing", "authoritative_time_invalid", "install_referrer_unsupported", "install_referrer_unavailable", "platform_referrer_not_available", "ambiguous_click_id", "bot_prefetch", "provider_attributed", "provider_organic", "provider_unattributed", "provider_time_authority_unavailable", "provider_modeled_conversion", "meta_referrer_decrypted", "meta_referrer_decrypt_failed", "adservices_attributed", "adservices_token_expired", "adservices_not_attributed", "adservices_lookup_unavailable", "skan_postback_verified", "skan_signature_invalid", "postback_not_winner", "crowd_anonymity_suppressed", "conversion_value_null", "fraud_excluded", "deep_link_open_attributed", "deep_link_unknown_link", "deep_link_link_inactive", "deep_link_install_click_reused"] },
     "reason_code_version": { "const": "0.4.0" },
     "evidence_refs": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/evidenceRef" } },
     "effective_at": { "$ref": "common.schema.json#/$defs/dateTime" },
@@ -24,6 +24,7 @@
     "rule_bundle_id": { "$ref": "common.schema.json#/$defs/id" },
     "rule_bundle_version": { "type": "string", "minLength": 1 },
     "rule_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "fraud_decision_ref": { "$ref": "common.schema.json#/$defs/id" },
     "supersedes_attribution_id": { "$ref": "common.schema.json#/$defs/id" }
   },
   "allOf": [
@@ -34,6 +35,10 @@
     {
       "if": { "properties": { "subject_scope": { "const": "installation_level" } }, "required": ["subject_scope"] },
       "then": { "properties": { "subject_ref": { "type": "string", "pattern": "^installation:" } } }
+    },
+    {
+      "if": { "properties": { "subject_scope": { "const": "engagement_level" } }, "required": ["subject_scope"] },
+      "then": { "properties": { "subject_ref": { "type": "string", "pattern": "^engagement:" } } }
     }
   ]
 }

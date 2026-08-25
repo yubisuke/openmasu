@@ -82,6 +82,24 @@ function normalizedRecord(
   if (payload.adservices_context !== undefined || payload.extensions?.adservices_context !== undefined) {
     throw new Error("device_adservices_claim_forbidden");
   }
+  if (source.event_name === "click" && [
+    "bot_prefetch", "source_rate_class", "client_class", "remote_click_ref",
+  ].some((key) => payload[key] !== undefined)) {
+    throw new Error("device_edge_claim_forbidden");
+  }
+  if (source.event_name === "deep_link_open" && [
+    "campaign_id", "tracking_link_id", "provider_campaign", "provider_campaign_id",
+    "provider_network", "provider_network_id",
+  ].some((key) => payload[key] !== undefined)) {
+    throw new Error("device_deep_link_attribution_claim_forbidden");
+  }
+  if (payload.integrity_verdict !== undefined || payload.extensions?.integrity_verdict !== undefined) {
+    throw new Error("device_integrity_claim_forbidden");
+  }
+  if (payload.store_verification !== undefined || payload.extensions?.store_verification_result_id !== undefined
+    || payload.extensions?.store_verification_state === "verified") {
+    throw new Error("device_store_verification_claim_forbidden");
+  }
   const adServicesToken = payload.extensions?.adservices_attribution_token_protected;
   if (adServicesToken !== undefined) {
     if (identity.platform !== "ios" || source.event_name !== "install") {
@@ -92,13 +110,63 @@ function normalizedRecord(
       throw new Error("adservices_token_invalid");
     }
   }
+  const integrityToken = payload.extensions?.integrity_token_protected;
+  const integrityProvider = payload.extensions?.integrity_provider;
+  const integrityBindingMode = payload.extensions?.integrity_binding_mode;
+  const integrityBinding = payload.extensions?.integrity_binding;
+  const integrityFields = [integrityToken, integrityProvider, integrityBindingMode, integrityBinding];
+  if (integrityFields.some((value) => value !== undefined)) {
+    if (integrityFields.some((value) => value === undefined)) throw new Error("integrity_evidence_incomplete");
+    const expectedProvider = identity.platform === "ios" ? "app_attest" : "play_integrity";
+    if (integrityProvider !== expectedProvider) throw new Error("integrity_provider_scope_invalid");
+    if (typeof integrityToken !== "string" || integrityToken.length < 1
+      || Buffer.byteLength(integrityToken, "utf8") > 64 * 1024) {
+      throw new Error("integrity_token_invalid");
+    }
+    const expectedMode = source.event_name === "install" ? "challenge" : "request_hash";
+    if (integrityBindingMode !== expectedMode) throw new Error("integrity_binding_mode_invalid");
+    if (typeof integrityBinding !== "string"
+      || (expectedMode === "challenge"
+        ? !/^[A-Za-z0-9_-]{32,256}$/.test(integrityBinding)
+        : !/^[a-f0-9]{64}$/.test(integrityBinding))) {
+      throw new Error("integrity_binding_invalid");
+    }
+  }
+  const playPurchaseToken = payload.extensions?.google_play_purchase_token_protected;
+  const playProductId = payload.extensions?.google_play_product_id_protected;
+  const playPurchaseKindValue = payload.extensions?.google_play_purchase_kind;
+  const playPurchaseKind = playPurchaseKindValue ?? "one_time_product";
+  if (playPurchaseToken !== undefined || playProductId !== undefined || playPurchaseKindValue !== undefined) {
+    if (identity.platform !== "android" || source.event_name !== "purchase"
+      || payload.financial_status !== "pending" || typeof payload.installation_id !== "string") {
+      throw new Error("google_play_product_verification_scope_invalid");
+    }
+    if (typeof playPurchaseToken !== "string" || playPurchaseToken.length < 1
+      || Buffer.byteLength(playPurchaseToken, "utf8") > 64 * 1024) {
+      throw new Error("google_play_purchase_token_invalid");
+    }
+    if (typeof playProductId !== "string" || !/^[A-Za-z0-9._:-]{1,255}$/.test(playProductId)) {
+      throw new Error("google_play_product_id_invalid");
+    }
+    if (!["one_time_product", "subscription_initial"].includes(playPurchaseKind)) {
+      throw new Error("google_play_purchase_kind_invalid");
+    }
+  }
+  const anchoredCommerce = ["purchase", "refund"].includes(source.event_name)
+    && typeof payload.installation_id === "string";
+  const legacyExplicitRefund = source.event_name === "refund"
+    && typeof payload.installation_id !== "string"
+    && typeof payload.correction_target_record_id === "string";
+  if (source.event_name === "refund" && !anchoredCommerce && !legacyExplicitRefund) {
+    throw new Error("installation_id_required");
+  }
   if (typeof payload.installation_id === "string"
     && installationIdDigest(config, payload.installation_id) !== identity.installationIdDigest) {
     throw new Error("installation_scope_mismatch");
   }
   const processingPurposeId = (() => {
     if (source.event_name === "install") return "attribution";
-    if (source.event_name === "ad_revenue") return "revenue_measurement";
+    if (source.event_name === "ad_revenue" || anchoredCommerce) return "revenue_measurement";
     if (source.event_name === "consent_changed" || source.event_name === "privacy_control") return "fraud_prevention";
     return "analytics";
   })();

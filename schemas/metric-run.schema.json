@@ -39,6 +39,7 @@
     },
     "undefined_reason": { "enum": ["no_attributed_cost", "no_activity_events", "empty_cohort"] },
     "value_unscaled": { "type": "string", "pattern": "^-?[0-9]+$" },
+    "fraud_policy": { "enum": ["gross", "net"], "default": "gross" },
     "amount_scale": { "type": "integer", "minimum": 0, "maximum": 18 },
     "ratio_scale": { "type": "integer", "minimum": 0, "maximum": 18 },
     "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },

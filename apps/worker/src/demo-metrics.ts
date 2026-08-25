@@ -2,6 +2,7 @@ import { createAppPool, withTenant } from "@openmasu/runtime";
 import { evaluate } from "@openmasu/attribution-core";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { buildDemoMetricsOutput } from "./demo-metrics-output.js";
 
 const tenantId = process.env.OPENMASU_MAX_TENANT_ID ?? "tenant-local";
 const appId = process.env.OPENMASU_MAX_APP_ID ?? "app-local";
@@ -30,12 +31,12 @@ try {
       input_snapshot_id: run.input_snapshot_id,
       data_freshness: run.data_freshness,
     }));
-  console.log(JSON.stringify({
-    tenant_id: tenantId,
-    app_id: appId,
-    ledger_counts: summary,
-    synthetic_contract_preview: syntheticPreview,
-  }, null, 2));
+  console.log(JSON.stringify(buildDemoMetricsOutput({
+    tenantId,
+    appId,
+    ledgerCounts: summary,
+    syntheticMetricRuns: syntheticPreview,
+  }), null, 2));
 } finally {
   await pool.end();
 }

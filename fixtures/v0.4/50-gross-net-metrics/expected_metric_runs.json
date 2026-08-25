@@ -1,0 +1,84 @@
+[
+  {
+    "metric_run_id": "run-50-gross:fraud_gross_install_count",
+    "metric_name": "fraud_gross_install_count",
+    "metric_definition_version": "0.4.3",
+    "input_snapshot_id": "d78aacb3597cd55bb49d24cfce674c42af701e58434da4cb96c6dd05858aaac1",
+    "input_received_at_watermark": "2026-08-22T00:00:00.000Z",
+    "input_ledger_position": "2026-08-21T02:00:10.000Z|install-50",
+    "computed_at": "2026-08-22T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-m6",
+    "rule_bundle_version": "0.4.3",
+    "rule_bundle_hash": "5050505050505050505050505050505050505050505050505050505050505050",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "fraud_policy": "gross",
+    "value_unscaled": "1",
+    "grouping": {
+      "dimensions": {
+        "metric_date": "2026-08-21"
+      },
+      "dimension_digest": "e1b95fb86fd307160e70b6b26701ec82edbed58c35ff3afb1af18f2f01066540"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-50",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-50",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "run-50-net:fraud_net_install_count",
+    "metric_name": "fraud_net_install_count",
+    "metric_definition_version": "0.4.3",
+    "input_snapshot_id": "d78aacb3597cd55bb49d24cfce674c42af701e58434da4cb96c6dd05858aaac1",
+    "input_received_at_watermark": "2026-08-22T00:00:00.000Z",
+    "input_ledger_position": "2026-08-21T02:00:10.000Z|install-50",
+    "computed_at": "2026-08-22T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-m6",
+    "rule_bundle_version": "0.4.3",
+    "rule_bundle_hash": "5050505050505050505050505050505050505050505050505050505050505050",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "fraud_policy": "net",
+    "value_unscaled": "0",
+    "grouping": {
+      "dimensions": {
+        "metric_date": "2026-08-21"
+      },
+      "dimension_digest": "e1b95fb86fd307160e70b6b26701ec82edbed58c35ff3afb1af18f2f01066540"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-50",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-50",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  }
+]

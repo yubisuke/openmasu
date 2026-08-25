@@ -37,7 +37,11 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
   let payloadRoot: string;
   let payloadStore: EncryptedFilePayloadStore;
 
-  function handler(options: { loginRate?: number; loginBurst?: number } = {}) {
+  function handler(options: {
+    loginRate?: number;
+    loginBurst?: number;
+    trackingOrigins?: readonly string[];
+  } = {}) {
     return createRequestHandler({
       pool: appPool,
       readerPool,
@@ -56,6 +60,7 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
       dashboard: { enabled: true, publicBaseUrl: configuredOrigin, tenantId, sessionTtlSeconds: 43200 },
       dashboardLoginBucket: new KeyedTokenBucket(options.loginRate ?? 100, options.loginBurst ?? 100),
       dashboardLoginGlobalBucket: new TokenBucket(100, 100),
+      trackingDestinationAllowlist: options.trackingOrigins ?? ["https://links.synthetic.example"],
     });
   }
 
@@ -371,5 +376,44 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     assert.equal(unknownLinks.status, 404);
     assert.equal(crossTenantLinks.status, 404);
     assert.equal(await unknownLinks.text(), await crossTenantLinks.text());
+  });
+
+  it("WO13 creates tracking links for configured origins and rejects unconfigured origins", async () => {
+    const dashboardCookie = cookie(await login(adminKeyA));
+    const appPage = await fetch(`${baseUrl}/dashboard/apps/${appId}`, {
+      headers: { cookie: dashboardCookie },
+    });
+    const csrf = /name="csrf_token" value="([^"]+)"/.exec(await appPage.text())?.[1];
+    assert.ok(csrf);
+    const create = (destinationUrl: string) => fetch(`${baseUrl}/dashboard/apps/${appId}/tracking-links`, {
+      method: "POST",
+      headers: {
+        cookie: dashboardCookie,
+        origin: configuredOrigin,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        csrf_token: csrf,
+        destination_kind: "custom_https",
+        destination_url: destinationUrl,
+        campaign_id: "synthetic-allowlist-campaign",
+      }),
+    });
+
+    const allowed = await create("https://links.synthetic.example/landing");
+    assert.equal(allowed.status, 201);
+    assert.match(await allowed.text(), /Tracking link created/);
+
+    const rejected = await create("https://unlisted.synthetic.example/landing");
+    assert.equal(rejected.status, 400);
+    assert.match(await rejected.text(), /destination_origin_not_allowed/);
+
+    const stored = await withTenant(appPool, tenantId, (client) => client.query<{ destination_url: string }>(
+      `SELECT destination_url FROM control.tracking_links
+       WHERE tenant_id=$1 AND app_id=$2 AND campaign_id='synthetic-allowlist-campaign'
+       ORDER BY destination_url`,
+      [tenantId, appId],
+    ));
+    assert.deepEqual(stored.rows.map((row) => row.destination_url), ["https://links.synthetic.example/landing"]);
   });
 });

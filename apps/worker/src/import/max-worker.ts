@@ -31,7 +31,6 @@ function attemptFromInbox(inbox: Any, query: URLSearchParams): CandidateAttempt 
       provider_attribution_strategy: "unattributed",
       provider_network: query.get("network") || "unknown",
       provider_country: (query.get("cc") || "ZZ").toUpperCase(),
-      provider_confirmed_at: inbox.received_at,
     },
   };
   return {

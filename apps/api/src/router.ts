@@ -27,6 +27,7 @@ import {
   type ReportFormat,
 } from "./reporting.js";
 import { parseMetricQuery, ReportQueryError } from "./report-query.js";
+import { encodeFraudAudit, fraudAudit, FraudAuditQueryError, parseFraudAuditQuery } from "./fraud-reporting.js";
 import type { KeyedTokenBucket, TokenBucket } from "./rate-limit.js";
 import { matchRoute, type RouteDefinition } from "./routes.js";
 import { activateRuleBundle } from "./rule-bundles.js";
@@ -45,6 +46,9 @@ import {
   type DashboardSession,
 } from "./session.js";
 import { createTrackingLink, listTrackingLinks, type TrackingLinkRecord } from "./tracking-links.js";
+import { registerAppLinkIdentity, registerLinkDomain } from "./link-domains.js";
+import { receiveGooglePlayRtdn, type GooglePlayRtdnReceiverDependencies } from "./google-play-rtdn-receiver.js";
+import { configureGoogleDataManagerDestination } from "./google-data-manager-admin.js";
 
 export const dashboardHeaders = {
   "content-security-policy": "default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
@@ -74,9 +78,11 @@ export type RequestHandlerDependencies = {
   readonly dashboardLoginGlobalBucket?: TokenBucket;
   readonly sdk?: SdkRouteDependencies;
   readonly trackingDestinationAllowlist?: readonly string[];
+  readonly referrerMaximumEncodedCharacters?: number;
   readonly reportMaximumRows?: number;
   readonly reportMaximumExportRows?: number;
   readonly applePostback?: ApplePostbackReceiverDependencies;
+  readonly googlePlayRtdn?: GooglePlayRtdnReceiverDependencies;
   readonly operationalMetrics?: OperationalMetrics;
   readonly operationalLogWriter?: OperationalLogWriter;
 };
@@ -163,7 +169,7 @@ async function dashboardSessionFor(
 }
 
 function dashboardAppId(pathname: string): string | undefined {
-  const match = /^\/dashboard\/apps\/([^/]+)(?:\/(?:cohorts\.csv|differences|tracking-links))?$/.exec(pathname);
+  const match = /^\/dashboard\/apps\/([^/]+)(?:\/(?:cohorts\.csv|differences|fraud|tracking-links))?$/.exec(pathname);
   if (!match) return undefined;
   try {
     return decodeURIComponent(match[1]);
@@ -173,7 +179,7 @@ function dashboardAppId(pathname: string): string | undefined {
 }
 
 function adminAppId(pathname: string): string | undefined {
-  const match = /^\/v1\/admin\/apps\/([^/]+)\/(?:apple-registration|conversion-schemas|rule-bundles)$/.exec(pathname);
+  const match = /^\/v1\/admin\/apps\/([^/]+)\/(?:apple-registration|conversion-schemas|rule-bundles|link-identity|google-data-manager)$/.exec(pathname);
   if (!match) return undefined;
   try {
     return decodeURIComponent(match[1]);
@@ -249,6 +255,14 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
           route.handler === "apple_skan_postback" ? "skadnetwork" : "adattributionkit",
           dependencies.applePostback,
         );
+        return;
+      }
+      if (route.handler === "google_play_rtdn") {
+        if (!dependencies.googlePlayRtdn) {
+          json(response, 503, { error: "google_play_rtdn_receiver_unavailable" });
+          return;
+        }
+        await receiveGooglePlayRtdn(request, response, dependencies.googlePlayRtdn);
         return;
       }
       if (route.handler === "sdk_enrollment" && dependencies.sdk) return handleSdkEnrollment(request, response, dependencies.sdk);
@@ -372,7 +386,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
         return;
       }
 
-      if (["dashboard_app", "dashboard_export", "dashboard_differences", "dashboard_tracking_links_list", "dashboard_tracking_links_create", "dashboard_apps_create"].includes(route.handler)) {
+      if (["dashboard_app", "dashboard_export", "dashboard_differences", "dashboard_fraud", "dashboard_tracking_links_list", "dashboard_tracking_links_create", "dashboard_apps_create"].includes(route.handler)) {
         const session = await dashboardSessionFor(dependencies, request);
         if (!session) {
           dashboardHtml(response, 401, loginPage("Authentication required."));
@@ -425,6 +439,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
                 appId: appIdentity.appId,
                 actorRef: `admin_key:${session.adminKeyId}`,
                 allowedOrigins: dependencies.trackingDestinationAllowlist ?? [],
+                referrerMaximumEncodedCharacters: dependencies.referrerMaximumEncodedCharacters,
                 body: Object.fromEntries(body),
               });
               const link = measurementLink(dependencies.redirectorBaseUrl, result.slug);
@@ -432,6 +447,19 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             } catch (error) {
               dashboardHtml(response, 400, `<!doctype html><html lang="en"><body><h1>Tracking link creation failed</h1><p>${escapeHtml(error instanceof Error ? error.message : "tracking_link_invalid")}</p></body></html>`);
             }
+            return;
+          }
+          if (route.handler === "dashboard_fraud") {
+            const from = target.searchParams.get("from") ?? "2000-01-01";
+            const to = target.searchParams.get("to") ?? "9999-12-31";
+            const rows = await fraudAudit(dependencies.readerPool, appIdentity, { from, to });
+            const apps = await listApps(dependencies.readerPool, sessionIdentity);
+            dashboardHtml(response, 200, renderDashboard(buildDashboardView({
+              apps,
+              selectedAppId: appIdentity.appId,
+              fraudRows: rows,
+              csrfToken: csrfToken(session.token),
+            })));
             return;
           }
           const params = new URLSearchParams(target.searchParams);
@@ -561,11 +589,29 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
           }
           return;
         }
-        if (route.handler === "admin_apple_registration" || route.handler === "admin_conversion_schema" || route.handler === "admin_rule_bundle") {
+        if (route.handler === "admin_link_domain") {
+          try {
+            const body = await jsonBody(request);
+            json(response, 201, await registerLinkDomain({ pool: dependencies.pool, identity, host: String(body.host ?? "") }));
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "link_domain_invalid";
+            json(response, message.endsWith("already_registered") ? 409 : 400, { error: message });
+          }
+          return;
+        }
+        if (route.handler === "admin_apple_registration" || route.handler === "admin_conversion_schema" || route.handler === "admin_rule_bundle" || route.handler === "admin_app_link_identity" || route.handler === "admin_google_data_manager") {
           try {
             const appIdentity = await requireRegisteredApp(dependencies.pool, identity, adminAppId(target.pathname) ?? "");
             const body = await jsonBody(request);
-            const result = route.handler === "admin_apple_registration"
+            const result = route.handler === "admin_google_data_manager"
+              ? await configureGoogleDataManagerDestination({
+                  pool: dependencies.pool,
+                  identity: appIdentity,
+                  body,
+                })
+              : route.handler === "admin_app_link_identity"
+              ? await registerAppLinkIdentity({ pool: dependencies.pool, identity: appIdentity, body })
+              : route.handler === "admin_apple_registration"
               ? await registerAppleApp({
                   pool: dependencies.pool,
                   identity: appIdentity,
@@ -591,6 +637,28 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
               const status = message.endsWith("_already_registered") || message === "rule_bundle_predecessor_mismatch" ? 409 : 400;
               json(response, status, { error: message });
             }
+          }
+          return;
+        }
+        if (route.handler === "audit_fraud") {
+          try {
+            const query = parseFraudAuditQuery(target.searchParams);
+            const appIdentity = await requireRegisteredApp(pool, identity, query.appId);
+            const rows = await fraudAudit(pool, appIdentity, query);
+            const encoded = encodeFraudAudit(rows, query.format);
+            response.writeHead(200, {
+              "content-type": encoded.contentType,
+              "cache-control": "no-store",
+              "x-content-type-options": "nosniff",
+              ...(query.format === "csv" ? {
+                "content-disposition": `attachment; filename="openmasu-fraud-${appIdentity.appId}-${query.from}-${query.to}.csv"`,
+              } : {}),
+            });
+            response.end(encoded.body);
+          } catch (error) {
+            if (error instanceof AppNotFoundError) json(response, 404, { error: "app_not_found" });
+            else if (error instanceof FraudAuditQueryError) json(response, 400, { error: error.message });
+            else throw error;
           }
           return;
         }
@@ -657,6 +725,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
               appId: appIdentity.appId,
               actorRef: `admin_key:${identity.keyId}`,
               allowedOrigins: dependencies.trackingDestinationAllowlist ?? [],
+              referrerMaximumEncodedCharacters: dependencies.referrerMaximumEncodedCharacters,
               body,
             });
             json(response, 201, result);

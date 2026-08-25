@@ -23,6 +23,8 @@ internal class OpenMasuStorage(context: Context) {
 
   fun referrerConsumed(): Boolean = preferences.getBoolean(KEY_REFERRER_CONSUMED, false)
   fun markReferrerConsumed() { preferences.edit().putBoolean(KEY_REFERRER_CONSUMED, true).commit() }
+  fun deferredDestinationConsumed(): Boolean = preferences.getBoolean(KEY_DEFERRED_DESTINATION_CONSUMED, false)
+  fun markDeferredDestinationConsumed() { preferences.edit().putBoolean(KEY_DEFERRED_DESTINATION_CONSUMED, true).commit() }
 
   fun nextSequence(): Long {
     val next = preferences.getLong(KEY_SEQUENCE, 0L) + 1L
@@ -75,6 +77,7 @@ internal class OpenMasuStorage(context: Context) {
     private const val KEY_INSTALLATION_ID = "installation_id"
     private const val KEY_COLLECTION_ENABLED = "collection_enabled"
     private const val KEY_REFERRER_CONSUMED = "referrer_consumed"
+    private const val KEY_DEFERRED_DESTINATION_CONSUMED = "deferred_destination_consumed"
     private const val KEY_SEQUENCE = "processing_sequence"
     private const val KEY_INSTALLATION_KEY_ID = "installation_key_id"
     private const val KEY_INSTALLATION_SECRET = "installation_secret"

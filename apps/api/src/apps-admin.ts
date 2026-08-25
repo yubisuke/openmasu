@@ -1,9 +1,11 @@
 import { randomBytes } from "node:crypto";
 import type { Pool } from "pg";
+import { DEFAULT_FRAUD_BUNDLE, fraudBundleHash, sha256Jcs } from "@openmasu/fraud-rules";
 import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 import type { AdminIdentity, AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAudit } from "./session.js";
 import { ensureSdkKeys } from "./sdk-auth.js";
+import { activateRuleBundle } from "./rule-bundles.js";
 
 const identifierPattern = /^[A-Za-z0-9._:-]{1,128}$/;
 
@@ -63,6 +65,19 @@ export async function registerApp(input: {
     [input.identity.tenantId, input.appId, now.toISOString()],
   ));
   if (inserted.rowCount !== 1) throw new Error("app_already_registered");
+
+  await activateRuleBundle({
+    pool: input.pool,
+    identity: { ...input.identity, appId: input.appId },
+    body: {
+      rule_bundle_id: DEFAULT_FRAUD_BUNDLE.id,
+      rule_bundle_version: DEFAULT_FRAUD_BUNDLE.version,
+      rule_bundle_hash: fraudBundleHash(DEFAULT_FRAUD_BUNDLE),
+      definition: DEFAULT_FRAUD_BUNDLE,
+      definition_digest: sha256Jcs(DEFAULT_FRAUD_BUNDLE),
+    },
+    now,
+  });
 
   const sdkKeyId = `sdk-key:${uuidV7(now.getTime())}`;
   const sdkKey = randomBytes(32).toString("base64url");

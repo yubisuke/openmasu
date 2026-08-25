@@ -9,6 +9,7 @@ type Counts = Record<string, number>;
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const baselineTag = "contract-v0.3.6";
+const verificationRef = "v0.1.0";
 const safeRoot = root.replaceAll("\\", "/");
 const gitArgs = ["-c", `safe.directory=${safeRoot}`];
 
@@ -18,6 +19,10 @@ function fail(message: string): never {
 
 function git(...args: string[]): string {
   return execFileSync("git", [...gitArgs, ...args], { cwd: root, encoding: "utf8" }).trim();
+}
+
+function gitBytes(...args: string[]): Buffer {
+  return execFileSync("git", [...gitArgs, ...args], { cwd: root });
 }
 
 function baselineGroup(prefix: string): Map<string, string> {
@@ -56,7 +61,7 @@ function parse(text: string, label: string): Json {
 }
 
 function currentJson(path: string): Json {
-  return parse(readFileSync(join(root, path), "utf8"), path);
+  return parse(git("show", `${verificationRef}:${path}`), `${verificationRef}:${path}`);
 }
 
 function renamed(value: string): string {
@@ -202,7 +207,7 @@ const fixtureFileSummary = new Map<string, { files: number; leafChanges: number 
 const oldFixtures = baselineGroup("fixtures/v0.3");
 const oldFixtureFiles = [...oldFixtures.keys()].sort();
 const expectedFixtureFiles = oldFixtureFiles.map((path) => path.replace(/^fixtures\/v0\.3/, "fixtures/v0.4"));
-const actualFixtureFiles = git("ls-files", "fixtures/v0.4").split(/\r?\n/).filter(Boolean).sort();
+const actualFixtureFiles = git("ls-tree", "-r", "--name-only", verificationRef, "fixtures/v0.4").split(/\r?\n/).filter(Boolean).sort();
 if (JSON.stringify(expectedFixtureFiles) !== JSON.stringify(actualFixtureFiles)) fail("fixture path inventory changed");
 for (const oldPath of oldFixtureFiles.filter((path) => path.endsWith(".json"))) {
   const newPath = oldPath.replace(/^fixtures\/v0\.3/, "fixtures/v0.4");
@@ -220,7 +225,7 @@ for (const oldPath of oldFixtureFiles.filter((path) => path.endsWith(".json"))) 
 const schemaCounts: Counts = {};
 const baselineSchemas = baselineGroup("schemas");
 const oldSchemas = [...baselineSchemas.keys()].filter((path) => path.endsWith(".json")).sort();
-const currentSchemas = git("ls-files", "schemas").split(/\r?\n/).filter((path) => path.endsWith(".json")).sort();
+const currentSchemas = git("ls-tree", "-r", "--name-only", verificationRef, "schemas").split(/\r?\n/).filter((path) => path.endsWith(".json")).sort();
 if (JSON.stringify(oldSchemas) !== JSON.stringify(currentSchemas)) fail("schema inventory changed");
 for (const path of oldSchemas) compareSchema(parse(baselineSchemas.get(path) ?? fail(`missing baseline schema ${path}`), path), currentJson(path), [path], schemaCounts);
 
@@ -228,7 +233,7 @@ const registryCounts: Counts = {};
 const baselineRegistries = baselineGroup("registries");
 const oldRegistries = [...baselineRegistries.keys()].filter((path) => path.endsWith("-v0.3.json")).sort();
 const expectedRegistries = oldRegistries.map((path) => path.replace(/-v0\.3\.json$/, "-v0.4.json"));
-const currentRegistries = git("ls-files", "registries").split(/\r?\n/).filter(Boolean).sort();
+const currentRegistries = git("ls-tree", "-r", "--name-only", verificationRef, "registries").split(/\r?\n/).filter(Boolean).sort();
 if (JSON.stringify(expectedRegistries) !== JSON.stringify(currentRegistries)) fail("registry path inventory changed");
 oldRegistries.forEach((oldPath, index) => compareRegistry(
   parse(baselineRegistries.get(oldPath) ?? fail(`missing baseline registry ${oldPath}`), oldPath),
@@ -239,8 +244,9 @@ oldRegistries.forEach((oldPath, index) => compareRegistry(
 
 const conversionPath = join(root, "sdk/ios/Sources/OpenMasuApplePostback/Resources/conversion-schema-v1.json");
 const unityConversionPath = join(root, "sdk/unity/com.openmasu.sdk/Runtime/Plugins/iOS/Sources/OpenMasuApplePostback/Resources/conversion-schema-v1.json");
-const conversionBytes = readFileSync(conversionPath);
-if (!conversionBytes.equals(readFileSync(unityConversionPath))) fail("Swift and Unity conversion schemas differ");
+const conversionBytes = gitBytes("show", `${verificationRef}:${relative(root, conversionPath).replaceAll("\\", "/")}`);
+const unityConversionBytes = gitBytes("show", `${verificationRef}:${relative(root, unityConversionPath).replaceAll("\\", "/")}`);
+if (!conversionBytes.equals(unityConversionBytes)) fail("Swift and Unity conversion schemas differ");
 const conversionDigest = createHash("sha256").update(conversionBytes).digest("hex");
 const fixture45 = currentJson("fixtures/v0.4/45-ios-conversion-schema/input.json") as unknown as { records: Array<{ payload?: { extensions?: { conversion_schema_sha256?: string } } }> };
 if (fixture45.records[0]?.payload?.extensions?.conversion_schema_sha256 !== conversionDigest) {
@@ -249,8 +255,7 @@ if (fixture45.records[0]?.payload?.extensions?.conversion_schema_sha256 !== conv
 
 const inputs = actualFixtureFiles.filter((path) => path.endsWith("/input.json")).length;
 const goldens = actualFixtureFiles.filter((path) => /\/expected_[^/]+\.json$/.test(path)).length;
-const fixtureDirectories = readdirSync(join(root, "fixtures/v0.4"), { withFileTypes: true })
-  .filter((entry) => entry.isDirectory() && /^\d{2}-/.test(entry.name)).length;
+const fixtureDirectories = new Set(actualFixtureFiles.map((path) => path.split("/")[2]).filter((name) => /^\d{2}-/.test(name))).size;
 
 console.log(`Contract v0.4 rename proof: ${baselineTag} (${baselineCommit})`);
 console.log(`Schemas: ${oldSchemas.length}; ${Object.entries(schemaCounts).map(([key, value]) => `${key}=${value}`).join(", ")}; SEMANTIC_DIFF=0`);

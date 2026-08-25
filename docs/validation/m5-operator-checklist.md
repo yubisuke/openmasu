@@ -23,8 +23,10 @@ data, credentials, device identifiers, private rule values, or production logs.
 - Replace single-process rate buckets when multiple replicas or measured abuse
   require shared enforcement.
 - Define alerts for HTTP error rate/latency, SDK/MAX/AdServices backlog and age,
+  fixed operator-job failure counts and stale latest-completion timestamps,
   database capacity, backup failure, restore failure, and privacy-reapply hard
-  stops. Introduce OpenTelemetry only when cross-service tracing or operational
+  stops. Keep scheduler, thresholds, receivers, and contacts deployment-private.
+  Introduce OpenTelemetry only when cross-service tracing or operational
   cardinality justifies the dependency and privacy review.
 
 ## Recovery and privacy

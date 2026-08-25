@@ -5,12 +5,23 @@
   "type": "object",
   "additionalProperties": false,
   "allOf": [{ "$ref": "../common.schema.json#/$defs/money" }],
-  "required": ["event_name", "transaction_id", "original_transaction_id", "correction_target_record_id", "amount_unscaled", "amount_scale", "currency", "financial_status"],
+  "anyOf": [
+    { "properties": { "installation_id": true }, "required": ["installation_id"] },
+    { "properties": { "correction_target_record_id": true }, "required": ["correction_target_record_id"] }
+  ],
+  "required": ["event_name", "transaction_id", "original_transaction_id", "amount_unscaled", "amount_scale", "currency", "financial_status"],
   "properties": {
     "event_name": { "const": "refund" },
+    "installation_id": {
+      "$ref": "../common.schema.json#/$defs/id",
+      "description": "Optional installation anchor used with original_transaction_id and currency for canonical purchase-target resolution."
+    },
     "transaction_id": { "$ref": "../common.schema.json#/$defs/id" },
     "original_transaction_id": { "$ref": "../common.schema.json#/$defs/id" },
-    "correction_target_record_id": { "$ref": "../common.schema.json#/$defs/id" },
+    "correction_target_record_id": {
+      "$ref": "../common.schema.json#/$defs/id",
+      "description": "Optional caller assertion. Installation-anchored refunds validate it against the resolved purchase. An unanchored explicit target preserves the v0.4.0 correction-only path."
+    },
     "amount_unscaled": {},
     "amount_scale": {},
     "currency": {},

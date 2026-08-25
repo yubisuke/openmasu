@@ -41,6 +41,8 @@ Difference reasons are neutral measurement-semantic categories (such as window, 
 ### Measurement links
 
 - Links containing `app_id`, `campaign`, `ad_group`, and `creative`
+- Direct deep-link destinations delivered through Android App Links and iOS Universal Links
+- Android-only deterministic deferred destinations carried through Google Play Install Referrer
 - Cryptographically random `click_id`
 - Google Play `referrer` containing the click ID
 - Minimal metadata for abuse investigation
@@ -85,6 +87,8 @@ self-hosted public implementation when the required evidence is restricted to
 partner MMPs. Adding a network requires a new owner decision, current primary
 documentation, a least-privilege public integration surface, synthetic
 fixtures, and neutral discrepancy semantics.
+
+Direct deep linking is deterministic on Android and iOS. Deferred deep linking is deterministic on Android only. On iOS, OpenMasu delivers deep links to users who already have the app, using Universal Links. It does not deliver a deep link to a user who installs the app after tapping a link. Every mechanism that would make that possible either requires deriving an identifier from device signals, which Apple's Developer Program License Agreement prohibits and which this project does not do, or requires a user-visible prompt on first launch. If Apple provides a channel that carries a destination through installation, OpenMasu will use it.
 
 M5 production controls make the repository safer to operate, but they do not
 turn a synthetic CI milestone into a production service. TLS termination,

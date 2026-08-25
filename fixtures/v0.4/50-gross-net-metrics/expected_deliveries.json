@@ -1,0 +1,36 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "delivery_id": "delivery:click-50",
+    "record_id": "click-50",
+    "canonical_record_id": "click-50",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-21T02:00:00.001Z",
+    "ingestion_status": "accepted",
+    "duplicate_resolution": "unique",
+    "timeliness": "on_time",
+    "clock_skew_suspected": false,
+    "payload_disposition": "protected",
+    "processing_purpose_id": "fraud_prevention",
+    "consent_evaluation_policy_version": "consent-m6",
+    "consent_decision_reason_code": "consent_not_required"
+  },
+  {
+    "contract_version": "0.4.0",
+    "delivery_id": "delivery:install-50",
+    "record_id": "install-50",
+    "canonical_record_id": "install-50",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-21T02:00:10.000Z",
+    "ingestion_status": "accepted",
+    "duplicate_resolution": "unique",
+    "timeliness": "on_time",
+    "clock_skew_suspected": false,
+    "payload_disposition": "protected",
+    "processing_purpose_id": "fraud_prevention",
+    "consent_evaluation_policy_version": "consent-m6",
+    "consent_decision_reason_code": "consent_not_required"
+  }
+]

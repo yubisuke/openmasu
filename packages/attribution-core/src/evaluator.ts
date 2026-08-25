@@ -1,6 +1,20 @@
 import { createHash } from "node:crypto";
 import { canonicalize } from "json-canonicalize";
-import type { OpenMasuEvaluationOutputV04 as EvaluationOutput } from "@openmasu/contracts";
+import {
+  DEFAULT_FRAUD_BUNDLE,
+  clickInjectionPolicyDigest,
+  evaluateInstallRules,
+  evaluateSourceDayWithBundle,
+  fraudBundleHash,
+  fraudNumberParameter,
+  fraudRuleAction,
+  sha256Jcs,
+  type FraudBundle,
+} from "@openmasu/fraud-rules";
+import {
+  REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
+  type OpenMasuEvaluationOutputV04 as EvaluationOutput,
+} from "@openmasu/contracts";
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type Any = Record<string, any>;
@@ -24,6 +38,8 @@ const CONTRACT_VERSION = "0.4.0" as const;
 // Rule bundles and metric definitions retain their independent v0.3 identities.
 const REFERENCE_RULE_VERSION = "0.3.0" as const;
 const HASH = "0".repeat(64);
+const FRAUD_BUNDLE: FraudBundle = DEFAULT_FRAUD_BUNDLE;
+const FRAUD_BUNDLE_HASH = fraudBundleHash(FRAUD_BUNDLE);
 const DAY_MS = 86_400_000;
 
 export function jcs(value: unknown): string {
@@ -32,6 +48,28 @@ export function jcs(value: unknown): string {
 
 export function sha256(value: unknown): string {
   return createHash("sha256").update(jcs(value), "utf8").digest("hex");
+}
+
+type BoundFraudBundle = { readonly definition: FraudBundle; readonly hash: string };
+
+function boundFraudBundle(server: Any): BoundFraudBundle | undefined {
+  if (server.fraud_enabled === false) return undefined;
+  const bound = server.fraud_rule_bundle;
+  if (!bound) return { definition: FRAUD_BUNDLE, hash: FRAUD_BUNDLE_HASH };
+  const definition = bound.definition as FraudBundle;
+  const hash = fraudBundleHash(definition);
+  if (bound.rule_bundle_id !== definition.id || bound.rule_bundle_version !== definition.version) {
+    throw new Error("fraud_rule_bundle_identity_mismatch");
+  }
+  if (bound.definition_digest !== sha256Jcs(definition)) throw new Error("fraud_rule_bundle_definition_digest_mismatch");
+  if (bound.rule_bundle_hash !== hash) throw new Error("fraud_rule_bundle_hash_mismatch");
+  return { definition, hash };
+}
+
+function quarantineDeadline(action: string, evaluatedAt: string, bundle: FraudBundle): Record<string, string> {
+  if (action !== "quarantine") return {};
+  const hours = fraudNumberParameter(bundle, "quarantine_hours", 72);
+  return { resolution_deadline_at: new Date(time(evaluatedAt, "evaluated_at") + hours * 3_600_000).toISOString() };
 }
 
 function compareText(a: string, b: string): number {
@@ -109,19 +147,31 @@ function assertRevenueAnchorSources(all: Attempt[]): void {
 }
 
 export function compareCandidateAttempts(a: CandidateAttempt, b: CandidateAttempt): number {
-  const aKey = [
-    a.record.received_at, a.record.record_id, a.record.delivery_id,
-    a.server.tenant_id, a.server.app_id, a.record.schema_version, sha256(a.record),
+  const aKey = candidateAttemptSortKey(a);
+  const bKey = candidateAttemptSortKey(b);
+  return compareCandidateAttemptSortKeys(aKey, bKey);
+}
+
+function candidateAttemptSortKey(attempt: CandidateAttempt): string[] {
+  return [
+    attempt.record.received_at, attempt.record.record_id, attempt.record.delivery_id,
+    attempt.server.tenant_id, attempt.server.app_id, attempt.record.schema_version, sha256(attempt.record),
   ];
-  const bKey = [
-    b.record.received_at, b.record.record_id, b.record.delivery_id,
-    b.server.tenant_id, b.server.app_id, b.record.schema_version, sha256(b.record),
-  ];
+}
+
+function compareCandidateAttemptSortKeys(aKey: readonly string[], bKey: readonly string[]): number {
   for (let index = 0; index < aKey.length; index += 1) {
     const comparison = compareText(aKey[index], bKey[index]);
     if (comparison !== 0) return comparison;
   }
   return 0;
+}
+
+export function sortCandidateAttempts(values: readonly CandidateAttempt[]): CandidateAttempt[] {
+  return values
+    .map((attempt) => ({ attempt, key: candidateAttemptSortKey(attempt) }))
+    .sort((a, b) => compareCandidateAttemptSortKeys(a.key, b.key))
+    .map(({ attempt }) => attempt);
 }
 
 function scopeKey(attempt: Attempt): string {
@@ -293,11 +343,185 @@ function assertScopedReferences(input: Any, all: Attempt[]): void {
       throw new Error(`cross-scope or missing retention reference: ${expiration.record_id}`);
     }
   }
-  for (const attempt of all.filter((entry) => entry.record.event_name === "refund")) {
-    if (!exists(attempt.server.tenant_id, attempt.server.app_id, attempt.record.payload.correction_target_record_id)) {
+  for (const attempt of all.filter(isLegacyExplicitRefund)) {
+    if (!exists(
+      attempt.server.tenant_id,
+      attempt.server.app_id,
+      attempt.record.payload.correction_target_record_id,
+    )) {
       throw new Error(`cross-scope or missing refund target: ${attempt.record.record_id}`);
     }
   }
+}
+
+function canonicalPurchaseOriginalTransactionId(attempt: Attempt): string | undefined {
+  if (attempt.record.event_name !== "purchase") return undefined;
+  return attempt.record.payload.original_transaction_id ?? attempt.record.payload.transaction_id;
+}
+
+function receivedNoLaterThan(candidate: Attempt, refund: Attempt): boolean {
+  try {
+    return time(candidate.record.received_at, "received_at") <= time(refund.record.received_at, "received_at");
+  } catch (error) {
+    if (error instanceof TimestampInvalidError) return false;
+    throw error;
+  }
+}
+
+function occurredNoLaterThan(candidate: Attempt, refund: Attempt): boolean {
+  try {
+    return time(candidate.record.occurred_at, "occurred_at") <= time(refund.record.occurred_at, "occurred_at");
+  } catch (error) {
+    if (error instanceof TimestampInvalidError) return false;
+    throw error;
+  }
+}
+
+function isBaseAcceptedCandidate(attempt: Attempt, candidates: readonly Attempt[]): boolean {
+  const { server, record } = attempt;
+  try {
+    time(record.received_at, "received_at");
+    time(record.occurred_at, "occurred_at");
+    if (record.tenant_id !== server.tenant_id || record.app_id !== server.app_id) return false;
+    if (candidates.filter((other) => other.record.record_id === record.record_id).length !== 1) return false;
+    if (candidates.find((other) => scopeKey(other) === scopeKey(attempt)) !== attempt) return false;
+    if (!consentDecision(attempt).allowed) return false;
+    if (server.timestamp_stale_policy &&
+        time(record.occurred_at, "occurred_at") <
+          time(server.timestamp_stale_policy.before, "timestamp_stale_policy.before")) return false;
+    if (record.subject_scope === "aggregate" && record.payload?.installation_id) return false;
+    return true;
+  } catch (error) {
+    if (error instanceof TimestampInvalidError) return false;
+    return false;
+  }
+}
+
+function isAnchoredCommerce(attempt: Attempt): boolean {
+  return (["purchase", "refund"] as string[]).includes(attempt.record.event_name) &&
+    typeof attempt.record.payload.installation_id === "string";
+}
+
+function isLegacyExplicitRefund(attempt: Attempt): boolean {
+  return attempt.record.event_name === "refund" &&
+    typeof attempt.record.payload.installation_id !== "string" &&
+    typeof attempt.record.payload.correction_target_record_id === "string";
+}
+
+function legacyRefundTarget(refund: Attempt, candidates: readonly Attempt[]): Attempt | undefined {
+  if (!isLegacyExplicitRefund(refund)) return undefined;
+  return candidates.find((candidate) =>
+    candidate.server.tenant_id === refund.server.tenant_id &&
+    candidate.server.app_id === refund.server.app_id &&
+    candidate.record.record_id === refund.record.payload.correction_target_record_id,
+  );
+}
+
+function canonicalPurchaseBusinessAttempts(attempt: Attempt, candidates: readonly Attempt[]): Attempt[] {
+  if (attempt.record.event_name !== "purchase" || !isAnchoredCommerce(attempt) ||
+      typeof attempt.record.payload.transaction_id !== "string") return [attempt];
+  return candidates.filter((candidate) =>
+    candidate.record.event_name === "purchase" &&
+    isAnchoredCommerce(candidate) &&
+    candidate.server.tenant_id === attempt.server.tenant_id &&
+    candidate.server.app_id === attempt.server.app_id &&
+    candidate.record.tenant_id === candidate.server.tenant_id &&
+    candidate.record.app_id === candidate.server.app_id &&
+    candidate.record.payload.transaction_id === attempt.record.payload.transaction_id &&
+    isBaseAcceptedCandidate(candidate, candidates),
+  );
+}
+
+function canonicalPurchaseBusinessAttempt(attempt: Attempt, candidates: readonly Attempt[]): Attempt | undefined {
+  const group = canonicalPurchaseBusinessAttempts(attempt, candidates);
+  return group[0];
+}
+
+function strictRefundTargetCandidates(
+  refund: Attempt,
+  candidates: readonly Attempt[],
+): Attempt[] {
+  if (refund.record.event_name !== "refund") return [];
+  const payload = refund.record.payload;
+  if (typeof payload.installation_id !== "string") return [];
+  return candidates.filter((candidate) =>
+    candidate.record.event_name === "purchase" &&
+    candidate.record.payload.financial_status === "settled" &&
+    candidate.server.tenant_id === refund.server.tenant_id &&
+    candidate.server.app_id === refund.server.app_id &&
+    candidate.record.tenant_id === candidate.server.tenant_id &&
+    candidate.record.app_id === candidate.server.app_id &&
+    !(refund.server.refund_target_ineligible_record_ids ?? []).includes(candidate.record.record_id) &&
+    receivedNoLaterThan(candidate, refund) &&
+    occurredNoLaterThan(candidate, refund) &&
+    candidate.record.payload.installation_id === payload.installation_id &&
+    canonicalPurchaseOriginalTransactionId(candidate) === payload.original_transaction_id &&
+    candidate.record.payload.currency === payload.currency &&
+    isBaseAcceptedCandidate(candidate, candidates) &&
+    canonicalPurchaseBusinessAttempt(candidate, candidates) === candidate,
+  );
+}
+
+function resolveRefundTargetIdentity(refund: Attempt, candidates: readonly Attempt[]): Attempt | undefined {
+  const explicitTarget = refund.record.payload.correction_target_record_id;
+  const matches = strictRefundTargetCandidates(refund, candidates);
+  if (matches.length !== 1) return undefined;
+  if (typeof explicitTarget === "string" && matches[0].record.record_id !== explicitTarget) return undefined;
+  return matches[0];
+}
+
+function exactMoneyAtScale(payload: Any, scale: number): bigint {
+  return BigInt(payload.amount_unscaled) * (10n ** BigInt(scale - Number(payload.amount_scale)));
+}
+
+function refundBusinessKey(refund: Attempt): string {
+  return compositeKey([
+    refund.server.tenant_id, refund.server.app_id,
+    refund.record.event_name, refund.record.payload.transaction_id,
+  ]);
+}
+
+function admittedRefunds(candidates: readonly Attempt[]): {
+  targets: Map<string, Attempt>;
+  winners: Map<string, Attempt>;
+} {
+  const targets = new Map<string, Attempt>();
+  const winners = new Map<string, Attempt>();
+  const settledByTarget = new Map<string, Attempt[]>();
+  const ordered = candidates.filter((candidate) =>
+    candidate.record.event_name === "refund" && isAnchoredCommerce(candidate) &&
+    typeof candidate.record.payload.transaction_id === "string" &&
+    isBaseAcceptedCandidate(candidate, candidates),
+  ).slice().sort(compareCandidateAttempts);
+  for (const candidate of ordered) {
+    const businessKey = refundBusinessKey(candidate);
+    if (winners.has(businessKey)) continue;
+    const target = resolveRefundTargetIdentity(candidate, candidates);
+    if (!target) continue;
+    if (candidate.record.payload.financial_status === "settled") {
+      const targetKey = attemptDecisionKey(target);
+      const prior = settledByTarget.get(targetKey) ?? [];
+      const scale = Math.max(
+        Number(target.record.payload.amount_scale),
+        Number(candidate.record.payload.amount_scale),
+        ...prior.map((refund) => Number(refund.record.payload.amount_scale)),
+      );
+      const refunded = prior.reduce(
+        (sum, refund) => sum + exactMoneyAtScale(refund.record.payload, scale), 0n,
+      );
+      if (refunded + exactMoneyAtScale(candidate.record.payload, scale) >
+          exactMoneyAtScale(target.record.payload, scale)) continue;
+      settledByTarget.set(targetKey, [...prior, candidate]);
+    }
+    winners.set(businessKey, candidate);
+    targets.set(attemptDecisionKey(candidate), target);
+  }
+  return { targets, winners };
+}
+
+function resolveRefundTarget(refund: Attempt, candidates: readonly Attempt[]): Attempt | undefined {
+  if (!isAnchoredCommerce(refund)) return undefined;
+  return admittedRefunds(candidates).targets.get(attemptDecisionKey(refund));
 }
 
 function isControlEvent(record: Any): boolean {
@@ -403,16 +627,46 @@ function decide(attempt: Attempt, candidates: CandidateProvider): Any {
       throw new Error("timestamp_stale_policy.policy_digest does not match its canonical policy fields");
     }
   }
+  if (server.click_injection_policy) {
+    const expectedDigest = clickInjectionPolicyDigest({
+      threshold_seconds: server.click_injection_policy.threshold_seconds,
+      authority: server.click_injection_policy.authority,
+      policy_version: server.click_injection_policy.policy_version,
+    });
+    if (server.click_injection_policy.policy_digest !== expectedDigest) {
+      throw new Error("click_injection_policy.policy_digest does not match its canonical policy fields");
+    }
+  }
   const sameRecordId = candidates.byRecordId(record.record_id);
   const sameKey = candidates.byLogicalScope(attempt);
   const first = sameKey[0];
-  const duplicate_resolution = sameRecordId.length > 1
+  let duplicate_resolution = sameRecordId.length > 1
     ? "record_id_collision"
     : attemptDecisionKey(first) === attemptDecisionKey(attempt)
     ? "unique"
     : sha256(first.record.payload) === sha256(record.payload)
       ? "duplicate_delivery"
       : "event_id_conflict";
+  let canonicalAttempt = first;
+  if (duplicate_resolution === "unique" && record.event_name === "purchase" && isAnchoredCommerce(attempt)) {
+    const business = canonicalPurchaseBusinessAttempts(attempt, candidates.all());
+    const businessFirst = business[0];
+    if (businessFirst && attemptDecisionKey(businessFirst) !== attemptDecisionKey(attempt)) {
+      duplicate_resolution = sha256(businessFirst.record.payload) === sha256(record.payload)
+        ? "duplicate_delivery"
+        : "event_id_conflict";
+      canonicalAttempt = businessFirst;
+    }
+  }
+  if (duplicate_resolution === "unique" && record.event_name === "refund" && isAnchoredCommerce(attempt)) {
+    const businessFirst = admittedRefunds(candidates.all()).winners.get(refundBusinessKey(attempt));
+    if (businessFirst && compareCandidateAttempts(businessFirst, attempt) < 0) {
+      duplicate_resolution = sha256(businessFirst.record.payload) === sha256(record.payload)
+        ? "duplicate_delivery"
+        : "event_id_conflict";
+      canonicalAttempt = businessFirst;
+    }
+  }
   const consent = consentDecision(attempt);
   let ingestion_status: "accepted" | "rejected" = "accepted";
   let reason_code: string | undefined;
@@ -435,10 +689,16 @@ function decide(attempt: Attempt, candidates: CandidateProvider): Any {
   } else if (duplicate_resolution === "event_id_conflict") {
     ingestion_status = "rejected";
     reason_code = "event_id_conflict";
+  } else if (record.event_name === "refund" && duplicate_resolution === "unique" &&
+      !(isLegacyExplicitRefund(attempt)
+        ? legacyRefundTarget(attempt, candidates.all())
+        : resolveRefundTarget(attempt, candidates.all()))) {
+    ingestion_status = "rejected";
+    reason_code = "refund_target_invalid";
   }
   const canonical_record_id = duplicate_resolution === "record_id_collision"
     ? undefined
-    : duplicate_resolution === "unique" ? record.record_id : first.record.record_id;
+    : duplicate_resolution === "unique" ? record.record_id : canonicalAttempt.record.record_id;
   return {
     record_id: record.record_id,
     ...(canonical_record_id ? { canonical_record_id } : {}),
@@ -701,6 +961,49 @@ function makeAggregatePostbackAttribution(
   };
 }
 
+function makeDeepLinkAttribution(
+  attempt: Attempt,
+  lifecycle: Map<string, LifecycleStatus>,
+): Attribution {
+  const { server, record } = attempt;
+  const resolution = server.deep_link_resolution ?? { status: "unknown" };
+  const reusedInstallClick = record.payload.open_source === "android_deferred_referrer"
+    && resolution.install_attribution_click_id === record.payload.click_id;
+  const status: Attribution["status"] = resolution.status === "active" && !reusedInstallClick
+    ? "non_organic" : "unattributed";
+  const reason_code: Attribution["reason_code"] = reusedInstallClick
+    ? "deep_link_install_click_reused"
+    : resolution.status === "active" ? "deep_link_open_attributed"
+      : resolution.status === "inactive" ? "deep_link_link_inactive"
+        : "deep_link_unknown_link";
+  return {
+    attribution_id: `attr:engagement:${record.record_id}`,
+    tenant_id: server.tenant_id,
+    app_id: server.app_id,
+    subject_scope: "engagement_level",
+    subject_ref: `engagement:${record.record_id}`,
+    status,
+    method: "deep_link",
+    model: "last_click",
+    reason_code,
+    reason_code_version: CONTRACT_VERSION,
+    evidence_refs: [{
+      tenant_id: server.tenant_id,
+      app_id: server.app_id,
+      ref: record.record_id,
+      lifecycle_status: lifecycle.get(evidenceKey(server.tenant_id, server.app_id, record.record_id)) ?? "available",
+      access_class: "protected",
+    }],
+    effective_at: record.occurred_at,
+    decided_at: server.received_at,
+    input_cutoff_at: server.received_at,
+    finality: "final",
+    rule_bundle_id: "attribution-default",
+    rule_bundle_version: REFERENCE_RULE_VERSION,
+    rule_bundle_hash: HASH,
+  };
+}
+
 export function roundHalfEven(numerator: bigint, denominator: bigint): bigint {
   if (denominator <= 0n) throw new Error("denominator must be positive");
   const negative = numerator < 0n;
@@ -713,34 +1016,7 @@ export function roundHalfEven(numerator: bigint, denominator: bigint): bigint {
 }
 
 function baseMetricDefinitions(): MetricDefinition[] {
-  const definitions: Array<Pick<MetricDefinition, "metric_name" | "aggregation_time_zone" | "definition">> = [
-    {
-      metric_name: "d0_install_to_24h_ad_revenue_usd",
-      aggregation_time_zone: "UTC",
-      definition: { calculation: "revenue_sum", window: { type: "elapsed", day: 0 }, numerator: "revenue" },
-    },
-    {
-      metric_name: "d0_utc_install_calendar_ad_revenue_usd",
-      aggregation_time_zone: "UTC",
-      definition: { calculation: "revenue_sum", window: { type: "calendar_day", day: 0 }, numerator: "revenue" },
-    },
-    {
-      metric_name: "d0_jst_install_calendar_ad_revenue_usd",
-      aggregation_time_zone: "Asia/Tokyo",
-      definition: { calculation: "revenue_sum", window: { type: "calendar_day", day: 0 }, numerator: "revenue" },
-    },
-  ];
-  return definitions.map((definition): MetricDefinition => ({
-    ...definition,
-    metric_definition_version: REFERENCE_RULE_VERSION,
-    anchor_event: "install",
-    value_type: "money",
-    currency: "USD",
-    amount_scale: 6,
-    rule_bundle_id: "metric-default",
-    rule_bundle_version: REFERENCE_RULE_VERSION,
-    rule_bundle_hash: HASH,
-  }));
+  return REFERENCE_AD_REVENUE_METRIC_DEFINITIONS.map((definition) => structuredClone(definition));
 }
 
 function metricDefinitions(input: Any): MetricDefinition[] {
@@ -755,6 +1031,22 @@ function metricDefinitions(input: Any): MetricDefinition[] {
 }
 
 function validateMetricDefinitionSeries(definition: Any): void {
+  const purchaseNetDays = new Map<string, number>([
+    ["cohort_purchase_net_revenue_d0_usd", 0],
+    ["cohort_purchase_net_revenue_d1_usd", 1],
+    ["cohort_purchase_net_revenue_d3_usd", 3],
+    ["cohort_purchase_net_revenue_d7_usd", 7],
+    ["cohort_purchase_net_revenue_d30_usd", 30],
+    ["cohort_purchase_net_revenue_d90_usd", 90],
+  ]);
+  const totalNetSeries = new Map<string, { day: number; calculation: string; valueType: string }>([
+    ["cohort_total_net_revenue_d30_usd", { day: 30, calculation: "revenue_sum", valueType: "money" }],
+    ["cohort_total_net_revenue_d90_usd", { day: 90, calculation: "revenue_sum", valueType: "money" }],
+    ["d30_total_net_roas", { day: 30, calculation: "revenue_over_cost", valueType: "ratio" }],
+    ["d90_total_net_roas", { day: 90, calculation: "revenue_over_cost", valueType: "ratio" }],
+    ["cohort_total_net_ltv_d30_usd", { day: 30, calculation: "revenue_over_cohort", valueType: "money" }],
+    ["cohort_total_net_ltv_d90_usd", { day: 90, calculation: "revenue_over_cohort", valueType: "money" }],
+  ]);
   const aggregateNames = new Set([
     "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
   ]);
@@ -762,6 +1054,38 @@ function validateMetricDefinitionSeries(definition: Any): void {
   const eventNames = definition.event_names ?? [];
   const grouping = definition.grouping_dimensions ?? [];
   const fail = () => { throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`); };
+  if (definition.definition?.numerator === "purchase_net_revenue" || purchaseNetDays.has(definition.metric_name)) {
+    const expectedDay = purchaseNetDays.get(definition.metric_name);
+    const expectedVersion = expectedDay === 30 || expectedDay === 90 ? "0.4.9" : "0.4.8";
+    const expectedHash = expectedVersion === "0.4.9" ? "9".repeat(64) : "8".repeat(64);
+    if (expectedDay === undefined || definition.metric_definition_version !== expectedVersion ||
+        definition.anchor_event !== "install" || definition.aggregation_time_zone !== "UTC" ||
+        definition.value_type !== "money" || definition.currency !== "USD" || definition.amount_scale !== 6 ||
+        definition.rule_bundle_id !== "metric-purchase-net" ||
+        definition.rule_bundle_version !== expectedVersion || definition.rule_bundle_hash !== expectedHash ||
+        definition.definition?.calculation !== "revenue_sum" ||
+        definition.definition?.numerator !== "purchase_net_revenue" ||
+        definition.definition?.window?.type !== "elapsed" || definition.definition?.window?.day !== expectedDay) fail();
+    return;
+  }
+  if (definition.definition?.numerator === "total_net_revenue" || totalNetSeries.has(definition.metric_name)) {
+    const expected = totalNetSeries.get(definition.metric_name);
+    if (!expected || definition.metric_definition_version !== "0.4.9" ||
+        definition.anchor_event !== "install" || definition.aggregation_time_zone !== "UTC" ||
+        definition.value_type !== expected.valueType ||
+        (expected.valueType === "money" && (definition.currency !== "USD" || definition.amount_scale !== 6)) ||
+        (expected.valueType === "ratio" && definition.ratio_scale !== 6) ||
+        definition.rule_bundle_id !== "metric-total-net" ||
+        definition.rule_bundle_version !== "0.4.9" || definition.rule_bundle_hash !== "9".repeat(64) ||
+        definition.definition?.calculation !== expected.calculation ||
+        definition.definition?.numerator !== "total_net_revenue" ||
+        definition.definition?.window?.type !== "elapsed" || definition.definition?.window?.day !== expected.day ||
+        (expected.calculation === "revenue_over_cost" &&
+          (definition.definition?.denominator !== "cost" ||
+            definition.definition?.cost_basis !== "cohort_acquisition_day_current_snapshot")) ||
+        (expected.calculation === "revenue_over_cohort" && definition.definition?.denominator !== "cohort_size")) fail();
+    return;
+  }
   if (aggregateNames.has(definition.metric_name)) {
     const expectedEvent = definition.metric_name === "aak_attributed_installs"
       ? "adattributionkit_postback" : "skan_postback";
@@ -769,6 +1093,15 @@ function validateMetricDefinitionSeries(definition: Any): void {
       ? ["metric_date", "apple_conversion_bucket"] : ["metric_date"];
     if (definition.definition?.calculation !== "event_count" || definition.definition?.numerator !== "events" ||
         definition.aggregation_time_zone !== "UTC" || eventNames.length !== 1 || eventNames[0] !== expectedEvent ||
+        grouping.length !== expectedGrouping.length || expectedGrouping.some((value) => !grouping.includes(value))) fail();
+    return;
+  }
+  if (["daily_deep_link_opens", "daily_deep_link_opens_by_status"].includes(definition.metric_name)) {
+    const expectedGrouping = definition.metric_name === "daily_deep_link_opens_by_status"
+      ? ["metric_date", "campaign_id", "attribution_status"]
+      : ["metric_date", "campaign_id"];
+    if (definition.definition?.calculation !== "event_count" || definition.definition?.numerator !== "events" ||
+        eventNames.length !== 1 || eventNames[0] !== "deep_link_open" ||
         grouping.length !== expectedGrouping.length || expectedGrouping.some((value) => !grouping.includes(value))) fail();
     return;
   }
@@ -804,6 +1137,7 @@ function metricRuns(
   decisions: Map<string, Any>,
   lifecycle: Map<string, LifecycleStatus>,
   attributions: Attribution[],
+  excludedInstallationIds: ReadonlySet<string> = new Set(),
 ): MetricRun[] {
   const evaluations = input.metric_evaluations ?? [];
   if (!evaluations.length) return [];
@@ -812,7 +1146,7 @@ function metricRuns(
   const definitionsByName = new Map(definitions.map((definition) => [definition.metric_name, definition]));
   const cost_records = costRecords(input);
   const attributionStatuses = new Map(attributions
-    .filter((attribution) => attribution.subject_scope === "installation_level")
+    .filter((attribution) => ["installation_level", "engagement_level"].includes(attribution.subject_scope))
     .map((attribution) => [
       compositeKey([attribution.tenant_id, attribution.app_id, attribution.subject_ref]),
       attribution.status,
@@ -824,7 +1158,7 @@ function metricRuns(
       decisionFor(decisions, attempt).duplicate_resolution === "unique" &&
       compareText(attempt.record.received_at, evaluation.input_received_at_watermark) <= 0,
     );
-    const recordSnapshotRows = [...included].sort(compareCandidateAttempts).map((attempt) => [
+    const recordSnapshotRows = sortCandidateAttempts(included).map((attempt) => [
       attempt.record.received_at,
       attempt.record.record_id,
       evaluation.privacy_state === "after" ? (lifecycle.get(attemptEvidenceKey(attempt)) ?? "available") : "available",
@@ -835,6 +1169,10 @@ function metricRuns(
       matchesGrouping(attempt, evaluation.grouping, attributionStatuses));
     const revenue = visible.filter((attempt) => attempt.record.event_name === "ad_revenue" &&
       attempt.record.payload.subject_scope === "installation_level");
+    const purchases = visible.filter((attempt) =>
+      attempt.record.event_name === "purchase" && attempt.record.payload.financial_status === "settled");
+    const refunds = visible.filter((attempt) =>
+      attempt.record.event_name === "refund" && attempt.record.payload.financial_status === "settled");
     const activities = visible;
     const affectedStates = evaluation.privacy_state === "after"
       ? included.map((attempt) => lifecycle.get(attemptEvidenceKey(attempt))).filter(Boolean)
@@ -843,7 +1181,7 @@ function metricRuns(
       ? "redaction_affected"
       : affectedStates.includes("purged") ? "retention_affected" : "fully_reproducible";
     const ledger = recordSnapshotRows.at(-1);
-    const recordEvidence: MetricRun["evidence_refs"] = [...included].sort(compareCandidateAttempts).map((attempt) => ({
+    const recordEvidence: MetricRun["evidence_refs"] = sortCandidateAttempts(included).map((attempt) => ({
       tenant_id: attempt.server.tenant_id,
       app_id: attempt.server.app_id,
       ref: attempt.record.record_id,
@@ -891,8 +1229,11 @@ function metricRuns(
           .filter((dimension) => !groupingDimensions.has(dimension));
         if (unsupported.length) throw new Error(`unsupported grouping for ${metricName}: ${unsupported.join(",")}`);
       }
+      const eligibleInstalls = definition.fraud_policy === "net"
+        ? installs.filter((candidate) => !excludedInstallationIds.has(candidate.record.payload.installation_id))
+        : installs;
       const revenueValue = revenue.reduce((sum, item) => {
-        const installation = installs.find((candidate) =>
+        const installation = eligibleInstalls.find((candidate) =>
           candidate.server.tenant_id === item.server.tenant_id && candidate.server.app_id === item.server.app_id &&
           candidate.record.payload.installation_id === item.record.payload.installation_id,
         );
@@ -900,11 +1241,40 @@ function metricRuns(
           ? sum + convertMoney(item.record.payload, fxPolicy)
           : sum;
       }, 0n);
-      const cohortSize = BigInt(new Set(installs.map((install) => install.record.payload.installation_id)).size);
+      const includesPurchaseNet = ["purchase_net_revenue", "total_net_revenue"].includes(
+        definition.definition.numerator,
+      );
+      const purchaseNetRevenueValue = includesPurchaseNet
+        ? purchases.reduce((sum, item) => {
+        const installation = eligibleInstalls.find((candidate) =>
+          candidate.server.tenant_id === item.server.tenant_id && candidate.server.app_id === item.server.app_id &&
+          candidate.record.payload.installation_id === item.record.payload.installation_id,
+        );
+        return installation && eligibleRevenue(definition, installation.record, item.record)
+          ? sum + convertMoney(item.record.payload, fxPolicy)
+          : sum;
+      }, 0n) - refunds.reduce((sum, item) => {
+        const target = resolveRefundTarget(item, visible);
+        if (!target || target.record.payload.financial_status !== "settled") return sum;
+        const installation = eligibleInstalls.find((candidate) =>
+          candidate.server.tenant_id === target.server.tenant_id && candidate.server.app_id === target.server.app_id &&
+          candidate.record.payload.installation_id === target.record.payload.installation_id,
+        );
+        return installation && eligibleRevenue(definition, installation.record, item.record)
+          ? sum + convertMoney(item.record.payload, fxPolicy)
+          : sum;
+      }, 0n)
+        : 0n;
+      const selectedRevenueValue = definition.definition.numerator === "purchase_net_revenue"
+        ? purchaseNetRevenueValue
+        : definition.definition.numerator === "total_net_revenue"
+          ? revenueValue + purchaseNetRevenueValue
+          : revenueValue;
+      const cohortSize = BigInt(new Set(eligibleInstalls.map((install) => install.record.payload.installation_id)).size);
       let value: bigint | undefined;
       let undefined_reason: "no_attributed_cost" | "no_activity_events" | "empty_cohort" | undefined;
       if (definition.definition.calculation === "revenue_sum") {
-        value = revenueValue;
+        value = selectedRevenueValue;
       } else if (definition.definition.calculation === "revenue_over_cost") {
         const cost = currentCosts.reduce((sum, item) => {
           if (item.currency !== fxPolicy.target_currency) throw new Error(`cost currency mismatch: ${item.cost_record_id}`);
@@ -913,7 +1283,7 @@ function metricRuns(
         if (cost === 0n) {
           undefined_reason = "no_attributed_cost";
         } else {
-          value = roundHalfEven(revenueValue * (10n ** BigInt(definition.ratio_scale ?? 6)), cost);
+          value = roundHalfEven(selectedRevenueValue * (10n ** BigInt(definition.ratio_scale ?? 6)), cost);
         }
       } else if (definition.definition.calculation === "active_installations_over_cohort") {
         if (cohortSize === 0n) {
@@ -936,7 +1306,7 @@ function metricRuns(
         if (cohortSize === 0n) {
           undefined_reason = "empty_cohort";
         } else {
-          value = roundHalfEven(revenueValue, cohortSize);
+          value = roundHalfEven(selectedRevenueValue, cohortSize);
         }
       } else if (definition.definition.calculation === "cohort_size") {
         value = cohortSize;
@@ -945,7 +1315,7 @@ function metricRuns(
         const eventName = [...eventNames][0];
         const metricDate = evaluation.grouping?.metric_date;
         if (metricDate === undefined) throw new Error(`event_count requires metric_date grouping: ${metricName}`);
-        if (eventNames.size !== 1 || !["click", "install", "skan_postback", "adattributionkit_postback"].includes(eventName)) {
+        if (eventNames.size !== 1 || !["click", "install", "deep_link_open", "skan_postback", "adattributionkit_postback"].includes(eventName)) {
           throw new Error(`event_count requires exactly one supported event name: ${metricName}`);
         }
         const aggregatePostback = eventName === "skan_postback" || eventName === "adattributionkit_postback";
@@ -992,11 +1362,13 @@ function metricRuns(
           if (evaluation.grouping?.apple_conversion_bucket !== undefined) {
             throw new Error(`apple_conversion_bucket requires aggregate SKAN events: ${metricName}`);
           }
-          if (evaluation.grouping?.attribution_status !== undefined && eventName !== "install") {
-            throw new Error(`attribution_status event_count requires install events: ${metricName}`);
+          if (evaluation.grouping?.attribution_status !== undefined && !["install", "deep_link_open"].includes(eventName)) {
+            throw new Error(`attribution_status event_count requires install or deep_link_open events: ${metricName}`);
           }
           value = BigInt(visible.filter((attempt) =>
             eventNames.has(attempt.record.event_name) &&
+            (definition.fraud_policy !== "net" || attempt.record.event_name !== "install" ||
+              !excludedInstallationIds.has(attempt.record.payload.installation_id)) &&
             matchesGrouping(attempt, evaluation.grouping, attributionStatuses) &&
             dateAt(attempt.record.occurred_at, definition.aggregation_time_zone, "occurred_at") === metricDate,
           ).length);
@@ -1037,6 +1409,7 @@ function metricRuns(
         rounding_mode: fxPolicy.rounding_mode,
         reproducibility_status,
         value_type: definition.value_type,
+        ...(definition.fraud_policy ? { fraud_policy: definition.fraud_policy } : {}),
         ...(value === undefined
           ? { value_state: "undefined" as const, undefined_reason }
           : { value_unscaled: value.toString() }),
@@ -1111,7 +1484,7 @@ function matchesGrouping(
 ): boolean {
   if (!grouping) return true;
   const payload = attempt.record.payload;
-  const campaign = payload.campaign_id ?? payload.import_context?.provider_campaign_ref;
+  const campaign = payload.campaign_id ?? attempt.server.deep_link_resolution?.campaign_id ?? payload.import_context?.provider_campaign_ref;
   const network = payload.network ?? payload.ad_network ?? payload.import_context?.provider_network;
   const country = payload.country ?? payload.import_context?.provider_country;
   if (grouping.campaign_id !== undefined && campaign !== grouping.campaign_id) return false;
@@ -1119,11 +1492,14 @@ function matchesGrouping(
   if (grouping.country !== undefined && country !== grouping.country) return false;
   if (grouping.cohort_date !== undefined && attempt.record.event_name === "install" &&
       dateAt(attempt.record.occurred_at, "UTC", "occurred_at") !== grouping.cohort_date) return false;
-  if (grouping.attribution_status !== undefined && attempt.record.event_name === "install") {
+  if (grouping.attribution_status !== undefined && ["install", "deep_link_open"].includes(attempt.record.event_name)) {
+    const subjectRef = attempt.record.event_name === "install"
+      ? attempt.record.payload.installation_id
+      : `engagement:${attempt.record.record_id}`;
     const status = attributionStatuses.get(compositeKey([
       attempt.server.tenant_id,
       attempt.server.app_id,
-      attempt.record.payload.installation_id,
+      subjectRef,
     ]));
     if (status !== grouping.attribution_status) return false;
   }
@@ -1191,7 +1567,7 @@ export function evaluate(
   input: Any,
   candidateProviderFactory: CandidateProviderFactory = createFixtureCandidateProvider,
 ): EvaluationOutput {
-  const all = attempts(input).sort(compareCandidateAttempts);
+  const all = sortCandidateAttempts(attempts(input));
   const candidates = candidateProviderFactory(all);
   assertImportProviderContexts(all);
   assertRevenueAnchorSources(all);
@@ -1276,23 +1652,32 @@ export function evaluate(
     record_lifecycle: "active",
     timeliness: attempt.record.late ? "late" : "on_time",
   })), (event) => [event.logical_event_id, event.tenant_id, event.app_id]);
-  const attributions = sortByKey([
+  const initialAttributions = sortByKey([
     ...acceptedUnique
       .filter((attempt) => attempt.record.event_name === "install")
       .map((attempt) => makeAttribution(attempt, candidates, decisions, lifecycle)),
     ...acceptedUnique
       .filter((attempt) => ["skan_postback", "adattributionkit_postback"].includes(attempt.record.event_name))
       .map((attempt) => makeAggregatePostbackAttribution(attempt, lifecycle)),
+    ...acceptedUnique
+      .filter((attempt) => attempt.record.event_name === "deep_link_open")
+      .map((attempt) => makeDeepLinkAttribution(attempt, lifecycle)),
   ],
   (attribution) => [attribution.attribution_id, attribution.tenant_id, attribution.app_id]);
   const corrections: Correction[] = [...(input.correction_inputs ?? [])];
   for (const attempt of acceptedUnique.filter((entry) => entry.record.event_name === "refund")) {
+    const legacy = isLegacyExplicitRefund(attempt);
+    if (!legacy && attempt.record.payload.financial_status !== "settled") continue;
+    const correctsRecordId = legacy
+      ? attempt.record.payload.correction_target_record_id
+      : resolveRefundTarget(attempt, acceptedUnique)?.record.record_id;
+    if (typeof correctsRecordId !== "string") continue;
     corrections.push({
       contract_version: CONTRACT_VERSION,
       tenant_id: attempt.server.tenant_id,
       app_id: attempt.server.app_id,
       correction_id: `correction:${attempt.record.record_id}`,
-      corrects_record_id: attempt.record.payload.correction_target_record_id,
+      corrects_record_id: correctsRecordId,
       correction_type: "correction",
       correction_reason: "refund",
       effective_at: attempt.record.occurred_at,
@@ -1354,15 +1739,20 @@ export function evaluate(
   }
   const privacy_tombstones = sortByKey(privacyTombstoneValues,
     (tombstone) => [tombstone.privacy_request_id, tombstone.record_id, tombstone.tenant_id, tombstone.app_id]);
-  const transportFraud = acceptedUnique
-    .filter((attempt) => attempt.record.event_name === "click" && (attempt.record.payload.bot_prefetch || attempt.record.payload.replay_suspected))
-    .map((attempt): FraudDecision => {
-      const reason_code: FraudDecision["reason_code"] = attempt.record.payload.replay_suspected ? "replay_suspected" : "bot_prefetch";
-      return ({
+  const transportFraud = acceptedUnique.flatMap((attempt): FraudDecision[] => {
+    if (attempt.record.event_name !== "click"
+      || (!attempt.record.payload.bot_prefetch && !attempt.record.payload.replay_suspected)) return [];
+    const bound = boundFraudBundle(attempt.server);
+    if (!bound) return [];
+    const reason_code: FraudDecision["reason_code"] = attempt.record.payload.replay_suspected
+      ? "replay_suspected" : "bot_prefetch";
+    const ruleId = reason_code === "replay_suspected" ? "transport-replay-v1" : "transport-bot-prefetch-v1";
+    const action = fraudRuleAction(bound.definition, ruleId, "exclude");
+    return [{
       fraud_decision_id: `fraud:${attempt.record.record_id}`,
       subject_ref: attempt.record.record_id,
       decision: "suspected",
-      action: "exclude",
+      action,
       reason_code,
       reason_code_version: CONTRACT_VERSION,
       evidence: [{
@@ -1371,54 +1761,172 @@ export function evaluate(
         digest: sha256([reason_code, attempt.record.record_id]),
         access_class: "protected",
       }],
-      rule_bundle_id: "fraud-public-envelope",
-      rule_bundle_version: REFERENCE_RULE_VERSION,
-      rule_bundle_hash: HASH,
+      rule_bundle_id: bound.definition.id,
+      rule_bundle_version: bound.definition.version,
+      rule_bundle_hash: bound.hash,
+      rule_id: ruleId,
       evaluated_at: attempt.record.received_at,
-    });
-    });
-  const clickInjectionFraud = acceptedUnique.flatMap((attempt): FraudDecision[] => {
-    if (attempt.record.event_name !== "install") return [];
-    const payload = attempt.record.payload;
-    if (payload.referrer_status !== "available" || !payload.click_id || !payload.install_begin_at_server) return [];
-    const matchingClicks = acceptedUnique.filter((candidate) =>
-      candidate.server.tenant_id === attempt.server.tenant_id && candidate.server.app_id === attempt.server.app_id &&
-      candidate.record.event_name === "click" && candidate.record.payload.click_id === payload.click_id &&
-      candidate.record.payload.redirector_time_status !== "invalid" && candidate.record.payload.redirector_click_at,
-    );
-    if (matchingClicks.length !== 1) return [];
-    const click = matchingClicks[0];
-    let delta: number;
-    try {
-      delta = time(payload.install_begin_at_server, "install_begin_at_server") -
-        time(click.record.payload.redirector_click_at, "redirector_click_at");
-    } catch {
-      // Invalid authority is classified by attribution and cannot support CTIT evidence.
-      return [];
-    }
-    const thresholdSeconds = attempt.server.click_injection_policy?.threshold_seconds ?? 10;
-    if (delta < 0 || delta >= thresholdSeconds * 1000) return [];
-    return [{
-      fraud_decision_id: `fraud:${attempt.record.record_id}:click-injection`,
-      subject_ref: attempt.record.record_id,
-      decision: "suspected",
-      action: "flag",
-      reason_code: "click_injection_suspected",
-      reason_code_version: CONTRACT_VERSION,
-      evidence: [{
-        type: "ctit_category",
-        captured_at: attempt.record.received_at,
-        digest: sha256(["click_injection_suspected", click.record.record_id, attempt.record.record_id]),
-        access_class: "protected",
-      }],
-      rule_bundle_id: "fraud-public-envelope",
-      rule_bundle_version: REFERENCE_RULE_VERSION,
-      rule_bundle_hash: HASH,
-      evaluated_at: attempt.record.received_at,
+      ...quarantineDeadline(action, attempt.record.received_at, bound.definition),
     }];
   });
-  const fraud_decisions = sortByKey([...transportFraud, ...clickInjectionFraud],
+  const installFraud = acceptedUnique.flatMap((attempt): FraudDecision[] => {
+    if (attempt.record.event_name !== "install") return [];
+    const bound = boundFraudBundle(attempt.server);
+    if (!bound) return [];
+    const payload = attempt.record.payload;
+    const matchingClicks = payload.click_id ? acceptedUnique.filter((candidate) =>
+      candidate.server.tenant_id === attempt.server.tenant_id && candidate.server.app_id === attempt.server.app_id
+      && candidate.record.event_name === "click" && candidate.record.payload.click_id === payload.click_id
+      && candidate.record.payload.redirector_time_status !== "invalid" && candidate.record.payload.redirector_click_at,
+    ) : [];
+    const click = matchingClicks.length === 1 ? matchingClicks[0] : undefined;
+    const thresholdSeconds = fraudNumberParameter(bound.definition, "ctit_lower_bound_seconds", 10);
+    const configured = attempt.server.click_injection_policy ?? {
+      threshold_seconds: thresholdSeconds,
+      authority: "server",
+      policy_version: `${bound.definition.id}:${bound.definition.version}`,
+      policy_digest: clickInjectionPolicyDigest({
+        threshold_seconds: thresholdSeconds,
+        authority: "server",
+        policy_version: `${bound.definition.id}:${bound.definition.version}`,
+      }),
+    };
+    const hits = evaluateInstallRules({
+      installBeginAtServer: payload.install_begin_at_server,
+      referrerClickAtServer: payload.referrer_click_at_server,
+      referrerClickAtServerStatus: payload.referrer_click_at_server_status,
+      ...(click ? { redirectorClickAt: click.record.payload.redirector_click_at } : {}),
+      policy: configured,
+      bundle: bound.definition,
+    });
+    return hits.map((hit): FraudDecision => ({
+      fraud_decision_id: hit.ruleId === "ctit-lower-bound-v1"
+        ? `fraud:${attempt.record.record_id}:click-injection`
+        : `fraud:${attempt.record.record_id}:${hit.ruleId}`,
+      subject_ref: attempt.record.record_id,
+      decision: hit.decision,
+      action: hit.action,
+      reason_code: hit.reasonCode,
+      reason_code_version: CONTRACT_VERSION,
+      evidence: [{
+        type: hit.evidenceType,
+        captured_at: attempt.record.received_at,
+        digest: sha256([hit.ruleId, click?.record.record_id ?? "no-redirector-click", attempt.record.record_id]),
+        access_class: "protected",
+      }],
+      rule_bundle_id: bound.definition.id,
+      rule_bundle_version: bound.definition.version,
+      rule_bundle_hash: bound.hash,
+      rule_id: hit.ruleId,
+      evaluated_at: attempt.record.received_at,
+      ...quarantineDeadline(hit.action, attempt.record.received_at, bound.definition),
+    }));
+  });
+  const sourceDayFraud = (input.source_day_aggregates ?? []).flatMap((aggregate: Any): FraudDecision[] => {
+    const scopeAttempt = acceptedUnique.find((attempt) =>
+      attempt.server.tenant_id === aggregate.tenant_id && attempt.server.app_id === aggregate.app_id);
+    const bound = scopeAttempt ? boundFraudBundle(scopeAttempt.server) : { definition: FRAUD_BUNDLE, hash: FRAUD_BUNDLE_HASH };
+    if (!bound) return [];
+    const hit = evaluateSourceDayWithBundle({
+      clicks: aggregate.clicks,
+      installs: aggregate.installs,
+      medianCvr: aggregate.medianCvr,
+      ctitP50Ms: aggregate.ctitP50Ms,
+      ctitP95Ms: aggregate.ctitP95Ms,
+    }, bound.definition);
+    if (!hit) return [];
+    const sourceRef = `source:${aggregate.tenant_id}:${aggregate.app_id}:${aggregate.metric_date}:${aggregate.campaign_id}:${aggregate.network}:${aggregate.site_id}`;
+    return [{
+      fraud_decision_id: `fraud:${aggregate.input_snapshot_id}`,
+      subject_scope: "source",
+      subject_ref: sourceRef,
+      decision: hit.decision,
+      action: hit.action,
+      reason_code: hit.reasonCode,
+      reason_code_version: CONTRACT_VERSION,
+      evidence: [{
+        type: hit.evidenceType,
+        captured_at: aggregate.computed_at,
+        digest: aggregate.input_snapshot_id,
+        access_class: "protected",
+      }],
+      rule_bundle_id: bound.definition.id,
+      rule_bundle_version: bound.definition.version,
+      rule_bundle_hash: bound.hash,
+      rule_id: hit.ruleId,
+      evaluated_at: aggregate.computed_at,
+      ...quarantineDeadline(hit.action, aggregate.computed_at, bound.definition),
+    }];
+  });
+  const fraud_decisions = sortByKey([...transportFraud, ...installFraud, ...sourceDayFraud],
     (decision) => [decision.fraud_decision_id]);
+  const provisionalClockAttributions: Attribution[] = [];
+  const sourceDays = new Map<string, Any[]>();
+  for (const aggregate of input.source_day_aggregates ?? []) {
+    const key = compositeKey([aggregate.tenant_id, aggregate.app_id, aggregate.metric_date]);
+    sourceDays.set(key, [...(sourceDays.get(key) ?? []), aggregate]);
+  }
+  for (const aggregates of sourceDays.values()) {
+    const aggregate = aggregates[0];
+    const scopeAttempt = acceptedUnique.find((attempt) =>
+      attempt.server.tenant_id === aggregate.tenant_id && attempt.server.app_id === aggregate.app_id);
+    const bound = scopeAttempt ? boundFraudBundle(scopeAttempt.server) : { definition: FRAUD_BUNDLE, hash: FRAUD_BUNDLE_HASH };
+    const installCount = aggregates.reduce((sum, item) => sum + Number(item.installs ?? 0), 0);
+    if (!bound || installCount === 0) continue;
+    const negativeCount = aggregates.reduce((sum, item) => sum + Number(item.ctitNegativeCount ?? 0), 0);
+    const negativeRate = negativeCount / installCount;
+    const threshold = fraudNumberParameter(bound.definition, "ctit_negative_rate_threshold", 0.05);
+    if (negativeRate <= threshold) continue;
+    const dailySnapshotId = sha256(aggregates.map((item) => String(item.input_snapshot_id)).sort());
+    const computedAt = aggregates.map((item) => String(item.computed_at)).sort().at(-1)!;
+    for (const install of acceptedUnique.filter((attempt) =>
+      attempt.server.tenant_id === aggregate.tenant_id && attempt.server.app_id === aggregate.app_id
+      && attempt.record.event_name === "install" && attempt.record.payload.click_id)) {
+      const click = acceptedUnique.find((attempt) =>
+        attempt.server.tenant_id === aggregate.tenant_id && attempt.server.app_id === aggregate.app_id
+        && attempt.record.event_name === "click"
+        && attempt.record.payload.click_id === install.record.payload.click_id
+        && String(attempt.record.payload.redirector_click_at ?? "").slice(0, 10) === aggregate.metric_date);
+      if (!click) continue;
+      const prior = initialAttributions.find((item) => item.subject_ref === install.record.payload.installation_id);
+      if (!prior || prior.reason_code !== "valid_install_referrer") continue;
+      provisionalClockAttributions.push({
+        ...prior,
+        attribution_id: `${prior.attribution_id}:ctit-clock-provisional:${dailySnapshotId.slice(0, 12)}`,
+        decided_at: computedAt,
+        input_cutoff_at: computedAt,
+        finality: "provisional",
+        supersedes_attribution_id: prior.attribution_id,
+      });
+    }
+  }
+  const excludedClickIds = new Map<string, FraudDecision>();
+  for (const decision of fraud_decisions.filter((item) => item.action === "exclude" && item.subject_scope !== "source")) {
+    const click = acceptedUnique.find((attempt) => attempt.record.record_id === decision.subject_ref && attempt.record.event_name === "click");
+    if (click?.server.fraud_actions_enabled && click.record.payload.click_id) excludedClickIds.set(click.record.payload.click_id, decision);
+  }
+  const excludedInstallationIds = new Set<string>();
+  const fraudAttributions: Attribution[] = [];
+  for (const install of acceptedUnique.filter((attempt) => attempt.record.event_name === "install")) {
+    const decision = excludedClickIds.get(install.record.payload.click_id);
+    if (!decision) continue;
+    excludedInstallationIds.add(install.record.payload.installation_id);
+    const prior = initialAttributions.find((item) => item.subject_ref === install.record.payload.installation_id);
+    if (!prior) continue;
+    fraudAttributions.push({
+      ...prior,
+      attribution_id: `${prior.attribution_id}:fraud`,
+      status: "unattributed",
+      method: "none",
+      model: "none",
+      reason_code: "fraud_excluded",
+      finality: "final",
+      fraud_decision_ref: decision.fraud_decision_id,
+      supersedes_attribution_id: prior.attribution_id,
+    });
+  }
+  const attributions = sortByKey([...initialAttributions, ...provisionalClockAttributions, ...fraudAttributions],
+    (attribution) => [attribution.attribution_id, attribution.tenant_id, attribution.app_id]);
   const rejections = sortByKey([...decisionsList, ...preIngestionDecisions]
     .filter((decision) => decision.ingestion_status === "rejected")
     .map((decision): Rejection => ({
@@ -1453,7 +1961,7 @@ export function evaluate(
     attributions,
     cost_records: costRecords(input),
     metric_definitions: metricDefinitions(input),
-    metric_runs: metricRuns(input, all, decisions, lifecycle, attributions),
+    metric_runs: metricRuns(input, all, decisions, lifecycle, attributions, excludedInstallationIds),
     fraud_decisions,
     rejections,
     reconciliation: reconciliationResults(input, acceptedUnique),

@@ -23,7 +23,7 @@
     "timeliness": { "enum": ["on_time", "late"] },
     "clock_skew_suspected": { "type": "boolean" },
     "payload_disposition": { "enum": ["protected", "discarded", "redacted"] },
-    "reason_code": { "enum": ["client_scope_mismatch", "consent_withdrawn", "aggregate_installation_join_forbidden", "event_id_conflict", "record_id_collision", "payload_schema_invalid", "timestamp_invalid", "timestamp_stale"] },
+    "reason_code": { "enum": ["client_scope_mismatch", "consent_withdrawn", "aggregate_installation_join_forbidden", "event_id_conflict", "record_id_collision", "payload_schema_invalid", "timestamp_invalid", "timestamp_stale", "refund_target_invalid"] },
     "processing_purpose_id": { "$ref": "common.schema.json#/$defs/processingPurposeId" },
     "consent_evaluation_policy_version": { "type": "string", "minLength": 1 },
     "consent_decision_reason_code": { "enum": ["consent_not_required", "consent_valid_before_withdrawal", "documented_alternative_legal_basis", "consent_withdrawn"] },

@@ -321,7 +321,16 @@ function validateRegistryReferences(output: Any, label: string): void {
     const aggregateMetricNames = new Set([
       "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
     ]);
-    const expectedVersion = aggregateMetricNames.has(definition.metric_name)
+    const expectedVersion = definition.definition.numerator === "total_net_revenue" ||
+      ["cohort_purchase_net_revenue_d30_usd", "cohort_purchase_net_revenue_d90_usd"].includes(definition.metric_name)
+      ? "0.4.9"
+      : definition.definition.numerator === "purchase_net_revenue"
+      ? "0.4.8"
+      : ["daily_deep_link_opens", "daily_deep_link_opens_by_status"].includes(definition.metric_name)
+      ? "0.4.7"
+      : definition.fraud_policy
+      ? "0.4.3"
+      : aggregateMetricNames.has(definition.metric_name)
       ? "0.3.3"
       : definition.definition.calculation === "event_count" ? "0.3.1" : "0.3.0";
     check(definition.metric_definition_version === expectedVersion, `wrong metric definition version in ${label}`);
@@ -467,7 +476,7 @@ if (!summaryOnly) {
         check(value.contract_version === expectedVersion, `registry version: ${name}`);
         if (name === "events") {
           unique(value.event_names, "event name");
-          check(value.event_names.length === 12, "event-name registry must contain the twelve Contract v0.4 events");
+          check(value.event_names.length === 13, "event-name registry must contain the thirteen Contract v0.4 events");
         } else if (name === "reasons") {
           for (const [reasonName, values] of Object.entries(value).filter(([key]) => key !== "contract_version")) {
             if (Array.isArray(values)) unique(values, `reason code in ${reasonName}`);
@@ -558,8 +567,8 @@ if (!summaryOnly) {
         }
       });
     }
-    it("contains 47 fixture directories", () => {
-      check(fixtureDirs.length === 47, `expected 47 fixture directories, found ${fixtureDirs.length}`);
+    it("contains 56 fixture directories", () => {
+      check(fixtureDirs.length === 56, `expected 56 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -890,12 +899,81 @@ const scenarios: Array<[string, () => void]> = [
     check(value.deliveries.length === 1 && value.deliveries[0].reason_code === "payload_schema_invalid" && value.deliveries[0].payload_disposition === "discarded", "scenario 47 delivery disposition");
     check(value.rejections.length === 1 && value.rejections[0].retained === "non_identifying_metadata", "scenario 47 rejection retention");
   }],
+  ["48 source scoped flooding fraud", () => {
+    const value = fixture("48-source-scoped-fraud").output;
+    check(value.fraud_decisions.length === 1 && value.fraud_decisions[0].subject_scope === "source", "scenario 48 source scope");
+    check(value.fraud_decisions[0].reason_code === "click_flooding_suspected" && value.fraud_decisions[0].subject_ref.startsWith("source:"), "scenario 48 flooding decision");
+  }],
+  ["49 fraud exclusion supersedes attribution", () => {
+    const value = fixture("49-fraud-excluded-attribution").output;
+    const replacement = value.attributions.find((item: Any) => item.reason_code === "fraud_excluded");
+    check(replacement?.fraud_decision_ref === "fraud:click-49" && replacement.supersedes_attribution_id === "attr:install-49", "scenario 49 fraud supersession");
+    check(value.rejections.length === 0 && value.deliveries.every((item: Any) => item.ingestion_status === "accepted"), "scenario 49 ingestion remains accepted");
+  }],
+  ["50 gross and net fraud metrics", () => {
+    const runs = Object.fromEntries(fixture("50-gross-net-metrics").output.metric_runs.map((item: Any) => [item.fraud_policy, item]));
+    check(runs.gross.value_unscaled === "1" && runs.net.value_unscaled === "0", "scenario 50 gross net values");
+  }],
+  ["51 Play server referrer ordering", () => {
+    const value = fixture("51-referrer-server-order").output;
+    check(value.fraud_decisions.length === 1 && value.fraud_decisions[0].decision === "confirmed", "scenario 51 confirmed ordering");
+    check(value.fraud_decisions[0].reason_code === "referrer_time_inconsistent" && value.fraud_decisions[0].rule_id === "referrer-server-order-v1", "scenario 51 reason and rule");
+  }],
+  ["52 bounded edge evidence", () => {
+    const input = fixture("52-bounded-edge-evidence").input.records[0].payload;
+    check(input.source_rate_class === "saturated" && input.client_class === "mobile_app_eligible", "scenario 52 bounded classes");
+    check(input.remote_click_ref === "synthetic-remote-52" && !JSON.stringify(input).match(/user-agent|ip_address/i), "scenario 52 no raw edge signal");
+  }],
+  ["53 negative CTIT clock guard", () => {
+    const value = fixture("53-negative-ctit-clock-anomaly").output;
+    const diagnostic = value.fraud_decisions.find((item: Any) => item.reason_code === "ctit_clock_anomaly");
+    check(diagnostic?.decision === "clear" && diagnostic.action === "allow", "scenario 53 negative CTIT diagnostic");
+    check(!value.fraud_decisions.some((item: Any) => item.reason_code === "click_injection_suspected"), "scenario 53 negative CTIT is not injection");
+    const provisional = value.attributions.find((item: Any) => item.subject_ref === "installation:valid-53" && item.finality === "provisional");
+    check(provisional?.supersedes_attribution_id === "attr:install-valid-53", "scenario 53 day-wide provisional attribution");
+  }],
+  ["54 deep link open contract", () => {
+    const value = fixture("54-deep-link-open-contract");
+    check(value.output.logical_events[0]?.event_name === "deep_link_open", "scenario 54 deep-link logical event");
+    const reasons = new Set(value.output.attributions.map((item: Any) => item.reason_code));
+    check(["deep_link_open_attributed", "deep_link_unknown_link", "deep_link_link_inactive", "deep_link_install_click_reused"]
+      .every((reason) => reasons.has(reason)) && value.output.rejections.length === 0,
+    "scenario 54 exercises every deep-link attribution reason");
+    check(value.output.metric_runs.length === 2 && value.output.metric_runs.every((run: Any) => run.value_unscaled === "1"),
+      "scenario 54 deep-link metrics");
+    check(!JSON.stringify(value.output).includes("days_since_last_session"),
+      "scenario 54 keeps runtime inactivity evidence outside contract artifacts");
+  }],
+  ["55 settled purchase and refund net revenue", () => {
+    const value = fixture("55-purchase-refund-net-revenue").output;
+    const runs = Object.fromEntries(value.metric_runs.map((item: Any) => [item.metric_name, item]));
+    check(runs.cohort_purchase_net_revenue_d0_usd.value_unscaled === "10000000", "scenario 55 D0 purchase revenue before refund");
+    check(runs.cohort_purchase_net_revenue_d1_usd.value_unscaled === "6000000" &&
+      runs.cohort_purchase_net_revenue_d3_usd.value_unscaled === "6000000" &&
+      runs.cohort_purchase_net_revenue_d7_usd.value_unscaled === "6000000", "scenario 55 D1 refund and cumulative D3 D7 net revenue");
+    check(runs.d0_install_to_24h_ad_revenue_usd.value_unscaled === "7000000", "scenario 55 existing ad revenue unchanged");
+    check(value.corrections.length === 1 && value.corrections[0].correction_reason === "refund" &&
+      value.corrections[0].corrects_record_id === "purchase-55-d0", "scenario 55 settled canonical refund correction");
+    check(!value.corrections.some((item: Any) => item.correction_id.includes("pending")), "scenario 55 pending refund excluded");
+  }],
+  ["56 D30 and D90 total-net revenue metrics", () => {
+    const value = fixture("56-d30-d90-total-net-metrics").output;
+    const runs = Object.fromEntries(value.metric_runs.map((item: Any) => [item.metric_name, item.value_unscaled]));
+    check(runs.cohort_purchase_net_revenue_d30_usd === "8000000" &&
+      runs.cohort_purchase_net_revenue_d90_usd === "30000000", "scenario 56 purchase-net horizons");
+    check(runs.cohort_total_net_revenue_d30_usd === "9000000" &&
+      runs.cohort_total_net_revenue_d90_usd === "37000000", "scenario 56 total-net revenue horizons");
+    check(runs.d30_total_net_roas === "900000" && runs.d90_total_net_roas === "3700000",
+      "scenario 56 total-net ROAS");
+    check(runs.cohort_total_net_ltv_d30_usd === "9000000" &&
+      runs.cohort_total_net_ltv_d90_usd === "37000000", "scenario 56 total-net LTV");
+  }],
 ];
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 47 scenario assertions", () => {
-      check(scenarios.length === 47, "scenario assertion inventory must contain 47 entries");
+    it("contains 56 scenario assertions", () => {
+      check(scenarios.length === 56, "scenario assertion inventory must contain 56 entries");
     });
   });
 
@@ -1370,7 +1448,7 @@ if (!summaryOnly) {
 const contractText = capture(() => readFileSync(join(root, "spec", "event-metric-contract-v0.4.md"), "utf8"));
 const fraudSchemaText = capture(() => readFileSync(join(root, "schemas", "fraud-decision.schema.json"), "utf8"));
 const acceptance: Array<[string, () => void]> = [
-  ["AC01 Draft 2020-12 schemas have stable IDs and versions", () => check(schemaPaths.length === 27 && schemaIds.every(Boolean), "AC01")],
+  ["AC01 Draft 2020-12 schemas have stable IDs and versions", () => check(schemaPaths.length === 28 && schemaIds.every(Boolean), "AC01")],
   ["AC02 canonical event names agree across registry and schemas", () => {
     const rawSchema = schemaValues.find(({ value }) => value.$id === outputSchemaIds.raw_records)?.value;
     check(rawSchema, "AC02 raw schema missing");
@@ -1456,7 +1534,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 47 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 56 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1496,7 +1574,7 @@ const acceptance: Array<[string, () => void]> = [
     for (const forbidden of ["threshold", "model_weight", "watchlist", "ip_address", "user_agent", "response_timing"]) check(!schemaText.includes(forbidden), `AC20 ${forbidden}`);
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
-  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 27 && Object.keys(registries).length === 8 && fixtureDirs.length === 47 && outputArtifactCount === 47 * 13, "AC21")],
+  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 56 && outputArtifactCount === 56 * 13, "AC21")],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {
     for (const { output, python } of results.values()) check(equal(output, python), "AC22 evaluator mismatch");
     const vector = { numbers: [333333333.33333329, 1e30, 4.50, 2e-3, 1e-27, -0], string: "€$\u000f\nA'B\"\\\"/" };
@@ -1563,12 +1641,375 @@ const acceptance: Array<[string, () => void]> = [
     try { evaluate(invalid); } catch { rejected = true; }
     check(rejected, "AC26 self-referential reinstall anchor");
   }],
+  ["AC27 refund targets resolve canonically and fail closed", () => {
+    const baseline = fixture("55-purchase-refund-net-revenue").input;
+    const zero = structuredClone(baseline);
+    zero.records.find((item: Any) => item.record_id === "refund-55-d0").payload.original_transaction_id = "missing-original-55";
+    const ambiguous = structuredClone(baseline);
+    const source = ambiguous.records.find((item: Any) => item.record_id === "purchase-55-d0");
+    ambiguous.records.push({
+      ...structuredClone(source),
+      record_id: "purchase-55-d0-ambiguous",
+      delivery_id: "delivery:purchase-55-d0-ambiguous",
+      event_id: "event:purchase-55-d0-ambiguous",
+      received_at: "2026-08-01T10:00:02.000Z",
+      processing_sequence: 12,
+      payload: { ...structuredClone(source.payload), transaction_id: "transaction-55-d0-ambiguous" },
+    });
+    const explicitMismatch = structuredClone(baseline);
+    explicitMismatch.records.find((item: Any) => item.record_id === "refund-55-pending").payload.correction_target_record_id = "purchase-55-pending";
+    const missingInstallation = structuredClone(baseline);
+    delete missingInstallation.records.find((item: Any) => item.record_id === "refund-55-d0").payload.installation_id;
+    const precedesPurchase = structuredClone(baseline);
+    precedesPurchase.records.find((item: Any) => item.record_id === "refund-55-d0").occurred_at = "2026-08-01T09:59:59.999Z";
+    const overRefund = structuredClone(baseline);
+    overRefund.records.find((item: Any) => item.record_id === "refund-55-d0").payload.amount_unscaled = "9000000";
+    const duplicate = structuredClone(baseline);
+    const duplicateSource = duplicate.records.find((item: Any) => item.record_id === "purchase-55-d0");
+    duplicate.records.push({
+      ...structuredClone(duplicateSource),
+      record_id: "purchase-55-d0-redelivery",
+      delivery_id: "delivery:purchase-55-d0-redelivery",
+      received_at: "2026-08-01T10:00:02.000Z",
+      processing_sequence: 12,
+    });
+    const future = structuredClone(baseline);
+    const futureSource = future.records.find((item: Any) => item.record_id === "purchase-55-d0");
+    future.records.push({
+      ...structuredClone(futureSource),
+      record_id: "purchase-55-d0-future",
+      delivery_id: "delivery:purchase-55-d0-future",
+      event_id: "event:purchase-55-d0-future",
+      occurred_at: "2026-08-10T00:00:00.000Z",
+      received_at: "2026-08-10T00:00:01.000Z",
+      processing_sequence: 12,
+      payload: { ...structuredClone(futureSource.payload), transaction_id: "transaction-55-d0-future" },
+    });
+    const cumulative = structuredClone(baseline);
+    const cumulativeSource = cumulative.records.find((item: Any) => item.record_id === "refund-55-d0");
+    cumulative.records.push({
+      ...structuredClone(cumulativeSource),
+      record_id: "refund-55-d2-cap-fill",
+      delivery_id: "delivery:refund-55-d2-cap-fill",
+      event_id: "event:refund-55-d2-cap-fill",
+      occurred_at: "2026-08-03T01:00:00.000Z",
+      received_at: "2026-08-03T01:00:01.000Z",
+      processing_sequence: 12,
+      payload: { ...structuredClone(cumulativeSource.payload), transaction_id: "refund-transaction-55-d2-cap-fill", amount_unscaled: "4800000" },
+    });
+    cumulative.records.push({
+      ...structuredClone(cumulativeSource),
+      record_id: "refund-55-d0-cumulative-over",
+      delivery_id: "delivery:refund-55-d0-cumulative-over",
+      event_id: "event:refund-55-d0-cumulative-over",
+      occurred_at: "2026-08-01T11:00:00.000Z",
+      received_at: "2026-08-03T02:00:01.000Z",
+      processing_sequence: 13,
+      payload: { ...structuredClone(cumulativeSource.payload), transaction_id: "refund-transaction-55-d0-cumulative-over", amount_unscaled: "4800000" },
+    });
+    const equivalentBusiness = structuredClone(baseline);
+    const equivalentSource = equivalentBusiness.records.find((item: Any) => item.record_id === "purchase-55-d0");
+    equivalentBusiness.records.push({
+      ...structuredClone(equivalentSource),
+      record_id: "purchase-55-d0-business-repeat",
+      delivery_id: "delivery:purchase-55-d0-business-repeat",
+      event_id: "event:purchase-55-d0-business-repeat",
+      received_at: "2026-08-01T10:00:02.000Z",
+      processing_sequence: 12,
+    });
+    const conflictingBusiness = structuredClone(equivalentBusiness);
+    conflictingBusiness.records.find((item: Any) => item.record_id === "purchase-55-d0-business-repeat").payload.amount_unscaled = "8000001";
+    const conflictingBusinessReordered = reorderedInput(conflictingBusiness);
+    const rounding = structuredClone(baseline);
+    rounding.fx_policy.rates[0].rate_unscaled = "50000000";
+    rounding.records.find((item: Any) => item.record_id === "purchase-55-d0").payload.amount_unscaled = "3";
+    rounding.records.find((item: Any) => item.record_id === "refund-55-d0").payload.amount_unscaled = "1";
+    const privacy = structuredClone(baseline);
+    privacy.metric_evaluations.push({
+      ...structuredClone(privacy.metric_evaluations[0]),
+      metric_run_id_prefix: "run-55-privacy-after",
+      computed_at: "2026-08-10T00:02:00.000Z",
+      data_freshness: "recalculated",
+      privacy_state: "after",
+      supersedes_metric_run_id_prefix: "run-55",
+    });
+    privacy.privacy_requests.push({
+      contract_version: "0.4.0", tenant_id: "tenant-a", app_id: "app-a",
+      privacy_request_id: "privacy-refund-55", deletion_subject_digest: "5".repeat(64),
+      deletion_scope: "installation", requested_via: "tenant_admin_api", requester_auth_ref: "admin_key:synthetic-refund-55",
+      requested_at: "2026-08-09T04:00:00.000Z", completed_at: "2026-08-09T05:00:00.000Z",
+      status: "completed", reason_code: "privacy_deletion", policy_version: "privacy-v0.4.8",
+      affected_records: [{ record_id: "refund-55-d0", lifecycle_status: "redacted" }],
+    });
+    const equivalentRefund = structuredClone(baseline);
+    const equivalentRefundSource = equivalentRefund.records.find((item: Any) => item.record_id === "refund-55-d0");
+    equivalentRefund.records.push({
+      ...structuredClone(equivalentRefundSource),
+      record_id: "refund-55-d0-business-repeat",
+      delivery_id: "delivery:refund-55-d0-business-repeat",
+      event_id: "event:refund-55-d0-business-repeat",
+      received_at: "2026-08-02T01:00:02.000Z",
+      processing_sequence: 12,
+    });
+    const futureOccurred = structuredClone(baseline);
+    const futureOccurredSource = futureOccurred.records.find((item: Any) => item.record_id === "purchase-55-d0");
+    futureOccurred.records.push({
+      ...structuredClone(futureOccurredSource),
+      record_id: "purchase-55-d0-future-occurred",
+      delivery_id: "delivery:purchase-55-d0-future-occurred",
+      event_id: "event:purchase-55-d0-future-occurred",
+      occurred_at: "2026-08-02T02:00:00.000Z",
+      received_at: "2026-08-02T00:59:00.000Z",
+      processing_sequence: 12,
+      payload: { ...structuredClone(futureOccurredSource.payload), transaction_id: "transaction-55-d0-future-occurred" },
+    });
+    const rejectedCandidates = structuredClone(baseline);
+    const rejectedSource = rejectedCandidates.records.find((item: Any) => item.record_id === "purchase-55-d0");
+    rejectedCandidates.records.push({
+      ...structuredClone(rejectedSource), record_id: "purchase-55-rejected-scope",
+      delivery_id: "delivery:purchase-55-rejected-scope", event_id: "event:purchase-55-rejected-scope",
+      tenant_id: "tenant-b", received_at: "2026-08-01T10:00:02.000Z", processing_sequence: 12,
+      payload: { ...structuredClone(rejectedSource.payload), transaction_id: "transaction-55-rejected-scope" },
+    });
+    for (const suffix of ["a", "b"]) rejectedCandidates.records.push({
+      ...structuredClone(rejectedSource), record_id: "purchase-55-collision",
+      delivery_id: `delivery:purchase-55-collision-${suffix}`, event_id: `event:purchase-55-collision-${suffix}`,
+      received_at: `2026-08-01T10:00:0${suffix === "a" ? "3" : "4"}.000Z`, processing_sequence: 13,
+      payload: { ...structuredClone(rejectedSource.payload), transaction_id: `transaction-55-collision-${suffix}` },
+    });
+    rejectedCandidates.records.push({
+      ...structuredClone(rejectedSource), record_id: "purchase-55-invalid-time",
+      delivery_id: "delivery:purchase-55-invalid-time", event_id: "event:purchase-55-invalid-time",
+      received_at: "invalid", processing_sequence: 14,
+      payload: { ...structuredClone(rejectedSource.payload), transaction_id: "transaction-55-invalid-time" },
+    });
+    const legacyExplicit = structuredClone(fixture("16-correction-refund").input);
+    const legacyInstallMismatch = structuredClone(legacyExplicit);
+    legacyInstallMismatch.records.find((item: Any) => item.record_id === "refund-16").payload.installation_id =
+      "installation:legacy-mismatch";
+    const invalidFirstValid = structuredClone(baseline);
+    const retrySource = invalidFirstValid.records.find((item: Any) => item.record_id === "refund-55-d0");
+    invalidFirstValid.records.push({
+      ...structuredClone(retrySource), record_id: "refund-55-invalid-first",
+      delivery_id: "delivery:refund-55-invalid-first", event_id: "event:refund-55-invalid-first",
+      occurred_at: "2026-08-03T01:00:00.000Z", received_at: "2026-08-03T01:00:01.000Z",
+      processing_sequence: 12,
+      payload: { ...structuredClone(retrySource.payload), transaction_id: "refund-transaction-55-retry", amount_unscaled: "6000000" },
+    });
+    invalidFirstValid.records.push({
+      ...structuredClone(retrySource), record_id: "refund-55-valid-after-invalid",
+      delivery_id: "delivery:refund-55-valid-after-invalid", event_id: "event:refund-55-valid-after-invalid",
+      occurred_at: "2026-08-03T02:00:00.000Z", received_at: "2026-08-03T02:00:01.000Z",
+      processing_sequence: 13,
+      payload: { ...structuredClone(retrySource.payload), transaction_id: "refund-transaction-55-retry", amount_unscaled: "1000000" },
+    });
+    const legacyBusiness = structuredClone(legacyExplicit);
+    const legacyPurchase = legacyBusiness.records.find((item: Any) => item.record_id === "purchase-16");
+    const legacyRefund = legacyBusiness.records.find((item: Any) => item.record_id === "refund-16");
+    legacyRefund.payload.financial_status = "reversed";
+    legacyBusiness.records.push({
+      ...structuredClone(legacyPurchase), record_id: "purchase-16-business-repeat",
+      delivery_id: "delivery:purchase-16-business-repeat", event_id: "event:purchase-16-business-repeat",
+      received_at: "2026-08-12T00:03:00.000Z", processing_sequence: 2,
+    });
+    legacyBusiness.records.push({
+      ...structuredClone(legacyRefund), record_id: "refund-16-business-repeat",
+      delivery_id: "delivery:refund-16-business-repeat", event_id: "event:refund-16-business-repeat",
+      received_at: "2026-08-12T00:04:00.000Z", processing_sequence: 2,
+    });
+    const legacyStrictMismatch = structuredClone(legacyExplicit);
+    const legacyMismatchRefund = legacyStrictMismatch.records.find((item: Any) => item.record_id === "refund-16");
+    legacyMismatchRefund.payload.original_transaction_id = "transaction-legacy-mismatch";
+    legacyMismatchRefund.payload.currency = "JPY";
+    legacyMismatchRefund.payload.financial_status = "pending";
+    const explicitFutureReceived = structuredClone(baseline);
+    explicitFutureReceived.records.find((item: Any) => item.record_id === "refund-55-d0")
+      .payload.correction_target_record_id = "purchase-55-d0";
+    const explicitFutureSource = explicitFutureReceived.records.find((item: Any) =>
+      item.record_id === "purchase-55-d0");
+    explicitFutureReceived.records.push({
+      ...structuredClone(explicitFutureSource),
+      record_id: "purchase-55-explicit-future-received",
+      delivery_id: "delivery:purchase-55-explicit-future-received",
+      event_id: "event:purchase-55-explicit-future-received",
+      occurred_at: "2026-08-01T12:00:00.000Z",
+      received_at: "2026-08-03T00:00:00.000Z",
+      processing_sequence: 12,
+      payload: {
+        ...structuredClone(explicitFutureSource.payload),
+        transaction_id: "transaction-55-explicit-future-received",
+      },
+    });
+    const explicitAmbiguous = structuredClone(ambiguous);
+    explicitAmbiguous.records.find((item: Any) => item.record_id === "refund-55-d0")
+      .payload.correction_target_record_id = "purchase-55-d0";
+    const explicitFutureTarget = structuredClone(explicitFutureReceived);
+    explicitFutureTarget.records.find((item: Any) => item.record_id === "refund-55-d0")
+      .payload.correction_target_record_id = "purchase-55-explicit-future-received";
+    const legacyMissingTarget = structuredClone(legacyExplicit);
+    legacyMissingTarget.records.find((item: Any) => item.record_id === "refund-16")
+      .payload.correction_target_record_id = "purchase-16-missing";
+    const legacyCollisionTarget = structuredClone(legacyExplicit);
+    const collidingLegacyPurchase = legacyCollisionTarget.records.find((item: Any) => item.record_id === "purchase-16");
+    legacyCollisionTarget.records.push({
+      ...structuredClone(collidingLegacyPurchase),
+      delivery_id: "delivery:purchase-16-collision",
+      event_id: "event:purchase-16-collision",
+      received_at: "2026-08-12T00:02:01.000Z",
+    });
+    const inputs = [zero, ambiguous, explicitMismatch, missingInstallation, precedesPurchase, overRefund,
+      duplicate, future, cumulative, equivalentBusiness, conflictingBusiness, conflictingBusinessReordered,
+      rounding, privacy, equivalentRefund, futureOccurred, rejectedCandidates, legacyExplicit, legacyInstallMismatch,
+      invalidFirstValid, legacyBusiness, legacyStrictMismatch, legacyCollisionTarget,
+      explicitFutureReceived, explicitAmbiguous, explicitFutureTarget];
+    const typescript = inputs.map((input) => evaluate(input));
+    const python = pythonOutputs(inputs);
+    typescript.forEach((output, index) => check(equal(output, python[index]), `AC27 Python parity ${index}`));
+    for (const [index, output] of typescript.slice(0, 6).entries()) {
+      check(output.deliveries.some((item: Any) => item.reason_code === "refund_target_invalid" && item.payload_disposition === "discarded"), `AC27 invalid delivery ${index}`);
+      check(output.rejections.some((item: Any) => item.reason_code === "refund_target_invalid" && item.retained === "non_identifying_metadata"), `AC27 invalid rejection ${index}`);
+    }
+    check(typescript[6].deliveries.some((item: Any) => item.record_id === "purchase-55-d0-redelivery" && item.duplicate_resolution === "duplicate_delivery"), "AC27 purchase redelivery deduplicated");
+    check(typescript[6].deliveries.some((item: Any) => item.record_id === "refund-55-d0" && item.ingestion_status === "accepted"), "AC27 canonical purchase target survives redelivery");
+    check(typescript[7].deliveries.some((item: Any) => item.record_id === "refund-55-d0" && item.ingestion_status === "accepted"), "AC27 future purchase cannot invalidate an accepted refund target");
+    check(typescript[7].corrections.some((item: Any) => item.corrects_record_id === "purchase-55-d0"), "AC27 future purchase preserves the resolved correction target");
+    const cumulativeRuns = Object.fromEntries(typescript[8].metric_runs.map((item: Any) => [item.metric_name, item.value_unscaled]));
+    check(typescript[8].deliveries.some((item: Any) => item.record_id === "refund-55-d0" && item.ingestion_status === "accepted") &&
+      typescript[8].deliveries.some((item: Any) => item.record_id === "refund-55-d2-cap-fill" && item.ingestion_status === "accepted") &&
+      typescript[8].deliveries.some((item: Any) => item.record_id === "refund-55-d0-cumulative-over" && item.reason_code === "refund_target_invalid"),
+    "AC27 cumulative settled refunds use first-accepted receipt order and cannot exceed purchase amount");
+    check(cumulativeRuns.cohort_purchase_net_revenue_d0_usd === "10000000" &&
+      cumulativeRuns.cohort_purchase_net_revenue_d1_usd === "6000000" &&
+      cumulativeRuns.cohort_purchase_net_revenue_d3_usd === "0" &&
+      cumulativeRuns.cohort_purchase_net_revenue_d7_usd === "0",
+    "AC27 receipt-order cap preserves the D0/D1 refund and accepts the later D2 cap fill");
+    const cumulativeReordered = evaluate(reorderedInput(cumulative));
+    check(equal(typescript[8], cumulativeReordered) && equal(cumulativeReordered, pythonOutputs([reorderedInput(cumulative)])[0]),
+      "AC27 receipt-order cap is input-order independent in both evaluators");
+    check(typescript[9].deliveries.some((item: Any) => item.record_id === "purchase-55-d0-business-repeat" && item.duplicate_resolution === "duplicate_delivery") &&
+      typescript[9].metric_runs.every((item: Any, index: number) => item.value_unscaled === fixture("55-purchase-refund-net-revenue").output.metric_runs[index].value_unscaled),
+    "AC27 equivalent business transaction counts once");
+    const businessConflicts = typescript[10].deliveries.filter((item: Any) =>
+      ["purchase-55-d0", "purchase-55-d0-business-repeat"].includes(item.record_id));
+    check(businessConflicts.length === 2 &&
+      businessConflicts.some((item: Any) => item.record_id === "purchase-55-d0" && item.ingestion_status === "accepted" && item.duplicate_resolution === "unique") &&
+      businessConflicts.some((item: Any) => item.record_id === "purchase-55-d0-business-repeat" && item.ingestion_status === "rejected" && item.reason_code === "event_id_conflict"),
+    "AC27 conflicting business transaction preserves the deterministic first accepted attempt and rejects the conflict");
+    check(typescript[10].metric_runs.every((item: Any, index: number) =>
+      item.value_unscaled === fixture("55-purchase-refund-net-revenue").output.metric_runs[index].value_unscaled),
+    "AC27 later business conflict cannot change the first accepted fact or any metric");
+    check(equal(typescript[10], typescript[11]), "AC27 conflicting business transaction reorder invariance");
+    const roundingRuns = Object.fromEntries(typescript[12].metric_runs.map((item: Any) => [item.metric_name, item.value_unscaled]));
+    check(roundingRuns.cohort_purchase_net_revenue_d0_usd === "2" && roundingRuns.cohort_purchase_net_revenue_d1_usd === "2",
+      "AC27 purchase and refund FX are half-even rounded independently before signed summation");
+    const privacyAfter = typescript[13].metric_runs.filter((item: Any) => item.metric_run_id.startsWith("run-55-privacy-after:"));
+    check(privacyAfter.find((item: Any) => item.metric_name === "cohort_purchase_net_revenue_d1_usd")?.value_unscaled === "10000000" &&
+      privacyAfter.find((item: Any) => item.metric_name === "d0_install_to_24h_ad_revenue_usd")?.value_unscaled === "7000000",
+    "AC27 redacted refund is excluded while unrelated ad revenue is unchanged");
+    check(typescript[14].deliveries.some((item: Any) => item.record_id === "refund-55-d0-business-repeat" &&
+      item.ingestion_status === "accepted" && item.duplicate_resolution === "duplicate_delivery") &&
+      !typescript[14].raw_records.some((item: Any) => item.record_id === "refund-55-d0-business-repeat") &&
+      typescript[14].corrections.filter((item: Any) => item.correction_reason === "refund").length === 1 &&
+      typescript[14].metric_runs.every((item: Any, index: number) => item.value_unscaled === fixture("55-purchase-refund-net-revenue").output.metric_runs[index].value_unscaled),
+    "AC27 equivalent refund business transaction is one accepted duplicate delivery and one financial fact");
+    check(typescript[15].deliveries.some((item: Any) => item.record_id === "refund-55-d0" && item.ingestion_status === "accepted") &&
+      typescript[15].corrections.some((item: Any) => item.correction_id === "correction:refund-55-d0" && item.corrects_record_id === "purchase-55-d0"),
+    "AC27 already-received purchase with future occurrence cannot make the refund target ambiguous");
+    check(typescript[16].deliveries.some((item: Any) => item.record_id === "refund-55-d0" && item.ingestion_status === "accepted") &&
+      typescript[16].deliveries.some((item: Any) => item.record_id === "purchase-55-rejected-scope" && item.reason_code === "client_scope_mismatch") &&
+      typescript[16].deliveries.filter((item: Any) => item.record_id === "purchase-55-collision").every((item: Any) => item.reason_code === "record_id_collision") &&
+      typescript[16].deliveries.some((item: Any) => item.record_id === "purchase-55-invalid-time" && item.reason_code === "timestamp_invalid"),
+    "AC27 rejected and colliding purchase attempts neither throw the batch nor enter refund target candidates");
+    check(typescript[17].deliveries.some((item: Any) => item.record_id === "refund-16" && item.ingestion_status === "accepted") &&
+      typescript[17].corrections.some((item: Any) => item.corrects_record_id === "purchase-16"),
+    "AC27 explicit legacy target accepts the original out-of-order receipt when both installation ids are absent");
+    check(typescript[18].deliveries.some((item: Any) => item.record_id === "refund-16" && item.reason_code === "refund_target_invalid"),
+    "AC27 explicit legacy target rejects one-sided installation identity");
+    const retryRuns = Object.fromEntries(typescript[19].metric_runs.map((item: Any) => [item.metric_name, item.value_unscaled]));
+    check(typescript[19].deliveries.some((item: Any) => item.record_id === "refund-55-invalid-first" &&
+      item.ingestion_status === "rejected" && item.reason_code === "refund_target_invalid") &&
+      typescript[19].deliveries.some((item: Any) => item.record_id === "refund-55-valid-after-invalid" &&
+        item.ingestion_status === "accepted" && item.duplicate_resolution === "unique") &&
+      typescript[19].corrections.some((item: Any) => item.correction_id === "correction:refund-55-valid-after-invalid"),
+    "AC27 an inadmissible refund does not reserve its business transaction identity");
+    check(retryRuns.cohort_purchase_net_revenue_d3_usd === "4750000" &&
+      retryRuns.cohort_purchase_net_revenue_d7_usd === "4750000",
+    "AC27 the valid same-transaction retry reaches settled net revenue");
+    check(equal(typescript[19], evaluate(reorderedInput(invalidFirstValid))) &&
+      equal(typescript[19], pythonOutputs([reorderedInput(invalidFirstValid)])[0]),
+    "AC27 fully-admissible refund business selection is input-order independent");
+    const legacyBusinessDeliveries = typescript[20].deliveries.filter((item: Any) =>
+      ["purchase-16", "purchase-16-business-repeat", "refund-16", "refund-16-business-repeat"].includes(item.record_id));
+    check(legacyBusinessDeliveries.length === 4 && legacyBusinessDeliveries.every((item: Any) =>
+      item.ingestion_status === "accepted" && item.duplicate_resolution === "unique") &&
+      typescript[20].corrections.filter((item: Any) => item.correction_reason === "refund").length === 2,
+    "AC27 unanchored v0.4.0 commerce remains event-ID-only and reversed refunds still correct");
+    check(typescript[21].deliveries.some((item: Any) => item.record_id === "refund-16" && item.ingestion_status === "accepted") &&
+      typescript[21].corrections.some((item: Any) => item.correction_id === "correction:refund-16" &&
+        item.corrects_record_id === "purchase-16"),
+    "AC27 unanchored explicit legacy corrections do not acquire v0.4.8 original/currency/status validation");
+    const legacyCollisionDeliveries = typescript[22].deliveries.filter((item: Any) => item.record_id === "purchase-16");
+    check(legacyCollisionDeliveries.length === 2 && legacyCollisionDeliveries.every((item: Any) =>
+      item.ingestion_status === "rejected" && item.reason_code === "record_id_collision") &&
+      typescript[22].deliveries.some((item: Any) => item.record_id === "refund-16" && item.ingestion_status === "accepted") &&
+      typescript[22].corrections.some((item: Any) => item.correction_id === "correction:refund-16" &&
+        item.corrects_record_id === "purchase-16"),
+    "AC27 accepted legacy refund preserves its validated explicit correction target when that target collides");
+    check(typescript[23].deliveries.some((item: Any) => item.record_id === "refund-55-d0" &&
+      item.ingestion_status === "accepted") &&
+      typescript[23].corrections.some((item: Any) => item.correction_id === "correction:refund-55-d0" &&
+        item.corrects_record_id === "purchase-55-d0"),
+    "AC27 an explicit strict target ignores an otherwise matching purchase received after the refund");
+    check(equal(typescript[23], evaluate(reorderedInput(explicitFutureReceived))) &&
+      equal(typescript[23], pythonOutputs([reorderedInput(explicitFutureReceived)])[0]),
+    "AC27 explicit future-receipt precedence is input-order independent in both evaluators");
+    check(typescript[24].deliveries.some((item: Any) => item.record_id === "refund-55-d0" &&
+      item.ingestion_status === "rejected" && item.reason_code === "refund_target_invalid") &&
+      !typescript[24].corrections.some((item: Any) => item.correction_id === "correction:refund-55-d0"),
+    "AC27 an explicit record ID cannot choose one of multiple strict target candidates");
+    check(equal(typescript[24], evaluate(reorderedInput(explicitAmbiguous))) &&
+      equal(typescript[24], pythonOutputs([reorderedInput(explicitAmbiguous)])[0]),
+    "AC27 explicit target ambiguity is input-order independent in both evaluators");
+    check(typescript[25].deliveries.some((item: Any) => item.record_id === "refund-55-d0" &&
+      item.ingestion_status === "rejected" && item.reason_code === "refund_target_invalid") &&
+      !typescript[25].corrections.some((item: Any) => item.correction_id === "correction:refund-55-d0"),
+    "AC27 an explicit future-received record ID cannot override the unique earlier strict target");
+    check(equal(typescript[25], evaluate(reorderedInput(explicitFutureTarget))) &&
+      equal(typescript[25], pythonOutputs([reorderedInput(explicitFutureTarget)])[0]),
+    "AC27 explicit future-target rejection is input-order independent in both evaluators");
+    check(!capture(() => evaluate(legacyMissingTarget)).ok &&
+      !capture(() => pythonOutputs([legacyMissingTarget])).ok,
+    "AC27 unanchored v0.4.0 refunds preserve the legacy missing same-scope target reference error");
+
+    const refundValidator = validatorFor("urn:openmasu:schema:event-refund:v0.4");
+    const schemaRefund = { event_name: "refund", ...structuredClone(retrySource.payload) };
+    const targetFreeUnanchored = structuredClone(schemaRefund);
+    delete targetFreeUnanchored.installation_id;
+    const explicitUnanchored = { ...targetFreeUnanchored, correction_target_record_id: "purchase-16" };
+    check(!refundValidator(targetFreeUnanchored) && refundValidator(explicitUnanchored) && refundValidator(schemaRefund),
+      "AC27 refund schema requires either the new installation anchor or the legacy explicit target");
+
+    const definitionValidator = validatorFor("urn:openmasu:schema:metric-definition:v0.4");
+    for (const [field, value] of [
+      ["rule_bundle_id", "metric-purchase-other"],
+      ["rule_bundle_version", "0.4.7"],
+      ["rule_bundle_hash", "7".repeat(64)],
+    ] as const) {
+      const provenance = structuredClone(baseline);
+      const definition = provenance.metric_definitions.find((item: Any) =>
+        item.metric_name === "cohort_purchase_net_revenue_d0_usd");
+      definition[field] = value;
+      check(!definitionValidator(definition), `AC27 schema accepted wrong purchase-net ${field}`);
+      check(!capture(() => evaluate(provenance)).ok, `AC27 TypeScript accepted wrong purchase-net ${field}`);
+      check(!capture(() => pythonOutputs([provenance])).ok, `AC27 Python accepted wrong purchase-net ${field}`);
+    }
+  }],
 ];
 if (!summaryOnly) {
   describe("acceptance criteria", () => {
     for (const [name, assertion] of acceptance) it(name, assertion);
-    it("contains 26 acceptance criteria", () => {
-      check(acceptance.length === 26, "acceptance inventory must contain 26 entries");
+    it("contains 27 acceptance criteria", () => {
+      check(acceptance.length === 27, "acceptance inventory must contain 27 entries");
     });
   });
 }

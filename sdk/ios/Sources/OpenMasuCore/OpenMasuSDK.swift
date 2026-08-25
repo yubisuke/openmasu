@@ -1,10 +1,11 @@
 import Foundation
 
 public actor OpenMasuSDK {
-  private let configuration: OpenMasuConfiguration
+  private nonisolated let configuration: OpenMasuConfiguration
   private let storage: OpenMasuStorage
   private let transport: any OpenMasuTransport
   private let tokenProvider: any AdServicesTokenProviding
+  private nonisolated let deepLinkRouter = DeepLinkRouter()
 
   public init(
     configuration: OpenMasuConfiguration,
@@ -53,6 +54,29 @@ public actor OpenMasuSDK {
     try await flush()
   }
 
+  public nonisolated func setDeepLinkListener(_ listener: (@Sendable (OpenMasuDeepLink) -> Void)?) {
+    deepLinkRouter.set(listener)
+  }
+
+  @discardableResult
+  public nonisolated func handleDeepLink(_ url: URL) -> Bool {
+    guard let value = parseDeepLink(url) else { return false }
+    deepLinkRouter.deliver(value)
+    Task { try? await self.recordDeepLink(value) }
+    return true
+  }
+
+  public nonisolated func parseDeepLink(_ url: URL) -> OpenMasuDeepLink? {
+    DeepLinkParser.direct(url, allowedHosts: configuration.deepLinkHosts, allowedSchemes: configuration.deepLinkSchemes)
+  }
+
+  @discardableResult
+  public nonisolated func handleDeepLink(_ userActivity: NSUserActivity) -> Bool {
+    guard userActivity.activityType == NSUserActivityTypeBrowsingWeb,
+          let url = userActivity.webpageURL else { return false }
+    return handleDeepLink(url)
+  }
+
   public func trackCustomEvent(_ eventKey: String, attributes: [String: Any] = [:]) async throws {
     guard try isCollectionEnabled() else { return }
     guard eventKey.range(of: "^[a-z][a-z0-9_]{0,63}$", options: .regularExpression) != nil else {
@@ -74,6 +98,7 @@ public actor OpenMasuSDK {
     try await flush()
   }
 
+  @available(*, deprecated, message: "Use trackSettledPurchase for installation-anchored settled purchases.")
   public func trackPurchase(
     transactionId: String,
     amountUnscaled: String,
@@ -82,7 +107,7 @@ public actor OpenMasuSDK {
     financialStatus: String = "settled"
   ) async throws {
     guard try isCollectionEnabled() else { return }
-    try validateMoney(amountUnscaled: amountUnscaled, amountScale: amountScale, currency: currency)
+    try validateLegacyMoney(amountUnscaled: amountUnscaled, amountScale: amountScale, currency: currency)
     guard ["settled", "pending", "reversed"].contains(financialStatus) else { throw OpenMasuError.invalidMoney }
     try enqueue(eventName: "purchase", purpose: "revenue_measurement", payloadJson: EventFactory.json([
       "event_name": "purchase",
@@ -95,6 +120,73 @@ public actor OpenMasuSDK {
     try await flush()
   }
 
+  public func trackSettledPurchase(
+    transactionId: String,
+    amountUnscaled: String,
+    amountScale: Int,
+    currency: String
+  ) async throws {
+    guard try isCollectionEnabled() else { return }
+    try validateIdentifier(transactionId)
+    try validateMoney(amountUnscaled: amountUnscaled, amountScale: amountScale, currency: currency)
+    let installationId = try storage.installationId()
+    let payload: [String: Any] = [
+      "event_name": "purchase",
+      "transaction_id": transactionId,
+      "amount_unscaled": amountUnscaled,
+      "amount_scale": amountScale,
+      "currency": currency,
+      "financial_status": "settled",
+      "installation_id": installationId,
+    ]
+    try enqueue(
+      eventName: "purchase",
+      purpose: "revenue_measurement",
+      payloadJson: EventFactory.json(payload),
+      eventId: EventFactory.commerceEventIdentifier(
+        eventName: "purchase", installationId: installationId, transactionId: transactionId,
+        originalTransactionId: nil, amountUnscaled: amountUnscaled, amountScale: amountScale, currency: currency
+      )
+    )
+    try await flush()
+  }
+
+  public func trackRefund(
+    transactionId: String,
+    originalTransactionId: String,
+    amountUnscaled: String,
+    amountScale: Int,
+    currency: String
+  ) async throws {
+    guard try isCollectionEnabled() else { return }
+    try validateIdentifier(transactionId)
+    try validateIdentifier(originalTransactionId)
+    try validateMoney(amountUnscaled: amountUnscaled, amountScale: amountScale, currency: currency)
+    let installationId = try storage.installationId()
+    let payload: [String: Any] = [
+      "event_name": "refund",
+      "transaction_id": transactionId,
+      "original_transaction_id": originalTransactionId,
+      "amount_unscaled": amountUnscaled,
+      "amount_scale": amountScale,
+      "currency": currency,
+      "financial_status": "settled",
+      "installation_id": installationId,
+    ]
+    try enqueue(
+      eventName: "refund",
+      purpose: "revenue_measurement",
+      payloadJson: EventFactory.json(payload),
+      eventId: EventFactory.commerceEventIdentifier(
+        eventName: "refund", installationId: installationId, transactionId: transactionId,
+        originalTransactionId: originalTransactionId, amountUnscaled: amountUnscaled,
+        amountScale: amountScale, currency: currency
+      )
+    )
+    try await flush()
+  }
+
+  @available(*, deprecated, message: "Use the target-free overload; OpenMasu resolves the canonical purchase from originalTransactionId.")
   public func trackRefund(
     transactionId: String,
     originalTransactionId: String,
@@ -104,7 +196,7 @@ public actor OpenMasuSDK {
     currency: String
   ) async throws {
     guard try isCollectionEnabled() else { return }
-    try validateMoney(amountUnscaled: amountUnscaled, amountScale: amountScale, currency: currency)
+    try validateLegacyMoney(amountUnscaled: amountUnscaled, amountScale: amountScale, currency: currency)
     try enqueue(eventName: "refund", purpose: "revenue_measurement", payloadJson: EventFactory.json([
       "event_name": "refund",
       "transaction_id": transactionId,
@@ -236,6 +328,16 @@ public actor OpenMasuSDK {
     return credential
   }
 
+  private func recordDeepLink(_ value: OpenMasuDeepLink) async throws {
+    guard try isCollectionEnabled() else { return }
+    try enqueue(
+      eventName: "deep_link_open",
+      purpose: "attribution",
+      payloadJson: EventFactory.deepLink(installationId: storage.installationId(), value: value)
+    )
+    try await flush()
+  }
+
   private func enqueue(eventName: String, purpose: String, payloadJson: String, eventId: String? = nil) throws {
     try storage.enqueue(QueuedEvent(
       eventId: eventId ?? EventFactory.identifier("event"),
@@ -249,10 +351,22 @@ public actor OpenMasuSDK {
   }
 
   private func validateMoney(amountUnscaled: String, amountScale: Int, currency: String) throws {
+    guard amountUnscaled.range(of: "^[0-9]+$", options: .regularExpression) != nil,
+          (0...18).contains(amountScale),
+          currency.range(of: "^[A-Z]{3}$", options: .regularExpression) != nil
+    else { throw OpenMasuError.invalidMoney }
+  }
+
+  private func validateLegacyMoney(amountUnscaled: String, amountScale: Int, currency: String) throws {
     guard amountUnscaled.range(of: "^-?[0-9]+$", options: .regularExpression) != nil,
           (0...18).contains(amountScale),
           currency.range(of: "^[A-Z]{3}$", options: .regularExpression) != nil
     else { throw OpenMasuError.invalidMoney }
+  }
+
+  private func validateIdentifier(_ value: String) throws {
+    guard value.range(of: "^[A-Za-z0-9._:-]{1,128}$", options: .regularExpression) != nil
+    else { throw OpenMasuError.invalidAttributes }
   }
 
   static func collectionDefault(bundle: Bundle, fallback: Bool) -> Bool {

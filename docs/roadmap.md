@@ -15,6 +15,8 @@ This is the canonical milestone sequence. `docs/project-plan.md` is a phase summ
 | M4a iOS first-party measurement | Phase 4a | Swift SDK, revenue, and Apple Ads first-party evidence |
 | M4b Apple aggregate attribution | Phase 4b | Separate SKAdNetwork and AdAttributionKit aggregate series |
 | M5 Production and limited adapter boundary | Phase 5 | Production controls, fraud boundary, and deliberately limited adapters |
+| M6 Deterministic fraud controls | Phase 6 | Replayable server-time/source-day rules and protected integrity evidence |
+| M7 Deep links and re-engagement | Phase 7 | Direct links on both platforms, Android deferred delivery, and engagement-scope metrics |
 
 ## M0.2 Contract v0.2
 
@@ -158,5 +160,17 @@ synthetic HTTP load and retains all prior replay, isolation, dashboard, SDK, and
 contract gates. A production pilot remains an operator gate.
 
 ## Immediate next step
+
+## M6 Deterministic fraud controls
+
+M6a adds deterministic server-time and source-day fraud evidence, conservative flag-only defaults, real fraud-bundle binding, explicit gross/net metrics, deadline-bound quarantine, and an aggregate-only audit surface. M6b adds protected server verification boundaries for Play Integrity and App Attest. Synthetic CI cannot establish live provider availability, threshold accuracy, device-farm detection, network acceptance, or false-positive rates; those remain in the [M6 operator checklist](validation/m6-fraud-checklist.md).
+
+Evidence gate: the pure rule package, contract fixtures, PostgreSQL aggregate/action paths, audit API/dashboard, provider normalization vectors, threat-model coverage, and existing runtime parity all pass without changing ingestion acceptance. Real traffic and real device/provider projects are not code gates.
+
+## M7 Deep links and re-engagement
+
+M7 adds tenant-owned link hosts, deterministic Android and Apple association files, a closed destination grammar, direct App Link/Universal Link delivery, Android-only deferred destinations through Install Referrer, engagement-scope attribution, and daily deep-link metrics. Direct delivery is deterministic on Android and iOS; deferred delivery is deterministic on Android only. iOS deferred deep linking is not offered.
+
+Evidence gate: contract/evaluator parity, association generation and route precedence, host isolation, referrer budget, typed SDK parsers, consent behavior, engagement/install separation, Android toolchain, iOS simulator/build audit, and the Unity compile probe pass with synthetic values. Real hosts, signing identities, devices, store tracks, propagation, reinstall behavior, and four-week re-engagement observation remain in the [M7 operator checklist](validation/deeplink-device-checklist.md).
 
 Run the operator checklists and a controlled shadow pilot. Real provider connectivity, device validation, platform approval, production TLS, backup operations, capacity, integrity-service configuration, and incident response remain separate states.

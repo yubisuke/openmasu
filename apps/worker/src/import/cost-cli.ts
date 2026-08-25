@@ -1,8 +1,8 @@
 import { resolve } from "node:path";
 import type { Pool } from "pg";
-import { createAppPool } from "@openmasu/runtime";
+import { createAppPool, recordJobOutcome, runWithTerminalJobOutcome } from "@openmasu/runtime";
 import { persistCostImport, type CostImportResult, type CostInput } from "./cost.js";
-import { loadMapping, mapRow, rowMatches } from "./mapping.js";
+import { loadMapping, loadMappingScope, mapRow, rowMatches } from "./mapping.js";
 import { readRows, type ImportLimits } from "./source.js";
 
 type Any = Record<string, any>;
@@ -55,6 +55,22 @@ export async function runCostImportFile(options: {
   return { ...result, rows: rows.length };
 }
 
+export async function runCostImportCommand(
+  options: Parameters<typeof runCostImportFile>[0],
+): ReturnType<typeof runCostImportFile> {
+  const scope = loadMappingScope(options.mappingPath);
+  return runWithTerminalJobOutcome(
+    () => runCostImportFile(options),
+    (outcome) => recordJobOutcome({
+      pool: options.pool,
+      tenantId: scope.tenantId,
+      appId: scope.appId,
+      job: "cost_import",
+      outcome,
+    }),
+  );
+}
+
 function argument(name: string): string | undefined {
   const prefix = `--${name}=`;
   return process.argv.slice(2).find((value) => value.startsWith(prefix))?.slice(prefix.length);
@@ -66,7 +82,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
   if (!file || !mapping) throw new Error("usage: npm run import:cost -- --file=<csv> --mapping=<json>");
   const pool = createAppPool();
   try {
-    console.log(JSON.stringify(await runCostImportFile({
+    console.log(JSON.stringify(await runCostImportCommand({
       pool, filePath: resolve(file), mappingPath: resolve(mapping),
     })));
   } finally {

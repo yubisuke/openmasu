@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { assertAllowedDestination, randomSlug } from "@openmasu/redirector-core";
+import { assertAllowedDestination, assertDeepLinkValue, buildDeferredReferrer, randomSlug } from "@openmasu/redirector-core";
 import { uuidV7, withTenant } from "@openmasu/runtime";
 import { recordDashboardAudit } from "./session.js";
 
@@ -16,6 +16,9 @@ export type TrackingLinkRecord = {
   readonly campaign_id?: string;
   readonly ad_group_id?: string;
   readonly creative_id?: string;
+  readonly deep_link_value?: string;
+  readonly deep_link_param_names: readonly string[];
+  readonly deferred_deep_link_ttl_seconds: number;
   readonly created_at: string;
   readonly status: "active" | "paused" | "archived";
 };
@@ -36,12 +39,16 @@ export async function listTrackingLinks(
     campaign_id: string | null;
     ad_group_id: string | null;
     creative_id: string | null;
+    deep_link_value: string | null;
+    deep_link_param_names: string[];
+    deferred_deep_link_ttl_seconds: number;
     created_at: string;
     status: "active" | "paused" | "archived";
   }>(
     `SELECT link.tracking_link_id, link.slug, link.destination_kind,
             link.destination_url, link.play_package_name, link.network,
             link.site_id, link.campaign_id, link.ad_group_id, link.creative_id,
+            link.deep_link_value, link.deep_link_param_names, link.deferred_deep_link_ttl_seconds,
             link.created_at, state.status
        FROM control.tracking_links AS link
        JOIN LATERAL (
@@ -69,6 +76,9 @@ export async function listTrackingLinks(
     ...(row.campaign_id ? { campaign_id: row.campaign_id } : {}),
     ...(row.ad_group_id ? { ad_group_id: row.ad_group_id } : {}),
     ...(row.creative_id ? { creative_id: row.creative_id } : {}),
+    ...(row.deep_link_value ? { deep_link_value: row.deep_link_value } : {}),
+    deep_link_param_names: row.deep_link_param_names,
+    deferred_deep_link_ttl_seconds: row.deferred_deep_link_ttl_seconds,
     created_at: row.created_at,
     status: row.status,
   }));
@@ -81,6 +91,7 @@ export async function createTrackingLink(input: {
   actorRef: string;
   allowedOrigins: readonly string[];
   body: Any;
+  referrerMaximumEncodedCharacters?: number;
   now?: string;
 }): Promise<Any> {
   const destinationKind = input.body.destination_kind;
@@ -96,6 +107,24 @@ export async function createTrackingLink(input: {
     throw new Error("play_package_name_invalid");
   }
   const now = input.now ?? new Date().toISOString();
+  const deepLinkValue = input.body.deep_link_value === undefined ? undefined : assertDeepLinkValue(String(input.body.deep_link_value));
+  const deepLinkParamNames = Array.isArray(input.body.deep_link_param_names)
+    ? input.body.deep_link_param_names.map(String)
+    : [];
+  if (deepLinkParamNames.length > 10 || new Set(deepLinkParamNames).size !== deepLinkParamNames.length
+    || deepLinkParamNames.some((name: string) => !/^[a-z][a-z0-9_]{0,63}$/.test(name))) {
+    throw new Error("deep_link_param_names_invalid");
+  }
+  const deferredTtl = Number(input.body.deferred_deep_link_ttl_seconds ?? 604800);
+  if (!Number.isInteger(deferredTtl) || deferredTtl < 0 || deferredTtl > 7776000) throw new Error("deferred_deep_link_ttl_invalid");
+  if (deepLinkValue) {
+    const maximumParams = Object.fromEntries(deepLinkParamNames.map((name: string) => [name, "x".repeat(64)]));
+    const probe = buildDeferredReferrer({
+      clickId: "x".repeat(44), deepLinkValue, deepLinkParams: maximumParams,
+      maximumEncodedCharacters: input.referrerMaximumEncodedCharacters ?? 512,
+    });
+    if (probe.status !== "carried") throw new Error("deep_link_referrer_budget_exceeded");
+  }
   const artifact = {
     tracking_link_id: `tracking-link:${uuidV7()}`,
     tenant_id: input.tenantId,
@@ -109,6 +138,9 @@ export async function createTrackingLink(input: {
     ...(input.body.campaign_id ? { campaign_id: String(input.body.campaign_id) } : {}),
     ...(input.body.ad_group_id ? { ad_group_id: String(input.body.ad_group_id) } : {}),
     ...(input.body.creative_id ? { creative_id: String(input.body.creative_id) } : {}),
+    ...(deepLinkValue ? { deep_link_value: deepLinkValue } : {}),
+    deep_link_param_names: deepLinkParamNames,
+    deferred_deep_link_ttl_seconds: deferredTtl,
     created_at: now,
     status: "active",
   };
@@ -117,12 +149,14 @@ export async function createTrackingLink(input: {
       `INSERT INTO control.tracking_links (
         tracking_link_id, tenant_id, app_id, slug, destination_kind, destination_url,
         play_package_name, network, site_id, campaign_id, ad_group_id, creative_id,
+        deep_link_value, deep_link_param_names, deferred_deep_link_ttl_seconds,
         created_at, artifact
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)`,
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb)`,
       [artifact.tracking_link_id, input.tenantId, input.appId, artifact.slug,
         destinationKind, artifact.destination_url, packageName ?? null,
         artifact.network ?? null, artifact.site_id ?? null, artifact.campaign_id ?? null,
-        artifact.ad_group_id ?? null, artifact.creative_id ?? null, now, JSON.stringify(artifact)],
+        artifact.ad_group_id ?? null, artifact.creative_id ?? null,
+        deepLinkValue ?? null, deepLinkParamNames, deferredTtl, now, JSON.stringify(artifact)],
     );
     await client.query(
       `INSERT INTO control.tracking_link_states (

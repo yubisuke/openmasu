@@ -35,7 +35,8 @@ export type OpenMasuEventDeliveryV04 = {
     | "record_id_collision"
     | "payload_schema_invalid"
     | "timestamp_invalid"
-    | "timestamp_stale";
+    | "timestamp_stale"
+    | "refund_target_invalid";
   processing_purpose_id?: "attribution" | "fraud_prevention" | "analytics" | "revenue_measurement";
   consent_evaluation_policy_version: string;
   consent_decision_reason_code:
@@ -81,7 +82,7 @@ export type OpenMasuAttributionResultV04 = {
   attribution_id: string;
   tenant_id: string;
   app_id: string;
-  subject_scope: "installation_level" | "aggregate";
+  subject_scope: "installation_level" | "aggregate" | "engagement_level";
   subject_ref: string;
   status: "organic" | "non_organic" | "unattributed";
   method:
@@ -92,6 +93,7 @@ export type OpenMasuAttributionResultV04 = {
     | "adattributionkit"
     | "meta_install_referrer"
     | "apple_adservices"
+    | "deep_link"
     | "none";
   model: "last_click" | "view_through" | "aggregate" | "provider_reported" | "none";
   reason_code:
@@ -123,7 +125,12 @@ export type OpenMasuAttributionResultV04 = {
     | "skan_signature_invalid"
     | "postback_not_winner"
     | "crowd_anonymity_suppressed"
-    | "conversion_value_null";
+    | "conversion_value_null"
+    | "fraud_excluded"
+    | "deep_link_open_attributed"
+    | "deep_link_unknown_link"
+    | "deep_link_link_inactive"
+    | "deep_link_install_click_reused";
   reason_code_version: "0.4.0";
   evidence_refs: EvidenceRef[];
   effective_at: string;
@@ -133,6 +140,7 @@ export type OpenMasuAttributionResultV04 = {
   rule_bundle_id: string;
   rule_bundle_version: string;
   rule_bundle_hash: string;
+  fraud_decision_ref?: string;
   supersedes_attribution_id?: string;
 };
 export type OpenMasuCostRecordV04 = Money & {
@@ -176,7 +184,8 @@ export type OpenMasuMetricDefinitionV04 = {
       type: "elapsed" | "calendar_day" | "activity_day";
       day: number;
     };
-    numerator: "revenue" | "active_installations" | "cohort_size" | "events";
+    numerator:
+      "revenue" | "purchase_net_revenue" | "total_net_revenue" | "active_installations" | "cohort_size" | "events";
     denominator?: "cost" | "cohort_size";
     cost_basis?: "cohort_acquisition_day_current_snapshot";
   };
@@ -187,7 +196,7 @@ export type OpenMasuMetricDefinitionV04 = {
   /**
    * @minItems 1
    */
-  event_names?: ("click" | "install" | "skan_postback" | "adattributionkit_postback")[];
+  event_names?: ("click" | "install" | "skan_postback" | "adattributionkit_postback" | "deep_link_open")[];
   /**
    * @minItems 1
    */
@@ -200,6 +209,7 @@ export type OpenMasuMetricDefinitionV04 = {
     | "attribution_status"
     | "apple_conversion_bucket"
   )[];
+  fraud_policy?: "gross" | "net";
   rule_bundle_id: string;
   rule_bundle_version: string;
   rule_bundle_hash: string;
@@ -234,6 +244,7 @@ export type OpenMasuMetricRunV04 = {
   value_state?: "present" | "undefined";
   undefined_reason?: "no_attributed_cost" | "no_activity_events" | "empty_cohort";
   value_unscaled?: string;
+  fraud_policy?: "gross" | "net";
   amount_scale?: number;
   ratio_scale?: number;
   currency?: string;
@@ -252,6 +263,37 @@ export type OpenMasuMetricRunV04 = {
   supersedes_metric_run_id?: string;
   evidence_refs: EvidenceRef[];
 };
+export type OpenMasuFraudDecisionV04 = {
+  [k: string]: unknown;
+} & {
+  fraud_decision_id: string;
+  subject_scope?: "record" | "source";
+  subject_ref: string;
+  decision: "clear" | "suspected" | "confirmed";
+  action: "allow" | "flag" | "exclude" | "quarantine";
+  reason_code:
+    | "bot_prefetch"
+    | "replay_suspected"
+    | "click_injection_suspected"
+    | "ctit_clock_anomaly"
+    | "click_flooding_suspected"
+    | "referrer_time_inconsistent"
+    | "device_integrity_failed";
+  reason_code_version: "0.4.0";
+  evidence: {
+    type: string;
+    captured_at: string;
+    digest: string;
+    access_class: "public" | "protected" | "private";
+  }[];
+  rule_bundle_id: string;
+  rule_bundle_version: string;
+  rule_bundle_hash: string;
+  rule_id?: string;
+  resolution_deadline_at?: string;
+  evaluated_at: string;
+  supersedes_fraud_decision_id?: string;
+};
 export type OpenMasuRejectionV04 = {
   [k: string]: unknown;
 } & {
@@ -268,7 +310,8 @@ export type OpenMasuRejectionV04 = {
     | "record_id_collision"
     | "payload_schema_invalid"
     | "timestamp_invalid"
-    | "timestamp_stale";
+    | "timestamp_stale"
+    | "refund_target_invalid";
   reason_code_version: "0.4.0";
   payload_disposition: "discarded" | "protected";
   retained: "non_identifying_metadata" | "protected_conflict_evidence";
@@ -355,7 +398,8 @@ export interface OpenMasuRawRecordV04 {
     | "consent_changed"
     | "custom_event"
     | "skan_postback"
-    | "adattributionkit_postback";
+    | "adattributionkit_postback"
+    | "deep_link_open";
   schema_version: "0.4.0";
   payload_sha256: string;
   occurred_at: string;
@@ -395,7 +439,8 @@ export interface OpenMasuLogicalEventV04 {
     | "consent_changed"
     | "custom_event"
     | "skan_postback"
-    | "adattributionkit_postback";
+    | "adattributionkit_postback"
+    | "deep_link_open";
   record_lifecycle: "active" | "retracted";
   timeliness: "on_time" | "late";
 }
@@ -433,23 +478,4 @@ export interface Money {
   amount_scale: number;
   currency: string;
   [k: string]: unknown;
-}
-export interface OpenMasuFraudDecisionV04 {
-  fraud_decision_id: string;
-  subject_ref: string;
-  decision: "clear" | "suspected" | "confirmed";
-  action: "allow" | "flag" | "exclude" | "quarantine";
-  reason_code: "bot_prefetch" | "replay_suspected" | "click_injection_suspected";
-  reason_code_version: "0.4.0";
-  evidence: {
-    type: string;
-    captured_at: string;
-    digest: string;
-    access_class: "public" | "protected" | "private";
-  }[];
-  rule_bundle_id: string;
-  rule_bundle_version: string;
-  rule_bundle_hash: string;
-  evaluated_at: string;
-  supersedes_fraud_decision_id?: string;
 }

@@ -1,20 +1,24 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import type { Pool } from "pg";
+import { DEFAULT_FRAUD_BUNDLE, fraudBundleHash, sha256Jcs } from "@openmasu/fraud-rules";
 import {
   createAppPool,
   createMigrationPool,
   createReaderPool,
   EncryptedFilePayloadStore,
+  recordJobOutcome,
+  uuidV7,
   withTenant,
 } from "@openmasu/runtime";
 import { ensureAdminKeys, verifyAdminKey, type AppAdminIdentity } from "./admin-auth.js";
 import { createRequestHandler } from "./router.js";
-import { OperationalMetrics } from "./operational-metrics.js";
+import { OperationalMetrics, renderOperationalMetrics } from "./operational-metrics.js";
 import { activateRuleBundle } from "./rule-bundles.js";
 import { issueDashboardSession, verifyDashboardSession } from "./session.js";
 
@@ -167,6 +171,122 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
   });
 
   it("serves identifier-free Prometheus metrics only to authenticated readers", async () => {
+    const completions = [
+      { job: "mmp_import", outcome: "succeeded", now: new Date("2026-08-20T00:00:00.000Z") },
+      { job: "mmp_import", outcome: "succeeded", now: new Date("2026-08-20T00:01:00.000Z") },
+      { job: "cost_import", outcome: "failed", now: new Date("2026-08-20T00:02:00.000Z") },
+    ] as const;
+    for (const completion of completions) {
+      await recordJobOutcome({ pool: appPool, tenantId, appId, ...completion });
+    }
+
+    const otherTenantId = `tenant-m5-other-${suffix}`;
+    const otherAppId = `app-m5-other-${suffix}`;
+    await withTenant(appPool, otherTenantId, (client) => client.query(
+      "INSERT INTO control.apps (tenant_id, app_id, created_at) VALUES ($1,$2,$3)",
+      [otherTenantId, otherAppId, "2026-08-20T00:00:00.000Z"],
+    ).then(() => undefined));
+    await recordJobOutcome({
+      pool: appPool,
+      tenantId: otherTenantId,
+      appId: otherAppId,
+      job: "metric_run",
+      outcome: "succeeded",
+      now: new Date("2026-08-20T00:03:00.000Z"),
+    });
+
+    const auditAcl = await migrationPool.query<{
+      rls_enabled: boolean;
+      rls_forced: boolean;
+      reader_select: boolean;
+      reader_insert: boolean;
+      other_rows: number;
+    }>(`
+      SELECT table_class.relrowsecurity AS rls_enabled,
+             table_class.relforcerowsecurity AS rls_forced,
+             has_table_privilege('openmasu_reader', 'ledger.audit_logs', 'SELECT') AS reader_select,
+             has_table_privilege('openmasu_reader', 'ledger.audit_logs', 'INSERT') AS reader_insert,
+             (SELECT count(*)::int FROM ledger.audit_logs
+               WHERE tenant_id=$1 AND actor_ref='job:metric_run') AS other_rows
+        FROM pg_class AS table_class
+        JOIN pg_namespace AS namespace ON namespace.oid=table_class.relnamespace
+       WHERE namespace.nspname='ledger' AND table_class.relname='audit_logs'`,
+    [otherTenantId]);
+    assert.deepEqual(auditAcl.rows[0], {
+      rls_enabled: true,
+      rls_forced: true,
+      reader_select: true,
+      reader_insert: false,
+      other_rows: 1,
+    });
+    const readerClient = await readerPool.connect();
+    try {
+      const unset = await readerClient.query<{ count: number }>(
+        "SELECT count(*)::int AS count FROM ledger.audit_logs",
+      );
+      assert.equal(unset.rows[0].count, 0);
+      await readerClient.query("BEGIN");
+      try {
+        await readerClient.query("SELECT set_config('openmasu.tenant_id', $1, true)", [tenantId]);
+        const crossTenant = await readerClient.query<{ count: number }>(
+          "SELECT count(*)::int AS count FROM ledger.audit_logs WHERE tenant_id=$1",
+          [otherTenantId],
+        );
+        assert.equal(crossTenant.rows[0].count, 0);
+      } finally {
+        await readerClient.query("ROLLBACK");
+      }
+    } finally {
+      readerClient.release();
+    }
+
+    const secretMarker = "synthetic-job-secret-do-not-export";
+    const insertMalformed = async (options: {
+      actorRef: string;
+      action?: string;
+      targetRef?: string;
+      policyVersion?: string;
+      outcome?: "succeeded" | "failed";
+      reasonCode?: string | null;
+      now: Date;
+    }): Promise<void> => withTenant(appPool, tenantId, (client) => client.query(
+      `INSERT INTO ledger.audit_logs (
+         audit_log_id, tenant_id, app_id, occurred_at, actor_type, actor_ref,
+         action, target_scope, target_ref, policy_version, request_digest,
+         outcome, reason_code
+       ) VALUES ($1,$2,$3,$4,'system_job',$5,$6,'app',$7,$8,$9,$10,$11)`,
+      [
+        uuidV7(options.now.valueOf()), tenantId, appId, options.now.toISOString(), options.actorRef,
+        options.action ?? "job_completed", options.targetRef ?? appId,
+        options.policyVersion ?? "job-health-v1", "f".repeat(64),
+        options.outcome ?? "succeeded", options.reasonCode ?? null,
+      ],
+    ).then(() => undefined));
+    await insertMalformed({
+      actorRef: `job:${secretMarker}`,
+      now: new Date("2026-08-20T00:04:00.000Z"),
+    });
+    await insertMalformed({
+      actorRef: "job:metric_run",
+      action: `${secretMarker}_completed`,
+      now: new Date("2026-08-20T00:05:00.000Z"),
+    });
+    await insertMalformed({
+      actorRef: "job:metric_run",
+      policyVersion: `${secretMarker}-policy`,
+      now: new Date("2026-08-20T00:06:00.000Z"),
+    });
+    await insertMalformed({
+      actorRef: "job:metric_run",
+      targetRef: secretMarker,
+      now: new Date("2026-08-20T00:07:00.000Z"),
+    });
+    await insertMalformed({
+      actorRef: "job:metric_run",
+      reasonCode: "job_failed",
+      now: new Date("2026-08-20T00:08:00.000Z"),
+    });
+
     assert.equal((await fetch(`${baseUrl}/metrics`)).status, 401);
     assert.equal((await fetch(`${baseUrl}/metrics`, {
       headers: { authorization: `Bearer synthetic-invalid-${"x".repeat(32)}` },
@@ -177,9 +297,80 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
     const body = await response.text();
     assert.match(body, /openmasu_http_requests_total/);
     assert.match(body, /openmasu_ingest_backlog\{queue="sdk_batches"\}/);
-    for (const forbidden of ["tenant_id", "app_id", "installation_id", "record_id", "payload", "authorization", "cookie"]) {
+    const values = (metric: string): Record<string, string> => Object.fromEntries(
+      body.split("\n")
+        .filter((line) => line.startsWith(`${metric}{`))
+        .map((line) => {
+          const match = /^\w+\{job="([^"]+)",outcome="([^"]+)"\} (.+)$/.exec(line);
+          assert.ok(match);
+          return [`${match[1]}:${match[2]}`, match[3]];
+        }),
+    );
+    assert.deepEqual(values("openmasu_job_runs_total"), {
+      "mmp_import:succeeded": "2",
+      "mmp_import:failed": "0",
+      "cost_import:succeeded": "0",
+      "cost_import:failed": "1",
+      "max_revenue_import:succeeded": "0",
+      "max_revenue_import:failed": "0",
+      "google_conversion_delivery:succeeded": "0",
+      "google_conversion_delivery:failed": "0",
+      "metric_run:succeeded": "0",
+      "metric_run:failed": "0",
+    });
+    const latest = values("openmasu_job_last_completion_timestamp_seconds");
+    assert.equal(Object.keys(latest).length, 10);
+    assert.equal(Number(latest["mmp_import:succeeded"]), Date.parse("2026-08-20T00:01:00.000Z") / 1000);
+    assert.equal(Number(latest["cost_import:failed"]), Date.parse("2026-08-20T00:02:00.000Z") / 1000);
+    for (const key of [
+      "mmp_import:failed", "cost_import:succeeded", "max_revenue_import:succeeded",
+      "max_revenue_import:failed", "google_conversion_delivery:succeeded",
+      "google_conversion_delivery:failed", "metric_run:succeeded", "metric_run:failed",
+    ]) {
+      assert.equal(latest[key], "0");
+    }
+    for (const forbidden of [
+      "tenant_id", "app_id", "installation_id", "record_id", "payload",
+      "authorization", "cookie", tenantId, appId, otherTenantId, otherAppId, secretMarker,
+    ]) {
       assert.equal(body.includes(forbidden), false);
     }
+
+    const audit = await withTenant(appPool, tenantId, (client) => client.query<{
+      actor_ref: string; outcome: string; occurred_at: string; request_digest: string; row_text: string;
+    }>(
+      `SELECT actor_ref, outcome, occurred_at, request_digest, row_to_json(audit_logs)::text AS row_text
+         FROM ledger.audit_logs
+        WHERE action='job_completed' AND policy_version='job-health-v1'
+          AND actor_ref IN (
+            'job:mmp_import','job:cost_import','job:max_revenue_import',
+            'job:google_conversion_delivery','job:metric_run'
+          )
+          AND app_id=target_ref
+          AND ((outcome='succeeded' AND reason_code IS NULL)
+            OR (outcome='failed' AND reason_code='job_failed'))
+        ORDER BY occurred_at`,
+    ));
+    assert.equal(audit.rows.length, 3);
+    for (const row of audit.rows) {
+      const job = row.actor_ref.slice("job:".length);
+      const expectedDigest = createHash("sha256")
+        .update(`${job}\u0000${row.outcome}\u0000${tenantId}\u0000${appId}\u0000${row.occurred_at}`, "utf8")
+        .digest("hex");
+      assert.equal(row.request_digest, expectedDigest);
+      assert.equal(row.row_text.includes(secretMarker), false);
+    }
+
+    const afterRestart = await renderOperationalMetrics(readerPool, tenantId, new OperationalMetrics());
+    assert.deepEqual(values("openmasu_job_runs_total"), Object.fromEntries(
+      afterRestart.split("\n")
+        .filter((line) => line.startsWith("openmasu_job_runs_total{"))
+        .map((line) => {
+          const match = /^\w+\{job="([^"]+)",outcome="([^"]+)"\} (.+)$/.exec(line);
+          assert.ok(match);
+          return [`${match[1]}:${match[2]}`, match[3]];
+        }),
+    ));
   });
 
   it("keeps rule-bundle versions append-only with one current successor and audit history", async () => {
@@ -291,5 +482,54 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
       "DELETE FROM control.rule_bundle_revisions WHERE rule_bundle_revision_id=$1",
       [first.rule_bundle_revision_id],
     )), /append-only/);
+  });
+
+  it("F-A-12 registers the canonical fraud definition and rejects forged digests", async () => {
+    const definition = structuredClone(DEFAULT_FRAUD_BUNDLE);
+    const revision = await activateRuleBundle({
+      pool: appPool,
+      identity: identities.admin,
+      body: {
+        rule_bundle_id: definition.id,
+        rule_bundle_version: definition.version,
+        rule_bundle_hash: fraudBundleHash(definition),
+        definition,
+        definition_digest: sha256Jcs(definition),
+      },
+      now: new Date("2026-08-20T02:00:00.000Z"),
+    });
+    assert.equal(revision.rule_bundle_hash, fraudBundleHash(definition));
+    assert.equal(revision.definition_digest, sha256Jcs(definition));
+    await assert.rejects(() => activateRuleBundle({
+      pool: appPool,
+      identity: identities.admin,
+      body: {
+        rule_bundle_id: definition.id,
+        rule_bundle_version: "1.1.0",
+        rule_bundle_hash: "f".repeat(64),
+        definition: { ...definition, version: "1.1.0" },
+        definition_digest: sha256Jcs({ ...definition, version: "1.1.0" }),
+        supersedes_rule_bundle_revision_id: revision.rule_bundle_revision_id,
+      },
+    }), /rule_bundle_hash_mismatch/);
+    await assert.rejects(() => activateRuleBundle({
+      pool: appPool,
+      identity: identities.admin,
+      body: {
+        rule_bundle_id: definition.id,
+        rule_bundle_version: "1.1.0",
+        definition: { ...definition, version: "1.1.0" },
+        definition_digest: "0".repeat(64),
+        supersedes_rule_bundle_revision_id: revision.rule_bundle_revision_id,
+      },
+    }), /rule_bundle_definition_digest_mismatch/);
+    const stored = await withTenant(appPool, tenantId, (client) => client.query<{
+      definition: unknown; definition_digest: string;
+    }>(
+      "SELECT definition,definition_digest FROM control.rule_bundle_revisions WHERE rule_bundle_revision_id=$1",
+      [revision.rule_bundle_revision_id],
+    ));
+    assert.deepEqual(stored.rows[0].definition, definition);
+    assert.equal(stored.rows[0].definition_digest, sha256Jcs(definition));
   });
 });

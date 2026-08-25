@@ -1,0 +1,16 @@
+{
+  "name": "@openmasu/fraud-rules",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pure deterministic OpenMasu fraud rules",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "json-canonicalize": "2.0.0"
+  }
+}

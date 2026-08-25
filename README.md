@@ -18,7 +18,7 @@ This project is licensed under the [Apache License 2.0](LICENSE); attribution is
 
 ## Current status
 
-This project contains the v0.4.0 contract and the synthetic code milestones from M1 through M5: the Shadow ledger and import foundation, cohort metrics and difference audit, Android/Unity and Apple measurement paths, the server-rendered operator dashboard, minimum RBAC, authenticated operational metrics, privacy-safe restore support, rule-bundle history, and release evidence. Real provider connectivity, real-device and campaign validation, Unity Xcode export, App Store review, a production deployment, real backup operations, real production load, real integrity-service configuration, real-cardinality dashboard usability, and exact 4-vCPU/8-GB capacity validation have not been demonstrated. Immutable baselines are available at the `contract-v0.1`, `contract-v0.2.1`, and `contract-v0.3.6` Git tags. See [the current status](docs/STATUS.md) for the milestone-by-milestone boundary.
+This project contains the v0.4.9 contract and synthetic code milestones through M7: the Shadow ledger and import foundation, cohort metrics and difference audit, Android/Unity and Apple measurement paths, the server-rendered operator dashboard, production-control foundations, deterministic fraud controls, direct/deferred deep-link paths, settled purchase/refund net revenue, D30/D90 total-net ROAS and cohort LTV, and synthetic Google Play one-time-product, initial-subscription, and RTDN renewal verification slices. Real provider connectivity, real-device and campaign validation, Unity exports, App Store review, a production deployment, real backup operations, real production load, real integrity-service configuration, live purchase verification, and real link-domain verification have not been demonstrated. Immutable baselines are available at the `contract-v0.1`, `contract-v0.2.1`, and `contract-v0.3.6` Git tags. See [the current status](docs/STATUS.md) for the milestone-by-milestone boundary.
 
 The first product entry point is a Shadow MMP that runs alongside an existing provider. It normalizes first-party events, existing MMP exports, media cost, and revenue into a common contract, then explains neutral differences through candidate evidence, exclusion reasons, attribution windows, ID joins, and recalculation history. Difference reasons describe measurement semantics, not provider quality. It must not be treated as the primary MMP until a real shadow pilot has produced sufficient evidence.
 
@@ -94,6 +94,8 @@ Implemented runtime code lives in `apps/api`, `apps/redirector`, `apps/worker`, 
 - [M4 device and Apple-provider validation checklist](docs/validation/m4-device-checklist.md)
 - [M5 integrity-service checklist](docs/validation/m5-integrity-checklist.md)
 - [M5 production-operator checklist](docs/validation/m5-operator-checklist.md)
+- [M6 fraud operator checklist](docs/validation/m6-fraud-checklist.md)
+- [M7 deep-link device checklist](docs/validation/deeplink-device-checklist.md)
 - [M5 synthetic load record](docs/validation/m5-load-results.md)
 - [Backup and restore runbook](docs/operations/backup-restore.md)
 - [Release runbook](docs/operations/release.md)
@@ -101,22 +103,30 @@ Implemented runtime code lives in `apps/api`, `apps/redirector`, `apps/worker`, 
 
 ## Five-minute synthetic quickstart
 
-Requirements: Docker with Compose, Node.js 22.18.0, and npm 11.6.2. From a clean clone, run:
+Requirements: Docker with Compose, Node.js 22.18.0, and npm 11.6.2. The Node.js and npm versions must match exactly because `.npmrc` enables `engine-strict`; nearby versions are rejected. Use `.nvmrc` with nvm, fnm, or an equivalent version manager. From a clean clone, run:
 
 ```bash
+npm ci
 docker compose up -d --wait
 npm run demo:metrics
 ```
 
-The bootstrap service generates local secrets, migrations run automatically, and the API and worker start only after PostgreSQL is healthy. `demo:metrics` prints tenant-scoped ledger counts plus a clearly labelled contract-synthetic preview. The preview is calculated from fixture 33 and does not claim that a real provider or campaign was queried. Its key values are:
+The bootstrap service generates local secrets, migrations run automatically, and the API and worker start only after PostgreSQL is healthy. `demo:metrics` prints tenant-scoped ledger counts plus a clearly labelled contract-synthetic preview. The preview is calculated from fixture 33 and does not claim that a real provider or campaign was queried.
 
 The API and dashboard listen on `http://localhost:8080` (`/dashboard` for the login page), and the portable redirector listens on `http://localhost:8090`. `npm run bootstrap` prints the local admin key once; paste it into the dashboard login form. Dashboard reports are aggregate operator views, not data-subject exports. Tracking links are created through the authenticated management route; request query parameters and headers can never override their stored destinations. SDK enrollment and event delivery use the HMAC signing string fixed in [M2 Design Baseline](docs/design/m2-baseline.md).
 
+An abridged clean-start output makes the two origins explicit:
+
 ```json
 {
+  "ledger_counts": {
+    "origin": "postgresql_ledger",
+    "raw_records": 0,
+    "logical_events": 0
+  },
   "synthetic_contract_preview": [
-    { "metric_name": "d7_roas", "value_unscaled": "1500000", "ratio_scale": 6 },
-    { "metric_name": "retention_d1", "value_unscaled": "1000000", "ratio_scale": 6 }
+    { "origin": "contract_fixture", "fixture": "33-stage-b-cohort-metrics", "metric_name": "d7_roas", "value_unscaled": "1500000", "ratio_scale": 6 },
+    { "origin": "contract_fixture", "fixture": "33-stage-b-cohort-metrics", "metric_name": "retention_d1", "value_unscaled": "1000000", "ratio_scale": 6 }
   ]
 }
 ```
@@ -127,6 +137,8 @@ To load all reviewed contract fixtures through the real PostgreSQL ingestion pat
 docker compose --profile seed run --rm seed
 npm run verify:parity
 ```
+
+Run the seed profile only on a synthetic instance with concurrent ingestion quiesced. Seed jobs serialize against each other with a PostgreSQL advisory lock and retry one `40P01` deadlock once; a second database deadlock is reported as a failure and should be investigated before rerunning.
 
 To exercise the operator CSV-to-metric path without committing a tabular file, create a synthetic CSV only under the gitignored `.openmasu/` directory and run the two explicit jobs:
 
@@ -141,7 +153,37 @@ The first command persists one immutable synthetic `cost_record`; the second run
 
 This quickstart uses synthetic inputs only. Do not place provider exports, credentials, real user data, campaign values, or validation results in this public repository.
 
+## Create a tracking link in the dashboard
+
+Custom HTTPS destinations fail closed unless their origins are explicitly allowed. Before the first bootstrap, export a comma-separated allowlist and start the stack:
+
+```bash
+export OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST=https://links.synthetic.example
+docker compose up -d --wait
+docker compose logs bootstrap
+```
+
+Open `http://localhost:8080/dashboard`, sign in with the generated admin key shown by the bootstrap log, select the application, and use **Create a tracking link**. The destination URL must use an origin in `OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST`; an unlisted origin remains rejected. An existing deployment must update its generated app runtime environment through its secret-management procedure and restart the API before a changed allowlist takes effect.
+
+## Backfill aggregate MAX revenue
+
+OpenMasu can pull the AppLovin MAX Revenue Reporting API into a separate, append-only aggregate-revenue snapshot series. Set `OPENMASU_MAX_REPORT_KEY` or `OPENMASU_MAX_REPORT_KEY_FILE` in the private deployment environment, then run an inclusive UTC range within the provider's current 45-day request window:
+
+```bash
+npm run import:revenue:max -- --tenant=<tenant> --app=<app> --start=2026-08-23 --end=2026-08-23
+```
+
+The command requests only UTC day, country, MAX ad-unit ID, network, and estimated revenue. Repeating the same report snapshot is idempotent; a later provider restatement remains in history while `aggregate_revenue_snapshots_current` selects the latest observed row for each retained dimension key. Reporting API totals are deliberately separate from S2S impression facts because they may overlap. They are not added to installation-level D0/D7/D30/D90 cohort revenue, and no installation or advertising identifier is stored. Recent provider totals may still be incomplete, so a later snapshot is expected to restate them.
+
+Live credentials, account access, provider availability, and private-dashboard reconciliation remain operator validation steps. Never commit a report key, response, or private validation result.
+
 ## Android, iOS, and Unity SDK development
+
+### Deep-link capability boundary
+
+OpenMasu delivers deterministic direct deep links on Android through App Links and on iOS through Universal Links. Deterministic deferred deep linking is available on Android only, carried by Google Play Install Referrer. On iOS, OpenMasu delivers deep links to users who already have the app, using Universal Links. It does not deliver a deep link to a user who installs the app after tapping a link. Every mechanism that would make that possible either requires deriving an identifier from device signals, which Apple's Developer Program License Agreement prohibits and which this project does not do, or requires a user-visible prompt on first launch. If Apple provides a channel that carries a destination through installation, OpenMasu will use it.
+
+The SDK parses and reports a typed destination but never navigates. The host application remains responsible for validating the value again and selecting its own screen. Routing still reaches the host listener while measurement collection is disabled; no `deep_link_open` event is queued in that state. A direct `deep_link_open` is a device claim, not server-observed click evidence.
 
 Requirements: JDK 17 and Android SDK 36. The Android project uses a checksum-pinned Gradle 8.13 wrapper. From the repository root:
 
@@ -152,6 +194,70 @@ dotnet run --project sdk/unity/tests/UnityCompileProbe.csproj --configuration Re
 ```
 
 The second command requires a running API 36 emulator. The first command compiles every documented Install Referrer 2.2 accessor, tests queue/consent/Meta/MAX behavior, verifies the merged manifest and backup rules, builds the native sample, and writes `sbom/sdk-android.cdx.json`. The Unity command is a shim compile and callback-concurrency gate; an actual Unity export remains an operator procedure. M2 distributes source and local build instructions only, not Maven or UPM registry artifacts.
+
+### Google Play purchase verification
+
+The Android SDK can submit a Play Billing one-time-product or initial-subscription token through the authenticated, encrypted ingestion path:
+
+```kotlin
+openMasu.trackGooglePlayProductPurchase(
+  purchaseToken = purchase.purchaseToken,
+  productId = "synthetic.product.example",
+  transactionId = "transaction:host-owned-id",
+  amountUnscaled = "12990000",
+  amountScale = 6,
+  currency = "USD",
+)
+
+openMasu.trackGooglePlaySubscriptionPurchase(
+  purchaseToken = purchase.purchaseToken,
+  productId = "synthetic.subscription.example",
+  transactionId = "transaction:host-owned-subscription-id",
+  amountUnscaled = "9990000",
+  amountScale = 6,
+  currency = "USD",
+)
+```
+
+Register the application's Android package identity, provide a service-account JSON file through the deployment secret manager, and enable the worker only after completing the [Google Play product-verification checklist](docs/validation/google-play-product-verification-checklist.md):
+
+```bash
+OPENMASU_GOOGLE_PLAY_PRODUCT_VERIFICATION=on
+OPENMASU_GOOGLE_PLAY_SUBSCRIPTION_VERIFICATION=on
+OPENMASU_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_FILE=/run/secrets/google-play-service-account.json
+```
+
+The initial client record stays `pending`. For one-time products, the worker requires a purchased ProductPurchaseV2 response and a matching processed order line. For an initial subscription, it requires one matching SubscriptionPurchaseV2 line with a latest successful order, then requires that order's subscription service period to start at the subscription start time. This prevents a later renewal from being mistaken for the initial order. In both paths, emitted money comes exactly from the matching Google order line total; client money is only an untrusted pending claim. Tokens, order IDs, buyer data, titles, and raw responses never enter public ledger artifacts. This proves a transaction, not entitlement or acknowledgement. Complete the [one-time-product checklist](docs/validation/google-play-product-verification-checklist.md) or [initial-subscription checklist](docs/validation/google-play-subscription-verification-checklist.md) before enabling the respective worker.
+
+Authenticated Google Cloud Pub/Sub push can trigger the separate subscription-renewal slice:
+
+```dotenv
+OPENMASU_GOOGLE_PLAY_RTDN_RENEWAL_VERIFICATION=on
+OPENMASU_GOOGLE_PLAY_RTDN_AUDIENCE=https://measure.example.invalid/v1/google-play/rtdn
+OPENMASU_GOOGLE_PLAY_RTDN_SERVICE_ACCOUNT_EMAIL=openmasu-rtdn@example-project.iam.gserviceaccount.com
+```
+
+Configure the Pub/Sub push endpoint as `https://<host>/v1/google-play/rtdn` with authentication enabled and the exact audience and user-managed service account above. The receiver verifies Google's OIDC signature and claims, resolves the registered package without trusting request tenant data, and durably queues only `SUBSCRIPTION_RENEWED`. The worker then re-reads SubscriptionPurchaseV2 and the processed order; only a period strictly after the original subscription start can become settled renewal revenue. Message, token, and order digests make redelivery idempotent. RTDN is a signal, not monetary truth. This slice sees only the latest successful order returned after a notification and does not claim historical backfill for missed notifications. Entitlements, acknowledgement, pause/hold/grace/cancel handling, refunds, revocation, and voided purchases remain outside it. Complete the [RTDN renewal checklist](docs/validation/google-play-rtdn-renewal-checklist.md) before enabling it.
+
+### Verified conversion delivery to Google Data Manager
+
+OpenMasu can optionally deliver a Play-verified, settled purchase to Google Data Manager only when its latest attribution is final and non-organic, the source click is explicitly `network=google_ads`, and `remote_click_ref` contains the source-qualified GCLID. Configure the redirector with `OPENMASU_REDIRECTOR_REMOTE_CLICK_PARAM=gclid`; internal click IDs and hashed reconciliation keys are never substituted. Register the non-secret destination with an administrator key:
+
+```bash
+curl -X POST http://localhost:8080/v1/admin/apps/app-local/google-data-manager \
+  -H "Authorization: Bearer $OPENMASU_ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"operating_account_id":"1234567890","conversion_action_id":"987654321","app_audience":"general","enabled":true}'
+```
+
+Then provide a dedicated credential, separate from Play verification, and opt in:
+
+```dotenv
+OPENMASU_GOOGLE_DATA_MANAGER_ENABLED=on
+OPENMASU_GOOGLE_DATA_MANAGER_SERVICE_ACCOUNT_JSON_FILE=/run/secrets/google-data-manager-service-account.json
+```
+
+The request body is encrypted until dispatch, retries are idempotent by a stable transaction ID, and delayed diagnostics are polled for at most 24 hours. Child-directed destinations, withdrawn/redacted evidence, provisional/organic/unattributed decisions, unverified purchases, and precision-losing money are rejected before dispatch. Complete the [operator checklist](docs/validation/google-data-manager-conversion-checklist.md) first. Live Google access, destination acceptance, diagnostics timing, provider retention, and post-dispatch deletion/retraction are not proven by synthetic CI.
 
 On macOS, run the Swift and Simulator gates:
 
@@ -174,4 +280,4 @@ python -m pip install --require-hashes --requirement requirements-contract.txt
 npm run validate
 ```
 
-Validation is read-only. It checks 27 schemas, 8 registries, 47 reviewed synthetic fixtures, 611 golden output artifacts across 13 classes, 47 scenario assertions, 26 acceptance criteria, semantic and metamorphic mutations, deterministic TypeScript output, independent Python output, and RFC 8785 conformance. See the [fixture provenance note](fixtures/v0.4/README.md).
+Validation is read-only. It checks 28 schemas, 8 registries, 56 reviewed synthetic fixtures, 728 golden output artifacts, 56 scenario assertions, 27 acceptance criteria, semantic and metamorphic mutations, deterministic TypeScript output, independent Python output, and RFC 8785 conformance. Purchase-net definitions cover D0/D1/D3/D7/D30/D90; D30/D90 total-net definitions add advertising revenue to settled purchase net for revenue, ROAS, and cohort LTV without changing the earlier ad-only series. Settled status is provider-neutral client evidence, not App Store, Play, or private-provider verification. See the [fixture provenance note](fixtures/v0.4/README.md).

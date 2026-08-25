@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { createSign, generateKeyPairSync, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,12 +15,18 @@ import {
   uuidV7,
   withTenant,
 } from "@openmasu/runtime";
-import { processSdkInbox } from "../../worker/src/sdk-worker.js";
+import { listRuntimeWorkTenants, processSdkInbox } from "../../worker/src/sdk-worker.js";
+import { processIntegrityVerifications } from "../../worker/src/integrity-verifier.js";
+import {
+  processGooglePlayProductVerifications,
+  queueGooglePlayProductVerification,
+} from "../../worker/src/google-play-product-verifier.js";
 import { createRequestHandler } from "./router.js";
 import { KeyedTokenBucket } from "./rate-limit.js";
 import { parseMetricQuery } from "./report-query.js";
 import { encodeMetricReport, metricReport } from "./reporting.js";
 import { ensureSdkKeys, signSdkRequest } from "./sdk-auth.js";
+import { createTrackingLink } from "./tracking-links.js";
 
 const run = randomBytes(6).toString("hex");
 const tenantId = `tenant-m2a-${run}`;
@@ -38,6 +44,44 @@ let baseUrl = "";
 let server: ReturnType<typeof createServer>;
 let installationKeyId = "";
 let installationSecret = "";
+let legacyPrivacyTargetRecordId = "";
+let legacyPrivacyRefundRecordId = "";
+let legacyPrivacyPayloadRefs: string[] = [];
+const integrityBinding = randomBytes(32).toString("base64url");
+const playPackageName = `dev.openmasu.synthetic${run}`;
+const playSubscriptionToken = `synthetic-google-play-subscription-token-${run}`;
+const playSubscriptionProductId = `subscription.synthetic.${run}`;
+const playSubscriptionStartTime = "2026-08-24T02:03:04.000Z";
+const rtdnAudience = "https://synthetic.invalid/v1/google-play/rtdn";
+const rtdnEmail = "synthetic-rtdn@synthetic-project.iam.gserviceaccount.com";
+const rtdnKeyPair = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const rtdnJwk = { ...rtdnKeyPair.publicKey.export({ format: "jwk" }), kid: "synthetic-rtdn-key", alg: "RS256", use: "sig" };
+
+function rtdnToken(overrides: Record<string, unknown> = {}): string {
+  const now = Math.floor(Date.now() / 1_000);
+  const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT", kid: "synthetic-rtdn-key" })).toString("base64url");
+  const claims = Buffer.from(JSON.stringify({
+    iss: "https://accounts.google.com", aud: rtdnAudience, email: rtdnEmail,
+    email_verified: true, iat: now - 30, exp: now + 3_000, ...overrides,
+  })).toString("base64url");
+  const signer = createSign("RSA-SHA256");
+  signer.update(`${header}.${claims}`);
+  signer.end();
+  return `${header}.${claims}.${signer.sign(rtdnKeyPair.privateKey).toString("base64url")}`;
+}
+
+function rtdnEnvelope(messageId: string): string {
+  const notification = {
+    version: "1.0",
+    packageName: playPackageName,
+    eventTimeMillis: String(Date.now()),
+    subscriptionNotification: { version: "1.0", notificationType: 2, purchaseToken: playSubscriptionToken },
+  };
+  return JSON.stringify({
+    message: { messageId, publishTime: new Date().toISOString(), data: Buffer.from(JSON.stringify(notification)).toString("base64") },
+    subscription: "projects/synthetic-project/subscriptions/openmasu-renewals",
+  });
+}
 
 function sourceEvent(eventId: string, eventName: string, payload: Record<string, unknown>, occurredAt = "2026-08-19T01:00:00.000Z") {
   return {
@@ -135,6 +179,16 @@ describe("M2a signed SDK ingestion", () => {
         appBucket: new KeyedTokenBucket(100, 100),
         privacyBucket: new KeyedTokenBucket(100, 100),
       },
+      googlePlayRtdn: {
+        pool,
+        payloadStore,
+        expectedAudience: rtdnAudience,
+        expectedServiceAccountEmail: rtdnEmail,
+        maximumBytes: 16 * 1024,
+        fetch: async () => new Response(JSON.stringify({ keys: [rtdnJwk] }), {
+          status: 200, headers: { "content-type": "application/json" },
+        }),
+      },
     }));
     server.listen(0, "127.0.0.1");
     await once(server, "listening");
@@ -160,6 +214,490 @@ describe("M2a signed SDK ingestion", () => {
     installationSecret = value.installation_secret;
     assert.match(installationKeyId, /^installation-key:/);
     assert.ok(installationSecret.length >= 43);
+  });
+
+  it("F-A-14 rejects parsed integrity claims and protects accepted raw tokens", async () => {
+    const integrityInstallationId = `installation:m2a-integrity-${run}`;
+    const enrollment = await signed("/v1/installations", { installation_id: integrityInstallationId });
+    assert.equal(enrollment.status, 201);
+    const integrityCredential = await enrollment.json() as {
+      installation_key_id: string;
+      installation_secret: string;
+    };
+    const parsedClaim = sourceEvent(`event:integrity-claim:${run}`, "install", {
+      installation_id: installationId,
+      install_type: "first_install",
+      referrer_status: "unavailable",
+      integrity_verdict: { provider: "play_integrity", verdict: "verified", evidence_ref: `protected:${run}` },
+    });
+    const rejected = await signed("/v1/events/batch", { records: [parsedClaim] }, {
+      secret: installationSecret,
+      installationKeyId,
+    });
+    assert.equal(rejected.status, 403);
+    assert.equal((await rejected.json() as { error: string }).error, "device_integrity_claim_forbidden");
+
+    const rawToken = `synthetic-integrity-token-${run}`;
+    const accepted = sourceEvent(`event:integrity-token:${run}`, "install", {
+      installation_id: integrityInstallationId,
+      install_type: "first_install",
+      referrer_status: "unavailable",
+      extensions: {
+        integrity_token_protected: rawToken,
+        integrity_provider: "play_integrity",
+        integrity_binding_mode: "challenge",
+        integrity_binding: integrityBinding,
+      },
+    });
+    assert.equal((await signed("/v1/events/batch", { records: [accepted] }, {
+      secret: integrityCredential.installation_secret,
+      installationKeyId: integrityCredential.installation_key_id,
+    })).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+    const evidence = await withTenant(pool, tenantId, async (client) => ({
+      queued: (await client.query<{ token_ref: string }>(
+        `SELECT token_ref FROM ephemeral.integrity_verifications
+         WHERE tenant_id=$1 AND app_id=$2 AND subject_record_id IN (
+           SELECT record_id FROM ledger.raw_records WHERE tenant_id=$1 AND app_id=$2 AND event_id=$3
+         )`,
+        [tenantId, appId, accepted.event_id],
+      )).rows,
+      raw: (await client.query<{ artifact: unknown }>(
+        "SELECT artifact FROM ledger.raw_records WHERE tenant_id=$1 AND app_id=$2 AND event_id=$3",
+        [tenantId, appId, accepted.event_id],
+      )).rows,
+    }));
+    assert.equal(evidence.queued.length, 1);
+    assert.match(evidence.queued[0].token_ref, /^encrypted:/);
+    assert.doesNotMatch(JSON.stringify(evidence.raw), new RegExp(rawToken));
+    assert.equal(await payloadStore.scanFor(rawToken), false, "encrypted store leaked a plaintext integrity token");
+  });
+
+  it("F-A-15 maps provider outages to unavailable without evidence or metric effects", async () => {
+    const before = await withTenant(pool, tenantId, async (client) => ({
+      fraud: (await client.query<{ count: number }>(
+        "SELECT count(*)::int AS count FROM ledger.fraud_decisions WHERE tenant_id=$1 AND app_id=$2",
+        [tenantId, appId],
+      )).rows[0].count,
+      metrics: (await client.query<{ count: number }>(
+        "SELECT count(*)::int AS count FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2",
+        [tenantId, appId],
+      )).rows[0].count,
+    }));
+    const result = await processIntegrityVerifications(pool, payloadStore, tenantId, {
+      providerMode: "play_integrity",
+      playEndpoint: "http://127.0.0.1:9999/verify",
+      client: async () => ({ status: 503, body: Buffer.from("synthetic provider outage") }),
+    });
+    assert.ok(result.unavailable >= 1);
+    const after = await withTenant(pool, tenantId, async (client) => ({
+      verdicts: (await client.query<{ verdict: string; evidence_ref: string | null }>(
+        `SELECT verdict, evidence_ref FROM ledger.integrity_verification_results
+         WHERE tenant_id=$1 AND app_id=$2 ORDER BY decided_at DESC`,
+        [tenantId, appId],
+      )).rows,
+      fraud: (await client.query<{ count: number }>(
+        "SELECT count(*)::int AS count FROM ledger.fraud_decisions WHERE tenant_id=$1 AND app_id=$2",
+        [tenantId, appId],
+      )).rows[0].count,
+      metrics: (await client.query<{ count: number }>(
+        "SELECT count(*)::int AS count FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2",
+        [tenantId, appId],
+      )).rows[0].count,
+    }));
+    assert.ok(after.verdicts.some((row) => row.verdict === "unavailable" && row.evidence_ref === null));
+    assert.equal(after.fraud, before.fraud);
+    assert.equal(after.metrics, before.metrics);
+  });
+
+  it("verifies a protected Google Play product token before emitting settled revenue and stays idempotent", async () => {
+    const packageName = `dev.openmasu.synthetic${run}`;
+    await withTenant(pool, tenantId, (client) => client.query(
+      `INSERT INTO control.app_link_identities (
+        tenant_id, app_id, android_package_name, registered_at, artifact
+      ) VALUES ($1,$2,$3,$4,$5::jsonb)`,
+      [tenantId, appId, packageName, "2026-08-24T00:00:00.000Z",
+        JSON.stringify({ tenant_id: tenantId, app_id: appId, android_package_name: packageName })],
+    ));
+    const rawToken = `synthetic-google-play-token-${run}`;
+    const productId = `product.synthetic.${run}`;
+    const providerOrderId = `order:synthetic:${run}`;
+    const event = sourceEvent(`event:google-play-product:${run}`, "purchase", {
+      installation_id: installationId,
+      transaction_id: `transaction:client-google-play:${run}`,
+      amount_unscaled: "12990000",
+      amount_scale: 6,
+      currency: "USD",
+      financial_status: "pending",
+      extensions: {
+        google_play_purchase_token_protected: rawToken,
+        google_play_product_id_protected: productId,
+      },
+    });
+    assert.equal((await signed("/v1/events/batch", { records: [event] }, {
+      secret: installationSecret, installationKeyId,
+    })).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+    const before = await withTenant(pool, tenantId, async (client) => ({
+      queue: (await client.query<{ token_ref: string; subject_record_id: string }>(
+        `SELECT token_ref, subject_record_id FROM ephemeral.google_play_product_verifications
+          WHERE tenant_id=$1 AND app_id=$2`, [tenantId, appId],
+      )).rows,
+      facts: (await client.query<{ financial_status: string }>(
+        `SELECT fact.financial_status FROM ledger.purchase_facts fact
+          JOIN ledger.raw_records raw ON raw.tenant_id=fact.tenant_id AND raw.app_id=fact.app_id AND raw.record_id=fact.record_id
+          WHERE fact.tenant_id=$1 AND fact.app_id=$2 AND raw.event_id=$3`,
+        [tenantId, appId, event.event_id],
+      )).rows,
+      rawArtifacts: (await client.query<{ artifact: unknown }>(
+        `SELECT artifact FROM ledger.raw_records WHERE tenant_id=$1 AND app_id=$2 AND event_id=$3`,
+        [tenantId, appId, event.event_id],
+      )).rows,
+    }));
+    assert.equal(before.queue.length, 1);
+    assert.ok((await listRuntimeWorkTenants(pool)).includes(tenantId),
+      "the worker must rediscover a tenant whose only due work is purchase verification");
+    assert.match(before.queue[0].token_ref, /^encrypted:/);
+    assert.deepEqual(before.facts, [{ financial_status: "pending" }]);
+    assert.doesNotMatch(JSON.stringify(before.rawArtifacts), new RegExp(rawToken));
+    assert.equal(await payloadStore.scanFor(rawToken), false);
+
+    const providerCalls: Array<Record<string, string | undefined>> = [];
+    const completed = await processGooglePlayProductVerifications(pool, payloadStore, tenantId, {
+      enabled: true,
+      client: async (input) => {
+        providerCalls.push(input);
+        return input.operation === "product"
+          ? { status: 200, body: Buffer.from(JSON.stringify({
+            purchaseStateContext: { purchaseState: "PURCHASED" },
+            purchaseCompletionTime: "2026-08-24T01:02:03.000Z",
+            orderId: providerOrderId,
+            productLineItem: [{ productId }],
+          })) }
+          : { status: 200, body: Buffer.from(JSON.stringify({
+            orderId: providerOrderId,
+            purchaseToken: rawToken,
+            state: "PROCESSED",
+            lineItems: [{
+              productId,
+              total: { currencyCode: "EUR", units: "7", nanos: 125_000_000 },
+              oneTimePurchaseDetails: { quantity: 1 },
+            }],
+          })) };
+      },
+      now: () => new Date(Date.now() + 60_000),
+    });
+    assert.deepEqual(completed, { verified: 1, failed: 0, unavailable: 0, deferred: 0 });
+    assert.equal(providerCalls[0].packageName, packageName);
+    assert.equal(providerCalls[0].purchaseToken, rawToken);
+    assert.deepEqual(providerCalls.map((call) => call.operation), ["product", "order"]);
+    assert.equal(providerCalls[1].orderId, providerOrderId);
+    const after = await withTenant(pool, tenantId, async (client) => ({
+      results: (await client.query<{ verdict: string; verified_record_id: string; artifact: unknown }>(
+        `SELECT verdict, verified_record_id, artifact
+           FROM ledger.google_play_purchase_verification_results
+          WHERE tenant_id=$1 AND app_id=$2 AND subject_record_id=$3`,
+        [tenantId, appId, before.queue[0].subject_record_id],
+      )).rows,
+      verified: (await client.query<{
+        financial_status: string; producer: string; amount_unscaled: string;
+        amount_scale: number; currency: string; artifact: unknown;
+      }>(
+        `SELECT fact.financial_status, raw.producer, fact.amount_unscaled,
+                fact.amount_scale, fact.currency, fact.artifact
+           FROM ledger.purchase_facts fact
+           JOIN ledger.raw_records raw ON raw.tenant_id=fact.tenant_id AND raw.app_id=fact.app_id AND raw.record_id=fact.record_id
+          WHERE fact.tenant_id=$1 AND fact.app_id=$2 AND raw.producer='adapter:google-play'`,
+        [tenantId, appId],
+      )).rows,
+      queued: (await client.query(
+        `SELECT 1 FROM ephemeral.google_play_product_verifications WHERE tenant_id=$1 AND app_id=$2`,
+        [tenantId, appId],
+      )).rowCount,
+    }));
+    assert.equal(after.results.length, 1);
+    assert.equal(after.results[0].verdict, "verified");
+    assert.deepEqual(after.verified.map(({ financial_status, producer }) => ({ financial_status, producer })), [
+      { financial_status: "settled", producer: "adapter:google-play" },
+    ]);
+    assert.deepEqual(after.verified.map(({ amount_unscaled, amount_scale, currency }) => ({
+      amount_unscaled, amount_scale, currency,
+    })), [{ amount_unscaled: "7125000000", amount_scale: 9, currency: "EUR" }],
+    "provider order money must replace the client-declared USD amount without rounding");
+    assert.match(JSON.stringify(after.results[0].artifact), /google_play_order_line_total/);
+    assert.equal(after.queued, 0);
+    assert.doesNotMatch(JSON.stringify(after), new RegExp(rawToken));
+    assert.doesNotMatch(JSON.stringify(after), new RegExp(providerOrderId));
+    assert.deepEqual(await processGooglePlayProductVerifications(pool, payloadStore, tenantId, {
+      enabled: true, client: async () => { throw new Error("idempotent replay called provider"); },
+    }), { verified: 0, failed: 0, unavailable: 0, deferred: 0 });
+
+    const otherTenant = `tenant-google-play-other-${run}`;
+    const otherApp = `app-google-play-other-${run}`;
+    await ensureSdkKeys(pool, payloadStore, { tenantId: otherTenant, appId: otherApp }, [{
+      keyId: `sdk-key-google-play-other-${run}`,
+      secret: `sdk-secret-${randomBytes(32).toString("base64url")}`,
+    }]);
+    await queueGooglePlayProductVerification(pool, {
+      tenantId: otherTenant,
+      appId: otherApp,
+      subjectRecordId: `record:google-play-discovery-${run}`,
+      tokenRef: before.queue[0].token_ref,
+      purchaseToken: `synthetic-google-play-discovery-${run}`,
+      productId: `product.discovery.${run}`,
+      requestedAt: "2026-08-24T01:03:30.000Z",
+    });
+    assert.ok((await listRuntimeWorkTenants(pool)).includes(otherTenant),
+      "a tenant with only pending Google Play verification work must be discoverable");
+    await assert.rejects(queueGooglePlayProductVerification(pool, {
+      tenantId: otherTenant,
+      appId: otherApp,
+      subjectRecordId: `record:google-play-reuse-${run}`,
+      tokenRef: before.queue[0].token_ref,
+      purchaseToken: rawToken,
+      productId,
+      requestedAt: "2026-08-24T01:04:00.000Z",
+    }), /google_play_purchase_token_reused/);
+  });
+
+  it("verifies only the initial Google Play subscription order and replaces the client amount", async () => {
+    await withTenant(pool, tenantId, (client) => client.query(
+      `INSERT INTO control.app_link_identities (
+        tenant_id, app_id, android_package_name, registered_at, artifact
+      ) VALUES ($1,$2,$3,$4,$5::jsonb)
+      ON CONFLICT (tenant_id, app_id) DO NOTHING`,
+      [tenantId, appId, playPackageName, "2026-08-24T02:00:00.000Z",
+        JSON.stringify({ tenant_id: tenantId, app_id: appId, android_package_name: playPackageName })],
+    ));
+    const providerOrderId = `order:subscription:synthetic:${run}`;
+    const event = sourceEvent(`event:google-play-subscription:${run}`, "purchase", {
+      installation_id: installationId,
+      transaction_id: `transaction:client-subscription:${run}`,
+      amount_unscaled: "99990000",
+      amount_scale: 6,
+      currency: "USD",
+      financial_status: "pending",
+      extensions: {
+        google_play_purchase_token_protected: playSubscriptionToken,
+        google_play_product_id_protected: playSubscriptionProductId,
+        google_play_purchase_kind: "subscription_initial",
+      },
+    });
+    assert.equal((await signed("/v1/events/batch", { records: [event] }, {
+      secret: installationSecret, installationKeyId,
+    })).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+
+    const operations: string[] = [];
+    const outcome = await processGooglePlayProductVerifications(pool, payloadStore, tenantId, {
+      enabled: true,
+      enabledKinds: ["subscription_initial"],
+      now: () => new Date(Date.now() + 60_000),
+      client: async (input) => {
+        operations.push(input.operation);
+        if (input.operation === "subscription") return { status: 200, body: Buffer.from(JSON.stringify({
+          subscriptionState: "SUBSCRIPTION_STATE_ACTIVE",
+          startTime: playSubscriptionStartTime,
+          lineItems: [{ productId: playSubscriptionProductId, latestSuccessfulOrderId: providerOrderId }],
+        })) };
+        return { status: 200, body: Buffer.from(JSON.stringify({
+          orderId: providerOrderId,
+          purchaseToken: playSubscriptionToken,
+          state: "PROCESSED",
+          lineItems: [{
+            productId: playSubscriptionProductId,
+            total: { currencyCode: "JPY", units: "850", nanos: 0 },
+            subscriptionDetails: {
+              servicePeriodStartTime: playSubscriptionStartTime,
+              servicePeriodEndTime: "2026-09-24T02:03:04.000Z",
+            },
+          }],
+        })) };
+      },
+    });
+    assert.deepEqual(outcome, { verified: 1, failed: 0, unavailable: 0, deferred: 0 });
+    assert.deepEqual(operations, ["subscription", "order"]);
+    const stored = await withTenant(pool, tenantId, async (client) => ({
+      result: (await client.query<{ artifact: unknown; purchase_kind: string; verified_record_id: string }>(
+        `SELECT artifact, purchase_kind, verified_record_id FROM ledger.google_play_purchase_verification_results
+          WHERE tenant_id=$1 AND app_id=$2 AND subject_record_id IN (
+            SELECT record_id FROM ledger.raw_records WHERE tenant_id=$1 AND app_id=$2 AND event_id=$3
+          )`, [tenantId, appId, event.event_id],
+      )).rows[0],
+      fact: (await client.query<{ amount_unscaled: string; amount_scale: number; currency: string; artifact: unknown }>(
+        `SELECT fact.amount_unscaled, fact.amount_scale, fact.currency, fact.artifact
+           FROM ledger.purchase_facts fact
+          WHERE fact.tenant_id=$1 AND fact.app_id=$2 AND fact.record_id=(
+            SELECT verified_record_id FROM ledger.google_play_purchase_verification_results
+             WHERE tenant_id=$1 AND app_id=$2 AND purchase_kind='subscription_initial'
+             ORDER BY decided_at DESC LIMIT 1
+          )`, [tenantId, appId],
+      )).rows[0],
+    }));
+    assert.equal(stored.result.purchase_kind, "subscription_initial");
+    assert.match(JSON.stringify(stored.result.artifact), /subscription_initial/);
+    assert.deepEqual({
+      amount_unscaled: stored.fact.amount_unscaled,
+      amount_scale: stored.fact.amount_scale,
+      currency: stored.fact.currency,
+    }, { amount_unscaled: "850000000000", amount_scale: 9, currency: "JPY" });
+    assert.doesNotMatch(JSON.stringify(stored), new RegExp(playSubscriptionToken));
+    assert.doesNotMatch(JSON.stringify(stored), new RegExp(providerOrderId));
+  });
+
+  it("ingests an authenticated RTDN renewal once and settles only provider order money", async () => {
+    const messageId = `synthetic-rtdn-message-${run}`;
+    const request = () => fetch(`${baseUrl}/v1/google-play/rtdn`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${rtdnToken()}`, "content-type": "application/json" },
+      body: rtdnEnvelope(messageId),
+    });
+    assert.equal((await request()).status, 204);
+    assert.equal((await request()).status, 204, "Pub/Sub redelivery must be idempotent");
+    const renewalOrderId = `order:subscription:renewal:synthetic:${run}`;
+    const renewalStart = "2026-09-24T02:03:04.000Z";
+    const operations: string[] = [];
+    const outcome = await processGooglePlayProductVerifications(pool, payloadStore, tenantId, {
+      enabled: true,
+      enabledKinds: ["subscription_renewal"],
+      now: () => new Date(Date.now() + 60_000),
+      client: async (input) => {
+        operations.push(input.operation);
+        if (input.operation === "subscription") return { status: 200, body: Buffer.from(JSON.stringify({
+          subscriptionState: "SUBSCRIPTION_STATE_ACTIVE",
+          startTime: playSubscriptionStartTime,
+          lineItems: [{ productId: playSubscriptionProductId, latestSuccessfulOrderId: renewalOrderId }],
+        })) };
+        return { status: 200, body: Buffer.from(JSON.stringify({
+          orderId: renewalOrderId,
+          purchaseToken: playSubscriptionToken,
+          state: "PROCESSED",
+          lineItems: [{
+            productId: playSubscriptionProductId,
+            total: { currencyCode: "JPY", units: "920", nanos: 0 },
+            subscriptionDetails: {
+              servicePeriodStartTime: renewalStart,
+              servicePeriodEndTime: "2026-10-24T02:03:04.000Z",
+            },
+          }],
+        })) };
+      },
+    });
+    assert.deepEqual(outcome, { verified: 1, failed: 0, unavailable: 0, deferred: 0 });
+    assert.deepEqual(operations, ["subscription", "order"]);
+    const stored = await withTenant(pool, tenantId, async (client) => ({
+      facts: (await client.query<{ amount_unscaled: string; amount_scale: number; currency: string; artifact: unknown }>(
+        `SELECT fact.amount_unscaled, fact.amount_scale, fact.currency, fact.artifact
+           FROM ledger.purchase_facts AS fact
+           JOIN ledger.google_play_purchase_verification_results AS result
+             ON result.tenant_id=fact.tenant_id AND result.app_id=fact.app_id
+            AND result.verified_record_id=fact.record_id
+          WHERE fact.tenant_id=$1 AND fact.app_id=$2
+            AND result.purchase_kind='subscription_renewal' AND result.verdict='verified'`,
+        [tenantId, appId],
+      )).rows,
+      messages: (await client.query<{ count: number }>(
+        "SELECT count(*)::int AS count FROM control.google_play_rtdn_messages WHERE tenant_id=$1 AND app_id=$2",
+        [tenantId, appId],
+      )).rows[0].count,
+      queue: (await client.query<{ count: number }>(
+        "SELECT count(*)::int AS count FROM ephemeral.google_play_product_verifications WHERE tenant_id=$1 AND app_id=$2 AND purchase_kind='subscription_renewal'",
+        [tenantId, appId],
+      )).rows[0].count,
+    }));
+    assert.equal(stored.messages, 1);
+    assert.equal(stored.queue, 0);
+    assert.equal(stored.facts.length, 1);
+    assert.deepEqual({
+      amount_unscaled: stored.facts[0].amount_unscaled,
+      amount_scale: stored.facts[0].amount_scale,
+      currency: stored.facts[0].currency,
+    }, { amount_unscaled: "920000000000", amount_scale: 9, currency: "JPY" });
+    assert.doesNotMatch(JSON.stringify(stored), new RegExp(playSubscriptionToken));
+    assert.doesNotMatch(JSON.stringify(stored), new RegExp(renewalOrderId));
+
+    const secondMessage = await fetch(`${baseUrl}/v1/google-play/rtdn`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${rtdnToken()}`, "content-type": "application/json" },
+      body: rtdnEnvelope(`${messageId}-second-provider-delivery`),
+    });
+    assert.equal(secondMessage.status, 204);
+    const duplicate = await processGooglePlayProductVerifications(pool, payloadStore, tenantId, {
+      enabled: true,
+      enabledKinds: ["subscription_renewal"],
+      now: () => new Date(Date.now() + 120_000),
+      client: async (input) => input.operation === "subscription"
+        ? { status: 200, body: Buffer.from(JSON.stringify({
+            subscriptionState: "SUBSCRIPTION_STATE_ACTIVE", startTime: playSubscriptionStartTime,
+            lineItems: [{ productId: playSubscriptionProductId, latestSuccessfulOrderId: renewalOrderId }],
+          })) }
+        : { status: 200, body: Buffer.from(JSON.stringify({
+            orderId: renewalOrderId, purchaseToken: playSubscriptionToken, state: "PROCESSED",
+            lineItems: [{ productId: playSubscriptionProductId, total: { currencyCode: "JPY", units: "920", nanos: 0 },
+              subscriptionDetails: { servicePeriodStartTime: renewalStart, servicePeriodEndTime: "2026-10-24T02:03:04.000Z" } }],
+          })) },
+    });
+    assert.deepEqual(duplicate, { verified: 0, failed: 1, unavailable: 0, deferred: 0 });
+    assert.equal(await withTenant(pool, tenantId, async (client) => (await client.query(
+      `SELECT 1 FROM ledger.purchase_facts AS fact
+        JOIN ledger.google_play_purchase_verification_results AS result
+          ON result.tenant_id=fact.tenant_id AND result.app_id=fact.app_id
+         AND result.verified_record_id=fact.record_id
+       WHERE fact.tenant_id=$1 AND fact.app_id=$2
+         AND result.purchase_kind='subscription_renewal' AND result.verdict='verified'`,
+      [tenantId, appId],
+    )).rowCount), 1);
+  });
+
+  it("keeps pending, cancelled, mismatched, malformed, and unavailable Play responses out of settled revenue", async () => {
+    const cases = ["pending", "cancelled", "mismatch", "malformed", "unavailable"] as const;
+    const records = cases.map((kind, index) => sourceEvent(`event:google-play-${kind}:${run}`, "purchase", {
+      installation_id: installationId,
+      transaction_id: `transaction:google-play-${kind}:${run}`,
+      amount_unscaled: String(100 + index), amount_scale: 2, currency: "USD", financial_status: "pending",
+      extensions: {
+        google_play_purchase_token_protected: `synthetic-token-${kind}-${run}`,
+        google_play_product_id_protected: `product.${kind}.${run}`,
+      },
+    }));
+    assert.equal((await signed("/v1/events/batch", { records }, {
+      secret: installationSecret, installationKeyId,
+    })).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+    const outcome = await processGooglePlayProductVerifications(pool, payloadStore, tenantId, {
+      enabled: true,
+      maximumAttempts: 1,
+      now: () => new Date(Date.now() + 60_000),
+      client: async ({ productId }) => {
+        const kind = cases.find((candidate) => productId.includes(`.${candidate}.`));
+        if (kind === "unavailable") return { status: 503, body: Buffer.alloc(0) };
+        if (kind === "malformed") return { status: 200, body: Buffer.from("{}") };
+        return { status: 200, body: Buffer.from(JSON.stringify({
+          purchaseStateContext: { purchaseState: kind === "pending" ? "PENDING" : kind === "cancelled" ? "CANCELLED" : "PURCHASED" },
+          purchaseCompletionTime: "2026-08-24T01:59:00.000Z",
+          productLineItem: [{ productId: kind === "mismatch" ? `product.other.${run}` : productId }],
+        })) };
+      },
+    });
+    assert.deepEqual(outcome, { verified: 0, failed: 3, unavailable: 2, deferred: 0 });
+    const evidence = await withTenant(pool, tenantId, async (client) => ({
+      results: (await client.query<{ verdict: string; verified_record_id: string | null }>(
+        `SELECT verdict, verified_record_id FROM ledger.google_play_purchase_verification_results
+          WHERE tenant_id=$1 AND app_id=$2 AND subject_record_id IN (
+            SELECT record_id FROM ledger.raw_records WHERE tenant_id=$1 AND app_id=$2 AND event_id=ANY($3::text[])
+          ) ORDER BY verdict, verification_result_id`,
+        [tenantId, appId, records.map((record) => record.event_id)],
+      )).rows,
+      settled: (await client.query<{ count: number }>(
+        `SELECT count(*)::int AS count FROM ledger.purchase_facts fact
+          JOIN ledger.raw_records raw ON raw.tenant_id=fact.tenant_id AND raw.app_id=fact.app_id AND raw.record_id=fact.record_id
+          WHERE fact.tenant_id=$1 AND fact.app_id=$2 AND raw.event_id=ANY($3::text[]) AND fact.financial_status='settled'`,
+        [tenantId, appId, records.map((record) => record.event_id)],
+      )).rows[0].count,
+    }));
+    assert.equal(evidence.results.length, 5);
+    assert.ok(evidence.results.every((row) => row.verified_record_id === null));
+    assert.equal(evidence.settled, 0);
   });
 
   it("keeps a committed receipt across a worker process kill and restart", async () => {
@@ -292,6 +830,514 @@ describe("M2a signed SDK ingestion", () => {
     assert.equal(conflictCount.rows[0].count, 1);
   });
 
+  it("DL-A-15, DL-A-16, and DL-A-25 resolve signed deep-link opens only from tenant-scoped server state", async () => {
+    const deepInstallationId = `installation:m7-${run}`;
+    const enrollment = await signed("/v1/installations", { installation_id: deepInstallationId });
+    assert.equal(enrollment.status, 201);
+    const deepCredential = await enrollment.json() as {
+      installation_key_id: string;
+      installation_secret: string;
+    };
+    const deepSigned = (records: unknown[]) => signed("/v1/events/batch", { records }, {
+      secret: deepCredential.installation_secret,
+      installationKeyId: deepCredential.installation_key_id,
+    });
+    const link = await createTrackingLink({
+      pool,
+      tenantId,
+      appId,
+      actorRef: "admin_key:synthetic-m7",
+      allowedOrigins: [],
+      now: "2026-08-19T02:00:00.000Z",
+      body: {
+        destination_kind: "play_store",
+        destination_url: "https://play.google.com/store/apps/details?id=dev.openmasu.synthetic",
+        play_package_name: "dev.openmasu.synthetic",
+        campaign_id: `campaign-m7-${run}`,
+        deep_link_value: "/synthetic/m7",
+      },
+    });
+    const session = sourceEvent(`event:m7-session:${run}`, "session_start", {
+      installation_id: deepInstallationId,
+      session_id: `session:m7-${run}`,
+    }, "2026-08-17T03:00:00.000Z");
+    assert.equal((await deepSigned([session])).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+
+    const active = sourceEvent(`event:m7-active:${run}`, "deep_link_open", {
+      installation_id: deepInstallationId,
+      open_source: "android_app_link",
+      destination_status: "delivered",
+      link_slug: link.slug,
+      deep_link_value: "/synthetic/m7",
+    }, "2026-08-19T03:00:00.000Z");
+    const unknown = sourceEvent(`event:m7-unknown:${run}`, "deep_link_open", {
+      installation_id: deepInstallationId,
+      open_source: "ios_universal_link",
+      destination_status: "delivered",
+      link_slug: "unknownM7slug",
+      deep_link_value: "/synthetic/unknown",
+    }, "2026-08-19T03:01:00.000Z");
+    assert.equal((await deepSigned([active, unknown])).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+
+    const evidence = await withTenant(pool, tenantId, async (client) => ({
+      projections: (await client.query<{
+        event_id: string;
+        tracking_link_id: string | null;
+        campaign_id: string | null;
+        days_since_last_session: number | null;
+      }>(
+        `SELECT raw.event_id, facts.tracking_link_id, facts.campaign_id, facts.days_since_last_session
+           FROM ledger.deep_link_open_facts AS facts
+           JOIN ledger.logical_events AS logical ON logical.logical_event_id=facts.logical_event_id
+           JOIN ledger.raw_records AS raw ON raw.record_id=logical.record_id
+          WHERE facts.tenant_id=$1 AND facts.app_id=$2 AND raw.event_id IN ($3,$4)
+          ORDER BY raw.event_id COLLATE "C"`,
+        [tenantId, appId, active.event_id, unknown.event_id],
+      )).rows,
+      attributions: (await client.query<{ event_id: string; subject_scope: string; subject_ref: string; reason_code: string }>(
+        `SELECT raw.event_id, result.subject_scope, result.subject_ref, result.reason_code
+           FROM ledger.attribution_results AS result
+           JOIN ledger.raw_records AS raw ON raw.record_id = substring(result.subject_ref FROM '^engagement:(.*)$')
+          WHERE result.tenant_id=$1 AND result.app_id=$2 AND raw.event_id IN ($3,$4)
+          ORDER BY raw.event_id COLLATE "C"`,
+        [tenantId, appId, active.event_id, unknown.event_id],
+      )).rows,
+      rejected: (await client.query<{ count: number }>(
+        `SELECT count(*)::int AS count FROM ledger.rejections AS rejection
+          JOIN ledger.raw_records AS raw ON raw.record_id=rejection.record_id
+         WHERE rejection.tenant_id=$1 AND rejection.app_id=$2 AND raw.event_id IN ($3,$4)`,
+        [tenantId, appId, active.event_id, unknown.event_id],
+      )).rows[0].count,
+    }));
+    assert.deepEqual(evidence.projections, [
+      { event_id: active.event_id, tracking_link_id: link.tracking_link_id, campaign_id: `campaign-m7-${run}`, days_since_last_session: 2 },
+      { event_id: unknown.event_id, tracking_link_id: null, campaign_id: null, days_since_last_session: 2 },
+    ]);
+    assert.deepEqual(evidence.attributions.map((row) => [row.event_id, row.subject_scope, row.reason_code]), [
+      [active.event_id, "engagement_level", "deep_link_open_attributed"],
+      [unknown.event_id, "engagement_level", "deep_link_unknown_link"],
+    ]);
+    assert.ok(evidence.attributions.every((row) => row.subject_ref.startsWith("engagement:record:")));
+    assert.equal(evidence.rejected, 0);
+
+    const otherTenant = `tenant-m7-other-${run}`;
+    const otherApp = `app-m7-other-${run}`;
+    await withTenant(pool, otherTenant, (client) => client.query(
+      "INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ($1,$2,$3)",
+      [otherTenant, otherApp, "2026-08-19T02:00:00.000Z"],
+    ).then(() => undefined));
+    const foreignLink = await createTrackingLink({
+      pool,
+      tenantId: otherTenant,
+      appId: otherApp,
+      actorRef: "admin_key:synthetic-m7-other",
+      allowedOrigins: [],
+      now: "2026-08-19T02:00:01.000Z",
+      body: {
+        destination_kind: "play_store",
+        destination_url: "https://play.google.com/store/apps/details?id=dev.openmasu.synthetic.other",
+        play_package_name: "dev.openmasu.synthetic.other",
+        campaign_id: `campaign-m7-other-${run}`,
+      },
+    });
+    const foreign = sourceEvent(`event:m7-foreign:${run}`, "deep_link_open", {
+      installation_id: deepInstallationId,
+      open_source: "android_app_link",
+      destination_status: "delivered",
+      link_slug: foreignLink.slug,
+    }, "2026-08-19T03:02:00.000Z");
+    const forged = sourceEvent(`event:m7-forged:${run}`, "deep_link_open", {
+      installation_id: deepInstallationId,
+      open_source: "android_app_link",
+      destination_status: "delivered",
+      link_slug: link.slug,
+      campaign_id: "device-claimed-campaign",
+      tracking_link_id: "device-claimed-link",
+      provider_campaign: "device-claimed-provider",
+    }, "2026-08-19T03:03:00.000Z");
+    assert.equal((await deepSigned([foreign])).status, 202);
+    assert.equal((await deepSigned([forged])).status, 403);
+    await processSdkInbox(pool, payloadStore, tenantId);
+    const isolation = await withTenant(pool, tenantId, async (client) => ({
+      foreign: (await client.query<{ tracking_link_id: string | null; campaign_id: string | null }>(
+        `SELECT facts.tracking_link_id,facts.campaign_id FROM ledger.deep_link_open_facts AS facts
+           JOIN ledger.logical_events AS logical ON logical.logical_event_id=facts.logical_event_id
+           JOIN ledger.raw_records AS raw ON raw.record_id=logical.record_id
+          WHERE facts.tenant_id=$1 AND facts.app_id=$2 AND raw.event_id=$3`,
+        [tenantId, appId, foreign.event_id],
+      )).rows[0],
+      foreignReason: (await client.query<{ reason_code: string }>(
+        `SELECT result.reason_code FROM ledger.attribution_results AS result
+           JOIN ledger.raw_records AS raw ON raw.record_id=substring(result.subject_ref FROM '^engagement:(.*)$')
+          WHERE result.tenant_id=$1 AND result.app_id=$2 AND raw.event_id=$3`,
+        [tenantId, appId, foreign.event_id],
+      )).rows[0]?.reason_code,
+      forgedLogical: (await client.query<{ count: number }>(
+        `SELECT count(*)::int AS count FROM ledger.logical_events AS logical
+           JOIN ledger.raw_records AS raw ON raw.record_id=logical.record_id
+          WHERE logical.tenant_id=$1 AND logical.app_id=$2 AND raw.event_id=$3`,
+        [tenantId, appId, forged.event_id],
+      )).rows[0].count,
+    }));
+    assert.deepEqual(isolation.foreign, { tracking_link_id: null, campaign_id: null });
+    assert.equal(isolation.foreignReason, "deep_link_unknown_link");
+    assert.equal(isolation.forgedLogical, 0);
+  });
+
+  it("assigns revenue purpose and resolves settled refunds without trusting a device target", async () => {
+    const originalTransactionId = `transaction:commerce-original-${run}`;
+    const unscopedPurchase = sourceEvent(`event:commerce-purchase-unscoped:${run}`, "purchase", {
+      transaction_id: `transaction:commerce-purchase-unscoped-${run}`,
+      amount_unscaled: "1000",
+      amount_scale: 2,
+      currency: "USD",
+      financial_status: "settled",
+    });
+    const unscopedRefund = sourceEvent(`event:commerce-refund-unscoped:${run}`, "refund", {
+      transaction_id: `transaction:commerce-refund-unscoped-${run}`,
+      original_transaction_id: originalTransactionId,
+      amount_unscaled: "250",
+      amount_scale: 2,
+      currency: "USD",
+      financial_status: "settled",
+    });
+    assert.equal((await signed("/v1/events/batch", { records: [unscopedPurchase] }, {
+      secret: installationSecret, installationKeyId,
+    })).status, 202, "legacy analytics purchases remain accepted without an installation anchor");
+    assert.equal((await signed("/v1/events/batch", { records: [unscopedRefund] }, {
+      secret: installationSecret, installationKeyId,
+    })).status, 403, "target-free refunds must carry their installation scope");
+
+    const purchase = sourceEvent(`event:commerce-purchase:${run}`, "purchase", {
+      installation_id: installationId,
+      transaction_id: `transaction:commerce-purchase-${run}`,
+      original_transaction_id: originalTransactionId,
+      amount_unscaled: "1000",
+      amount_scale: 2,
+      currency: "USD",
+      financial_status: "settled",
+    }, "2026-08-19T01:00:00.000Z");
+    assert.equal((await signed("/v1/events/batch", { records: [purchase] }, {
+      secret: installationSecret, installationKeyId,
+    })).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+
+    const legacyPurchase = await withTenant(pool, tenantId, async (client) => (await client.query<{
+      record_id: string; processing_purpose_id: string;
+    }>(
+      `SELECT raw.record_id, raw.processing_purpose_id
+         FROM ledger.raw_records AS raw
+        WHERE raw.tenant_id=$1 AND raw.app_id=$2 AND raw.event_id=$3`,
+      [tenantId, appId, unscopedPurchase.event_id],
+    )).rows[0]);
+    assert.equal(legacyPurchase.processing_purpose_id, "analytics");
+    const legacyRefund = sourceEvent(`event:commerce-refund-legacy:${run}`, "refund", {
+      transaction_id: `transaction:commerce-refund-legacy-${run}`,
+      original_transaction_id: "legacy-values-are-not-financially-reclassified",
+      correction_target_record_id: legacyPurchase.record_id,
+      amount_unscaled: "999999",
+      amount_scale: 2,
+      currency: "JPY",
+      financial_status: "reversed",
+    }, "2026-08-18T23:00:00.000Z");
+    assert.equal((await signed("/v1/events/batch", { records: [legacyRefund] }, {
+      secret: installationSecret, installationKeyId,
+    })).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+    const legacyEvidence = await withTenant(pool, tenantId, async (client) => ({
+      purpose: (await client.query<{ processing_purpose_id: string }>(
+        `SELECT processing_purpose_id FROM ledger.raw_records
+          WHERE tenant_id=$1 AND app_id=$2 AND event_id=$3`,
+        [tenantId, appId, legacyRefund.event_id],
+      )).rows[0]?.processing_purpose_id,
+      correction: (await client.query<{ corrects_record_id: string }>(
+        `SELECT correction.corrects_record_id FROM ledger.corrections AS correction
+           JOIN ledger.raw_records AS raw
+             ON raw.tenant_id=correction.tenant_id AND raw.app_id=correction.app_id
+            AND raw.record_id=substring(correction.correction_id FROM '^correction:(.*)$')
+          WHERE correction.tenant_id=$1 AND correction.app_id=$2 AND raw.event_id=$3`,
+        [tenantId, appId, legacyRefund.event_id],
+      )).rows[0],
+      facts: (await client.query(
+        `SELECT fact.logical_event_id FROM ledger.refund_facts AS fact
+           JOIN ledger.logical_events AS logical USING (logical_event_id, tenant_id, app_id)
+           JOIN ledger.raw_records AS raw USING (record_id, tenant_id, app_id)
+          WHERE fact.tenant_id=$1 AND fact.app_id=$2 AND raw.event_id=$3`,
+        [tenantId, appId, legacyRefund.event_id],
+      )).rowCount,
+    }));
+    assert.equal(legacyEvidence.purpose, "analytics");
+    assert.deepEqual(legacyEvidence.correction, { corrects_record_id: legacyPurchase.record_id });
+    assert.equal(legacyEvidence.facts, 0, "legacy explicit refunds must not enter financial facts");
+
+    const acceptedRefund = sourceEvent(`event:commerce-refund:${run}`, "refund", {
+      installation_id: installationId,
+      transaction_id: `transaction:commerce-refund-${run}`,
+      original_transaction_id: originalTransactionId,
+      amount_unscaled: "250",
+      amount_scale: 2,
+      currency: "USD",
+      financial_status: "settled",
+    }, "2026-08-19T02:00:00.000Z");
+    const mismatchedRefund = sourceEvent(`event:commerce-refund-mismatch:${run}`, "refund", {
+      installation_id: installationId,
+      transaction_id: `transaction:commerce-refund-mismatch-${run}`,
+      original_transaction_id: originalTransactionId,
+      correction_target_record_id: `record:forged-commerce-target-${run}`,
+      amount_unscaled: "100",
+      amount_scale: 2,
+      currency: "USD",
+      financial_status: "settled",
+    }, "2026-08-19T02:30:00.000Z");
+    const overRefund = sourceEvent(`event:commerce-refund-over:${run}`, "refund", {
+      installation_id: installationId,
+      transaction_id: `transaction:commerce-refund-over-${run}`,
+      original_transaction_id: originalTransactionId,
+      // Exceeds the purchase on its own, so same-millisecond record-id tie
+      // ordering cannot make this synthetic rejection depend on batch order.
+      amount_unscaled: "1100",
+      amount_scale: 2,
+      currency: "USD",
+      financial_status: "settled",
+    }, "2026-08-19T03:00:00.000Z");
+    const precedingRefund = sourceEvent(`event:commerce-refund-precedes:${run}`, "refund", {
+      installation_id: installationId,
+      transaction_id: `transaction:commerce-refund-precedes-${run}`,
+      original_transaction_id: originalTransactionId,
+      amount_unscaled: "100",
+      amount_scale: 2,
+      currency: "USD",
+      financial_status: "settled",
+    }, "2026-08-19T00:30:00.000Z");
+    assert.equal((await signed("/v1/events/batch", {
+      records: [acceptedRefund, mismatchedRefund, overRefund, precedingRefund],
+    }, {
+      secret: installationSecret, installationKeyId,
+    })).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+
+    const secondPurchase = sourceEvent(`event:commerce-purchase-ambiguous:${run}`, "purchase", {
+      installation_id: installationId,
+      transaction_id: `transaction:commerce-purchase-ambiguous-${run}`,
+      original_transaction_id: originalTransactionId,
+      amount_unscaled: "500",
+      amount_scale: 2,
+      currency: "USD",
+      financial_status: "settled",
+    });
+    assert.equal((await signed("/v1/events/batch", { records: [secondPurchase] }, {
+      secret: installationSecret, installationKeyId,
+    })).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+
+    const ambiguousRefund = sourceEvent(`event:commerce-refund-ambiguous:${run}`, "refund", {
+      installation_id: installationId,
+      transaction_id: `transaction:commerce-refund-ambiguous-${run}`,
+      original_transaction_id: originalTransactionId,
+      amount_unscaled: "100",
+      amount_scale: 2,
+      currency: "USD",
+      financial_status: "settled",
+    });
+    const missingRefund = sourceEvent(`event:commerce-refund-missing:${run}`, "refund", {
+      installation_id: installationId,
+      transaction_id: `transaction:commerce-refund-missing-${run}`,
+      original_transaction_id: `transaction:commerce-missing-${run}`,
+      amount_unscaled: "100",
+      amount_scale: 2,
+      currency: "USD",
+      financial_status: "settled",
+    });
+    assert.equal((await signed("/v1/events/batch", { records: [ambiguousRefund, missingRefund] }, {
+      secret: installationSecret, installationKeyId,
+    })).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+
+    const evidence = await withTenant(pool, tenantId, async (client) => ({
+      purchase: (await client.query<{
+        record_id: string; processing_purpose_id: string; financial_status: string;
+      }>(
+        `SELECT raw.record_id, raw.processing_purpose_id, fact.financial_status
+           FROM ledger.raw_records AS raw
+           JOIN ledger.logical_events AS logical USING (record_id, tenant_id, app_id)
+           JOIN ledger.purchase_facts AS fact USING (logical_event_id, tenant_id, app_id)
+          WHERE raw.tenant_id=$1 AND raw.app_id=$2 AND raw.event_id=$3`,
+        [tenantId, appId, purchase.event_id],
+      )).rows[0],
+      refund: (await client.query<{
+        processing_purpose_id: string; correction_target_record_id: string; financial_status: string;
+      }>(
+        `SELECT raw.processing_purpose_id, fact.correction_target_record_id, fact.financial_status
+           FROM ledger.raw_records AS raw
+           JOIN ledger.logical_events AS logical USING (record_id, tenant_id, app_id)
+           JOIN ledger.refund_facts AS fact USING (logical_event_id, tenant_id, app_id)
+          WHERE raw.tenant_id=$1 AND raw.app_id=$2 AND raw.event_id=$3`,
+        [tenantId, appId, acceptedRefund.event_id],
+      )).rows[0],
+      correction: (await client.query<{ corrects_record_id: string }>(
+        `SELECT correction.corrects_record_id
+           FROM ledger.corrections AS correction
+           JOIN ledger.raw_records AS target
+             ON target.tenant_id=correction.tenant_id AND target.app_id=correction.app_id
+            AND target.record_id=correction.corrects_record_id
+          WHERE correction.tenant_id=$1 AND correction.app_id=$2
+            AND correction.artifact->>'correction_reason'='refund' AND target.event_id=$3`,
+        [tenantId, appId, purchase.event_id],
+      )).rows,
+      rejected: (await client.query<{ event_id: string }>(
+        `SELECT raw.event_id
+           FROM ledger.rejections AS rejection
+           JOIN ledger.event_deliveries AS delivery
+             ON delivery.tenant_id=rejection.tenant_id AND delivery.app_id=rejection.app_id
+            AND delivery.record_id=rejection.record_id AND delivery.delivery_id=rejection.delivery_id
+           LEFT JOIN ledger.raw_records AS raw
+             ON raw.tenant_id=rejection.tenant_id AND raw.app_id=rejection.app_id
+            AND raw.record_id=rejection.record_id
+          WHERE rejection.tenant_id=$1 AND rejection.app_id=$2
+            AND rejection.reason_code='refund_target_invalid'
+          ORDER BY rejection.record_id`,
+        [tenantId, appId],
+      )).rows,
+    }));
+    assert.equal(evidence.purchase.processing_purpose_id, "revenue_measurement");
+    assert.equal(evidence.purchase.financial_status, "settled");
+    assert.equal(evidence.refund.processing_purpose_id, "revenue_measurement");
+    assert.equal(evidence.refund.financial_status, "settled");
+    assert.equal(evidence.refund.correction_target_record_id, evidence.purchase.record_id);
+    assert.deepEqual(evidence.correction, [{ corrects_record_id: evidence.purchase.record_id }]);
+    assert.equal(evidence.rejected.length, 5);
+    assert.equal((await pool.query(
+      "SELECT logical_event_id FROM ledger.refund_facts WHERE correction_target_record_id=$1",
+      [evidence.purchase.record_id],
+    )).rowCount, 0, "refund facts must be hidden when the tenant GUC is unset");
+    assert.equal((await withTenant(pool, `${tenantId}-other`, (client) => client.query(
+      "SELECT logical_event_id FROM ledger.refund_facts WHERE correction_target_record_id=$1",
+      [evidence.purchase.record_id],
+    ))).rowCount, 0, "refund facts must be hidden from another tenant");
+
+    const repeatedPurchase = sourceEvent(`event:commerce-purchase-repeat:${run}`, "purchase", {
+      installation_id: installationId,
+      transaction_id: `transaction:commerce-purchase-${run}`,
+      original_transaction_id: originalTransactionId,
+      amount_unscaled: "1000",
+      amount_scale: 2,
+      currency: "USD",
+      financial_status: "settled",
+    }, "2026-08-19T01:00:00.000Z");
+    assert.equal((await signed("/v1/events/batch", { records: [repeatedPurchase] }, {
+      secret: installationSecret, installationKeyId,
+    })).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+    assert.equal((await withTenant(pool, tenantId, (client) => client.query(
+      `SELECT delivery_attempt_id FROM ledger.event_deliveries
+        WHERE tenant_id=$1 AND app_id=$2 AND canonical_record_id=$3
+          AND duplicate_resolution='duplicate_delivery'`,
+      [tenantId, appId, evidence.purchase.record_id],
+    ))).rowCount, 1, "equivalent business transaction IDs must count once");
+
+    const conflictingPurchase = sourceEvent(`event:commerce-purchase-conflict:${run}`, "purchase", {
+      installation_id: installationId,
+      transaction_id: `transaction:commerce-purchase-${run}`,
+      original_transaction_id: originalTransactionId,
+      amount_unscaled: "1001",
+      amount_scale: 2,
+      currency: "USD",
+      financial_status: "settled",
+    }, "2026-08-19T01:00:00.000Z");
+    assert.equal((await signed("/v1/events/batch", { records: [conflictingPurchase] }, {
+      secret: installationSecret, installationKeyId,
+    })).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+    const conflictEvidence = await withTenant(pool, tenantId, async (client) => ({
+      rejection: (await client.query(
+        `SELECT rejection.rejection_seq FROM ledger.rejections AS rejection
+          JOIN ledger.raw_records AS raw
+            ON raw.tenant_id=rejection.tenant_id AND raw.app_id=rejection.app_id
+           AND raw.record_id=rejection.record_id
+         WHERE rejection.tenant_id=$1 AND rejection.app_id=$2 AND raw.event_id=$3
+           AND rejection.reason_code='event_id_conflict'`,
+        [tenantId, appId, conflictingPurchase.event_id],
+      )).rowCount,
+      facts: (await client.query(
+        `SELECT logical_event_id FROM ledger.purchase_facts
+          WHERE tenant_id=$1 AND app_id=$2 AND transaction_id=$3`,
+        [tenantId, appId, `transaction:commerce-purchase-${run}`],
+      )).rowCount,
+    }));
+    assert.equal(conflictEvidence.rejection, 1, "conflicting business transaction must fail closed");
+    assert.equal(conflictEvidence.facts, 1, "conflicting business transaction must not add a fact");
+
+    const privacyTarget = sourceEvent(`event:commerce-privacy-target:${run}`, "purchase", {
+      installation_id: installationId,
+      transaction_id: `transaction:commerce-privacy-target-${run}`,
+      amount_unscaled: "1000",
+      amount_scale: 2,
+      currency: "USD",
+      financial_status: "settled",
+    }, "2026-08-19T04:00:00.000Z");
+    assert.equal((await signed("/v1/events/batch", { records: [privacyTarget] }, {
+      secret: installationSecret, installationKeyId,
+    })).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+    legacyPrivacyTargetRecordId = await withTenant(pool, tenantId, async (client) => (await client.query<{ record_id: string }>(
+      `SELECT record_id FROM ledger.raw_records
+        WHERE tenant_id=$1 AND app_id=$2 AND event_id=$3`,
+      [tenantId, appId, privacyTarget.event_id],
+    )).rows[0].record_id);
+
+    const privacyLegacyRefund = sourceEvent(`event:commerce-privacy-legacy-refund:${run}`, "refund", {
+      transaction_id: `transaction:commerce-privacy-legacy-refund-${run}`,
+      original_transaction_id: "legacy-correction-only",
+      correction_target_record_id: legacyPrivacyTargetRecordId,
+      amount_unscaled: "1",
+      amount_scale: 2,
+      currency: "JPY",
+      financial_status: "reversed",
+    }, "2026-08-19T04:01:00.000Z");
+    assert.equal((await signed("/v1/events/batch", { records: [privacyLegacyRefund] }, {
+      secret: installationSecret, installationKeyId,
+    })).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+    const privacyLegacyEvidence = await withTenant(pool, tenantId, async (client) => {
+      const refundRecord = (await client.query<{ record_id: string }>(
+        `SELECT record_id FROM ledger.raw_records
+          WHERE tenant_id=$1 AND app_id=$2 AND event_id=$3`,
+        [tenantId, appId, privacyLegacyRefund.event_id],
+      )).rows[0].record_id;
+      const bodyRefs = (await client.query<{ body_ref: string }>(
+        `SELECT DISTINCT batch.body_ref
+           FROM ledger.ingest_batches AS batch
+           JOIN ledger.ingest_batch_records AS member
+             ON member.ingest_batch_id=batch.ingest_batch_id
+            AND member.tenant_id=batch.tenant_id AND member.app_id=batch.app_id
+          WHERE batch.tenant_id=$1 AND batch.app_id=$2
+            AND member.record_id=ANY($3::text[])
+          ORDER BY batch.body_ref`,
+        [tenantId, appId, [legacyPrivacyTargetRecordId, refundRecord]],
+      )).rows.map((row) => row.body_ref);
+      const correction = (await client.query<{ corrects_record_id: string }>(
+        `SELECT corrects_record_id FROM ledger.corrections
+          WHERE tenant_id=$1 AND app_id=$2 AND correction_id=$3`,
+        [tenantId, appId, `correction:${refundRecord}`],
+      )).rows[0];
+      const refundFacts = (await client.query(
+        `SELECT fact.logical_event_id FROM ledger.refund_facts AS fact
+          JOIN ledger.logical_events AS logical USING (logical_event_id, tenant_id, app_id)
+         WHERE fact.tenant_id=$1 AND fact.app_id=$2 AND logical.record_id=$3`,
+        [tenantId, appId, refundRecord],
+      )).rowCount;
+      return { refundRecord, bodyRefs, correction, refundFacts };
+    });
+    legacyPrivacyRefundRecordId = privacyLegacyEvidence.refundRecord;
+    legacyPrivacyPayloadRefs = privacyLegacyEvidence.bodyRefs;
+    assert.deepEqual(privacyLegacyEvidence.correction, { corrects_record_id: legacyPrivacyTargetRecordId });
+    assert.equal(privacyLegacyEvidence.refundFacts, 0, "legacy refund must remain correction-only");
+    assert.equal(legacyPrivacyPayloadRefs.length, 2);
+    for (const reference of legacyPrivacyPayloadRefs) await payloadStore.read(reference);
+  });
+
   it("creates an immutable superseding attribution when a redirect click arrives late", async () => {
     const clickId = `Click_${randomBytes(18).toString("base64url")}`;
     const installEventId = `event:late-install:${run}`;
@@ -353,11 +1399,32 @@ describe("M2a signed SDK ingestion", () => {
       event_key: "post_withdrawal",
       attributes: { source: "synthetic" },
     }, "2026-08-18T00:00:00.000Z");
+    const rejectedPurchase = sourceEvent(`event:post-withdrawal-purchase:${run}`, "purchase", {
+      installation_id: installationId,
+      transaction_id: `transaction:post-withdrawal-purchase-${run}`,
+      amount_unscaled: "1000",
+      amount_scale: 2,
+      currency: "USD",
+      financial_status: "settled",
+    }, "2026-08-18T00:00:01.000Z");
+    const rejectedRefund = sourceEvent(`event:post-withdrawal-refund:${run}`, "refund", {
+      installation_id: installationId,
+      transaction_id: `transaction:post-withdrawal-refund-${run}`,
+      original_transaction_id: `transaction:post-withdrawal-purchase-${run}`,
+      amount_unscaled: "100",
+      amount_scale: 2,
+      currency: "USD",
+      financial_status: "settled",
+    }, "2026-08-18T00:00:02.000Z");
     // A client cannot bypass the server-owned purpose mapping.
     postWithdrawal.processing_purpose_id = "fraud_prevention";
-    assert.equal((await signed("/v1/events/batch", { records: [postWithdrawal] }, {
+    assert.equal((await signed("/v1/events/batch", {
+      records: [postWithdrawal, rejectedPurchase, rejectedRefund],
+    }, {
       secret: installationSecret, installationKeyId,
     })).status, 202);
+    // Base-policy rejection must remain a record-level outcome; an unresolved
+    // refund in the same batch must not fail the worker transaction.
     await processSdkInbox(pool, payloadStore, tenantId);
 
     const after = await withTenant(pool, tenantId, async (client) => (await client.query<{ count: number }>(
@@ -365,10 +1432,22 @@ describe("M2a signed SDK ingestion", () => {
        WHERE tenant_id=$1 AND app_id=$2 AND reason_code='consent_withdrawn'`,
       [tenantId, appId],
     )).rows[0].count);
-    assert.equal(after, before + 1);
+    assert.equal(after, before + 3);
     assert.equal(await withTenant(pool, tenantId, async (client) => (await client.query(
       `SELECT event_id FROM ledger.logical_events
        WHERE tenant_id=$1 AND app_id=$2 AND event_id=$3`, [tenantId, appId, eventId],
+    )).rowCount), 0);
+    assert.equal(await withTenant(pool, tenantId, async (client) => (await client.query(
+      `SELECT logical.logical_event_id FROM ledger.logical_events AS logical
+       JOIN ledger.purchase_facts AS purchase USING (logical_event_id, tenant_id, app_id)
+       WHERE logical.tenant_id=$1 AND logical.app_id=$2 AND logical.event_id=$3`,
+      [tenantId, appId, rejectedPurchase.event_id],
+    )).rowCount), 0);
+    assert.equal(await withTenant(pool, tenantId, async (client) => (await client.query(
+      `SELECT logical.logical_event_id FROM ledger.logical_events AS logical
+       JOIN ledger.refund_facts AS refund USING (logical_event_id, tenant_id, app_id)
+       WHERE logical.tenant_id=$1 AND logical.app_id=$2 AND logical.event_id=$3`,
+      [tenantId, appId, rejectedRefund.event_id],
     )).rowCount), 0);
   });
 
@@ -404,14 +1483,65 @@ describe("M2a signed SDK ingestion", () => {
         priorMetric.value_type, priorMetric.value_state, priorMetric.value_unscaled,
         priorMetric.amount_scale, priorMetric.currency, JSON.stringify(priorMetric)],
     ).then(() => undefined));
+    const deletionToken = `synthetic-google-play-delete-${run}`;
+    const deletionProductId = `product.delete.${run}`;
+    const deletionTokenRef = await payloadStore.write({
+      tenantId, appId, objectId: `google-play-delete-${run}`,
+    }, Buffer.from(JSON.stringify({ records: [{
+      record_id: legacyPrivacyTargetRecordId,
+      event_name: "purchase",
+      payload: {
+        event_name: "purchase",
+        installation_id: installationId,
+        amount_unscaled: "2500000",
+        amount_scale: 6,
+        currency: "USD",
+        financial_status: "pending",
+        extensions: {
+          google_play_purchase_token_protected: deletionToken,
+          google_play_product_id_protected: deletionProductId,
+        },
+      },
+    }] }), "utf8"));
+    await queueGooglePlayProductVerification(pool, {
+      tenantId,
+      appId,
+      subjectRecordId: legacyPrivacyTargetRecordId,
+      tokenRef: deletionTokenRef,
+      purchaseToken: deletionToken,
+      productId: deletionProductId,
+      requestedAt: new Date().toISOString(),
+    });
+    assert.match((await payloadStore.read(deletionTokenRef)).toString("utf8"), new RegExp(deletionToken));
     const secretRef = await withTenant(pool, tenantId, async (client) => (await client.query<{ secret_ref: string }>(
       `SELECT secret_ref FROM control.installation_credentials WHERE installation_key_id=$1`, [installationKeyId],
     )).rows[0].secret_ref);
     const response = await signed("/v1/privacy/on-device", { installation_id: installationId }, { secret: installationSecret, installationKeyId });
-    assert.equal(response.status, 201);
-    const artifact = await response.json() as Record<string, unknown>;
+    const responseText = await response.text();
+    assert.equal(response.status, 201, responseText);
+    const artifact = JSON.parse(responseText) as Record<string, unknown>;
     assert.equal(artifact.deletion_subject_ref, undefined);
     assert.match(String(artifact.requester_auth_ref), /^sdk_auth:/);
+    const legacyPrivacyTombstones = await withTenant(pool, tenantId, async (client) => (await client.query<{ record_id: string }>(
+      `SELECT record_id FROM ledger.privacy_tombstones
+        WHERE tenant_id=$1 AND app_id=$2 AND privacy_request_id=$3
+          AND record_id=ANY($4::text[])
+        ORDER BY record_id`,
+      [tenantId, appId, artifact.privacy_request_id,
+        [legacyPrivacyTargetRecordId, legacyPrivacyRefundRecordId]],
+    )).rows.map((row) => row.record_id));
+    assert.deepEqual(legacyPrivacyTombstones,
+      [legacyPrivacyTargetRecordId, legacyPrivacyRefundRecordId].sort(),
+      "installation deletion must include a legacy correction-only refund and its anchored purchase target");
+    for (const reference of legacyPrivacyPayloadRefs) {
+      await assert.rejects(payloadStore.read(reference));
+    }
+    await assert.rejects(payloadStore.read(deletionTokenRef));
+    assert.equal(await withTenant(pool, tenantId, async (client) => (await client.query(
+      `SELECT 1 FROM ephemeral.google_play_product_verifications
+        WHERE tenant_id=$1 AND app_id=$2 AND subject_record_id=$3`,
+      [tenantId, appId, legacyPrivacyTargetRecordId],
+    )).rowCount), 0);
     assert.ok(await withTenant(pool, tenantId, async (client) => (await client.query<{ count: number }>(
       `SELECT count(*)::int AS count FROM ledger.privacy_tombstones
        WHERE tenant_id=$1 AND app_id=$2 AND privacy_request_id=$3`,

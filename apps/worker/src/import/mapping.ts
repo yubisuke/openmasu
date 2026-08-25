@@ -13,6 +13,7 @@ export type MappingExpression = {
   default?: unknown;
   map?: Record<string, unknown>;
   map_default?: unknown;
+  omit_if_empty?: boolean;
   boolean?: { true_values: unknown[]; false_values: unknown[]; default?: boolean };
   uppercase?: boolean;
   timestamp?: { default_timezone: "UTC"; timezone_source?: string; truncate_to_milliseconds: true };
@@ -46,6 +47,22 @@ export class MappingError extends Error {
   }
 }
 
+export function loadMappingScope(path: string): { tenantId: string; appId: string } {
+  const value: unknown = JSON.parse(readFileSync(path, "utf8"));
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new MappingError("mapping scope is missing", ["tenant_id", "app_id"]);
+  }
+  const mapping = value as Any;
+  const identifier = (field: "tenant_id" | "app_id"): string => {
+    const candidate = mapping[field];
+    if (typeof candidate !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(candidate)) {
+      throw new MappingError("mapping scope is invalid", [field]);
+    }
+    return candidate;
+  };
+  return { tenantId: identifier("tenant_id"), appId: identifier("app_id") };
+}
+
 const schemaPath = join(process.cwd(), "runtime-schemas", "import-mapping.schema.json");
 const Ajv2020 = Ajv2020Module as unknown as new (options: Any) => {
   compile(schema: Any): ((value: unknown) => boolean) & { errors?: ErrorObject[] | null };
@@ -54,6 +71,7 @@ const addFormats = addFormatsModule as unknown as (instance: unknown) => void;
 const ajv = new Ajv2020({ allErrors: true, strict: true, allowUnionTypes: true });
 addFormats(ajv);
 const validate = ajv.compile(JSON.parse(readFileSync(schemaPath, "utf8")));
+const omitted = Symbol("mapping-value-omitted");
 
 function errorFields(errors: ErrorObject[] | null | undefined): string[] {
   return [...new Set((errors ?? []).map((error) => error.instancePath || error.params.missingProperty)
@@ -67,6 +85,27 @@ export function loadMapping(path: string): ImportMapping {
   if (mapping.kind === "mmp_raw" && !mapping.provider) {
     throw new MappingError("mmp_raw mappings require provider", ["provider"]);
   }
+  const requiredTargets = new Set(mapping.kind === "mmp_raw"
+    ? ["event_name", "event_id", "occurred_at", "payload"]
+    : ["network", "date", "money", "as_of"]);
+  const eventName = mapping.rules.find((rule) => rule.target === "event_name")?.expression.const;
+  if (mapping.kind === "mmp_raw" && typeof eventName === "string") {
+    const eventSchemaPath = join(process.cwd(), "schemas", "events", `${eventName.replaceAll("_", "-")}.schema.json`);
+    const eventSchema = JSON.parse(readFileSync(eventSchemaPath, "utf8")) as { required?: string[] };
+    for (const name of eventSchema.required ?? []) {
+      if (name !== "event_name") requiredTargets.add(`payload.${name}`);
+    }
+  }
+  const inspect = (expression: MappingExpression, target: string): void => {
+    if (expression.omit_if_empty && requiredTargets.has(target)) {
+      throw new MappingError("omit_if_empty cannot target a required field", [target]);
+    }
+    for (const [name, child] of Object.entries(expression.object ?? {})) inspect(child, `${target}.${name}`);
+  };
+  const declaredTargets = new Set(mapping.rules.map((rule) => rule.target));
+  const missingTargets = [...requiredTargets].filter((target) => !target.startsWith("payload.") && !declaredTargets.has(target));
+  if (missingTargets.length > 0) throw new MappingError("mapping is missing required targets", missingTargets);
+  for (const rule of mapping.rules) inspect(rule.expression, rule.target);
   return mapping;
 }
 
@@ -164,7 +203,10 @@ function moneyValue(value: unknown, config: NonNullable<MappingExpression["money
 
 export function evaluateExpression(expression: MappingExpression, row: Any): unknown {
   if (expression.object) {
-    return Object.fromEntries(Object.entries(expression.object).map(([name, child]) => [name, evaluateExpression(child, row)]));
+    return Object.fromEntries(Object.entries(expression.object).flatMap(([name, child]) => {
+      const value = evaluateExpression(child, row);
+      return value === omitted ? [] : [[name, value]];
+    }));
   }
   let value = Object.prototype.hasOwnProperty.call(expression, "const")
     ? expression.const
@@ -181,6 +223,7 @@ export function evaluateExpression(expression: MappingExpression, row: Any): unk
     else if (Object.prototype.hasOwnProperty.call(expression, "map_default")) value = expression.map_default;
     else throw new MappingError("enum source is outside the declared map", expression.source ? [expression.source] : []);
   }
+  if (expression.omit_if_empty && (value === undefined || value === null || value === "")) return omitted;
   if (expression.boolean) value = booleanValue(value, expression.boolean);
   if (expression.uppercase && typeof value === "string") value = value.toUpperCase();
   if (expression.timestamp) value = normalizeTimestamp(value, expression, row);
@@ -227,6 +270,9 @@ export function rowMatches(mapping: ImportMapping, row: Any): boolean {
 
 export function mapRow(mapping: ImportMapping, row: Any): Any {
   const output: Any = {};
-  for (const rule of mapping.rules) setTarget(output, rule.target, evaluateExpression(rule.expression, row));
+  for (const rule of mapping.rules) {
+    const value = evaluateExpression(rule.expression, row);
+    if (value !== omitted) setTarget(output, rule.target, value);
+  }
   return output;
 }

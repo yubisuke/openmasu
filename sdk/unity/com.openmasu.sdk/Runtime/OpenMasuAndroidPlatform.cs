@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace OpenMasu.Unity
 {
-    public sealed class OpenMasuAndroidPlatform : IOpenMasuPlatform
+    public sealed class OpenMasuAndroidPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform
     {
         private AndroidJavaClass bridge;
         private bool disposed;
@@ -16,17 +16,38 @@ namespace OpenMasu.Unity
         {
             using (var activity = CurrentActivity())
             {
-                EnsureBridge().CallStatic("initialize", activity, options.Endpoint, options.SdkKeyId, options.SdkSecret, options.WrapperVersion);
+                EnsureBridge().CallStatic("initialize", activity, options.Endpoint, options.SdkKeyId, options.SdkSecret,
+                    options.WrapperVersion, string.Join(",", options.DeepLinkHosts ?? Array.Empty<string>()),
+                    string.Join(",", options.DeepLinkSchemes ?? Array.Empty<string>()));
             }
         }
 
         public void TrackCustomEvent(string eventKey) => EnsureBridge().CallStatic("trackCustomEvent", eventKey);
+        public void TrackPurchase(
+            string transactionId,
+            string amountUnscaled,
+            int amountScale,
+            string currency) =>
+            EnsureBridge().CallStatic("trackPurchase", transactionId, amountUnscaled, amountScale, currency);
+        public void TrackRefund(
+            string transactionId,
+            string originalTransactionId,
+            string amountUnscaled,
+            int amountScale,
+            string currency) =>
+            EnsureBridge().CallStatic("trackRefund", transactionId, originalTransactionId, amountUnscaled, amountScale, currency);
         public void StartSession() => EnsureBridge().CallStatic("startSession");
         public void SetCollectionEnabled(bool enabled) => EnsureBridge().CallStatic("setCollectionEnabled", enabled);
         public void ResetInstallationId(Action<bool> completion) =>
             EnsureBridge().CallStatic("resetInstallationId", new BooleanCallback(completion));
         public void PingFromBackground(string value, Action<string> completion) =>
             EnsureBridge().CallStatic("pingFromBackground", value, new StringCallback(completion));
+        public void SetDeepLinkListener(Action<string> listener) =>
+            EnsureBridge().CallStatic("setDeepLinkListener", new StringCallback(listener));
+        public void HandleDeepLink(string url)
+        {
+            using (var activity = CurrentActivity()) EnsureBridge().CallStatic("handleDeepLink", activity, url);
+        }
 
         private AndroidJavaClass EnsureBridge()
         {

@@ -18,6 +18,7 @@
     "protected_referrer_evidence_ref": { "type": "string" },
     "referrer_click_at_device": { "$ref": "../common.schema.json#/$defs/dateTime" },
     "referrer_click_at_server": { "$ref": "../common.schema.json#/$defs/dateTime" },
+    "referrer_click_at_server_status": { "enum": ["available", "missing", "invalid"] },
     "install_begin_at_device": { "$ref": "../common.schema.json#/$defs/dateTime" },
     "install_begin_at_server": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$" },
     "install_begin_at_server_status": { "enum": ["available", "missing", "invalid"] },
@@ -28,6 +29,7 @@
     "os_version": { "type": "string", "minLength": 1, "maxLength": 128 },
     "sdk_version": { "type": "string", "minLength": 1, "maxLength": 128 },
     "ad_tracking_limited": { "type": "boolean" },
+    "deferred_deep_link_status": { "enum": ["not_applicable", "absent", "delivered", "expired", "rejected"] },
     "attribution_confirmed_at": { "$ref": "../common.schema.json#/$defs/dateTime" },
     "meta_referrer_status": { "enum": ["provider_unavailable", "app_version_unsupported", "no_campaign_data", "decrypt_failed", "auth_failed", "decrypted"] },
     "is_ct": { "type": "integer", "enum": [0, 1] },
@@ -101,6 +103,13 @@
           "properties": { "prior_installation_id": {} },
           "required": ["prior_installation_id"]
         }
+      }
+    },
+    {
+      "if": { "properties": { "referrer_click_at_server_status": { "const": "available" } }, "required": ["referrer_click_at_server_status"] },
+      "then": {
+        "properties": { "referrer_click_at_server": { "$ref": "../common.schema.json#/$defs/dateTime" } },
+        "required": ["referrer_click_at_server"]
       }
     },
     {

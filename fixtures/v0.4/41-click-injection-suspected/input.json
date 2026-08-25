@@ -22,7 +22,7 @@
       "threshold_seconds": 10,
       "authority": "server",
       "policy_version": "click-injection-v0.3",
-      "policy_digest": "3333333333333333333333333333333333333333333333333333333333333333"
+      "policy_digest": "09e767c7f45edccfd452861098e1628ea6150971a8d3f08876f7c7c7015cead9"
     }
   },
   "records": [

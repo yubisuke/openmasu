@@ -7,16 +7,30 @@
   "required": ["fraud_decision_id", "subject_ref", "decision", "action", "reason_code", "reason_code_version", "evidence", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash", "evaluated_at"],
   "properties": {
     "fraud_decision_id": { "$ref": "common.schema.json#/$defs/id" },
+    "subject_scope": { "enum": ["record", "source"], "default": "record" },
     "subject_ref": { "$ref": "common.schema.json#/$defs/id" },
     "decision": { "enum": ["clear", "suspected", "confirmed"] },
     "action": { "enum": ["allow", "flag", "exclude", "quarantine"] },
-    "reason_code": { "enum": ["bot_prefetch", "replay_suspected", "click_injection_suspected"] },
+    "reason_code": { "enum": ["bot_prefetch", "replay_suspected", "click_injection_suspected", "ctit_clock_anomaly", "click_flooding_suspected", "referrer_time_inconsistent", "device_integrity_failed"] },
     "reason_code_version": { "const": "0.4.0" },
     "evidence": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["type", "captured_at", "digest", "access_class"], "properties": { "type": { "type": "string" }, "captured_at": { "$ref": "common.schema.json#/$defs/dateTime" }, "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "access_class": { "enum": ["public", "protected", "private"] } } } },
     "rule_bundle_id": { "$ref": "common.schema.json#/$defs/id" },
     "rule_bundle_version": { "type": "string", "minLength": 1 },
     "rule_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "rule_id": { "$ref": "common.schema.json#/$defs/id" },
+    "resolution_deadline_at": { "$ref": "common.schema.json#/$defs/dateTime" },
     "evaluated_at": { "$ref": "common.schema.json#/$defs/dateTime" },
     "supersedes_fraud_decision_id": { "$ref": "common.schema.json#/$defs/id" }
-  }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "subject_scope": { "const": "source" } }, "required": ["subject_scope"] },
+      "then": { "properties": { "subject_ref": { "type": "string", "pattern": "^source:" } } },
+      "else": { "properties": { "subject_ref": { "type": "string", "not": { "pattern": "^source:" } } } }
+    },
+    {
+      "if": { "properties": { "action": { "const": "quarantine" } }, "required": ["action"] },
+      "then": { "properties": { "resolution_deadline_at": {} }, "required": ["resolution_deadline_at"] }
+    }
+  ]
 }

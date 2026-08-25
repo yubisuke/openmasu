@@ -48,7 +48,9 @@ public func openmasuIOSInitialize(
       endpoint: endpointURL,
       sdkKeyId: String(cString: sdkKeyId),
       sdkSecret: String(cString: sdkSecret),
-      wrapperVersion: "unity-0.1.0"
+      wrapperVersion: "unity-0.1.0",
+      deepLinkHosts: Set(Bundle.main.object(forInfoDictionaryKey: "OpenMasuLinkHosts") as? [String] ?? []),
+      deepLinkSchemes: Set(Bundle.main.object(forInfoDictionaryKey: "OpenMasuLinkSchemes") as? [String] ?? [])
     )
     let sdk = try OpenMasuSDK(
       configuration: configuration,
@@ -64,6 +66,33 @@ public func openmasuIOSInitialize(
   }
 }
 
+@_cdecl("openmasu_ios_handle_deep_link")
+public func openmasuIOSHandleDeepLink(
+  _ urlValue: UnsafePointer<CChar>?,
+  _ requestId: Int64,
+  _ callbackValue: OpenMasuCStringCallback?
+) {
+  guard let sdk = BridgeState.get(), let urlValue,
+        let url = URL(string: String(cString: urlValue)) else {
+    callback(callbackValue, requestId: requestId, value: "error:deep_link_invalid")
+    return
+  }
+  guard let value = sdk.parseDeepLink(url), sdk.handleDeepLink(url) else {
+    callback(callbackValue, requestId: requestId, value: "error:deep_link_unhandled")
+    return
+  }
+  var components = URLComponents()
+  components.queryItems = [
+    value.value.map { URLQueryItem(name: "value", value: $0) },
+    URLQueryItem(name: "open_source", value: value.openSource),
+    URLQueryItem(name: "destination_status", value: value.destinationStatus),
+    URLQueryItem(name: "link_slug", value: value.linkSlug),
+  ].compactMap { $0 } + value.parameters.sorted(by: { $0.key < $1.key }).map {
+    URLQueryItem(name: "p_\($0.key)", value: $0.value)
+  }
+  callback(callbackValue, requestId: requestId, value: components.percentEncodedQuery ?? "error:deep_link_encoding")
+}
+
 @_cdecl("openmasu_ios_track_custom_event")
 public func openmasuIOSTrackCustomEvent(
   _ eventKey: UnsafePointer<CChar>?,
@@ -74,9 +103,76 @@ public func openmasuIOSTrackCustomEvent(
     callback(callbackValue, requestId: requestId, value: "error:not_initialized")
     return
   }
+  let eventKeyValue = String(cString: eventKey)
   Task {
-    do { try await sdk.trackCustomEvent(String(cString: eventKey)); callback(callbackValue, requestId: requestId, value: "ok") }
+    do { try await sdk.trackCustomEvent(eventKeyValue); callback(callbackValue, requestId: requestId, value: "ok") }
     catch { callback(callbackValue, requestId: requestId, value: "error:track_failed") }
+  }
+}
+
+@_cdecl("openmasu_ios_track_purchase")
+public func openmasuIOSTrackPurchase(
+  _ transactionId: UnsafePointer<CChar>?,
+  _ amountUnscaled: UnsafePointer<CChar>?,
+  _ amountScale: Int32,
+  _ currency: UnsafePointer<CChar>?,
+  _ requestId: Int64,
+  _ callbackValue: OpenMasuCStringCallback?
+) {
+  guard let sdk = BridgeState.get(), let transactionId, let amountUnscaled, let currency else {
+    callback(callbackValue, requestId: requestId, value: "error:not_initialized_or_invalid_purchase")
+    return
+  }
+  let transactionIdValue = String(cString: transactionId)
+  let amountUnscaledValue = String(cString: amountUnscaled)
+  let currencyValue = String(cString: currency)
+  Task {
+    do {
+      try await sdk.trackSettledPurchase(
+        transactionId: transactionIdValue,
+        amountUnscaled: amountUnscaledValue,
+        amountScale: Int(amountScale),
+        currency: currencyValue
+      )
+      callback(callbackValue, requestId: requestId, value: "ok")
+    } catch {
+      callback(callbackValue, requestId: requestId, value: "error:purchase_failed")
+    }
+  }
+}
+
+@_cdecl("openmasu_ios_track_refund")
+public func openmasuIOSTrackRefund(
+  _ transactionId: UnsafePointer<CChar>?,
+  _ originalTransactionId: UnsafePointer<CChar>?,
+  _ amountUnscaled: UnsafePointer<CChar>?,
+  _ amountScale: Int32,
+  _ currency: UnsafePointer<CChar>?,
+  _ requestId: Int64,
+  _ callbackValue: OpenMasuCStringCallback?
+) {
+  guard let sdk = BridgeState.get(), let transactionId, let originalTransactionId,
+        let amountUnscaled, let currency else {
+    callback(callbackValue, requestId: requestId, value: "error:not_initialized_or_invalid_refund")
+    return
+  }
+  let transactionIdValue = String(cString: transactionId)
+  let originalTransactionIdValue = String(cString: originalTransactionId)
+  let amountUnscaledValue = String(cString: amountUnscaled)
+  let currencyValue = String(cString: currency)
+  Task {
+    do {
+      try await sdk.trackRefund(
+        transactionId: transactionIdValue,
+        originalTransactionId: originalTransactionIdValue,
+        amountUnscaled: amountUnscaledValue,
+        amountScale: Int(amountScale),
+        currency: currencyValue
+      )
+      callback(callbackValue, requestId: requestId, value: "ok")
+    } catch {
+      callback(callbackValue, requestId: requestId, value: "error:refund_failed")
+    }
   }
 }
 

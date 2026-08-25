@@ -111,6 +111,14 @@ public final class OpenMasuStorage: @unchecked Sendable {
 
   public func enqueue(_ event: QueuedEvent) throws {
     try lock.withLock {
+      if let existing = try queuedEvent(eventId: event.eventId),
+         isIdempotentCommerceDuplicate(event, existing: existing) {
+        let sequenceOwner = try eventId(processingSequence: event.processingSequence)
+        if sequenceOwner == nil || sequenceOwner == event.eventId {
+          try reassertBackupExclusion()
+          return
+        }
+      }
       let statement = try prepare("""
         INSERT INTO queued_events (
           event_id,event_name,processing_purpose_id,payload_json,occurred_at,
@@ -240,6 +248,45 @@ public final class OpenMasuStorage: @unchecked Sendable {
     bind(key, to: statement, at: 1)
     bind(value, to: statement, at: 2)
     guard sqlite3_step(statement) == SQLITE_DONE else { throw databaseError("metadata_write_failed") }
+  }
+
+  private func queuedEvent(eventId: String) throws -> QueuedEvent? {
+    let statement = try prepare("""
+      SELECT event_id,event_name,processing_purpose_id,payload_json,occurred_at,
+             processing_sequence,enqueued_at_ms
+      FROM queued_events WHERE event_id=?
+      """)
+    defer { sqlite3_finalize(statement) }
+    bind(eventId, to: statement, at: 1)
+    guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+    return QueuedEvent(
+      eventId: text(statement, 0),
+      eventName: text(statement, 1),
+      processingPurposeId: text(statement, 2),
+      payloadJson: text(statement, 3),
+      occurredAt: text(statement, 4),
+      processingSequence: sqlite3_column_int64(statement, 5),
+      enqueuedAtMs: sqlite3_column_int64(statement, 6)
+    )
+  }
+
+  private func eventId(processingSequence: Int64) throws -> String? {
+    let statement = try prepare("SELECT event_id FROM queued_events WHERE processing_sequence=?")
+    defer { sqlite3_finalize(statement) }
+    sqlite3_bind_int64(statement, 1, processingSequence)
+    return sqlite3_step(statement) == SQLITE_ROW ? text(statement, 0) : nil
+  }
+
+  private func isIdempotentCommerceDuplicate(_ event: QueuedEvent, existing: QueuedEvent) -> Bool {
+    guard ["purchase", "refund"].contains(event.eventName),
+          event.processingPurposeId == "revenue_measurement",
+          event.eventId.range(of: "^event:commerce:[0-9a-f]{64}$", options: .regularExpression) != nil
+    else { return false }
+    // A retry receives new queue timestamps and a new sequence. The canonical
+    // payload, event name, and purpose are the deterministic event semantics.
+    return existing.eventName == event.eventName &&
+      existing.processingPurposeId == event.processingPurposeId &&
+      existing.payloadJson == event.payloadJson
   }
 
   private func write(_ value: String, to url: URL) throws { try write(Data(value.utf8), to: url) }

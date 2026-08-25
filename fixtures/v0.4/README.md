@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 47 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 56 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -18,7 +18,7 @@ Each fixture has one synthetic input and 13 independently asserted output classe
 - `expected_rejections.json`
 - `expected_reconciliation.json`
 
-The validator checks every object against its Draft 2020-12 schema, checks registry references, runs scenario-specific semantic assertions and acceptance assertions, evaluates each input twice in TypeScript, evaluates it independently in Python, and compares RFC 8785 canonical bytes. Deliberate in-memory mutations prove that malformed timestamps, negative money, unknown registry values, changed golden output, input reorder, paid reinstall evidence, record-ID collisions, ambiguous clicks, cross-scope references, protected provider-reference leakage, stale-policy provenance drift, cost-dimension drift, aggregate-installation misuse, invalid S2S anchors, extension bypass, and registry/schema drift fail validation or fail closed as specified.
+The validator checks every object against its Draft 2020-12 schema, checks registry references, runs scenario-specific semantic assertions and acceptance assertions, evaluates each input twice in TypeScript, evaluates it independently in Python, and compares RFC 8785 canonical bytes. Deliberate in-memory mutations prove that malformed timestamps, negative source money, unknown registry values, changed golden output, input reorder, paid reinstall evidence, record-ID collisions, ambiguous clicks, cross-scope references, protected provider-reference leakage, stale-policy provenance drift, cost-dimension drift, aggregate-installation misuse, invalid S2S anchors, refund-target absence/ambiguity/mismatch/temporal stability, extension bypass, and registry/schema drift fail validation or fail closed as specified.
 
 The data is synthetic. It contains no external-source format, campaign data, user data, credential, live fraud rule, or operational threshold.
 
@@ -41,6 +41,20 @@ The late revenue is EUR `123456789012345678 * 10^-18`. The synthetic EUR-to-USD 
 `123456789012345678 * 125000000 * 10^6 / 10^(18 + 8) = 154320.9862654320975`
 
 Half-even rounding therefore produces `154321` target units, or USD `0.154321`. The initial watermark ends before the revenue delivery and yields `0`; the recalculated watermark includes it and yields `154321`. Separate mutation vectors exercise exact quotient ties: `0.5` rounds to the even integer `0`, and `1.5` rounds to the even integer `2`.
+
+### Fixture 16: explicit-target legacy compatibility
+
+The reviewed fixture remains byte-identical: its purchase is received at `00:02:00.000Z`, after the explicit-target refund at `00:01:00.000Z`, and both payloads omit `installation_id`. Version 0.4.8 treats this as the v0.4.0 legacy correction path: the named record must exist in the same authenticated tenant/app scope, but the new financial status, ordering, identity, cap, business-canonicalization, refund-fact, and purchase-net semantics do not apply. Target-free refunds still require string installation IDs and point-in-time exactly-one resolution.
+
+### Fixture 55: settled purchase/refund net revenue
+
+The one settled purchase is EUR 8.000000 in D0; the synthetic EUR/USD rate is 1.25, so independent integer conversion produces USD `10000000` at scale 6. A target-free settled refund of EUR 3.200000 occurs in D1 and converts independently to USD `4000000`. Cumulative net target units are therefore D0 `10000000` and D1/D3/D7 `6000000`. A pending EUR 50 purchase, reversed EUR 30 purchase, and explicit-target pending EUR 99 refund contribute zero. EUR 5.600000 ad revenue independently converts to the unchanged USD `7000000`, proving the existing `revenue` numerator is separate. Refunds use their own occurrence-time windows; mutations prove a pre-purchase refund, an individual over-refund, a cumulative over-refund, and a later ambiguous purchase all fail closed or preserve the already resolved target as required.
+
+All statuses in this fixture are synthetic, provider-neutral client reports; they do not demonstrate App Store, Google Play, or private-provider verification.
+
+### Fixture 56: D30/D90 total-net revenue metrics
+
+One synthetic imported install has USD 1 advertising revenue and USD 8 settled purchase-net revenue inside D30, so total-net revenue and one-install LTV are USD 9 and ROAS against USD 10 cost is 0.9. D31 revenue is excluded from D30 but included in D90; later D60 revenue and commerce bring D90 purchase net to USD 30 and total net/LTV to USD 37, with ROAS 3.7. A USD 100 purchase at the exact D91 boundary is excluded. These calculations use the half-open `[install, install + (day + 1 days))` rule and contain only synthetic values.
 
 ### Protected provider matching keys
 
@@ -130,6 +144,15 @@ Each fixture contains the same 13 `expected_*.json` artifacts listed above. Empt
 | `45-ios-conversion-schema` | One iOS install carries a synthetic bundled conversion-policy version and digest in `extensions`; one reserved custom event records an opt-in conversion-value update without changing attribution or metric meaning. |
 | `46-integrity-verdict-reservation` | Three server-assigned synthetic integrity envelopes cover both supported platforms and every closed verdict while preserving platform-referrer attribution semantics. |
 | `47-payload-schema-invalid` | One synthetic normalized runtime row fails the compiled event schema before ledger admission. It yields only a discarded delivery and non-identifying rejection; every raw, logical, and derived output remains empty. |
+| `48-source-scoped-fraud` | One reviewed source-day has exactly 1,000 clicks, CVR 0.001 against median 0.01, CTIT p50 24 hours, and p95/p50 2. All four F-R-4 terms hold, so one `source`-scoped `click_flooding_suspected` decision names the aggregate snapshot and no individual record. |
+| `49-fraud-excluded-attribution` | A synthetic server-classified prefetch click is excluded. Its same-click install keeps the original immutable attribution and adds one superseding `unattributed/fraud_excluded` result carrying the fraud-decision reference. Ingestion artifacts remain accepted and unchanged. |
+| `50-gross-net-metrics` | The same excluded synthetic install is counted by the explicit gross daily definition and omitted by the explicit net daily definition. Both use the same snapshot and grouping digest; gross is 1 and net is 0. |
+| `51-referrer-server-order` | The Play server click timestamp is exactly one second after the Play install-begin timestamp, so the threshold-free ordering rule emits a confirmed, flag-only `referrer_time_inconsistent` decision. No redirector timestamp is needed. |
+| `52-bounded-edge-evidence` | One redirector click carries only the permitted server-assigned bounded evidence: saturated source rate, mobile-app-eligible client class, and a synthetic remote click reference. No IP, User-Agent, hash-derived identity, or device signal is stored. |
+| `53-negative-ctit-clock-anomaly` | One negative-CTIT install emits the non-fraud `clear/allow` clock diagnostic. The day-wide ratio is 1/2, above the registered conservative 0.05 bound, so an independent valid Install Referrer attribution in another source cell on the same UTC day is superseded by a `provisional` result. TS and Python produce identical RFC 8785 bytes. |
+| `54-deep-link-open-contract` | Four synthetic direct/deferred opens exercise active, unknown, inactive, and install-click-reused engagement outcomes. Daily deep-link metrics preserve campaign and attribution-status separation without changing installation attribution. |
+| `55-purchase-refund-net-revenue` | One EUR 8 settled purchase and one D1 EUR 3.2 capped refund convert independently at 1.25 to reviewed D0/D1/D3/D7 net values of USD 10/6/6/6; pending/reversed rows are excluded, target-free and explicit target paths are exercised, and ad revenue stays USD 7. |
+| `56-d30-d90-total-net-metrics` | D30 purchase net/total net/ROAS/LTV are USD 8/USD 9/0.9/USD 9; D90 values are USD 30/USD 37/3.7/USD 37. D31 is excluded only from D30 and exact D91 is excluded from D90. |
 
 ## Adding a fixture
 

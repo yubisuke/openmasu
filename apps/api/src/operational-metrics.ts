@@ -1,5 +1,12 @@
 import type { Pool } from "pg";
-import { withTenant } from "@openmasu/runtime";
+import {
+  JOB_HEALTH_ACTOR_REFS,
+  JOB_HEALTH_JOBS,
+  JOB_HEALTH_OUTCOMES,
+  withTenant,
+  type JobHealthJob,
+  type JobHealthOutcome,
+} from "@openmasu/runtime";
 import type { RouteHandler } from "./routes.js";
 
 type RouteLabel = RouteHandler | "unmatched";
@@ -79,7 +86,7 @@ export async function renderOperationalMetrics(
   tenantId: string,
   metrics: OperationalMetrics,
 ): Promise<string> {
-  const backlog = await withTenant(pool, tenantId, async (client) => {
+  const durable = await withTenant(pool, tenantId, async (client) => {
     const inbox = await client.query<{ count: string; oldest: string }>(
       `SELECT count(*)::text AS count,
               COALESCE(EXTRACT(EPOCH FROM (clock_timestamp()-min(received_at::timestamptz))),0)::text AS oldest
@@ -101,24 +108,83 @@ export async function renderOperationalMetrics(
         WHERE tenant_id=$1`,
       [tenantId],
     );
+    const completedJobs = await client.query<{
+      actor_ref: string;
+      outcome: JobHealthOutcome;
+      runs: string;
+      latest: string;
+    }>(
+      `SELECT actor_ref, outcome, count(*)::text AS runs,
+              COALESCE(
+                EXTRACT(EPOCH FROM max(control.canonical_timestamp_value(occurred_at))),
+                0
+              )::text AS latest
+         FROM ledger.audit_logs
+        WHERE tenant_id=$1
+          AND actor_type='system_job'
+          AND action='job_completed'
+          AND policy_version='job-health-v1'
+          AND actor_ref IN (
+            'job:mmp_import', 'job:cost_import', 'job:max_revenue_import',
+            'job:google_conversion_delivery', 'job:metric_run'
+          )
+          AND outcome IN ('succeeded', 'failed')
+          AND target_scope='app'
+          AND app_id=target_ref
+          AND (
+            (outcome='succeeded' AND reason_code IS NULL)
+            OR (outcome='failed' AND reason_code='job_failed')
+          )
+        GROUP BY actor_ref, outcome`,
+      [tenantId],
+    );
+    const jobs = new Map<string, { runs: string; latest: string }>();
+    for (const job of JOB_HEALTH_JOBS) {
+      for (const outcome of JOB_HEALTH_OUTCOMES) jobs.set(`${job}\u0000${outcome}`, { runs: "0", latest: "0" });
+    }
+    for (const row of completedJobs.rows) {
+      const job = JOB_HEALTH_JOBS.find((candidate) => JOB_HEALTH_ACTOR_REFS[candidate] === row.actor_ref);
+      if (job && JOB_HEALTH_OUTCOMES.includes(row.outcome)) {
+        jobs.set(`${job}\u0000${row.outcome}`, { runs: row.runs, latest: row.latest });
+      }
+    }
     return {
       inbox: inbox.rows[0],
       batches: batches.rows[0],
       adservices: adservices.rows[0],
+      jobs,
     };
   });
   const lines = metrics.renderProcessMetrics();
   lines.push(
     "# HELP openmasu_ingest_backlog Pending durable ingest work by bounded queue.",
     "# TYPE openmasu_ingest_backlog gauge",
-    `openmasu_ingest_backlog${labels({ queue: "max_inbox" })} ${backlog.inbox.count}`,
-    `openmasu_ingest_backlog${labels({ queue: "sdk_batches" })} ${backlog.batches.count}`,
-    `openmasu_ingest_backlog${labels({ queue: "adservices" })} ${backlog.adservices.count}`,
+    `openmasu_ingest_backlog${labels({ queue: "max_inbox" })} ${durable.inbox.count}`,
+    `openmasu_ingest_backlog${labels({ queue: "sdk_batches" })} ${durable.batches.count}`,
+    `openmasu_ingest_backlog${labels({ queue: "adservices" })} ${durable.adservices.count}`,
     "# HELP openmasu_ingest_oldest_pending_seconds Age of the oldest pending item in a bounded queue.",
     "# TYPE openmasu_ingest_oldest_pending_seconds gauge",
-    `openmasu_ingest_oldest_pending_seconds${labels({ queue: "max_inbox" })} ${backlog.inbox.oldest}`,
-    `openmasu_ingest_oldest_pending_seconds${labels({ queue: "sdk_batches" })} ${backlog.batches.oldest}`,
-    `openmasu_ingest_oldest_pending_seconds${labels({ queue: "adservices" })} ${backlog.adservices.oldest}`,
+    `openmasu_ingest_oldest_pending_seconds${labels({ queue: "max_inbox" })} ${durable.inbox.oldest}`,
+    `openmasu_ingest_oldest_pending_seconds${labels({ queue: "sdk_batches" })} ${durable.batches.oldest}`,
+    `openmasu_ingest_oldest_pending_seconds${labels({ queue: "adservices" })} ${durable.adservices.oldest}`,
+    "# HELP openmasu_job_runs_total Durable terminal operator job runs by fixed job and outcome.",
+    "# TYPE openmasu_job_runs_total counter",
   );
+  const jobValue = (job: JobHealthJob, outcome: JobHealthOutcome): { runs: string; latest: string } =>
+    durable.jobs.get(`${job}\u0000${outcome}`) ?? { runs: "0", latest: "0" };
+  for (const job of JOB_HEALTH_JOBS) {
+    for (const outcome of JOB_HEALTH_OUTCOMES) {
+      lines.push(`openmasu_job_runs_total${labels({ job, outcome })} ${jobValue(job, outcome).runs}`);
+    }
+  }
+  lines.push(
+    "# HELP openmasu_job_last_completion_timestamp_seconds Unix timestamp of the latest durable terminal operator job run.",
+    "# TYPE openmasu_job_last_completion_timestamp_seconds gauge",
+  );
+  for (const job of JOB_HEALTH_JOBS) {
+    for (const outcome of JOB_HEALTH_OUTCOMES) {
+      lines.push(`openmasu_job_last_completion_timestamp_seconds${labels({ job, outcome })} ${jobValue(job, outcome).latest}`);
+    }
+  }
   return `${lines.join("\n")}\n`;
 }

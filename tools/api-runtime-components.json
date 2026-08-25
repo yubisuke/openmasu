@@ -1,6 +1,9 @@
 [
   "api",
+  "app-association",
   "apple-postback",
+  "fraud-rules",
+  "json-canonicalize",
   "pg",
   "pg-connection-string",
   "pg-int8",

@@ -1,0 +1,23 @@
+[
+  {
+    "fraud_decision_id": "fraud:install-negative-53:ctit-clock-anomaly-v1",
+    "subject_ref": "install-negative-53",
+    "decision": "clear",
+    "action": "allow",
+    "reason_code": "ctit_clock_anomaly",
+    "reason_code_version": "0.4.0",
+    "evidence": [
+      {
+        "type": "ctit_clock_diagnostic",
+        "captured_at": "2026-08-21T12:00:01.000Z",
+        "digest": "2b90111b418a0adc10fc58c9c1f223280108c8eb5b1f033318f0a4f6dbeb303a",
+        "access_class": "protected"
+      }
+    ],
+    "rule_bundle_id": "fraud-conservative",
+    "rule_bundle_version": "1.0.0",
+    "rule_bundle_hash": "dfc447604f961bc549af4e28985d8f4e5427bd8f56c26b208d35ccab9a04a1ed",
+    "rule_id": "ctit-clock-anomaly-v1",
+    "evaluated_at": "2026-08-21T12:00:01.000Z"
+  }
+]

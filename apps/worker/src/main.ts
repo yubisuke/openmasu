@@ -4,6 +4,10 @@ import { EncryptedFilePayloadStore, EnvironmentSecretStore, uuidV7, withTenant }
 import { AdServicesLookupLimiter, processAdServicesLookups } from "./adservices-worker.js";
 import { processMaxInbox } from "./import/max-worker.js";
 import { listRuntimeWorkTenants, processSdkInbox } from "./sdk-worker.js";
+import { aggregateSourceDay, resolveExpiredQuarantines } from "./fraud-worker.js";
+import { processIntegrityVerifications, type IntegrityProvider } from "./integrity-verifier.js";
+import { processGooglePlayProductVerifications } from "./google-play-product-verifier.js";
+import { discoverGoogleConversionDeliveries, processGoogleConversionDeliveries } from "./google-conversion-worker.js";
 
 const connectionString = process.env.OPENMASU_APP_DATABASE_URL;
 if (!connectionString) throw new Error("OPENMASU_APP_DATABASE_URL is required");
@@ -23,11 +27,27 @@ const secrets = new EnvironmentSecretStore({
   OPENMASU_PAYLOAD_MASTER_KEY: { value: process.env.OPENMASU_PAYLOAD_MASTER_KEY, file: process.env.OPENMASU_PAYLOAD_MASTER_KEY_FILE },
   OPENMASU_META_IR_DECRYPTION_KEY: { value: process.env.OPENMASU_META_IR_DECRYPTION_KEY, file: process.env.OPENMASU_META_IR_DECRYPTION_KEY_FILE },
   OPENMASU_META_IR_DECRYPTION_KEY_PREVIOUS: { value: process.env.OPENMASU_META_IR_DECRYPTION_KEY_PREVIOUS, file: process.env.OPENMASU_META_IR_DECRYPTION_KEY_PREVIOUS_FILE },
+  OPENMASU_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: {
+    value: process.env.OPENMASU_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON,
+    file: process.env.OPENMASU_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_FILE,
+  },
+  OPENMASU_GOOGLE_DATA_MANAGER_SERVICE_ACCOUNT_JSON: {
+    value: process.env.OPENMASU_GOOGLE_DATA_MANAGER_SERVICE_ACCOUNT_JSON,
+    file: process.env.OPENMASU_GOOGLE_DATA_MANAGER_SERVICE_ACCOUNT_JSON_FILE,
+  },
 });
 const payloadStore = new EncryptedFilePayloadStore(
   process.env.OPENMASU_PAYLOAD_STORE_DIR ?? ".openmasu/payloads",
   secrets.require("OPENMASU_PAYLOAD_MASTER_KEY"),
 );
+const fraudEnabled = process.env.OPENMASU_FRAUD_ENABLED !== "0";
+const integrityProviderMode = (() => {
+  const value = process.env.OPENMASU_INTEGRITY_PROVIDER ?? "off";
+  if (!["off", "play_integrity", "app_attest", "both"].includes(value)) {
+    throw new Error("OPENMASU_INTEGRITY_PROVIDER is invalid");
+  }
+  return value as "off" | IntegrityProvider | "both";
+})();
 async function sweepDashboardSessions(): Promise<void> {
   const now = new Date();
   await withTenant(pool, maxTenantId, async (client) => {
@@ -69,13 +89,53 @@ const tick = async (): Promise<void> => {
         endpoint: process.env.OPENMASU_ADSERVICES_ENDPOINT,
         limiter: adServicesLimiter,
       });
+      await processIntegrityVerifications(pool, payloadStore, tenantId, {
+        providerMode: integrityProviderMode,
+        playEndpoint: process.env.OPENMASU_PLAY_INTEGRITY_ENDPOINT,
+        appAttestEndpoint: process.env.OPENMASU_APP_ATTEST_ENDPOINT,
+      });
+      await processGooglePlayProductVerifications(pool, payloadStore, tenantId, {
+        enabled: process.env.OPENMASU_GOOGLE_PLAY_PRODUCT_VERIFICATION === "on"
+          || process.env.OPENMASU_GOOGLE_PLAY_SUBSCRIPTION_VERIFICATION === "on"
+          || process.env.OPENMASU_GOOGLE_PLAY_RTDN_RENEWAL_VERIFICATION === "on",
+        enabledKinds: [
+          ...(process.env.OPENMASU_GOOGLE_PLAY_PRODUCT_VERIFICATION === "on" ? ["one_time_product" as const] : []),
+          ...(process.env.OPENMASU_GOOGLE_PLAY_SUBSCRIPTION_VERIFICATION === "on" ? ["subscription_initial" as const] : []),
+          ...(process.env.OPENMASU_GOOGLE_PLAY_RTDN_RENEWAL_VERIFICATION === "on" ? ["subscription_renewal" as const] : []),
+        ],
+        credentialsJson: secrets.read("OPENMASU_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"),
+        apiBaseUrl: process.env.OPENMASU_GOOGLE_PLAY_ANDROID_PUBLISHER_BASE_URL,
+        tokenUrl: process.env.OPENMASU_GOOGLE_PLAY_OAUTH_TOKEN_URL,
+      });
+      if (process.env.OPENMASU_GOOGLE_DATA_MANAGER_ENABLED === "on") {
+        await discoverGoogleConversionDeliveries(pool, payloadStore, tenantId);
+        await processGoogleConversionDeliveries(pool, payloadStore, tenantId, {
+          enabled: true,
+          credentialsJson: secrets.read("OPENMASU_GOOGLE_DATA_MANAGER_SERVICE_ACCOUNT_JSON"),
+          apiBaseUrl: process.env.OPENMASU_GOOGLE_DATA_MANAGER_BASE_URL,
+          tokenUrl: process.env.OPENMASU_GOOGLE_DATA_MANAGER_OAUTH_TOKEN_URL,
+        });
+      }
+      if (fraudEnabled) {
+        const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+        await aggregateSourceDay(pool, tenantId, yesterday);
+        await resolveExpiredQuarantines(pool, tenantId);
+      }
     }
     await sweepDashboardSessions();
   }
   finally { busy = false; }
 };
 await tick();
-const timer = setInterval(() => void tick(), interval);
+const poll = async (): Promise<void> => {
+  try {
+    await tick();
+  }
+  catch {
+    process.stderr.write('{"event":"worker_tick_failed","component":"worker","retry":"next_poll"}\n');
+  }
+};
+const timer = setInterval(() => void poll(), interval);
 
 async function stop(): Promise<void> {
   clearInterval(timer);

@@ -31,6 +31,12 @@ namespace UnityEngine
     {
         public static int AttachCurrentThread() => 0;
     }
+    public static class Application
+    {
+        public static string absoluteURL = string.Empty;
+        public static event Action<string> deepLinkActivated;
+        public static void RaiseDeepLink(string value) => deepLinkActivated?.Invoke(value);
+    }
 }
 
 public static class MaxSdk
