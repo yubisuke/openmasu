@@ -50,7 +50,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: openmasu-sdk-release-bundle
-          path: build/sdk-release/openmasu-sdk-0.1.0
+          path: build/sdk-release/openmasu-sdk-0.2.0-rc.1
           if-no-files-found: error
 
   android-emulator:

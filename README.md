@@ -18,7 +18,12 @@ This project is licensed under the [Apache License 2.0](LICENSE); attribution is
 
 ## Current status
 
-This project contains the v0.4.9 contract and synthetic code milestones through M7: the Shadow ledger and import foundation, cohort metrics and difference audit, Android/Unity and Apple measurement paths, the server-rendered operator dashboard, production-control foundations, deterministic fraud controls, direct/deferred deep-link paths, settled purchase/refund net revenue, D30/D90 total-net ROAS and cohort LTV, and synthetic verified-commerce lifecycle paths for Google Play and the App Store. Real provider connectivity, real-device and campaign validation, Unity exports, App Store review, a production deployment, real backup operations, real production load, real integrity-service configuration, live purchase verification, and real link-domain verification have not been demonstrated. Immutable baselines are available at the `contract-v0.1`, `contract-v0.2.1`, and `contract-v0.3.6` Git tags. See [the current status](docs/STATUS.md) for the milestone-by-milestone boundary.
+The current source and SDK release candidate is `v0.2.0-rc.1`. It packages the
+post-M7 synthetic implementation while retaining Contract v0.4 identities;
+the release number and contract version are intentionally independent. See
+[the release-candidate notes](docs/releases/v0.2.0-rc.1.md).
+
+This project contains the v0.4 contract, with additive metric and rule definitions through v0.4.9, and synthetic code milestones through M7: the Shadow ledger and import foundation, cohort metrics and difference audit, Android/Unity and Apple measurement paths, the server-rendered operator dashboard, production-control foundations, deterministic fraud controls, direct/deferred deep-link paths, settled purchase/refund net revenue, D30/D90 total-net ROAS and cohort LTV, and synthetic verified-commerce lifecycle paths for Google Play and the App Store. Real provider connectivity, real-device and campaign validation, Unity exports, App Store review, a production deployment, real backup operations, real production load, real integrity-service configuration, live purchase verification, and real link-domain verification have not been demonstrated. Immutable baselines are available at the `contract-v0.1`, `contract-v0.2.1`, and `contract-v0.3.6` Git tags. See [the current status](docs/STATUS.md) for the milestone-by-milestone boundary.
 
 The first product entry point is a Shadow MMP that runs alongside an existing provider. It normalizes first-party events, existing MMP exports, media cost, and revenue into a common contract, then explains neutral differences through candidate evidence, exclusion reasons, attribution windows, ID joins, and recalculation history. Difference reasons describe measurement semantics, not provider quality. It must not be treated as the primary MMP until a real shadow pilot has produced sufficient evidence.
 
@@ -213,7 +218,7 @@ npm run sbom
 python tools/build-sdk-release.py --reproducibility-check
 ```
 
-`build/sdk-release/openmasu-sdk-0.1.0/` contains Maven AAR/POM artifacts, a Unity UPM archive, an immutable Swift Package source archive, Android/iOS/Unity CycloneDX SBOMs, source and toolchain metadata, and a SHA-256 manifest. CI rebuilds and byte-compares the bundle. These are synthetic build artifacts only: no registry publication, Unity export, real provider read, device validation, or distribution signing is claimed.
+`build/sdk-release/openmasu-sdk-0.2.0-rc.1/` contains Maven AAR/POM artifacts, a Unity UPM archive, an immutable Swift Package source archive, Android/iOS/Unity CycloneDX SBOMs, source and toolchain metadata, and a SHA-256 manifest. CI rebuilds and byte-compares the bundle. These are synthetic build artifacts only: no registry publication, Unity export, real provider read, device validation, or distribution signing is claimed.
 
 ### Google Play purchase verification
 

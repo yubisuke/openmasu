@@ -33,7 +33,7 @@ for (const workspace of workspaces) {
   const name = workspace.replace("@openmasu/", "");
   JSON.parse(readFileSync(join(root, `${name}.cdx.json`), "utf8"));
 }
-const iosRef = "pkg:swift/dev.openmasu/OpenMasuIOS@0.1.0";
+const iosRef = "pkg:swift/dev.openmasu/OpenMasuIOS@0.2.0-rc.1";
 const iosPackage = readFileSync(join(process.cwd(), "sdk", "ios", "Package.swift"), "utf8");
 if (iosPackage.includes(".package(")) {
   throw new Error("shipping iOS Package.swift gained a runtime dependency");
@@ -54,7 +54,7 @@ const ios = {
   version: 1,
   metadata: {
     component: {
-      type: "library", "bom-ref": iosRef, group: "dev.openmasu", name: "OpenMasuIOS", version: "0.1.0",
+      type: "library", "bom-ref": iosRef, group: "dev.openmasu", name: "OpenMasuIOS", version: "0.2.0-rc.1",
     },
   },
   components: iosComponents,

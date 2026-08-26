@@ -1,12 +1,12 @@
 # Project Status
 
-Checked on 2026-08-25. “Implemented” below means source and synthetic automated
+Checked on 2026-08-26 for the `v0.2.0-rc.1` release candidate. “Implemented” below means source and synthetic automated
 evidence are present. It does not mean a production deployment, real provider
 connection, device validation, platform approval, or operator acceptance.
 
 | Milestone | State | Implemented evidence | Residual boundary |
 | --- | --- | --- | --- |
-| M0.4 Contract v0.4.9 | Implemented | 28 schemas, 8 registries, 56 reviewed synthetic fixtures, independent TypeScript/Python evaluators, RFC 8785 parity, optional integrity/deep-link evidence, canonical settled purchase/refund net revenue, D30/D90 total-net ROAS and cohort LTV, runtime schema-rejection evidence, identity-only OpenMasu migration proof | No real data, live store/private-provider purchase verification, provider token, device identifier, or live fraud rule is validated |
+| M0.4 Contract v0.4 (definitions through v0.4.9) | Implemented | 28 schemas, 8 registries, 56 reviewed synthetic fixtures, independent TypeScript/Python evaluators, RFC 8785 parity, optional integrity/deep-link evidence, canonical settled purchase/refund net revenue, D30/D90 total-net ROAS and cohort LTV, runtime schema-rejection evidence, identity-only OpenMasu migration proof | No real data, live store/private-provider purchase verification, provider token, device identifier, or live fraud rule is validated |
 | M1a Shadow ledger/import | Implemented | PostgreSQL append-only/RLS ledger, encrypted payload port, three synthetic import paths, executable append-only MAX aggregate-revenue snapshots with restatement/current-view semantics, runtime-to-golden parity, SBOM | Real exports, provider credentials and response reconciliation, production TLS, external KMS, and deployment operations are unverified |
 | M1b Metrics/difference audit | Implemented | SQL/evaluator parity, fixed snapshots, supersession/redaction recalculation, authenticated JSON/CSV audit, synthetic performance floor | A real shadow pilot and exact 4-vCPU/8-GB capacity remain unverified |
 | M2 Android/Unity/redirector | Implemented | HMAC durable ingestion, deterministic referrer path, Kotlin SDK, Unity bridge, synthetic Google Play purchase verification, authenticated RTDN lifecycle ingestion, exact Orders refund correction, emulator CI, Android SBOM | Real Play Billing/Pub/Sub credentials, tokens, notifications, orders, entitlement/acknowledgement, complete missed-renewal history, Play/Meta/MAX campaigns, devices, backup transfer, and Unity export remain operator checks |

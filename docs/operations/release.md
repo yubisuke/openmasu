@@ -25,7 +25,7 @@ packages, or npm packages to a public registry.
    `python tools/build-sdk-release.py --reproducibility-check`. Verify the
    Maven POMs, UPM archive, Swift source archive, normalized SDK SBOMs,
    `release-manifest.json`, and `SHA256SUMS` under
-   `build/sdk-release/openmasu-sdk-0.1.0/`. The command compares two packaging
+   `build/sdk-release/openmasu-sdk-0.2.0-rc.1/`. The command compares two packaging
    passes byte for byte and never publishes them.
 8. Review the [informational synthetic load record](../validation/m5-load-results.md). Do not convert its p95
    record into a production service-level objective without a representative

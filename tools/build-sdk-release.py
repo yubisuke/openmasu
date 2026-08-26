@@ -23,19 +23,19 @@ MODULES = {
         ("androidx.work", "work-runtime", "2.11.2", "runtime", False),
     ],
     "installreferrer": [
-        ("dev.openmasu", "core", "0.1.0", "compile", False),
+        ("dev.openmasu", "core", "0.2.0-rc.1", "compile", False),
         ("com.android.installreferrer", "installreferrer", "2.2", "runtime", False),
     ],
-    "metareferrer": [("dev.openmasu", "core", "0.1.0", "compile", False)],
+    "metareferrer": [("dev.openmasu", "core", "0.2.0-rc.1", "compile", False)],
     "max": [
-        ("dev.openmasu", "core", "0.1.0", "compile", False),
+        ("dev.openmasu", "core", "0.2.0-rc.1", "compile", False),
         ("com.applovin", "applovin-sdk", "13.6.2", "provided", True),
     ],
     "unitybridge": [
-        ("dev.openmasu", "core", "0.1.0", "compile", False),
-        ("dev.openmasu", "installreferrer", "0.1.0", "runtime", False),
-        ("dev.openmasu", "metareferrer", "0.1.0", "runtime", False),
-        ("dev.openmasu", "max", "0.1.0", "compile", False),
+        ("dev.openmasu", "core", "0.2.0-rc.1", "compile", False),
+        ("dev.openmasu", "installreferrer", "0.2.0-rc.1", "runtime", False),
+        ("dev.openmasu", "metareferrer", "0.2.0-rc.1", "runtime", False),
+        ("dev.openmasu", "max", "0.2.0-rc.1", "compile", False),
     ],
 }
 
