@@ -120,6 +120,14 @@ npm run demo:metrics
 
 The bootstrap service generates local secrets, migrations run automatically, and the API and worker start only after PostgreSQL is healthy. `demo:metrics` prints tenant-scoped ledger counts plus a clearly labelled contract-synthetic preview. The preview is calculated from fixture 33 and does not claim that a real provider or campaign was queried.
 
+For an isolated end-to-end verification that never reuses the quickstart stack, run this instead from a clean worktree with no `.env` or `.openmasu` directory:
+
+```bash
+npm run pilot:synthetic -- --disposable
+```
+
+The command stages tracked source into a temporary directory, chooses a unique Compose project and loopback ports, forces provider integrations off, verifies the empty-ledger demo, stops writers before seeding, reproduces all reviewed goldens through PostgreSQL, runs the API/dashboard/redirector/SDK smoke, and removes its containers, networks, volumes, generated secrets, and staging directory on both success and failure. It refuses remote Docker contexts and does not print child logs or generated credentials. `--load` adds the informational synthetic M5 load measurement and is reserved for the pinned Runtime CI gate.
+
 The API and dashboard listen on `http://localhost:8080` (`/dashboard` for the login page), and the portable redirector listens on `http://localhost:8090`. `npm run bootstrap` prints the local admin key once; paste it into the dashboard login form. Dashboard reports are aggregate operator views, not data-subject exports. Tracking links are created through the authenticated management route; request query parameters and headers can never override their stored destinations. SDK enrollment and event delivery use the HMAC signing string fixed in [M2 Design Baseline](docs/design/m2-baseline.md).
 
 Subject access and portability are deliberately separate from dashboard reporting. An enrolled installation can sign `POST /v1/privacy/access` with its installation credential and a body containing its own `installation_id` plus `request_type: "access"` or `"portability"`. The response contains only allowlisted normalized facts and opaque scoped references; it is returned with `Cache-Control: no-store` and is not a raw-payload export. Deletion remains a separate operation at `POST /v1/privacy/on-device`.

@@ -62,7 +62,9 @@ describe("synthetic offline pilot preflight", () => {
       PATH: "synthetic-path",
       OPENMASU_ADMIN_KEY: "secret-a",
       PROVIDER_ACCESS_TOKEN: "secret-b",
-      PUBLIC_MODE: "synthetic",
-    }), { PATH: "synthetic-path", PUBLIC_MODE: "synthetic" });
+      NODE_OPTIONS: "--require private-hook",
+      npm_config_userconfig: "private-config",
+      HTTPS_PROXY: "private-proxy",
+    }), { PATH: "synthetic-path" });
   });
 });
