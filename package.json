@@ -27,6 +27,7 @@
     "generate:types": "npm run generate:types --workspace @openmasu/contracts",
     "import": "npm run import --workspace @openmasu/worker --",
     "import:preview": "npm run import:preview --workspace @openmasu/worker --",
+    "import:compatibility": "npm run import:compatibility --workspace @openmasu/worker --",
     "import:cost": "npm run import:cost --workspace @openmasu/worker --",
     "import:cost:google": "npm run import:cost:google --workspace @openmasu/worker --",
     "import:cost:meta": "npm run import:cost:meta --workspace @openmasu/worker --",

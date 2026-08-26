@@ -160,13 +160,13 @@ docker compose up -d --wait
 
 Run the seed profile only on a synthetic instance. Stop every ingestion writer first, as shown above; the seed command resets the synthetic ledger and is not safe alongside normal writes. Seed jobs serialize against each other with a PostgreSQL advisory lock and retry one `40P01` deadlock once; a second database deadlock is reported as a failure and should be investigated before rerunning. Fixture 33 exercises a non-zero revenue and non-zero cost cohort and reproduces `d7_roas=1.5` at ratio scale 6, so this seed/parity path is the non-zero synthetic cohort gate. It is not a real shadow-pilot result.
 
-Before importing an existing MMP export, run the no-write compatibility preview:
+Before importing an existing measurement export, run the provider-neutral, no-write compatibility report:
 
 ```bash
-npm run import:preview -- --source=examples/mappings/synthetic-provider-click.json --file=examples/synthetic/mmp-raw-events.json
+npm run import:compatibility -- --source=examples/mappings/synthetic-provider-click.json --file=examples/synthetic/mmp-raw-events.json --lint-directory=examples/mappings
 ```
 
-The preview opens no database connection and reports only aggregate selection, acceptance, and schema-rejection diagnostics. It does not print source values or input paths, and it cannot detect conflicts with identities already stored in a ledger. See the [import mapping guide](docs/import-mappings.md) for the exact boundary.
+The report opens no database connection and classifies the supplied artifact as `compatible`, `partially_compatible`, `not_compatible`, or `not_evaluated`. It reports aggregate selection and rejection counts, contract-field coverage, and mapping warnings without printing source values, source column names, identifiers, digests, or input paths. The lower-level `npm run import:preview` command remains available with its original aggregate-only output. This evaluates the artifact-to-contract mapping only: it cannot detect conflicts with identities already stored in a ledger, certify a provider, prove live connectivity, or claim production metric equivalence. See the [import mapping guide](docs/import-mappings.md) for the exact boundary.
 
 To exercise the operator CSV-to-metric path without committing a tabular file, create a synthetic CSV only under the gitignored `.openmasu/` directory and run the two explicit jobs:
 
