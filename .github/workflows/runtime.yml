@@ -77,17 +77,22 @@ jobs:
         run: npm run check:threat-model
       - name: Run isolated disposable synthetic runtime pilot
         run: npm run pilot:synthetic -- --disposable --load
+      - name: Upload synthetic runtime pilot evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: synthetic-runtime-pilot
+          path: build/pilot-evidence/synthetic-runtime.json
+          if-no-files-found: warn
+      - name: Remove disposable pilot resources after cancellation or failure
+        if: always()
+        run: docker compose --project-name "$OPENMASU_PILOT_PROJECT" down --volumes --remove-orphans --timeout 30
       - name: Upload M5 load evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: m5-synthetic-load
-          path: |
-            build/pilot-evidence/m5-load.json
-            build/pilot-evidence/synthetic-runtime.json
+          path: build/pilot-evidence/m5-load.json
           if-no-files-found: error
-      - name: Remove disposable pilot resources after cancellation or failure
-        if: always()
-        run: docker compose --project-name "$OPENMASU_PILOT_PROJECT" down --volumes --remove-orphans --timeout 30
       - name: Generate workspace SBOMs
         run: npm run sbom
       - name: Enforce the M3 API runtime component baseline

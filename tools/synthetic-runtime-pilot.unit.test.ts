@@ -34,7 +34,8 @@ describe("disposable synthetic runtime pilot", () => {
   it("fixes provider integrations off and uses only synthetic identities and isolated ports", () => {
     const environment = syntheticComposeEnvironment({ api: 41001, postgres: 41002, redirector: 41003 });
     assert.match(environment, /^OPENMASU_API_HOST_PORT=41001$/m);
-    assert.match(environment, /^OPENMASU_MAX_TENANT_ID=tenant-synthetic-pilot$/m);
+    assert.match(environment, /^OPENMASU_MAX_TENANT_ID=tenant-a$/m);
+    assert.match(environment, /^OPENMASU_MAX_APP_ID=app-a$/m);
     assert.match(environment, /^OPENMASU_COMMERCE_READBACKS=off$/m);
     assert.match(environment, /^OPENMASU_GOOGLE_DATA_MANAGER_ENABLED=off$/m);
     assert.match(environment, /^OPENMASU_APP_STORE_API_PRIVATE_KEY_FILE=$/m);
@@ -51,8 +52,8 @@ describe("disposable synthetic runtime pilot", () => {
 
   it("accepts only the clean-ledger demo and the two reviewed fixture-33 preview values", () => {
     const valid = {
-      tenant_id: "tenant-synthetic-pilot",
-      app_id: "app-synthetic-pilot",
+      tenant_id: "tenant-a",
+      app_id: "app-a",
       ledger_counts: {
         origin: "postgresql_ledger",
         raw_records: 0,

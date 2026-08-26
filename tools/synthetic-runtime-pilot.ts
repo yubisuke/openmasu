@@ -37,8 +37,8 @@ export function syntheticComposeEnvironment(ports: { api: number; postgres: numb
     OPENMASU_API_HOST_PORT: String(ports.api),
     OPENMASU_POSTGRES_HOST_PORT: String(ports.postgres),
     OPENMASU_REDIRECTOR_HOST_PORT: String(ports.redirector),
-    OPENMASU_MAX_TENANT_ID: "tenant-synthetic-pilot",
-    OPENMASU_MAX_APP_ID: "app-synthetic-pilot",
+    OPENMASU_MAX_TENANT_ID: "tenant-a",
+    OPENMASU_MAX_APP_ID: "app-a",
     OPENMASU_ENROLL_RATE_RPS: "10000",
     OPENMASU_ENROLL_RATE_BURST: "2000",
     OPENMASU_INGEST_RATE_RPS: "10",
@@ -94,8 +94,8 @@ export function assertCleanDemo(value: unknown): void {
     };
     synthetic_contract_preview?: Array<{ metric_name?: string; value_unscaled?: string; ratio_scale?: number }>;
   };
-  assert.equal(demo.tenant_id, "tenant-synthetic-pilot");
-  assert.equal(demo.app_id, "app-synthetic-pilot");
+  assert.equal(demo.tenant_id, "tenant-a");
+  assert.equal(demo.app_id, "app-a");
   assert.equal(demo.ledger_counts?.origin, "postgresql_ledger");
   for (const count of ["raw_records", "logical_events", "attributions", "metric_runs", "current_cost_rows"] as const) {
     assert.equal(demo.ledger_counts?.[count], 0, `${count} must be empty before synthetic seeding`);
@@ -347,7 +347,8 @@ export async function runSyntheticRuntimePilot(
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   await runSyntheticRuntimePilot(process.argv.slice(2)).catch((error: unknown) => {
     const step = error instanceof PilotStepError ? error.stepId : "precondition";
-    console.error(`Disposable synthetic runtime pilot failed at ${step}.`);
+    const exitCode = error instanceof PilotStepError ? error.exitCode : undefined;
+    console.error(`Disposable synthetic runtime pilot failed at ${step}${exitCode === undefined ? "" : ` (exit ${exitCode})`}.`);
     process.exitCode = 1;
   });
 }
