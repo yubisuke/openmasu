@@ -234,6 +234,29 @@ public func openmasuIOSSetCollectionEnabled(_ enabled: Bool) {
   Task { try? await sdk.setCollectionEnabled(enabled) }
 }
 
+@_cdecl("openmasu_ios_queue_health")
+public func openmasuIOSQueueHealth(
+  _ requestId: Int64,
+  _ callbackValue: OpenMasuCStringCallback?
+) {
+  guard let sdk = BridgeState.get() else {
+    callback(callbackValue, requestId: requestId, value: "error:not_initialized")
+    return
+  }
+  Task {
+    do {
+      let health = try await sdk.queueHealth()
+      callback(
+        callbackValue,
+        requestId: requestId,
+        value: "pending_count=\(health.pendingCount)&logical_bytes=\(health.logicalBytes)&evicted_total=\(health.evictedTotal)&rejected_total=\(health.rejectedTotal)"
+      )
+    } catch {
+      callback(callbackValue, requestId: requestId, value: "error:queue_health_failed")
+    }
+  }
+}
+
 @_cdecl("openmasu_ios_reset_installation")
 public func openmasuIOSResetInstallation(
   _ requestId: Int64,

@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace OpenMasu.Unity
 {
-    public sealed class OpenMasuAndroidPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform
+    public sealed class OpenMasuAndroidPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform
     {
         private AndroidJavaClass bridge;
         private bool disposed;
@@ -38,6 +38,8 @@ namespace OpenMasu.Unity
             string currency) =>
             EnsureBridge().CallStatic("trackRefund", transactionId, originalTransactionId, amountUnscaled, amountScale, currency);
         public void StartSession() => EnsureBridge().CallStatic("startSession");
+        public void GetQueueHealth(Action<string> completion) =>
+            EnsureBridge().CallStatic("getQueueHealth", new StringCallback(completion));
         public void SetCollectionEnabled(bool enabled) => EnsureBridge().CallStatic("setCollectionEnabled", enabled);
         public void ResetInstallationId(Action<bool> completion) =>
             EnsureBridge().CallStatic("resetInstallationId", new BooleanCallback(completion));

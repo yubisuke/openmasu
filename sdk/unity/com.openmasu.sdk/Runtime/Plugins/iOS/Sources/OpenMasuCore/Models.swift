@@ -1,5 +1,10 @@
 import Foundation
 
+public enum OpenMasuQueueDefaults {
+  public static let maxRecords = 10_000
+  public static let maxBytes: Int64 = 16 * 1024 * 1024
+}
+
 public struct OpenMasuConfiguration: Sendable {
   public let endpoint: URL
   public let sdkKeyId: String
@@ -12,6 +17,8 @@ public struct OpenMasuConfiguration: Sendable {
   public let conversionSchemaSha256: String?
   public let deepLinkHosts: Set<String>
   public let deepLinkSchemes: Set<String>
+  public let maxQueueRecords: Int
+  public let maxQueueBytes: Int64
 
   public init(
     endpoint: URL,
@@ -24,7 +31,9 @@ public struct OpenMasuConfiguration: Sendable {
     conversionSchemaVersion: String? = nil,
     conversionSchemaSha256: String? = nil,
     deepLinkHosts: Set<String> = [],
-    deepLinkSchemes: Set<String> = []
+    deepLinkSchemes: Set<String> = [],
+    maxQueueRecords: Int = OpenMasuQueueDefaults.maxRecords,
+    maxQueueBytes: Int64 = OpenMasuQueueDefaults.maxBytes
   ) {
     precondition(endpoint.scheme == "https" || endpoint.host == "127.0.0.1" || endpoint.host == "localhost")
     precondition((conversionSchemaVersion == nil) == (conversionSchemaSha256 == nil))
@@ -32,6 +41,8 @@ public struct OpenMasuConfiguration: Sendable {
     if let conversionSchemaSha256 {
       precondition(conversionSchemaSha256.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil)
     }
+    precondition((1...100_000).contains(maxQueueRecords))
+    precondition((65_536...268_435_456).contains(maxQueueBytes))
     self.endpoint = endpoint
     self.sdkKeyId = sdkKeyId
     self.sdkSecret = sdkSecret
@@ -43,6 +54,8 @@ public struct OpenMasuConfiguration: Sendable {
     self.conversionSchemaSha256 = conversionSchemaSha256
     self.deepLinkHosts = Set(deepLinkHosts.map { $0.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".")) })
     self.deepLinkSchemes = Set(deepLinkSchemes.map { $0.lowercased() })
+    self.maxQueueRecords = maxQueueRecords
+    self.maxQueueBytes = maxQueueBytes
   }
 }
 
@@ -131,6 +144,38 @@ public struct QueuedEvent: Equatable, Sendable {
     self.occurredAt = occurredAt
     self.processingSequence = processingSequence
     self.enqueuedAtMs = enqueuedAtMs
+  }
+}
+
+public struct OpenMasuQueueHealth: Equatable, Sendable {
+  public let pendingCount: Int
+  public let logicalBytes: Int64
+  public let evictedTotal: Int64
+  public let rejectedTotal: Int64
+}
+
+struct QueueCapacity: Equatable, Sendable {
+  let maxRecords: Int
+  let maxBytes: Int64
+}
+
+struct QueueAdmissionResult: Equatable, Sendable {
+  let admitted: Bool
+  let evicted: Int
+  let rejected: Int
+}
+
+extension QueuedEvent {
+  var logicalQueueBytes: Int64 {
+    Int64(eventId.utf8.count + eventName.utf8.count + processingPurposeId.utf8.count +
+      payloadJson.utf8.count + occurredAt.utf8.count + 16)
+  }
+
+  var queuePriority: Int {
+    if eventName == "consent_changed" { return 3 }
+    if processingPurposeId == "revenue_measurement" || eventName == "install" { return 2 }
+    if processingPurposeId == "analytics" { return 0 }
+    return 1
   }
 }
 

@@ -335,6 +335,7 @@ public actor OpenMasuSDK {
   public func installationIdForMeasurement() throws -> String { try storage.installationId() }
   public func pendingEvents() throws -> [QueuedEvent] { try storage.pending(limit: 10_000) }
   public func pendingCount() throws -> Int { try storage.count() }
+  public func queueHealth() throws -> OpenMasuQueueHealth { try storage.queueHealth() }
   public func storageRoot() -> URL { storage.root }
 
   private func ensureCredential() async throws -> InstallationCredential {
@@ -356,7 +357,7 @@ public actor OpenMasuSDK {
 
   private func enqueue(eventName: String, purpose: String, payloadJson: String, eventId: String? = nil) throws {
     if try storage.consentBarrierActive(), Self.consentRequiredPurposes.contains(purpose) { return }
-    try storage.enqueue(QueuedEvent(
+    _ = try storage.enqueue(QueuedEvent(
       eventId: eventId ?? EventFactory.identifier("event"),
       eventName: eventName,
       processingPurposeId: purpose,
@@ -364,6 +365,9 @@ public actor OpenMasuSDK {
       occurredAt: EventFactory.canonicalNow(),
       processingSequence: storage.nextSequence(),
       enqueuedAtMs: Int64(Date().timeIntervalSince1970 * 1_000)
+    ), capacity: QueueCapacity(
+      maxRecords: configuration.maxQueueRecords,
+      maxBytes: configuration.maxQueueBytes
     ))
   }
 

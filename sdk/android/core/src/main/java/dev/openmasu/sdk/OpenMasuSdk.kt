@@ -28,7 +28,14 @@ data class OpenMasuConfiguration @JvmOverloads constructor(
   val deepLinkHosts: Set<String> = emptySet(),
   val deepLinkSchemes: Set<String> = emptySet(),
   val deferredDeepLinkTtlSeconds: Long = 604800,
-)
+  val maxQueueRecords: Int = OpenMasuQueueDefaults.MAX_RECORDS,
+  val maxQueueBytes: Long = OpenMasuQueueDefaults.MAX_BYTES,
+) {
+  init {
+    require(maxQueueRecords in 1..100_000)
+    require(maxQueueBytes in 65_536L..268_435_456L)
+  }
+}
 
 class OpenMasuSdk private constructor(
   private val context: Context,
@@ -321,6 +328,15 @@ class OpenMasuSdk private constructor(
   internal fun pendingCount(): Int = executor.submit<Int> { database.queue().count() }.get()
   internal fun pendingEvents(): List<QueuedEvent> = executor.submit<List<QueuedEvent>> { database.queue().pending(10_000) }.get()
   internal fun installationId(): String = storage.installationId()
+  fun queueHealth(): OpenMasuQueueHealth = executor.submit<OpenMasuQueueHealth> {
+    val stats = database.queue().stats() ?: QueueStats()
+    OpenMasuQueueHealth(
+      pendingCount = database.queue().count(),
+      logicalBytes = database.queue().logicalBytes(),
+      evictedTotal = stats.evictedTotal,
+      rejectedTotal = stats.rejectedTotal,
+    )
+  }.get()
   fun close() {
     executor.shutdown()
     executor.awaitTermination(10, TimeUnit.SECONDS)
@@ -343,8 +359,10 @@ class OpenMasuSdk private constructor(
     if (!isCollectionEnabled() && eventName != "consent_changed") return
     if (storage.consentBarrierActive() && purpose in CONSENT_REQUIRED_PURPOSES) return
     val now = EventFactory.canonicalNow()
-    database.queue().insert(
+    database.queue().admit(
       QueuedEvent(eventId ?: EventFactory.newEventId(), eventName, purpose, payload.toString(), now, storage.nextSequence(), System.currentTimeMillis()),
+      configuration.maxQueueRecords,
+      configuration.maxQueueBytes,
     )
   }
 

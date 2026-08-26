@@ -89,6 +89,8 @@ Before implementation, legal and operational requirements must validate these de
 - Once the server recognizes a withdrawal, it rejects every event for a consent-required purpose regardless of `occurred_at`, retaining only non-identifying rejection metadata.
 - Acceptance of a queued event after withdrawal requires an explicit, per-purpose, documented alternative legal basis in the versioned server policy; it is never inferred from an earlier occurrence time.
 - On withdrawal or denial, the SDK persists a local admission barrier before purging queued consent-required events. The barrier is re-applied before queue admission and delivery after restart or installation reset; only an explicit `granted` or `not_required` update removes it. `unknown` never clears an existing barrier.
+- Android and iOS apply the same bounded-queue policy: 10,000 records and 16 MiB of logical UTF-8 content by default, configurable within validated SDK limits. Capacity enforcement, eviction or rejection, insertion, and aggregate-counter updates occur in one database transaction. Oldest analytics evidence is evicted first; install and revenue evidence is protected over analytics; `consent_changed` has the highest priority and is always admitted. If no eligible victim can free enough capacity, the incoming event is rejected without modifying existing rows.
+- Queue health exposes only aggregate pending count, logical bytes, cumulative evictions, and cumulative rejections. It never exposes payloads or event identifiers. Logical bytes count the UTF-8 stored strings plus the two fixed-width integer fields; they are not a physical-disk measurement and do not strengthen the documented sudden-power-loss boundary.
 
 ## Correction, deletion, and export
 

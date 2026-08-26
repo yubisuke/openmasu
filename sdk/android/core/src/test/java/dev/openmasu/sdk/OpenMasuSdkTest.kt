@@ -2,6 +2,7 @@ package dev.openmasu.sdk
 
 import android.content.Context
 import android.content.Intent
+import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import org.json.JSONObject
@@ -15,6 +16,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -158,6 +160,102 @@ class OpenMasuSdkTest {
     sdk.updateConsent("granted", "synthetic-policy-granted")
     sdk.trackCustomEvent("allowed_after_grant")
     await { sdk.pendingEvents().any { it.eventName == "custom_event" } }
+  }
+
+  @Test fun `queue capacity protects revenue over analytics and always admits the latest consent`() {
+    val sdk = sdk(
+      RecordingTransport(false),
+      configuration = OpenMasuConfiguration(
+        "http://127.0.0.1", "sdk-key:synthetic", "synthetic-secret",
+        maxQueueRecords = 2, maxQueueBytes = 65_536,
+      ),
+    )
+    sdk.initialize()
+    await { sdk.pendingEvents().any { it.eventName == "install" } }
+    sdk.enqueueAdRevenue(JSONObject()
+      .put("event_name", "ad_revenue").put("subject_scope", "installation_level")
+      .put("installation_id", sdk.installationId()).put("ad_network", "synthetic")
+      .put("amount_unscaled", "1").put("amount_scale", 6).put("currency", "USD")
+      .put("revenue_source", "client_estimated").put("revenue_precision", "exact"))
+    await { sdk.pendingCount() == 2 }
+
+    sdk.trackCustomEvent("rejected_while_protected_is_full")
+    await { sdk.queueHealth().rejectedTotal == 1L }
+    assertEquals(setOf("install", "ad_revenue"), sdk.pendingEvents().map { it.eventName }.toSet())
+
+    sdk.updateConsent("unknown", "synthetic-policy-capacity")
+    await { sdk.pendingEvents().any { it.eventName == "consent_changed" } }
+    val health = sdk.queueHealth()
+    assertEquals(2, health.pendingCount)
+    assertEquals(1L, health.evictedTotal)
+    assertEquals(1L, health.rejectedTotal)
+    assertEquals(setOf("ad_revenue", "consent_changed"), sdk.pendingEvents().map { it.eventName }.toSet())
+  }
+
+  @Test fun `queue byte accounting uses UTF-8 and duplicate admission never evicts`() {
+    val database = OpenMasuQueueDatabase.open(context)
+    val executor = Executors.newSingleThreadExecutor()
+    try {
+      val result = executor.submit<List<Any>> {
+        val ascii = QueuedEvent(
+          "event:ascii", "custom_event", "analytics", "{\"value\":\"a\"}",
+          "2026-08-26T00:00:00.000Z", 1, 1,
+        )
+        val multibyte = QueuedEvent(
+          "event:multibyte", "custom_event", "analytics", "{\"value\":\"枡枡枡\"}",
+          "2026-08-26T00:00:00.000Z", 2, 2,
+        )
+        val first = database.queue().admit(ascii, 10, multibyte.logicalQueueBytes())
+        val second = database.queue().admit(multibyte, 10, multibyte.logicalQueueBytes())
+        val duplicate = database.queue().admit(multibyte, 1, multibyte.logicalQueueBytes())
+        listOf(first, second, duplicate, database.queue().pending(10), database.queue().logicalBytes(), multibyte.logicalQueueBytes())
+      }.get(5, TimeUnit.SECONDS)
+      assertEquals(QueueAdmissionResult(true, 0, 0), result[0])
+      assertEquals(QueueAdmissionResult(true, 1, 0), result[1])
+      assertEquals(QueueAdmissionResult(true, 0, 0), result[2])
+      assertEquals(listOf("event:multibyte"), (result[3] as List<*>).map { (it as QueuedEvent).eventId })
+      assertEquals(result[5], result[4])
+    } finally {
+      executor.shutdownNow()
+      database.close()
+    }
+  }
+
+  @Test fun `queue database version one migrates without losing pending evidence`() {
+    val subtree = context.filesDir.resolve(OpenMasuStorage.SUBTREE).apply { mkdirs() }
+    val queueFile = subtree.resolve("queue.db")
+    SQLiteDatabase.openOrCreateDatabase(queueFile, null).use { legacy ->
+      legacy.execSQL("""
+        CREATE TABLE queued_events (
+          eventId TEXT NOT NULL, eventName TEXT NOT NULL, processingPurposeId TEXT NOT NULL,
+          payloadJson TEXT NOT NULL, occurredAt TEXT NOT NULL, processingSequence INTEGER NOT NULL,
+          createdAtEpochMs INTEGER NOT NULL, PRIMARY KEY(eventId)
+        )
+      """.trimIndent())
+      legacy.execSQL("""
+        INSERT INTO queued_events VALUES (
+          'event:legacy', 'install', 'attribution', '{"event_name":"install"}',
+          '2026-08-26T00:00:00.000Z', 1, 1
+        )
+      """.trimIndent())
+      legacy.execSQL("CREATE TABLE room_master_table (id INTEGER PRIMARY KEY, identity_hash TEXT)")
+      legacy.execSQL("INSERT INTO room_master_table VALUES (42, '3b7188418b7c305b460540ab3e8c1a3d')")
+      legacy.version = 1
+    }
+
+    val database = OpenMasuQueueDatabase.open(context)
+    val executor = Executors.newSingleThreadExecutor()
+    try {
+      val result = executor.submit<Pair<List<String>, QueueStats?>> {
+        database.queue().pending(10).map { it.eventId } to database.queue().stats()
+      }.get(5, TimeUnit.SECONDS)
+      assertEquals(listOf("event:legacy"), result.first)
+      assertEquals(null, result.second)
+      assertEquals(2, SQLiteDatabase.openDatabase(queueFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { it.version })
+    } finally {
+      executor.shutdownNow()
+      database.close()
+    }
   }
 
   @Test fun `session start uses a durable analytics event`() {

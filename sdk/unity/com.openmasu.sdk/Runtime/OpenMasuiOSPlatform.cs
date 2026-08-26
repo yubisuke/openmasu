@@ -6,7 +6,7 @@ using AOT;
 
 namespace OpenMasu.Unity
 {
-    public sealed class OpenMasuiOSPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform
+    public sealed class OpenMasuiOSPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform
     {
         private delegate void NativeCallback(long requestId, IntPtr value);
         private static readonly NativeCallback Callback = OnNativeCallback;
@@ -99,6 +99,17 @@ namespace OpenMasu.Unity
             openmasu_ios_start_session(requestId, Callback);
 #else
             CompleteSynthetic(requestId, "ok");
+#endif
+        }
+
+        public void GetQueueHealth(Action<string> completion)
+        {
+            ThrowIfDisposed();
+            var requestId = Register(completion);
+#if UNITY_IOS && !UNITY_EDITOR
+            openmasu_ios_queue_health(requestId, Callback);
+#else
+            CompleteSynthetic(requestId, "pending_count=0&logical_bytes=0&evicted_total=0&rejected_total=0");
 #endif
         }
 
@@ -214,6 +225,8 @@ namespace OpenMasu.Unity
             NativeCallback callback);
         [DllImport("__Internal")]
         private static extern void openmasu_ios_start_session(long requestId, NativeCallback callback);
+        [DllImport("__Internal")]
+        private static extern void openmasu_ios_queue_health(long requestId, NativeCallback callback);
         [DllImport("__Internal")]
         private static extern void openmasu_ios_set_collection_enabled([MarshalAs(UnmanagedType.I1)] bool enabled);
         [DllImport("__Internal")]
