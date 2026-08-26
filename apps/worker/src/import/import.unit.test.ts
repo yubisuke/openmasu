@@ -15,7 +15,7 @@ import {
 } from "./adapters.js";
 import { normalizeMaxAggregateRevenue } from "./max-revenue.js";
 import { runGoogleCostImport } from "./google-cost-cli.js";
-import { mappingsForLint } from "./runner.js";
+import { mappingsForLint, previewMmpImport } from "./runner.js";
 
 describe("runtime import mapping", () => {
   it("applies nested objects, booleans, maps, uppercase, and timestamps", () => {
@@ -177,6 +177,53 @@ describe("runtime import mapping", () => {
       writeFileSync(join(directory, "unrelated.json"), JSON.stringify({ unrelated: true }));
       assert.equal(mappingsForLint(mappingPath).length, 1);
       assert.throws(() => mappingsForLint(mappingPath, directory), /mapping schema validation failed/);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it("previews a valid existing-MMP export without persistence", () => {
+    assert.deepEqual(previewMmpImport({
+      mappingPath: "examples/mappings/synthetic-provider-click.json",
+      filePath: "examples/synthetic/mmp-raw-events.json",
+    }), {
+      mode: "preview",
+      persistence: "none",
+      mapping_version: "1.0.0",
+      format: "json",
+      rows: { read: 1, selected: 1, filtered: 0, accepted: 1, rejected: 0 },
+      warnings: [],
+      rejections: [],
+      limitations: [
+        "database_identity_conflicts_not_checked",
+        "provider_connectivity_not_checked",
+      ],
+    });
+  });
+
+  it("aggregates preview schema failures without exposing row values or paths", () => {
+    const directory = mkdtempSync(join(tmpdir(), "openmasu-preview-"));
+    try {
+      const file = join(directory, "private-export.json");
+      const [valid] = JSON.parse(requireText("examples/synthetic/mmp-raw-events.json"));
+      const invalidSecret = "must-not-appear-in-preview";
+      writeFileSync(file, JSON.stringify([
+        valid,
+        { ...valid, event_id: "synthetic-invalid", click_id: "", campaign_id: invalidSecret },
+        { ...valid, event_id: "synthetic-bad-time", occurred_at: "not-a-timestamp" },
+        { ...valid, event_type: "install", event_id: "synthetic-filtered" },
+      ]));
+      const preview = previewMmpImport({
+        mappingPath: "examples/mappings/synthetic-provider-click.json",
+        filePath: file,
+      });
+      assert.deepEqual(preview.rows, { read: 4, selected: 3, filtered: 1, accepted: 1, rejected: 2 });
+      assert.deepEqual(preview.rejections, [
+        { reason_code: "row_schema_invalid", count: 1, fields: ["/click_id"] },
+        { reason_code: "timestamp_invalid", count: 1, fields: [] },
+      ]);
+      const serialized = JSON.stringify(preview);
+      assert.equal(serialized.includes(invalidSecret), false);
+      assert.equal(serialized.includes(file), false);
+      assert.equal(serialized.includes("synthetic-invalid"), false);
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 });

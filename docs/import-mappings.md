@@ -2,6 +2,18 @@
 
 Runtime import mappings are schema-validated JSON documents. Public files under `examples/mappings/` contain synthetic values only; deployment-specific provider column names and certification evidence remain private.
 
+## No-write preview
+
+Preview an existing-MMP export before opening a database connection or writing any ledger state:
+
+```bash
+npm run import:preview -- --source=examples/mappings/synthetic-provider-click.json --file=examples/synthetic/mmp-raw-events.json
+```
+
+The preview applies the selected mapping, row filters, import limits, and the same compiled event-schema validators as runtime ingestion. Its JSON output contains only aggregate row counts, lint warning codes, rejection reason counts, and schema field paths. It never emits source row values, source identifiers, input paths, record IDs, or payload digests.
+
+`persistence: "none"` means the command did not create a database pool or write import metadata, rejections, deliveries, logical events, or facts. The preview cannot detect conflicts with identities already persisted in a ledger and does not test live provider connectivity. A successful preview is therefore a safe compatibility check, not production-ingestion proof.
+
 ## Row selection
 
 The original single equality clause remains valid:

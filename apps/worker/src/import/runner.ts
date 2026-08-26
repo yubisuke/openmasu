@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import type { Pool } from "pg";
 import { sha256, type CandidateAttempt } from "@openmasu/attribution-core";
+import { validateEventPayload } from "@openmasu/contracts";
 import {
   createAppPool,
   recordJobOutcome,
@@ -32,6 +33,30 @@ export type ImportSummary = {
   rejected: number;
   deliveries: number;
   logical_events: number;
+};
+
+export type ImportPreviewSummary = {
+  mode: "preview";
+  persistence: "none";
+  mapping_version: string;
+  format: ImportMapping["format"];
+  rows: {
+    read: number;
+    selected: number;
+    filtered: number;
+    accepted: number;
+    rejected: number;
+  };
+  warnings: Array<{ code: string }>;
+  rejections: Array<{
+    reason_code: "mapping_validation_failed" | "timestamp_invalid" | "row_schema_invalid";
+    count: number;
+    fields: string[];
+  }>;
+  limitations: [
+    "database_identity_conflicts_not_checked",
+    "provider_connectivity_not_checked",
+  ];
 };
 
 const importMetadataChunkSize = 1_000;
@@ -114,6 +139,87 @@ function toAttempt(mapping: ImportMapping, mapped: Any, fileDigest: string, rowO
     },
     record,
     batch_id: identifier("batch", [mapping.source_id, fileDigest]),
+  };
+}
+
+export function previewMmpImport(options: {
+  mappingPath: string;
+  filePath: string;
+  limits?: ImportLimits;
+  lintDirectory?: string;
+}): ImportPreviewSummary {
+  const mapping = loadMapping(options.mappingPath);
+  if (mapping.kind !== "mmp_raw") throw new Error("previewMmpImport requires an mmp_raw mapping");
+  const loaded = readRows(options.filePath, mapping, options.limits ?? limitsFromEnvironment());
+  const fileDigest = createHash("sha256").update(readFileSync(options.filePath)).digest("hex");
+  const rejectionGroups = new Map<string, {
+    reason_code: "mapping_validation_failed" | "timestamp_invalid" | "row_schema_invalid";
+    count: number;
+    fields: Set<string>;
+  }>();
+  let selected = 0;
+  let accepted = 0;
+  const reject = (
+    reasonCode: "mapping_validation_failed" | "timestamp_invalid" | "row_schema_invalid",
+    fields: readonly string[],
+  ): void => {
+    const group = rejectionGroups.get(reasonCode) ?? {
+      reason_code: reasonCode,
+      count: 0,
+      fields: new Set<string>(),
+    };
+    group.count += 1;
+    for (const field of fields) group.fields.add(field);
+    rejectionGroups.set(reasonCode, group);
+  };
+
+  for (const [ordinal, row] of loaded.rows.entries()) {
+    if (!rowMatches(mapping, row)) continue;
+    selected += 1;
+    try {
+      const attempt = toAttempt(
+        mapping,
+        mapRow(mapping, row),
+        fileDigest,
+        ordinal,
+        "2000-01-01T00:00:00.000Z",
+      );
+      const validation = validateEventPayload(String(attempt.record.event_name), attempt.record.payload);
+      if (validation.valid) accepted += 1;
+      else reject("row_schema_invalid", validation.fields);
+    } catch (error) {
+      const mappingError = error instanceof MappingError ? error : new MappingError("row mapping failed");
+      reject(
+        mappingError.message.includes("timestamp") ? "timestamp_invalid" : "mapping_validation_failed",
+        mappingError.fields,
+      );
+    }
+  }
+
+  const warnings = lintMappings(mappingsForLint(options.mappingPath, options.lintDirectory))
+    .map(({ code }) => ({ code }))
+    .sort((left, right) => left.code.localeCompare(right.code));
+  const rejections = [...rejectionGroups.values()]
+    .map(({ reason_code, count, fields }) => ({ reason_code, count, fields: [...fields].sort() }))
+    .sort((left, right) => left.reason_code.localeCompare(right.reason_code));
+  return {
+    mode: "preview",
+    persistence: "none",
+    mapping_version: mapping.version,
+    format: mapping.format,
+    rows: {
+      read: loaded.rows.length,
+      selected,
+      filtered: loaded.rows.length - selected,
+      accepted,
+      rejected: selected - accepted,
+    },
+    warnings,
+    rejections,
+    limitations: [
+      "database_identity_conflicts_not_checked",
+      "provider_connectivity_not_checked",
+    ],
   };
 }
 
@@ -320,23 +426,39 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
   const source = argument("source");
   const file = argument("file");
   const lintDirectory = argument("lint-directory");
-  if (!source || !file) throw new Error("usage: npm run import -- --source=<mapping-name-or-path> --file=<path>");
+  const preview = process.argv.slice(2).includes("--preview");
+  if (!source || !file) {
+    throw new Error(`usage: npm run ${preview ? "import:preview" : "import"} -- --source=<mapping-name-or-path> --file=<path>`);
+  }
   const mappingPath = source.endsWith(".json") && (source.includes("/") || source.includes("\\"))
     ? resolve(source)
     : join(resolve(process.env.OPENMASU_MAPPINGS_DIR ?? "examples/mappings"), source.endsWith(".json") ? source : `${source}.json`);
-  const pool = createAppPool();
-  try {
-    const summary = await runMmpImportCommand({
-      pool,
-      mappingPath,
-      filePath: resolve(file),
-      lintDirectory,
-    });
-    console.log(JSON.stringify(summary));
-  } catch (error) {
-    if (error instanceof ImportLimitError) console.error(`Import refused before persistence: ${error.message}`);
-    throw error;
-  } finally {
-    await pool.end();
+  if (preview) {
+    try {
+      console.log(JSON.stringify(previewMmpImport({
+        mappingPath,
+        filePath: resolve(file),
+        lintDirectory,
+      })));
+    } catch (error) {
+      if (error instanceof ImportLimitError) console.error(`Import preview refused: ${error.message}`);
+      throw error;
+    }
+  } else {
+    const pool = createAppPool();
+    try {
+      const summary = await runMmpImportCommand({
+        pool,
+        mappingPath,
+        filePath: resolve(file),
+        lintDirectory,
+      });
+      console.log(JSON.stringify(summary));
+    } catch (error) {
+      if (error instanceof ImportLimitError) console.error(`Import refused before persistence: ${error.message}`);
+      throw error;
+    } finally {
+      await pool.end();
+    }
   }
 }
