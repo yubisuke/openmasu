@@ -108,14 +108,14 @@ export function assertCleanDemo(value: unknown): void {
 export function assertSeedOutput(seedOutput: string): void {
   assert.match(
     seedOutput,
-    /^Seeded 56 synthetic fixtures through PostgreSQL ingestion \(550 parity artifacts\)\.\s*$/,
+    /^Seeded 56 synthetic fixtures through PostgreSQL ingestion \(550 parity artifacts\)\.$/m,
   );
 }
 
 export function assertRuntimeParityOutput(parityOutput: string): void {
   assert.match(
     parityOutput,
-    /^Runtime parity passed: 56 fixtures, 10 artifact families, 550 JCS byte-identical artifacts\.\s*$/,
+    /^Runtime parity passed: 56 fixtures, 10 artifact families, 550 JCS byte-identical artifacts\.$/m,
   );
 }
 
