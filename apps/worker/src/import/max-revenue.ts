@@ -29,6 +29,9 @@ export type MaxAggregateRevenueImportResult = {
 
 type JsonObject = Record<string, unknown>;
 
+export const MAX_AGGREGATE_REVENUE_PAGE_ROWS = 1_000;
+export const MAX_AGGREGATE_REVENUE_RESPONSE_BYTES = 8 * 1024 * 1024;
+
 const canonicalTimestampPattern = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/;
 const dayPattern = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 
@@ -89,6 +92,25 @@ function responseRows(value: unknown, maxRows: number): JsonObject[] {
     }
     return row as JsonObject;
   });
+}
+
+export function validateMaxAggregateRevenueResponse(
+  value: unknown,
+  maxRows = MAX_AGGREGATE_REVENUE_PAGE_ROWS,
+): unknown[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("MAX response must be a JSON object");
+  }
+  const object = value as JsonObject;
+  if (object.code !== undefined && object.code !== 200 && object.code !== "200") {
+    throw new Error("MAX response contains a non-success code");
+  }
+  const rows = responseRows(object, maxRows);
+  const reportedCount = object.count === undefined ? rows.length : Number(object.count);
+  if (!Number.isInteger(reportedCount) || reportedCount < 0 || reportedCount !== rows.length) {
+    throw new Error("MAX response count does not match the returned rows");
+  }
+  return rows;
 }
 
 function retainedDimensions(row: MaxAggregateRevenueRow): Record<string, unknown> {

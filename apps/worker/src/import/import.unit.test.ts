@@ -16,7 +16,11 @@ import {
 import { normalizeMaxAggregateRevenue } from "./max-revenue.js";
 import { runGoogleCostImport } from "./google-cost-cli.js";
 import { mappingsForLint, previewMmpImport } from "./runner.js";
-import { reportMmpImportCompatibility } from "./compatibility-cli.js";
+import {
+  reportImportCompatibility,
+  reportManualCostCompatibility,
+  reportMmpImportCompatibility,
+} from "./compatibility-cli.js";
 
 describe("runtime import mapping", () => {
   it("applies nested objects, booleans, maps, uppercase, and timestamps", () => {
@@ -297,6 +301,105 @@ describe("runtime import mapping", () => {
       assert.deepEqual(invalid.compatibility.checks.find(({ code }) => code === "contract_schema"), {
         code: "contract_schema", status: "fail", count: 1,
       });
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it("reports an execution-ready manual-cost artifact without source-value leakage", () => {
+    const directory = mkdtempSync(join(tmpdir(), "openmasu-cost-compatibility-"));
+    try {
+      const file = join(directory, "private-cost-export.csv");
+      const privateNetwork = "must-not-appear-network";
+      const privateCampaign = "must-not-appear-campaign";
+      writeFileSync(file, [
+        "network,campaign_id,country,date,cost_micros,currency,as_of",
+        `${privateNetwork},${privateCampaign},us,2026-08-20,1250000,USD,2026-08-21T00:00:00.000Z`,
+      ].join("\n"));
+      const report = reportManualCostCompatibility({
+        mappingPath: "examples/mappings/synthetic-manual-cost.json",
+        filePath: file,
+      });
+      assert.equal(report.compatibility.kind, "manual_cost");
+      assert.equal(report.compatibility.status, "compatible");
+      assert.equal(report.compatibility.execution_ready, true);
+      assert.deepEqual(report.rows, { read: 1, selected: 1, filtered: 0, accepted: 1, rejected: 0 });
+      assert.deepEqual(report.compatibility.money, {
+        input: "integer", scale: 6, currency_origin: "source",
+      });
+      assert.deepEqual(report.compatibility.field_coverage.missing_required_target_fields, []);
+      assert.deepEqual(report.compatibility.checks, [
+        { code: "rows_selected", status: "pass", count: 1 },
+        { code: "mapping_transform", status: "pass", count: 0 },
+        { code: "cost_schema", status: "pass", count: 0 },
+        { code: "retained_dimension_uniqueness", status: "pass", count: 0 },
+      ]);
+      const serialized = JSON.stringify(report);
+      assert.equal(serialized.includes(privateNetwork), false);
+      assert.equal(serialized.includes(privateCampaign), false);
+      assert.equal(serialized.includes("cost_micros"), false);
+      assert.equal(serialized.includes(file), false);
+      assert.equal(reportImportCompatibility({
+        mappingPath: "examples/mappings/synthetic-manual-cost.json",
+        filePath: file,
+      }).compatibility.status, "compatible");
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it("keeps partial and duplicate manual-cost batches non-executable", () => {
+    const directory = mkdtempSync(join(tmpdir(), "openmasu-cost-readiness-"));
+    try {
+      const partialFile = join(directory, "partial.csv");
+      writeFileSync(partialFile, [
+        "network,campaign_id,country,date,cost_micros,currency,as_of",
+        "synthetic-network,synthetic-campaign,us,2026-08-20,1000000,USD,2026-08-21T00:00:00.000Z",
+        "synthetic-network,synthetic-other,us,2026-02-30,1000000,USD,2026-08-21T00:00:00.000Z",
+      ].join("\n"));
+      const partial = reportManualCostCompatibility({
+        mappingPath: "examples/mappings/synthetic-manual-cost.json",
+        filePath: partialFile,
+      });
+      assert.equal(partial.compatibility.status, "partially_compatible");
+      assert.equal(partial.compatibility.execution_ready, false);
+      assert.deepEqual(partial.rejections, [
+        { reason_code: "cost_date_invalid", count: 1, fields: ["date"] },
+      ]);
+
+      const duplicateFile = join(directory, "duplicate.csv");
+      writeFileSync(duplicateFile, [
+        "network,campaign_id,country,date,cost_micros,currency,as_of",
+        "synthetic-network,synthetic-campaign,us,2026-08-20,1000000,USD,2026-08-21T00:00:00.000Z",
+        "synthetic-network,synthetic-campaign,us,2026-08-20,2000000,USD,2026-08-21T00:00:00.000Z",
+      ].join("\n"));
+      const duplicate = reportManualCostCompatibility({
+        mappingPath: "examples/mappings/synthetic-manual-cost.json",
+        filePath: duplicateFile,
+      });
+      assert.equal(duplicate.compatibility.status, "not_compatible");
+      assert.equal(duplicate.compatibility.execution_ready, false);
+      assert.deepEqual(duplicate.compatibility.checks.at(-1), {
+        code: "retained_dimension_uniqueness", status: "fail", count: 1,
+      });
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it("reports a filtered manual-cost artifact as not evaluated", () => {
+    const directory = mkdtempSync(join(tmpdir(), "openmasu-cost-filtered-"));
+    try {
+      const mappingPath = join(directory, "mapping.json");
+      const mapping = JSON.parse(requireText("examples/mappings/synthetic-manual-cost.json"));
+      writeFileSync(mappingPath, JSON.stringify({
+        ...mapping,
+        row_filter: { source: "row_state", equals: "selected" },
+      }));
+      const file = join(directory, "filtered.csv");
+      writeFileSync(file, [
+        "network,campaign_id,country,date,cost_micros,currency,as_of,row_state",
+        "synthetic-network,synthetic-campaign,us,2026-08-20,1000000,USD,2026-08-21T00:00:00.000Z,ignored",
+      ].join("\n"));
+      const report = reportManualCostCompatibility({ mappingPath, filePath: file });
+      assert.equal(report.compatibility.status, "not_evaluated");
+      assert.equal(report.compatibility.execution_ready, false);
+      assert.equal(report.compatibility.checks.every(({ status }) => status === "not_evaluated"), true);
+      assert.equal(JSON.stringify(report).includes("row_state"), false);
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 });

@@ -15,6 +15,7 @@
     "import:cost:google": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/import/google-cost-cli.ts",
     "import:cost:meta": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/import/meta-cost-cli.ts",
     "import:revenue:max": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/import/max-revenue-cli.ts",
+    "import:revenue:compatibility": "cd ../.. && node --import tsx apps/worker/src/import/aggregate-revenue-compatibility-cli.ts",
     "metrics:run": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/metrics/run.ts",
     "demo:metrics": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/demo-metrics.ts",
     "db:reapply-privacy": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/reapply-privacy.ts --",

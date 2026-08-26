@@ -67,6 +67,8 @@ jobs:
         run: npm run seed && npm run verify:parity
       - name: Verify SQL cohort metrics against the contract evaluator
         run: npm run test:metric-parity
+      - name: Verify synthetic financial import and series separation
+        run: npm run test:financial-parity
       - name: Verify raw, API, dashboard-view, and HTML consistency
         run: npm run verify:consistency
       - name: Run reduced synthetic metric performance floor

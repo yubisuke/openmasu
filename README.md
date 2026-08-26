@@ -166,13 +166,14 @@ Before importing an existing measurement export, run the provider-neutral, no-wr
 npm run import:compatibility -- --source=examples/mappings/synthetic-provider-click.json --file=examples/synthetic/mmp-raw-events.json --lint-directory=examples/mappings
 ```
 
-The report opens no database connection and classifies the supplied artifact as `compatible`, `partially_compatible`, `not_compatible`, or `not_evaluated`. It reports aggregate selection and rejection counts, contract-field coverage, and mapping warnings without printing source values, source column names, identifiers, digests, or input paths. The lower-level `npm run import:preview` command remains available with its original aggregate-only output. This evaluates the artifact-to-contract mapping only: it cannot detect conflicts with identities already stored in a ledger, certify a provider, prove live connectivity, or claim production metric equivalence. See the [import mapping guide](docs/import-mappings.md) for the exact boundary.
+The report opens no database connection and classifies the supplied artifact as `compatible`, `partially_compatible`, `not_compatible`, or `not_evaluated`. It supports raw event and manual-cost mappings, reports aggregate selection and rejection counts, contract-field coverage, mapping warnings, exact money representation, and whether the whole cost batch is execution-ready, without printing source values, source column names, identifiers, digests, or input paths. The lower-level `npm run import:preview` command remains available with its original raw-event aggregate-only output. This evaluates the artifact-to-contract mapping only: it cannot detect conflicts with identities already stored in a ledger, certify a provider, prove live connectivity, or claim production metric equivalence. See the [import mapping guide](docs/import-mappings.md) for the exact boundary.
 
 To exercise the operator CSV-to-metric path without committing a tabular file, create a synthetic CSV only under the gitignored `.openmasu/` directory and run the two explicit jobs:
 
 ```bash
 mkdir -p .openmasu
 printf 'network,campaign_id,country,date,cost_micros,currency,as_of\nsynthetic-cli-network,synthetic-cli-campaign,us,2026-08-20,2500000,USD,2026-08-20T12:00:00.000Z\n' > .openmasu/synthetic-cost.csv
+npm run import:compatibility -- --source=examples/mappings/synthetic-manual-cost.json --file=.openmasu/synthetic-cost.csv
 npm run import:cost -- --file=.openmasu/synthetic-cost.csv --mapping=examples/mappings/synthetic-manual-cost.json
 npm run metrics:run -- --date=2026-08-20 --definitions=examples/metrics/synthetic-d0-roas.json
 ```
@@ -183,11 +184,14 @@ PowerShell 7 uses the same npm commands after creating the file without a BOM:
 New-Item -ItemType Directory -Force .openmasu | Out-Null
 $csv = "network,campaign_id,country,date,cost_micros,currency,as_of`nsynthetic-cli-network,synthetic-cli-campaign,us,2026-08-20,2500000,USD,2026-08-20T12:00:00.000Z`n"
 [System.IO.File]::WriteAllText((Join-Path $PWD '.openmasu\synthetic-cost.csv'), $csv)
+npm run import:compatibility -- --source=examples/mappings/synthetic-manual-cost.json --file=.openmasu/synthetic-cost.csv
 npm run import:cost -- --file=.openmasu/synthetic-cost.csv --mapping=examples/mappings/synthetic-manual-cost.json
 npm run metrics:run -- --date=2026-08-20 --definitions=examples/metrics/synthetic-d0-roas.json
 ```
 
-The first command persists one immutable synthetic `cost_record`; the second runs the existing cohort SQL engine at the explicit day watermark and persists `d0_roas` with `value_state=present`. With no matching synthetic revenue loaded for that cohort, the reproducible ratio value is zero. Re-running the same metric definition intentionally refuses to overwrite the immutable metric-run ID.
+The compatibility command writes nothing and must report `execution_ready=true` before the cost import. The import then persists one immutable synthetic `cost_record`; the metric command runs the existing cohort SQL engine at the explicit day watermark and persists `d0_roas` with `value_state=present`. With no matching synthetic revenue loaded for that cohort, the reproducible ratio value is zero. Re-running the same metric definition intentionally refuses to overwrite the immutable metric-run ID.
+
+With the synthetic PostgreSQL test environment configured, `npm run test:financial-parity` runs the named integration gate for event import, installation-level revenue, manual cost, non-zero D0 ROAS, aggregate-revenue replay/restatement, and aggregate/cohort separation. It uses no provider credential or network connection.
 
 This quickstart uses synthetic inputs only. Do not place provider exports, credentials, real user data, campaign values, or validation results in this public repository.
 
@@ -220,6 +224,14 @@ Tracking-link lifecycle operations are append-only. An active link may be paused
 ## Backfill aggregate MAX revenue
 
 OpenMasu can pull the AppLovin MAX Revenue Reporting API into a separate, append-only aggregate-revenue snapshot series. Set `OPENMASU_MAX_REPORT_KEY` or `OPENMASU_MAX_REPORT_KEY_FILE` in the private deployment environment, then run an inclusive UTC range within the provider's current 45-day request window:
+
+Before persistence, an already-exported private JSON response can be checked without a database or credential:
+
+```bash
+npm run import:revenue:compatibility -- --file=<private-json-path>
+```
+
+The compatibility output contains only aggregate counts, closed reason codes, and the fixed series boundary. It never emits report values, paths, identifiers, response bodies, or digests. `cohort_eligible=false` and `separate_from_installation_revenue=true` are invariant: a compatible aggregate report is not installation-level ROAS evidence.
 
 ```bash
 npm run import:revenue:max -- --tenant=<tenant> --app=<app> --start=2026-08-23 --end=2026-08-23

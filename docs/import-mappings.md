@@ -10,16 +10,26 @@ Evaluate a measurement export before opening a database connection or writing an
 npm run import:compatibility -- --source=examples/mappings/synthetic-provider-click.json --file=examples/synthetic/mmp-raw-events.json --lint-directory=examples/mappings
 ```
 
-The lower-level `npm run import:preview` command retains its original aggregate-only JSON shape. Both commands apply the selected mapping, row filters, import limits, and the same compiled event-schema validators as runtime ingestion. The versioned `compatibility` object uses four closed states:
+The lower-level `npm run import:preview` command retains its original raw-event aggregate-only JSON shape. Compatibility dispatches on the mapping kind, applies the selected mapping, row filters, and import limits, and uses the same event or cost validation as runtime ingestion. The versioned `compatibility` object uses four closed states:
 
 - `compatible`: at least one selected row was accepted, with no rejection or mapping warning;
-- `partially_compatible`: at least one row was accepted, but another row was rejected or a mapping warning remains;
+- `partially_compatible`: at least one row was accepted, but another row was rejected or a mapping warning remains; for manual cost this is not execution-ready because the runtime imports the batch atomically;
 - `not_compatible`: rows were selected but none passed the mapping and event-schema gates;
 - `not_evaluated`: the row filter selected no rows, so support was not inferred.
 
 The report contains aggregate row counts, closed check results, lint warning codes, rejection reason counts, contract target paths, and per-field `observed`, `absent`, or `unmapped` counts. `observed` and `absent` describe only the supplied artifact. They are not statements about a provider's product capabilities. `unmapped` means that this mapping does not declare the optional contract field; it does not mean the source product cannot supply it. The report never emits source row values, source column names, source identifiers, input paths, record IDs, or payload digests.
 
 `persistence: "none"` means the command did not create a database pool or write import metadata, rejections, deliveries, logical events, or facts. Without `--lint-directory=<mapping-directory>`, cross-route `event_id` namespace safety is reported as `not_evaluated`; the command never guesses from one mapping. The report cannot detect conflicts with identities already persisted in a ledger and does not test live provider connectivity. It does not certify a provider or establish metric equivalence: time range, timezone, currency policy, attribution window, cohort definition, and watermark must match before totals can be compared. A successful report is therefore a safe compatibility check, not production-ingestion proof.
+
+For `manual_cost`, required compatibility fields are `network`, `date`, `as_of`, and the exact `money.amount_unscaled`, `money.amount_scale`, and `money.currency` representation. Country, campaign, and ad-group dimensions remain optional. The report validates calendar dates, canonical mapped timestamps, uppercase currency/country shapes, non-negative integer money, and duplicate retained dimensions before declaring `execution_ready=true`. It reports only target contract paths and never copies source column names or values.
+
+Provider-reported aggregate revenue uses a separate JSON entry point because it is not a mapping-DSL event or cost batch:
+
+```bash
+npm run import:revenue:compatibility -- --file=<private-json-path>
+```
+
+This no-write report validates rows and retained-dimension uniqueness while fixing `subject_scope=aggregate`, `cohort_eligible=false`, and `separate_from_installation_revenue=true`. Compatibility therefore cannot be interpreted as installation-level revenue, cohort ROAS, or live-provider proof.
 
 ## Row selection
 
