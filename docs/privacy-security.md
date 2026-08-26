@@ -88,7 +88,7 @@ Before implementation, legal and operational requirements must validate these de
 
 - Once the server recognizes a withdrawal, it rejects every event for a consent-required purpose regardless of `occurred_at`, retaining only non-identifying rejection metadata.
 - Acceptance of a queued event after withdrawal requires an explicit, per-purpose, documented alternative legal basis in the versioned server policy; it is never inferred from an earlier occurrence time.
-- On withdrawal, the SDK stops delivery and purges or immediately redacts queued consent-required events.
+- On withdrawal or denial, the SDK persists a local admission barrier before purging queued consent-required events. The barrier is re-applied before queue admission and delivery after restart or installation reset; only an explicit `granted` or `not_required` update removes it. `unknown` never clears an existing barrier.
 
 ## Correction, deletion, and export
 

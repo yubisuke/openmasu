@@ -50,6 +50,15 @@ class OpenMasuSdk private constructor(
     storage.persistConfiguration(configuration)
     if (!isCollectionEnabled()) return
     executor.execute {
+      purgeConsentRequiredQueueIfBlocked()
+      if (storage.consentBarrierActive()) {
+        drain()
+        return@execute
+      }
+      if (storage.resetInstallPending()) {
+        completePendingResetInstall()
+        return@execute
+      }
       val installationId = storage.installationId()
       if (!storage.referrerConsumed()) {
         val play = normalizeDeferred(playReader.read())
@@ -252,14 +261,19 @@ class OpenMasuSdk private constructor(
 
   fun updateConsent(state: String, policyVersion: String) {
     require(state in setOf("granted", "denied", "withdrawn", "not_required", "unknown"))
+    storage.applyConsentState(state)
     executor.execute {
       database.runInTransaction {
-        if (state == "withdrawn" || state == "denied") {
-          database.queue().deleteByPurposes(listOf("attribution", "analytics", "revenue_measurement"))
-        }
+        purgeConsentRequiredQueueIfBlocked()
         enqueueJson("consent_changed", "fraud_prevention", EventFactory.consent(state, policyVersion))
       }
-      if (isCollectionEnabled()) drain()
+      if (isCollectionEnabled()) {
+        if ((state == "granted" || state == "not_required") && storage.resetInstallPending()) {
+          completePendingResetInstall()
+        } else {
+          drain()
+        }
+      }
     }
   }
 
@@ -282,25 +296,18 @@ class OpenMasuSdk private constructor(
       database.runInTransaction { database.queue().deleteAll() }
       storage.clearAfterDeletion()
       val newId = storage.replaceInstallationId()
-      ensureCredential(newId)
-      enqueueJson(
-        "install", "attribution",
-        EventFactory.install(
-          newId, configuration.wrapperVersion ?: configuration.sdkVersion,
-          PlayReferrerEvidence("none", "ok"), MetaReferrerEvidence("provider_unavailable"), "identifier_reset",
-        ),
-      )
-      drain()
-      onComplete(true)
+      storage.markResetInstallPending()
+      onComplete(completePendingResetInstall(newId))
     }
   }
 
   internal fun drain(): Boolean {
     if (!isCollectionEnabled()) return false
-    val credential = runCatching { storage.credential() ?: ensureCredential(storage.installationId()) }
-      .getOrElse { backstopScheduler(context); return false }
+    purgeConsentRequiredQueueIfBlocked()
     val batch = database.queue().pending(100)
     if (batch.isEmpty()) return true
+    val credential = runCatching { storage.credential() ?: ensureCredential(storage.installationId()) }
+      .getOrElse { backstopScheduler(context); return false }
     return if (runCatching { transport.deliver(credential, batch) }.getOrDefault(false)) {
       database.queue().deleteByIds(batch.map { it.eventId })
       if (database.queue().count() > 0) backstopScheduler(context)
@@ -334,10 +341,32 @@ class OpenMasuSdk private constructor(
 
   private fun enqueueJson(eventName: String, purpose: String, payload: JSONObject, eventId: String? = null) {
     if (!isCollectionEnabled() && eventName != "consent_changed") return
+    if (storage.consentBarrierActive() && purpose in CONSENT_REQUIRED_PURPOSES) return
     val now = EventFactory.canonicalNow()
     database.queue().insert(
       QueuedEvent(eventId ?: EventFactory.newEventId(), eventName, purpose, payload.toString(), now, storage.nextSequence(), System.currentTimeMillis()),
     )
+  }
+
+  private fun purgeConsentRequiredQueueIfBlocked() {
+    if (storage.consentBarrierActive()) database.queue().deleteByPurposes(CONSENT_REQUIRED_PURPOSES.toList())
+  }
+
+  private fun completePendingResetInstall(installationId: String = storage.installationId()): Boolean {
+    if (!storage.resetInstallPending() || storage.consentBarrierActive()) return true
+    return runCatching {
+      ensureCredential(installationId)
+      enqueueJson(
+        "install", "attribution",
+        EventFactory.install(
+          installationId, configuration.wrapperVersion ?: configuration.sdkVersion,
+          PlayReferrerEvidence("none", "ok"), MetaReferrerEvidence("provider_unavailable"), "identifier_reset",
+        ),
+      )
+      storage.clearResetInstallPending()
+      drain()
+      true
+    }.getOrElse { backstopScheduler(context); false }
   }
 
   private fun validateCommerceEvent(
@@ -354,6 +383,7 @@ class OpenMasuSdk private constructor(
 
   companion object {
     private const val WORK_NAME = "openmasu-delivery"
+    private val CONSENT_REQUIRED_PURPOSES = setOf("attribution", "analytics", "revenue_measurement")
     private val IDENTIFIER_PATTERN = Regex("^[A-Za-z0-9._:-]{1,128}$")
     private val NONNEGATIVE_UNSCALED_PATTERN = Regex("^[0-9]+$")
     private val CURRENCY_PATTERN = Regex("^[A-Z]{3}$")

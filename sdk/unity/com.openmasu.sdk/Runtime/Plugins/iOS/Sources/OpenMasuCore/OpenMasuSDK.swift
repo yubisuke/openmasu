@@ -21,6 +21,15 @@ public actor OpenMasuSDK {
 
   public func initialize() async throws {
     guard try isCollectionEnabled() else { return }
+    try storage.purgeConsentRequiredQueueIfBlocked()
+    if try storage.consentBarrierActive() {
+      try await flush()
+      return
+    }
+    if try storage.isResetPending() {
+      try await completePendingReset(installationId: storage.installationId())
+      return
+    }
     if !(try storage.isInstallRecorded()) {
       let token: String? = (try? tokenProvider.attributionToken()) ?? nil
       try enqueue(
@@ -246,16 +255,21 @@ public actor OpenMasuSDK {
     guard ["granted", "denied", "withdrawn", "not_required", "unknown"].contains(state) else {
       throw OpenMasuError.invalidAttributes
     }
-    if state == "withdrawn" || state == "denied" {
-      try storage.purge(processingPurposes: ["attribution", "analytics", "revenue_measurement"])
-    }
+    try storage.applyConsentState(state)
+    try storage.purgeConsentRequiredQueueIfBlocked()
     try enqueue(eventName: "consent_changed", purpose: "fraud_prevention", payloadJson: EventFactory.json([
       "event_name": "consent_changed",
       "consent_state": state,
       "effective_at": EventFactory.canonicalNow(),
       "consent_policy_version": policyVersion,
     ]))
-    if try isCollectionEnabled() { try await flush() }
+    if try isCollectionEnabled() {
+      if (state == "granted" || state == "not_required"), try storage.isResetPending() {
+        try await completePendingReset(installationId: storage.installationId())
+      } else {
+        try await flush()
+      }
+    }
   }
 
   public func setCollectionEnabled(_ enabled: Bool) async throws {
@@ -285,6 +299,7 @@ public actor OpenMasuSDK {
   }
 
   private func completePendingReset(installationId: String) async throws {
+    if try storage.consentBarrierActive() { return }
     if try storage.credential() == nil {
       try storage.setCredential(try await transport.enroll(installationId: installationId))
     }
@@ -309,6 +324,7 @@ public actor OpenMasuSDK {
 
   public func flush() async throws {
     guard try isCollectionEnabled() else { return }
+    try storage.purgeConsentRequiredQueueIfBlocked()
     let events = try storage.pending(limit: 100)
     guard !events.isEmpty else { return }
     let credential = try await ensureCredential()
@@ -339,6 +355,7 @@ public actor OpenMasuSDK {
   }
 
   private func enqueue(eventName: String, purpose: String, payloadJson: String, eventId: String? = nil) throws {
+    if try storage.consentBarrierActive(), Self.consentRequiredPurposes.contains(purpose) { return }
     try storage.enqueue(QueuedEvent(
       eventId: eventId ?? EventFactory.identifier("event"),
       eventName: eventName,
@@ -372,4 +389,6 @@ public actor OpenMasuSDK {
   static func collectionDefault(bundle: Bundle, fallback: Bool) -> Bool {
     (bundle.object(forInfoDictionaryKey: "OpenMasuCollectionEnabledDefault") as? Bool) ?? fallback
   }
+
+  private static let consentRequiredPurposes = Set(["attribution", "analytics", "revenue_measurement"])
 }
