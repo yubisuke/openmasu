@@ -309,6 +309,9 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
     const body = await response.text();
     assert.match(body, /openmasu_http_requests_total/);
     assert.match(body, /openmasu_ingest_backlog\{queue="sdk_batches"\}/);
+    assert.match(body, /openmasu_scheduled_job_runs_total\{job="sdk_inbox",outcome="failed"\} 0/);
+    assert.match(body, /openmasu_scheduled_job_consecutive_failures\{job="sdk_inbox"\} 0/);
+    assert.match(body, /openmasu_scheduled_job_configured\{job="sdk_inbox"\} 0/);
     const values = (metric: string): Record<string, string> => Object.fromEntries(
       body.split("\n")
         .filter((line) => line.startsWith(`${metric}{`))

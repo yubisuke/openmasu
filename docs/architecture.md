@@ -209,14 +209,18 @@ backing key role and become invalid when that key is retired.
 `GET /metrics` requires a valid administrator bearer identity with read
 capability and returns dependency-free Prometheus text. Labels are closed route,
 method, status-class, queue, operator-job (`mmp_import`, `cost_import`,
-`metric_run`), and outcome (`succeeded`, `failed`) vocabularies; tenant, app,
+`metric_run`), scheduled-worker job, and outcome (`succeeded`, `failed`)
+vocabularies; tenant, app,
 installation, record, payload, authorization, cookie, and query values are never
 labels or output. Operator-run import and metric CLI entrypoints append one
 terminal tenant/app-scoped row to `ledger.audit_logs`. The metrics endpoint reads
 those rows into durable run counts and latest-completion timestamps, including
-zero-valued fixed combinations after restart. The five-second workers,
-benchmarks, scheduler, alert thresholds, receivers, and notification routing are
-outside this mechanism.
+zero-valued fixed combinations after restart. Internal worker jobs use a
+tenant/job-scoped PostgreSQL schedule with a session advisory lock plus a periodically renewed expiring lease,
+persisted next run, retry timing, completion counts, and consecutive-failure state. This keeps
+multiple workers and restarts from running the same internal job concurrently.
+Provider-import schedules, benchmarks, alert thresholds, receivers, and
+external notification routing remain outside this mechanism.
 Application HTTP logs use a closed event type that structurally cannot accept
 payload/body/authentication/identifier fields.
 

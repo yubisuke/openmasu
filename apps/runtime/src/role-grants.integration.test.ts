@@ -44,6 +44,7 @@ const seedControlTruncate = new Set([
   "control.metric_replay_manifests",
   "control.public_postback_audits",
   "control.rule_bundle_revisions",
+  "control.worker_job_schedules",
 ]);
 const ephemeralExpected = new Map<string, Record<Role, Privilege[]>>([
   ["ephemeral.request_nonces", {
@@ -86,6 +87,7 @@ function expected(row: Row): Privilege[] {
     if (qualified === "control.google_play_order_digests") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.google_data_manager_destinations") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.commerce_backfill_checkpoints") return ["SELECT", "INSERT", "UPDATE"];
+    if (qualified === "control.worker_job_schedules") return ["SELECT", "INSERT", "UPDATE"];
     return qualified === "control.public_postback_audits" ? ["INSERT"] : ["SELECT", "INSERT"];
   }
   if (row.role_name === "openmasu_reader") {
