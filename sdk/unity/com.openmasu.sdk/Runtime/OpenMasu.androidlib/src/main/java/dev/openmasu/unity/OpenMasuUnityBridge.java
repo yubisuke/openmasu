@@ -8,6 +8,7 @@ import dev.openmasu.sdk.MetaReferrerEvidence;
 import dev.openmasu.sdk.MetaReferrerReader;
 import dev.openmasu.sdk.OpenMasuSdk;
 import dev.openmasu.sdk.OpenMasuSdkFactory;
+import dev.openmasu.sdk.OpenMasuQueueHealth;
 import dev.openmasu.sdk.PlayReferrerEvidence;
 import dev.openmasu.sdk.PlayReferrerReader;
 import dev.openmasu.sdk.max.OpenMasuMaxBridge;
@@ -65,6 +66,17 @@ public final class OpenMasuUnityBridge {
   }
 
   public static void startSession() { requireSdk().startSession(); }
+
+  public static void getQueueHealth(StringCallback callback) {
+    new Thread(() -> {
+      OpenMasuQueueHealth health = requireSdk().queueHealth();
+      callback.onResult(
+          "pending_count=" + health.getPendingCount() +
+          "&logical_bytes=" + health.getLogicalBytes() +
+          "&evicted_total=" + health.getEvictedTotal() +
+          "&rejected_total=" + health.getRejectedTotal());
+    }, "openmasu-queue-health").start();
+  }
 
   public static void setCollectionEnabled(boolean enabled) { requireSdk().setCollectionEnabled(enabled); }
 

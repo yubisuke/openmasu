@@ -591,6 +591,8 @@ sdk/android/
 
 Recommend keeping the default and documenting the boundary. A "zero loss" claim that quietly means "except on power loss" is the kind of promise this project should not make; a stated boundary is stronger than an unstated absolute.
 
+**Implemented hardening (2026-08-26).** The Room queue is bounded by both record count and logical UTF-8 bytes, defaulting to 10,000 records and 16 MiB. The byte total is derived from the five stored string fields plus the two fixed-width integers and is not a claim about SQLite file size. Admission is one Room transaction: duplicates are resolved before eviction; the oldest analytics rows are the first victims; install and revenue rows outrank analytics; and `consent_changed` outranks every measurement row so a withdrawal signal cannot be blocked by a full queue. An event that cannot free enough eligible capacity is rejected without changing existing rows. Durable counters record only aggregate evictions and rejections, and the public health surface returns those totals with current count and logical bytes, never payloads or identifiers.
+
 ### M2-D-18. Background delivery
 
 **Options**

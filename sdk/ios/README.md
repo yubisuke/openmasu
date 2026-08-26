@@ -89,6 +89,17 @@ files use `completeUntilFirstUserAuthentication` protection on iOS. SQLite
 uses WAL, `synchronous=NORMAL`, and `secure_delete=ON`. Committed pages survive
 process death; abrupt power loss between WAL sync points is not guaranteed.
 
+The queue defaults to at most 10,000 records and 16 MiB of logical content;
+both values are configurable through `OpenMasuConfiguration`. Logical bytes are
+the UTF-8 lengths of the stored event ID, event name, processing purpose,
+payload JSON, and occurrence timestamp plus 16 bytes for the sequence and
+enqueue timestamp, not the SQLite file size. At capacity the SDK evicts the
+oldest analytics evidence first and protects install and revenue evidence over
+analytics. The latest `consent_changed` event is always admitted, even when the
+queue contains only higher-value measurement evidence. `queueHealth()` exposes
+only pending count, logical bytes, cumulative evictions, and cumulative
+rejections; it never returns queued payloads or identifiers.
+
 Consent-gated applications must set the Boolean Info.plist key
 `OpenMasuCollectionEnabledDefault` to `false` and enable collection only after
 their own policy allows it. Unity's postprocessor writes `false` unless the

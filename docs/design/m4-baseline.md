@@ -608,6 +608,8 @@ The module split is the Android split with the same rule: `OpenMasuCore` links n
 
 (b) is the option with zero dependencies and a real database. It is also the closest analogue of Room's on-disk behaviour, which lets both SDKs make **the same durability claim in the same words**: process death (SIGKILL, jetsam, force-quit) loses nothing because committed pages are in the OS page cache; abrupt power loss can lose the most recent commits under WAL with `synchronous=NORMAL`. Keep the default, document the boundary, and let M4-A-21 test the case that actually happens.
 
+**Implemented hardening (2026-08-26).** Swift and Android share the same bounded-queue policy and logical-byte formula: 10,000 records and 16 MiB by default, configurable within validated limits. SQLite admission uses `BEGIN IMMEDIATE` so victim selection, eviction, insertion, and aggregate counter updates commit or roll back together. Oldest analytics rows are evicted first, install and revenue rows are protected over analytics, and `consent_changed` has absolute priority so a full queue cannot suppress the latest consent state. The public Swift and Unity health surfaces expose only current count, logical bytes, cumulative evictions, and cumulative rejections. These counters do not expose queued content and do not extend the power-loss guarantee above.
+
 `PRAGMA secure_delete=ON` as on Android, described with M2-S-12's exact wording.
 
 ### M4-D-23. Delivery, and the honest statement about background work

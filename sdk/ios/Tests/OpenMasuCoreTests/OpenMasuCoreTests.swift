@@ -53,6 +53,70 @@ final class OpenMasuCoreTests: XCTestCase {
     // fsyncs remains outside this gate, as documented by M4-D-22.
   }
 
+  func testQueueCapacityProtectsRevenueOverAnalyticsAndAlwaysAdmitsConsent() throws {
+    let storage = try OpenMasuStorage(root: temporaryDirectory("queue-capacity-priority"))
+    let capacity = QueueCapacity(maxRecords: 2, maxBytes: 65_536)
+    let install = QueuedEvent(
+      eventId: "event:install", eventName: "install", processingPurposeId: "attribution",
+      payloadJson: "{\"event_name\":\"install\"}", occurredAt: "2026-08-26T00:00:00.000Z",
+      processingSequence: 1, enqueuedAtMs: 1
+    )
+    let revenue = QueuedEvent(
+      eventId: "event:revenue", eventName: "ad_revenue", processingPurposeId: "revenue_measurement",
+      payloadJson: "{\"event_name\":\"ad_revenue\"}", occurredAt: "2026-08-26T00:00:01.000Z",
+      processingSequence: 2, enqueuedAtMs: 2
+    )
+    let analytics = QueuedEvent(
+      eventId: "event:analytics", eventName: "custom_event", processingPurposeId: "analytics",
+      payloadJson: "{\"event_name\":\"custom_event\"}", occurredAt: "2026-08-26T00:00:02.000Z",
+      processingSequence: 3, enqueuedAtMs: 3
+    )
+    let consent = QueuedEvent(
+      eventId: "event:consent", eventName: "consent_changed", processingPurposeId: "fraud_prevention",
+      payloadJson: "{\"event_name\":\"consent_changed\",\"consent_state\":\"unknown\"}",
+      occurredAt: "2026-08-26T00:00:03.000Z", processingSequence: 4, enqueuedAtMs: 4
+    )
+
+    XCTAssertEqual(try storage.enqueue(install, capacity: capacity), QueueAdmissionResult(admitted: true, evicted: 0, rejected: 0))
+    XCTAssertEqual(try storage.enqueue(revenue, capacity: capacity), QueueAdmissionResult(admitted: true, evicted: 0, rejected: 0))
+    XCTAssertEqual(try storage.enqueue(analytics, capacity: capacity), QueueAdmissionResult(admitted: false, evicted: 0, rejected: 1))
+    XCTAssertEqual(Set(try storage.pending().map(\.eventName)), ["install", "ad_revenue"])
+    XCTAssertEqual(try storage.enqueue(consent, capacity: capacity), QueueAdmissionResult(admitted: true, evicted: 1, rejected: 0))
+    XCTAssertEqual(Set(try storage.pending().map(\.eventName)), ["ad_revenue", "consent_changed"])
+    XCTAssertEqual(
+      try storage.queueHealth(),
+      OpenMasuQueueHealth(
+        pendingCount: 2,
+        logicalBytes: try storage.pending().reduce(0) { $0 + $1.logicalQueueBytes },
+        evictedTotal: 1,
+        rejectedTotal: 1
+      )
+    )
+  }
+
+  func testQueueCapacityCountsUTF8BytesAndDuplicateAdmissionDoesNotEvict() throws {
+    let storage = try OpenMasuStorage(root: temporaryDirectory("queue-capacity-utf8"))
+    let ascii = QueuedEvent(
+      eventId: "event:ascii", eventName: "custom_event", processingPurposeId: "analytics",
+      payloadJson: "{\"value\":\"a\"}", occurredAt: "2026-08-26T00:00:00.000Z",
+      processingSequence: 1, enqueuedAtMs: 1
+    )
+    let multibyte = QueuedEvent(
+      eventId: "event:multibyte", eventName: "custom_event", processingPurposeId: "analytics",
+      payloadJson: "{\"value\":\"枡枡枡\"}", occurredAt: "2026-08-26T00:00:01.000Z",
+      processingSequence: 2, enqueuedAtMs: 2
+    )
+    let capacity = QueueCapacity(maxRecords: 10, maxBytes: multibyte.logicalQueueBytes)
+    XCTAssertEqual(try storage.enqueue(ascii, capacity: capacity).evicted, 0)
+    XCTAssertEqual(try storage.enqueue(multibyte, capacity: capacity).evicted, 1)
+    XCTAssertEqual(try storage.queueHealth().logicalBytes, multibyte.logicalQueueBytes)
+    XCTAssertEqual(
+      try storage.enqueue(multibyte, capacity: QueueCapacity(maxRecords: 1, maxBytes: multibyte.logicalQueueBytes)),
+      QueueAdmissionResult(admitted: true, evicted: 0, rejected: 0)
+    )
+    XCTAssertEqual(try storage.queueHealth().evictedTotal, 1)
+  }
+
   func testIdenticalDeterministicCommerceDuplicateIsIdempotentWithoutMaskingSequenceConflicts() throws {
     let storage = try OpenMasuStorage(root: temporaryDirectory("commerce-queue-idempotency"))
     let installationId = "installation:synthetic-commerce-queue"

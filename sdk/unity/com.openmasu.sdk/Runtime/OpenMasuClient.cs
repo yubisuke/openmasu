@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 
 namespace OpenMasu.Unity
@@ -29,6 +30,46 @@ namespace OpenMasu.Unity
             string amountUnscaled,
             int amountScale,
             string currency);
+    }
+
+    public interface IOpenMasuQueueHealthPlatform
+    {
+        void GetQueueHealth(Action<string> completion);
+    }
+
+    public sealed class OpenMasuQueueHealth
+    {
+        public int PendingCount { get; private set; }
+        public long LogicalBytes { get; private set; }
+        public long EvictedTotal { get; private set; }
+        public long RejectedTotal { get; private set; }
+
+        internal static OpenMasuQueueHealth Parse(string value)
+        {
+            var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var pair in (value ?? string.Empty).Split('&'))
+            {
+                var parts = pair.Split(new[] { '=' }, 2);
+                if (parts.Length == 2) fields[parts[0]] = parts[1];
+            }
+            return new OpenMasuQueueHealth {
+                PendingCount = ParseInt(fields, "pending_count"),
+                LogicalBytes = ParseLong(fields, "logical_bytes"),
+                EvictedTotal = ParseLong(fields, "evicted_total"),
+                RejectedTotal = ParseLong(fields, "rejected_total"),
+            };
+        }
+
+        private static int ParseInt(IReadOnlyDictionary<string, string> fields, string key) =>
+            checked((int)ParseLong(fields, key));
+
+        private static long ParseLong(IReadOnlyDictionary<string, string> fields, string key)
+        {
+            if (!fields.TryGetValue(key, out var value) ||
+                !long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var result) || result < 0)
+                throw new FormatException("openmasu_queue_health_invalid");
+            return result;
+        }
     }
 
     public sealed class OpenMasuDeepLink
@@ -109,6 +150,9 @@ namespace OpenMasu.Unity
             RevenuePlatform().TrackRefund(transactionId, originalTransactionId, amountUnscaled, amountScale, currency);
         }
         public void StartSession() => platform.StartSession();
+        public void GetQueueHealth(Action<OpenMasuQueueHealth> completion) =>
+            QueueHealthPlatform().GetQueueHealth(value =>
+                dispatcher.Post(() => completion(OpenMasuQueueHealth.Parse(value))));
         public void SetCollectionEnabled(bool enabled) => platform.SetCollectionEnabled(enabled);
         public void ResetInstallationId(Action<bool> completion) =>
             platform.ResetInstallationId(value => dispatcher.Post(() => completion(value)));
@@ -130,6 +174,13 @@ namespace OpenMasu.Unity
         {
             var value = platform as IOpenMasuRevenuePlatform;
             if (value == null) throw new NotSupportedException("openmasu_revenue_platform_unavailable");
+            return value;
+        }
+
+        private IOpenMasuQueueHealthPlatform QueueHealthPlatform()
+        {
+            var value = platform as IOpenMasuQueueHealthPlatform;
+            if (value == null) throw new NotSupportedException("openmasu_queue_health_platform_unavailable");
             return value;
         }
 

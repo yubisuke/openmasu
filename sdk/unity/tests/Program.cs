@@ -75,6 +75,10 @@ internal static class Program
             try { legacyClient.TrackPurchase("transaction:legacy-49", "1", 0, "USD"); }
             catch (NotSupportedException) { unavailable = true; }
             Require(unavailable, "legacy IOpenMasuPlatform implementer was treated as a revenue platform");
+            unavailable = false;
+            try { legacyClient.GetQueueHealth(_ => { }); }
+            catch (NotSupportedException) { unavailable = true; }
+            Require(unavailable, "legacy IOpenMasuPlatform implementer was treated as a queue-health platform");
         }
 
         using (var platform = new SyntheticRevenuePlatform())
@@ -116,6 +120,17 @@ internal static class Program
             }
             Require(received == 10_000, "iOS callback count mismatch");
             Require(dispatcher.DroppedCount == 0, "iOS dispatcher dropped callbacks");
+            OpenMasuQueueHealth health = null;
+            client.GetQueueHealth(value => health = value);
+            var healthDeadline = DateTime.UtcNow.AddSeconds(5);
+            while (health == null && DateTime.UtcNow < healthDeadline)
+            {
+                client.PumpCallbacks();
+                Thread.Yield();
+            }
+            Require(health != null && health.PendingCount == 0 && health.LogicalBytes == 0 &&
+                health.EvictedTotal == 0 && health.RejectedTotal == 0,
+                "iOS queue-health callback changed aggregate values");
         }
     }
 

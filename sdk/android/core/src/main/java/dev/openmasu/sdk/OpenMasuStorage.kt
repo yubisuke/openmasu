@@ -64,6 +64,8 @@ internal class OpenMasuStorage(context: Context) {
       .putString(KEY_SDK_KEY_ID, configuration.sdkKeyId)
       .putString(KEY_SDK_SECRET, configuration.sdkSecret)
       .putString(KEY_SDK_VERSION, configuration.sdkVersion)
+      .putInt(KEY_MAX_QUEUE_RECORDS, configuration.maxQueueRecords)
+      .putLong(KEY_MAX_QUEUE_BYTES, configuration.maxQueueBytes)
       .commit()
   }
 
@@ -72,7 +74,11 @@ internal class OpenMasuStorage(context: Context) {
     val keyId = preferences.getString(KEY_SDK_KEY_ID, null) ?: return null
     val secret = preferences.getString(KEY_SDK_SECRET, null) ?: return null
     val sdkVersion = preferences.getString(KEY_SDK_VERSION, null) ?: SDK_VERSION
-    return OpenMasuConfiguration(endpoint, keyId, secret, sdkVersion = sdkVersion)
+    return OpenMasuConfiguration(
+      endpoint, keyId, secret, sdkVersion = sdkVersion,
+      maxQueueRecords = preferences.getInt(KEY_MAX_QUEUE_RECORDS, OpenMasuQueueDefaults.MAX_RECORDS),
+      maxQueueBytes = preferences.getLong(KEY_MAX_QUEUE_BYTES, OpenMasuQueueDefaults.MAX_BYTES),
+    )
   }
 
   fun clearAfterDeletion() {
@@ -91,6 +97,8 @@ internal class OpenMasuStorage(context: Context) {
     private const val KEY_COLLECTION_ENABLED = "collection_enabled"
     private const val KEY_CONSENT_BARRIER = "consent_barrier"
     private const val KEY_RESET_INSTALL_PENDING = "reset_install_pending"
+    private const val KEY_MAX_QUEUE_RECORDS = "max_queue_records"
+    private const val KEY_MAX_QUEUE_BYTES = "max_queue_bytes"
     private const val KEY_REFERRER_CONSUMED = "referrer_consumed"
     private const val KEY_DEFERRED_DESTINATION_CONSUMED = "deferred_destination_consumed"
     private const val KEY_SEQUENCE = "processing_sequence"

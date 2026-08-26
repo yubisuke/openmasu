@@ -126,31 +126,77 @@ public final class OpenMasuStorage: @unchecked Sendable {
   }
 
   public func enqueue(_ event: QueuedEvent) throws {
+    _ = try enqueue(event, capacity: QueueCapacity(
+      maxRecords: OpenMasuQueueDefaults.maxRecords,
+      maxBytes: OpenMasuQueueDefaults.maxBytes
+    ))
+  }
+
+  func enqueue(_ event: QueuedEvent, capacity: QueueCapacity) throws -> QueueAdmissionResult {
     try lock.withLock {
-      if let existing = try queuedEvent(eventId: event.eventId),
-         isIdempotentCommerceDuplicate(event, existing: existing) {
-        let sequenceOwner = try eventId(processingSequence: event.processingSequence)
-        if sequenceOwner == nil || sequenceOwner == event.eventId {
-          try reassertBackupExclusion()
-          return
+      precondition(capacity.maxRecords > 0 && capacity.maxBytes > 0)
+      try execute("BEGIN IMMEDIATE")
+      do {
+        if let existing = try queuedEvent(eventId: event.eventId),
+           isIdempotentCommerceDuplicate(event, existing: existing) {
+          let sequenceOwner = try eventId(processingSequence: event.processingSequence)
+          if sequenceOwner == nil || sequenceOwner == event.eventId {
+            try execute("COMMIT")
+            try reassertBackupExclusion()
+            return QueueAdmissionResult(admitted: true, evicted: 0, rejected: 0)
+          }
         }
+
+        let incomingBytes = event.logicalQueueBytes
+        if incomingBytes > capacity.maxBytes {
+          try incrementMetadataUnlocked("queue_rejected_total", by: 1)
+          try execute("COMMIT")
+          return QueueAdmissionResult(admitted: false, evicted: 0, rejected: 1)
+        }
+
+        let currentCount = try countUnlocked()
+        let currentBytes = try logicalBytesUnlocked()
+        var victims: [QueuedEvent] = []
+        if currentCount >= capacity.maxRecords || currentBytes + incomingBytes > capacity.maxBytes {
+          var remainingCount = currentCount
+          var remainingBytes = currentBytes
+          for candidate in try evictionCandidatesUnlocked(incomingPriority: event.queuePriority) {
+            victims.append(candidate)
+            remainingCount -= 1
+            remainingBytes -= candidate.logicalQueueBytes
+            if remainingCount < capacity.maxRecords && remainingBytes + incomingBytes <= capacity.maxBytes { break }
+          }
+          if remainingCount >= capacity.maxRecords || remainingBytes + incomingBytes > capacity.maxBytes {
+            try incrementMetadataUnlocked("queue_rejected_total", by: 1)
+            try execute("COMMIT")
+            return QueueAdmissionResult(admitted: false, evicted: 0, rejected: 1)
+          }
+          try deleteUnlocked(eventIds: victims.map(\.eventId))
+        }
+
+        let statement = try prepare("""
+          INSERT INTO queued_events (
+            event_id,event_name,processing_purpose_id,payload_json,occurred_at,
+            processing_sequence,enqueued_at_ms
+          ) VALUES (?,?,?,?,?,?,?)
+          """)
+        defer { sqlite3_finalize(statement) }
+        bind(event.eventId, to: statement, at: 1)
+        bind(event.eventName, to: statement, at: 2)
+        bind(event.processingPurposeId, to: statement, at: 3)
+        bind(event.payloadJson, to: statement, at: 4)
+        bind(event.occurredAt, to: statement, at: 5)
+        sqlite3_bind_int64(statement, 6, event.processingSequence)
+        sqlite3_bind_int64(statement, 7, event.enqueuedAtMs)
+        guard sqlite3_step(statement) == SQLITE_DONE else { throw databaseError("queue_insert_failed") }
+        if !victims.isEmpty { try incrementMetadataUnlocked("queue_evicted_total", by: Int64(victims.count)) }
+        try execute("COMMIT")
+        try reassertBackupExclusion()
+        return QueueAdmissionResult(admitted: true, evicted: victims.count, rejected: 0)
+      } catch {
+        try? execute("ROLLBACK")
+        throw error
       }
-      let statement = try prepare("""
-        INSERT INTO queued_events (
-          event_id,event_name,processing_purpose_id,payload_json,occurred_at,
-          processing_sequence,enqueued_at_ms
-        ) VALUES (?,?,?,?,?,?,?)
-        """)
-      defer { sqlite3_finalize(statement) }
-      bind(event.eventId, to: statement, at: 1)
-      bind(event.eventName, to: statement, at: 2)
-      bind(event.processingPurposeId, to: statement, at: 3)
-      bind(event.payloadJson, to: statement, at: 4)
-      bind(event.occurredAt, to: statement, at: 5)
-      sqlite3_bind_int64(statement, 6, event.processingSequence)
-      sqlite3_bind_int64(statement, 7, event.enqueuedAtMs)
-      guard sqlite3_step(statement) == SQLITE_DONE else { throw databaseError("queue_insert_failed") }
-      try reassertBackupExclusion()
     }
   }
 
@@ -217,11 +263,17 @@ public final class OpenMasuStorage: @unchecked Sendable {
   }
 
   public func count() throws -> Int {
+    try lock.withLock { try countUnlocked() }
+  }
+
+  public func queueHealth() throws -> OpenMasuQueueHealth {
     try lock.withLock {
-      let statement = try prepare("SELECT count(*) FROM queued_events")
-      defer { sqlite3_finalize(statement) }
-      guard sqlite3_step(statement) == SQLITE_ROW else { throw databaseError("queue_count_failed") }
-      return Int(sqlite3_column_int64(statement, 0))
+      OpenMasuQueueHealth(
+        pendingCount: try countUnlocked(),
+        logicalBytes: try logicalBytesUnlocked(),
+        evictedTotal: Int64(try metadataUnlocked("queue_evicted_total") ?? "0") ?? 0,
+        rejectedTotal: Int64(try metadataUnlocked("queue_rejected_total") ?? "0") ?? 0
+      )
     }
   }
 
@@ -268,6 +320,84 @@ public final class OpenMasuStorage: @unchecked Sendable {
     bind(key, to: statement, at: 1)
     bind(value, to: statement, at: 2)
     guard sqlite3_step(statement) == SQLITE_DONE else { throw databaseError("metadata_write_failed") }
+  }
+
+  private func incrementMetadataUnlocked(_ key: String, by delta: Int64) throws {
+    let current = Int64(try metadataUnlocked(key) ?? "0") ?? 0
+    try setMetadataUnlocked(key, value: String(current + delta))
+  }
+
+  private func countUnlocked() throws -> Int {
+    let statement = try prepare("SELECT count(*) FROM queued_events")
+    defer { sqlite3_finalize(statement) }
+    guard sqlite3_step(statement) == SQLITE_ROW else { throw databaseError("queue_count_failed") }
+    return Int(sqlite3_column_int64(statement, 0))
+  }
+
+  private func logicalBytesUnlocked() throws -> Int64 {
+    let statement = try prepare("""
+      SELECT COALESCE(SUM(
+        length(CAST(event_id AS BLOB)) + length(CAST(event_name AS BLOB)) +
+        length(CAST(processing_purpose_id AS BLOB)) + length(CAST(payload_json AS BLOB)) +
+        length(CAST(occurred_at AS BLOB)) + 16
+      ), 0) FROM queued_events
+      """)
+    defer { sqlite3_finalize(statement) }
+    guard sqlite3_step(statement) == SQLITE_ROW else { throw databaseError("queue_bytes_failed") }
+    return sqlite3_column_int64(statement, 0)
+  }
+
+  private func evictionCandidatesUnlocked(incomingPriority: Int) throws -> [QueuedEvent] {
+    let statement = try prepare("""
+      SELECT event_id,event_name,processing_purpose_id,payload_json,occurred_at,
+             processing_sequence,enqueued_at_ms
+      FROM queued_events
+      WHERE ? = 3 OR
+        (? = 0 AND CASE
+          WHEN event_name='consent_changed' THEN 3
+          WHEN processing_purpose_id='revenue_measurement' OR event_name='install' THEN 2
+          WHEN processing_purpose_id='analytics' THEN 0
+          ELSE 1
+        END = 0) OR
+        (? > 0 AND CASE
+          WHEN event_name='consent_changed' THEN 3
+          WHEN processing_purpose_id='revenue_measurement' OR event_name='install' THEN 2
+          WHEN processing_purpose_id='analytics' THEN 0
+          ELSE 1
+        END < ?)
+      ORDER BY
+        CASE
+          WHEN event_name='consent_changed' THEN 3
+          WHEN processing_purpose_id='revenue_measurement' OR event_name='install' THEN 2
+          WHEN processing_purpose_id='analytics' THEN 0
+          ELSE 1
+        END,
+        processing_sequence,event_id
+      """)
+    defer { sqlite3_finalize(statement) }
+    sqlite3_bind_int(statement, 1, Int32(incomingPriority))
+    sqlite3_bind_int(statement, 2, Int32(incomingPriority))
+    sqlite3_bind_int(statement, 3, Int32(incomingPriority))
+    sqlite3_bind_int(statement, 4, Int32(incomingPriority))
+    var events: [QueuedEvent] = []
+    while sqlite3_step(statement) == SQLITE_ROW {
+      events.append(QueuedEvent(
+        eventId: text(statement, 0), eventName: text(statement, 1),
+        processingPurposeId: text(statement, 2), payloadJson: text(statement, 3),
+        occurredAt: text(statement, 4), processingSequence: sqlite3_column_int64(statement, 5),
+        enqueuedAtMs: sqlite3_column_int64(statement, 6)
+      ))
+    }
+    return events
+  }
+
+  private func deleteUnlocked(eventIds: [String]) throws {
+    guard !eventIds.isEmpty else { return }
+    let placeholders = Array(repeating: "?", count: eventIds.count).joined(separator: ",")
+    let statement = try prepare("DELETE FROM queued_events WHERE event_id IN (\(placeholders))")
+    defer { sqlite3_finalize(statement) }
+    for (index, value) in eventIds.enumerated() { bind(value, to: statement, at: Int32(index + 1)) }
+    guard sqlite3_step(statement) == SQLITE_DONE else { throw databaseError("queue_eviction_failed") }
   }
 
   private func queuedEvent(eventId: String) throws -> QueuedEvent? {

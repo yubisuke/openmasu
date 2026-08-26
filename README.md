@@ -237,6 +237,8 @@ OpenMasu delivers deterministic direct deep links on Android through App Links a
 
 The SDK parses and reports a typed destination but never navigates. The host application remains responsible for validating the value again and selecting its own screen. Routing still reaches the host listener while measurement collection is disabled; no `deep_link_open` event is queued in that state. A direct `deep_link_open` is a device claim, not server-observed click evidence.
 
+Android and iOS bound their durable event queues to 10,000 records and 16 MiB of logical UTF-8 content by default. Integrators may lower or raise both limits through `OpenMasuConfiguration` within the SDK's validated ranges. When capacity is exhausted, the SDK evicts the oldest analytics evidence first, protects install and revenue evidence over analytics, and always admits the latest `consent_changed` event even when that requires evicting other measurement evidence. If no eligible event can be evicted, the new event is rejected. Native `queueHealth()` and Unity `GetQueueHealth(...)` expose only pending record count, logical bytes, cumulative evictions, and cumulative rejections; they never expose or log queued payloads or identifiers. Logical bytes are the UTF-8 lengths of the stored event ID, event name, processing purpose, payload JSON, and occurrence timestamp plus 16 bytes for the sequence and enqueue timestamp. They are not the physical SQLite file size.
+
 Requirements: JDK 17 and Android SDK 36. The Android project uses a checksum-pinned Gradle 8.13 wrapper. From the repository root:
 
 ```bash
