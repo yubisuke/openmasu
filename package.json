@@ -40,7 +40,7 @@
     "check:operational-logs": "node --import tsx tools/check-no-payload-logs.ts",
     "check:release-version": "node --import tsx tools/check-release-version.ts",
     "check:sdk-ios": "node tools/check-ios-sdk.mjs --source-only",
-    "check:sdk-release": "python tools/build-sdk-release.py --verify-only build/sdk-release/openmasu-sdk-0.2.0-rc.1",
+    "check:sdk-release": "python tools/build-sdk-release.py --verify-only build/sdk-release/openmasu-sdk-0.2.0-rc.2",
     "check:threat-model": "node --import tsx tools/check-threat-model.ts",
     "check:fraud-sources": "node --import tsx tools/check-fraud-sources.ts",
     "check:fraud-artifacts": "node --import tsx tools/check-fraud-artifacts.ts",

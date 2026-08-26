@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { createPreflightEvidence, sanitizedEnvironment, type CommandExecutor, type CommandResult } from "./pilot-preflight.js";
 
-const expected = { contract: "0.4.0", node: "22.18.0", npm: "11.6.2", python: "3.13.5", sdk: "0.2.0-rc.1" };
+const expected = { contract: "0.4.0", node: "22.18.0", npm: "11.6.2", python: "3.13.5", sdk: "0.2.0-rc.2" };
 const npmCommand = { command: "npm", prefix: [] } as const;
 
 function executor(overrides: Record<string, Partial<CommandResult>> = {}): CommandExecutor {

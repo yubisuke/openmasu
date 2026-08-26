@@ -38,7 +38,7 @@ packages, or npm packages to a public registry.
    `python tools/build-sdk-release.py --reproducibility-check`. Verify the
    Maven POMs, UPM archive, Swift source archive, normalized SDK SBOMs,
    `release-manifest.json`, and `SHA256SUMS` under
-   `build/sdk-release/openmasu-sdk-0.2.0-rc.1/`. The command compares two packaging
+   `build/sdk-release/openmasu-sdk-0.2.0-rc.2/`. The command compares two packaging
    passes byte for byte and never publishes them.
 10. Review the [informational synthetic load record](../validation/m5-load-results.md). Do not convert its p95
    record into a production service-level objective without a representative
@@ -46,7 +46,9 @@ packages, or npm packages to a public registry.
 11. Confirm all GitHub Actions are green at the exact release commit. Action
    SHA changes require their own review and are never incidental release work.
 12. Create a signed or annotated source tag only after the owner approves the
-   release candidate. Record the exact commit and CI run.
+   release candidate. Record the exact commit and CI run. For RC2, confirm the
+   [synthetic evidence manifest](../validation/v0.2.0-rc.2-synthetic-evidence.md)
+   against the tag target.
 
 ## Source release contents
 

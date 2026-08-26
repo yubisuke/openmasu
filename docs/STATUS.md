@@ -1,6 +1,6 @@
 # Project Status
 
-Checked on 2026-08-26 for the `v0.2.0-rc.1` release candidate. “Implemented” below means source and synthetic automated
+Checked on 2026-08-26 for the `v0.2.0-rc.2` release candidate. “Implemented” below means source and synthetic automated
 evidence are present. It does not mean a production deployment, real provider
 connection, device validation, platform approval, or operator acceptance.
 
@@ -31,7 +31,10 @@ non-public provider interface.
 
 ## Next evidence step
 
-Run the operator checklists in an authorized isolated environment, then conduct
-a bounded shadow pilot without treating OpenMasu as the primary source. Keep
-real exports, credentials, campaign values, device identifiers, provider
-tokens, and validation records outside this public repository.
+Keep the host preflight and disposable synthetic Runtime workflow green at each
+release commit. Provider, device, deployment, capacity, and operator evidence is
+outside this release's code gate, but is required before a production or
+primary-source decision and requires a separately authorized isolated
+environment. Real exports, credentials, campaign values, device identifiers,
+provider tokens, and private validation records must remain outside this public
+repository.

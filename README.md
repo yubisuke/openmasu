@@ -18,10 +18,10 @@ This project is licensed under the [Apache License 2.0](LICENSE); attribution is
 
 ## Current status
 
-The current source and SDK release candidate is `v0.2.0-rc.1`. It packages the
+The current source and SDK release candidate is `v0.2.0-rc.2`. It packages the
 post-M7 synthetic implementation while retaining Contract v0.4 identities;
 the release number and contract version are intentionally independent. See
-[the release-candidate notes](docs/releases/v0.2.0-rc.1.md).
+[the release-candidate notes](docs/releases/v0.2.0-rc.2.md).
 
 This project contains the v0.4 contract, with additive metric and rule definitions through v0.4.9, and synthetic code milestones through M7: the Shadow ledger and import foundation, cohort metrics and difference audit, Android/Unity and Apple measurement paths, the server-rendered operator dashboard, production-control foundations, deterministic fraud controls, direct/deferred deep-link paths, settled purchase/refund net revenue, D30/D90 total-net ROAS and cohort LTV, and synthetic verified-commerce lifecycle paths for Google Play and the App Store. Real provider connectivity, real-device and campaign validation, Unity exports, App Store review, a production deployment, real backup operations, real production load, real integrity-service configuration, live purchase verification, and real link-domain verification have not been demonstrated. Immutable baselines are available at the `contract-v0.1`, `contract-v0.2.1`, and `contract-v0.3.6` Git tags. See [the current status](docs/STATUS.md) for the milestone-by-milestone boundary.
 
@@ -102,7 +102,8 @@ Implemented runtime code lives in `apps/api`, `apps/redirector`, `apps/worker`, 
 - [M6 fraud operator checklist](docs/validation/m6-fraud-checklist.md)
 - [M7 deep-link device checklist](docs/validation/deeplink-device-checklist.md)
 - [M5 synthetic load record](docs/validation/m5-load-results.md)
-- [v0.2.0-rc.1 synthetic pilot record](docs/validation/v0.2.0-rc.1-pilot.md)
+- [Historical v0.2.0-rc.1 synthetic pilot record](docs/validation/v0.2.0-rc.1-pilot.md)
+- [v0.2.0-rc.2 synthetic evidence manifest](docs/validation/v0.2.0-rc.2-synthetic-evidence.md)
 - [Backup and restore runbook](docs/operations/backup-restore.md)
 - [Release runbook](docs/operations/release.md)
 - [Current milestone status](docs/STATUS.md)
@@ -248,7 +249,7 @@ npm run sbom
 python tools/build-sdk-release.py --reproducibility-check
 ```
 
-`build/sdk-release/openmasu-sdk-0.2.0-rc.1/` contains Maven AAR/POM artifacts, a Unity UPM archive, an immutable Swift Package source archive, Android/iOS/Unity CycloneDX SBOMs, source and toolchain metadata, and a SHA-256 manifest. CI rebuilds and byte-compares the bundle. These are synthetic build artifacts only: no registry publication, Unity export, real provider read, device validation, or distribution signing is claimed.
+`build/sdk-release/openmasu-sdk-0.2.0-rc.2/` contains Maven AAR/POM artifacts, a Unity UPM archive, an immutable Swift Package source archive, Android/iOS/Unity CycloneDX SBOMs, source and toolchain metadata, and a SHA-256 manifest. CI rebuilds and byte-compares the bundle. These are synthetic build artifacts only: no registry publication, Unity export, real provider read, device validation, or distribution signing is claimed.
 
 ### Google Play purchase verification
 
