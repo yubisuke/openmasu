@@ -160,6 +160,14 @@ docker compose up -d --wait
 
 Run the seed profile only on a synthetic instance. Stop every ingestion writer first, as shown above; the seed command resets the synthetic ledger and is not safe alongside normal writes. Seed jobs serialize against each other with a PostgreSQL advisory lock and retry one `40P01` deadlock once; a second database deadlock is reported as a failure and should be investigated before rerunning. Fixture 33 exercises a non-zero revenue and non-zero cost cohort and reproduces `d7_roas=1.5` at ratio scale 6, so this seed/parity path is the non-zero synthetic cohort gate. It is not a real shadow-pilot result.
 
+Before importing an existing MMP export, run the no-write compatibility preview:
+
+```bash
+npm run import:preview -- --source=examples/mappings/synthetic-provider-click.json --file=examples/synthetic/mmp-raw-events.json
+```
+
+The preview opens no database connection and reports only aggregate selection, acceptance, and schema-rejection diagnostics. It does not print source values or input paths, and it cannot detect conflicts with identities already stored in a ledger. See the [import mapping guide](docs/import-mappings.md) for the exact boundary.
+
 To exercise the operator CSV-to-metric path without committing a tabular file, create a synthetic CSV only under the gitignored `.openmasu/` directory and run the two explicit jobs:
 
 ```bash
