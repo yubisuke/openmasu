@@ -32,6 +32,8 @@
     "import:cost:google": "npm run import:cost:google --workspace @openmasu/worker --",
     "import:cost:meta": "npm run import:cost:meta --workspace @openmasu/worker --",
     "import:revenue:max": "npm run import:revenue:max --workspace @openmasu/worker --",
+    "import:revenue:compatibility": "npm run import:revenue:compatibility --workspace @openmasu/worker --",
+    "test:financial-parity": "node --env-file-if-exists=.env --import tsx --test --test-concurrency=1 --test-name-pattern=\"manual-cost compatibility|provider-reported aggregate-revenue compatibility|WO11 carries|Issue 61\" apps/worker/src/import/import.unit.test.ts apps/worker/src/import/aggregate-revenue-compatibility.unit.test.ts apps/worker/src/import/runtime.integration.test.ts",
     "metrics:run": "npm run metrics:run --workspace @openmasu/worker --",
     "pilot:preflight": "node --import tsx tools/pilot-preflight.ts",
     "pilot:synthetic": "node --import tsx tools/synthetic-runtime-pilot.ts",

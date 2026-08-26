@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import type { Pool } from "pg";
 import { createAppPool, recordJobOutcome, runWithTerminalJobOutcome } from "@openmasu/runtime";
-import { persistCostImport, type CostImportResult, type CostInput } from "./cost.js";
+import { persistCostImport, prepareCostImportRows, type CostImportResult, type CostInput } from "./cost.js";
 import { loadMapping, loadMappingScope, mapRow, rowMatches } from "./mapping.js";
 import { readRows, type ImportLimits } from "./source.js";
 
@@ -13,29 +13,75 @@ const defaultLimits: ImportLimits = {
   maxRowBytes: 64 * 1024,
 };
 
-function requiredText(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.length === 0) throw new Error(`mapped ${field} is required`);
+export type CostInputRejectionCode =
+  | "cost_field_invalid"
+  | "cost_money_invalid"
+  | "cost_date_invalid"
+  | "cost_as_of_invalid";
+
+export class CostInputError extends Error {
+  constructor(
+    readonly code: CostInputRejectionCode,
+    readonly fields: string[],
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+function requiredText(value: unknown, field: string, code: CostInputRejectionCode = "cost_field_invalid"): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new CostInputError(code, [field], `mapped ${field} is required`);
+  }
   return value;
 }
 
-function costInput(mapping: ReturnType<typeof loadMapping>, mapped: Any): CostInput {
+function canonicalDay(value: unknown): string {
+  const date = requiredText(value, "date", "cost_date_invalid");
+  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)
+    || Number.isNaN(Date.parse(`${date}T00:00:00.000Z`))
+    || new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10) !== date) {
+    throw new CostInputError("cost_date_invalid", ["date"], "mapped date must be a valid YYYY-MM-DD date");
+  }
+  return date;
+}
+
+export function normalizeCostInput(mapping: ReturnType<typeof loadMapping>, mapped: Any): CostInput {
   const money = mapped.money;
-  if (!money || typeof money !== "object" || Array.isArray(money)) throw new Error("mapped money is required");
-  const date = requiredText(mapped.date, "date");
-  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)) throw new Error("mapped date must be YYYY-MM-DD");
-  const asOf = requiredText(mapped.as_of, "as_of");
-  if (Number.isNaN(Date.parse(asOf))) throw new Error("mapped as_of must be a timestamp");
+  if (!money || typeof money !== "object" || Array.isArray(money)) {
+    throw new CostInputError("cost_money_invalid", ["money"], "mapped money is required");
+  }
+  const amountUnscaled = requiredText(money.amount_unscaled, "money.amount_unscaled", "cost_money_invalid");
+  const currency = requiredText(money.currency, "money.currency", "cost_money_invalid");
+  if (!/^[0-9]+$/.test(amountUnscaled)) {
+    throw new CostInputError("cost_money_invalid", ["money.amount_unscaled"], "mapped cost amount is invalid");
+  }
+  if (!Number.isInteger(money.amount_scale) || money.amount_scale < 0 || money.amount_scale > 18) {
+    throw new CostInputError("cost_money_invalid", ["money.amount_scale"], "mapped cost scale is invalid");
+  }
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    throw new CostInputError("cost_money_invalid", ["money.currency"], "mapped cost currency is invalid");
+  }
+  const date = canonicalDay(mapped.date);
+  const asOf = requiredText(mapped.as_of, "as_of", "cost_as_of_invalid");
+  if (Number.isNaN(Date.parse(asOf))) {
+    throw new CostInputError("cost_as_of_invalid", ["as_of"], "mapped as_of must be a timestamp");
+  }
+  const country = mapped.country === undefined ? null : requiredText(mapped.country, "country");
+  if (country !== null && !/^[A-Z]{2}$/.test(country)) {
+    throw new CostInputError("cost_field_invalid", ["country"], "mapped country must be an uppercase ISO alpha-2 code");
+  }
   return {
     tenant_id: mapping.tenant_id,
     app_id: mapping.app_id,
     network: requiredText(mapped.network, "network"),
     campaign_id: mapped.campaign_id === undefined ? null : requiredText(mapped.campaign_id, "campaign_id"),
     ad_group_id: mapped.ad_group_id === undefined ? null : requiredText(mapped.ad_group_id, "ad_group_id"),
-    country: mapped.country === undefined ? null : requiredText(mapped.country, "country"),
+    country,
     date,
-    amount_unscaled: requiredText(money.amount_unscaled, "money.amount_unscaled"),
+    amount_unscaled: amountUnscaled,
     amount_scale: money.amount_scale,
-    currency: requiredText(money.currency, "money.currency"),
+    currency,
     source: "imported_reported",
     as_of: new Date(asOf).toISOString(),
   };
@@ -50,7 +96,9 @@ export async function runCostImportFile(options: {
   const mapping = loadMapping(options.mappingPath);
   if (mapping.kind !== "manual_cost") throw new Error("import:cost requires a manual_cost mapping");
   const loaded = readRows(options.filePath, mapping, options.limits ?? defaultLimits);
-  const rows = loaded.rows.filter((row) => rowMatches(mapping, row)).map((row) => costInput(mapping, mapRow(mapping, row)));
+  const rows = prepareCostImportRows(
+    loaded.rows.filter((row) => rowMatches(mapping, row)).map((row) => normalizeCostInput(mapping, mapRow(mapping, row))),
+  );
   const result = await persistCostImport(options.pool, mapping.source_id, rows);
   return { ...result, rows: rows.length };
 }

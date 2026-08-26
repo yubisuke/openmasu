@@ -9,8 +9,11 @@ import {
 } from "@openmasu/runtime";
 import type { FetchLike } from "./adapters.js";
 import {
+  MAX_AGGREGATE_REVENUE_PAGE_ROWS,
+  MAX_AGGREGATE_REVENUE_RESPONSE_BYTES,
   normalizeMaxAggregateRevenue,
   persistMaxAggregateRevenue,
+  validateMaxAggregateRevenueResponse,
   type MaxAggregateRevenueImportResult,
 } from "./max-revenue.js";
 
@@ -21,9 +24,9 @@ export type MaxRevenueImportResult = MaxAggregateRevenueImportResult & {
   readonly pages: number;
 };
 
-const DEFAULT_PAGE_SIZE = 1_000;
+const DEFAULT_PAGE_SIZE = MAX_AGGREGATE_REVENUE_PAGE_ROWS;
 const DEFAULT_MAX_PAGES = 200;
-const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+const DEFAULT_MAX_RESPONSE_BYTES = MAX_AGGREGATE_REVENUE_RESPONSE_BYTES;
 
 function identifier(value: string, name: string): string {
   if (!/^[A-Za-z0-9._:-]{1,128}$/.test(value)) throw new Error(`${name} is invalid`);
@@ -122,16 +125,14 @@ export async function fetchMaxAggregateRevenue(options: {
     }
     if (!response.ok) throw new Error(`MAX Reporting API failed with status ${response.status}`);
     const payload = await boundedJson(response, maxResponseBytes);
-    if (payload.code !== undefined && payload.code !== 200 && payload.code !== "200") {
-      throw new Error("MAX Reporting API returned a non-success response code");
-    }
-    const pageRows = normalizeMaxAggregateRevenue({ tenant_id: tenantId, app_id: appId, as_of: asOf }, payload);
+    const responseRows = validateMaxAggregateRevenueResponse(payload, pageSize);
+    const pageRows = normalizeMaxAggregateRevenue(
+      { tenant_id: tenantId, app_id: appId, as_of: asOf },
+      responseRows,
+      { maxRows: pageSize },
+    );
     rows.push(...pageRows);
     pages += 1;
-    const reportedCount = payload.count === undefined ? pageRows.length : Number(payload.count);
-    if (!Number.isInteger(reportedCount) || reportedCount < 0 || reportedCount !== pageRows.length) {
-      throw new Error("MAX Reporting API count does not match the returned rows");
-    }
     if (pageRows.length < pageSize) return { rows, pages };
   }
   throw new Error(`MAX Reporting API exceeded ${maxPages} pages`);
