@@ -93,6 +93,22 @@ public final class OpenMasuStorage: @unchecked Sendable {
     try setMetadata("collection_enabled", value: enabled ? "1" : "0")
   }
 
+  func consentBarrierActive() throws -> Bool { try metadata("consent_barrier") == "1" }
+
+  func applyConsentState(_ state: String) throws {
+    if state == "denied" || state == "withdrawn" {
+      try setMetadata("consent_barrier", value: "1")
+    } else if state == "granted" || state == "not_required" {
+      try setMetadata("consent_barrier", value: "0")
+    }
+  }
+
+  func purgeConsentRequiredQueueIfBlocked() throws {
+    if try consentBarrierActive() {
+      try purge(processingPurposes: ["attribution", "analytics", "revenue_measurement"])
+    }
+  }
+
   public func nextSequence() throws -> Int64 {
     try lock.withLock {
       try execute("BEGIN IMMEDIATE")
@@ -187,8 +203,12 @@ public final class OpenMasuStorage: @unchecked Sendable {
 
   public func clearForReset() throws {
     try lock.withLock {
+      let consentBarrier = try metadataUnlocked("consent_barrier")
       try execute("DELETE FROM queued_events")
       try execute("DELETE FROM metadata")
+      if let consentBarrier {
+        try setMetadataUnlocked("consent_barrier", value: consentBarrier)
+      }
       for name in ["credential.json", "installation-id"] {
         try? FileManager.default.removeItem(at: root.appendingPathComponent(name))
       }

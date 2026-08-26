@@ -308,6 +308,7 @@ final class OpenMasuCoreTests: XCTestCase {
     XCTAssertEqual(token.count, 1)
 
     await transport.setDeliveryFailure(false)
+    try await sdk.updateConsent(state: "granted", policyVersion: "policy-synthetic-v2")
     try await sdk.resetInstallationId()
     XCTAssertEqual(token.count, 1, "reset must not fetch another AdServices token")
     let deleteCount = await transport.deleteCount()
@@ -316,6 +317,69 @@ final class OpenMasuCoreTests: XCTestCase {
     let resetPayloads = deliveredPayloads.flatMap { $0 }.map(\.payloadJson)
     XCTAssertTrue(resetPayloads.contains { $0.contains("\"install_origin\":\"identifier_reset\"") })
     XCTAssertTrue(resetPayloads.contains { $0.contains("\"referrer_status\":\"not_applicable\"") })
+  }
+
+  func testConsentBarrierSurvivesRestartAndRepurgesBeforeDelivery() async throws {
+    let root = temporaryDirectory("consent-barrier-restart")
+    let storage = try OpenMasuStorage(root: root)
+    try storage.enqueue(QueuedEvent(
+      eventId: "event:synthetic-restart-analytics", eventName: "session_start",
+      processingPurposeId: "analytics", payloadJson: "{\"event_name\":\"session_start\"}",
+      occurredAt: "2026-08-26T00:00:00.000Z", processingSequence: 100, enqueuedAtMs: 100
+    ))
+    try storage.enqueue(QueuedEvent(
+      eventId: "event:synthetic-restart-control", eventName: "consent_changed",
+      processingPurposeId: "fraud_prevention", payloadJson: "{\"event_name\":\"consent_changed\"}",
+      occurredAt: "2026-08-26T00:00:00.000Z", processingSequence: 101, enqueuedAtMs: 101
+    ))
+    try storage.applyConsentState("withdrawn")
+
+    let transport = RecordingTransport(deliveryFailure: true)
+    let sdk = try OpenMasuSDK(
+      configuration: configuration(defaultEnabled: true), storageRoot: root, transport: transport
+    )
+    do { try await sdk.initialize(); XCTFail("the retained control event must remain queued") }
+    catch { XCTAssertEqual(error as? OpenMasuError, .transport(503)) }
+    do { try await sdk.startSession() } catch { XCTAssertEqual(error as? OpenMasuError, .transport(503)) }
+    do { try await sdk.trackCustomEvent("blocked_after_restart") }
+    catch { XCTAssertEqual(error as? OpenMasuError, .transport(503)) }
+    var remaining = try await sdk.pendingEvents()
+    XCTAssertEqual(Set(remaining.map(\.processingPurposeId)), ["fraud_prevention"])
+
+    do { try await sdk.updateConsent(state: "unknown", policyVersion: "policy-synthetic-unknown") }
+    catch { XCTAssertEqual(error as? OpenMasuError, .transport(503)) }
+    do { try await sdk.trackCustomEvent("still_blocked") }
+    catch { XCTAssertEqual(error as? OpenMasuError, .transport(503)) }
+    remaining = try await sdk.pendingEvents()
+    XCTAssertFalse(remaining.contains { $0.eventName == "custom_event" })
+
+    do { try await sdk.updateConsent(state: "granted", policyVersion: "policy-synthetic-granted") }
+    catch { XCTAssertEqual(error as? OpenMasuError, .transport(503)) }
+    do { try await sdk.trackCustomEvent("allowed_after_grant") }
+    catch { XCTAssertEqual(error as? OpenMasuError, .transport(503)) }
+    remaining = try await sdk.pendingEvents()
+    XCTAssertTrue(remaining.contains { $0.eventName == "custom_event" })
+  }
+
+  func testResetWhileConsentIsWithdrawnDefersTheNewInstallUntilExplicitGrant() async throws {
+    let transport = RecordingTransport(deliveryFailure: false)
+    let sdk = try OpenMasuSDK(
+      configuration: configuration(defaultEnabled: true),
+      storageRoot: temporaryDirectory("reset-consent-barrier"),
+      transport: transport
+    )
+    try await sdk.initialize()
+    try await sdk.updateConsent(state: "withdrawn", policyVersion: "policy-synthetic-withdrawn")
+    try await sdk.resetInstallationId()
+    let pendingAfterReset = try await sdk.pendingEvents()
+    XCTAssertTrue(pendingAfterReset.allSatisfy { $0.eventName != "install" })
+
+    try await sdk.updateConsent(state: "granted", policyVersion: "policy-synthetic-granted")
+    let deliveredPayloads = await transport.deliveredPayloads()
+    let resetInstalls = deliveredPayloads.flatMap { $0 }.filter {
+      $0.eventName == "install" && $0.payloadJson.contains("\"install_origin\":\"identifier_reset\"")
+    }
+    XCTAssertEqual(resetInstalls.count, 1)
   }
 
   func testM4A22ResetResumesAfterEnrollmentFailureWithoutASecondDeletion() async throws {

@@ -21,6 +21,19 @@ internal class OpenMasuStorage(context: Context) {
     preferences.edit().putBoolean(KEY_COLLECTION_ENABLED, enabled).commit()
   }
 
+  fun consentBarrierActive(): Boolean = preferences.getBoolean(KEY_CONSENT_BARRIER, false)
+
+  fun applyConsentState(state: String) {
+    when (state) {
+      "denied", "withdrawn" -> preferences.edit().putBoolean(KEY_CONSENT_BARRIER, true).commit()
+      "granted", "not_required" -> preferences.edit().putBoolean(KEY_CONSENT_BARRIER, false).commit()
+    }
+  }
+
+  fun resetInstallPending(): Boolean = preferences.getBoolean(KEY_RESET_INSTALL_PENDING, false)
+  fun markResetInstallPending() { preferences.edit().putBoolean(KEY_RESET_INSTALL_PENDING, true).commit() }
+  fun clearResetInstallPending() { preferences.edit().remove(KEY_RESET_INSTALL_PENDING).commit() }
+
   fun referrerConsumed(): Boolean = preferences.getBoolean(KEY_REFERRER_CONSUMED, false)
   fun markReferrerConsumed() { preferences.edit().putBoolean(KEY_REFERRER_CONSUMED, true).commit() }
   fun deferredDestinationConsumed(): Boolean = preferences.getBoolean(KEY_DEFERRED_DESTINATION_CONSUMED, false)
@@ -76,6 +89,8 @@ internal class OpenMasuStorage(context: Context) {
     const val SDK_VERSION = "0.2.0-rc.2"
     private const val KEY_INSTALLATION_ID = "installation_id"
     private const val KEY_COLLECTION_ENABLED = "collection_enabled"
+    private const val KEY_CONSENT_BARRIER = "consent_barrier"
+    private const val KEY_RESET_INSTALL_PENDING = "reset_install_pending"
     private const val KEY_REFERRER_CONSUMED = "referrer_consumed"
     private const val KEY_DEFERRED_DESTINATION_CONSUMED = "deferred_destination_consumed"
     private const val KEY_SEQUENCE = "processing_sequence"

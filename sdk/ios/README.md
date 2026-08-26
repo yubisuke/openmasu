@@ -93,7 +93,10 @@ Consent-gated applications must set the Boolean Info.plist key
 `OpenMasuCollectionEnabledDefault` to `false` and enable collection only after
 their own policy allows it. Unity's postprocessor writes `false` unless the
 operator explicitly changes the project setting. Disabling collection performs
-no network or AdServices read. Withdrawal purges consent-required queued events.
+no network or AdServices read. Withdrawal or denial persists a local barrier,
+purges consent-required queued events, and re-applies the purge before admission
+or delivery after restart or installation reset. Only an explicit `granted` or
+`not_required` update removes that barrier; `unknown` does not.
 Installation reset sends the credential-bound deletion request before creating
 a new identifier and does not fetch AdServices again.
 

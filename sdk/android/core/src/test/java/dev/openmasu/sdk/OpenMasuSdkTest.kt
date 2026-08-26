@@ -121,6 +121,45 @@ class OpenMasuSdkTest {
     assertEquals(setOf("fraud_prevention"), remaining.map { it.processingPurposeId }.toSet())
   }
 
+  @Test fun `persisted consent barrier re-purges after restart and blocks new measurement`() {
+    val storage = OpenMasuStorage(context)
+    val database = OpenMasuQueueDatabase.open(context)
+    try {
+      Thread {
+        database.queue().insert(QueuedEvent(
+          "event:synthetic-restart-analytics", "session_start", "analytics",
+          "{\"event_name\":\"session_start\"}", EventFactory.canonicalNow(), 1, 1,
+        ))
+        database.queue().insert(QueuedEvent(
+          "event:synthetic-restart-control", "consent_changed", "fraud_prevention",
+          "{\"event_name\":\"consent_changed\"}", EventFactory.canonicalNow(), 2, 2,
+        ))
+      }.apply { start(); join() }
+      storage.applyConsentState("withdrawn")
+    } finally { database.close() }
+
+    val sdk = sdk(RecordingTransport(false))
+    sdk.initialize()
+    sdk.startSession()
+    sdk.trackCustomEvent("blocked_after_restart")
+    sdk.enqueueAdRevenue(JSONObject()
+      .put("event_name", "ad_revenue").put("subject_scope", "installation_level")
+      .put("installation_id", sdk.installationId()).put("ad_network", "synthetic")
+      .put("amount_unscaled", "1").put("amount_scale", 6).put("currency", "USD")
+      .put("revenue_source", "client_estimated").put("revenue_precision", "exact"))
+    await { sdk.pendingEvents().none { it.processingPurposeId in setOf("attribution", "analytics", "revenue_measurement") } }
+    assertEquals(setOf("fraud_prevention"), sdk.pendingEvents().map { it.processingPurposeId }.toSet())
+
+    sdk.updateConsent("unknown", "synthetic-policy-unknown")
+    sdk.trackCustomEvent("still_blocked")
+    await { sdk.pendingEvents().any { it.eventName == "consent_changed" } }
+    assertTrue(sdk.pendingEvents().none { it.eventName == "custom_event" })
+
+    sdk.updateConsent("granted", "synthetic-policy-granted")
+    sdk.trackCustomEvent("allowed_after_grant")
+    await { sdk.pendingEvents().any { it.eventName == "custom_event" } }
+  }
+
   @Test fun `session start uses a durable analytics event`() {
     val sdk = sdk(RecordingTransport(false))
     sdk.initialize()
@@ -346,6 +385,29 @@ class OpenMasuSdkTest {
     val resetPayload = transport.deliveredPayloads.last().first { it.eventName == "install" }.payloadJson
     assertTrue(resetPayload.contains("\"install_origin\":\"identifier_reset\""))
     assertTrue(resetPayload.contains("\"referrer_status\":\"none\""))
+  }
+
+  @Test fun `reset while consent is withdrawn defers the new install until explicit grant`() {
+    val transport = RecordingTransport(true)
+    val sdk = sdk(transport)
+    sdk.initialize()
+    await { transport.deliveries.get() == 1 }
+    sdk.updateConsent("withdrawn", "synthetic-policy-withdrawn")
+    await { transport.deliveries.get() == 2 }
+
+    val complete = CountDownLatch(1)
+    var resetResult = false
+    sdk.resetInstallationId { resetResult = it; complete.countDown() }
+    assertTrue(complete.await(5, TimeUnit.SECONDS))
+    assertTrue(resetResult)
+    assertTrue(OpenMasuStorage(context).resetInstallPending())
+    assertTrue(sdk.pendingEvents().none { it.eventName == "install" })
+
+    sdk.updateConsent("granted", "synthetic-policy-granted")
+    await { transport.deliveredPayloads.flatten().any {
+      it.eventName == "install" && it.payloadJson.contains("\"install_origin\":\"identifier_reset\"")
+    } }
+    assertFalse(OpenMasuStorage(context).resetInstallPending())
   }
 
   @Test fun `failed deletion keeps the old installation identity`() {
