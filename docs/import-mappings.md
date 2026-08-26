@@ -2,17 +2,24 @@
 
 Runtime import mappings are schema-validated JSON documents. Public files under `examples/mappings/` contain synthetic values only; deployment-specific provider column names and certification evidence remain private.
 
-## No-write preview
+## Provider-neutral compatibility report
 
-Preview an existing-MMP export before opening a database connection or writing any ledger state:
+Evaluate a measurement export before opening a database connection or writing any ledger state:
 
 ```bash
-npm run import:preview -- --source=examples/mappings/synthetic-provider-click.json --file=examples/synthetic/mmp-raw-events.json
+npm run import:compatibility -- --source=examples/mappings/synthetic-provider-click.json --file=examples/synthetic/mmp-raw-events.json --lint-directory=examples/mappings
 ```
 
-The preview applies the selected mapping, row filters, import limits, and the same compiled event-schema validators as runtime ingestion. Its JSON output contains only aggregate row counts, lint warning codes, rejection reason counts, and schema field paths. It never emits source row values, source identifiers, input paths, record IDs, or payload digests.
+The lower-level `npm run import:preview` command retains its original aggregate-only JSON shape. Both commands apply the selected mapping, row filters, import limits, and the same compiled event-schema validators as runtime ingestion. The versioned `compatibility` object uses four closed states:
 
-`persistence: "none"` means the command did not create a database pool or write import metadata, rejections, deliveries, logical events, or facts. The preview cannot detect conflicts with identities already persisted in a ledger and does not test live provider connectivity. A successful preview is therefore a safe compatibility check, not production-ingestion proof.
+- `compatible`: at least one selected row was accepted, with no rejection or mapping warning;
+- `partially_compatible`: at least one row was accepted, but another row was rejected or a mapping warning remains;
+- `not_compatible`: rows were selected but none passed the mapping and event-schema gates;
+- `not_evaluated`: the row filter selected no rows, so support was not inferred.
+
+The report contains aggregate row counts, closed check results, lint warning codes, rejection reason counts, contract target paths, and per-field `observed`, `absent`, or `unmapped` counts. `observed` and `absent` describe only the supplied artifact. They are not statements about a provider's product capabilities. `unmapped` means that this mapping does not declare the optional contract field; it does not mean the source product cannot supply it. The report never emits source row values, source column names, source identifiers, input paths, record IDs, or payload digests.
+
+`persistence: "none"` means the command did not create a database pool or write import metadata, rejections, deliveries, logical events, or facts. Without `--lint-directory=<mapping-directory>`, cross-route `event_id` namespace safety is reported as `not_evaluated`; the command never guesses from one mapping. The report cannot detect conflicts with identities already persisted in a ledger and does not test live provider connectivity. It does not certify a provider or establish metric equivalence: time range, timezone, currency policy, attribution window, cohort definition, and watermark must match before totals can be compared. A successful report is therefore a safe compatibility check, not production-ingestion proof.
 
 ## Row selection
 

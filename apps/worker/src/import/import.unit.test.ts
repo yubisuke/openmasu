@@ -16,6 +16,7 @@ import {
 import { normalizeMaxAggregateRevenue } from "./max-revenue.js";
 import { runGoogleCostImport } from "./google-cost-cli.js";
 import { mappingsForLint, previewMmpImport } from "./runner.js";
+import { reportMmpImportCompatibility } from "./compatibility-cli.js";
 
 describe("runtime import mapping", () => {
   it("applies nested objects, booleans, maps, uppercase, and timestamps", () => {
@@ -181,10 +182,11 @@ describe("runtime import mapping", () => {
   });
 
   it("previews a valid existing-MMP export without persistence", () => {
-    assert.deepEqual(previewMmpImport({
+    const preview = previewMmpImport({
       mappingPath: "examples/mappings/synthetic-provider-click.json",
       filePath: "examples/synthetic/mmp-raw-events.json",
-    }), {
+    });
+    assert.deepEqual(preview, {
       mode: "preview",
       persistence: "none",
       mapping_version: "1.0.0",
@@ -199,6 +201,45 @@ describe("runtime import mapping", () => {
     });
   });
 
+  it("reports provider-neutral contract compatibility without changing preview output", () => {
+    const report = reportMmpImportCompatibility({
+      mappingPath: "examples/mappings/synthetic-provider-click.json",
+      filePath: "examples/synthetic/mmp-raw-events.json",
+    });
+    const { compatibility } = report;
+    assert.equal(report.mode, "compatibility_report");
+    assert.equal(report.persistence, "none");
+    assert.equal(compatibility.report_version, "1.0.0");
+    assert.equal(compatibility.status, "compatible");
+    assert.deepEqual(compatibility.event_name, { mode: "constant", value: "click" });
+    assert.deepEqual(compatibility.field_coverage.missing_required_target_fields, []);
+    assert.deepEqual(compatibility.checks, [
+      { code: "rows_selected", status: "pass", count: 1 },
+      { code: "mapping_transform", status: "pass", count: 0 },
+      { code: "contract_schema", status: "pass", count: 0 },
+      { code: "event_id_namespace", status: "not_evaluated", count: 0 },
+    ]);
+    assert.equal(report.limitations.includes("sibling_mapping_identity_conflicts_not_checked"), true);
+    assert.deepEqual(
+      compatibility.field_coverage.evidence_coverage.find(({ field }) => field === "payload.click_id"),
+      { field: "payload.click_id", state: "observed", count: 1 },
+    );
+    assert.deepEqual(
+      compatibility.field_coverage.evidence_coverage.find(({ field }) => field === "payload.network"),
+      { field: "payload.network", state: "unmapped", count: 0 },
+    );
+
+    const linted = reportMmpImportCompatibility({
+      mappingPath: "examples/mappings/synthetic-provider-click.json",
+      filePath: "examples/synthetic/mmp-raw-events.json",
+      lintDirectory: "examples/mappings",
+    });
+    assert.deepEqual(linted.compatibility.checks.find(({ code }) => code === "event_id_namespace"), {
+      code: "event_id_namespace", status: "pass", count: 0,
+    });
+    assert.equal(linted.limitations.includes("sibling_mapping_identity_conflicts_not_checked"), false);
+  });
+
   it("aggregates preview schema failures without exposing row values or paths", () => {
     const directory = mkdtempSync(join(tmpdir(), "openmasu-preview-"));
     try {
@@ -211,11 +252,17 @@ describe("runtime import mapping", () => {
         { ...valid, event_id: "synthetic-bad-time", occurred_at: "not-a-timestamp" },
         { ...valid, event_type: "install", event_id: "synthetic-filtered" },
       ]));
-      const preview = previewMmpImport({
+      const preview = reportMmpImportCompatibility({
         mappingPath: "examples/mappings/synthetic-provider-click.json",
         filePath: file,
       });
       assert.deepEqual(preview.rows, { read: 4, selected: 3, filtered: 1, accepted: 1, rejected: 2 });
+      assert.equal(preview.compatibility.status, "partially_compatible");
+      assert.deepEqual(preview.compatibility.checks.slice(0, 3), [
+        { code: "rows_selected", status: "pass", count: 3 },
+        { code: "mapping_transform", status: "warning", count: 1 },
+        { code: "contract_schema", status: "warning", count: 1 },
+      ]);
       assert.deepEqual(preview.rejections, [
         { reason_code: "row_schema_invalid", count: 1, fields: ["/click_id"] },
         { reason_code: "timestamp_invalid", count: 1, fields: [] },
@@ -224,6 +271,32 @@ describe("runtime import mapping", () => {
       assert.equal(serialized.includes(invalidSecret), false);
       assert.equal(serialized.includes(file), false);
       assert.equal(serialized.includes("synthetic-invalid"), false);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it("distinguishes an unevaluated artifact from one that is not compatible", () => {
+    const directory = mkdtempSync(join(tmpdir(), "openmasu-compatibility-status-"));
+    try {
+      const [valid] = JSON.parse(requireText("examples/synthetic/mmp-raw-events.json"));
+      const filteredFile = join(directory, "filtered.json");
+      writeFileSync(filteredFile, JSON.stringify([{ ...valid, event_type: "install" }]));
+      const filtered = reportMmpImportCompatibility({
+        mappingPath: "examples/mappings/synthetic-provider-click.json",
+        filePath: filteredFile,
+      });
+      assert.equal(filtered.compatibility.status, "not_evaluated");
+      assert.equal(filtered.compatibility.checks[0]?.status, "not_evaluated");
+
+      const invalidFile = join(directory, "invalid.json");
+      writeFileSync(invalidFile, JSON.stringify([{ ...valid, click_id: "" }]));
+      const invalid = reportMmpImportCompatibility({
+        mappingPath: "examples/mappings/synthetic-provider-click.json",
+        filePath: invalidFile,
+      });
+      assert.equal(invalid.compatibility.status, "not_compatible");
+      assert.deepEqual(invalid.compatibility.checks.find(({ code }) => code === "contract_schema"), {
+        code: "contract_schema", status: "fail", count: 1,
+      });
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 });

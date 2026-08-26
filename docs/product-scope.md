@@ -18,12 +18,15 @@ The first useful product runs alongside an existing MMP rather than replacing it
 
 - Store first-party events independently
 - Import existing MMP and media outputs
+- Produce a provider-neutral, no-write compatibility report that distinguishes observed, absent, unmapped, and not-evaluated evidence without exposing source values
 - Normalize inputs into a versioned event and metric contract
 - Recalculate attribution and revenue using explicit rules
 - Explain differences through candidate evidence, exclusions, windows, joins, and data freshness
 - Reduce dependency only after a real shadow pilot validates a specific measurement path
 
 Difference reasons are neutral measurement-semantic categories (such as window, join, freshness, scope, redaction, currency, or policy); they do not score provider quality.
+
+Compatibility states apply to the supplied artifact and mapping, not to a provider's overall product. A passing report does not certify a provider, prove live connectivity, or establish that two differently defined metrics are equivalent.
 
 ## Phase 1 native vertical slice
 

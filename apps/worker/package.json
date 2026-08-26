@@ -10,6 +10,7 @@
     "commerce:backfill": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/commerce-backfill.ts",
     "import": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/import/runner.ts",
     "import:preview": "cd ../.. && node --import tsx apps/worker/src/import/runner.ts --preview",
+    "import:compatibility": "cd ../.. && node --import tsx apps/worker/src/import/compatibility-cli.ts",
     "import:cost": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/import/cost-cli.ts",
     "import:cost:google": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/import/google-cost-cli.ts",
     "import:cost:meta": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/import/meta-cost-cli.ts",

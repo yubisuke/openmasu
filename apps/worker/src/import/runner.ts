@@ -22,6 +22,7 @@ import {
   type ImportMapping,
 } from "./mapping.js";
 import { ImportLimitError, readRows, type ImportLimits } from "./source.js";
+import { declaredMappingTargetFields } from "./compatibility.js";
 
 type Any = Record<string, any>;
 
@@ -57,6 +58,12 @@ export type ImportPreviewSummary = {
     "database_identity_conflicts_not_checked",
     "provider_connectivity_not_checked",
   ];
+};
+
+export type ImportPreviewAnalysis = {
+  preview: ImportPreviewSummary;
+  mapping: ImportMapping;
+  observedFieldCounts: ReadonlyMap<string, number>;
 };
 
 const importMetadataChunkSize = 1_000;
@@ -142,12 +149,12 @@ function toAttempt(mapping: ImportMapping, mapped: Any, fileDigest: string, rowO
   };
 }
 
-export function previewMmpImport(options: {
+export function analyzeMmpImport(options: {
   mappingPath: string;
   filePath: string;
   limits?: ImportLimits;
   lintDirectory?: string;
-}): ImportPreviewSummary {
+}): ImportPreviewAnalysis {
   const mapping = loadMapping(options.mappingPath);
   if (mapping.kind !== "mmp_raw") throw new Error("previewMmpImport requires an mmp_raw mapping");
   const loaded = readRows(options.filePath, mapping, options.limits ?? limitsFromEnvironment());
@@ -159,6 +166,17 @@ export function previewMmpImport(options: {
   }>();
   let selected = 0;
   let accepted = 0;
+  const observedFieldCounts = new Map<string, number>();
+  const targetFields = declaredMappingTargetFields(mapping);
+  const targetValue = (attempt: CandidateAttempt, target: string): unknown => {
+    const parts = target.split(".");
+    let value: unknown = parts[0] === "payload" ? attempt.record.payload : attempt.record[parts[0]!];
+    for (const part of parts.slice(1)) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+      value = (value as Any)[part];
+    }
+    return value;
+  };
   const reject = (
     reasonCode: "mapping_validation_failed" | "timestamp_invalid" | "row_schema_invalid",
     fields: readonly string[],
@@ -185,8 +203,15 @@ export function previewMmpImport(options: {
         "2000-01-01T00:00:00.000Z",
       );
       const validation = validateEventPayload(String(attempt.record.event_name), attempt.record.payload);
-      if (validation.valid) accepted += 1;
-      else reject("row_schema_invalid", validation.fields);
+      if (validation.valid) {
+        accepted += 1;
+        for (const field of targetFields) {
+          const value = targetValue(attempt, field);
+          if (value !== undefined && value !== null && value !== "") {
+            observedFieldCounts.set(field, (observedFieldCounts.get(field) ?? 0) + 1);
+          }
+        }
+      } else reject("row_schema_invalid", validation.fields);
     } catch (error) {
       const mappingError = error instanceof MappingError ? error : new MappingError("row mapping failed");
       reject(
@@ -202,25 +227,34 @@ export function previewMmpImport(options: {
   const rejections = [...rejectionGroups.values()]
     .map(({ reason_code, count, fields }) => ({ reason_code, count, fields: [...fields].sort() }))
     .sort((left, right) => left.reason_code.localeCompare(right.reason_code));
-  return {
-    mode: "preview",
-    persistence: "none",
-    mapping_version: mapping.version,
-    format: mapping.format,
-    rows: {
-      read: loaded.rows.length,
-      selected,
-      filtered: loaded.rows.length - selected,
-      accepted,
-      rejected: selected - accepted,
-    },
-    warnings,
-    rejections,
-    limitations: [
-      "database_identity_conflicts_not_checked",
-      "provider_connectivity_not_checked",
-    ],
+  const rows = {
+    read: loaded.rows.length,
+    selected,
+    filtered: loaded.rows.length - selected,
+    accepted,
+    rejected: selected - accepted,
   };
+  return {
+    mapping,
+    observedFieldCounts,
+    preview: {
+      mode: "preview",
+      persistence: "none",
+      mapping_version: mapping.version,
+      format: mapping.format,
+      rows,
+      warnings,
+      rejections,
+      limitations: [
+        "database_identity_conflicts_not_checked",
+        "provider_connectivity_not_checked",
+      ],
+    },
+  };
+}
+
+export function previewMmpImport(options: Parameters<typeof analyzeMmpImport>[0]): ImportPreviewSummary {
+  return analyzeMmpImport(options).preview;
 }
 
 async function ensureApp(pool: Pool, mapping: ImportMapping, now: string): Promise<void> {
@@ -422,6 +456,15 @@ export function mappingsForLint(mappingPath: string, explicitDirectory?: string)
     .map((entry) => loadMapping(join(directory, entry.name)));
 }
 
+export function resolveMappingPath(source: string): string {
+  return source.endsWith(".json") && (source.includes("/") || source.includes("\\"))
+    ? resolve(source)
+    : join(
+      resolve(process.env.OPENMASU_MAPPINGS_DIR ?? "examples/mappings"),
+      source.endsWith(".json") ? source : `${source}.json`,
+    );
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
   const source = argument("source");
   const file = argument("file");
@@ -430,9 +473,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
   if (!source || !file) {
     throw new Error(`usage: npm run ${preview ? "import:preview" : "import"} -- --source=<mapping-name-or-path> --file=<path>`);
   }
-  const mappingPath = source.endsWith(".json") && (source.includes("/") || source.includes("\\"))
-    ? resolve(source)
-    : join(resolve(process.env.OPENMASU_MAPPINGS_DIR ?? "examples/mappings"), source.endsWith(".json") ? source : `${source}.json`);
+  const mappingPath = resolveMappingPath(source);
   if (preview) {
     try {
       console.log(JSON.stringify(previewMmpImport({
