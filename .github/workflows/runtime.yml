@@ -36,8 +36,8 @@ jobs:
       OPENMASU_API_HOST_PORT: "8080"
       OPENMASU_PILOT_PROJECT: openmasu-synthetic-ci-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22.18.0
           cache: npm
@@ -79,7 +79,7 @@ jobs:
         run: npm run pilot:synthetic -- --disposable --load
       - name: Upload synthetic runtime pilot evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: synthetic-runtime-pilot
           path: build/pilot-evidence/synthetic-runtime.json
@@ -88,7 +88,7 @@ jobs:
         if: always()
         run: docker compose --project-name "$OPENMASU_PILOT_PROJECT" down --volumes --remove-orphans --timeout 30
       - name: Upload M5 load evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: m5-synthetic-load
           path: build/pilot-evidence/m5-load.json
@@ -98,7 +98,7 @@ jobs:
       - name: Enforce the M3 API runtime component baseline
         run: npm run check:api-runtime-sbom
       - name: Upload workspace SBOMs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: runtime-sbom
           path: sbom/*.cdx.json
