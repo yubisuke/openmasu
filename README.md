@@ -356,3 +356,11 @@ npm run validate
 ```
 
 Validation is read-only. It checks 28 schemas, 8 registries, 56 reviewed synthetic fixtures, 728 golden output artifacts, 56 scenario assertions, 27 acceptance criteria, semantic and metamorphic mutations, deterministic TypeScript output, independent Python output, and RFC 8785 conformance. Purchase-net definitions cover D0/D1/D3/D7/D30/D90; D30/D90 total-net definitions add advertising revenue to settled purchase net for revenue, ROAS, and cohort LTV without changing the earlier ad-only series. Settled status is provider-neutral client evidence, not App Store, Play, or private-provider verification. See the [fixture provenance note](fixtures/v0.4/README.md).
+
+For a clean-tree, host-only release preflight, run:
+
+```bash
+npm run pilot:preflight
+```
+
+The command verifies the pinned Node.js, npm, and Python versions, runs the full contract validation, unit tests, and the source-only iOS check, then writes machine-readable evidence to `build/pilot-evidence/preflight.json`. The report contains only public source identity, tool versions, command statuses, and aggregate summaries. Docker, emulators, simulators, physical devices, live providers, real data, production deployment, and operator acceptance are explicitly recorded as `not_run`; a passing preflight does not imply any of them. `npm run check:doc-drift` separately compares the measured validation inventory and current SDK release identity with their maintained documentation surfaces.

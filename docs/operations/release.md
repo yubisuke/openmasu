@@ -9,30 +9,37 @@ packages, or npm packages to a public registry.
 1. Start from a clean, reviewed branch. Confirm no real data, credentials,
    provider exports, screenshots, private thresholds, or generated local
    secrets are tracked.
-2. Confirm the contract package version, migration ledger, schema snapshot,
-   fixture counts, and `docs/STATUS.md` agree.
-3. Run `npm ci` with Node 22.18.0 and npm 11.6.2, install the hash-pinned Python
+2. Run `npm run pilot:preflight`. It writes
+   `build/pilot-evidence/preflight.json` only after checking the clean tree and
+   pinned toolchain, and records every out-of-scope runtime, device, provider,
+   real-data, production, and operator gate as `not_run`. The report excludes
+   child output, credentials, absolute paths, and raw provider payloads.
+3. Confirm the contract package version, migration ledger, schema snapshot,
+   fixture counts, and `docs/STATUS.md` agree. `npm run check:doc-drift`
+   mechanically compares the current validation summary and SDK release
+   identity with their maintained documentation surfaces.
+4. Run `npm ci` with Node 22.18.0 and npm 11.6.2, install the hash-pinned Python
    requirements, and run `npm run validate`.
-4. Run unit, integration, database-invariant, parity, consistency, privacy
+5. Run unit, integration, database-invariant, parity, consistency, privacy
    restore, threat-model, environment-coverage, and operational-log gates.
-5. Run Android, iOS, Unity, and emulator/simulator workflows. A successful
+6. Run Android, iOS, Unity, and emulator/simulator workflows. A successful
    synthetic workflow does not replace the M2/M4 device checklists.
-6. Generate CycloneDX JSON SBOMs with `npm run sbom`, the Android SBOM task, and
+7. Generate CycloneDX JSON SBOMs with `npm run sbom`, the Android SBOM task, and
    the iOS SDK workflow. Confirm every expected workspace and SDK artifact is
    present and the API runtime component baseline is unchanged unless an
    approved dependency change explains it.
-7. Build the five Android release AARs, then run
+8. Build the five Android release AARs, then run
    `python tools/build-sdk-release.py --reproducibility-check`. Verify the
    Maven POMs, UPM archive, Swift source archive, normalized SDK SBOMs,
    `release-manifest.json`, and `SHA256SUMS` under
    `build/sdk-release/openmasu-sdk-0.2.0-rc.1/`. The command compares two packaging
    passes byte for byte and never publishes them.
-8. Review the [informational synthetic load record](../validation/m5-load-results.md). Do not convert its p95
+9. Review the [informational synthetic load record](../validation/m5-load-results.md). Do not convert its p95
    record into a production service-level objective without a representative
    environment and operator approval.
-9. Confirm all GitHub Actions are green at the exact release commit. Action
+10. Confirm all GitHub Actions are green at the exact release commit. Action
    SHA changes require their own review and are never incidental release work.
-10. Create a signed or annotated source tag only after the owner approves the
+11. Create a signed or annotated source tag only after the owner approves the
    release candidate. Record the exact commit and CI run.
 
 ## Source release contents
