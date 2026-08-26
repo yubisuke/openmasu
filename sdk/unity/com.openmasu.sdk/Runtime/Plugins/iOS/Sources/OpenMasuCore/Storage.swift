@@ -138,7 +138,8 @@ public final class OpenMasuStorage: @unchecked Sendable {
       try execute("BEGIN IMMEDIATE")
       do {
         if let existing = try queuedEvent(eventId: event.eventId),
-           isIdempotentCommerceDuplicate(event, existing: existing) {
+           isExactQueueDuplicate(event, existing: existing)
+             || isIdempotentCommerceDuplicate(event, existing: existing) {
           let sequenceOwner = try eventId(processingSequence: event.processingSequence)
           if sequenceOwner == nil || sequenceOwner == event.eventId {
             try execute("COMMIT")
@@ -437,6 +438,15 @@ public final class OpenMasuStorage: @unchecked Sendable {
     return existing.eventName == event.eventName &&
       existing.processingPurposeId == event.processingPurposeId &&
       existing.payloadJson == event.payloadJson
+  }
+
+  private func isExactQueueDuplicate(_ event: QueuedEvent, existing: QueuedEvent) -> Bool {
+    existing.eventName == event.eventName &&
+      existing.processingPurposeId == event.processingPurposeId &&
+      existing.payloadJson == event.payloadJson &&
+      existing.occurredAt == event.occurredAt &&
+      existing.processingSequence == event.processingSequence &&
+      existing.enqueuedAtMs == event.enqueuedAtMs
   }
 
   private func write(_ value: String, to url: URL) throws { try write(Data(value.utf8), to: url) }
