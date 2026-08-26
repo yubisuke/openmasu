@@ -1,4 +1,4 @@
-# M2 Device and Provider Validation Checklist
+# Android, Unity, and Provider Validation Checklist
 
 This checklist is an operator procedure, not a code gate. Record only a dated pass/fail summary and an opaque private-evidence reference in a deployment-private system. Never commit a provider export, credential, decryption key, device identifier, campaign value, referrer payload, screenshot containing identifiers, or live validation result to this public repository.
 
@@ -7,7 +7,7 @@ This checklist is an operator procedure, not a code gate. Record only a dated pa
 - Build the exact reviewed commit and record its SHA privately.
 - Use a non-production test app and synthetic or isolated test traffic where the provider permits it.
 - Store endpoints, SDK keys, installation credentials, Meta keys, campaign IDs, and device details outside the repository.
-- Confirm the operator understands that M2 does not prevent a party holding the APK from fabricating installations; Play Integrity is deferred to M5.
+- Confirm the operator understands that possession of the APK can permit fabricated installation traffic. Platform-integrity verification is a separate control and must be configured independently.
 
 ## V-1 — Google Play internal testing
 
@@ -45,7 +45,7 @@ Availability to every publisher and equality with reporting/S2S values remain un
 
 ## V-5 — Play referrer length
 
-Record the longest intact referrer observed privately. M2 carries only `omv=1&cid=<opaque click id>`, so no code or contract gate depends on a provider maximum.
+Record the longest intact referrer observed privately. OpenMasu carries only `omv=1&cid=<opaque click id>`, so no code or contract gate depends on a provider maximum.
 
 ## V-6 — Meta coverage
 

@@ -1,6 +1,6 @@
 # Import Mapping DSL
 
-Runtime import mappings are schema-validated JSON documents. Public files under `examples/mappings/` contain synthetic values only; deployment-specific provider column names and certification evidence remain private.
+Runtime import mappings are schema-validated JSON documents. Public files under `examples/mappings/` contain synthetic values only; deployment-specific provider column names and certification evidence remain private. Start with the no-write compatibility report below. Use [Getting started](getting-started.md) for the synthetic runtime and [the optional private checklist](validation/real-data-checklist.md) only when a separate authorization covers real input.
 
 ## Provider-neutral compatibility report
 

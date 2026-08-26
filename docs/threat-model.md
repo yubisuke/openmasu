@@ -1,117 +1,186 @@
-# Initial Threat Model
+# Threat Model
 
-This is the public M0.4 Contract v0.4 threat model for the contract and its reference evaluators. It describes security properties and release gates, not live defenses, incident response timing, credentials, or personal data.
+## Scope and assumptions
 
-## Assets and trust boundaries
+This model covers the public reference deployment and SDKs. Internet clients,
+mobile devices, import files, callback senders, administrators, and restore
+media are untrusted until the relevant boundary authenticates and validates
+them. A self-hosting operator controls deployment secrets and infrastructure.
 
-- Protected evidence and its digests are tenant- and app-scoped.
-- Server-generated `record_id` is a global ledger identity; client event IDs are not ledger identities.
-- `installation_id` is an app-local, resettable installation anchor. A reinstall or redownload creates a new anchor.
-- `click_id` is redirector evidence scoped to one tenant and app.
-- Derived attribution, metric, privacy, and reconciliation artifacts must retain enough protected references to be audited without exposing raw evidence.
+The public repository contains only synthetic data. Live provider accounts,
+fraud policy, alert routing, and incident response are deployment concerns.
 
-Untrusted inputs cross the SDK, redirector, import, and fixture boundaries. The PostgreSQL ledger is the authoritative received-evidence store in the future runtime architecture. Edge delivery may be deployed close to users, but must preserve the same authenticated scope, immutable ledger semantics, and portable contract behavior.
+## Assets
 
-## M0.4 Contract v0.4 threats and contract controls
+- tenant and application separation;
+- protected payloads, credentials, provider tokens, and transaction references;
+- immutable evidence and privacy lifecycle state;
+- attribution, fraud, reconciliation, and metric reproducibility;
+- tracking-link destinations and host ownership;
+- release artifacts, SBOMs, and contract identity.
 
-| Threat | Contract control | Evidence |
-| --- | --- | --- |
-| Client claims another tenant or app | Authenticated server context is compared with client scope; mismatches are rejected. | Tenant-isolation fixture and mutation. |
-| A malformed or replayed record ID overwrites evidence | `record_id` is globally unique; every collision is rejected without choosing a winner. | Collision mutation and delivery/rejection artifacts. |
-| A reference crosses a tenant or app boundary | Privacy, correction, and refund references resolve only in their enclosing tenant/app scope. | Cross-scope mutations. |
-| Two clicks claim one `click_id` | `click_id` is unique within tenant/app. Zero candidates are unknown, one is evaluated, and multiple are unattributed as ambiguous. | Ambiguous-click mutation. |
-| Reinstall state erases valid paid evidence | `install_type` is orthogonal to attribution. Paid evidence can yield non-organic attribution for a new reinstall/redownload installation anchor; no-referrer evidence can yield organic. | Fixture 10. |
-| Revenue attaches to an uncertain installation | Metric joins require one explicit tenant/app-qualified installation anchor. | Installation-anchor assertions and D0 mutations. |
-| A public reference reveals protected evidence or loses handling policy | Every evidence reference requires tenant, app, payload lifecycle, opaque reference, and `access_class`. | Schema/registry checks and the missing-access-class mutation. |
-| A predictable click ID permits guessing or click injection | Redirectors generate at least 128 bits from a cryptographically secure random source and encode at least 22 base64url-compatible characters. | Click schema and short-ID mutation. |
-| An injected click is silently treated as ordinary evidence | The public evaluator derives CTIT only from server-authoritative click and install times and can emit `click_injection_suspected` without exposing private signals or production thresholds. | Fixture 41 and the 9.999/10.000-second CTIT boundary mutation. |
-| Aggregate output is mislabeled as installation evidence | `subject_scope` structurally selects the `aggregate:` or `installation:` subject-reference namespace. | Attribution-schema mutation. |
-| A completed deletion request retains its subject identifier | Completion forbids `deletion_subject_ref` and requires an HMAC-SHA-256 `deletion_subject_digest`; the HMAC key remains deployment-private. | Privacy-request schema, fixture 17, and privacy mutations. |
-| A malformed calendar timestamp reaches attribution or metrics | Calendar-invalid ingress is rejected as `timestamp_invalid`, its payload is discarded, and only non-identifying metadata remains. | Fixture 20 and timestamp mutations. |
-| Replay suspicion is confused with ordinary retry delivery | Replay suspicion produces a public fraud-decision category while duplicate delivery remains an independent ingestion classification. | Fixture 25. |
-| Retention expiry silently changes historical metrics | Expired evidence produces a tombstone and an immutable replacement run marked `retention_affected`. | Fixture 26. |
-| A provider-reported judgment is mistaken for first-party deterministic attribution | Imported attribution uses the separate `imported` method and `provider_reported` model, with neutral reconciliation reasons. | Fixtures 28-31. |
-| An unregistered processing purpose bypasses policy evaluation | Purpose IDs are closed by a registry and schema equality checks; every registered purpose is exercised synthetically. | Fixtures 25, 33, and 34 plus the unknown-purpose mutation. |
-| An aggregate Apple postback is presented as installation-level evidence | SKAdNetwork and AdAttributionKit use aggregate subjects, separate methods, explicit signature status, and aggregate-only compatibility rows. | Fixture 34. |
-| Public artifacts expose operational defenses | The public envelope contains categories, references, and digests only. Live thresholds, models, watchlists, keys, and response timing remain private. | Schema and text scan. |
+## Component threats and controls
 
-## Deterministic selection policy
-
-Contract v0.4 does not select among multiple accepted clicks with one `click_id`: it returns `ambiguous_click_id`. If a later, explicitly versioned contract permits multiple candidates, it must first sort candidates by `redirector_click_at` descending, then `received_at` descending, then `record_id` ascending, and record the selected candidate and all exclusions. That future rule is not active in v0.4.
-
-## M1a runtime threat table
-
-| Component | Boundary and primary threats | Implemented controls | Residual risk |
-| --- | --- | --- | --- |
-<!-- threat-component:import-worker -->
-| `import-worker` | Untrusted export rows, malformed mappings, oversized files, duplicate snapshots, and accidental value logging | Closed mapping schema; declarative conversion; pre-insert limits; row rejection outside the evaluator; content digest and ledger idempotency; count/field-only logs | Live provider export variations remain operator-validated outside the repository. |
-<!-- threat-component:max-receiver -->
-| `max-receiver` | Forged/tampered postbacks, identifier leakage, replay, burst abuse, and timeout loss | EVENT_TOKEN_ALL with documented fallback; constant-time comparison; strict macro allowlist; IDFA/IDFV/IP boot and request rejection; token bucket; durable inbox before 204; daily aggregate backfill port | Account enablement, provider delivery latency, and live token behavior are unverified without an operator account. |
-<!-- threat-component:payload-store -->
-| `payload-store` | Plaintext exposure, object swapping, ciphertext tampering, and undecryptable-but-retained deletion residue | AES-256-GCM; random DEK per object; separately wrapped DEK; tenant/app/object AAD; separate object and key files; purge removes both; integration test proves ciphertext-only storage and post-purge decryption failure | Host volume, backup, KEK rotation, and external secret-manager controls remain deployment responsibilities. |
 <!-- threat-component:admin-api -->
-| `admin-api` | Bearer theft, cross-tenant deletion, excessive requests, identifier retention, and unaudited privileged actions | scrypt verifier only; constant-time check; role capability matrix; at most configured active keys; tenant scope plus per-route app resolution; token bucket; completed artifact retains a digest rather than subject; append-only actor audit; separately HMAC-authenticated on-device deletion | Identity federation, approval workflow, automated rotation UI, and multi-instance rate enforcement remain deployment controls. |
-<!-- threat-component:postgres-ledger -->
-| `postgres-ledger` | Cross-tenant reads/writes, evidence overwrite, ambiguous delivery identity, and destructive deletion | FORCE RLS with transaction-local tenant; app role lacks DDL/update/delete; reader cannot access verifier/replay-manifest secrets; high-value append-only triggers; separate deliveries and logical IDs; redaction as state/tombstone/correction rows; disposable restore/privacy-reapply integration | High availability, real backup recovery, capacity, patching, and production database hardening require operator evidence. |
-<!-- threat-component:runtime-ci -->
-| `runtime-ci` | Migration drift, self-consistent evaluator errors, missing runtime security tests, or incomplete dependency inventory | Pinned Linux job; PostgreSQL 17; double migration and schema snapshot; unit/integration; seed-to-golden parity; Compose smoke; component coverage; one CycloneDX SBOM per npm workspace with missing-file failure | CI is synthetic evidence and cannot prove real account, device, campaign, capacity, or production TLS behavior. |
+**Management API:** key theft, cross-app reference, privilege confusion, CSRF,
+and unsafe mutation. Controls include tenant-scoped keys, RBAC, route-declared
+auth, explicit app validation, opaque sessions, Origin/CSRF checks, rate limits,
+and immutable audit records.
 
-## M2 trust-boundary additions
-
-| Component | Boundary and primary threats | Implemented or required controls | Residual risk |
-| --- | --- | --- | --- |
 <!-- threat-component:redirector -->
-| `redirector` | Open-redirect abuse, slug enumeration, click flooding, source-IP retention, User-Agent fingerprinting, click injection, prefetch inflation, remote-reference injection, association-route shadowing, cross-tenant host confusion, and redirect availability | Destination allowlist at link creation; closed destination grammar; stored destination only; deployment-unique tenant host; well-known routes before click routes; no click-edge classifications on well-known routes; CSPRNG slug and click ID; byte-identical safe fallback; bounded in-memory source-IP bucket; no source-IP or User-Agent persistence; three bounded click-only classifications; validated `remote_click_ref`; prefetch evidence without a click ID; country derivation off by default; server-authoritative click time; durable click inbox | A hostile tenant can still publish an approved-domain link with harmful content. Shared-network classifications can be noisy. Proxy logs, certificates, association-file propagation, and horizontal rate limiting remain deployment controls. |
+**Redirector:** open redirect, destination override, slug enumeration, click
+flooding, and raw IP retention. Controls include stored destinations, HTTPS
+origin allowlists, random slugs, indistinguishable misses, bounded click-only
+classification, and no raw IP in durable artifacts.
+
 <!-- threat-component:sdk-ingestion -->
-| `sdk-ingestion` | Body tampering, replay, app/installation impersonation, oversized batches, forged deletion, worker crash, and cross-tenant evidence | Raw-body HMAC before JSON parsing; configured tenant/app scope; two-key overlap; per-installation random secret; tenant/app keyed installation digest; constant-time verification; bounded rates and size; deletable non-evidence nonce table; durable encrypted inbox before `202`; append-only processing states; credential-bound deletion and audit | **M2 does not prevent an attacker who possesses the APK from enrolling installations and delivering fabricated installs or events.** Enrollment limits, event idempotency, signatures, nonce expiry, optional platform-integrity evidence, and audit make the activity bounded and visible. Compromise of both PostgreSQL and the payload KEK permits request forgery. |
+**SDK ingest:** forged batches, replay, cross-install deletion, oversized input,
+and synchronous partial writes. Controls include SDK and installation
+credentials, canonical HMAC, timestamp/nonce replay windows, limits, durable
+inbox admission, schema validation, and transactional per-record persistence.
+
+<!-- threat-component:import-worker -->
+**Import worker:** malicious mapping or CSV/JSON shape, invalid payload, partial
+ledger state, duplicate event ID, and accidental source disclosure. Controls
+include closed mapping schemas, linting, compiled contract validators, row-level
+rejections, atomic writes, idempotency keys, and aggregate-only compatibility
+output.
+
+<!-- threat-component:max-receiver -->
+**Mediation receiver:** forged revenue callback, replay, identifier leakage, and
+misclassification as attribution. Controls include callback authentication,
+bounded fields, durable inbox state, protected raw references, and a separate
+revenue evidence class.
+
+<!-- threat-component:payload-store -->
+**Payload store:** plaintext disclosure, path traversal, stale encryption keys,
+and resurrection after deletion. Controls include opaque references, envelope
+encryption, allowlisted storage roots, purge/crypto-erasure, and privacy
+reapplication after restore.
+
+<!-- threat-component:postgres-ledger -->
+**PostgreSQL:** cross-tenant reads, overprivileged roles, mutation of received
+evidence, missing grants, and inconsistent transactions. Controls include
+forced RLS, role separation, append-only triggers, a complete CI grant matrix,
+foreign keys, canonical artifacts, and explicit transactions.
+
 <!-- threat-component:sdk-android -->
-| `sdk-android` | Queue leakage, backup-restored identifiers, unauthorized provider reads, consent-withdrawal delivery, client secret extraction, unverified link interception, and forged `deep_link_open` evidence | Excluded storage and backup rules; durable Room queue; purpose-scoped purge; pre-initialization collection disablement; HMAC requests; host allowlist and closed destination parser; synchronous host-owned routing before measurement; no SDK navigation; provider mapping and accessor compile gates; synthetic emulator tests | APK extraction means the app-level SDK secret cannot establish a trusted device. A device can fabricate a direct open and inflate re-engagement counts. Real-device App Link verification, Play, Meta, and MAX behavior remains operator evidence. |
-<!-- threat-component:unity-bridge -->
-| `unity-bridge` | Callback thread misuse, JNI/C ABI lifetime leaks, event-field drift, missing ad-format subscriptions, deep-link forwarding loss, and generated-project configuration loss | Typed C# bridges; Android object leases; iOS function-pointer request IDs; main-thread dispatcher; Unity initial/activated URL forwarding; 10,000-callback synthetic probe; four-format subscription table; generated-plist/entitlement/source-copy postprocessor tests | Real Unity Android/iOS export, activity forwarding, generated-Xcode compilation, and live MAX behavior remain operator-verified. |
+**Android SDK:** queue loss, secret extraction, backup transfer, changed-payload
+event-ID reuse, and fabricated device evidence. Controls include bounded durable
+storage, exact duplicate/conflict semantics, HMAC credentials, backup exclusion,
+reset lifecycle, and server-authority classification. A compromised device can
+still fabricate device-reported events.
 
-## M3 trust-boundary addition
-
-| Component | Boundary and primary threats | Implemented controls | Residual risk |
-| --- | --- | --- | --- |
-<!-- threat-component:dashboard -->
-| `dashboard` | Admin-key disclosure, session theft, CSRF, cross-tenant app discovery, report-query injection, identifier export, login abuse, and client-side supply-chain growth | scrypt admin-key verification; opaque 32-byte sessions stored only as SHA-256 digests; fixed 12-hour expiry; Strict/Secure/HttpOnly cookie; HMAC synchronizer token and Origin mismatch rejection; bearer/cookie namespace separation; tenant-forced reader RLS; identical app-not-found responses; allowlisted typed filters with bound SQL; aggregate-only raw counts; CSP with no scripts; memory-only source-IP throttling; fixed API runtime SBOM baseline | Production TLS, reverse-proxy log retention, multi-instance rate limiting, browser usability, and real-cardinality query performance remain operator evidence. |
-
-## M4 trust-boundary additions
-
-| Component | Boundary and primary threats | Implemented controls | Residual risk |
-| --- | --- | --- | --- |
-<!-- threat-component:apple-postback-receiver -->
-| `apple-postback-receiver` | Forged Apple postbacks, unsigned-field confusion, transaction replay/conflict, ADAM-ID enumeration, invalid-signature flooding, token disclosure, and aggregate-to-installation identity joins | Generated P-256/ES256 vectors; exact signed-field/JWS verification; explicit unsigned evidence classification; non-enumerating 200 responses; SECURITY DEFINER exact app lookup with forced-RLS ledger writes; transaction idempotency; invalid-signature quota; protected raw AdServices token; aggregate subject namespace and installation-join rejection | A verified signature proves Apple origin, not a genuine install. Live developer-copy delivery, second/third SKAN copies, Apple latency, and provider availability remain operator evidence. |
 <!-- threat-component:sdk-ios -->
-| `sdk-ios` | IPA secret extraction, queue/credential leakage, restored identifiers, pre-consent Apple reads, callback lifetime misuse, Universal Link misconfiguration, forged `deep_link_open` evidence, privacy-manifest drift, and undeclared device API access | Host allowlist and closed destination parser; synchronous host-owned routing before measurement; no SDK navigation or pasteboard; one excluded/protected storage subtree; WAL queue and process-death tests; `secure_delete`; HMAC shared vectors; collection-default and withdrawal gates; deletion-first reset; no second AdServices read; C ABI allocation table; built-object Required Reason/forbidden-symbol audit; tracking-disabled privacy manifest; dependency-empty runtime SBOM | **M4/M7 do not prevent an attacker who possesses the IPA from enrolling installations or fabricating events.** A forged direct open can inflate re-engagement counts. iOS deferred deep linking is intentionally not offered. Real Universal Link propagation, App Attest, backup/transfer behavior, App Store privacy review, live MAX, and Unity export remain operator evidence. |
+**iOS SDK:** the same queue, credential, backup, reset, and fabricated-evidence
+risks plus privacy-manifest drift. Controls include native parity tests,
+Keychain-free installation identity, backup exclusion, privacy manifest, and
+source/built-product audits.
+
+<!-- threat-component:unity-bridge -->
+**Unity bridge:** native signature drift, duplicate SDK copies, wrong wrapper
+version, and lost lifecycle calls. Controls include a versioned UPM package,
+compile probes, native dependency pinning, source parity, samples, and release
+identity checks.
+
 <!-- threat-component:app-association -->
-| `app-association` | Cross-tenant association, malformed public identity files, stale signing identities, and accidental secret inclusion | Pure closed generation; deployment-unique tenant host; uppercase fingerprint validation; strict JSON; no redirects or cookies; only package/bundle/team identifiers and signing fingerprints | Association files are intentionally public. Certificate rotation and Android/Apple cache propagation remain operator evidence. |
+**Association files:** tenant host collision, hostile destination grammar,
+cache/propagation failure, and accidental IP restriction. Controls include
+deployment-wide host uniqueness, validated destinations, deterministic public
+documents, and public unauthenticated routes with no click-path filtering.
 
-## M5 trust-boundary additions
+<!-- threat-component:dashboard -->
+**Dashboard:** session theft, XSS, CSRF, confused authentication, sensitive
+cache, and report divergence. Controls include hashed absolute-expiry cookies,
+strict cookie attributes, CSP, no JavaScript, output escaping, CSRF/Origin,
+`no-store`, reader RLS, and shared API/dashboard encoders.
 
-| Component | Boundary and primary threats | Implemented controls | Residual risk |
-| --- | --- | --- | --- |
-<!-- threat-component:production-control-plane -->
-| `production-control-plane` | Over-privileged administrator keys, stale dashboard sessions, cross-bundle supersession, rule-definition disclosure, and reader access to verifier hashes | Closed `admin/operator/read_only` capability matrix; tenant-wide identity plus per-route app validation; session role revalidation; verifier tables revoked from reader; append-only same-bundle predecessor chain; one root/one successor constraints; artifact-column equality; opaque audit references | Production identity federation, hardware-backed key storage, approval workflow, multi-party authorization, and real rotation drills remain operator controls. |
-<!-- threat-component:privacy-restore -->
-| `privacy-restore` | Restored encrypted payload resurrection, deletion-ledger loss, replaying an incorrect metric definition, partial purge, and destructive live restore | PostgreSQL custom archive restored only into a new target; separately protected payload snapshot and key; completed-request reapply before traffic; payload purge plus unreadability check; idempotent tombstone/correction/audit append; exact replay manifest; replacement metric supersession; unsupported affected runs fail closed | A backup predating a completed request is unsafe without a later authoritative ledger. Real storage snapshots, key custody, recovery objectives, and operator execution are not CI evidence. |
-<!-- threat-component:operational-observability -->
-| `operational-observability` | Payload/identifier leakage in logs or labels, unauthenticated metrics, high-cardinality exhaustion, concurrent or stale worker execution, silent operator-job failure, misleading load budgets, and missing distributed trace context | Closed typed log events plus source lint; bounded route/method/status/queue/job/outcome labels; bearer-authenticated `/metrics`; append-only terminal rows for operator CLI jobs; tenant/job-scoped internal schedules with session advisory locks, expiring crash-recovery leases, persisted retry timing, durable success/failure counts, and consecutive-failure/overdue gauges; no identifiers, payload values, paths, provider values, errors, or lease tokens in metric labels; fixed histogram buckets; synthetic p50/p95/p99 artifact with informational budgets only | A failure before valid tenant scope or while the database is unavailable cannot be recorded durably. An external monitor must detect database/process loss. Reverse-proxy/platform logs, provider-import scheduling, external notification routing, production alert thresholds, multi-replica process-metric aggregation, OpenTelemetry tracing, and representative load remain operator decisions. |
-<!-- threat-component:integrity-evidence -->
-| `integrity-evidence` | Replayed attestations, treating outage as fraud, trusting one device signal, provider-token disclosure, or attribution changes based on unverified evidence | Optional normalized evidence-only contract field; encrypted token and response references; provider/verdict vocabulary; request-hash/challenge binding; durable replay rejection; observation mode with no automatic attribution, fraud, or metric action | Real Play/App Attest projects, provider-specific credentials, device behavior, rollout, false-positive review, key rotation, quota behavior, and recovery remain unverified until the operator checklist is completed. |
+<!-- threat-component:apple-postback-receiver -->
+**Apple postbacks:** forged signatures, wrong environment, replay/conflict,
+tenant enumeration, and mixing aggregate with installation data. Controls
+include signed-envelope verification, explicit key environment, transaction-ID
+state, non-enumerating tenant resolution, and separate aggregate series.
+
 <!-- threat-component:fraud-engine -->
-| `fraud-engine` | Client-forged fraud claims, rule drift, source/record scope confusion, non-resolving quarantine, silent net-metric changes, identifying audit exports, and private-policy disclosure | SDK server-only claim rejection; pure replayable rules; real fraud bundle JCS hash; source namespace constraints; append-only aggregates and decisions; deadline resolution; explicit gross/net policy; closed aggregate JSON/CSV audit fields | Thresholds are conservative proposals. Real traffic performance, network acceptance, real-device farms, reset fraud, and cross-advertiser intelligence remain outside the evidence boundary. |
+**Fraud engine:** unbound thresholds, non-reproducible decisions, metric changes
+from a default flag, clock anomalies, and privacy-invasive signals. Controls
+include registered definitions and digests, composite bundle hashes, pure rules,
+explicit provisional time handling, gross/net separation, and a closed bounded
+signal set.
+
 <!-- threat-component:integrity-verifier -->
-| `integrity-verifier` | Forged or replayed provider tokens, provider outage treated as fraud, token disclosure, and a single device signal changing attribution | Protected token references, server-side provider boundary, challenge/request binding, replay rejection, closed `verified/failed/unavailable` normalization, and a rule-loader prohibition on integrity-only decisions | Real Play/App Attest projects, device behavior, quotas, key rotation, and false-positive rates remain operator validation. |
+**Integrity verifier:** forged provider response, raw token disclosure,
+incorrect project configuration, and treating unavailable evidence as success.
+Controls include server-side provider verification, protected references,
+closed neutral verdicts, policy provenance, and fail-closed configuration.
+
 <!-- threat-component:google-play-product-verifier -->
-| `google-play-purchase-verifier` | Purchase-token, Pub/Sub message-ID, or order-ID theft/disclosure; replay across apps or tenants; forged RTDN/JWT/provider responses; product substitution; renewal mistaken for initial revenue; initial order mistaken for renewal; provider endpoint redirection; outage promoted to revenue; and client/notification values mistaken for store-authoritative money | HMAC-authenticated Android ingestion; Google-signed OIDC push with exact issuer/audience/verified-email checks; package-to-app resolver; encrypted token reference; deployment-global token/message/order digest registries; tenant/app/package/product binding; HTTPS Google host locks; bounded closed-shape parsing and retry; ProductPurchaseV2 or SubscriptionPurchaseV2 binding; matching processed order/token/typed line; equality for the initial period and strict-after for a renewal; exact integer conversion of the Google line total; no token, message ID, order ID, buyer data, title, IP, User-Agent, or raw response in artifacts/reports; deletion purges encrypted evidence | Live service-account scope, package access, Pub/Sub configuration/delivery, Orders API quota/behavior, real tokens/orders, missed-notification historical renewal backfill, partial or full refunds, revocation, acknowledgement, consumption, and entitlement correctness remain operator or product responsibilities. |
+**Google Play verifier:** forged notification, stale purchase state, duplicated
+money, credential leakage, and refund mismatch. Controls include authenticated
+notifications, authoritative API read-back, revision/idempotency state,
+protected tokens, exact money, and correction constraints.
+
 <!-- threat-component:verified-commerce-lifecycle -->
-| `verified-commerce-lifecycle` | Forged/replayed notifications, unverified nested Apple JWS, wrong app/environment, provider outage, out-of-order state, duplicate refund subtraction, signed-payload/token disclosure, and stale protected evidence after deletion | Google OIDC and package resolution; Apple outer plus nested ES256/certificate/app/environment verification; deployment-global replay digests; encrypted provider evidence and cursors; durable bounded retry/backoff; exact provider read-back before money; deterministic provider-neutral refund IDs; tenant RLS; protected-object privacy purge; bounded count-only worker records | Live credentials, provider delivery/quota/root rotation, complete reconstruction of missed intermediate Google renewals, Apple installation-level revenue binding, entitlements, tax, payout, and production retention remain operator/product boundaries. |
+**Commerce lifecycle:** out-of-order revisions, missed notifications, unsafe
+cursor storage, double refunds, and public provider identifiers. Controls
+include ascending revision cursors, encrypted payload/cursor state, bounded
+retry, authoritative read-back, per-target refund caps, and opaque public refs.
+
 <!-- threat-component:google-data-manager-delivery -->
-| `google-data-manager-delivery` | Sending an unverified or child-directed conversion; substituting an internal identifier for GCLID; duplicate conversion upload; request disclosure; open redirect; provider outage; or claiming local deletion after provider acceptance | Explicit administrator destination; separate credential; exact final non-organic/source-qualified eligibility; stable transaction ID; encrypted request reference; request and transaction digests; Google/loopback host lock; redirect rejection; bounded response parsing; 429/5xx retry; delayed diagnostic polling; append-only safe results; deletion-before-dispatch purge; fixed low-cardinality job health | Live Google access, quotas, acceptance semantics, provider retention, and provider-side retraction after dispatch remain unverified operator boundaries. |
+**Conversion delivery:** unauthorized export, replay, provider payload leakage,
+and ambiguous delivery status. Controls include explicit enablement, eligible
+event selection, service authentication, idempotent delivery records, bounded
+status vocabulary, and sanitized logs.
 
-## Residual risk and release gates
+<!-- threat-component:production-control-plane -->
+**Control plane:** key misuse, stale rule activation, scheduler overlap, and
+unaudited configuration. Controls include minimum RBAC, encrypted secrets,
+append-only revision history, tenant/job leases, retry state, and audit events.
 
-M1-M7 now have local network services, a tenant database, authenticated and role-scoped admin paths, envelope-encrypted protected-object storage, Android/iOS SDKs, Apple receivers, deterministic fraud controls, synthetic platform-integrity adapters, direct/deferred deep-link paths, restore/privacy/load gates, operational metrics, and release inventories. They still cannot prove production TLS termination, external secret-manager operation, real provider/device/link-domain delivery, representative capacity, availability, backup operations, live integrity accuracy, App Store review, or incident response. Device-reported direct opens remain forgeable and iOS deferred deep linking is not offered. Those remain explicit operator or product boundaries.
+<!-- threat-component:privacy-restore -->
+**Restore path:** deleted payload resurrection and exposure before privacy state
+is reapplied. Controls require restoration into a new target, writer isolation,
+completed-request reapplication, verification, and release only after the
+privacy gate passes.
 
-The M0.4 Contract v0.4 gate requires the complete fixture and mutation suite plus the identity-only migration proof. The M1a local gate adds the [privacy and security release-gate crosswalk](privacy-security.md#release-gates), ledger-isolation and deletion tests, envelope-encryption evidence, runtime CI, and one SBOM per workspace. M5 adds disposable restore/privacy-reapply, RBAC, observability, and informational synthetic-load evidence. Production transport and operator evidence remain unverified until recorded outside this repository.
+<!-- threat-component:operational-observability -->
+**Logs and metrics:** raw payload or high-cardinality identifier disclosure.
+Controls include closed event schemas, aggregate counters, authenticated metrics,
+payload scans, and no user/provider identifiers in labels.
+
+<!-- threat-component:integrity-evidence -->
+**Public integrity artifacts:** exposing provider tokens or presenting a device
+claim as verified. Controls limit artifacts to platform, verdict, evaluation
+time, policy version, and a protected opaque reference assigned by the server.
+
+<!-- threat-component:runtime-ci -->
+**CI and supply chain:** unpinned actions, dependency substitution, credential
+leakage, stale SBOMs, and tests that rewrite evidence. Controls include full SHA
+pins, exact toolchains, lockfiles, SBOM checks, real-data guardrails, read-only
+validation, and immutable reviewed goldens.
+
+## Residual risks
+
+- A compromised client can fabricate device-reported events, including
+  `deep_link_open`; current fraud rules can inspect the evidence but cannot make
+  it server-observed.
+- The reference fraud boundary cannot reliably detect real-device farms and
+  deliberately does not link identifier resets.
+- Bounded source/client classes can create aggregate facts about co-located
+  traffic and may create false positives.
+- A slow provider or tenant job can delay later work in the current serial
+  worker loop.
+- Nested tenant transactions can exhaust a small worker connection pool unless
+  the job releases its outer connection or receives an explicit connection
+  budget; this is an active hardening item.
+- Synthetic platform vectors do not prove production keys, projects, delivery,
+  or provider behavior.
+- Self-hosting operators remain responsible for TLS, secret custody, host
+  security, backup media, alert routing, and incident response.
+
+## Release boundary
+
+No release is production-approved by this threat model. A release may state
+which synthetic controls passed and which private operator gates remain open.
+See [Project status](STATUS.md), [Privacy and security](privacy-security.md), and
+[Validation checklists](validation/README.md).

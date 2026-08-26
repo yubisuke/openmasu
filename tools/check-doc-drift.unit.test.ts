@@ -7,12 +7,12 @@ const version = "0.2.0-rc.2";
 
 function documents(): CurrentDocumentation {
   return {
-    readme: `The current source and SDK release candidate is \`v${version}\`. Validation checks 28 schemas, 8 registries, 56 reviewed synthetic fixtures, 728 golden output artifacts, 56 scenario assertions, 27 acceptance criteria.`,
+    readme: `The latest tagged source and SDK release candidate is \`v${version}\`. Validation checks 28 schemas, 8 registries, 56 reviewed synthetic fixtures,\n728 golden output artifacts, 56 scenario assertions, 27 acceptance criteria.`,
     roadmap: "The current gate preserves parity across 28 schemas, 8 registries, and 56 reviewed synthetic fixtures.",
     releaseRunbook: `Use build/sdk-release/openmasu-sdk-${version}.`,
     releaseNotes: `# OpenMasu v${version}`,
     specification: `The literal validation summary is: \`${summary}\``,
-    status: `Checked for the \`v${version}\` release candidate.`,
+    status: `The latest tagged source and SDK release candidate is \`v${version}\`.`,
   };
 }
 

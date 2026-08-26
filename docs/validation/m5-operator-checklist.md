@@ -1,6 +1,6 @@
-# M5 Production Operator Checklist
+# Production Operator Checklist
 
-M5 CI closes only repository-verifiable controls. Every item below remains an
+CI closes only repository-verifiable controls. Every item below remains an
 operator or owner responsibility and must be evidenced without committing real
 data, credentials, device identifiers, private rule values, or production logs.
 
@@ -46,7 +46,7 @@ data, credentials, device identifiers, private rule values, or production logs.
 
 - Repeat the 100,000-event and 10,000-MAX-postback measurements in the intended
   topology and at expected cardinality; define budgets only after observation.
-- Repeat the M2/M4 device/provider checklists, Unity exports, Apple delivery,
+- Repeat the Android and iOS device/provider checklists, Unity exports, Apple delivery,
   dashboard usability, and real shadow reconciliation under authorization.
 - Configure Play Integrity and App Attest only through the dedicated checklist.
 - Confirm the final media-adapter boundary with legal/platform owners. Do not

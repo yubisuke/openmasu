@@ -1,116 +1,102 @@
-# MVP Product Scope
+# Product Scope
 
-## Problem
+## Product definition
 
-Small app teams need a self-hosted way to measure ad clicks, installs, and key in-app events while retaining enough evidence to audit the SDK, server, attribution rules, and reported totals.
+OpenMasu is an auditable, self-hostable Shadow MMP. It runs alongside an
+existing measurement provider, records first-party and authorized reporting
+evidence, recalculates versioned attribution and metrics, and explains neutral
+differences with traceable evidence.
 
-## Initial users
+It is intended for teams that need to answer questions such as:
 
-- Developers operating their own mobile apps
-- Growth operators validating campaign-level installs
-- Data teams reconciling an existing MMP, media reports, and first-party raw data
+- Which received records contributed to this result?
+- Which timestamp, attribution window, join key, cost revision, currency rule,
+  or exclusion changed the total?
+- Can a historical result be reproduced with the same inputs and rule bundle?
+- Does a provider export fit the public contract before it is imported?
 
-Serving as a third-party measurement provider for unrelated advertisers is outside the initial MVP.
+## Supported workflow
 
-## Product entry point: Shadow MMP
+1. **Collect or import evidence.** Use first-party SDKs and links, supported
+   platform callbacks, or an explicitly authorized export.
+2. **Normalize it.** Convert the source into closed Contract v0.4 events and
+   evidence artifacts.
+3. **Preserve provenance.** Store received evidence, delivery state, rules,
+   timestamps, and protected references separately.
+4. **Evaluate deterministically.** Produce versioned attribution, fraud,
+   reconciliation, and metric artifacts.
+5. **Compare like with like.** Freeze cohort, time zone, watermark, FX, metric
+   definition, and rule bundle before comparing results.
+6. **Explain differences.** Report candidates, exclusions, windows, joins,
+   freshness, and closed neutral reason codes.
 
-The first useful product runs alongside an existing MMP rather than replacing it.
+## Supported evidence families
 
-- Store first-party events independently
-- Import existing MMP and media outputs
-- Produce a provider-neutral, no-write compatibility report that distinguishes observed, absent, unmapped, and not-evaluated evidence without exposing source values
-- Normalize inputs into a versioned event and metric contract
-- Recalculate attribution and revenue using explicit rules
-- Explain differences through candidate evidence, exclusions, windows, joins, and data freshness
-- Reduce dependency only after a real shadow pilot validates a specific measurement path
+- First-party click, install, session, custom event, purchase, refund, and ad
+  revenue evidence from the OpenMasu SDK and redirector.
+- Android Install Referrer and supported Meta Install Referrer evidence.
+- Apple Ads installation evidence and privacy-preserving SKAdNetwork or
+  AdAttributionKit aggregate postbacks.
+- Manual cost plus bounded authenticated provider cost adapters.
+- AppLovin MAX impression-level or aggregate advertising revenue.
+- Authenticated synthetic lifecycle/read-back paths for Google Play and the App
+  Store.
+- Provider-reported imported attribution preserved as a distinct evidence and
+  method class.
 
-Difference reasons are neutral measurement-semantic categories (such as window, join, freshness, scope, redaction, currency, or policy); they do not score provider quality.
+Support means the repository has a typed path and synthetic evidence. It does
+not mean every account, report version, region, permission tier, or live API has
+been verified.
 
-Compatibility states apply to the supplied artifact and mapping, not to a provider's overall product. A passing report does not certify a provider, prove live connectivity, or establish that two differently defined metrics are equivalent.
+## Measurement invariants
 
-## Phase 1 native vertical slice
-
-### Android and Unity SDK
-
-- App-scoped random `installation_id`
-- Google Play Install Referrer retrieval
-- `install`, `session_start`, and custom event delivery
-- Persistent offline queue, retry, and batching
-- On consent withdrawal, purge or immediately redact queued events for consent-required purposes; post-withdrawal acceptance requires a documented alternative legal basis per purpose
-- Event-level idempotency
-- Collection disablement and local identifier reset
-- Unity C# surface backed by an Android Kotlin bridge
-
-### Measurement links
-
-- Links containing `app_id`, `campaign`, `ad_group`, and `creative`
-- Direct deep-link destinations delivered through Android App Links and iOS Universal Links
-- Android-only deterministic deferred destinations carried through Google Play Install Referrer
-- Cryptographically random `click_id`
-- Google Play `referrer` containing the click ID
-- Minimal metadata for abuse investigation
-- No persistent storage of raw IP addresses in the application database
-
-### Ingestion and attribution
-
-- Deterministic click-to-install matching
-- Seven-day last-click window for the MVP
-- Explicit organic and unattributed classifications for missing, expired, conflicting, or unknown evidence
-- Explicit unattributed classifications for unsupported or unavailable Install Referrer paths
-- Required attribution method, reason code, input cutoff, and rule version
-- Recalculation from immutable or lawfully redacted source records
-
-### Reporting
-
-- Clicks, installs, and key events by date, app, and campaign
-- Organic, non-organic, and unattributed separation
-- JSON and CSV export
-- UTC storage with an explicit reporting time zone
-- Attribution method and data freshness in every aggregate
+- Raw evidence, normalized facts, decisions, and aggregates remain distinct.
+- Deterministic installation-level attribution and aggregate
+  privacy-preserving attribution remain separate series.
+- Imported provider judgment never becomes first-party evidence.
+- Organic, non-organic, and unattributed results remain distinct.
+- Undefined metrics remain undefined with a reason; they do not become zero.
+- Money uses integer unscaled values and explicit currency and scale.
+- Historical output binds the input snapshot, watermark, rule bundle, and
+  metric definition needed to reproduce it.
+- Corrections and supersession append new artifacts instead of rewriting
+  history.
+- Valid privacy deletion removes or redacts identifiable payloads even when the
+  evidence ledger is otherwise append-only.
 
 ## Explicit non-goals
 
-- Device fingerprinting
-- Presenting probabilistic estimates as deterministic attribution
-- Initial ad-cost API coverage for every media network
-- Real-time bidding, ad delivery, or audience targeting
-- User-level cross-app tracking on iOS
-- Persistent device identifiers justified as fraud prevention
-- Immediate replacement of an existing production MMP
-- User-level attribution for a media network when access requires partner-MMP status or non-public provider evidence
+- Replacing an existing MMP as a blanket product objective.
+- Device fingerprinting, probabilistic identity, cross-device graphs, or
+  cross-advertiser device intelligence.
+- User-level attribution that requires a partner-only MMP relationship or
+  non-public provider evidence.
+- Combining aggregate platform or mediation reports with installation-level
+  cohort facts as though they represent the same subjects.
+- iOS deferred deep linking.
+- Collecting advertising identifiers by default.
+- Shipping real fraud thresholds, credentials, watchlists, or customer data in
+  the public repository.
+- Claiming production readiness from synthetic CI.
 
-## Final adapter boundary
+## Public and private boundary
 
-The supported measurement boundary is first-party links and events, Meta Install
-Referrer evidence, Apple Ads through AdServices, and Apple aggregate developer
-postbacks. AppLovin MAX supplies impression-revenue evidence only; it is not a
-user-level install-attribution adapter. TikTok, AppLovin, Unity Ads, and
-Mintegral user-level attribution is structurally unavailable to this
-self-hosted public implementation when the required evidence is restricted to
-partner MMPs. Adding a network requires a new owner decision, current primary
-documentation, a least-privilege public integration surface, synthetic
-fixtures, and neutral discrepancy semantics.
+The public repository contains contracts, schemas, deterministic algorithms,
+synthetic fixtures, adapters, deployment templates, and validation tools. It
+must not contain real exports, credentials, identifiers, campaign names,
+costs, revenue, provider responses, or values derived from them.
 
-Direct deep linking is deterministic on Android and iOS. Deferred deep linking is deterministic on Android only. On iOS, OpenMasu delivers deep links to users who already have the app, using Universal Links. It does not deliver a deep link to a user who installs the app after tapping a link. Every mechanism that would make that possible either requires deriving an identifier from device signals, which Apple's Developer Program License Agreement prohibits and which this project does not do, or requires a user-visible prompt on first launch. If Apple provides a channel that carries a destination through installation, OpenMasu will use it.
+A private operator may validate real data outside this repository. Such a run
+must preserve the project definitions and record its own authorization,
+environment, source coverage, and residuals. It is not a prerequisite for
+repository-only development.
 
-M5 production controls make the repository safer to operate, but they do not
-turn a synthetic CI milestone into a production service. TLS termination,
-external secret management, real backup recovery, real load, provider/device
-validation, integrity-service projects, and incident operations remain outside
-the code gate.
+## Acceptance boundary
 
-## MVP evidence gates
+A capability can be described as implemented only when its code and public
+interface exist. It can be described as synthetically verified only when its
+checked-in evidence passes. Real-provider, real-device, platform-approval,
+operator-acceptance, and production-deployment states require separate records.
 
-1. A test measurement link can reproduce the redirect flow used by Google Play.
-2. A test Android app can retrieve the referrer on first launch.
-3. Duplicate deliveries normalize to one logical install without hiding conflicts.
-4. In-window clicks attribute to a campaign; other cases receive explicit organic or unattributed reasons.
-5. Raw records and aggregate totals can be reconciled through a documented query or evaluator.
-6. The SDK sends no new events after collection is disabled.
-7. An installation-scoped deletion request removes identifiable data and triggers aggregate recalculation.
-8. Shadow results remain labeled as unverified until compared against real campaigns for an adequate observation period.
-9. Android Auto Backup/device-transfer testing shows that an `installation_id` is not restored onto another device.
-
-## Measurement terminology
-
-Deterministic Install Referrer results and delayed, noisy, or aggregate platform privacy reports are separate data series. A combined view must preserve their individual methods and uncertainty.
+See [Project status](STATUS.md) for the current evidence level and
+[Validation checklists](validation/README.md) for private operational gates.

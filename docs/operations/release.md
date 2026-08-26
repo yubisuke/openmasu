@@ -1,84 +1,146 @@
 # Release Runbook
 
-OpenMasu ships source and reproducible local SDK artifacts. This runbook does
-not publish packages, container images, Maven artifacts, Swift packages, UPM
-packages, or npm packages to a public registry.
+OpenMasu publishes source tags and reproducible local SDK bundles. This runbook
+does not publish Maven, Swift, Unity, npm, container, or hosting artifacts to a
+public registry.
 
-## Release candidate gate
+The latest tagged source and SDK candidate is `v0.2.0-rc.2`. Development `main`
+may be ahead of that tag. A new release must describe the exact tag target and
+must not reuse an older evidence manifest as proof for a newer commit.
 
-1. Start from a clean, reviewed branch. Confirm no real data, credentials,
-   provider exports, screenshots, private thresholds, or generated local
-   secrets are tracked.
-2. Run `npm run pilot:preflight`. It writes
-   `build/pilot-evidence/preflight.json` only after checking the clean tree and
-   pinned toolchain, and records every out-of-scope runtime, device, provider,
-   real-data, production, and operator gate as `not_run`. The report excludes
-   child output, credentials, absolute paths, and raw provider payloads.
-3. Run `npm run pilot:synthetic -- --disposable` with local Docker, or confirm
-   the same command passed in the pinned Runtime workflow. It stages tracked
-   source away from host state, forces provider integrations off, uses a unique
-   Compose project, stops writers before seeding, verifies PostgreSQL parity and
-   the runtime smoke, and removes every isolated resource. CI alone adds
-   `--load` for the informational synthetic load record.
-4. Confirm the contract package version, migration ledger, schema snapshot,
-   fixture counts, and `docs/STATUS.md` agree. `npm run check:doc-drift`
-   mechanically compares the current validation summary and SDK release
-   identity with their maintained documentation surfaces.
-5. Run `npm ci` with Node 22.18.0 and npm 11.6.2, install the hash-pinned Python
-   requirements, and run `npm run validate`.
-6. Run unit, integration, database-invariant, parity, consistency, privacy
-   restore, threat-model, environment-coverage, and operational-log gates.
-7. Run Android, iOS, Unity, and emulator/simulator workflows. A successful
-   synthetic workflow does not replace the M2/M4 device checklists.
-8. Generate CycloneDX JSON SBOMs with `npm run sbom`, the Android SBOM task, and
-   the iOS SDK workflow. Confirm every expected workspace and SDK artifact is
-   present and the API runtime component baseline is unchanged unless an
-   approved dependency change explains it.
-9. Build the five Android release AARs, then run
-   `python tools/build-sdk-release.py --reproducibility-check`. Verify the
-   Maven POMs, UPM archive, Swift source archive, normalized SDK SBOMs,
-   `release-manifest.json`, and `SHA256SUMS` under
-   `build/sdk-release/openmasu-sdk-0.2.0-rc.2/`. The command compares two packaging
-   passes byte for byte and never publishes them.
-10. Review the [informational synthetic load record](../validation/m5-load-results.md). Do not convert its p95
-   record into a production service-level objective without a representative
-   environment and operator approval.
-11. Confirm all GitHub Actions are green at the exact release commit. Action
-   SHA changes require their own review and are never incidental release work.
-12. Create a signed or annotated source tag only after the owner approves the
-   release candidate. Record the exact commit and CI run. For RC2, confirm the
-   [synthetic evidence manifest](../validation/v0.2.0-rc.2-synthetic-evidence.md)
-   against the tag target.
+## 1. Freeze the candidate
 
-## Source release contents
+1. Select one reviewed commit on a release branch.
+2. Confirm the worktree is clean and all intended changes are committed.
+3. Confirm no real data, credentials, exports, screenshots, private thresholds,
+   generated secrets, or local payload stores are tracked.
+4. Record the intended source version, SDK version, Contract v0.4 patch level,
+   and release-note path.
+
+## 2. Reproduce repository evidence
+
+Use the pinned Node, npm, and Python versions:
+
+```bash
+npm ci
+python -m pip install --require-hashes --requirement requirements-contract.txt
+npm run pilot:preflight
+npm run pilot:synthetic -- --disposable
+npm run validate
+```
+
+The preflight records unavailable device/provider/production gates as `not_run`.
+The synthetic pilot proves the disposable runtime path. Neither is live-provider
+or production evidence.
+
+Run the relevant additional gates:
+
+```bash
+npm test
+npm run test:integration
+npm run test:db-invariants
+npm run verify:parity
+npm run test:metric-parity
+npm run test:dashboard-parity
+npm run test:privacy-e2e
+npm run test:backup-restore
+npm run check:threat-model
+npm run check:operational-logs
+```
+
+Run the pinned Android, iOS, Unity, emulator, and simulator workflows at the
+exact candidate commit. Platform CI is required even when the contributor's
+local operating system cannot run a platform gate.
+
+## 3. Verify identities and documentation
+
+```bash
+npm run check:release-version
+npm run check:doc-drift
+npm run verify:contract-rename
+```
+
+Confirm:
+
+- SDK runtime constants, samples, package manifests, build tools, and SBOM names
+  carry the same release version;
+- root contract packages retain their independent Contract v0.4 identity;
+- `README.md`, `docs/STATUS.md`, release notes, and the SDK bundle path refer to
+  the intended candidate;
+- the active validation inventory matches the contract specification and
+  roadmap;
+- post-tag development is not described as part of an older tag.
+
+## 4. Build reproducible SDK artifacts
+
+```bash
+npm run sbom
+npm run build:sdk-release
+python tools/build-sdk-release.py --reproducibility-check
+npm run check:sdk-release
+```
+
+The current candidate bundle path is
+`build/sdk-release/openmasu-sdk-0.2.0-rc.2/`. A new candidate must update all
+version-bearing source and checks together before using a different path.
+
+Verify the Android AAR/POM files, Unity UPM archive, Swift source archive,
+normalized CycloneDX SBOMs, `release-manifest.json`, and `SHA256SUMS`. The two
+packaging passes must be byte-identical.
+
+| Artifact | Repository output | Not provided |
+| --- | --- | --- |
+| Android | five local AAR/POM pairs | Maven registry publication and signing |
+| Unity | local UPM `.tgz` | OpenUPM publication and real Unity export proof |
+| iOS | deterministic Swift source ZIP | binary XCFramework, registry publication, and distribution signing |
+
+## 5. Review the release boundary
+
+Release notes must state:
+
+- what OpenMasu is;
+- which capabilities are implemented and synthetically verified;
+- the exact Contract v0.4 patch level;
+- real-provider, real-device, store, domain, production, capacity, backup, and
+  operator evidence that remains unverified;
+- that the candidate is not described as production-ready or a proven MMP
+  replacement.
+
+The synthetic load record is informational and must not become a production
+service-level objective without representative measurement.
+
+## 6. Tag and publish
+
+Before any GitHub write, verify the authenticated account, exact repository,
+visibility, tag name, commit, and explicit authorization for that operation.
+Confirm every required workflow is green on the exact commit. Create an
+annotated or signed tag and release only after the release owner approves it.
+
+The `v0.2.0-rc.2` tag uses
+[its own synthetic evidence manifest](../validation/v0.2.0-rc.2-synthetic-evidence.md).
+A later tag requires a later manifest.
+
+## Public release contents
 
 - contract schemas, registries, specification, and reviewed synthetic fixtures;
-- TypeScript and Python contract evaluators;
-- API, redirector, worker, runtime, database migrations, and Compose source;
-- Android, iOS, and Unity SDK source and sample source;
-- local Maven AAR/POM artifacts, the Unity UPM archive, and the Swift Package
-  source archive generated from one immutable revision;
-- architecture, security, operation, and validation documents;
-- Android, iOS, and Unity CycloneDX SBOMs plus the SHA-256 and build-input
-  manifests produced by the pinned workflows; and
-- CI evidence links and the operator residual checklist.
+- TypeScript and Python evaluators;
+- API, redirector, worker, runtime, database, and Compose source;
+- Android, iOS, and Unity SDK and sample source;
+- reproducible local SDK artifacts and their manifests;
+- architecture, security, operations, status, and validation documents;
+- SBOMs and checksums generated by the pinned workflows.
 
-Do not attach runtime secrets, real data, provider exports, real identifiers,
-payload-store snapshots, private rule definitions, production logs, or load
-inputs to a public release.
+Never attach runtime secrets, real data, exports, identifiers, payload-store
+snapshots, private rule definitions, provider responses, or production logs.
 
 ## Rollback
 
-Application rollback must not reverse an already-applied append-only database
-migration or resurrect redacted payloads. Restore service binaries from the
-last approved source tag while retaining the newer compatible schema, or
-restore into a new target using the backup runbook and reapply privacy before
-traffic. If compatibility is uncertain, keep traffic stopped and escalate to
-the operator; do not use destructive schema rollback commands.
+Application rollback must not reverse an append-only migration or resurrect
+redacted payloads. Restore an earlier compatible application against the newer
+schema, or restore into a new target and reapply privacy state using the backup
+runbook. If compatibility is uncertain, keep traffic stopped; do not use a
+destructive schema rollback.
 
-## Remaining operator gates
-
-Branch protection, secret scanning, production TLS, external secret managers,
-real backup recovery, real capacity, incident response, distribution signing,
-and formal trademark clearance for any registration are not established by this repository. Track them in
-`docs/validation/m5-operator-checklist.md`.
+Production TLS, secret management, backup schedules, real restore evidence,
+incident response, distribution signing, capacity, and trademark registration
+remain operator or release-owner gates.

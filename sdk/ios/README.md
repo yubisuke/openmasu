@@ -1,6 +1,7 @@
 # OpenMasu iOS SDK
 
-The iOS SDK is a source-distributed Swift Package for first-party event
+The iOS SDK is a source-distributed Swift Package with a deployment floor of
+iOS 16. It provides first-party event
 delivery, Universal Link routing, AdServices token handoff, Apple conversion-value updates, and MAX
 impression-level revenue mapping. It does not read IDFA, request App Tracking
 Transparency permission, fingerprint a device, or link installations across
@@ -23,7 +24,8 @@ applications.
 ## Local synthetic gates
 
 Run these commands on macOS with an Xcode toolchain that contains the iOS 17.4
-or later SDK:
+or later build SDK. The package can deploy to iOS 16; AdAttributionKit calls are
+runtime-gated to iOS 17.4 or later:
 
 ```bash
 swift test --package-path sdk/ios

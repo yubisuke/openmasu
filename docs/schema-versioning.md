@@ -1,72 +1,81 @@
 # Contract and Schema Versioning
 
-OpenMasu publishes one active contract tree while the project has no production contract consumers. The Git tags `contract-v0.1`, `contract-v0.2.1`, and `contract-v0.3.6` preserve the complete earlier contract lines; the working tree contains v0.4 in place.
+OpenMasu keeps one active pre-1.0 contract tree in the working branch. Complete
+older contract lines are preserved by Git tags:
 
-Contract v0.4 is a planned breaking identity migration from v0.3.6. It changes the former project and contract namespace to OpenMasu / `openmasu` without changing field meaning, attribution behavior, metric arithmetic, ordering, or privacy semantics. Consumers must migrate schemas, registries, fixtures, and evaluator identifiers as one unit. The in-place policy does not make artifacts from different minor lines interoperable.
+- `contract-v0.1`
+- `contract-v0.2.1`
+- `contract-v0.3.6`
+
+The active tree is Contract v0.4. Schema identifiers use the v0.4 minor line;
+artifact version fields use the exact contract release defined by their schema.
 
 ## Version identifiers
 
-- A schema `$id` ends in the contract minor line, for example `urn:openmasu:schema:raw-record:v0.4`.
-- `contract_version` is the exact SemVer contract release implemented by an artifact. Active v0.4 artifacts declare `0.4.0`.
-- `schema_version` is the exact SemVer version of an input record's event schema. The v0.4 fixtures use `0.4.0`.
-- Registry filenames carry the contract minor line. Their `contract_version` field identifies the exact release.
-- Policy, producer, and rule-bundle versions are independent deployment or fixture identifiers unless a schema explicitly binds them.
+- Schema `$id`: `urn:openmasu:schema:<artifact>:v0.4`
+- Artifact `contract_version`: exact SemVer contract release, currently `0.4.0`
+  for the active artifact family
+- Event `schema_version`: exact event schema release, currently `0.4.0`
+- Registry filename: contract minor line, such as `*-v0.4.json`
+- Metric, policy, producer, wrapper, and rule-bundle versions: independent
+  identities unless a schema explicitly binds them
 
-An implementation MUST select schemas and registries by the declared contract version. It MUST NOT infer compatibility from a filename alone.
+Consumers must select schemas and registries from the declared contract version.
+They must not infer compatibility from a filename or package version alone.
 
 ## Compatibility rules
 
-The following changes are breaking and require a new contract minor line before 1.0:
+A change requires a new minor line before 1.0 when it:
 
-- adding a required field;
-- narrowing or removing an enum value;
-- changing an `additionalProperties` boundary;
-- changing a field's type, structure, meaning, or namespace;
-- changing identity, ordering, hashing, time-window, privacy, or metric semantics.
+- adds a required field;
+- removes or narrows an enum value;
+- changes an `additionalProperties` boundary;
+- changes a field's type, structure, meaning, or namespace;
+- changes identity, ordering, hashing, authority, time-window, privacy, or metric
+  semantics.
 
-The following changes are non-breaking when they do not alter existing meanings:
+A patch may add an optional field, enum value, independent schema, or independent
+registry entry when all existing conforming artifacts retain their meaning. A
+patch may also tighten validation to enforce behavior already required by the
+normative specification. Every new vocabulary value must be exercised by a
+synthetic fixture, recorded in the migration ledger, and kept in TypeScript/
+Python parity.
 
-- adding an optional field;
-- adding an enum value;
-- improving descriptions or examples;
-- adding a new independent schema or registry entry that existing artifacts need not use.
+## Active release history
 
-Patch releases may correct validation defects only when every existing conforming artifact retains the same meaning. A constraint that rejects inputs the normative contract already prohibited may be a patch fix; a new behavioral decision is not.
+### v0.4.0 identity migration
 
-## v0.4.0 identity migration
+The project and contract namespace changed to OpenMasu. Schema URNs, contract-
+owned version fields, registry and fixture paths, generated type names, and
+name-derived strings changed. Field meaning, evaluator behavior, metric
+arithmetic, privacy semantics, and independent metric/rule versions did not.
+The mechanical proof is recorded in [Contract v0.4 migration](contract-v0.4-migration.md).
 
-`v0.4.0` is the identifier-wide project rename to OpenMasu. It changes schema URNs, contract-owned SemVer fields, active registry and fixture paths, generated public type names, and name-derived strings. It makes no semantic contract change. Metric-definition versions, rule-bundle versions, policy versions, producer versions, and other independently governed identifiers remain unchanged unless their literal value contained the former project name. The complete mechanical mapping and reviewed golden classification are recorded in [the v0.4 migration ledger](contract-v0.4-migration.md).
+### v0.4 additive patches
 
-R-23 is an explicit patch exception authorized to close two already documented M1 audit outcomes without changing existing artifact meaning. In `0.2.1`, metric-run adds optional `value_state` and `undefined_reason`; omission remains equivalent to a present v0.2.0 value. The difference-reason registry advances to `0.2.1`, and only the added `provider_modeled_conversion` reconciliation reason uses `difference_reason_version=0.2.1`; older reasons remain `0.2.0`. Schema `$id` values and registry filenames continue to identify the `v0.2` minor line. Existing event `contract_version`, event `schema_version`, metric-definition versions, rule-bundle versions, and conforming v0.2.0 goldens do not change merely because the release package advances to `0.2.1`.
+The v0.4 line adds independently exercised optional vocabulary and definitions:
 
-R-27 is the corresponding v0.3 patch exception for M3. In `0.3.1`, metric definition, metric run, and fixture evaluation schemas add the optional `metric_date` grouping dimension. The metric-definition calculation and numerator enums add `event_count` and `events`, with an explicit optional `event_names` set used only by new daily definitions. Existing v0.3.0 artifacts retain the same meaning, schema `$id` values remain on the `v0.3` minor line, and no existing golden output changes.
+| Patch | Additive capability |
+| --- | --- |
+| 0.4.1 | source-scoped fraud decisions and public fraud categories |
+| 0.4.2 | fraud-exclusion attribution provenance |
+| 0.4.3 | gross/net metric fraud policy |
+| 0.4.4 | explicit Play referrer click-time availability |
+| 0.4.5 | bounded source-rate and client classifications |
+| 0.4.6 | registered fraud-bundle binding and negative-CTIT diagnostic |
+| 0.4.7 | deep-link events, engagement attribution, and daily metrics |
+| 0.4.8 | installation-anchored purchase/refund net revenue |
+| 0.4.9 | D30/D90 purchase-net and total-net metrics |
 
-R-27 also authorizes the additive M4 handoff in `0.3.2`. The install event adds the optional iOS first-launch origin, the not-applicable platform-referrer state, and two non-attributed AdServices outcomes. AdAttributionKit adds an optional signing-key environment and SKAdNetwork accepts later minor versions within supported majors 3 and 4. The new enum values and optional field are each exercised by synthetic fixture 43. Existing v0.3.0 and v0.3.1 artifacts retain their meaning, schema `$id` values remain on the `v0.3` minor line, and no existing golden output changes.
+Existing schema `$id` values remain on `v0.4`; existing event artifact version
+fields remain `0.4.0` where their schema did not change.
 
-The same R-27 patch authority covers `0.3.3`, which adds only new Apple aggregate metric definitions and an optional `apple_conversion_bucket` grouping dimension. Existing event-count definitions retain their click/install and `occurred_at` semantics. The new SKAN/AdAttributionKit definitions use UTC server `received_at`, the new bucket is required only for the SKAN distribution definition, and synthetic fixture 44 exercises every added value. Existing schema `$id` values remain on the `v0.3` minor line and no earlier golden changes.
+## Registry and golden policy
 
-R-27 also covers the additive iOS conversion-schema handoff in `0.3.4`. The closed custom-event vocabulary admits the reserved `openmasu.conversion_value_updated` lifecycle event. M4-D-20 deliberately makes no typed install-schema change: synthetic fixture 45 carries the deployment-private conversion-schema version and SHA-256 digest in the existing `install.extensions` evidence surface. Existing schema `$id` values remain on the `v0.3` minor line, existing event-version constants retain `0.3.0`, and no earlier golden changes.
+Schemas define artifact shape. Registries define closed vocabularies and
+cross-field metadata. The validator proves duplicated enum surfaces agree.
 
-R-27 also covers the additive platform-integrity reservation in `0.3.5`. Raw records and fixture ingress records add an optional, server-assigned `integrity_verdict` evidence object. Its closed provider/verdict vocabulary is exercised by synthetic fixture 46; it carries no raw provider assertion or identifying value and does not change attribution, fraud, or metric semantics. Existing schema `$id` values remain on the `v0.3` minor line, existing event-version constants retain `0.3.0`, and no earlier golden changes.
-
-R-27 also covers the additive import-hardening patch in `0.3.6`. Delivery and rejection reason enums add `payload_schema_invalid`, and the fixture envelope adds an independent pre-ingestion rejection input used only to prove that output. Runtime imports dispatch normalized payloads through the same compiled event schemas as the contract gate before any raw or logical evidence write. Existing schema `$id` values remain on the `v0.3` minor line, existing event-version constants retain `0.3.0`, and all 598 earlier goldens remain unchanged.
-
-R-27 also authorizes the additive M6 fraud patches in `0.4.1` through `0.4.5`. They add source-scoped fraud decisions and three produced public categories (`0.4.1`), fraud-exclusion attribution provenance (`0.4.2`), gross/net metric policy (`0.4.3`), explicit Play referrer click-time availability (`0.4.4`), and two server-assigned bounded edge classifications (`0.4.5`). Existing schema `$id` values remain on the `v0.4` minor line, existing event-version constants retain `0.4.0`, and fixtures 01 through 47 retain byte-identical golden output.
-
-R-27 also covers the additive fraud-binding correction in `0.4.6`. The public fraud reason registry and schema add `ctit_clock_anomaly`; the fixture server context admits an optional registered fraud-bundle revision used only by deterministic runtime and replay tests. Negative CTIT remains non-fraud (`clear` / `allow`), while an app-day negative-CTIT ratio above its registered bundle threshold makes that day's valid CTIT-derived attribution provisional. Existing schema `$id` values and artifact version constants stay on `v0.4` / `0.4.0`. The real composite bundle changes only the seven previously emitted fraud-decision goldens because their former zero or partial binding was the defect being corrected.
-
-The additive deep-link contract patch follows as `0.4.7`. It adds an independent `deep_link_open` event, engagement-level attribution vocabulary, optional deferred-destination evidence, and daily deep-link metric definitions. Existing schema `$id` values and artifact version constants remain on `v0.4` / `0.4.0`; fixture 54 exercises the new surface without changing earlier deep-link behavior.
-
-The purchase/refund net-revenue patch follows as `0.4.8`. Purchase and refund payloads add optional `installation_id`; a refund requires either that anchor or an explicit `correction_target_record_id`; delivery/rejection reasons add `refund_target_invalid`; and metric definitions add the closed `purchase_net_revenue` numerator plus four new independent definitions with fixed `metric-purchase-net` / `0.4.8` / `8888888888888888888888888888888888888888888888888888888888888888` provenance. A top-level string `installation_id` is the explicit compatibility gate for the new financial semantics: anchored commerce uses strict settled targeting, refund facts, caps, business transaction canonicalization, and purchase-net metrics. Target-free refunds are necessarily anchored and resolve exactly one base-accepted canonical purchase known at receipt time. Unanchored purchases and explicit-target refunds retain v0.4.0 event-ID-only behavior; the existing purchase projection remains compatible, while an unanchored explicit refund emits no refund fact. The explicit record must exist in the authenticated tenant/app scope, but no new status, ordering, identity, cap, or business rule reclassifies it, and neither unanchored event contributes to purchase-net metrics. Fixture 16 and its reviewed goldens therefore remain unchanged as the out-of-order explicit-target compatibility case. Fixture 55 adds 13 reviewed goldens. Existing schema `$id` values and artifact version constants remain on `v0.4` / `0.4.0`. Historical rows whose projected financial status is null are not backfilled or eligible refund targets under this patch; explicit protected-payload replay is a separate operator action and is outside the public fixture release.
-
-R-27 also covers the additive metric-definition patch `0.4.9`. It adds D30/D90 purchase-net definitions and the independent closed `total_net_revenue` numerator with six D30/D90 revenue, ROAS, and cohort-LTV definitions. Existing D0/D1/D3/D7 purchase-net definitions remain on `0.4.8`, and every existing advertising-revenue, ROAS, and LTV definition remains byte-identical. The new definitions use fixed `0.4.9` provenance and are exercised by synthetic fixture 56. Existing schema `$id` values and artifact version constants remain on `v0.4` / `0.4.0`; fixtures 01 through 55 and all their goldens remain unchanged.
-
-## Compatibility registry
-
-`registries/compatibility-v0.4.json` closes the allowed attribution combinations of subject scope, method, model, and status. It does not replace schema versioning. Schemas define artifact shape, registries define closed cross-field vocabularies and metadata, and the validator proves that duplicated enum surfaces agree.
-
-## Fixture and golden policy
-
-Fixtures are versioned with the active contract. The v0.4 identity migration moves `fixtures/v0.3/` to `fixtures/v0.4/` and updates only contract-owned versions and name-derived values. The immutable v0.3.6 evidence remains available from the `contract-v0.3.6` tag.
-
-Golden output files are human-reviewed evidence, not generated validation authority. A semantic evaluator or schema change and its reviewed golden update SHOULD be separate commits. Every v0.4 identity-only golden change is recorded in [the migration ledger](contract-v0.4-migration.md) with its field-level reason and mechanical proof classification.
+Golden outputs are reviewed evidence, not generated authority. Validation is
+read-only. A semantic change and its reviewed golden update should be separated
+when practical, and every changed golden must have a written derivation in
+`fixtures/v0.4/README.md` and the relevant migration record.

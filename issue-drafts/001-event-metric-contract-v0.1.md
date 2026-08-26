@@ -1,5 +1,10 @@
 # [Epic] Define OpenMasu Event & Metric Contract v0.1
 
+Historical record: this draft describes the first contract planning boundary.
+It is not a current checklist. The active contract is v0.4 and is defined by
+`schemas/`, `registries/`, `fixtures/v0.4/`, and
+`spec/event-metric-contract-v0.4.md`.
+
 ## Background
 
 Implementing a replacement MMP before fixing the contract would mix media-specific behavior, metric definitions, duplicate handling, late data, privacy-preserving APIs, and fraud controls. The result would be difficult to reproduce or audit.

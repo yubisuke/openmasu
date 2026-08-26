@@ -44,6 +44,8 @@ export function documentationDriftFailures(
 ): string[] {
   const inventory = parseValidationSummary(validationSummary);
   const failures: string[] = [];
+  const normalizedIncludes = (document: string, expected: string): boolean =>
+    document.replace(/\s+/g, " ").includes(expected.replace(/\s+/g, " "));
   const expect = (condition: boolean, label: string): void => {
     if (!condition) failures.push(label);
   };
@@ -54,23 +56,25 @@ export function documentationDriftFailures(
     "the normative specification does not contain the measured validation summary",
   );
   expect(
-    documents.readme.includes(
+    normalizedIncludes(
+      documents.readme,
       `checks ${inventory.schemas} schemas, ${inventory.registries} registries, ${inventory.fixtures} reviewed synthetic fixtures, ${inventory.goldenArtifacts} golden output artifacts, ${inventory.scenarios} scenario assertions, ${inventory.acceptanceCriteria} acceptance criteria`,
     ),
     "README validation inventory differs from the measured summary",
   );
   expect(
-    documents.roadmap.includes(
+    normalizedIncludes(
+      documents.roadmap,
       `across ${inventory.schemas} schemas, ${inventory.registries} registries, and ${inventory.fixtures} reviewed synthetic fixtures`,
     ),
     "the current M0.4 roadmap gate differs from the measured inventory",
   );
   expect(
-    documents.readme.includes(`current source and SDK release candidate is \`v${releaseVersion}\``),
+    normalizedIncludes(documents.readme, `latest tagged source and SDK release candidate is \`v${releaseVersion}\``),
     "README release candidate differs from the SDK release version",
   );
   expect(
-    documents.status.includes(`for the \`v${releaseVersion}\` release candidate`),
+    normalizedIncludes(documents.status, `latest tagged source and SDK release candidate is \`v${releaseVersion}\``),
     "STATUS release candidate differs from the SDK release version",
   );
   expect(documents.releaseRunbook.includes(bundlePath), "release runbook bundle path differs from the SDK release version");
