@@ -34,6 +34,7 @@ jobs:
       OPENMASU_SEED_DATABASE_URL: postgresql://openmasu_seed:seed-synthetic-ci-password@localhost:5432/openmasu
       OPENMASU_POSTGRES_HOST_PORT: "55432"
       OPENMASU_API_HOST_PORT: "8080"
+      OPENMASU_PILOT_PROJECT: openmasu-synthetic-ci-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -74,37 +75,19 @@ jobs:
         run: npm run benchmark:import
       - name: Check threat-model coverage
         run: npm run check:threat-model
-      - name: Compose first-run smoke
-        run: |
-          export OPENMASU_MAX_TENANT_ID=tenant-a
-          export OPENMASU_MAX_APP_ID=app-a
-          export OPENMASU_ENROLL_RATE_RPS=10000
-          export OPENMASU_ENROLL_RATE_BURST=2000
-          export OPENMASU_INGEST_RATE_RPS=10
-          export OPENMASU_INGEST_RATE_BURST=20
-          export OPENMASU_INGEST_APP_RATE_RPS=10000
-          export OPENMASU_INGEST_APP_RATE_BURST=2000
-          export OPENMASU_MAX_RATE_RPS=20000
-          export OPENMASU_MAX_RATE_BURST=12000
-          docker compose up -d --wait
-          docker compose --env-file /dev/null --profile seed run --rm seed
-          worker_id=$(docker compose --env-file /dev/null ps -aq worker)
-          test -n "$worker_id"
-          sleep 12
-          docker compose --env-file /dev/null logs --no-color worker
-          test "$(docker inspect --format '{{.State.Status}}' "$worker_id")" = running
-          test "$(docker inspect --format '{{.RestartCount}}' "$worker_id")" = 0
-          docker compose --env-file /dev/null exec -T api sh -c 'set -a && . /run/openmasu/app/runtime.env && set +a && OPENMASU_API_HOST_PORT=8080 node --import tsx tools/runtime-smoke.ts'
-      - name: Measure synthetic ingestion and MAX postback load
-        run: |
-          docker compose --env-file /dev/null exec -T api sh -c 'set -a && . /run/openmasu/app/runtime.env && set +a && node --import tsx tools/m5-load.ts' > m5-load.json
-          cat m5-load.json
+      - name: Run isolated disposable synthetic runtime pilot
+        run: npm run pilot:synthetic -- --disposable --load
       - name: Upload M5 load evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: m5-synthetic-load
-          path: m5-load.json
+          path: |
+            build/pilot-evidence/m5-load.json
+            build/pilot-evidence/synthetic-runtime.json
           if-no-files-found: error
+      - name: Remove disposable pilot resources after cancellation or failure
+        if: always()
+        run: docker compose --project-name "$OPENMASU_PILOT_PROJECT" down --volumes --remove-orphans --timeout 30
       - name: Generate workspace SBOMs
         run: npm run sbom
       - name: Enforce the M3 API runtime component baseline

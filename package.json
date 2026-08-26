@@ -32,6 +32,7 @@
     "import:revenue:max": "npm run import:revenue:max --workspace @openmasu/worker --",
     "metrics:run": "npm run metrics:run --workspace @openmasu/worker --",
     "pilot:preflight": "node --import tsx tools/pilot-preflight.ts",
+    "pilot:synthetic": "node --import tsx tools/synthetic-runtime-pilot.ts",
     "seed": "npm run seed --workspace @openmasu/worker",
     "sbom": "node --import tsx tools/sbom.ts",
     "check:api-runtime-sbom": "node --import tsx tools/check-api-runtime-sbom.ts",

@@ -59,9 +59,11 @@ const boundaries: PreflightEvidence["boundaries"] = [
 ];
 
 export function sanitizedEnvironment(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return Object.fromEntries(Object.entries(environment).filter(([key]) =>
-    !key.startsWith("OPENMASU_") && !/(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|PRIVATE_KEY|ACCESS_KEY|API_KEY)/i.test(key),
-  ));
+  const allowed = new Set([
+    "APPDATA", "CI", "COMSPEC", "HOME", "LOCALAPPDATA", "NO_COLOR", "PATH", "PATHEXT",
+    "Path", "SYSTEMROOT", "SystemRoot", "TEMP", "TERM", "TMP", "USERPROFILE",
+  ]);
+  return Object.fromEntries(Object.entries(environment).filter(([key]) => allowed.has(key)));
 }
 
 function safeVersion(value: string, prefix = ""): string {
