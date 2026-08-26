@@ -180,4 +180,6 @@ Evidence gate: synthetic outer/nested Apple signature vectors, Google OIDC and l
 
 ## Immediate next step
 
-Run the operator checklists and a controlled shadow pilot. Real provider connectivity, device validation, platform approval, production TLS, backup operations, capacity, integrity-service configuration, and incident response remain separate states.
+Continue synthetic operational hardening without weakening the separate operator gates. The first slice replaces process-only worker overlap control with tenant/job-scoped PostgreSQL leases, durable retry timing, and fixed-label failure/overdue metrics. Provider-import scheduling and external notification delivery remain later operational slices because their parameters, credentials, receivers, and ownership are deployment-specific.
+
+Run the operator checklists and any controlled shadow pilot only under separate authorization. Real provider connectivity, device validation, platform approval, production TLS, backup operations, capacity, integrity-service configuration, and incident response remain separate states.

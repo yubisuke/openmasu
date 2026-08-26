@@ -154,6 +154,21 @@ Implemented in synthetic code/CI: authenticated Google Play lifecycle signals an
 - Provider transaction/order identifiers, purchase tokens, signed payloads, and credentials remain protected and are absent from public artifacts.
 - Live stores, credentials, delivery, quotas, root/key rotation, complete historical recovery, Apple installation-level revenue binding, entitlement, tax, and payout remain operator/product gates.
 
+### Post-Phase 7: Synthetic operational hardening
+
+The first operational-hardening slice replaces process-only worker overlap
+control with a tenant/job-scoped PostgreSQL schedule. Session advisory locks plus expiring leases prevent
+concurrent internal execution across worker replicas, persisted next-run and
+retry timestamps survive restart, and authenticated fixed-label metrics expose
+success/failure counts, consecutive failures, active leases, and overdue jobs.
+
+- This slice schedules only the existing internal inbox, verification,
+  delivery, fraud-maintenance, and session-sweep jobs.
+- Provider imports remain explicit CLI operations until a deployment supplies
+  reviewed parameters, secret custody, timing, and ownership.
+- External notification receivers and routing remain operator configuration;
+  the repository exposes sanitized durable state for those systems to monitor.
+
 ## Evidence gates
 
 A phase completes through measurable evidence, not code completion alone.

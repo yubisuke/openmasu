@@ -3,6 +3,7 @@ import {
   JOB_HEALTH_ACTOR_REFS,
   JOB_HEALTH_JOBS,
   JOB_HEALTH_OUTCOMES,
+  SCHEDULED_WORKER_JOBS,
   withTenant,
   type JobHealthJob,
   type JobHealthOutcome,
@@ -138,6 +139,26 @@ export async function renderOperationalMetrics(
         GROUP BY actor_ref, outcome`,
       [tenantId],
     );
+    const scheduledJobs = await client.query<{
+      job_name: string;
+      last_outcome: "succeeded" | "failed" | null;
+      consecutive_failures: string;
+      success_count: string;
+      failure_count: string;
+      overdue: string;
+      lease_active: boolean;
+    }>(
+      `SELECT job_name, last_outcome,
+              consecutive_failures::text,
+              success_count::text,
+              failure_count::text,
+              GREATEST(EXTRACT(EPOCH FROM (clock_timestamp()-next_run_at)),0)::text AS overdue,
+              COALESCE(lease_expires_at > clock_timestamp(),false) AS lease_active
+         FROM control.worker_job_schedules
+        WHERE tenant_id=$1
+        ORDER BY job_name`,
+      [tenantId],
+    );
     const jobs = new Map<string, { runs: string; latest: string }>();
     for (const job of JOB_HEALTH_JOBS) {
       for (const outcome of JOB_HEALTH_OUTCOMES) jobs.set(`${job}\u0000${outcome}`, { runs: "0", latest: "0" });
@@ -153,6 +174,7 @@ export async function renderOperationalMetrics(
       batches: batches.rows[0],
       adservices: adservices.rows[0],
       jobs,
+      scheduledJobs: new Map(scheduledJobs.rows.map((row) => [row.job_name, row])),
     };
   });
   const lines = metrics.renderProcessMetrics();
@@ -185,6 +207,36 @@ export async function renderOperationalMetrics(
     for (const outcome of JOB_HEALTH_OUTCOMES) {
       lines.push(`openmasu_job_last_completion_timestamp_seconds${labels({ job, outcome })} ${jobValue(job, outcome).latest}`);
     }
+  }
+  lines.push(
+    "# HELP openmasu_scheduled_job_runs_total Durable worker scheduler completions by fixed job and outcome.",
+    "# TYPE openmasu_scheduled_job_runs_total counter",
+  );
+  for (const job of SCHEDULED_WORKER_JOBS) {
+    const state = durable.scheduledJobs.get(job);
+    lines.push(
+      `openmasu_scheduled_job_runs_total${labels({ job, outcome: "succeeded" })} ${state?.success_count ?? "0"}`,
+      `openmasu_scheduled_job_runs_total${labels({ job, outcome: "failed" })} ${state?.failure_count ?? "0"}`,
+    );
+  }
+  lines.push(
+    "# HELP openmasu_scheduled_job_consecutive_failures Current consecutive failures for a fixed worker job.",
+    "# TYPE openmasu_scheduled_job_consecutive_failures gauge",
+    "# HELP openmasu_scheduled_job_overdue_seconds Seconds since a fixed worker job became due.",
+    "# TYPE openmasu_scheduled_job_overdue_seconds gauge",
+    "# HELP openmasu_scheduled_job_lease_active Whether a fixed worker job currently has an unexpired lease.",
+    "# TYPE openmasu_scheduled_job_lease_active gauge",
+    "# HELP openmasu_scheduled_job_configured Whether a fixed worker job has durable schedule state.",
+    "# TYPE openmasu_scheduled_job_configured gauge",
+  );
+  for (const job of SCHEDULED_WORKER_JOBS) {
+    const state = durable.scheduledJobs.get(job);
+    lines.push(
+      `openmasu_scheduled_job_consecutive_failures${labels({ job })} ${state?.consecutive_failures ?? "0"}`,
+      `openmasu_scheduled_job_overdue_seconds${labels({ job })} ${state?.overdue ?? "0"}`,
+      `openmasu_scheduled_job_lease_active${labels({ job })} ${state?.lease_active ? "1" : "0"}`,
+      `openmasu_scheduled_job_configured${labels({ job })} ${state ? "1" : "0"}`,
+    );
   }
   return `${lines.join("\n")}\n`;
 }

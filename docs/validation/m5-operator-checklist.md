@@ -24,8 +24,10 @@ data, credentials, device identifiers, private rule values, or production logs.
   require shared enforcement.
 - Define alerts for HTTP error rate/latency, SDK/MAX/AdServices backlog and age,
   fixed operator-job failure counts and stale latest-completion timestamps,
-  database capacity, backup failure, restore failure, and privacy-reapply hard
-  stops. Keep scheduler, thresholds, receivers, and contacts deployment-private.
+  missing required scheduler state, scheduled-worker consecutive failures, overdue jobs, database capacity,
+  backup failure, restore failure, and privacy-reapply hard stops. Internal
+  worker leases and retry timing are repository-defined; keep provider-import
+  schedules, alert thresholds, receivers, and contacts deployment-private.
   Introduce OpenTelemetry only when cross-service tracing or operational
   cardinality justifies the dependency and privacy review.
 
