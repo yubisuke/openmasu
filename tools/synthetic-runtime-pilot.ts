@@ -105,6 +105,20 @@ export function assertCleanDemo(value: unknown): void {
   assert.ok(preview.some((row) => row.metric_name === "retention_d1" && row.value_unscaled === "1000000" && row.ratio_scale === 6));
 }
 
+export function assertSeedOutput(seedOutput: string): void {
+  assert.match(
+    seedOutput,
+    /^Seeded 56 synthetic fixtures through PostgreSQL ingestion \(550 parity artifacts\)\.\s*$/,
+  );
+}
+
+export function assertRuntimeParityOutput(parityOutput: string): void {
+  assert.match(
+    parityOutput,
+    /^Runtime parity passed: 56 fixtures, 10 artifact families, 550 JCS byte-identical artifacts\.\s*$/,
+  );
+}
+
 async function freeLoopbackPorts(count: number): Promise<number[]> {
   const servers: Server[] = [];
   try {
@@ -249,14 +263,11 @@ export async function runSyntheticRuntimePilot(
     runStep("stop_writers", [...compose, "stop", "worker", "api", "redirector"]);
     runVerifiedStep("seed_contract_fixtures", [
       ...compose, "--profile", "seed", "run", "--rm", "seed",
-    ], (result) => assert.match(
-      result.stdout,
-      /^Seeded 56 synthetic fixtures through PostgreSQL ingestion \(728 parity artifacts\)\.\s*$/,
-    ));
+    ], (result) => assertSeedOutput(result.stdout));
     runVerifiedStep("verify_runtime_parity", [
       ...compose, "--profile", "seed", "run", "--rm", "seed",
       ...shell("set -a && . /run/openmasu/seed/runtime.env && set +a && npm run verify:parity"),
-    ], (result) => assert.match(result.stdout, /Runtime parity passed: 56 fixtures/));
+    ], (result) => assertRuntimeParityOutput(result.stdout));
     runStep("resume_runtime", [...compose, "up", "-d", "--wait"]);
     await new Promise((resolve) => setTimeout(resolve, 12_000));
     const workerId = requireSuccess("stable_worker", "docker", [...compose, "ps", "-q", "worker"], staging).stdout.trim();

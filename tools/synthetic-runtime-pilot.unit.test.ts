@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   assertCleanDemo,
+  assertRuntimeParityOutput,
+  assertSeedOutput,
   parseSyntheticPilotArguments,
   plannedSyntheticPilotSteps,
   syntheticComposeEnvironment,
@@ -66,5 +68,17 @@ describe("disposable synthetic runtime pilot", () => {
     };
     assert.doesNotThrow(() => assertCleanDemo(valid));
     assert.throws(() => assertCleanDemo({ ...valid, ledger_counts: { ...valid.ledger_counts, raw_records: 1 } }));
+  });
+
+  it("pins the database parity gate to the measured 10-family, 550-artifact result", () => {
+    assert.doesNotThrow(() => assertSeedOutput(
+      "Seeded 56 synthetic fixtures through PostgreSQL ingestion (550 parity artifacts).\n",
+    ));
+    assert.doesNotThrow(() => assertRuntimeParityOutput(
+      "Runtime parity passed: 56 fixtures, 10 artifact families, 550 JCS byte-identical artifacts.\n",
+    ));
+    assert.throws(() => assertSeedOutput(
+      "Seeded 56 synthetic fixtures through PostgreSQL ingestion (728 parity artifacts).\n",
+    ));
   });
 });
