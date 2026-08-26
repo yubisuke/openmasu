@@ -163,7 +163,7 @@ A phase completes through measurable evidence, not code completion alone.
 - A fixed policy version reproduces a historical decision
 - Duplicate, conflict, delay, deletion, import, aggregate, and platform fixtures pass automatically
 - Runtime fixture reproduction, operator-run validation, device validation, platform approval, and production validation remain distinct states
-- All planned synthetic code phases are implemented; M2-M5 operator evidence remains open and must not be inferred from CI
+- All planned synthetic code phases are implemented; M2-M7 and Post-M7 operator evidence remains open and must not be inferred from CI
 - Platform approval, device validation, and campaign validation remain labeled unverified until actually completed
 
 ## Rough estimate

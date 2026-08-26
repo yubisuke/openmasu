@@ -102,16 +102,18 @@ Implemented runtime code lives in `apps/api`, `apps/redirector`, `apps/worker`, 
 - [M6 fraud operator checklist](docs/validation/m6-fraud-checklist.md)
 - [M7 deep-link device checklist](docs/validation/deeplink-device-checklist.md)
 - [M5 synthetic load record](docs/validation/m5-load-results.md)
+- [v0.2.0-rc.1 synthetic pilot record](docs/validation/v0.2.0-rc.1-pilot.md)
 - [Backup and restore runbook](docs/operations/backup-restore.md)
 - [Release runbook](docs/operations/release.md)
 - [Current milestone status](docs/STATUS.md)
 
 ## Five-minute synthetic quickstart
 
-Requirements: Docker with Compose, Node.js 22.18.0, and npm 11.6.2. The Node.js and npm versions must match exactly because `.npmrc` enables `engine-strict`; nearby versions are rejected. Use `.nvmrc` with nvm, fnm, or an equivalent version manager. From a clean clone, run:
+Requirements: Docker with Compose, Node.js 22.18.0, and npm 11.6.2. The Node.js and npm versions must match exactly because `.npmrc` enables `engine-strict`; nearby versions are rejected. Use `.nvmrc` with nvm, fnm, or an equivalent version manager. From a clean clone, run the following only against a disposable synthetic stack. The first command removes this Compose project's existing containers and named volumes, so skip it if the project contains anything that must be retained:
 
 ```bash
 npm ci
+docker compose down --volumes --remove-orphans
 docker compose up -d --wait
 npm run demo:metrics
 ```
@@ -141,17 +143,29 @@ An abridged clean-start output makes the two origins explicit:
 To load all reviewed contract fixtures through the real PostgreSQL ingestion path and compare database artifacts with their immutable goldens, run:
 
 ```bash
+docker compose stop worker api redirector
 docker compose --profile seed run --rm seed
 npm run verify:parity
+docker compose up -d --wait
 ```
 
-Run the seed profile only on a synthetic instance with concurrent ingestion quiesced. Seed jobs serialize against each other with a PostgreSQL advisory lock and retry one `40P01` deadlock once; a second database deadlock is reported as a failure and should be investigated before rerunning.
+Run the seed profile only on a synthetic instance. Stop every ingestion writer first, as shown above; the seed command resets the synthetic ledger and is not safe alongside normal writes. Seed jobs serialize against each other with a PostgreSQL advisory lock and retry one `40P01` deadlock once; a second database deadlock is reported as a failure and should be investigated before rerunning. Fixture 33 exercises a non-zero revenue and non-zero cost cohort and reproduces `d7_roas=1.5` at ratio scale 6, so this seed/parity path is the non-zero synthetic cohort gate. It is not a real shadow-pilot result.
 
 To exercise the operator CSV-to-metric path without committing a tabular file, create a synthetic CSV only under the gitignored `.openmasu/` directory and run the two explicit jobs:
 
 ```bash
 mkdir -p .openmasu
 printf 'network,campaign_id,country,date,cost_micros,currency,as_of\nsynthetic-cli-network,synthetic-cli-campaign,us,2026-08-20,2500000,USD,2026-08-20T12:00:00.000Z\n' > .openmasu/synthetic-cost.csv
+npm run import:cost -- --file=.openmasu/synthetic-cost.csv --mapping=examples/mappings/synthetic-manual-cost.json
+npm run metrics:run -- --date=2026-08-20 --definitions=examples/metrics/synthetic-d0-roas.json
+```
+
+PowerShell 7 uses the same npm commands after creating the file without a BOM:
+
+```powershell
+New-Item -ItemType Directory -Force .openmasu | Out-Null
+$csv = "network,campaign_id,country,date,cost_micros,currency,as_of`nsynthetic-cli-network,synthetic-cli-campaign,us,2026-08-20,2500000,USD,2026-08-20T12:00:00.000Z`n"
+[System.IO.File]::WriteAllText((Join-Path $PWD '.openmasu\synthetic-cost.csv'), $csv)
 npm run import:cost -- --file=.openmasu/synthetic-cost.csv --mapping=examples/mappings/synthetic-manual-cost.json
 npm run metrics:run -- --date=2026-08-20 --definitions=examples/metrics/synthetic-d0-roas.json
 ```
@@ -166,6 +180,14 @@ Custom HTTPS destinations fail closed unless their origins are explicitly allowe
 
 ```bash
 export OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST=https://links.synthetic.example
+docker compose up -d --wait
+docker compose logs bootstrap
+```
+
+PowerShell uses an environment variable rather than `export`:
+
+```powershell
+$env:OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST = 'https://links.synthetic.example'
 docker compose up -d --wait
 docker compose logs bootstrap
 ```
