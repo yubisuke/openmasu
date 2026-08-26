@@ -16,7 +16,7 @@ npm run sbom
 python tools/build-sdk-release.py --reproducibility-check
 ```
 
-The output under `build/sdk-release/openmasu-sdk-0.2.0-rc.1/` contains Maven AAR/POM pairs, the UPM archive, the Swift Package source archive, three CycloneDX SDK SBOMs, a source/toolchain manifest, and `SHA256SUMS`. It is a local CI artifact, not a public registry publication.
+The output under `build/sdk-release/openmasu-sdk-0.2.0-rc.2/` contains Maven AAR/POM pairs, the UPM archive, the Swift Package source archive, three CycloneDX SDK SBOMs, a source/toolchain manifest, and `SHA256SUMS`. It is a local CI artifact, not a public registry publication.
 
 MAX integration must subscribe separately to Interstitial, Rewarded, Banner, and MRec revenue callbacks. The compile probe keeps the four-format subscription table closed even when AppLovin is not present in the test environment.
 

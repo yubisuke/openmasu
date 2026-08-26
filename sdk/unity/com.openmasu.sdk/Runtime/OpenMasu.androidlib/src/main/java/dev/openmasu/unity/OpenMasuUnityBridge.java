@@ -37,7 +37,7 @@ public final class OpenMasuUnityBridge {
       String deepLinkHosts, String deepLinkSchemes, boolean enablePlayReferrer, String metaAppId) {
     Context context = activity.getApplicationContext();
     OpenMasuConfiguration configuration = new OpenMasuConfiguration(
-        endpoint, keyId, secret, "0.2.0-rc.1", wrapperVersion, 10_000,
+        endpoint, keyId, secret, "0.2.0-rc.2", wrapperVersion, 10_000,
         csvSet(deepLinkHosts), csvSet(deepLinkSchemes), 604_800);
     sdk = OpenMasuSdkFactory.create(
         context,

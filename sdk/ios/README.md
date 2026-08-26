@@ -40,7 +40,7 @@ bridge probe.
 ## Immutable source bundle
 
 The repository release tool packages the tracked `sdk/ios` tree as a
-deterministic source ZIP tied to the same `0.2.0-rc.1` release identity and commit as
+deterministic source ZIP tied to the same `0.2.0-rc.2` release identity and commit as
 the Android Maven layout and Unity UPM archive. It does not publish a Swift
 registry package or binary XCFramework. Run the repository-level commands in
 [`docs/operations/release.md`](../../docs/operations/release.md), then verify

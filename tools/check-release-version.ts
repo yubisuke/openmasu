@@ -26,6 +26,7 @@ for (const path of [
   "sdk/unity/com.openmasu.sdk/Runtime/OpenMasuClient.cs",
   "sdk/unity/com.openmasu.sdk/Runtime/Plugins/iOS/Sources/OpenMasuCore/Models.swift",
   "sdk/unity/com.openmasu.sdk/Runtime/Plugins/iOS/Sources/OpenMasuObjC/OpenMasuObjCBridge.swift",
+  "sdk/unity/com.openmasu.sdk/Samples~/AndroidMeasurement/OpenMasuSample.cs",
   "tools/build-sdk-release.py",
   "tools/sbom.ts",
 ]) {
