@@ -17,6 +17,7 @@ This is the canonical milestone sequence. `docs/project-plan.md` is a phase summ
 | M5 Production and limited adapter boundary | Phase 5 | Production controls, fraud boundary, and deliberately limited adapters |
 | M6 Deterministic fraud controls | Phase 6 | Replayable server-time/source-day rules and protected integrity evidence |
 | M7 Deep links and re-engagement | Phase 7 | Direct links on both platforms, Android deferred delivery, and engagement-scope metrics |
+| Post-M7 verified commerce lifecycle | Post-Phase 7 | Authenticated store lifecycle evidence, exact refunds, and bounded read-back |
 
 ## M0.2 Contract v0.2
 
@@ -42,9 +43,9 @@ Evidence gate: 27 schemas, 8 registries, 47 reviewed synthetic fixtures, both in
 
 ## M0.4 Contract v0.4
 
-Contract v0.4.0 is complete and mechanically proven equivalent to the immutable `contract-v0.3.6` baseline except for contract-owned identifiers, the OpenMasu namespace, and the resulting fixture-45 digests. The active schemas, registries, fixtures, specification, generated types, and both evaluators use the v0.4 identity as one unit. Metric, attribution, privacy, reconciliation, and fraud semantics are unchanged.
+Contract v0.4.0 is complete and mechanically proven equivalent to the immutable `contract-v0.3.6` baseline except for contract-owned identifiers, the OpenMasu namespace, and the resulting fixture-45 digests. The active schemas, registries, fixtures, specification, generated types, and both evaluators use the v0.4 identity as one unit. Additive definitions through v0.4.9 extend fraud, deep-link, commerce, and long-horizon metric evidence without changing the v0.4 wire identity.
 
-Evidence gate: `npm run verify:contract-rename` reports `SEMANTIC_DIFF=0`, `npm run validate` preserves TypeScript/Python JCS parity across all 47 synthetic fixtures, and the full CI suite passes without real data or credentials.
+Evidence gate: `npm run verify:contract-rename` reports `SEMANTIC_DIFF=0` for the identity migration, while the current `npm run validate` gate preserves TypeScript/Python JCS parity across 28 schemas, 8 registries, and 56 reviewed synthetic fixtures. The full CI suite passes without real data or credentials.
 
 ## M1a Shadow ledger and import foundation
 
@@ -159,8 +160,6 @@ payloads remain unreadable, and verifies recalculated exports. CI also records
 synthetic HTTP load and retains all prior replay, isolation, dashboard, SDK, and
 contract gates. A production pilot remains an operator gate.
 
-## Immediate next step
-
 ## M6 Deterministic fraud controls
 
 M6a adds deterministic server-time and source-day fraud evidence, conservative flag-only defaults, real fraud-bundle binding, explicit gross/net metrics, deadline-bound quarantine, and an aggregate-only audit surface. M6b adds protected server verification boundaries for Play Integrity and App Attest. Synthetic CI cannot establish live provider availability, threshold accuracy, device-farm detection, network acceptance, or false-positive rates; those remain in the [M6 operator checklist](validation/m6-fraud-checklist.md).
@@ -178,5 +177,7 @@ Evidence gate: contract/evaluator parity, association generation and route prece
 The verified-commerce slice expands Google Play from initial/renewal verification to authenticated lifecycle state and exact full/partial refund correction, and adds App Store Server Notifications V2 plus revision-based transaction/refund history. Provider notifications remain non-financial signals; only authoritative read-back can create settled purchase or refund money. Protected evidence and cursors are encrypted, while public lifecycle facts contain bounded state and digests.
 
 Evidence gate: synthetic outer/nested Apple signature vectors, Google OIDC and lifecycle mapping, durable retry/revision pagination, exact one-time refund correction, RLS, privacy purge, and provider-secret scans pass. Live credentials, delivery, quota/root rotation, complete missed-renewal reconstruction, Apple installation-level revenue binding, entitlement, tax, and payout remain outside the code gate.
+
+## Immediate next step
 
 Run the operator checklists and a controlled shadow pilot. Real provider connectivity, device validation, platform approval, production TLS, backup operations, capacity, integrity-service configuration, and incident response remain separate states.
