@@ -6,7 +6,7 @@ The standard source package includes the Android core, Google Play Install Refer
 
 OpenMasu does not publish a Maven or UPM registry artifact. CI and local release tooling generate a versioned Maven-layout directory and `com.openmasu.sdk-<version>.tgz` from one source revision. Consumers may point Unity/Gradle at that operator-controlled directory or import the UPM archive without replacing placeholder coordinates by hand. See [the release runbook](../../docs/operations/release.md).
 
-The `.androidlib` resolution path from a UPM package is not established by Unity's primary documentation. The operator checklist records an actual export on both supported Unity lines. If the package directory is not resolved, use the locally built AAR as the documented fallback; do not download or commit a third-party binary.
+The `.androidlib` resolution path from a UPM package is not established by Unity's primary documentation. Actual exports on both supported Unity lines remain unverified and must be recorded in the operator checklist. If the package directory is not resolved, use the locally built AAR as the documented fallback; do not download or commit a third-party binary.
 
 Generate the local bundle after building the five release AARs and SDK SBOMs:
 

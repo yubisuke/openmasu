@@ -1,109 +1,87 @@
-# Contract v0.4 Migration Guide
+# Contract v0.4 Migration
 
-Contract v0.4.0 is a planned, in-place identity migration from the immutable `contract-v0.3.6` tag at commit `62e1288076925adf7384a7688c56d0b67fa789c7`. It changes the project and public contract namespace to OpenMasu. It does not change artifact shape, field meaning, attribution behavior, metric arithmetic, ordering, hashing rules, privacy semantics, or public fraud semantics.
+Contract v0.4.0 completed the identity migration from the immutable
+`contract-v0.3.6` tag to the OpenMasu namespace. The migration changed public
+contract identity but did not change field meaning, attribution behavior, metric
+arithmetic, ordering, hashing, privacy, or fraud semantics.
+
+## Complete-set migration
 
 Consumers must move the complete contract set together:
 
-| v0.3.6 surface | v0.4.0 surface | Rule |
-| --- | --- | --- |
-| Schema minor suffix `:v0.3` | `:v0.4` | Namespace identity only |
-| Contract-owned `0.3.0` values | `0.4.0` | Applies to `contract_version`, event `schema_version`, `reason_code_version`, and `difference_reason_version` |
-| `registries/*-v0.3.json` | `registries/*-v0.4.json` | Registry values and order are unchanged |
-| `fixtures/v0.3/` | `fixtures/v0.4/` | All 47 synthetic inputs and 611 reviewed goldens move as one set |
-| `spec/event-metric-contract-v0.3.md` | `spec/event-metric-contract-v0.4.md` | The active normative specification follows the namespace |
-| Generated `V03` public types | Generated `V04` public types | Type names follow the active schema titles |
-
-Metric-definition versions, rule-bundle versions, policy versions, producer versions, wrapper versions, and other independently governed identifiers do not advance merely because the contract namespace changes. Their unchanged values are part of the mechanical proof.
-
-## Complete schema identifier map
-
-| v0.3.6 identifier | v0.4.0 identifier |
+| v0.3.6 surface | v0.4.0 surface |
 | --- | --- |
-| `urn:open-mmp:schema:attribution-result:v0.3` | `urn:openmasu:schema:attribution-result:v0.4` |
-| `urn:open-mmp:schema:common:v0.3` | `urn:openmasu:schema:common:v0.4` |
-| `urn:open-mmp:schema:correction:v0.3` | `urn:openmasu:schema:correction:v0.4` |
-| `urn:open-mmp:schema:cost-record:v0.3` | `urn:openmasu:schema:cost-record:v0.4` |
-| `urn:open-mmp:schema:event-delivery:v0.3` | `urn:openmasu:schema:event-delivery:v0.4` |
-| `urn:open-mmp:schema:event-ad-impression:v0.3` | `urn:openmasu:schema:event-ad-impression:v0.4` |
-| `urn:open-mmp:schema:event-ad-revenue:v0.3` | `urn:openmasu:schema:event-ad-revenue:v0.4` |
-| `urn:open-mmp:schema:event-ad-view:v0.3` | `urn:openmasu:schema:event-ad-view:v0.4` |
-| `urn:open-mmp:schema:event-adattributionkit-postback:v0.3` | `urn:openmasu:schema:event-adattributionkit-postback:v0.4` |
-| `urn:open-mmp:schema:event-click:v0.3` | `urn:openmasu:schema:event-click:v0.4` |
-| `urn:open-mmp:schema:event-consent-changed:v0.3` | `urn:openmasu:schema:event-consent-changed:v0.4` |
-| `urn:open-mmp:schema:event-custom-event:v0.3` | `urn:openmasu:schema:event-custom-event:v0.4` |
-| `urn:open-mmp:schema:event-install:v0.3` | `urn:openmasu:schema:event-install:v0.4` |
-| `urn:open-mmp:schema:event-purchase:v0.3` | `urn:openmasu:schema:event-purchase:v0.4` |
-| `urn:open-mmp:schema:event-refund:v0.3` | `urn:openmasu:schema:event-refund:v0.4` |
-| `urn:open-mmp:schema:event-session-start:v0.3` | `urn:openmasu:schema:event-session-start:v0.4` |
-| `urn:open-mmp:schema:event-skan-postback:v0.3` | `urn:openmasu:schema:event-skan-postback:v0.4` |
-| `urn:open-mmp:schema:fixture-input:v0.3` | `urn:openmasu:schema:fixture-input:v0.4` |
-| `urn:open-mmp:schema:fraud-decision:v0.3` | `urn:openmasu:schema:fraud-decision:v0.4` |
-| `urn:open-mmp:schema:logical-event:v0.3` | `urn:openmasu:schema:logical-event:v0.4` |
-| `urn:open-mmp:schema:metric-definition:v0.3` | `urn:openmasu:schema:metric-definition:v0.4` |
-| `urn:open-mmp:schema:metric-run:v0.3` | `urn:openmasu:schema:metric-run:v0.4` |
-| `urn:open-mmp:schema:privacy-request:v0.3` | `urn:openmasu:schema:privacy-request:v0.4` |
-| `urn:open-mmp:schema:privacy-tombstone:v0.3` | `urn:openmasu:schema:privacy-tombstone:v0.4` |
-| `urn:open-mmp:schema:raw-record:v0.3` | `urn:openmasu:schema:raw-record:v0.4` |
-| `urn:open-mmp:schema:reconciliation-result:v0.3` | `urn:openmasu:schema:reconciliation-result:v0.4` |
-| `urn:open-mmp:schema:rejection:v0.3` | `urn:openmasu:schema:rejection:v0.4` |
+| schema suffix `:v0.3` | schema suffix `:v0.4` |
+| namespace `urn:open-mmp:schema:` | namespace `urn:openmasu:schema:` |
+| contract-owned `0.3.0` values | contract-owned `0.4.0` values |
+| `registries/*-v0.3.json` | `registries/*-v0.4.json` |
+| `fixtures/v0.3/` | `fixtures/v0.4/` |
+| v0.3 specification | `spec/event-metric-contract-v0.4.md` |
+| generated `V03` types | generated `V04` types |
 
-## Mechanical proof and golden ledger
+Metric-definition versions, rule-bundle versions, policy versions, producer
+versions, and other independently governed values did not advance unless their
+literal identity contained the former project name.
 
-Run `npm run verify:contract-rename`. The verifier reads the immutable tag through `git cat-file`, compares every current JSON artifact structurally, and rejects any field, value, array order, or independent version change outside the closed identity mapping. It also verifies that the Swift and Unity conversion-schema resources are byte-identical and that fixture 45 carries their exact byte digest.
+## Schema identifier rule
 
-The reviewed result is:
+Every schema maps mechanically:
 
 ```text
-Contract v0.4 rename proof: contract-v0.3.6 (62e1288076925adf7384a7688c56d0b67fa789c7)
-Schemas: 27; SCHEMA_URN=31, CONTRACT_SEMVER=19, SCHEMA_TITLE=27, NAME_DERIVED=1; SEMANTIC_DIFF=0
-Registries: 8; PATH_RENAME=8; CONTRACT_SEMVER=8; SEMANTIC_DIFF=0
-Fixtures: 47 inputs=47 goldens=611 files=659
-Fixture diff classification: PATH_RENAME=659; CONTRACT_SEMVER=820; NAME_DERIVED=3; DERIVED_DIGEST=3; SEMANTIC_DIFF=0
+urn:open-mmp:schema:<artifact>:v0.3
+urn:openmasu:schema:<artifact>:v0.4
 ```
 
-Every fixture file moves to the v0.4 path. JSON content changes are exhaustive by artifact class:
+This applies to common, raw-record, delivery, logical-event, correction,
+privacy, attribution, fraud, rejection, reconciliation, cost, metric,
+fixture-input, and every event schema. The complete exact list can be recovered
+from the tagged schemas and verified against the active tree.
 
-| JSON artifact | Changed files | Changed leaves | Identity reason |
-| --- | ---: | ---: | --- |
-| `input.json` | 47 | 288 | Contract/schema versions; three fixture-45 name-derived values and one derived resource digest |
-| `expected_raw_records.json` | 43 | 208 | Contract/schema versions; two fixture-45 payload digests derived from renamed input strings |
-| `expected_deliveries.json` | 47 | 116 | Contract versions |
-| `expected_logical_events.json` | 43 | 102 | Contract versions |
-| `expected_corrections.json` | 4 | 6 | Contract versions |
-| `expected_privacy_requests.json` | 3 | 4 | Contract versions |
-| `expected_privacy_tombstones.json` | 3 | 4 | Contract versions |
-| `expected_attributions.json` | 32 | 61 | Reason-code versions |
-| `expected_cost_records.json` | 1 | 2 | Contract versions |
-| `expected_fraud_decisions.json` | 3 | 3 | Reason-code versions |
-| `expected_rejections.json` | 8 | 16 | Contract and reason-code versions |
-| `expected_reconciliation.json` | 13 | 16 | Difference-reason versions |
-| `expected_metric_definitions.json` | 0 | 0 | Path-only move; independent metric/rule versions remain unchanged |
-| `expected_metric_runs.json` | 0 | 0 | Path-only move; values, snapshots, and independent versions remain unchanged |
+## Mechanical proof
 
-Fixture 45 has the only derived digest changes:
+Run:
 
-| Evidence | v0.4.0 digest |
-| --- | --- |
-| Bundled conversion-schema bytes | `593b3db37b01680452064eacbc32c135832c977933c2a8ac7437fd9d2a50b4ed` |
-| Install payload JCS | `3165088f0016e2d7745abfce00a76707c9fb812540dd6e999455e551a3079574` |
-| Conversion-update payload JCS | `b702b0728fbe7d6bf6155c711c515457c27c03e08a9fdd535cb657ed4bf98cba` |
+```bash
+npm run verify:contract-rename
+```
 
-No attribution status, reason meaning, candidate set, window, join, metric value, money value, snapshot digest, grouping digest, evidence reference, privacy state, or fraud decision changes. `SEMANTIC_DIFF=0` is a hard failure condition, not a descriptive claim.
+The verifier reads the immutable tag with `git cat-file`, compares every current
+JSON artifact structurally, and rejects any change outside the closed identity
+mapping. Its accepted migration classified:
 
-## Additive M6 patch ledger
+- 27 schemas;
+- 8 registry path moves;
+- 47 fixture inputs and 611 reviewed golden files;
+- contract SemVer, schema URN/title, path, and name-derived changes;
+- zero semantic differences.
 
-The active v0.4 schema identifiers and artifact `contract_version` values remain unchanged under R-27. These release-package patches are additive and are exercised only by new synthetic fixtures:
+Conversion-schema resources embedded in Swift and Unity were required to remain
+byte-identical. Fixture 45 contained the only name-derived digest updates. No
+attribution status, candidate, window, join, metric value, money value, snapshot,
+grouping, privacy state, or fraud meaning changed.
 
-| Patch | Additive surface | Fixture |
-| --- | --- | --- |
-| `0.4.1` | Source-scoped fraud decisions, rule identity, quarantine deadline, and three produced public fraud categories | 48 |
-| `0.4.2` | `fraud_excluded` attribution provenance | 49 |
-| `0.4.3` | Optional `fraud_policy` on metric definitions and runs | 50 |
-| `0.4.4` | Explicit Play referrer click-time availability | 51 |
-| `0.4.5` | Server-assigned `source_rate_class` and `client_class` click evidence | 52 |
-| `0.4.6` | Registered fraud-bundle definition binding and the non-fraud `ctit_clock_anomaly` day guard | 53 |
-| `0.4.7` | Deep-link open events, engagement attribution vocabulary, deferred-destination evidence, and daily deep-link metrics | 54 |
-| `0.4.8` | Canonical purchase/refund targets and settled purchase-net D0/D1/D3/D7 revenue | 55 |
-| `0.4.9` | D30/D90 purchase-net plus total-net revenue, ROAS, and cohort LTV | 56 |
+## Additive v0.4 patch ledger
 
-Fixture 53 adds 13 reviewed golden files. The bundle-binding correction changes only `expected_fraud_decisions.json` in fixtures 19, 25, 41, 48, 49, 50, and 51: their rule-bundle ID/version/hash now name the same non-zero composite definition. No raw, delivery, logical-event, rejection, attribution, metric, cost, privacy, correction, or reconciliation golden in an existing fixture changes. Fixture 54 adds one independent event schema and 13 reviewed golden files without altering an earlier deep-link golden. Fixture 55 adds 13 reviewed golden files for purchase/refund net revenue. Fixture 56 adds 13 reviewed golden files for D30/D90 total-net metrics; its D31 and D91 boundary events are new synthetic evidence only. Fixture 16 remains byte-identical and proves explicit-target legacy compatibility when the purchase receipt follows the refund receipt and both installation IDs are absent. Fixtures 48 through 56 add 117 reviewed golden files, while fixtures 01 through 47 otherwise retain the v0.4.0 baseline.
+| Patch | Additive surface | First fixture |
+| --- | --- | ---: |
+| 0.4.1 | source-scoped fraud decisions and public categories | 48 |
+| 0.4.2 | fraud-exclusion attribution provenance | 49 |
+| 0.4.3 | gross/net metric fraud policy | 50 |
+| 0.4.4 | Play referrer click-time availability | 51 |
+| 0.4.5 | source-rate and client classifications | 52 |
+| 0.4.6 | registered fraud-bundle binding and CTIT clock diagnostic | 53 |
+| 0.4.7 | deep-link event and engagement attribution | 54 |
+| 0.4.8 | installation-anchored purchase/refund net revenue | 55 |
+| 0.4.9 | D30/D90 purchase-net and total-net metrics | 56 |
+
+These patches leave active schema IDs on the v0.4 minor line. Each new vocabulary
+or definition is exercised by synthetic evidence. Earlier goldens remain
+byte-identical except for the documented fraud-bundle binding correction, which
+replaced placeholder or partial hashes in seven fraud-decision files with the
+registered composite definition.
+
+## Current source of truth
+
+Use `schemas/`, `registries/`, `fixtures/v0.4/`, and
+`spec/event-metric-contract-v0.4.md` together. This migration document explains
+compatibility; it is not a substitute for active validation.

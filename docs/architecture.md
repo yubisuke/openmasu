@@ -1,300 +1,208 @@
-# Initial Architecture
+# Architecture
 
-## Approach
+## Design goal
 
-Start with a modular monolith and PostgreSQL. Do not add ClickHouse, Kafka, or service decomposition until measured load demonstrates the need.
+OpenMasu separates received evidence, normalized facts, decisions, and reports
+so that a historical result can be reproduced and audited. PostgreSQL is the
+default durable store. Pure TypeScript and independent Python evaluators define
+contract behavior; runtime SQL must match them.
 
-Proposed stack:
+## Deployment shape
 
-- Server: TypeScript on Node.js
-- Schemas: JSON Schema Draft 2020-12 with generated runtime types
-- Database: PostgreSQL
-- Android SDK: Kotlin
-- Unity integration: C# API with Android Kotlin and iOS Swift/C ABI bridges
-- iOS SDK: Swift Package with first-party, Apple, and provider-neutral MAX products
-- Dashboard: dependency-free, server-rendered TypeScript HTML with no client JavaScript
-- Local runtime: Docker Compose
-
-## Reference deployment boundary
-
-M1 through M4 use one portable deployment path: Docker Compose, Node.js services, and PostgreSQL. They do not adopt Cloudflare Queues, R2, or D1. M2 may offer a Cloudflare Workers redirector as an optional edge adapter, but the same redirector behavior must remain available through the portable Node.js interface. The ingestion API, worker, authoritative ledger, protected evidence, Apple postback receiver, and dashboard do not require Cloudflare. No public contract depends on a Cloudflare-specific API.
-
-The decided M1 implementation baseline is documented in [M1 Design Baseline](design/m1-baseline.md). R-22 resolves every option set in that document to its recorded recommendation. The Android, Unity, redirector, and SDK-ingestion design is fixed by R-24 in [M2 Design Baseline](design/m2-baseline.md). The dependency-free server-rendered dashboard, tenant-scoped session, reader-role, and typed reporting design is fixed by R-25 in [M3 Design Baseline](design/m3-baseline.md). The Swift SDK, Apple receiver, AdServices, conversion schema, and aggregate-series design is fixed by R-28 in [M4 Design Baseline](design/m4-baseline.md). Deterministic fraud controls are fixed by R-32 in [Fraud Design Baseline](design/fraud-baseline.md), and direct/deferred deep-link behavior is fixed by R-33 in [Deep-Link Design Baseline](design/deeplink-baseline.md).
-
-## Android M2 flow
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant R as Redirector
-    participant P as Google Play
-    participant S as Android SDK
-    participant I as Ingestion API
-    participant W as Attribution Worker
-    participant D as PostgreSQL
-
-    U->>R: Open measurement link
-    R->>D: Store click_id and campaign evidence
-    R-->>P: Redirect with click_id in referrer
-    U->>S: First app launch
-    S->>P: Read Install Referrer
-    P-->>S: Return click_id and optional validated deferred destination
-    S-->>U: Deliver destination to host app before measurement
-    S->>I: Deliver install record and click evidence
-    I->>D: Store delivery and raw record
-    W->>D: Normalize and match click to install
-    W->>D: Store a versioned attribution decision
+```text
+mobile apps / platform callbacks / import files
+                 |
+                 v
+      API and redirector trust boundaries
+                 |
+                 v
+       durable inbox and payload store
+                 |
+                 v
+     worker normalization and evaluation
+                 |
+                 v
+   PostgreSQL ledger, control, and facts
+                 |
+                 v
+      reporting API and HTML dashboard
 ```
 
-## Components
+The default Compose deployment contains PostgreSQL, bootstrap/migrations, API,
+redirector, worker, and one-shot seed services. A Cloudflare redirector adapter
+is a documented future deployment option over the same core; it is not currently
+implemented or shipped, and Cloudflare is not the database or application
+runtime.
 
-### M1a runtime component inventory
+## Runtime components
 
-The following component identifiers are mechanically matched to the threat tables.
-
-<!-- m1-component:import-worker -->
-- `import-worker`: file-driven existing-MMP imports, cost adapters, MAX inbox processing, append-only MAX aggregate-revenue snapshots, and contract evaluation.
-<!-- m1-component:max-receiver -->
-- `max-receiver`: authenticated, allowlisted, rate-limited public GET receiver that appends one durable inbox row before returning 204.
-<!-- m1-component:payload-store -->
-- `payload-store`: AES-256-GCM envelope-encrypted protected objects with one random data key and independently purgeable key entry per object.
 <!-- m1-component:admin-api -->
-- `admin-api`: scrypt-verified bearer authentication, two-key overlap, deletion requests, and append-only privileged-operation audit.
-<!-- m1-component:postgres-ledger -->
-- `postgres-ledger`: authoritative RLS, append-only raw evidence, deliveries, corrections, tombstones, decisions, costs, and metric runs.
-<!-- m1-component:runtime-ci -->
-- `runtime-ci`: Linux/PostgreSQL migration, unit/integration, golden parity, Compose smoke, threat coverage, and per-workspace SBOM gate.
-
-### M2 component inventory
-
-The following four identifiers are covered mechanically.
+**Management and reporting API.** Authenticates tenant administrators, app and
+SDK management, imports, reports, privacy requests, and server-rendered
+dashboard sessions. Mutating routes use the application role; read-only report
+routes use the reader role.
 
 <!-- m1-component:redirector -->
-- `redirector`: portable Node HTTP shell and shared deterministic core for tenant-owned link hosts, stored measurement links, association-file routes, validated destination suffixes, Play referrers, click evidence, safe fallback, and memory-only source-IP rate limiting on click routes only.
-<!-- m1-component:sdk-ingestion -->
-- `sdk-ingestion`: app-key enrollment, per-installation credentials, HMAC request integrity, ephemeral nonce replay defence, durable batch inbox, ordered worker drain, and on-device deletion authorization.
-<!-- m1-component:sdk-android -->
-- `sdk-android`: Kotlin client boundary for App Link delivery, Android-only deferred destinations through Install Referrer, Meta evidence, durable delivery, consent, collection lifecycle, and MAX revenue mapping.
-<!-- m1-component:unity-bridge -->
-- `unity-bridge`: C# bridge to Kotlin/Swift for Unity lifecycle, main-thread deep-link and measurement callbacks, generated Apple associated-domain configuration, and Android/iOS MAX impression-revenue callbacks.
-<!-- m1-component:app-association -->
-- `app-association`: pure generation of Android Digital Asset Links and Apple app-site association JSON from synthetic or operator-supplied registrations; it performs no network or database I/O.
+**Redirector.** Resolves stored tracking links, enforces destination and host
+policy, records click evidence, and redirects without trusting request-supplied
+destinations.
 
-### M3 component inventory
+<!-- m1-component:sdk-ingestion -->
+**SDK ingestion.** Verifies SDK-key and installation credentials, HMAC body
+signatures, timestamp and nonce replay windows, request limits, and durable
+inbox admission before asynchronous evaluation.
+
+<!-- m1-component:import-worker -->
+**Import worker.** Applies the mapping DSL, validates normalized payloads against
+the active event schemas, preserves row-level rejection, and writes each
+logical record atomically and idempotently.
+
+<!-- m1-component:max-receiver -->
+**Mediation receiver.** Authenticates bounded AppLovin MAX revenue evidence and
+places it on the same durable evaluation path without turning it into install
+attribution evidence.
+
+<!-- m1-component:payload-store -->
+**Encrypted payload store.** Keeps protected raw material outside public
+artifacts and supports purge or crypto-erasure when required by lifecycle
+policy.
+
+<!-- m1-component:postgres-ledger -->
+**PostgreSQL ledger.** Separates control, append-only evidence, normalized facts,
+ephemeral credentials/sessions, and testing data. Tenant row-level security and
+role-specific grants constrain access.
+
+<!-- m1-component:sdk-android -->
+**Android SDK.** Persists a bounded queue, signs batches, reads Install Referrer,
+and exposes optional measurement adapters without collecting advertising IDs by
+default.
+
+<!-- m1-component:sdk-ios -->
+**iOS SDK.** Provides the corresponding queue, signed delivery, consent/reset
+lifecycle, AdServices and Apple conversion hooks, privacy manifest, and Unity
+bridge.
+
+<!-- m1-component:unity-bridge -->
+**Unity bridge.** Presents one C# surface backed by the Android and iOS native
+SDKs.
+
+<!-- m1-component:app-association -->
+**Association files and deep-link routing.** Generate public Android App Links
+and Apple Universal Links declarations and validate tenant-owned link hosts.
+Association files are public and never use click-path IP classification.
 
 <!-- m1-component:dashboard -->
-- `dashboard`: tenant-scoped opaque sessions, strict credential separation, a read-only PostgreSQL role, shared typed report filters, aggregate exports, and dependency-free server-rendered HTML/SVG.
-
-### M4 component inventory
+**Dashboard.** Renders HTML, CSS, and SVG on the server with no client-side
+JavaScript. It shares query parsing, SQL builders, and encoders with the API so
+the visible value and exported value use the same implementation.
 
 <!-- m1-component:apple-postback-receiver -->
-- `apple-postback-receiver`: API routes for SKAdNetwork and AdAttributionKit developer copies, Apple signature/JWS verification, non-enumerating app lookup, replay/conflict handling, and protected AdServices follow-up.
-<!-- m1-component:sdk-ios -->
-- `sdk-ios`: Swift first-party client with Universal Link delivery, one excluded storage subtree, durable SQLite queue, HMAC delivery, consent/reset lifecycle, AdServices, conversion-value updates, MAX mapping, Unity C ABI, privacy manifest, symbol audit, and dependency-empty runtime SBOM.
+**Apple postback receivers.** Verify supported synthetic SKAdNetwork and
+AdAttributionKit signature shapes, reject replay/conflict, and persist aggregate
+series separately from installation attribution.
 
-### Redirector
+<!-- m1-component:fraud-engine -->
+**Fraud engine.** Applies deterministic public rules to recorded evidence,
+binds decisions to registered rule-bundle definitions and hashes, and keeps
+default action separate from metric exclusion.
 
-- Accepts `GET /r/{slug}` and `GET /r/{slug}/<validated-deep-link-value>`
-- Serves `/.well-known/assetlinks.json` and `/.well-known/apple-app-site-association` before click routing, without click-IP classification or allowlisting
-- Resolves the tenant from a deployment-unique registered host, with an explicit single-tenant fixed mode
-- Resolves an approved destination from the link configuration
-- Generates and records a server-side `click_id`
-- Adds an encoded referrer to the Google Play URL on Android
-- Falls back to a safe configured destination without exposing internal errors
+<!-- m1-component:integrity-verifier -->
+**Integrity verifier.** Normalizes protected Play Integrity or App Attest
+responses through server-side verification boundaries. Live projects remain an
+operator configuration.
 
-### Ingestion API
-
-Google Play commerce claims remain pending until the worker resolves the registered package against the provider. One-time products use ProductPurchaseV2; subscriptions use SubscriptionPurchaseV2. A processed package-scoped order with the same protected token and exactly one matching typed line supplies settled purchase money. Authenticated Pub/Sub RTDN signals are accepted only after Google OIDC verification and package-to-app resolution. All supported lifecycle states remain non-financial until read-back; a voided/full/partial-refund signal creates a correction only from an exact processed Orders history amount. Deployment-global message, token, notification, and order digests make redelivery idempotent without retaining raw identifiers.
+<!-- m1-component:google-play-product-verifier -->
+**Google Play product verifier.** Converts authenticated notifications into
+non-financial state signals and uses authoritative read-back before emitting
+settled money.
 
 <!-- m1-component:verified-commerce-lifecycle -->
-App Store Server Notifications V2 uses a two-step trust boundary: an unverified outer payload may select only a registered bundle/App Apple ID candidate, after which the outer and every nested ES256 JWS must pass certificate trust, validity, environment, and app-scope verification. Notification UUIDs reject replay. Transaction/refund history is read with short-lived server tokens and encrypted ascending revision cursors. Signed payloads stay in the protected store; provider-neutral lifecycle facts retain only safe state, timestamps, and transaction digests. Notifications themselves never create money.
+**Verified commerce lifecycle.** Tracks Google and Apple lifecycle revisions,
+refund corrections, encrypted cursors, and privacy coverage without exposing
+provider transaction identifiers publicly.
 
-- Accepts `POST /v1/events/batch`
-- Assigns the authoritative tenant and app from an authenticated SDK key or adapter configuration; client-supplied IDs are consistency checks only
-- Validates payload size, event count, schema version, and client-clock skew: when client `occurred_at` is later than `received_at + 5 minutes`, retain it as evidence and mark `clock_skew_suspected`; it never controls an attribution window
-- Stores delivery, raw record, and logical event as separate concepts
-- Distinguishes successful receipt from successful normalization or attribution
-
-Minimal delivery example:
-
-```json
-{
-  "raw_record": {
-    "contract_version": "0.2.0",
-    "record_id": "record:example-install",
-    "tenant_id": "tenant:example",
-    "app_id": "app:example",
-    "producer": "sdk-android",
-    "producer_version": "0.2.0",
-    "event_id": "event:example-install",
-    "delivery_id": "delivery:example-install",
-    "event_name": "install",
-    "schema_version": "0.2.0",
-    "payload_sha256": "ef404508d45f9dff0b61f7ed43c0ad8e06c9723440f23645db82233391575249",
-    "occurred_at": "2026-08-11T00:00:00.000Z",
-    "occurred_at_source": "device",
-    "received_at": "2026-08-11T00:00:01.000Z",
-    "payload_lifecycle_status": "available",
-    "raw_payload_ref": "protected:example-install",
-    "processing_purpose_id": "attribution",
-    "consent_evaluation_policy_version": "consent-policy-0.2",
-    "consent_decision_reason_code": "consent_not_required"
-  },
-  "payload": {
-    "event_name": "install",
-    "installation_id": "installation:example",
-    "referrer_status": "none",
-    "install_type": "first_install"
-  }
-}
-```
-
-The canonical schemas live in `schemas/`; this example is illustrative and validates against `schemas/raw-record.schema.json` and `schemas/events/install.schema.json`. The payload digest is SHA-256 over the RFC 8785 JCS UTF-8 serialization of the shown payload.
-
-### Attribution Core
-
-Implement attribution as a pure evaluator. Recalculation must fix the inputs and all relevant policy versions:
-
-- Raw-record watermark
-- Immutable input snapshot ID or ledger position
-- Attribution rule bundle
-- Metric definition
-- Time zone and window boundaries
-- FX policy and rounding
-- Output schema version
-
-Initial Android rule:
-
-1. Extract a verifiable `click_id` from Install Referrer evidence.
-2. Confirm that the click belongs to the same tenant and app.
-3. Evaluate the seven-day half-open window with the redirector-recorded click time and the Google Play server `install_begin_at_server`; device `occurred_at` is evidence only and never decides the window.
-4. Return `non_organic` with a deterministic method and reason when valid.
-5. Otherwise return `organic` or `unattributed` with an explicit reason code.
-
-### Reporting API
-
-- `GET /v1/reports/metrics?app_id=...&format=json|csv` returns tenant-scoped, validated-app metric rows under one typed filter and keyset-pagination contract.
-- `GET /v1/reports/records?app_id=...&watermark_at_most=...` returns aggregate counts and declared non-identifying dimensions only; it never returns an installation, click, record ID, payload, or payload reference.
-- `GET /v1/audit/differences?app_id=...&format=json|csv` renders only persisted reconciliation artifacts, including internal/external snapshots, protected matching-key metadata, candidates, exclusions, windows, joins, freshness, and neutral reason codes.
-- JSON and CSV are generated from one normalized row model. Metric rows carry the metric-definition version, policy versions, input watermark, immutable snapshot ID, freshness, and explicit present/undefined value state.
-- Date filters are half-open, filter values are bound parameters, supersession defaults to the latest row, and `supersession=all` exposes history. Pagination uses an opaque keyset cursor and never `OFFSET`.
-- Undefined ROAS has an absent numeric value and an explicit reason. It is not coerced to zero or infinity.
-- Raw-record access remains separate from aggregate reporting; these endpoints never expose raw payloads.
-- The authenticated scope fixes the tenant. The request supplies an `app_id` that is validated against that tenant's registered apps; unknown and cross-tenant apps have the same response. Responses use `cache-control: no-store`.
-- Aggregate privacy reports are never presented as installation-level records.
-
-### M5 management and operations
+<!-- m1-component:google-data-manager-delivery -->
+**Conversion delivery.** Produces a bounded, authenticated Google Data Manager
+delivery path from eligible stored evidence with idempotent delivery state.
 
 <!-- m1-component:production-control-plane -->
+**Production control plane.** Holds tenant/app configuration, RBAC, rule-bundle
+history, keys, durable schedules, and audited administrative changes.
+
 <!-- m1-component:privacy-restore -->
+**Privacy restore path.** Reapplies completed deletion state after a database
+restore before the restored system is released to normal service.
+
 <!-- m1-component:operational-observability -->
+**Operational observability.** Emits closed structured logs and authenticated
+fixed-label Prometheus metrics without raw payloads or identifiers.
+
 <!-- m1-component:integrity-evidence -->
-<!-- m1-component:fraud-engine -->
-<!-- m1-component:integrity-verifier -->
-<!-- m1-component:google-play-product-verifier -->
+**Integrity evidence boundary.** Stores only bounded verdict, policy, time, and
+protected opaque evidence references in public-contract artifacts.
 
-The M6 `fraud-engine` is a deterministic worker-side rule evaluator over server-authoritative record evidence and append-only source-day aggregates. It persists versioned decisions, resolves every expired quarantine exactly once, supersedes excluded installation attribution, and exposes aggregate-only audit rows through `/v1/audit/fraud`. Ingestion is never rejected by a fraud action. The `integrity-verifier` is a separate protected-token boundary; M6b normalizes server-verification outcomes without turning provider outages into failures. The `google-play-product-verifier` is another protected-token worker boundary: it binds an Android package, globally unique purchase-token digest, claimed product, ProductPurchaseV2 or SubscriptionPurchaseV2 state, and a matching processed Google order before emitting a separate settled adapter record. Authenticated renewal notifications reuse that boundary and add deployment-global message/order replay registries. Amount and currency are converted exactly from the matching order line total; client- or notification-declared money cannot override the verified record.
+<!-- m1-component:runtime-ci -->
+**Runtime CI.** Migrates PostgreSQL, checks the role/grant matrix, seeds synthetic
+fixtures, proves ledger and metric parity, exercises API/worker/redirector paths,
+and checks SBOM, threat-model, and real-data guardrails.
 
-Administrator keys are tenant-wide control-plane identities. Every route still
-resolves and validates the requested app inside that tenant; a role does not
-turn a request-supplied `app_id` into authority. Dashboard sessions inherit the
-backing key role and become invalid when that key is retired.
+## Evidence flow
 
-| Role | Read reports/dashboard/metrics | Operate tracking and imports | Administer apps, keys, privacy, Apple configuration, and rule bundles |
-| --- | --- | --- | --- |
-| `admin` | Yes | Yes | Yes |
-| `operator` | Yes | Yes | No |
-| `read_only` | Yes | No | No |
-
-`GET /metrics` requires a valid administrator bearer identity with read
-capability and returns dependency-free Prometheus text. Labels are closed route,
-method, status-class, queue, operator-job (`mmp_import`, `cost_import`,
-`metric_run`), scheduled-worker job, and outcome (`succeeded`, `failed`)
-vocabularies; tenant, app,
-installation, record, payload, authorization, cookie, and query values are never
-labels or output. Operator-run import and metric CLI entrypoints append one
-terminal tenant/app-scoped row to `ledger.audit_logs`. The metrics endpoint reads
-those rows into durable run counts and latest-completion timestamps, including
-zero-valued fixed combinations after restart. Internal worker jobs use a
-tenant/job-scoped PostgreSQL schedule with a session advisory lock plus a periodically renewed expiring lease,
-persisted next run, retry timing, completion counts, and consecutive-failure state. This keeps
-multiple workers and restarts from running the same internal job concurrently.
-Provider-import schedules, benchmarks, alert thresholds, receivers, and
-external notification routing remain outside this mechanism.
-Application HTTP logs use a closed event type that structurally cannot accept
-payload/body/authentication/identifier fields.
-
-Rule-bundle activation writes an append-only tenant/app-scoped revision with
-ID, version, hash, predecessor, and an audit row. The registry records which
-version governed a historical result; live rule definitions, thresholds,
-watchlists, weights, and response timing remain deployment-private. Metric
-replay manifests retain exact versioned evaluation inputs for privacy
-recalculation and are intentionally unavailable to the reader role.
+1. A trust-boundary adapter authenticates and bounds an input.
+2. Protected bytes are encrypted and referenced by an opaque token.
+3. The input enters a durable inbox or import run.
+4. Schema validation happens before ledger persistence.
+5. A transaction writes the raw record, delivery, logical event, and applicable
+   fact projection or records a non-identifying rejection.
+6. Evaluators resolve supported attribution, fraud, reconciliation, and metric
+   results under registered rule and metric versions.
+7. Derived artifacts append; a newer artifact names the artifact it supersedes.
+8. Reports select an explicit watermark and supersession mode.
 
 ## Data layers
 
-Minimum logical entities:
+- **Control:** tenants, apps, credentials, configuration, rule bundles,
+  schedules, import runs, and audit records.
+- **Ledger:** received evidence and append-only decision artifacts.
+- **Facts:** normalized queryable projections derived from ledger artifacts.
+- **Ephemeral:** replay nonces, sessions, queues, quarantine state, and other
+  bounded operational state.
+- **Payload store:** encrypted protected evidence referenced from the database.
+- **Testing:** synthetic fixture and parity records only.
 
-- `tenants`
-- `apps`
-- `sdk_keys`
-- `tracking_links`
-- `clicks`
-- `raw_records`
-- `event_deliveries`
-- `events`
-- `corrections`
-- `installations`
-- `attributions`
-- `fraud_decisions`
-- `metric_runs`
-- `privacy_requests`
-- `audit_logs`
+`received_at` and server/platform authoritative times determine selection and
+windows. Device `occurred_at` remains evidence but is not silently promoted to
+server authority.
 
-The layers have distinct responsibilities:
+## Tenant and role isolation
 
-- `raw_records`: append-only received evidence and payload digest
-- `event_deliveries`: retries, duplicate deliveries, and ID conflicts
-- `events`: normalized logical events
-- `corrections`: causal correction, retraction, and redaction records
-- `attributions`: versioned and supersedable decisions
-- `metric_runs`: aggregates with a fixed input watermark and policy versions
+Tenant scope is set from authenticated server configuration, not from an
+untrusted cookie or query parameter. PostgreSQL row-level security is forced on
+tenant tables. The application, reader, seed, and migration roles receive
+different minimum grants, and CI compares the complete table/grant matrix after
+migrations.
 
-PostgreSQL is the authoritative ledger and the initial store for impression-revenue facts and aggregates. Runtime code accesses impression revenue through an `ImpressionRevenueStore` port so storage can change without changing the contract. A Parquet and DuckDB adapter is a documented future option, not an M1 dependency. Consider implementing it only after measured load persistently exceeds at least one baseline threshold: five million daily impression rows, 500 GB for `ad_revenue_facts` including indexes, a daily cohort aggregation longer than 30 minutes, or aggregation p95 longer than one quarter of its schedule interval. Before adding a second store, use monthly partitioning, daily pre-aggregation, and retention of only the evidence required by policy.
+## Reporting consistency
 
-Do not compress independent concerns into one `data_quality_status`. Store ingestion, duplicate resolution, timeliness, record lifecycle, and attribution finality as separate axes.
+Metric definitions, SQL cohort evaluation, raw-record aggregation, API rows,
+CSV export, dashboard views, and rendered values use a fixed watermark and
+shared types. `ledger_seq` may support internal ordering but is not part of a
+public reproducibility digest.
 
-## Attribution result minimum
+Undefined values remain absent with a closed reason. Organic, non-organic,
+unattributed, deterministic installation-level, and aggregate platform series
+are never merged implicitly.
 
-- `attribution_id`
-- `tenant_id`
-- `app_id`
-- `subject_scope`: `installation_level | aggregate`
-- `subject_ref`
-- `status`: `organic | non_organic | unattributed`
-- `method`
-- `model`
-- `reason_code` and registry version
-- Evidence references with access classifications
-- Input cutoff and decision timestamps
-- Rule bundle ID, version, and digest
-- `finality`
-- `supersedes_attribution_id`
+## Known architectural limits
 
-Aggregate subjects must not contain an `installation_id`.
+- The default worker runs job types serially; slow tenant or provider work can
+  delay later jobs until bounded concurrency is introduced.
+- Any job that holds a scheduler lease and opens nested tenant transactions
+  must fit the configured connection pool; this is an active hardening target.
+- PostgreSQL is the only supported primary store. Additional analytical stores
+  require measured evidence and a separate design.
+- Live provider credentials, alert routing, TLS termination, and production
+  hosting remain deployment responsibilities.
 
-## Runtime sequence
-
-- M1a implements the ledger and three portable import paths; M1b adds cohort metrics and difference audit.
-- M2 adds the Android and Unity SDKs plus the portable redirector and optional Workers adapter.
-- M4a adds first-party iOS measurement; M4b adds AdAttributionKit and SKAdNetwork postback receipt, verification, and separate fixed-watermark aggregate reporting.
-- M5 adds production controls and only the adapter scope approved in the roadmap.
-- Google announced the retirement of Attribution Reporting (Android) on 2025-10-17 and no longer accepts enrollment; this project does not adopt it.
-- A second analytical store is considered only when the measured thresholds above are crossed.
-
-Privacy-preserving aggregate reports remain a dedicated aggregate series and are never forcibly joined to an installation.
-
-## Verified Google conversion delivery
-
-<!-- m1-component:google-data-manager-delivery -->
-The post-M7 outbound adapter discovers only a Play-verified settled purchase whose latest attribution is final and non-organic and whose installation resolves to a first-party click marked `network=google_ads` with a source-qualified `remote_click_ref`. The operator registers the Google Ads operating-account and conversion-action identifiers per tenant/app and declares the app audience. Child-directed scope is structurally ineligible. The worker serializes one Data Manager APP event, stores only encrypted request bytes plus digests in the durable queue, sends with a dedicated service-account secret, and appends safe state transitions while polling request diagnostics. The provider boundary never receives installation, purchase-token, Play order, raw record, or internal click identifiers.
+Security controls and residual risks are listed in
+[Threat model](threat-model.md). Subsystem details are in `docs/design/`.

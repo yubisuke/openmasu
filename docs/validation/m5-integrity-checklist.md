@@ -1,4 +1,4 @@
-# M5 Play Integrity and App Attest Operator Checklist
+# Play Integrity and App Attest Operator Checklist
 
 Contract v0.3.5 reserves optional `integrity_verdict` evidence only. OpenMasu
 does not ship a live Play Integrity or App Attest integration and never treats

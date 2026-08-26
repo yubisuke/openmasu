@@ -1,4 +1,4 @@
-# M4 device and Apple-provider validation checklist
+# iOS Device and Apple Provider Validation Checklist
 
 This checklist holds operator evidence that cannot be established by synthetic
 CI. Store all results outside this public repository. Never paste an Apple
@@ -20,7 +20,7 @@ runtime, Android, and iOS workflows are green. The iOS workflow must include:
 CI is synthetic evidence. It is not proof of a real device, provider account,
 campaign, App Store build, Unity export, or privacy-review outcome.
 
-## M4-V-1: first-party SDK delivery
+## First-party SDK delivery
 
 - Install a development build on a designated test device.
 - With collection disabled in Info.plist, confirm that first launch performs no
@@ -33,7 +33,7 @@ campaign, App Store build, Unity export, or privacy-review outcome.
 - Confirm consent withdrawal purges queued consent-required events and retains
   only the control event.
 
-## M4-V-2: AdServices and reset
+## AdServices and installation reset
 
 - Observe the exact live AdServices response shape and the semantics of
   `attribution=false`; these remain unverified until recorded here externally.
@@ -43,7 +43,7 @@ campaign, App Store build, Unity export, or privacy-review outcome.
   longer deliver, a new installation identifier is created, and AdServices is
   not fetched a second time.
 
-## M4-V-3: storage, reinstall, and transfer
+## Storage, reinstall, and transfer
 
 - After repeated queue writes and credential rewrites, inspect the SDK directory
   and verify backup exclusion and file protection remain applied.
@@ -53,7 +53,7 @@ campaign, App Store build, Unity export, or privacy-review outcome.
 - Force-quit with queued events and confirm the same queue drains on the next
   launch without duplicates. Do not claim abrupt-power-loss durability.
 
-## M4-V-4: Apple developer-copy postbacks
+## Apple developer-copy postbacks
 
 - Configure `NSAdvertisingAttributionReportEndpoint` and
   `AttributionCopyEndpoint` only in the deployment-private test application.
@@ -64,7 +64,7 @@ campaign, App Store build, Unity export, or privacy-review outcome.
 - Record whether second and third SKAdNetwork developer-copy postbacks arrive.
   Their delivery remains unverified.
 
-## M4-V-5: Unity export and MAX
+## Unity export and MAX
 
 - Export the Unity iOS sample with the supported Unity version.
 - Confirm Swift sources, `PrivacyInfo.xcprivacy`, conversion schema, sqlite3
@@ -74,7 +74,7 @@ campaign, App Store build, Unity export, or privacy-review outcome.
 - Confirm callbacks raised off the Unity thread are delivered once on the Unity
   main thread and no callback allocation remains after completion.
 
-## M4-V-6: privacy review
+## Privacy review
 
 - Compare the final built application's privacy manifest and App Privacy Details
   with the enabled event, purchase, advertising, and identifier features.

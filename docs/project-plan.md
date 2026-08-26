@@ -1,192 +1,74 @@
-# OpenMasu Project Plan
+# Project Plan
 
-## Product hypothesis
+## Objective
 
-OpenMasu does not begin by copying every feature of an established MMP. It begins by solving two problems: measurements that cannot be explained and economics that cannot be tied to visible processing and storage costs.
+Develop OpenMasu as an auditable Shadow MMP and first-party measurement toolkit.
+The project succeeds when a contributor can trace a reported value to received
+evidence, reproduce it under fixed rules, and understand why it differs from
+another measurement result.
 
-The product therefore starts as a Shadow MMP alongside an existing provider.
+Replacing an existing MMP is not the objective.
 
-- Store first-party events independently
-- Normalize existing MMP and media outputs into a common contract
-- Recalculate attribution and revenue under explicit definitions
-- Explain neutral measurement differences through candidates, exclusion reasons, windows, joins, and freshness; these categories do not score provider quality
-- Move a measurement path to primary status only after an operator-run shadow pilot validates it and the owner explicitly chooses that direction
+## Sources of truth
 
-The project is an open-source product for self-hosting teams. No company-specific replacement is assumed. Real deployment data may be used by an operator outside the public repository to test whether the contract represents reality, but it is not a repository artifact or a public completion gate.
+| Topic | Canonical source |
+| --- | --- |
+| Product boundary | [Product scope](product-scope.md) |
+| Current evidence state | [Project status](STATUS.md) |
+| Milestone order | [Roadmap](roadmap.md) |
+| Contract behavior | [Contract specification](../spec/event-metric-contract-v0.4.md), schemas, and registries |
+| Runtime design | [Architecture](architecture.md) and `docs/design/` |
+| Security boundary | [Privacy and security](privacy-security.md) and [Threat model](threat-model.md) |
+| Contributor workflow | [Development](development.md) |
+| Private operational checks | [Validation checklists](validation/README.md) |
 
-## Open and private boundaries
+Historical issue drafts, reviews, and migration records explain how earlier
+versions were reached. They do not override current sources of truth.
 
-### Open
+## Workstream order
 
-- Event and Metric Contract
-- Attribution algorithms and versions
-- Database schema and recalculation model
-- Duplicate, conflict, delay, and missing-data fixtures
-- Fraud evidence types and reason taxonomy
-- Media-adapter interfaces and declared support status
-- Infrastructure-cost calculation method
+1. **Correctness before breadth.** Fix deterministic, transactional, security,
+   and cross-platform semantic defects before adding providers or event types.
+2. **Integration before promotion.** Make the existing import-to-report path
+   coherent and easy to reproduce before publishing another release candidate.
+3. **Evidence before claims.** Add the narrowest gate that proves the intended
+   behavior; keep unperformed operator evidence explicitly open.
+4. **Release coherence before tagging.** Align version identities, release
+   notes, SBOMs, SDK artifacts, documentation, and CI on the exact commit to be
+   tagged.
 
-### Private and deployment-specific
+## Current integration work
 
-- API keys, signing keys, and media tokens
-- Live fraud thresholds and rule combinations
-- Detection-model weights
-- IP, device, and operator watchlists
-- Detection-response timing
-- Real user, campaign, cost, revenue, and provider-export evidence
+| Workstream | Deliverable | Required evidence |
+| --- | --- | --- |
+| Worker database safety | Remove nested pool starvation and unsafe transaction ownership | Synthetic scheduler/inbox integration test at the configured pool limit |
+| SDK queue parity | Align duplicate and event-ID conflict behavior across Android and iOS | Shared semantic cases plus each platform's native gate |
+| Newcomer documentation | One current documentation map and safe synthetic first run | Link check, documentation drift check, threat-model coverage, full validation |
+| Release alignment | Distinguish latest tag from development main and keep all SDK/package identities synchronized | Release-version check, bundle verification, tagged evidence manifest |
+| CI efficiency | Cancel superseded runs and run expensive platform jobs only when relevant | Pull-request scenarios proving required jobs are neither skipped nor duplicated |
 
-Fraud decisions retain evidence references, reason codes, rule-bundle versions and digests, evaluation time, action, and supersession history. A later delayed-transparency policy for retired rules may be considered, but it is not part of v0.3.
+## Change acceptance
 
-## Execution phases
+Every change must identify:
 
-`docs/roadmap.md` is the canonical execution order and contains the project-plan crosswalk. This document is a phase summary and must be updated with that crosswalk when the roadmap changes.
+- the product or operational outcome;
+- files and public interfaces affected;
+- synthetic tests that passed;
+- golden fixtures changed, if any, with their derivation;
+- checks that were not run;
+- remaining real-provider, device, platform, or production boundaries.
 
-### Phase 0.2: Contract v0.2
+Contract changes follow [Schema versioning](schema-versioning.md). Security,
+privacy, release, or public API changes require proportionate broad validation.
+Documentation-only work still runs the documentation consistency and full
+contract gates because status and validation counts are mechanically linked.
 
-Contract v0.2 is complete and its local validation gate passes. It includes the in-place consistency migration plus imported provider-reported attribution, automatic neutral reconciliation, typed reporting dimensions, cost and cohort metrics, Apple aggregate envelopes, a minimal verified Meta envelope, and the closed processing-purpose catalog. It remains contract evidence, not production-runtime readiness.
+## Public and private work
 
-### Phase 0.3: Contract v0.3
+The repository may contain only synthetic data and public configuration
+examples. Credentials, provider exports, campaign values, device identifiers,
+fraud watchlists, private thresholds, and operational evidence stay outside the
+repository.
 
-Contract v0.3 is complete and locally validated. It adds only the closed Android/Unity/Meta evidence required by Phase 2, including third-party referrer classification, typed Meta Install Referrer evidence, attribution-status grouping, custom events, click-injection classification, revenue precision, and wrapper provenance. It does not claim an SDK, device run, live campaign, or production integration.
-
-### Phase 0.4: Contract v0.4
-
-Contract v0.4.0 completes the identity-only OpenMasu namespace migration. A tag preserves the complete v0.3.6 baseline, and a mechanical verifier proves that schema structure, registry vocabularies, fixture semantics, metric/rule versions, and evaluator behavior do not drift. This phase adds no measurement capability and no production-readiness claim.
-
-### Phase 1a: Shadow ledger and import foundation
-
-M1a is implemented and locally validated with synthetic evidence. The public repository does not contain or claim real provider/account validation.
-
-- PostgreSQL received-evidence ledger, normalized logical records, corrections, and redactions
-- Docker Compose with portable Node.js API and worker services
-- Three runtime import paths: public Shadow Import Profile, media cost, and advertising revenue
-- Authenticated tenant scope, idempotency, payload and batch limits, baseline rate limiting, envelope encryption, audit logs, tests, and SBOMs
-- Runtime reproduction of reviewed synthetic contract fixtures
-- Private vulnerability reporting, TLS 1.2-or-later transport evidence, ledger-isolation tests, and deletion recalculation tests
-
-### Phase 1b: Cohort metrics and difference audit
-
-Phase 1b is implemented and locally validated with synthetic PostgreSQL data. Snapshot supersession, SQL/evaluator parity, redaction recalculation, undefined ROAS, JSON/CSV export, persisted difference evidence, a third oracle, and a 10-million-row arithmetic floor have executable evidence. Contract v0.3 closes the two vocabulary/grouping follow-ups. Exact 4-vCPU/8-GB capacity validation remains outside the completed runtime change.
-
-- Recalculable D0, ROAS, retention, and cohort-LTV engine
-- Versioned cost, revenue, FX, grouping, and watermark handling
-- Difference-audit API for candidates, exclusions, windows, joins, freshness, and neutral reasons
-- Operator-facing validation checklist; its real-data results stay outside the public repository
-
-### Phase 1.5: Continuation decision gate
-
-There is no code deliverable. The owner uses the M1a/M1b evidence, operator-run validation, operating cost, and unresolved platform limits to choose one path: continue as an audit layer, proceed toward a first-party measurement layer, or stop further expansion.
-
-### Phase 2: Android, Unity, and redirector
-
-M2a and M2b are complete on synthetic evidence: the portable redirector, HMAC app and installation authentication, durable batch processing, Kotlin SDK, Install Referrer/Meta/MAX modules, Unity UPM bridge, native and Unity samples, emulator evidence, Android SBOM, and operator checklist are present without changing contract v0.3. Real-device, real-Play, live Meta/MAX, and Unity-export validation remains an external operator responsibility and is not a code-completion claim.
-
-- Unity C# SDK and Android Kotlin bridge
-- Google Play Install Referrer and versioned deterministic attribution
-- Portable Node.js redirector, with an optional Cloudflare Workers adapter only for that redirector
-- Meta Install Referrer decryption against the v0.3 typed evidence fields, using synthetic vectors for the code gate
-- Persistent queue, retry, idempotency, identifier reset, and sample application
-
-### Phase 3: Metrics dashboard
-
-Phase 3 is implemented on synthetic evidence. The dashboard is served by the existing API process as server-rendered, zero-JavaScript HTML/SVG and shares the reporting query builder and encoder rather than calling a second reporting implementation.
-
-- App registration, measurement-link creation, and authenticated reporting
-- ROAS, retention, cohort, and attribution views
-- Raw, report, and dashboard consistency under identical definitions
-- Fixed-watermark consistency across aggregate record counts, API rows, typed views, and rendered values
-- Reader-role RLS, opaque sessions, CSRF/Origin protection, and a no-growth API runtime SBOM gate
-
-### Phase 4a: iOS first-party measurement
-
-Implemented with synthetic Swift, Simulator, server-ingestion, privacy-manifest,
-Unity bridge, and SBOM gates. Real-device and live-provider evidence remains
-operator-owned.
-
-- Swift SDK and Unity iOS bridge
-- First-party events, advertising revenue, persistent delivery, and consent controls
-- Apple AdServices evidence and required privacy disclosures
-
-### Phase 4b: Apple aggregate attribution
-
-Implemented with generated signature vectors, replay/conflict tests, protected
-AdServices lookup, fixed-watermark metrics, and separate dashboard/API series.
-
-- SKAdNetwork and AdAttributionKit developer postback-copy receipt
-- Verification, replay rejection, versioned conversion-value policy, and aggregate reporting
-- No mixing of aggregate iOS reports with deterministic installation-level attribution
-
-### Phase 5: Production and limited adapter boundary
-
-Implemented as a synthetic code/CI phase: tenant-wide minimum RBAC, existing
-rate controls, closed structured logging, authenticated Prometheus metrics,
-informational load measurement, privacy-safe backup restoration, deletion
-recalculation/export evidence, rule-bundle history, and release runbooks.
-
-- Play Integrity and App Attest are reserved as optional evidence and remain operator-configured; they are not live integrations.
-- Supported attribution evidence is limited to first-party links, Meta Install Referrer, and Apple Ads/Apple aggregate paths.
-- AppLovin MAX remains revenue evidence. TikTok, AppLovin, Unity Ads, and Mintegral user-level attribution is unsupported where partner-MMP or non-public evidence is required.
-- Production TLS, real backup recovery, real load, provider/device delivery, integrity projects, incident response, and formal trademark clearance before registration remain operator-owned gates.
-
-### Phase 6: Deterministic fraud controls
-
-Implemented through a public, replayable rule package, source-day aggregates, real fraud-bundle JCS binding, gross/net cohort policy, deadline-bound quarantine, and an aggregate-only audit report. Play Integrity and App Attest are normalized through a protected server-verification boundary, but real provider projects and real devices remain operator evidence.
-
-- No device fingerprinting, third-party IP/device intelligence, device graph, or cross-advertiser history.
-- Real-device farms cannot be detected from the permitted evidence; reset fraud is intentionally not detected.
-- Default actions are conservative flags and do not change metrics.
-- Threshold calibration, real provider availability, and chargeback acceptance remain operator work.
-
-### Phase 7: Deep links and re-engagement
-
-Implemented in synthetic code/CI: tenant-owned link hosts, public association-file generation, closed deep-link destinations, Android App Links, iOS Universal Links, Android deferred delivery through Install Referrer, Unity callbacks, engagement-scope attribution, and separated daily metrics.
-
-- Direct deep linking is deterministic on both supported mobile platforms.
-- Deferred deep linking is deterministic on Android only; iOS deferred deep linking is not offered.
-- Device-reported opens are forgeable evidence and do not become redirector-observed clicks.
-- Real-domain verification, store delivery, devices, propagation, reinstall behavior, Unity export, and four-week observation remain operator gates.
-
-### Post-Phase 7: Verified commerce lifecycle
-
-Implemented in synthetic code/CI: authenticated Google Play lifecycle signals and exact Orders refunds; App Store Server Notifications V2 outer/nested JWS verification; encrypted durable read-back with ascending revision cursors; provider-neutral lifecycle facts; deletion coverage; and bounded count-only observability.
-
-- Notifications remain state signals and never create money directly.
-- Provider transaction/order identifiers, purchase tokens, signed payloads, and credentials remain protected and are absent from public artifacts.
-- Live stores, credentials, delivery, quotas, root/key rotation, complete historical recovery, Apple installation-level revenue binding, entitlement, tax, and payout remain operator/product gates.
-
-### Post-Phase 7: Synthetic operational hardening
-
-The first operational-hardening slice replaces process-only worker overlap
-control with a tenant/job-scoped PostgreSQL schedule. Session advisory locks plus expiring leases prevent
-concurrent internal execution across worker replicas, persisted next-run and
-retry timestamps survive restart, and authenticated fixed-label metrics expose
-success/failure counts, consecutive failures, active leases, and overdue jobs.
-
-- This slice schedules only the existing internal inbox, verification,
-  delivery, fraud-maintenance, and session-sweep jobs.
-- Provider imports remain explicit CLI operations until a deployment supplies
-  reviewed parameters, secret custody, timing, and ownership.
-- External notification receivers and routing remain operator configuration;
-  the repository exposes sanitized durable state for those systems to monitor.
-
-## Evidence gates
-
-A phase completes through measurable evidence, not code completion alone.
-
-- Raw counts and aggregates can be recalculated under identical conditions
-- Every exclusion has a reason code
-- A fixed policy version reproduces a historical decision
-- Duplicate, conflict, delay, deletion, import, aggregate, and platform fixtures pass automatically
-- Runtime fixture reproduction, operator-run validation, device validation, platform approval, and production validation remain distinct states
-- All planned synthetic code phases are implemented; M2-M7 and Post-M7 operator evidence remains open and must not be inferred from CI
-- Platform approval, device validation, and campaign validation remain labeled unverified until actually completed
-
-## Rough estimate
-
-- M1a and M1b: approximately 8-12 weeks with two contributors, subject to implementation evidence
-- M2: approximately 6-10 weeks, excluding platform and device-validation elapsed time
-- M3: approximately 3-4 weeks
-- M4a and M4b: approximately 8-12 weeks, excluding Apple validation elapsed time
-- Production readiness and a shadow pilot require additional elapsed time and operational ownership
-
-AI can accelerate implementation, fixtures, documentation, adapters, and discrepancy analysis. It cannot shorten platform approval, device-signal delivery, real-campaign observation, consent behavior, restore testing, or the owner's continuation decision.
+Private operator validation is optional and separately authorized. Repository
+development must remain useful without it.

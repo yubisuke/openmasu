@@ -1,10 +1,10 @@
-# M3 Operator Validation Checklist
+# Dashboard and Reporting Operator Validation Checklist
 
 This checklist records observations that cannot be established by the synthetic code gate. Do not commit real campaign names, values, exports, credentials, session tokens, source IP addresses, screenshots containing real data, or operator notes from a live deployment to this public repository.
 
 The automated baseline is `npm run verify:consistency` plus the Runtime workflow. It covers the typed query contract, PostgreSQL reader isolation, metric parity, aggregate-only record counts, API/dashboard CSV byte identity, undefined-value rendering, zero-JavaScript CSP, and the API runtime SBOM component baseline.
 
-## V-1: Five-day morning test
+## Five-day morning test
 
 For five working days, an authorized operator opens the dashboard once and records outside this repository whether the page answered: "Did yesterday's spend produce measurable activity?"
 
@@ -15,7 +15,7 @@ For five working days, an authorized operator opens the dashboard once and recor
 - [ ] Day 5 observation stored privately
 - [ ] Any missing definition, filter, or freshness signal has an owner and follow-up date
 
-## V-2: Browser matrix
+## Browser matrix
 
 - [ ] Current Chrome accepts the session cookie and renders headings, tables, CSV links, and SVG gaps
 - [ ] Current Firefox accepts the session cookie and renders the same aggregate values
@@ -23,7 +23,7 @@ For five working days, an authorized operator opens the dashboard once and recor
 - [ ] The page remains legible with the stylesheet blocked
 - [ ] No browser request is made to an external asset, script, font, or analytics endpoint
 
-## V-3: TLS deployment
+## TLS deployment
 
 - [ ] The deployment uses HTTPS and the `__Host-openmasu_dashboard` cookie name
 - [ ] The cookie attributes are `HttpOnly`, `Secure`, `SameSite=Strict`, and `Path=/`
@@ -31,7 +31,7 @@ For five working days, an authorized operator opens the dashboard once and recor
 - [ ] Reverse-proxy access-log retention and redaction are documented privately
 - [ ] Login throttling across multiple API replicas is documented or explicitly accepted as single-process only
 
-## V-4: Real cardinality and usability
+## Real cardinality and usability
 
 - [ ] Campaign × country × date cardinality is tested outside the public repository
 - [ ] Query latency and export size are recorded privately

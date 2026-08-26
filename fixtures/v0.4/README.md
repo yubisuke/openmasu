@@ -44,7 +44,7 @@ Half-even rounding therefore produces `154321` target units, or USD `0.154321`. 
 
 ### Fixture 16: explicit-target legacy compatibility
 
-The reviewed fixture remains byte-identical: its purchase is received at `00:02:00.000Z`, after the explicit-target refund at `00:01:00.000Z`, and both payloads omit `installation_id`. Version 0.4.8 treats this as the v0.4.0 legacy correction path: the named record must exist in the same authenticated tenant/app scope, but the new financial status, ordering, identity, cap, business-canonicalization, refund-fact, and purchase-net semantics do not apply. Target-free refunds still require string installation IDs and point-in-time exactly-one resolution.
+Fixture 16 remains byte-identical: its purchase is received at `00:02:00.000Z`, after the explicit-target refund at `00:01:00.000Z`, and both payloads omit `installation_id`. Version 0.4.8 treats this as the v0.4.0 legacy correction path: the named record must exist in the same authenticated tenant/app scope, but the new financial status, ordering, identity, cap, business-canonicalization, refund-fact, and purchase-net semantics do not apply. Target-free refunds still require string installation IDs and point-in-time exactly-one resolution.
 
 ### Fixture 55: settled purchase/refund net revenue
 
@@ -78,7 +78,7 @@ Provider matching-key values were independently recomputed from the normative `S
 
 Each of the three synthetic EUR revenue events has `amount_unscaled=100000001`, scale 6, and EUR-to-USD rate `5 * 10^-1`. At target scale 6, each event converts to the exact tie `50000000.5`; half-even rounds each event to `50000000` before aggregation. Cumulative D1, D3, and D7 revenue is therefore `50000000`, `100000000`, and `150000000` target units. The current cost revision is USD `100000000` scale 6, so the non-organic cohort ROAS at ratio scale 6 is `500000`, `1000000`, and `1500000`. One-install retention on D1 and D7 is `1000000`; D7 cohort LTV is `150000000`; cohort size is `1`. A second synthetic organic install forms a separate attribution-status cohort and yields `undefined/no_attributed_cost` rather than borrowing the paid cohort's denominator.
 
-The cost dimension object `{campaign_id:"provider-campaign-33",country:"JP",network:"synthetic-network"}` has independently checked JCS/SHA-256 digest `953315226bb75e01e5ed7f838cf9f044cbfe5fb899b5bfa5e42e300a87d2caff`. The later `as_of` row supersedes the earlier row only for current selection; both remain immutable inputs. The aggregate revenue uses the synthetic deployment default USD with `currency_source=default` and is excluded from installation-cohort metrics. The imported timestamp is already normalized by truncation to `2026-08-01T00:00:00.123Z`. The reviewed golden artifacts were checked against these formulas and the output schemas; the validator itself never writes them.
+The cost dimension object `{campaign_id:"provider-campaign-33",country:"JP",network:"synthetic-network"}` has independently checked JCS/SHA-256 digest `953315226bb75e01e5ed7f838cf9f044cbfe5fb899b5bfa5e42e300a87d2caff`. The later `as_of` row supersedes the earlier row only for current selection; both remain immutable inputs. The aggregate revenue uses the synthetic deployment default USD with `currency_source=default` and is excluded from installation-cohort metrics. The imported timestamp is already normalized by truncation to `2026-08-01T00:00:00.123Z`. The committed golden artifacts were checked against these formulas and the output schemas; the validator itself never writes them.
 
 ### Fixture 34: Apple and Meta attribution envelopes
 
@@ -110,7 +110,7 @@ The public purpose catalog is exercised without adding real data: fixture 25 use
 
 ## v0.3 fixture derivations
 
-Fixtures 01 through 38 migrate the reviewed v0.2.1 scenarios to the v0.3 contract. Their per-file changes are recorded in `docs/contract-v0.3-migration.md`; the earlier v0.1-to-v0.2 derivations remain in `docs/contract-v0.2-migration.md`.
+Fixtures 01 through 38 migrate the committed v0.2.1 scenarios to the v0.3 contract. Their per-file changes are recorded in `docs/contract-v0.3-migration.md`; the earlier v0.1-to-v0.2 derivations remain in `docs/contract-v0.2-migration.md`.
 
 Each fixture contains the same 13 `expected_*.json` artifacts listed above. Empty arrays are deliberate reviewed outputs, not missing assertions.
 
@@ -144,7 +144,7 @@ Each fixture contains the same 13 `expected_*.json` artifacts listed above. Empt
 | `45-ios-conversion-schema` | One iOS install carries a synthetic bundled conversion-policy version and digest in `extensions`; one reserved custom event records an opt-in conversion-value update without changing attribution or metric meaning. |
 | `46-integrity-verdict-reservation` | Three server-assigned synthetic integrity envelopes cover both supported platforms and every closed verdict while preserving platform-referrer attribution semantics. |
 | `47-payload-schema-invalid` | One synthetic normalized runtime row fails the compiled event schema before ledger admission. It yields only a discarded delivery and non-identifying rejection; every raw, logical, and derived output remains empty. |
-| `48-source-scoped-fraud` | One reviewed source-day has exactly 1,000 clicks, CVR 0.001 against median 0.01, CTIT p50 24 hours, and p95/p50 2. All four F-R-4 terms hold, so one `source`-scoped `click_flooding_suspected` decision names the aggregate snapshot and no individual record. |
+| `48-source-scoped-fraud` | One reviewed source-day has exactly 1,000 clicks, CVR 0.001 against median 0.01, CTIT p50 24 hours, and p95/p50 2. All four registered flooding terms hold, so one `source`-scoped `click_flooding_suspected` decision names the aggregate snapshot and no individual record. |
 | `49-fraud-excluded-attribution` | A synthetic server-classified prefetch click is excluded. Its same-click install keeps the original immutable attribution and adds one superseding `unattributed/fraud_excluded` result carrying the fraud-decision reference. Ingestion artifacts remain accepted and unchanged. |
 | `50-gross-net-metrics` | The same excluded synthetic install is counted by the explicit gross daily definition and omitted by the explicit net daily definition. Both use the same snapshot and grouping digest; gross is 1 and net is 0. |
 | `51-referrer-server-order` | The Play server click timestamp is exactly one second after the Play install-begin timestamp, so the threshold-free ordering rule emits a confirmed, flag-only `referrer_time_inconsistent` decision. No redirector timestamp is needed. |
@@ -154,9 +154,9 @@ Each fixture contains the same 13 `expected_*.json` artifacts listed above. Empt
 | `55-purchase-refund-net-revenue` | One EUR 8 settled purchase and one D1 EUR 3.2 capped refund convert independently at 1.25 to reviewed D0/D1/D3/D7 net values of USD 10/6/6/6; pending/reversed rows are excluded, target-free and explicit target paths are exercised, and ad revenue stays USD 7. |
 | `56-d30-d90-total-net-metrics` | D30 purchase net/total net/ROAS/LTV are USD 8/USD 9/0.9/USD 9; D90 values are USD 30/USD 37/3.7/USD 37. D31 is excluded only from D30 and exact D91 is excluded from D90. |
 
-## WO-20 non-fraud rule-bundle provenance review
+## Non-fraud rule-bundle provenance review
 
-WO-20 replaces the undocumented placeholder hashes on attribution, Apple postback, and metric artifacts with SHA-256 digests of RFC 8785 canonical rule-bundle definitions. A structural comparison against the pre-WO-20 fixture tree found 335 changed fields in 110 JSON files. Every changed path ends in `rule_bundle_hash`; no metric value, attribution decision, identifier, timestamp, grouping, or other artifact field changed.
+The provenance correction replaces undocumented placeholder hashes on attribution, Apple postback, and metric artifacts with SHA-256 digests of RFC 8785 canonical rule-bundle definitions. A structural comparison against the preceding fixture tree found 335 changed fields in 110 JSON files. Every changed path ends in `rule_bundle_hash`; no metric value, attribution decision, identifier, timestamp, grouping, or other artifact field changed.
 
 | Rule bundle | Version | Reviewed SHA-256 digest | Changed fields |
 | --- | --- | --- | ---: |
@@ -169,7 +169,7 @@ WO-20 replaces the undocumented placeholder hashes on attribution, Apple postbac
 | `metric-purchase-net` | `0.4.9` | `709f6688c7bb8537b7af3aa3b5a3aa879036a866fe13a21b83244baec6389712` | 6 |
 | `metric-total-net` | `0.4.9` | `fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3` | 18 |
 
-The reviewed field locations are 75 in `expected_attributions.json`, 190 in `expected_metric_definitions.json`, 48 in `expected_metric_runs.json`, and 22 in `input.json`. The inputs changed only where they embed expected definition or run artifacts for parity assertions.
+The affected field locations are 75 in `expected_attributions.json`, 190 in `expected_metric_definitions.json`, 48 in `expected_metric_runs.json`, and 22 in `input.json`. The inputs changed only where they embed expected definition or run artifacts for parity assertions.
 
 ## Adding a fixture
 
@@ -178,6 +178,6 @@ The reviewed field locations are 75 in `expected_attributions.json`, 190 in `exp
 1. Create `fixtures/.candidates/<NN-name>/input.json`. Use only synthetic data and keep the proposed number and name stable during review.
 2. Run `evaluate()` from `tools/evaluator.ts` manually and run `python tools/python_evaluator.py fixtures/.candidates/<NN-name>/input.json` independently. Save neither command's output as an approved golden automatically.
 3. Compare the two outputs, review every field by hand against the schemas and contract, and record the derivation of each meaningful expected value in the pull-request description. Resolve any disagreement before promotion.
-4. Promote the reviewed input to `fixtures/v0.4/<NN-name>/`, hand-create the 13 `expected_*.json` output files, and update the named scenario assertions and inventory checks in `tools/validate.ts`. Run `npm run validate` before requesting review.
+4. Promote the approved input to `fixtures/v0.4/<NN-name>/`, hand-create the 13 `expected_*.json` output files, and update the named scenario assertions and inventory checks in `tools/validate.ts`. Run `npm run validate` before requesting review.
 
 Golden changes must be reviewed in a commit separate from evaluator or schema behavior changes. The validation command remains read-only and must never promote a candidate or regenerate an expected file.
