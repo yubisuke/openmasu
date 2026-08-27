@@ -27,7 +27,8 @@ const connectionString = process.env.OPENMASU_APP_DATABASE_URL;
 if (!connectionString) throw new Error("OPENMASU_APP_DATABASE_URL is required");
 
 const pool = new Pool({ connectionString, max: 2 });
-await pool.query("SELECT 1");
+const schedulerPool = new Pool({ connectionString, max: 1 });
+await Promise.all([pool.query("SELECT 1"), schedulerPool.query("SELECT 1")]);
 process.stdout.write('{"event":"service_started","component":"worker"}\n');
 
 const interval = Number(process.env.OPENMASU_WORKER_POLL_MS ?? "5000");
@@ -121,7 +122,7 @@ async function sweepDashboardSessions(): Promise<void> {
   });
 }
 let busy = false;
-const schedulerStore = new PostgresSchedulerStore(pool);
+const schedulerStore = new PostgresSchedulerStore(schedulerPool);
 const schedulePolicy = {
   intervalMs: interval,
   retryMs: interval,
@@ -252,7 +253,7 @@ const timer = setInterval(() => void poll(), interval);
 
 async function stop(): Promise<void> {
   clearInterval(timer);
-  await pool.end();
+  await Promise.all([pool.end(), schedulerPool.end()]);
   process.exit(0);
 }
 

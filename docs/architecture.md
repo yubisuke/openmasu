@@ -197,8 +197,10 @@ are never merged implicitly.
 
 - The default worker runs job types serially; slow tenant or provider work can
   delay later jobs until bounded concurrency is introduced.
-- Any job that holds a scheduler lease and opens nested tenant transactions
-  must fit the configured connection pool; this is an active hardening target.
+- Scheduler advisory leases use a dedicated one-connection pool. Job work uses
+  a separate bounded pool, and lease completion or failure is committed on the
+  held scheduler connection. A lease therefore cannot consume the connection
+  budget needed by nested tenant transactions.
 - PostgreSQL is the only supported primary store. Additional analytical stores
   require measured evidence and a separate design.
 - Live provider credentials, alert routing, TLS termination, and production

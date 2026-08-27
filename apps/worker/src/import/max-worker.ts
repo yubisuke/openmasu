@@ -67,29 +67,28 @@ function attemptFromInbox(inbox: Any, query: URLSearchParams): CandidateAttempt 
 }
 
 export async function processMaxInbox(pool: Pool, payloadStore: PayloadStore, tenantId: string): Promise<number> {
-  return withTenant(pool, tenantId, async (client) => {
-    const pending = await client.query<Any>(
-      `SELECT * FROM ledger.ingest_inbox_current
-       WHERE tenant_id=$1 AND status='pending'
-       ORDER BY received_at, inbox_id`,
-      [tenantId],
-    );
-    let processed = 0;
-    for (const inbox of pending.rows) {
-      const plaintext = await payloadStore.read(inbox.raw_query_ref);
-      const attempt = attemptFromInbox(inbox, new URLSearchParams(plaintext.toString("utf8")));
-      const historyRows = await client.query<Any>(
-        `SELECT server_context, record, import_run_id::text
-         FROM control.import_attempts
-         WHERE tenant_id=$1 AND app_id=$2 AND source_id='max-s2s'
-         ORDER BY created_at, row_ordinal`,
-        [inbox.tenant_id, inbox.app_id],
-      );
-      const history = historyRows.rows.map((row) => ({ server: row.server_context, record: row.record, batch_id: row.import_run_id }));
-      // withTenant is re-entrant through a separate pool connection; do not pass this transaction's client.
-      const output = await ingestRuntimeBatch([attempt], pool, history);
-      const validationFailure = output.validation_failures[0];
-      const runId = uuidV7(Date.parse(inbox.received_at));
+  const pending = await withTenant(pool, tenantId, (client) => client.query<Any>(
+    `SELECT * FROM ledger.ingest_inbox_current
+     WHERE tenant_id=$1 AND status='pending'
+     ORDER BY received_at, inbox_id`,
+    [tenantId],
+  ));
+  let processed = 0;
+  for (const inbox of pending.rows) {
+    const plaintext = await payloadStore.read(inbox.raw_query_ref);
+    const attempt = attemptFromInbox(inbox, new URLSearchParams(plaintext.toString("utf8")));
+    const historyRows = await withTenant(pool, tenantId, (client) => client.query<Any>(
+      `SELECT server_context, record, import_run_id::text
+       FROM control.import_attempts
+       WHERE tenant_id=$1 AND app_id=$2 AND source_id='max-s2s'
+       ORDER BY created_at, row_ordinal`,
+      [inbox.tenant_id, inbox.app_id],
+    ));
+    const history = historyRows.rows.map((row) => ({ server: row.server_context, record: row.record, batch_id: row.import_run_id }));
+    const output = await ingestRuntimeBatch([attempt], pool, history);
+    const validationFailure = output.validation_failures[0];
+    const runId = uuidV7(Date.parse(inbox.received_at));
+    await withTenant(pool, tenantId, async (client) => {
       await client.query(
         `INSERT INTO control.import_runs (
           import_run_id, tenant_id, app_id, source_id, source_snapshot_digest,
@@ -105,7 +104,6 @@ export async function processMaxInbox(pool: Pool, payloadStore: PayloadStore, te
           ) VALUES ($1,$2,$3,$4,'max-s2s',0,'row_schema_invalid',$5::jsonb,$6)`,
           [uuidV7(), runId, inbox.tenant_id, inbox.app_id, JSON.stringify(validationFailure.fields), inbox.received_at],
         );
-        await payloadStore.purge(inbox.raw_query_ref);
       } else {
         await client.query(
           `INSERT INTO control.import_attempts (
@@ -121,8 +119,9 @@ export async function processMaxInbox(pool: Pool, payloadStore: PayloadStore, te
         ) VALUES ($1,$2,$3,'processed',$4,$5::jsonb)`,
         [inbox.inbox_id, inbox.tenant_id, inbox.app_id, new Date().toISOString(), JSON.stringify({ inbox_id: inbox.inbox_id, status: "processed" })],
       );
-      processed += 1;
-    }
-    return processed;
-  });
+    });
+    if (validationFailure) await payloadStore.purge(inbox.raw_query_ref);
+    processed += 1;
+  }
+  return processed;
 }

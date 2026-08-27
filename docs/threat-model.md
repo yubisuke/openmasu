@@ -170,9 +170,10 @@ validation, and immutable reviewed goldens.
   traffic and may create false positives.
 - A slow provider or tenant job can delay later work in the current serial
   worker loop.
-- Nested tenant transactions can exhaust a small worker connection pool unless
-  the job releases its outer connection or receives an explicit connection
-  budget; this is an active hardening item.
+- Scheduler leases and job transactions have separate bounded connection
+  pools. Completion and failure reuse the held lease connection, preventing a
+  lease from starving nested tenant work. Slow database operations can still
+  delay the serial worker loop and remain an operational capacity risk.
 - Synthetic platform vectors do not prove production keys, projects, delivery,
   or provider behavior.
 - Self-hosting operators remain responsible for TLS, secret custody, host

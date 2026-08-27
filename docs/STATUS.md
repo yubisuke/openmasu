@@ -51,7 +51,8 @@ not score a provider, certify its product, or recommend migration.
 The next development cycle is integration and release coherence rather than
 feature expansion:
 
-1. remove nested database-connection and transaction hazards in worker paths;
+1. validate worker database-pool budgets under longer synthetic concurrency and
+   failure campaigns;
 2. keep Android and iOS queue conflict behavior semantically identical;
 3. provide one canonical synthetic onboarding path and safe operator guidance;
 4. keep tagged release state distinct from post-tag development state;
