@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { Pool } from "pg";
 import { createAppPool, withTenant } from "./index.js";
 import { PostgresSchedulerStore } from "./scheduler.js";
 
@@ -66,6 +67,30 @@ describe("durable worker scheduler PostgreSQL lease", () => {
       if (finalClaim) {
         await store.complete(finalClaim, new Date("2026-08-26T00:00:10.000Z"));
       }
+      await pool.end();
+    }
+  });
+
+  it("finalizes a lease with a one-connection scheduler pool", async () => {
+    const connectionString = process.env.OPENMASU_APP_DATABASE_URL;
+    assert.ok(connectionString, "OPENMASU_APP_DATABASE_URL is required");
+    const pool = new Pool({ connectionString, max: 1, connectionTimeoutMillis: 1_000 });
+    const tenantId = `tenant-scheduler-budget-${Date.now()}`;
+    const store = new PostgresSchedulerStore(pool);
+    const policy = { intervalMs: 1_000, retryMs: 1_000, leaseMs: 60_000 };
+    let outstanding: Awaited<ReturnType<typeof store.claim>> = null;
+    try {
+      outstanding = await store.claim(tenantId, "sdk_inbox", policy, new Date("2026-08-26T01:00:00.000Z"));
+      assert.ok(outstanding);
+      assert.equal(await store.complete(outstanding, new Date("2026-08-26T01:00:00.500Z")), true);
+      outstanding = null;
+
+      outstanding = await store.claim(tenantId, "sdk_inbox", policy, new Date("2026-08-26T01:00:01.500Z"));
+      assert.ok(outstanding);
+      assert.equal(await store.fail(outstanding, new Date("2026-08-26T01:00:02.000Z")), true);
+      outstanding = null;
+    } finally {
+      if (outstanding) await store.fail(outstanding, new Date("2026-08-26T01:00:03.000Z"));
       await pool.end();
     }
   });

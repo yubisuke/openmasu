@@ -6,7 +6,15 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createServer } from "node:http";
-import { createAppPool, createMigrationPool, EncryptedFilePayloadStore, withTenant } from "@openmasu/runtime";
+import { Pool } from "pg";
+import {
+  createAppPool,
+  createMigrationPool,
+  EncryptedFilePayloadStore,
+  PostgresSchedulerStore,
+  runScheduledJob,
+  withTenant,
+} from "@openmasu/runtime";
 import { sha256 } from "@openmasu/attribution-core";
 import { runMmpImport, runMmpImportCommand } from "./runner.js";
 import { persistCostImport } from "./cost.js";
@@ -740,6 +748,35 @@ describe("MAX receiver integration", () => {
       duplicate_accepted: 1, conflict_rejected: 0, canonical_links: 1,
       raw_records: 1, logical_events: 1, revenue_facts: 1, conflict_rejections: 0,
     });
+  });
+
+  it("processes MAX inbox work through isolated one-connection job and scheduler pools", async () => {
+    const connectionString = process.env.OPENMASU_APP_DATABASE_URL;
+    assert.ok(connectionString, "OPENMASU_APP_DATABASE_URL is required");
+    const eventId = "abcdef0123456789abcdef0123456789abcdef02";
+    assert.equal((await send(eventId)).status, 204);
+    const jobPool = new Pool({ connectionString, max: 1, connectionTimeoutMillis: 1_000 });
+    const schedulerPool = new Pool({ connectionString, max: 1, connectionTimeoutMillis: 1_000 });
+    let processed = 0;
+    try {
+      const outcome = await runScheduledJob({
+        store: new PostgresSchedulerStore(schedulerPool),
+        tenantId: config.tenantId,
+        job: "max_inbox",
+        policy: { intervalMs: 1_000, retryMs: 1_000, leaseMs: 60_000 },
+        task: async () => { processed = await processMaxInbox(jobPool, payloadStore, config.tenantId); },
+        now: () => new Date("2026-08-26T02:00:00.000Z"),
+      });
+      assert.equal(outcome, "succeeded");
+      assert.equal(processed, 1);
+      assert.deepEqual(await eventState(eventId), {
+        inboxes: 1, receipt_times: 1, unique_accepted: 1,
+        duplicate_accepted: 0, conflict_rejected: 0, canonical_links: 0,
+        raw_records: 1, logical_events: 1, revenue_facts: 1, conflict_rejections: 0,
+      });
+    } finally {
+      await Promise.all([jobPool.end(), schedulerPool.end()]);
+    }
   });
 
   it("A6 rejects a changed MAX payload that reuses an event ID", async () => {

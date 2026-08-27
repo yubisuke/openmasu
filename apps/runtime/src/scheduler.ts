@@ -1,5 +1,5 @@
 import type { Pool, PoolClient } from "pg";
-import { uuidV7, withTenant } from "./index.js";
+import { uuidV7 } from "./index.js";
 
 export const SCHEDULED_WORKER_JOBS = [
   "max_inbox",
@@ -149,8 +149,12 @@ export class PostgresSchedulerStore implements SchedulerStore {
 
   async complete(claim: ScheduledJobClaim, now: Date): Promise<boolean> {
     validDate("schedule completion time", now);
+    const client = this.leaseClients.get(claim.leaseToken);
+    if (!client) return false;
     try {
-      return await withTenant(this.pool, claim.tenantId, (client) => client.query(
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('openmasu.tenant_id', $1, true)", [claim.tenantId]);
+      const completed = await client.query(
         `UPDATE control.worker_job_schedules
             SET next_run_at=$4::timestamptz + interval_ms * interval '1 millisecond',
                 lease_token=NULL,
@@ -161,7 +165,12 @@ export class PostgresSchedulerStore implements SchedulerStore {
                 success_count=success_count+1
           WHERE tenant_id=$1 AND job_name=$2 AND lease_token=$3`,
         [claim.tenantId, claim.job, claim.leaseToken, now],
-      ).then((result) => result.rowCount === 1));
+      );
+      await client.query("COMMIT");
+      return completed.rowCount === 1;
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch { /* connection may already be unavailable */ }
+      throw error;
     } finally {
       await this.releaseLease(claim);
     }
@@ -191,8 +200,12 @@ export class PostgresSchedulerStore implements SchedulerStore {
 
   async fail(claim: ScheduledJobClaim, now: Date): Promise<boolean> {
     validDate("schedule failure time", now);
+    const client = this.leaseClients.get(claim.leaseToken);
+    if (!client) return false;
     try {
-      return await withTenant(this.pool, claim.tenantId, (client) => client.query(
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('openmasu.tenant_id', $1, true)", [claim.tenantId]);
+      const failed = await client.query(
         `UPDATE control.worker_job_schedules
             SET next_run_at=$4::timestamptz + retry_ms * interval '1 millisecond',
                 lease_token=NULL,
@@ -203,7 +216,12 @@ export class PostgresSchedulerStore implements SchedulerStore {
                 failure_count=failure_count+1
           WHERE tenant_id=$1 AND job_name=$2 AND lease_token=$3`,
         [claim.tenantId, claim.job, claim.leaseToken, now],
-      ).then((result) => result.rowCount === 1));
+      );
+      await client.query("COMMIT");
+      return failed.rowCount === 1;
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch { /* connection may already be unavailable */ }
+      throw error;
     } finally {
       await this.releaseLease(claim);
     }

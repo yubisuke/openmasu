@@ -42,8 +42,8 @@ provider or attribution family.
 
 Exit gates:
 
-- worker jobs do not require more database connections than their configured
-  pool can provide;
+- scheduler leases cannot consume the job pool, and MAX inbox processing
+  succeeds at a one-connection job-pool limit;
 - Android and iOS queues classify duplicate and conflicting event IDs the same
   way;
 - one safe synthetic command is the canonical first run;
