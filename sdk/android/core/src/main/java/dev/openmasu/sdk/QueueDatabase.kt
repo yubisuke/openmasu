@@ -61,6 +61,16 @@ internal fun QueuedEvent.queuePriority(): Int = when {
   else -> 1
 }
 
+private fun QueuedEvent.isExactDuplicateOf(existing: QueuedEvent): Boolean = this == existing
+
+private fun QueuedEvent.isIdempotentCommerceDuplicateOf(existing: QueuedEvent): Boolean =
+  eventName in setOf("purchase", "refund") &&
+    processingPurposeId == "revenue_measurement" &&
+    eventId.matches(Regex("^event:commerce:[0-9a-f]{64}$")) &&
+    existing.eventName == eventName &&
+    existing.processingPurposeId == processingPurposeId &&
+    existing.payloadJson == payloadJson
+
 @Dao
 abstract class QueueDao {
   @Insert(onConflict = OnConflictStrategy.IGNORE)
@@ -68,6 +78,9 @@ abstract class QueueDao {
 
   @Query("SELECT * FROM queued_events WHERE eventId = :eventId LIMIT 1")
   abstract fun byEventId(eventId: String): QueuedEvent?
+
+  @Query("SELECT eventId FROM queued_events WHERE processingSequence = :processingSequence AND eventId != :eventId LIMIT 1")
+  abstract fun otherEventIdBySequence(processingSequence: Long, eventId: String): String?
 
   @Query("SELECT * FROM queued_events ORDER BY processingSequence, eventId LIMIT :limit")
   abstract fun pending(limit: Int): List<QueuedEvent>
@@ -134,7 +147,17 @@ abstract class QueueDao {
   @Transaction
   open fun admit(event: QueuedEvent, maxRecords: Int, maxBytes: Long): QueueAdmissionResult {
     require(maxRecords > 0 && maxBytes > 0)
-    if (byEventId(event.eventId) != null) return QueueAdmissionResult(admitted = true, evicted = 0, rejected = 0)
+    val existing = byEventId(event.eventId)
+    if (existing != null) {
+      val duplicate = event.isExactDuplicateOf(existing) || event.isIdempotentCommerceDuplicateOf(existing)
+      if (duplicate && otherEventIdBySequence(event.processingSequence, event.eventId) == null) {
+        return QueueAdmissionResult(admitted = true, evicted = 0, rejected = 0)
+      }
+      throw IllegalStateException("queue_event_conflict")
+    }
+    if (otherEventIdBySequence(event.processingSequence, event.eventId) != null) {
+      throw IllegalStateException("queue_event_conflict")
+    }
     val incomingBytes = event.logicalQueueBytes()
     if (incomingBytes > maxBytes) {
       incrementStats(evicted = 0, rejected = 1)

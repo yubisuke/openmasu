@@ -53,7 +53,8 @@ feature expansion:
 
 1. validate worker database-pool budgets under longer synthetic concurrency and
    failure campaigns;
-2. keep Android and iOS queue conflict behavior semantically identical;
+2. expand shared Android/iOS queue vectors when new native event families are
+   introduced;
 3. provide one canonical synthetic onboarding path and safe operator guidance;
 4. keep tagged release state distinct from post-tag development state;
 5. reduce redundant CI execution without weakening platform-specific gates.

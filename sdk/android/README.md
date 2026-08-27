@@ -33,12 +33,16 @@ Building locally without that emulator result is not device-delivery evidence.
 
 ## Queue and lifecycle
 
-The queue is bounded by record count and logical UTF-8 bytes. Exact replay of
-the same event ID, name, purpose, and payload is idempotent. Reusing an event ID
-with changed content is a conflict and must not silently replace or discard the
-new meaning. Collection disablement blocks new measurement. Withdrawal purges
-consent-required queued records. Installation reset sends the credential-bound
-deletion request before generating an unrelated replacement identity.
+The queue is bounded by record count and logical UTF-8 bytes. A normal retry is
+idempotent only when every persisted field is identical. A deterministic
+commerce retry may use a new occurrence time and queue sequence, but its event
+ID, event name, purpose, and payload must match. Any other event-ID reuse, or a
+processing sequence already owned by another event, raises
+`queue_event_conflict` before eviction. Android and iOS run the same synthetic
+cases from `sdk/queue-semantics-vectors.json`. Collection disablement blocks new
+measurement. Withdrawal purges consent-required queued records. Installation
+reset sends the credential-bound deletion request before generating an
+unrelated replacement identity.
 
 SDK storage is excluded from backup and transfer where Android supports both
 the modern data-extraction rules and legacy backup attributes. SQLite

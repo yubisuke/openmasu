@@ -117,6 +117,28 @@ final class OpenMasuCoreTests: XCTestCase {
     XCTAssertEqual(try storage.queueHealth().evictedTotal, 1)
   }
 
+  func testQueueMatchesSharedDuplicateAndConflictVectors() throws {
+    let vectorURL = findRepositoryFile("sdk/queue-semantics-vectors.json")
+    let object = try JSONSerialization.jsonObject(with: Data(contentsOf: vectorURL)) as! [String: Any]
+    let vectors = object["vectors"] as! [[String: Any]]
+    XCTAssertGreaterThanOrEqual(vectors.count, 8)
+    for vector in vectors {
+      let storage = try OpenMasuStorage(root: temporaryDirectory("queue-vector"))
+      let existing = queueVectorEvent(vector["existing"] as! [String: Any])
+      let incoming = queueVectorEvent(vector["incoming"] as! [String: Any])
+      try storage.enqueue(existing)
+      let outcome: String
+      do {
+        try storage.enqueue(incoming)
+        outcome = "duplicate"
+      } catch let OpenMasuError.storage(message) where message == "queue_event_conflict" {
+        outcome = "conflict"
+      }
+      XCTAssertEqual(outcome, vector["outcome"] as? String, vector["name"] as? String ?? "")
+      XCTAssertEqual(try storage.pending(), [existing], vector["name"] as? String ?? "")
+    }
+  }
+
   func testIdenticalDeterministicCommerceDuplicateIsIdempotentWithoutMaskingSequenceConflicts() throws {
     let storage = try OpenMasuStorage(root: temporaryDirectory("commerce-queue-idempotency"))
     let installationId = "installation:synthetic-commerce-queue"
@@ -167,7 +189,7 @@ final class OpenMasuCoreTests: XCTestCase {
       payloadJson: otherPayload, occurredAt: "2026-08-20T00:00:02.000Z",
       processingSequence: 1, enqueuedAtMs: 3
     )
-    assertQueueInsertFailed { try storage.enqueue(sequenceConflict) }
+    assertQueueConflict { try storage.enqueue(sequenceConflict) }
   }
 
   func testDeterministicCommerceDuplicateWithDifferentPayloadStillFails() throws {
@@ -194,7 +216,7 @@ final class OpenMasuCoreTests: XCTestCase {
       "amount_unscaled": "1251", "amount_scale": 2, "currency": "USD",
       "financial_status": "settled", "installation_id": installationId,
     ])
-    assertQueueInsertFailed {
+    assertQueueConflict {
       try storage.enqueue(QueuedEvent(
         eventId: eventId, eventName: "purchase", processingPurposeId: "revenue_measurement",
         payloadJson: conflictingPayload, occurredAt: "2026-08-20T00:00:01.000Z",
@@ -216,7 +238,7 @@ final class OpenMasuCoreTests: XCTestCase {
       payloadJson: originalPayload, occurredAt: "2026-08-20T00:00:00.000Z",
       processingSequence: 1, enqueuedAtMs: 1
     ))
-    assertQueueInsertFailed {
+    assertQueueConflict {
       try storage.enqueue(QueuedEvent(
         eventId: eventId, eventName: "ad_revenue", processingPurposeId: "revenue_measurement",
         payloadJson: originalPayload, occurredAt: "2026-08-20T00:00:01.000Z",
@@ -228,7 +250,7 @@ final class OpenMasuCoreTests: XCTestCase {
       "event_name": "ad_revenue", "impression_id": eventId,
       "amount_unscaled": "101", "amount_scale": 6, "currency": "USD",
     ])
-    assertQueueInsertFailed {
+    assertQueueConflict {
       try storage.enqueue(QueuedEvent(
         eventId: eventId, eventName: "ad_revenue", processingPurposeId: "revenue_measurement",
         payloadJson: conflictingPayload, occurredAt: "2026-08-20T00:00:02.000Z",
@@ -693,7 +715,7 @@ final class OpenMasuCoreTests: XCTestCase {
     return url
   }
 
-  private func assertQueueInsertFailed(
+  private func assertQueueConflict(
     _ operation: () throws -> Void,
     file: StaticString = #filePath,
     line: UInt = #line
@@ -704,8 +726,20 @@ final class OpenMasuCoreTests: XCTestCase {
       else {
         return XCTFail("expected OpenMasuError.storage, got \(error)", file: file, line: line)
       }
-      XCTAssertTrue(message.hasPrefix("queue_insert_failed:"), message, file: file, line: line)
+      XCTAssertEqual(message, "queue_event_conflict", message, file: file, line: line)
     }
+  }
+
+  private func queueVectorEvent(_ value: [String: Any]) -> QueuedEvent {
+    QueuedEvent(
+      eventId: value["event_id"] as! String,
+      eventName: value["event_name"] as! String,
+      processingPurposeId: value["purpose"] as! String,
+      payloadJson: value["payload"] as! String,
+      occurredAt: value["occurred_at"] as! String,
+      processingSequence: (value["sequence"] as! NSNumber).int64Value,
+      enqueuedAtMs: (value["enqueued_at_ms"] as! NSNumber).int64Value
+    )
   }
 
   private func findRepositoryFile(_ relativePath: String) -> URL {

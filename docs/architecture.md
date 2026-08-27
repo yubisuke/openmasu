@@ -75,12 +75,13 @@ role-specific grants constrain access.
 <!-- m1-component:sdk-android -->
 **Android SDK.** Persists a bounded queue, signs batches, reads Install Referrer,
 and exposes optional measurement adapters without collecting advertising IDs by
-default.
+default. Queue duplicate and conflict classification is defined by a shared
+Android/iOS vector set.
 
 <!-- m1-component:sdk-ios -->
 **iOS SDK.** Provides the corresponding queue, signed delivery, consent/reset
 lifecycle, AdServices and Apple conversion hooks, privacy manifest, and Unity
-bridge.
+bridge. It consumes the same queue identity vectors as Android.
 
 <!-- m1-component:unity-bridge -->
 **Unity bridge.** Presents one C# surface backed by the Android and iOS native

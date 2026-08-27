@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "description": "Shared Android and iOS local queue duplicate/conflict cases. Synthetic values only.",
+  "vectors": [
+    {
+      "name": "exact normal duplicate",
+      "existing": { "event_id": "event:queue:01", "event_name": "custom_event", "purpose": "analytics", "payload": "{\"event_name\":\"custom_event\",\"value\":\"same\"}", "occurred_at": "2026-08-27T00:00:00.000Z", "sequence": 101, "enqueued_at_ms": 101 },
+      "incoming": { "event_id": "event:queue:01", "event_name": "custom_event", "purpose": "analytics", "payload": "{\"event_name\":\"custom_event\",\"value\":\"same\"}", "occurred_at": "2026-08-27T00:00:00.000Z", "sequence": 101, "enqueued_at_ms": 101 },
+      "outcome": "duplicate"
+    },
+    {
+      "name": "changed event name",
+      "existing": { "event_id": "event:queue:02", "event_name": "custom_event", "purpose": "analytics", "payload": "{\"event_name\":\"custom_event\"}", "occurred_at": "2026-08-27T00:00:00.000Z", "sequence": 102, "enqueued_at_ms": 102 },
+      "incoming": { "event_id": "event:queue:02", "event_name": "session_start", "purpose": "analytics", "payload": "{\"event_name\":\"custom_event\"}", "occurred_at": "2026-08-27T00:00:00.000Z", "sequence": 102, "enqueued_at_ms": 102 },
+      "outcome": "conflict"
+    },
+    {
+      "name": "changed purpose",
+      "existing": { "event_id": "event:queue:03", "event_name": "custom_event", "purpose": "analytics", "payload": "{\"event_name\":\"custom_event\"}", "occurred_at": "2026-08-27T00:00:00.000Z", "sequence": 103, "enqueued_at_ms": 103 },
+      "incoming": { "event_id": "event:queue:03", "event_name": "custom_event", "purpose": "fraud_prevention", "payload": "{\"event_name\":\"custom_event\"}", "occurred_at": "2026-08-27T00:00:00.000Z", "sequence": 103, "enqueued_at_ms": 103 },
+      "outcome": "conflict"
+    },
+    {
+      "name": "changed payload",
+      "existing": { "event_id": "event:queue:04", "event_name": "custom_event", "purpose": "analytics", "payload": "{\"event_name\":\"custom_event\",\"value\":\"first\"}", "occurred_at": "2026-08-27T00:00:00.000Z", "sequence": 104, "enqueued_at_ms": 104 },
+      "incoming": { "event_id": "event:queue:04", "event_name": "custom_event", "purpose": "analytics", "payload": "{\"event_name\":\"custom_event\",\"value\":\"changed\"}", "occurred_at": "2026-08-27T00:00:00.000Z", "sequence": 104, "enqueued_at_ms": 104 },
+      "outcome": "conflict"
+    },
+    {
+      "name": "changed occurrence time",
+      "existing": { "event_id": "event:queue:05", "event_name": "custom_event", "purpose": "analytics", "payload": "{\"event_name\":\"custom_event\"}", "occurred_at": "2026-08-27T00:00:00.000Z", "sequence": 105, "enqueued_at_ms": 105 },
+      "incoming": { "event_id": "event:queue:05", "event_name": "custom_event", "purpose": "analytics", "payload": "{\"event_name\":\"custom_event\"}", "occurred_at": "2026-08-27T00:00:01.000Z", "sequence": 105, "enqueued_at_ms": 105 },
+      "outcome": "conflict"
+    },
+    {
+      "name": "changed processing sequence",
+      "existing": { "event_id": "event:queue:06", "event_name": "custom_event", "purpose": "analytics", "payload": "{\"event_name\":\"custom_event\"}", "occurred_at": "2026-08-27T00:00:00.000Z", "sequence": 106, "enqueued_at_ms": 106 },
+      "incoming": { "event_id": "event:queue:06", "event_name": "custom_event", "purpose": "analytics", "payload": "{\"event_name\":\"custom_event\"}", "occurred_at": "2026-08-27T00:00:00.000Z", "sequence": 116, "enqueued_at_ms": 106 },
+      "outcome": "conflict"
+    },
+    {
+      "name": "changed enqueue time",
+      "existing": { "event_id": "event:queue:07", "event_name": "custom_event", "purpose": "analytics", "payload": "{\"event_name\":\"custom_event\"}", "occurred_at": "2026-08-27T00:00:00.000Z", "sequence": 107, "enqueued_at_ms": 107 },
+      "incoming": { "event_id": "event:queue:07", "event_name": "custom_event", "purpose": "analytics", "payload": "{\"event_name\":\"custom_event\"}", "occurred_at": "2026-08-27T00:00:00.000Z", "sequence": 107, "enqueued_at_ms": 117 },
+      "outcome": "conflict"
+    },
+    {
+      "name": "deterministic commerce retry",
+      "existing": { "event_id": "event:commerce:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "event_name": "purchase", "purpose": "revenue_measurement", "payload": "{\"event_name\":\"purchase\",\"amount_unscaled\":\"1250\"}", "occurred_at": "2026-08-27T00:00:00.000Z", "sequence": 108, "enqueued_at_ms": 108 },
+      "incoming": { "event_id": "event:commerce:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "event_name": "purchase", "purpose": "revenue_measurement", "payload": "{\"event_name\":\"purchase\",\"amount_unscaled\":\"1250\"}", "occurred_at": "2026-08-27T00:00:01.000Z", "sequence": 118, "enqueued_at_ms": 118 },
+      "outcome": "duplicate"
+    },
+    {
+      "name": "processing sequence owned by another event",
+      "existing": { "event_id": "event:queue:09-existing", "event_name": "custom_event", "purpose": "analytics", "payload": "{\"event_name\":\"custom_event\"}", "occurred_at": "2026-08-27T00:00:00.000Z", "sequence": 109, "enqueued_at_ms": 109 },
+      "incoming": { "event_id": "event:queue:09-incoming", "event_name": "custom_event", "purpose": "analytics", "payload": "{\"event_name\":\"custom_event\"}", "occurred_at": "2026-08-27T00:00:01.000Z", "sequence": 109, "enqueued_at_ms": 119 },
+      "outcome": "conflict"
+    }
+  ]
+}

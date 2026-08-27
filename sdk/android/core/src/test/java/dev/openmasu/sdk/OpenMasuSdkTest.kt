@@ -15,6 +15,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -218,6 +219,42 @@ class OpenMasuSdkTest {
     } finally {
       executor.shutdownNow()
       database.close()
+    }
+  }
+
+  @Test fun `Android queue matches the shared duplicate and conflict vectors`() {
+    val vectorFile = generateSequence(File(System.getProperty("user.dir") ?: ".")) { it.parentFile }
+      .map { File(it, "sdk/queue-semantics-vectors.json") }
+      .first { it.isFile }
+    val vectors = JSONObject(vectorFile.readText()).getJSONArray("vectors")
+    val executor = Executors.newSingleThreadExecutor()
+    try {
+      for (index in 0 until vectors.length()) {
+        context.filesDir.resolve(OpenMasuStorage.SUBTREE).deleteRecursively()
+        val vector = vectors.getJSONObject(index)
+        val existing = queueVectorEvent(vector.getJSONObject("existing"))
+        val incoming = queueVectorEvent(vector.getJSONObject("incoming"))
+        val database = OpenMasuQueueDatabase.open(context)
+        try {
+          val result = executor.submit<Pair<String, List<QueuedEvent>>> {
+            assertEquals(QueueAdmissionResult(true, 0, 0), database.queue().admit(existing, 10, 65_536))
+            val outcome = try {
+              assertEquals(QueueAdmissionResult(true, 0, 0), database.queue().admit(incoming, 10, 65_536))
+              "duplicate"
+            } catch (error: IllegalStateException) {
+              assertEquals("queue_event_conflict", error.message)
+              "conflict"
+            }
+            outcome to database.queue().pending(10)
+          }.get(5, TimeUnit.SECONDS)
+          assertEquals(vector.getString("name"), vector.getString("outcome"), result.first)
+          assertEquals(vector.getString("name"), listOf(existing), result.second)
+        } finally {
+          database.close()
+        }
+      }
+    } finally {
+      executor.shutdownNow()
     }
   }
 
@@ -535,6 +572,16 @@ class OpenMasuSdkTest {
     metaReader,
     {},
   ).also(created::add)
+
+  private fun queueVectorEvent(value: JSONObject): QueuedEvent = QueuedEvent(
+    eventId = value.getString("event_id"),
+    eventName = value.getString("event_name"),
+    processingPurposeId = value.getString("purpose"),
+    payloadJson = value.getString("payload"),
+    occurredAt = value.getString("occurred_at"),
+    processingSequence = value.getLong("sequence"),
+    createdAtEpochMs = value.getLong("enqueued_at_ms"),
+  )
 
   private fun await(condition: () -> Boolean) {
     repeat(100) { if (condition()) return; Thread.sleep(25) }

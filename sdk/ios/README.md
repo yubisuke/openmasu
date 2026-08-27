@@ -39,6 +39,15 @@ AppLovin MAX Swift Package version, lints `PrivacyInfo.xcprivacy`, audits built
 symbols, checks the dependency-empty CycloneDX SBOM, and compiles the Unity C#
 bridge probe.
 
+## Queue identity
+
+A normal retry is idempotent only when every persisted field is identical. A
+deterministic commerce retry may use a new occurrence time and queue sequence,
+but its event ID, event name, purpose, and payload must match. Any other
+event-ID reuse, or a processing sequence already owned by another event,
+raises `queue_event_conflict` before eviction. Android and iOS run the same
+synthetic cases from `sdk/queue-semantics-vectors.json`.
+
 ## Immutable source bundle
 
 The repository release tool packages the tracked `sdk/ios` tree as a

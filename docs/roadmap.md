@@ -44,8 +44,7 @@ Exit gates:
 
 - scheduler leases cannot consume the job pool, and MAX inbox processing
   succeeds at a one-connection job-pool limit;
-- Android and iOS queues classify duplicate and conflicting event IDs the same
-  way;
+- Android and iOS queues pass the same duplicate and event-ID conflict vectors;
 - one safe synthetic command is the canonical first run;
 - current documentation contains no unexplained review, work-order, or decision
   references;

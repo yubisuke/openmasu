@@ -42,7 +42,7 @@ versions were reached. They do not override current sources of truth.
 | Workstream | Deliverable | Required evidence |
 | --- | --- | --- |
 | Worker database safety | Complete: separate scheduler/job pools and short transaction phases | Scheduler and MAX inbox integration tests at a one-connection pool limit |
-| SDK queue parity | Align duplicate and event-ID conflict behavior across Android and iOS | Shared semantic cases plus each platform's native gate |
+| SDK queue parity | Complete: one duplicate/conflict policy across Android and iOS | Shared semantic vectors plus each platform's native gate |
 | Newcomer documentation | One current documentation map and safe synthetic first run | Link check, documentation drift check, threat-model coverage, full validation |
 | Release alignment | Distinguish latest tag from development main and keep all SDK/package identities synchronized | Release-version check, bundle verification, tagged evidence manifest |
 | CI efficiency | Cancel superseded runs and run expensive platform jobs only when relevant | Pull-request scenarios proving required jobs are neither skipped nor duplicated |

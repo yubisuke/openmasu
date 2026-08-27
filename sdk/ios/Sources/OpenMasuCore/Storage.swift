@@ -137,15 +137,24 @@ public final class OpenMasuStorage: @unchecked Sendable {
       precondition(capacity.maxRecords > 0 && capacity.maxBytes > 0)
       try execute("BEGIN IMMEDIATE")
       do {
-        if let existing = try queuedEvent(eventId: event.eventId),
-           isExactQueueDuplicate(event, existing: existing)
-             || isIdempotentCommerceDuplicate(event, existing: existing) {
-          let sequenceOwner = try eventId(processingSequence: event.processingSequence)
-          if sequenceOwner == nil || sequenceOwner == event.eventId {
+        if let existing = try queuedEvent(eventId: event.eventId) {
+          let duplicate = isExactQueueDuplicate(event, existing: existing)
+            || isIdempotentCommerceDuplicate(event, existing: existing)
+          if duplicate && try otherEventId(
+            processingSequence: event.processingSequence,
+            excluding: event.eventId
+          ) == nil {
             try execute("COMMIT")
             try reassertBackupExclusion()
             return QueueAdmissionResult(admitted: true, evicted: 0, rejected: 0)
           }
+          throw OpenMasuError.storage("queue_event_conflict")
+        }
+        if try otherEventId(
+          processingSequence: event.processingSequence,
+          excluding: event.eventId
+        ) != nil {
+          throw OpenMasuError.storage("queue_event_conflict")
         }
 
         let incomingBytes = event.logicalQueueBytes
@@ -421,10 +430,13 @@ public final class OpenMasuStorage: @unchecked Sendable {
     )
   }
 
-  private func eventId(processingSequence: Int64) throws -> String? {
-    let statement = try prepare("SELECT event_id FROM queued_events WHERE processing_sequence=?")
+  private func otherEventId(processingSequence: Int64, excluding eventId: String) throws -> String? {
+    let statement = try prepare(
+      "SELECT event_id FROM queued_events WHERE processing_sequence=? AND event_id!=? LIMIT 1"
+    )
     defer { sqlite3_finalize(statement) }
     sqlite3_bind_int64(statement, 1, processingSequence)
+    bind(eventId, to: statement, at: 2)
     return sqlite3_step(statement) == SQLITE_ROW ? text(statement, 0) : nil
   }
 
