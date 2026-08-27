@@ -57,7 +57,7 @@ feature expansion:
    introduced;
 3. provide one canonical synthetic onboarding path and safe operator guidance;
 4. keep tagged release state distinct from post-tag development state;
-5. reduce redundant CI execution without weakening platform-specific gates.
+5. maintain the fail-open CI scope map as new build surfaces are introduced.
 
 Private real-data, real-device, and live-provider work is optional operator work
 and is not required to continue repository-only hardening.

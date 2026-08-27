@@ -45,7 +45,7 @@ versions were reached. They do not override current sources of truth.
 | SDK queue parity | Complete: one duplicate/conflict policy across Android and iOS | Shared semantic vectors plus each platform's native gate |
 | Newcomer documentation | One current documentation map and safe synthetic first run | Link check, documentation drift check, threat-model coverage, full validation |
 | Release alignment | Distinguish latest tag from development main and keep all SDK/package identities synchronized | Release-version check, bundle verification, tagged evidence manifest |
-| CI efficiency | Cancel superseded runs and run expensive platform jobs only when relevant | Pull-request scenarios proving required jobs are neither skipped nor duplicated |
+| CI efficiency | Complete: cancel superseded PR runs and gate expensive steps by changed scope | Classifier unit matrix plus GitHub pull-request proof with every required context present |
 
 ## Change acceptance
 

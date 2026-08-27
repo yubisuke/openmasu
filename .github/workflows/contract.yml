@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   validate:
     strategy:
@@ -16,11 +20,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
+      - name: Detect relevant changes
+        id: scope
+        env:
+          OPENMASU_CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          OPENMASU_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node tools/ci/changed-scope.mjs
+      - name: No contract-sensitive changes
+        if: steps.scope.outputs.run_contract != 'true'
+        run: echo "Contract validation is not required for this change; the required job remains successful."
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        if: steps.scope.outputs.run_contract == 'true'
         with:
           node-version: 22.18.0
           cache: npm
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        if: steps.scope.outputs.run_contract == 'true'
         with:
           python-version: 3.13.5
       # Real-data guardrail (independent of npm run validate so it still fires if the
@@ -36,8 +51,13 @@ jobs:
           offenders=$(git ls-files -z -- fixtures | tr '\0' '\n' | grep -Ev '\.json$|(^|/)README\.md$' || true)
           if [ -n "$offenders" ]; then echo "fixtures/ may only contain .json and README.md:"; echo "$offenders"; exit 1; fi
           echo "Real-data guardrail passed."
-      - run: npm install --global npm@11.6.2
-      - run: npm ci
-      - run: python -m pip install --require-hashes --requirement requirements-contract.txt
-      - run: npm run verify:contract-rename
-      - run: npm run validate
+      - if: steps.scope.outputs.run_contract == 'true'
+        run: npm install --global npm@11.6.2
+      - if: steps.scope.outputs.run_contract == 'true'
+        run: npm ci
+      - if: steps.scope.outputs.run_contract == 'true'
+        run: python -m pip install --require-hashes --requirement requirements-contract.txt
+      - if: steps.scope.outputs.run_contract == 'true'
+        run: npm run verify:contract-rename
+      - if: steps.scope.outputs.run_contract == 'true'
+        run: npm run validate

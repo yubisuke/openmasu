@@ -6,6 +6,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
@@ -16,20 +20,36 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Detect relevant changes
+        id: scope
+        env:
+          OPENMASU_CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          OPENMASU_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node tools/ci/changed-scope.mjs
+      - name: No iOS-sensitive changes
+        if: steps.scope.outputs.run_ios != 'true'
+        run: echo "iOS validation is not required for this change; the required job remains successful."
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        if: steps.scope.outputs.run_ios == 'true'
         with:
           node-version: 22.18.0
           cache: npm
       - name: Install pinned npm
+        if: steps.scope.outputs.run_ios == 'true'
         run: npm install --global npm@11.6.2
       - name: Install JavaScript dependencies
+        if: steps.scope.outputs.run_ios == 'true'
         run: npm ci
       - name: Record the Apple toolchain
+        if: steps.scope.outputs.run_ios == 'true'
         run: |
           xcode-select -p
           xcodebuild -version
           swift --version
       - name: Run Swift package tests
+        if: steps.scope.outputs.run_ios == 'true'
         run: |
           swift package --package-path sdk/ios resolve
           swift build --package-path sdk/ios/CrashProbe --product OpenMasuQueueCrashProbe
@@ -37,30 +57,37 @@ jobs:
           test -x "$crash_probe_bin"
           OPENMASU_QUEUE_CRASH_PROBE="$crash_probe_bin" swift test --package-path sdk/ios
       - name: Run the package tests on an iOS Simulator
+        if: steps.scope.outputs.run_ios == 'true'
         working-directory: sdk/ios
         run: |
           simulator_id=$(xcrun simctl list devices available -j | /usr/bin/python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(device["udid"] for runtime in sorted(devices) for device in devices[runtime] if device["name"].startswith("iPhone")))')
           test -n "$simulator_id"
           xcodebuild -scheme OpenMasuIOS-Package -destination "platform=iOS Simulator,id=$simulator_id" -derivedDataPath ../../build/ios-tests CODE_SIGNING_ALLOWED=NO test
       - name: Build the shipping products and sample for an iOS Simulator
+        if: steps.scope.outputs.run_ios == 'true'
         working-directory: sdk/ios
         run: |
           xcodebuild -scheme OpenMasuObjC -destination 'generic/platform=iOS Simulator' -derivedDataPath ../../build/ios-sdk CODE_SIGNING_ALLOWED=NO build
           xcodebuild -scheme OpenMasuSample -destination 'generic/platform=iOS Simulator' -derivedDataPath ../../build/ios-sample CODE_SIGNING_ALLOWED=NO build
       - name: Compile against the pinned AppLovin MAX SDK
+        if: steps.scope.outputs.run_ios == 'true'
         working-directory: sdk/ios/ProviderCompileProbe
         run: xcodebuild -scheme OpenMasuProviderCompileProbe -destination 'generic/platform=iOS Simulator' -derivedDataPath ../../../build/ios-provider CODE_SIGNING_ALLOWED=NO build
       - name: Validate the privacy manifest and dependency-empty SDK SBOM
+        if: steps.scope.outputs.run_ios == 'true'
         run: |
           plutil -lint sdk/ios/Sources/OpenMasuCore/PrivacyInfo.xcprivacy
           npm run sbom
           node tools/check-ios-sdk.mjs --built-root build/ios-sdk
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        if: steps.scope.outputs.run_ios == 'true'
         with:
           dotnet-version: 8.0.x
       - name: Compile and exercise the Unity iOS bridge shim
+        if: steps.scope.outputs.run_ios == 'true'
         run: dotnet run --project sdk/unity/tests/UnityCompileProbe.csproj --configuration Release
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: steps.scope.outputs.run_ios == 'true'
         with:
           name: sdk-ios-sbom
           path: sbom/sdk-ios.cdx.json

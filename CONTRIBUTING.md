@@ -16,6 +16,17 @@ OpenMasu is a contract-first mobile measurement platform with reference evaluato
 - Commit evaluator or schema behavior changes separately from reviewed golden changes. The behavior commit establishes the proposed rule; a following golden-only commit records the independently reviewed expected artifacts and derivations. Never regenerate or silently update approved golden files during validation.
 - Do not include real user, campaign, credential, provider-export, or live fraud-defense data in public fixtures or documentation.
 
+## Continuous integration scope
+
+Every pull-request workflow keeps its existing required job context. The local
+classifier in `tools/ci/changed-scope.mjs` skips expensive steps that cannot be
+affected by the changed paths; unknown paths and detection failures run every
+gate. Documentation runs contract and drift checks, runtime code runs the
+runtime gate, SDK sources run their native and packaging gates, and workflow,
+tooling, or dependency changes run everything. A newer commit to the same pull
+request cancels its superseded run. Pushes to `main` and manual dispatches
+always run all gates and are never canceled by this policy.
+
 ## Real data never enters this repository
 
 This repository is public. Real or production data — MMP exports, ad revenue, media cost, identifiers, campaign, ad-set, creative, or app names, and any value derived from them — must never enter the repository in any form: files, fixtures, tests, documentation, commit messages, or examples. Fixtures are synthetic only. Guardrails enforce part of this: `.gitignore` excludes tabular exports and lab/input directories, and both CI and `npm run validate` fail if a tracked or addable file has a `.csv`, `.tsv`, `.xlsx`, `.xls`, or `.parquet` extension, sits under an `openmasu-lab/`, `real-data/`, or `input/` directory, or is a non-JSON file under `fixtures/`. If a future importer needs a synthetic CSV fixture, allow-list that exact path in `.gitignore`, `tools/validate.ts`, and the CI step in the same change and explain in the pull request why the file is synthetic.

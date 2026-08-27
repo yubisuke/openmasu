@@ -6,6 +6,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
@@ -14,40 +18,63 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Detect relevant changes
+        id: scope
+        env:
+          OPENMASU_CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          OPENMASU_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node tools/ci/changed-scope.mjs
+      - name: No Android-sensitive changes
+        if: steps.scope.outputs.run_android != 'true'
+        run: echo "Android validation is not required for this change; the required job remains successful."
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        if: steps.scope.outputs.run_android == 'true'
         with:
           distribution: temurin
           java-version: "17"
           cache: gradle
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        if: steps.scope.outputs.run_android == 'true'
         with:
           node-version: 22.18.0
           cache: npm
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        if: steps.scope.outputs.run_android == 'true'
         with:
           python-version: 3.13.5
       - name: Install pinned release tooling
+        if: steps.scope.outputs.run_android == 'true'
         run: |
           npm install --global npm@11.6.2
           npm ci
       - name: Generate workspace, iOS, and Unity SBOMs
+        if: steps.scope.outputs.run_android == 'true'
         run: npm run sbom
       - name: Install Android SDK 36
+        if: steps.scope.outputs.run_android == 'true'
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
       - name: Verify Android SDK, provider wiring, release AARs, manifest, backup rules, and SBOM
+        if: steps.scope.outputs.run_android == 'true'
         run: ./sdk/android/gradlew -p sdk/android androidAcceptance :core:assembleRelease :installreferrer:assembleRelease :metareferrer:assembleRelease :max:assembleRelease :unitybridge:assembleRelease verifySdkSbom --no-daemon
       - name: Build and reproduce the local SDK release bundle
+        if: steps.scope.outputs.run_android == 'true'
         run: python tools/build-sdk-release.py --reproducibility-check
       - name: Verify the pinned Gradle wrapper JAR
+        if: steps.scope.outputs.run_android == 'true'
         shell: bash
         run: echo "81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f  sdk/android/gradle/wrapper/gradle-wrapper.jar" | sha256sum --check
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        if: steps.scope.outputs.run_android == 'true'
         with:
           dotnet-version: 8.0.x
       - name: Compile and exercise the Unity bridge shim
+        if: steps.scope.outputs.run_android == 'true'
         run: dotnet run --project sdk/unity/tests/UnityCompileProbe.csproj --configuration Release
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: steps.scope.outputs.run_android == 'true'
         with:
           name: openmasu-sdk-release-bundle
           path: build/sdk-release/openmasu-sdk-0.2.0-rc.2
@@ -57,17 +84,31 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Detect relevant changes
+        id: scope
+        env:
+          OPENMASU_CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          OPENMASU_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node tools/ci/changed-scope.mjs
+      - name: No Android-sensitive changes
+        if: steps.scope.outputs.run_android_emulator != 'true'
+        run: echo "Android emulator validation is not required for this change; the required job remains successful."
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        if: steps.scope.outputs.run_android_emulator == 'true'
         with:
           distribution: temurin
           java-version: "17"
           cache: gradle
       - name: Enable KVM for the emulator
+        if: steps.scope.outputs.run_android_emulator == 'true'
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        if: steps.scope.outputs.run_android_emulator == 'true'
         with:
           api-level: 36
           arch: x86_64
