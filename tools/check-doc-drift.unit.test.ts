@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { documentationDriftFailures, parseValidationSummary, type CurrentDocumentation } from "./check-doc-drift.js";
 
 const summary = "Validated 28 schemas, 8 registries, 56 reviewed fixtures, 728 golden output artifacts, 56 scenario assertions, 27 acceptance criteria, deterministic TypeScript, independent Python, and RFC 8785 conformance.";
-const version = "0.2.0-rc.2";
+const version = "0.2.0-rc.3";
 
 function documents(): CurrentDocumentation {
   return {

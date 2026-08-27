@@ -4,7 +4,7 @@ OpenMasu publishes source tags and reproducible local SDK bundles. This runbook
 does not publish Maven, Swift, Unity, npm, container, or hosting artifacts to a
 public registry.
 
-The latest tagged source and SDK candidate is `v0.2.0-rc.2`. Development `main`
+The latest tagged source and SDK candidate is `v0.2.0-rc.3`. Development `main`
 may be ahead of that tag. A new release must describe the exact tag target and
 must not reuse an older evidence manifest as proof for a newer commit.
 
@@ -86,7 +86,7 @@ npm run check:sdk-release
 ```
 
 The current candidate bundle path is
-`build/sdk-release/openmasu-sdk-0.2.0-rc.2/`. A new candidate must update all
+`build/sdk-release/openmasu-sdk-0.2.0-rc.3/`. A new candidate must update all
 version-bearing source and checks together before using a different path.
 
 Verify the Android AAR/POM files, Unity UPM archive, Swift source archive,
@@ -121,8 +121,8 @@ visibility, tag name, commit, and explicit authorization for that operation.
 Confirm every required workflow is green on the exact commit. Create an
 annotated or signed tag and release only after the release owner approves it.
 
-The `v0.2.0-rc.2` tag uses
-[its own synthetic evidence manifest](../validation/v0.2.0-rc.2-synthetic-evidence.md).
+The `v0.2.0-rc.3` tag uses
+[its own synthetic evidence manifest](../validation/v0.2.0-rc.3-synthetic-evidence.md).
 A later tag requires a later manifest.
 
 ## Public release contents

@@ -7,7 +7,7 @@ systems.
 
 ## Repository-controlled evidence
 
-- [v0.2.0-rc.2 synthetic evidence](v0.2.0-rc.2-synthetic-evidence.md)
+- [v0.2.0-rc.3 synthetic evidence](v0.2.0-rc.3-synthetic-evidence.md)
 - [Synthetic load record](m5-load-results.md)
 - [Pull request CI scope validation](ci-scope-routing.md)
 
