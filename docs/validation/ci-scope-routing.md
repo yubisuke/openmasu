@@ -36,3 +36,21 @@ workflow at the candidate commit, never from a path-reduced pull request.
 
 This validation uses only repository-controlled synthetic inputs. It does not
 exercise credentials, real provider data, devices, or production services.
+
+## Recorded proof
+
+Pull request [#36](https://github.com/yubisuke/openmasu/pull/36), commit
+`af2487dce980693532ce822e5a28100fa909d5e6`, exercised the documentation-only
+case on 2026-08-27. All six required jobs were present and successful:
+
+| Required job | Result | Duration | Run |
+| --- | --- | --- | --- |
+| `validate (ubuntu-24.04)` | Full validation passed | 54 seconds | [Contract](https://github.com/yubisuke/openmasu/actions/runs/33033539631) |
+| `validate (windows-2025)` | Full validation passed | 2 minutes 24 seconds | [Contract](https://github.com/yubisuke/openmasu/actions/runs/33033539631) |
+| `runtime` | Scope no-op passed | 14 seconds | [Runtime](https://github.com/yubisuke/openmasu/actions/runs/33033539672) |
+| `android-jvm` | Scope no-op passed | 8 seconds | [Android](https://github.com/yubisuke/openmasu/actions/runs/33033539625) |
+| `android-emulator` | Scope no-op passed | 8 seconds | [Android](https://github.com/yubisuke/openmasu/actions/runs/33033539625) |
+| `ios-sdk` | Scope no-op passed | 7 seconds | [iOS](https://github.com/yubisuke/openmasu/actions/runs/33033539620) |
+
+The next push to `main` remains the proof that full gates run outside pull
+request path selection.
