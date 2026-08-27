@@ -77,7 +77,7 @@ jobs:
         if: steps.scope.outputs.run_android == 'true'
         with:
           name: openmasu-sdk-release-bundle
-          path: build/sdk-release/openmasu-sdk-0.2.0-rc.2
+          path: build/sdk-release/openmasu-sdk-0.2.0-rc.3
           if-no-files-found: error
 
   android-emulator:

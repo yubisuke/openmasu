@@ -20,10 +20,10 @@ dependencies {
         runtimeOnly project(':metareferrer')
         implementation project(':max')
     } else {
-        implementation 'dev.openmasu:core:0.2.0-rc.2'
-        runtimeOnly 'dev.openmasu:installreferrer:0.2.0-rc.2'
-        runtimeOnly 'dev.openmasu:metareferrer:0.2.0-rc.2'
-        implementation 'dev.openmasu:max:0.2.0-rc.2'
+        implementation 'dev.openmasu:core:0.2.0-rc.3'
+        runtimeOnly 'dev.openmasu:installreferrer:0.2.0-rc.3'
+        runtimeOnly 'dev.openmasu:metareferrer:0.2.0-rc.3'
+        implementation 'dev.openmasu:max:0.2.0-rc.3'
     }
     testImplementation project(':installreferrer')
     testImplementation project(':metareferrer')

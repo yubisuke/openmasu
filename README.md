@@ -57,7 +57,7 @@ New contributors should read these documents in order:
 5. [Development guide](docs/development.md)
 6. [Event and Metric Contract v0.4](spec/event-metric-contract-v0.4.md)
 
-The latest tagged source and SDK release candidate is `v0.2.0-rc.2`.
+The latest tagged source and SDK release candidate is `v0.2.0-rc.3`.
 The `main` branch may contain reviewed work added after that tag. Release tags,
 release notes, and `docs/STATUS.md` are the authoritative way to distinguish a
 published candidate from current development.
@@ -158,7 +158,7 @@ packager can run. Follow the complete [release runbook](docs/operations/release.
 rather than invoking the final packaging command in a clean checkout.
 
 The current verified bundle path is
-`build/sdk-release/openmasu-sdk-0.2.0-rc.2`. See the
+`build/sdk-release/openmasu-sdk-0.2.0-rc.3`. See the
 [release runbook](docs/operations/release.md) before tagging or publishing.
 
 OpenMasu is licensed under the [Apache License 2.0](LICENSE). Attribution is

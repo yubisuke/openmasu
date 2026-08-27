@@ -1,11 +1,10 @@
 # Project Status
 
-Status date: 2026-08-26.
+Status date: 2026-08-27.
 
-The latest tagged source and SDK release candidate is `v0.2.0-rc.2`.
-The development branch contains additional reviewed work after that tag. This
-document describes current source; the release notes describe the exact tagged
-candidate.
+The latest tagged source and SDK release candidate is `v0.2.0-rc.3`.
+This document describes the reviewed source state included in that candidate;
+later development may move ahead of the tag and is described separately.
 
 ## How to read status
 

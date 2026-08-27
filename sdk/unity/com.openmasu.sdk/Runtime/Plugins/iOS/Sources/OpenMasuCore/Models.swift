@@ -24,7 +24,7 @@ public struct OpenMasuConfiguration: Sendable {
     endpoint: URL,
     sdkKeyId: String,
     sdkSecret: String,
-    sdkVersion: String = "0.2.0-rc.2",
+    sdkVersion: String = "0.2.0-rc.3",
     wrapperVersion: String? = nil,
     requestTimeout: TimeInterval = 10,
     collectionEnabledByDefault: Bool = true,
