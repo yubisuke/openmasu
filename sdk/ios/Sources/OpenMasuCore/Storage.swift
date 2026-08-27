@@ -140,10 +140,11 @@ public final class OpenMasuStorage: @unchecked Sendable {
         if let existing = try queuedEvent(eventId: event.eventId) {
           let duplicate = isExactQueueDuplicate(event, existing: existing)
             || isIdempotentCommerceDuplicate(event, existing: existing)
-          if duplicate && try otherEventId(
+          let sequenceConflict = try otherEventId(
             processingSequence: event.processingSequence,
             excluding: event.eventId
-          ) == nil {
+          )
+          if duplicate && sequenceConflict == nil {
             try execute("COMMIT")
             try reassertBackupExclusion()
             return QueueAdmissionResult(admitted: true, evicted: 0, rejected: 0)
