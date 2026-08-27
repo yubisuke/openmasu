@@ -52,6 +52,11 @@ Run the pinned Android, iOS, Unity, emulator, and simulator workflows at the
 exact candidate commit. Platform CI is required even when the contributor's
 local operating system cannot run a platform gate.
 
+Pull-request path selection never applies to a `main` push or manual workflow
+dispatch. Release evidence must come from one of those full-gate events at the
+exact candidate commit, not from a pull request whose unrelated steps were
+intentionally skipped.
+
 ## 3. Verify identities and documentation
 
 ```bash

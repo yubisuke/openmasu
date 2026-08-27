@@ -6,6 +6,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   runtime:
     # Runtime containers are verified on Linux. Windows development uses Docker Desktop.
@@ -37,20 +41,36 @@ jobs:
       OPENMASU_PILOT_PROJECT: openmasu-synthetic-ci-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Detect relevant changes
+        id: scope
+        env:
+          OPENMASU_CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          OPENMASU_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node tools/ci/changed-scope.mjs
+      - name: No runtime-sensitive changes
+        if: steps.scope.outputs.run_runtime != 'true'
+        run: echo "Runtime validation is not required for this change; the required job remains successful."
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        if: steps.scope.outputs.run_runtime == 'true'
         with:
           node-version: 22.18.0
           cache: npm
       - name: Install pinned npm
+        if: steps.scope.outputs.run_runtime == 'true'
         run: npm install --global npm@11.6.2
       - name: Install dependencies
+        if: steps.scope.outputs.run_runtime == 'true'
         run: npm ci
       - name: Apply migrations twice and check schema
+        if: steps.scope.outputs.run_runtime == 'true'
         run: |
           npm run db:migrate
           npm run db:migrate
           npm run db:schema:check
       - name: Run runtime unit and integration tests
+        if: steps.scope.outputs.run_runtime == 'true'
         run: |
           npm test
           npm run check:operational-logs
@@ -60,46 +80,60 @@ jobs:
           npm run check:fraud-sources
           npm run check:fraud-artifacts
       - name: Verify backup restore and completed privacy reapplication
+        if: steps.scope.outputs.run_runtime == 'true'
         run: OPENMASU_M5_BACKUP_RESTORE=1 OPENMASU_M5_PG_TOOLS=docker npm run test:backup-restore
       - name: Run M2a redirector, signed-ingestion, replay, worker, and deletion gates
+        if: steps.scope.outputs.run_runtime == 'true'
         run: npm run test:m2a
       - name: Reproduce contract goldens through PostgreSQL
+        if: steps.scope.outputs.run_runtime == 'true'
         run: npm run seed && npm run verify:parity
       - name: Verify SQL cohort metrics against the contract evaluator
+        if: steps.scope.outputs.run_runtime == 'true'
         run: npm run test:metric-parity
       - name: Verify synthetic financial import and series separation
+        if: steps.scope.outputs.run_runtime == 'true'
         run: npm run test:financial-parity
       - name: Verify raw, API, dashboard-view, and HTML consistency
+        if: steps.scope.outputs.run_runtime == 'true'
         run: npm run verify:consistency
       - name: Run reduced synthetic metric performance floor
+        if: steps.scope.outputs.run_runtime == 'true'
         run: OPENMASU_BENCHMARK_ROWS=100000 npm run benchmark:metric-floor
       - name: Import 100,000 synthetic MMP rows within the pilot floor
+        if: steps.scope.outputs.run_runtime == 'true'
         run: npm run benchmark:import
       - name: Check threat-model coverage
+        if: steps.scope.outputs.run_runtime == 'true'
         run: npm run check:threat-model
       - name: Run isolated disposable synthetic runtime pilot
+        if: steps.scope.outputs.run_runtime == 'true'
         run: npm run pilot:synthetic -- --disposable --load
       - name: Upload synthetic runtime pilot evidence
-        if: always()
+        if: always() && steps.scope.outputs.run_runtime == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: synthetic-runtime-pilot
           path: build/pilot-evidence/synthetic-runtime.json
           if-no-files-found: warn
       - name: Remove disposable pilot resources after cancellation or failure
-        if: always()
+        if: always() && steps.scope.outputs.run_runtime == 'true'
         run: docker compose --project-name "$OPENMASU_PILOT_PROJECT" down --volumes --remove-orphans --timeout 30
       - name: Upload M5 load evidence
+        if: steps.scope.outputs.run_runtime == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: m5-synthetic-load
           path: build/pilot-evidence/m5-load.json
           if-no-files-found: error
       - name: Generate workspace SBOMs
+        if: steps.scope.outputs.run_runtime == 'true'
         run: npm run sbom
       - name: Enforce the M3 API runtime component baseline
+        if: steps.scope.outputs.run_runtime == 'true'
         run: npm run check:api-runtime-sbom
       - name: Upload workspace SBOMs
+        if: steps.scope.outputs.run_runtime == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: runtime-sbom
