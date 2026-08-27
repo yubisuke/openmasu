@@ -9,6 +9,7 @@ systems.
 
 - [v0.2.0-rc.2 synthetic evidence](v0.2.0-rc.2-synthetic-evidence.md)
 - [Synthetic load record](m5-load-results.md)
+- [Pull request CI scope validation](ci-scope-routing.md)
 
 These records apply to the exact commit or tag they name. They are not a claim
 about later development branches or production behavior.
