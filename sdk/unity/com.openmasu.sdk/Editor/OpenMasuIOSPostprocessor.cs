@@ -14,7 +14,9 @@ namespace OpenMasu.Unity.Editor
             string attributionCopyEndpoint,
             bool collectionEnabledByDefault = false,
             IReadOnlyList<string> linkHosts = null,
-            IReadOnlyList<string> linkSchemes = null)
+            IReadOnlyList<string> linkSchemes = null,
+            bool reengagementPostbackCopiesEnabled = false,
+            bool overlappingConversionsEnabled = false)
         {
             RequireHttps(skanEndpoint, nameof(skanEndpoint));
             RequireHttps(attributionCopyEndpoint, nameof(attributionCopyEndpoint));
@@ -25,6 +27,8 @@ namespace OpenMasu.Unity.Editor
             SetBoolean(dictionary, "OpenMasuCollectionEnabledDefault", collectionEnabledByDefault);
             SetStringArray(dictionary, "OpenMasuLinkHosts", ValidateLinkHosts(linkHosts));
             SetStringArray(dictionary, "OpenMasuLinkSchemes", ValidateLinkSchemes(linkSchemes));
+            SetBoolean(dictionary, "EligibleForAdAttributionKitReengagementPostbackCopies", reengagementPostbackCopiesEnabled);
+            SetBoolean(dictionary, "EligibleForAdAttributionKitOverlappingConversions", overlappingConversionsEnabled);
             return document.ToString(SaveOptions.DisableFormatting);
         }
 
@@ -129,6 +133,8 @@ namespace OpenMasu.Unity.Editor
         public bool collectionEnabledByDefault = false;
         public string[] linkHosts = Array.Empty<string>();
         public string[] linkSchemes = Array.Empty<string>();
+        public bool reengagementPostbackCopiesEnabled = false;
+        public bool overlappingConversionsEnabled = false;
     }
 
     public static class OpenMasuIOSPostprocessor
@@ -143,7 +149,8 @@ namespace OpenMasu.Unity.Editor
             var plistPath = Path.Combine(projectPath, "Info.plist");
             File.WriteAllText(plistPath, OpenMasuIosPlistSettings.Apply(
                 File.ReadAllText(plistPath), settings.skanEndpoint, settings.attributionCopyEndpoint,
-                settings.collectionEnabledByDefault, settings.linkHosts, settings.linkSchemes));
+                settings.collectionEnabledByDefault, settings.linkHosts, settings.linkSchemes,
+                settings.reengagementPostbackCopiesEnabled, settings.overlappingConversionsEnabled));
 
             var pbxPath = PBXProject.GetPBXProjectPath(projectPath);
             var project = new PBXProject();

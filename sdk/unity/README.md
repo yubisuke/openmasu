@@ -54,6 +54,27 @@ to `OpenMasuClient.HandleDeepLink`. For iOS, put `linkHosts` in
 `OpenMasuLinkHosts` and `com.apple.developer.associated-domains` without a
 development-mode query.
 
+The same iOS settings file controls Apple's explicit re-engagement opt-ins. Both
+flags default to `false`:
+
+```json
+{
+  "skanEndpoint": "https://measurement.synthetic.invalid/skan",
+  "attributionCopyEndpoint": "https://measurement.synthetic.invalid/aak",
+  "collectionEnabledByDefault": false,
+  "linkHosts": ["links.synthetic.invalid"],
+  "linkSchemes": [],
+  "reengagementPostbackCopiesEnabled": true,
+  "overlappingConversionsEnabled": false
+}
+```
+
+Enable `reengagementPostbackCopiesEnabled` only when the deployment-private
+`AttributionCopyEndpoint` is ready to receive and verify those copies. Keep
+`overlappingConversionsEnabled` off unless the host application securely owns
+the conversion-tag mapping and retrieval lifecycle; OpenMasu does not persist
+the opaque tag in analytics or logs.
+
 Direct delivery is supported on Android and iOS. Deferred delivery is Android
 only through Google Play Install Referrer. Actual Unity exports and platform
 domain verification remain the operator procedures in

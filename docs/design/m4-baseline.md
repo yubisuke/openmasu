@@ -48,7 +48,12 @@ The SDK may target install or re-engagement postbacks on iOS 18+ and may use an
 opaque conversion tag on iOS 18.4+. A requested type or tag fails closed on an
 older OS rather than broadening to every active postback. Conversion tags are
 transient platform bookmarks and are not analytics payloads, identifiers, or
-log fields.
+log fields. The host application must explicitly opt in to re-engagement
+developer-copy delivery. Overlapping conversions are a separate, default-off
+opt-in; when enabled, the host application owns protected tag mapping,
+persistence, and retrieval while OpenMasu supplies only parsing and targeted
+update helpers. The Unity postprocessor writes both Info.plist Booleans from
+explicit project settings and keeps them false by default.
 
 ## Unity bridge
 
@@ -66,4 +71,5 @@ release identity, SBOM, and server runtime tests.
 
 Real devices, Apple developer delivery, AdServices production responses, live
 postback keys, store review, privacy disclosure approval, domain association,
-and installation-level Apple revenue binding remain unverified.
+caller-owned conversion-tag persistence, and installation-level Apple revenue
+binding remain unverified.

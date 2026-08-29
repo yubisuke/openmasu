@@ -57,6 +57,13 @@ campaign, App Store build, Unity export, or privacy-review outcome.
 
 - Configure `NSAdvertisingAttributionReportEndpoint` and
   `AttributionCopyEndpoint` only in the deployment-private test application.
+- Set `EligibleForAdAttributionKitReengagementPostbackCopies` to `true`, then
+  confirm a signed winning re-engagement copy reaches the configured endpoint.
+- If overlapping conversion windows are part of the application design, set
+  `EligibleForAdAttributionKitOverlappingConversions` to `true`, exercise two
+  simultaneous synthetic campaigns on a device, and confirm the application
+  securely restores the correct caller-owned conversion tag for each update.
+  Otherwise leave the key false and record that overlap remains out of scope.
 - Confirm registered and unregistered application handling is non-enumerating.
 - Confirm transaction replay is idempotent and conflicting payloads fail closed.
 - Confirm deterministic installation metrics, SKAdNetwork aggregate metrics,
@@ -68,8 +75,9 @@ campaign, App Store build, Unity export, or privacy-review outcome.
 
 - Export the Unity iOS sample with the supported Unity version.
 - Confirm Swift sources, `PrivacyInfo.xcprivacy`, conversion schema, sqlite3
-  linker setting, both Apple endpoint keys, and collection-default key reach the
-  generated Xcode project.
+  linker setting, both Apple endpoint keys, both explicit AdAttributionKit
+  opt-in Booleans, and the collection-default key reach the generated Xcode
+  project.
 - Build and run the exported application, then exercise all four MAX formats.
 - Confirm callbacks raised off the Unity thread are delivered once on the Unity
   main thread and no callback allocation remains after completion.

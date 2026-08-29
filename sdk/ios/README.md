@@ -43,6 +43,23 @@ AppLovin MAX Swift Package version, lints `PrivacyInfo.xcprivacy`, audits built
 symbols, checks the dependency-empty CycloneDX SBOM, and compiles the Unity C#
 bridge probe.
 
+## AdAttributionKit host-app configuration
+
+The Swift Package cannot edit its host application's Info.plist. To receive
+developer copies of re-engagement postbacks, configure the HTTPS
+`AttributionCopyEndpoint` and explicitly set
+`EligibleForAdAttributionKitReengagementPostbackCopies` to `true` in the host
+application. Without that Boolean opt-in, Apple does not deliver those copies.
+
+`EligibleForAdAttributionKitOverlappingConversions` remains `false` unless the
+application deliberately supports multiple simultaneous re-engagement
+conversion windows. Enabling it makes Apple append conversion tags to the
+re-engagement URL. The host application owns any protected mapping, persistence,
+and later retrieval of those opaque bookmarks; OpenMasu exposes parsing and
+targeted update helpers but never writes a tag to its analytics queue or logs.
+Do not enable overlapping conversions until that caller-owned lifecycle and the
+corresponding device test have been implemented.
+
 ## Queue identity
 
 A normal retry is idempotent only when every persisted field is identical. A

@@ -22,6 +22,15 @@ Apple attribution and SDK references confirmed on 2026-08-20:
 - [Privacy collected-data type](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacycollecteddatatypes/nsprivacycollecteddatatype) and [collection purposes](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacycollecteddatatypes/nsprivacycollecteddatatypepurposes) define the exact manifest vocabulary used by the SDK.
 - [AppLovin MAX iOS advanced settings](https://developers.applovin.com/en/max/ios/overview/advanced-settings/) and the [pinned 13.6.4 Swift Package manifest](https://raw.githubusercontent.com/AppLovin/AppLovin-MAX-Swift-Package/13.6.4/Package.swift) define the impression-revenue fields and exact compile-only provider dependency.
 
+AdAttributionKit re-engagement references confirmed on 2026-08-30:
+
+- [Postback parameters](https://developer.apple.com/documentation/adattributionkit/identifying-the-parameters-in-a-postback) defines the signed wire value `re-engagement` and the postback sequence.
+- [Receiving ad attributions and postbacks](https://developer.apple.com/documentation/adattributionkit/receiving-ad-attributions-and-postbacks) defines re-engagement as click-only with no nonwinning postbacks.
+- [PostbackUpdate](https://developer.apple.com/documentation/adattributionkit/postbackupdate) and [conversion types](https://developer.apple.com/documentation/adattributionkit/postbackupdate/conversiontypes) define iOS 18 conversion targeting and the all-types `nil` default.
+- [Conversion tags](https://developer.apple.com/documentation/adattributionkit/conversion-tags) defines the iOS 18.4 opaque bookmark and caller-owned persistence boundary.
+- [Re-engagement postback copies](https://developer.apple.com/documentation/bundleresources/information-property-list/eligibleforadattributionkitreengagementpostbackcopies) defines the separate developer-copy Info.plist opt-in.
+- [WWDC25: What's new in AdAttributionKit](https://developer.apple.com/videos/play/wwdc2025/221/) defines the `EligibleForAdAttributionKitOverlappingConversions` opt-in for simultaneous conversion windows.
+
 Universal Links references confirmed on 2026-08-21:
 
 - [Supporting associated domains](https://developer.apple.com/documentation/xcode/supporting-associated-domains) defines the extensionless AASA path, HTTPS/no-redirect requirement, `applinks:` entitlement shape, Apple CDN behavior, and the prohibition on path/query/trailing-slash components in the entitlement.
