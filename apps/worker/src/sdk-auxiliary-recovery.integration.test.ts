@@ -217,7 +217,7 @@ describe("SDK auxiliary queue recovery", () => {
       providerMode: "play_integrity",
       playEndpoint: "http://127.0.0.1/play-integrity",
       client: async () => ({ status: 503, body: Buffer.from("synthetic outage") }),
-    }), { verified: 0, failed: 0, unavailable: 1 });
+    }), { completed: 1, unavailable: 1 });
     await queueIntegrityVerification(pool, {
       tenantId: input.tenantId,
       appId: input.appId,
