@@ -47,6 +47,23 @@ type Withdrawal = {
   withdrawal_recognized_sequence: number;
 };
 
+type StoredWithdrawal = {
+  installation_key_id: string;
+  processing_purpose_id: string;
+  withdrawal_recognized_at: string;
+  withdrawal_recognized_sequence: string;
+};
+
+type DecodedInboxEntry = {
+  row: InboxRow;
+  records: Any[];
+  adServicesLookups: PendingAdServicesLookup[];
+  integrityVerifications: PendingIntegrityVerification[];
+  googlePlayProductVerifications: PendingGooglePlayProductVerification[];
+};
+
+const WITHDRAWAL_PURPOSES = ["attribution", "analytics", "revenue_measurement"] as const;
+
 function serverContext(row: InboxRow, record: Any, withdrawals: Withdrawal[]): Any {
   const aggregatePostback = row.producer === "postback:skadnetwork"
     || row.producer === "postback:adattributionkit";
@@ -273,13 +290,15 @@ async function recordsFor(
   return { records, adServicesLookups, integrityVerifications, googlePlayProductVerifications };
 }
 
-function withdrawalsFor(rows: Array<{ row: InboxRow; records: Any[] }>): Map<string, Withdrawal[]> {
-  const result = new Map<string, Withdrawal[]>();
+function decodedWithdrawalsFor(
+  rows: readonly DecodedInboxEntry[],
+  result: Map<string, Withdrawal[]> = new Map(),
+): Map<string, Withdrawal[]> {
   for (const entry of rows) {
     if (!entry.row.installation_key_id) continue;
     for (const record of entry.records) {
       if (record.event_name !== "consent_changed" || !["withdrawn", "denied"].includes(record.payload?.consent_state)) continue;
-      const withdrawals = ["attribution", "analytics", "revenue_measurement"].map((processing_purpose_id) => ({
+      const withdrawals = WITHDRAWAL_PURPOSES.map((processing_purpose_id) => ({
         processing_purpose_id,
         withdrawal_recognized_at: entry.row.received_at,
         withdrawal_recognized_sequence: record.processing_sequence,
@@ -288,6 +307,78 @@ function withdrawalsFor(rows: Array<{ row: InboxRow; records: Any[] }>): Map<str
     }
   }
   return result;
+}
+
+async function durableWithdrawalsFor(
+  pool: Pool,
+  tenantId: string,
+  rows: readonly DecodedInboxEntry[],
+): Promise<Map<string, Withdrawal[]>> {
+  const installationKeyIds = [...new Set(rows
+    .map((entry) => entry.row.installation_key_id)
+    .filter((value): value is string => value !== null))];
+  if (installationKeyIds.length === 0) return new Map();
+  const stored = await withTenant(pool, tenantId, (client) => client.query<StoredWithdrawal>(
+    `SELECT installation_key_id, processing_purpose_id, withdrawal_recognized_at,
+            withdrawal_recognized_sequence::text
+       FROM control.installation_withdrawals
+      WHERE tenant_id=$1 AND installation_key_id=ANY($2::text[])
+      ORDER BY installation_key_id, processing_purpose_id`,
+    [tenantId, installationKeyIds],
+  ));
+  const result = new Map<string, Withdrawal[]>();
+  for (const row of stored.rows) {
+    const values = result.get(row.installation_key_id) ?? [];
+    values.push({
+      processing_purpose_id: row.processing_purpose_id,
+      withdrawal_recognized_at: row.withdrawal_recognized_at,
+      withdrawal_recognized_sequence: Number(row.withdrawal_recognized_sequence),
+    });
+    result.set(row.installation_key_id, values);
+  }
+  return result;
+}
+
+async function persistRecognizedWithdrawals(
+  pool: Pool,
+  rows: readonly DecodedInboxEntry[],
+): Promise<number> {
+  let inserted = 0;
+  for (const entry of rows) {
+    if (!entry.row.installation_key_id) continue;
+    for (const record of entry.records) {
+      if (record.event_name !== "consent_changed"
+        || !["withdrawn", "denied"].includes(record.payload?.consent_state)) continue;
+      for (const processingPurposeId of WITHDRAWAL_PURPOSES) {
+        const artifact = {
+          processing_purpose_id: processingPurposeId,
+          withdrawal_recognized_at: entry.row.received_at,
+          withdrawal_recognized_sequence: record.processing_sequence,
+          source_record_id: record.record_id,
+        };
+        inserted += await withTenant(pool, entry.row.tenant_id, async (client) => (await client.query(
+          `INSERT INTO control.installation_withdrawals (
+             installation_key_id, tenant_id, app_id, processing_purpose_id,
+             withdrawal_recognized_at, withdrawal_recognized_sequence, source_record_id, artifact
+           )
+           SELECT $1, raw.tenant_id, raw.app_id, $2, $3, $4, raw.record_id, $5::jsonb
+             FROM ledger.raw_records AS raw
+             JOIN ledger.logical_events AS logical
+               ON logical.tenant_id=raw.tenant_id AND logical.app_id=raw.app_id
+              AND logical.record_id=raw.record_id
+            WHERE raw.tenant_id=$6 AND raw.app_id=$7 AND raw.record_id=$8
+              AND raw.producer=$9 AND raw.event_id=$10
+              AND raw.payload_sha256=$11 AND logical.event_name='consent_changed'
+           ON CONFLICT (installation_key_id, processing_purpose_id) DO NOTHING`,
+          [entry.row.installation_key_id, processingPurposeId, entry.row.received_at,
+            record.processing_sequence, JSON.stringify(artifact), entry.row.tenant_id,
+            entry.row.app_id, record.record_id, record.producer, record.event_id,
+            sha256(record.payload)],
+        )).rowCount ?? 0);
+      }
+    }
+  }
+  return inserted;
 }
 
 async function appendState(pool: Pool, row: InboxRow, status: "processed" | "failed", reasonCode?: string): Promise<void> {
@@ -348,13 +439,7 @@ export async function processSdkInbox(
   const pending: CandidateAttempt[] = [];
   const workRows: InboxRow[] = [];
   const newlyPendingRows: InboxRow[] = [];
-  const decoded: Array<{
-    row: InboxRow;
-    records: Any[];
-    adServicesLookups: PendingAdServicesLookup[];
-    integrityVerifications: PendingIntegrityVerification[];
-    googlePlayProductVerifications: PendingGooglePlayProductVerification[];
-  }> = [];
+  const decoded: DecodedInboxEntry[] = [];
   for (const row of rows.rows) {
     try {
       decoded.push({ row, ...await recordsFor(row, payloadStore, options.metaKeys ?? []) });
@@ -362,7 +447,14 @@ export async function processSdkInbox(
       if (row.status === "pending") await appendState(pool, row, "failed", error instanceof Error ? error.message : "batch_invalid");
     }
   }
-  const withdrawals = withdrawalsFor(decoded);
+  // Existing installations may predate the durable withdrawal projection. Backfill only
+  // consent controls that already have an accepted canonical logical event; invalid or
+  // rejected client payloads can never create server withdrawal state.
+  await persistRecognizedWithdrawals(pool, decoded);
+  const withdrawals = decodedWithdrawalsFor(
+    decoded,
+    await durableWithdrawalsFor(pool, tenantId, decoded),
+  );
   for (const entry of decoded) {
     const attempts = entry.records.map((record) => ({
       server: serverContext(entry.row, record, entry.row.installation_key_id ? withdrawals.get(entry.row.installation_key_id) ?? [] : []),
@@ -385,6 +477,11 @@ export async function processSdkInbox(
     .map((row) => row.ingest_batch_id));
   try {
     const output = await ingestRuntimeBatch(pending, pool, historical);
+    // Persist after the evaluator/ledger transaction. If this insert fails, the inbox row
+    // remains retryable; a retry validates the already-written canonical logical event and
+    // completes this projection before the batch is marked processed.
+    await persistRecognizedWithdrawals(pool, decoded.filter((entry) =>
+      workRows.some((row) => row.ingest_batch_id === entry.row.ingest_batch_id)));
     const acceptedInstallIds = new Set(output.logical_events
       .filter((logical) => logical.event_name === "install")
       .map((logical) => logical.record_id));

@@ -1627,7 +1627,7 @@ describe("M2a signed SDK ingestion", () => {
     ))).rows[0].artifact);
   });
 
-  it("rejects consent-required events received after a server-recognised withdrawal", async () => {
+  it("keeps server-recognised withdrawal effective after the encrypted SDK batch is purged", async () => {
     const before = await withTenant(pool, tenantId, async (client) => (await client.query<{ count: number }>(
       `SELECT count(*)::int AS count FROM ledger.rejections
        WHERE tenant_id=$1 AND app_id=$2 AND reason_code='consent_withdrawn'`,
@@ -1642,6 +1642,31 @@ describe("M2a signed SDK ingestion", () => {
       secret: installationSecret, installationKeyId,
     })).status, 202);
     await processSdkInbox(pool, payloadStore, tenantId);
+
+    const withdrawalState = await withTenant(pool, tenantId, async (client) => ({
+      count: (await client.query<{ count: number }>(
+        `SELECT count(*)::int AS count FROM control.installation_withdrawals
+          WHERE tenant_id=$1 AND app_id=$2 AND installation_key_id=$3`,
+        [tenantId, appId, installationKeyId],
+      )).rows[0].count,
+      bodyRef: (await client.query<{ body_ref: string }>(
+        `SELECT batch.body_ref
+           FROM ledger.ingest_batches AS batch
+           JOIN ledger.ingest_batch_records AS member
+             ON member.ingest_batch_id=batch.ingest_batch_id
+            AND member.tenant_id=batch.tenant_id AND member.app_id=batch.app_id
+           JOIN ledger.raw_records AS raw
+             ON raw.tenant_id=member.tenant_id AND raw.app_id=member.app_id
+            AND raw.record_id=member.record_id
+          WHERE raw.tenant_id=$1 AND raw.app_id=$2 AND raw.event_id=$3
+          ORDER BY batch.inbox_seq DESC LIMIT 1`,
+        [tenantId, appId, withdrawal.event_id],
+      )).rows[0]?.body_ref,
+    }));
+    assert.equal(withdrawalState.count, 3);
+    assert.ok(withdrawalState.bodyRef);
+    await payloadStore.purge(withdrawalState.bodyRef);
+    await assert.rejects(payloadStore.read(withdrawalState.bodyRef), /ENOENT|no such file/);
 
     const eventId = `event:post-withdrawal:${run}`;
     const postWithdrawal = sourceEvent(eventId, "custom_event", {
