@@ -49,11 +49,12 @@ Progress:
 | One disposable synthetic command is the canonical first run | Complete |
 | Current documentation excludes unexplained review, work-order, and decision references | Complete |
 | CI cancels superseded runs and routes expensive gates without hiding required contexts | Complete |
-| Release notes, SDK identity, tagged evidence, and post-tag development describe one exact candidate | Open for the next prerelease |
+| Release notes, SDK identity, tagged evidence, and source revision describe one exact candidate | Complete for v0.2.0-rc.4 |
 
-The next release candidate is the only open exit gate. It must receive a new
-version and evidence manifest; post-tag `main` must not reuse rc.3 identity as
-published release evidence.
+Candidate v0.2.0-rc.4 satisfied the release-coherence exit gate at green `main`
+commit `2a2f6b5`. No new provider or attribution milestone is selected. The next
+repository work begins with a current-code audit of failure recovery,
+reconciliation completeness, and operational correctness.
 
 ## Optional operator evidence
 

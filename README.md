@@ -53,13 +53,14 @@ guides, subsystem designs, operator procedures, tagged records, and historical
 material. For the shortest safe first run, go directly to the
 [synthetic getting started guide](docs/getting-started.md).
 
-The source and SDK are configured for candidate `v0.2.0-rc.4`. It freezes the
+The source and SDK are configured for candidate `v0.2.0-rc.4`. The annotated
+tag and [GitHub prerelease](https://github.com/yubisuke/openmasu/releases/tag/v0.2.0-rc.4)
+were published from green `main` commit `2a2f6b5`. The candidate freezes the
 additive Contract v0.4 patch ledger through v0.4.10 with 57 reviewed fixtures
 and 741 goldens. A candidate is published only if the matching annotated tag
-and GitHub prerelease point to the same green `main` commit. Until then it is a
-prepared source identity, not a release. [`docs/STATUS.md`](docs/STATUS.md)
+and GitHub prerelease point to the same green commit. [`docs/STATUS.md`](docs/STATUS.md)
 defines the current source tree, and the [release index](docs/releases/README.md)
-separates prepared records from immutable published tags.
+separates current records from immutable historical tags.
 
 ## Safe synthetic verification
 

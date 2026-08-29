@@ -11,9 +11,9 @@ For the current checkout, use the disposable pilot and gates in
 [Getting started](../getting-started.md) and [Development](../development.md).
 Their result applies only to the exact source revision that ran them.
 
-The rc.4 evidence manifest is prepared with the configured candidate. It becomes
-release evidence only when the matching annotated tag and GitHub prerelease
-point to the same green `main` commit.
+The rc.4 evidence manifest is release evidence for tagged commit `2a2f6b5`; the
+matching annotated tag, GitHub prerelease, and full platform gates all identify
+that commit. It does not apply to later `main` changes.
 
 ## Tagged and historical repository evidence
 

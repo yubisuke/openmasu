@@ -13,7 +13,8 @@ describe later `main` behavior.
 | `v0.2.0-rc.2` | [Release notes](v0.2.0-rc.2.md) | [Synthetic evidence](../validation/v0.2.0-rc.2-synthetic-evidence.md) |
 | `v0.2.0-rc.1` | [Release notes](v0.2.0-rc.1.md) | [Synthetic pilot record](../validation/v0.2.0-rc.1-pilot.md) |
 
-The repository is configured for candidate `v0.2.0-rc.4`; rc.3 is the preceding
-published tag. Verify the tag, GitHub prerelease, source commit, and full-gate
-results before treating rc.4 as published. See [Project status](../STATUS.md).
-An untagged bundle is only a local candidate artifact.
+`v0.2.0-rc.4` is the latest published candidate; its annotated tag and GitHub
+prerelease point to green `main` commit `2a2f6b5`. rc.3 is the preceding
+published tag. Verify the tag, source commit, and full-gate results independently
+when consuming a release. See [Project status](../STATUS.md). An untagged bundle
+is only a local candidate artifact.
