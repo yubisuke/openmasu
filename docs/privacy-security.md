@@ -85,6 +85,13 @@ record may be accepted only under a documented, purpose-specific configuration;
 the SDK default is to purge its queue on withdrawal. Withdrawal does not make
 processing completed before withdrawal retroactively unlawful.
 
+The server projects a recognized installation withdrawal into tenant-scoped
+durable control state before marking its SDK batch complete. Later enforcement
+therefore does not depend on retaining or replaying the encrypted batch body.
+The durable row contains the credential key reference, purpose, sequence,
+recognition time, and canonical source-record reference, but not the consent
+payload or installation identifier.
+
 ## Access, portability, correction, and deletion
 
 - An enrolled installation may sign an access or portability request for its
