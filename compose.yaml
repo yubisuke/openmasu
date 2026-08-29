@@ -20,7 +20,8 @@ services:
     environment:
       OPENMASU_REPOSITORY_ROOT: /repository
       OPENMASU_RUNTIME_SECRET_ROOT: /run/openmasu
-      OPENMASU_PUBLIC_BASE_URL: http://localhost:8080
+      OPENMASU_PUBLIC_BASE_URL: ${OPENMASU_PUBLIC_BASE_URL:-http://localhost:8080}
+      OPENMASU_REDIRECTOR_BASE_URL: ${OPENMASU_REDIRECTOR_BASE_URL:-http://localhost:8090}
       OPENMASU_DATABASE_HOST: postgres
       OPENMASU_DATABASE_PORT: "5432"
       OPENMASU_DATABASE_NAME: openmasu
@@ -147,7 +148,7 @@ services:
     image: caddy:2.11.4-alpine
     profiles: ["proxy"]
     ports:
-      - "8443:443"
+      - "127.0.0.1:${OPENMASU_PROXY_HOST_PORT:-8443}:443"
     volumes:
       - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
     networks:
