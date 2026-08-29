@@ -66,6 +66,7 @@ The v0.4 line adds independently exercised optional vocabulary and definitions:
 | 0.4.7 | deep-link events, engagement attribution, and daily metrics |
 | 0.4.8 | installation-anchored purchase/refund net revenue |
 | 0.4.9 | D30/D90 purchase-net and total-net metrics |
+| 0.4.10 | AdAttributionKit re-engagement postbacks and separated aggregate metrics |
 
 Existing schema `$id` values remain on `v0.4`; existing event artifact version
 fields remain `0.4.0` where their schema did not change.

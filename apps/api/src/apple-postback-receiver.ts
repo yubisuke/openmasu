@@ -230,7 +230,7 @@ function normalizedPayload(
     signature_verified: verification.verified,
     postback_identifier: patternedString(claims["postback-identifier"], "postback_identifier", /^[A-Za-z0-9._:-]{1,120}$/),
     advertised_item_identifier: requiredInteger(claims["advertised-item-identifier"], "advertised_item_identifier"),
-    conversion_type: enumeratedString(claims["conversion-type"], "conversion_type", ["download", "redownload"]),
+    conversion_type: enumeratedString(claims["conversion-type"], "conversion_type", ["download", "redownload", "re-engagement"]),
     ad_network_identifier: patternedString(claims["ad-network-identifier"], "ad_network_identifier", /^[A-Za-z0-9.-]+$/),
     impression_type: enumeratedString(claims["impression-type"], "impression_type", ["app-impression"]),
     postback_sequence_index: rangedInteger(claims["postback-sequence-index"], "postback_sequence_index", 0, 2),
@@ -253,6 +253,10 @@ function normalizedPayload(
   ]);
   if (payload.conversion_value !== undefined && payload.coarse_conversion_value !== undefined) {
     throw new PostbackRequestError(400, "conversion_value_ambiguous");
+  }
+  if (payload.conversion_type === "re-engagement"
+    && (payload.ad_interaction_type !== "click" || payload.did_win !== true)) {
+    throw new PostbackRequestError(400, "reengagement_postback_invalid");
   }
   return payload;
 }

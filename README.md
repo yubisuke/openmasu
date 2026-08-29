@@ -107,8 +107,8 @@ The main contract gate is:
 npm run validate
 ```
 
-It checks 28 schemas, 8 registries, 56 reviewed synthetic fixtures, 728 golden
-output artifacts, 56 scenario assertions, 27 acceptance criteria,
+It checks 28 schemas, 8 registries, 57 reviewed synthetic fixtures, 741 golden
+output artifacts, 57 scenario assertions, 27 acceptance criteria,
 deterministic TypeScript, the independent Python evaluator, release identity,
 documentation drift, fraud artifacts, and RFC 8785 canonicalization.
 

@@ -25,7 +25,7 @@ in [Project plan](project-plan.md).
 | Cohort metrics and difference audit | Synthetic complete | Reproducible cost/revenue metrics, supersession, exports, and neutral reconciliation |
 | Android, Unity, and redirector | Synthetic complete | First-party Android measurement, measurement links, SDK queue, and Unity bridge |
 | Operator dashboard | Synthetic complete | Shared report queries and encoders, zero-JavaScript HTML/SVG, session security, and reader RLS |
-| iOS and Apple aggregate measurement | Synthetic complete | Swift SDK, Apple evidence adapters, signed postback handling, and separate aggregate series |
+| iOS and Apple aggregate measurement | Synthetic complete | Swift SDK, signed postback handling, current AdAttributionKit conversion targeting, and separated install/re-engagement aggregate series |
 | Operational control foundation | Synthetic complete | RBAC, scheduler state, metrics, backup/restore logic, SBOMs, and release runbooks |
 | Deterministic fraud controls | Synthetic complete | Replayable public rules, bundle binding, quarantine, source-day aggregates, and integrity normalization |
 | Deep links and re-engagement | Synthetic complete | Direct Android/iOS links, Android deferred links, engagement attribution, and daily metrics |
@@ -33,7 +33,7 @@ in [Project plan](project-plan.md).
 | Import and financial compatibility | Synthetic complete | No-write raw/cost/revenue compatibility plus PostgreSQL cost-to-ROAS and revenue parity |
 
 The current contract gate preserves parity across 28 schemas, 8 registries,
-and 56 reviewed synthetic fixtures.
+and 57 reviewed synthetic fixtures.
 
 ## Current milestone: integration and release coherence
 

@@ -16,7 +16,7 @@ function executor(overrides: Record<string, Partial<CommandResult>> = {}): Comma
       "git describe --tags --exact-match": { status: 1, stdout: "", stderr: "" },
       "git rev-parse HEAD": { status: 0, stdout: `${"a".repeat(40)}\n`, stderr: "" },
       "git branch --show-current": { status: 0, stdout: "review/wo-24-release-evidence\n", stderr: "" },
-      "npm run validate": { status: 0, stdout: "Validated 28 schemas, 8 registries, 56 reviewed fixtures, 728 golden output artifacts, 56 scenario assertions, 27 acceptance criteria, deterministic TypeScript, independent Python, and RFC 8785 conformance.\n", stderr: "" },
+      "npm run validate": { status: 0, stdout: "Validated 28 schemas, 8 registries, 57 reviewed fixtures, 741 golden output artifacts, 57 scenario assertions, 27 acceptance criteria, deterministic TypeScript, independent Python, and RFC 8785 conformance.\n", stderr: "" },
       "npm run test": { status: 0, stdout: "# tests 187\n# pass 187\n# fail 0\n", stderr: "" },
       "npm run check:sdk-ios": { status: 0, stdout: "OpenMasu iOS source validation passed.\n", stderr: "" },
     };

@@ -593,6 +593,7 @@ async function persistProjectionWithClient(
           : null;
       const aggregateFact = {
         event_name: logical.event_name,
+        conversion_type: payload.conversion_type ?? null,
         signature_verified: payload.signature_verified === true,
         did_win: payload.did_win === true,
         source_identifier_present: payload.source_identifier !== undefined,
@@ -601,13 +602,14 @@ async function persistProjectionWithClient(
       };
       await client.query(
         `INSERT INTO ledger.apple_postback_facts (
-          logical_event_id, tenant_id, app_id, event_name, signature_verified,
-          did_win, source_identifier_present, conversion_bucket, received_at, artifact
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
+          logical_event_id, tenant_id, app_id, event_name, conversion_type,
+          signature_verified, did_win, source_identifier_present, conversion_bucket,
+          received_at, artifact
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
         ON CONFLICT (logical_event_id) DO NOTHING`,
         [
           logical.logical_event_id, logical.tenant_id, logical.app_id,
-          logical.event_name, aggregateFact.signature_verified, aggregateFact.did_win,
+          logical.event_name, aggregateFact.conversion_type, aggregateFact.signature_verified, aggregateFact.did_win,
           aggregateFact.source_identifier_present, conversionBucket,
           attempt.record.received_at, projected(aggregateFact),
         ],
@@ -1368,13 +1370,15 @@ function bulkProjectionRows(
         ? `fine:${payload.conversion_value}`
         : payload.coarse_conversion_value !== undefined ? `coarse:${payload.coarse_conversion_value}` : null;
       const artifact = {
-        event_name: logical.event_name, signature_verified: payload.signature_verified === true,
+        event_name: logical.event_name, conversion_type: payload.conversion_type ?? null,
+        signature_verified: payload.signature_verified === true,
         did_win: payload.did_win === true, source_identifier_present: payload.source_identifier !== undefined,
         conversion_bucket: conversionBucket, received_at: attempt.record.received_at,
       };
       append("apple_postback", {
         logical_event_id: logical.logical_event_id, tenant_id: logical.tenant_id, app_id: logical.app_id,
-        event_name: logical.event_name, signature_verified: artifact.signature_verified,
+        event_name: logical.event_name, conversion_type: artifact.conversion_type,
+        signature_verified: artifact.signature_verified,
         did_win: artifact.did_win, source_identifier_present: artifact.source_identifier_present,
         conversion_bucket: conversionBucket, received_at: attempt.record.received_at, artifact,
       });
@@ -1465,8 +1469,8 @@ async function persistRuntimeBulk(
         SELECT logical_event_id,tenant_id,app_id,installation_id,anchor_source,impression_id,ad_unit_id,ad_network,amount_unscaled,amount_scale,currency,revenue_source,country,occurred_at,artifact FROM jsonb_populate_recordset(NULL::ledger.ad_revenue_facts,$1::jsonb) ON CONFLICT (logical_event_id) DO NOTHING`,
       custom_event: `INSERT INTO ledger.custom_event_facts (logical_event_id,tenant_id,app_id,installation_id,event_key,artifact)
         SELECT logical_event_id,tenant_id,app_id,installation_id,event_key,artifact FROM jsonb_populate_recordset(NULL::ledger.custom_event_facts,$1::jsonb) ON CONFLICT (logical_event_id) DO NOTHING`,
-      apple_postback: `INSERT INTO ledger.apple_postback_facts (logical_event_id,tenant_id,app_id,event_name,signature_verified,did_win,source_identifier_present,conversion_bucket,received_at,artifact)
-        SELECT logical_event_id,tenant_id,app_id,event_name,signature_verified,did_win,source_identifier_present,conversion_bucket,received_at,artifact FROM jsonb_populate_recordset(NULL::ledger.apple_postback_facts,$1::jsonb) ON CONFLICT (logical_event_id) DO NOTHING`,
+      apple_postback: `INSERT INTO ledger.apple_postback_facts (logical_event_id,tenant_id,app_id,event_name,conversion_type,signature_verified,did_win,source_identifier_present,conversion_bucket,received_at,artifact)
+        SELECT logical_event_id,tenant_id,app_id,event_name,conversion_type,signature_verified,did_win,source_identifier_present,conversion_bucket,received_at,artifact FROM jsonb_populate_recordset(NULL::ledger.apple_postback_facts,$1::jsonb) ON CONFLICT (logical_event_id) DO NOTHING`,
     };
     const projectionOrder = [...projections.byTable.keys()].sort((left, right) => {
       const priority = (table: string) => table === "purchase" ? 0 : table === "refund" ? 2 : 1;

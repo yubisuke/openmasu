@@ -71,15 +71,15 @@ describe("disposable synthetic runtime pilot", () => {
     assert.throws(() => assertCleanDemo({ ...valid, ledger_counts: { ...valid.ledger_counts, raw_records: 1 } }));
   });
 
-  it("pins the database parity gate to the measured 10-family, 550-artifact result", () => {
+  it("pins the database parity gate to the measured 57-fixture, 10-family, 558-artifact result", () => {
     assert.doesNotThrow(() => assertSeedOutput(
-      "> openmasu-contract@0.4.0 seed\n> npm run seed --workspace @openmasu/worker\n\nSeeded 56 synthetic fixtures through PostgreSQL ingestion (550 parity artifacts).\n",
+      "> openmasu-contract@0.4.0 seed\n> npm run seed --workspace @openmasu/worker\n\nSeeded 57 synthetic fixtures through PostgreSQL ingestion (558 parity artifacts).\n",
     ));
     assert.doesNotThrow(() => assertRuntimeParityOutput(
-      "> openmasu-contract@0.4.0 verify:parity\n\nRuntime parity passed: 56 fixtures, 10 artifact families, 550 JCS byte-identical artifacts.\n",
+      "> openmasu-contract@0.4.0 verify:parity\n\nRuntime parity passed: 57 fixtures, 10 artifact families, 558 JCS byte-identical artifacts.\n",
     ));
     assert.throws(() => assertSeedOutput(
-      "Seeded 56 synthetic fixtures through PostgreSQL ingestion (728 parity artifacts).\n",
+      "Seeded 57 synthetic fixtures through PostgreSQL ingestion (741 parity artifacts).\n",
     ));
   });
 });

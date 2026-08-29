@@ -1,0 +1,155 @@
+{
+  "contract_version": "0.4.0",
+  "fx_policy": {
+    "policy_version": "fx-aak-v0.4.10",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "1",
+        "rate_scale": 0,
+        "source": "synthetic-fixture-rate",
+        "as_of": "2026-08-30T00:00:00.000Z"
+      }
+    ]
+  },
+  "metric_definitions": [
+    {
+      "metric_name": "aak_attributed_installs",
+      "metric_definition_version": "0.3.3",
+      "anchor_event": "calendar_day",
+      "aggregation_time_zone": "UTC",
+      "value_type": "count",
+      "definition": {
+        "calculation": "event_count",
+        "window": { "type": "calendar_day", "day": 0 },
+        "numerator": "events"
+      },
+      "event_names": ["adattributionkit_postback"],
+      "grouping_dimensions": ["metric_date"],
+      "rule_bundle_id": "metric-stage-m4",
+      "rule_bundle_version": "0.3.3",
+      "rule_bundle_hash": "4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    {
+      "metric_name": "aak_attributed_reengagements",
+      "metric_definition_version": "0.4.10",
+      "anchor_event": "calendar_day",
+      "aggregation_time_zone": "UTC",
+      "value_type": "count",
+      "definition": {
+        "calculation": "event_count",
+        "window": { "type": "calendar_day", "day": 0 },
+        "numerator": "events"
+      },
+      "event_names": ["adattributionkit_postback"],
+      "grouping_dimensions": ["metric_date"],
+      "rule_bundle_id": "metric-aak-reengagement",
+      "rule_bundle_version": "0.4.10",
+      "rule_bundle_hash": "5555555555555555555555555555555555555555555555555555555555555555"
+    }
+  ],
+  "metric_evaluations": [
+    {
+      "metric_run_id_prefix": "run-57-aak-installs",
+      "input_received_at_watermark": "2026-08-31T00:00:00.000Z",
+      "computed_at": "2026-08-31T00:01:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "metric_names": ["aak_attributed_installs"],
+      "grouping": { "metric_date": "2026-08-30" }
+    },
+    {
+      "metric_run_id_prefix": "run-57-aak-reengagements",
+      "input_received_at_watermark": "2026-08-31T00:00:00.000Z",
+      "computed_at": "2026-08-31T00:01:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "metric_names": ["aak_attributed_reengagements"],
+      "grouping": { "metric_date": "2026-08-30" }
+    }
+  ],
+  "reconciliation_inputs": [],
+  "privacy_requests": [],
+  "server_context": {
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-31T00:00:00.000Z",
+    "policy_digest": "policy-aak-v0.4.10",
+    "processing_purposes": [
+      {
+        "processing_purpose_id": "analytics",
+        "consent_required": false,
+        "policy_version": "consent-aak-v0.4.10"
+      }
+    ],
+    "withdrawals": [],
+    "alternative_legal_bases": []
+  },
+  "records": [
+    {
+      "contract_version": "0.4.0",
+      "record_id": "aak-download-57",
+      "delivery_id": "delivery:aak-download-57",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "postback:synthetic-adattributionkit",
+      "producer_version": "fixture-v0.4.10",
+      "event_id": "event:aak-download-57",
+      "event_name": "adattributionkit_postback",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-30T05:00:00.000Z",
+      "occurred_at_source": "server",
+      "received_at": "2026-08-30T05:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "jws_string": "eyJhbGciOiJFUzI1NiJ9.eyJzeW50aGV0aWMiOnRydWV9.c3ludGhldGljLXNpZ25hdHVyZQ",
+        "signature_verified": true,
+        "postback_identifier": "synthetic-aak-download-57",
+        "advertised_item_identifier": 123456789,
+        "conversion_type": "download",
+        "ad_network_identifier": "synthetic.adattributionkit",
+        "impression_type": "app-impression",
+        "postback_sequence_index": 0,
+        "source_identifier": "5701",
+        "conversion_value": 7,
+        "did_win": true,
+        "ad_interaction_type": "click"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "aak-reengagement-57",
+      "delivery_id": "delivery:aak-reengagement-57",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "postback:synthetic-adattributionkit",
+      "producer_version": "fixture-v0.4.10",
+      "event_id": "event:aak-reengagement-57",
+      "event_name": "adattributionkit_postback",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-30T06:00:00.000Z",
+      "occurred_at_source": "server",
+      "received_at": "2026-08-30T06:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 2,
+      "payload": {
+        "jws_string": "eyJhbGciOiJFUzI1NiJ9.eyJzeW50aGV0aWMiOnRydWV9.c3ludGhldGljLXNpZ25hdHVyZQ",
+        "signature_verified": true,
+        "postback_identifier": "synthetic-aak-reengagement-57",
+        "advertised_item_identifier": 123456789,
+        "conversion_type": "re-engagement",
+        "ad_network_identifier": "synthetic.adattributionkit",
+        "impression_type": "app-impression",
+        "postback_sequence_index": 0,
+        "source_identifier": "5702",
+        "coarse_conversion_value": "medium",
+        "did_win": true,
+        "ad_interaction_type": "click"
+      }
+    }
+  ]
+}

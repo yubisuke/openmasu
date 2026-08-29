@@ -14,7 +14,9 @@ applications.
 - `OpenMasuAppleAds`: `AAAttribution.attributionToken()` provider. The token is
   delivered as protected evidence and is interpreted only by the server.
 - `OpenMasuApplePostback`: versioned conversion schema and independent
-  SKAdNetwork and AdAttributionKit update calls.
+  SKAdNetwork and AdAttributionKit update calls. Callers may target install or
+  re-engagement postbacks on iOS 18+ and may pass an opaque conversion tag on
+  iOS 18.4+; tags are not written to OpenMasu analytics events or logs.
 - `OpenMasuMax`: provider-neutral MAX revenue mapper. The shipping product does
   not depend on the AppLovin SDK; the compile-only probe verifies the adapter
   surface against the exact pinned provider package.
@@ -23,9 +25,11 @@ applications.
 
 ## Local synthetic gates
 
-Run these commands on macOS with an Xcode toolchain that contains the iOS 17.4
-or later build SDK. The package can deploy to iOS 16; AdAttributionKit calls are
-runtime-gated to iOS 17.4 or later:
+Run these commands on macOS with an Xcode toolchain that contains the current
+iOS SDK. The package can deploy to iOS 16; baseline AdAttributionKit calls are
+runtime-gated to iOS 17.4, conversion-type targeting to iOS 18, and conversion
+tags to iOS 18.4. Requested targeting is never silently broadened on an older
+OS:
 
 ```bash
 swift test --package-path sdk/ios
@@ -38,6 +42,23 @@ The `sdk-ios` workflow also builds `ProviderCompileProbe` against the exact
 AppLovin MAX Swift Package version, lints `PrivacyInfo.xcprivacy`, audits built
 symbols, checks the dependency-empty CycloneDX SBOM, and compiles the Unity C#
 bridge probe.
+
+## AdAttributionKit host-app configuration
+
+The Swift Package cannot edit its host application's Info.plist. To receive
+developer copies of re-engagement postbacks, configure the HTTPS
+`AttributionCopyEndpoint` and explicitly set
+`EligibleForAdAttributionKitReengagementPostbackCopies` to `true` in the host
+application. Without that Boolean opt-in, Apple does not deliver those copies.
+
+`EligibleForAdAttributionKitOverlappingConversions` remains `false` unless the
+application deliberately supports multiple simultaneous re-engagement
+conversion windows. Enabling it makes Apple append conversion tags to the
+re-engagement URL. The host application owns any protected mapping, persistence,
+and later retrieval of those opaque bookmarks; OpenMasu exposes parsing and
+targeted update helpers but never writes a tag to its analytics queue or logs.
+Do not enable overlapping conversions until that caller-owned lifecycle and the
+corresponding device test have been implemented.
 
 ## Queue identity
 

@@ -93,6 +93,7 @@ export function buildDashboardView(input: {
   const rows = [...(input.metrics?.data ?? [])].sort(compare);
   const aggregateNames = new Set([
     "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
+    "aak_attributed_reengagements",
   ]);
   const deterministicRows = rows.filter((row) => !aggregateNames.has(row.metric_name));
   const appleAggregateRows = rows.filter((row) => aggregateNames.has(row.metric_name));

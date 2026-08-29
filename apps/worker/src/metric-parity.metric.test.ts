@@ -637,6 +637,37 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
     }
   });
 
+  it("keeps AdAttributionKit re-engagement separate from aggregate installs", async () => {
+    const fixture = "57-aak-reengagement-current-spec";
+    const directory = join(process.cwd(), "fixtures", "v0.4", fixture);
+    const currentInput: Any = JSON.parse(readFileSync(join(directory, "input.json"), "utf8"));
+    const currentGolden: Any[] = JSON.parse(readFileSync(
+      join(directory, "expected_metric_runs.json"),
+      "utf8",
+    ));
+    await ingestFixture(fixture, currentInput, appPool, seedPool);
+    const facts = await withTenant(appPool, currentInput.server_context.tenant_id, async (client) => {
+      const result = await client.query<{ conversion_type: string | null }>(
+        `SELECT conversion_type FROM ledger.apple_postback_facts
+         WHERE tenant_id=$1 AND app_id=$2
+         ORDER BY conversion_type COLLATE "C"`,
+        [currentInput.server_context.tenant_id, currentInput.server_context.app_id],
+      );
+      return result.rows;
+    });
+    assert.deepEqual(facts, [
+      { conversion_type: "download" },
+      { conversion_type: "re-engagement" },
+    ]);
+    const expected = evaluate(currentInput).metric_runs;
+    const actual = await computeSqlMetricRuns(appPool, currentInput, false);
+    assert.equal(jcs(expected), jcs(currentGolden));
+    assert.equal(jcs(actual), jcs(expected));
+    assert.equal(actual.find((run) => run.metric_name === "aak_attributed_installs")?.value_unscaled, "1");
+    assert.equal(actual.find((run) =>
+      run.metric_name === "aak_attributed_reengagements")?.value_unscaled, "1");
+  });
+
   it("keeps ad revenue unchanged while SQL and evaluators agree on settled purchase/refund net revenue", async () => {
     const commerceFixture = "55-purchase-refund-net-revenue";
     const commerceInput: Any = JSON.parse(readFileSync(

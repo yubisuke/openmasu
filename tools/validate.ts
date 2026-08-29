@@ -320,6 +320,7 @@ function validateRegistryReferences(output: Any, label: string): void {
   for (const definition of output.metric_definitions) {
     const aggregateMetricNames = new Set([
       "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
+      "aak_attributed_reengagements",
     ]);
     const expectedVersion = definition.definition.numerator === "total_net_revenue" ||
       ["cohort_purchase_net_revenue_d30_usd", "cohort_purchase_net_revenue_d90_usd"].includes(definition.metric_name)
@@ -330,6 +331,8 @@ function validateRegistryReferences(output: Any, label: string): void {
       ? "0.4.7"
       : definition.fraud_policy
       ? "0.4.3"
+      : definition.metric_name === "aak_attributed_reengagements"
+      ? "0.4.10"
       : aggregateMetricNames.has(definition.metric_name)
       ? "0.3.3"
       : definition.definition.calculation === "event_count" ? "0.3.1" : "0.3.0";
@@ -567,8 +570,8 @@ if (!summaryOnly) {
         }
       });
     }
-    it("contains 56 fixture directories", () => {
-      check(fixtureDirs.length === 56, `expected 56 fixture directories, found ${fixtureDirs.length}`);
+    it("contains 57 fixture directories", () => {
+      check(fixtureDirs.length === 57, `expected 57 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -968,12 +971,20 @@ const scenarios: Array<[string, () => void]> = [
     check(runs.cohort_total_net_ltv_d30_usd === "9000000" &&
       runs.cohort_total_net_ltv_d90_usd === "37000000", "scenario 56 total-net LTV");
   }],
+  ["57 current AdAttributionKit re-engagement", () => {
+    const value = fixture("57-aak-reengagement-current-spec").output;
+    const runs = Object.fromEntries(value.metric_runs.map((item: Any) => [item.metric_name, item.value_unscaled]));
+    check(runs.aak_attributed_installs === "1", "scenario 57 install series excludes re-engagement");
+    check(runs.aak_attributed_reengagements === "1", "scenario 57 re-engagement series");
+    check(value.attributions.filter((item: Any) => item.method === "adattributionkit")
+      .every((item: Any) => item.subject_scope === "aggregate"), "scenario 57 aggregate privacy scope");
+  }],
 ];
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 56 scenario assertions", () => {
-      check(scenarios.length === 56, "scenario assertion inventory must contain 56 entries");
+    it("contains 57 scenario assertions", () => {
+      check(scenarios.length === 57, "scenario assertion inventory must contain 57 entries");
     });
   });
 
@@ -1284,7 +1295,15 @@ if (!summaryOnly) {
 
       const reengagement = structuredClone(aak);
       reengagement.conversion_type = "re-engagement";
-      check(!aakValidator({ event_name: "adattributionkit_postback", ...reengagement }), "Stage C accepted out-of-scope re-engagement");
+      reengagement.ad_interaction_type = "click";
+      reengagement.did_win = true;
+      check(aakValidator({ event_name: "adattributionkit_postback", ...reengagement }), "Stage C rejected current re-engagement");
+      const viewReengagement = structuredClone(reengagement);
+      viewReengagement.ad_interaction_type = "view";
+      check(!aakValidator({ event_name: "adattributionkit_postback", ...viewReengagement }), "Stage C accepted view-through re-engagement");
+      const losingReengagement = structuredClone(reengagement);
+      losingReengagement.did_win = false;
+      check(!aakValidator({ event_name: "adattributionkit_postback", ...losingReengagement }), "Stage C accepted non-winning re-engagement");
       const unknownConversion = structuredClone(adservices);
       unknownConversion.adservices_context.conversion_type = "Unknown";
       check(!installValidator({ event_name: "install", ...unknownConversion }), "Stage C accepted an unknown AdServices conversion type");
@@ -1534,7 +1553,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 56 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 57 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1574,7 +1593,7 @@ const acceptance: Array<[string, () => void]> = [
     for (const forbidden of ["threshold", "model_weight", "watchlist", "ip_address", "user_agent", "response_timing"]) check(!schemaText.includes(forbidden), `AC20 ${forbidden}`);
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
-  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 56 && outputArtifactCount === 56 * 13, "AC21")],
+  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 57 && outputArtifactCount === 57 * 13, "AC21")],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {
     for (const { output, python } of results.values()) check(equal(output, python), "AC22 evaluator mismatch");
     const vector = { numbers: [333333333.33333329, 1e30, 4.50, 2e-3, 1e-27, -0], string: "€$\u000f\nA'B\"\\\"/" };
