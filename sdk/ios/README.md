@@ -71,10 +71,11 @@ synthetic cases from `sdk/queue-semantics-vectors.json`.
 
 ## Immutable source bundle
 
-At the `v0.2.0-rc.3` tag, the repository release tool packages the tracked
-`sdk/ios` tree as a deterministic source ZIP tied to the same `0.2.0-rc.3` SDK
-identity and commit as the Android Maven layout and Unity UPM archive. Post-tag `main`
-must not publish changed SDK source under the rc.3 identity. The tool does not
+For configured candidate `v0.2.0-rc.4`, the repository release tool packages the
+tracked `sdk/ios` tree as a deterministic source ZIP tied to the same
+`0.2.0-rc.4` SDK identity and commit as the Android Maven layout and Unity UPM
+archive. Treat it as release evidence only when the matching annotated tag names
+the exact green source commit. The tool does not
 publish a Swift registry package or binary XCFramework. Run the repository-level commands in
 [`docs/operations/release.md`](../../docs/operations/release.md), then verify
 the archive through `SHA256SUMS` and `release-manifest.json`. The macOS

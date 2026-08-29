@@ -45,6 +45,13 @@ for (const path of [
 }
 assert.ok(read("sdk/ios/README.md").includes(`\`${releaseVersion}\``), "iOS release identity differs");
 assert.ok(read(`docs/releases/v${releaseVersion}.md`).includes(`# OpenMasu v${releaseVersion}`), "release notes differ");
+assert.ok(
+  read(`docs/validation/v${releaseVersion}-synthetic-evidence.md`).includes(`# v${releaseVersion} Synthetic Evidence Manifest`),
+  "synthetic evidence manifest differs",
+);
+for (const path of ["docs/releases/README.md", "docs/validation/README.md"]) {
+  assert.ok(read(path).includes(`v${releaseVersion}`), `${path} does not index v${releaseVersion}`);
+}
 
 for (const path of ["package.json", "packages/contracts/package.json", "packages/attribution-core/package.json"]) {
   assert.equal(json<{ version: string }>(path).version, "0.4.0", `${path} changed the Contract v0.4 package identity`);

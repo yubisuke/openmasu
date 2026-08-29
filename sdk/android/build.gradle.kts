@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "dev.openmasu"
-version = "0.2.0-rc.3"
+version = "0.2.0-rc.4"
 
 allprojects {
   tasks.withType<org.gradle.api.tasks.bundling.AbstractArchiveTask>().configureEach {

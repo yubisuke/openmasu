@@ -53,12 +53,13 @@ guides, subsystem designs, operator procedures, tagged records, and historical
 material. For the shortest safe first run, go directly to the
 [synthetic getting started guide](docs/getting-started.md).
 
-The latest tagged source and SDK release candidate is `v0.2.0-rc.3`.
-That tag freezes the Contract v0.4 patch ledger through v0.4.9 with 56 reviewed
-fixtures and 728 golden artifacts. The current `main` branch is unreleased and
-includes the additive v0.4.10 line with 57 fixtures and 741 goldens. Release
-tags and their evidence manifests define published candidates;
-[`docs/STATUS.md`](docs/STATUS.md) defines the current source tree.
+The source and SDK are configured for candidate `v0.2.0-rc.4`. It freezes the
+additive Contract v0.4 patch ledger through v0.4.10 with 57 reviewed fixtures
+and 741 goldens. A candidate is published only if the matching annotated tag
+and GitHub prerelease point to the same green `main` commit. Until then it is a
+prepared source identity, not a release. [`docs/STATUS.md`](docs/STATUS.md)
+defines the current source tree, and the [release index](docs/releases/README.md)
+separates prepared records from immutable published tags.
 
 ## Safe synthetic verification
 
@@ -155,12 +156,11 @@ Release candidates require the platform AARs and SDK SBOMs before the repository
 packager can run. Follow the complete [release runbook](docs/operations/release.md)
 rather than invoking the final packaging command in a clean checkout.
 
-The latest tagged bundle path is
-`build/sdk-release/openmasu-sdk-0.2.0-rc.3`, but it is release evidence only
-when built from the exact `v0.2.0-rc.3` tag. A bundle built from development
-`main` must not be published as `v0.2.0-rc.3`; the next candidate must update
-its version surfaces and evidence together. See the
-[release runbook](docs/operations/release.md).
+The configured candidate bundle path is
+`build/sdk-release/openmasu-sdk-0.2.0-rc.4`. It is release evidence only when
+built from the exact commit named by the matching `v0.2.0-rc.4` annotated tag,
+after every full platform gate is green for that commit. An untagged bundle is
+only a local candidate artifact. See the [release runbook](docs/operations/release.md).
 
 OpenMasu is licensed under the [Apache License 2.0](LICENSE). Attribution is
 recorded in [NOTICE](NOTICE). A preliminary name clearance was completed on

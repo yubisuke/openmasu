@@ -4,13 +4,13 @@ OpenMasu publishes source tags and reproducible local SDK bundles. This runbook
 does not publish Maven, Swift, Unity, npm, container, or hosting artifacts to a
 public registry.
 
-The latest tagged source and SDK candidate is `v0.2.0-rc.3`. Development `main`
-may be ahead of that tag. A new release must describe the exact tag target and
-must not reuse an older evidence manifest as proof for a newer commit.
-Because post-tag `main` still carries the configured rc.3 SDK version for drift
-checks, a bundle built from `main` must not be published as `v0.2.0-rc.3`.
-Version-bearing source, notes, manifest, and artifact paths must move together
-before the next candidate is published. See [Tagged release records](../releases/README.md).
+The source and SDK are configured for candidate `v0.2.0-rc.4`; the preceding
+published tag is `v0.2.0-rc.3`. A configured version is not publication. It
+must not be treated as published unless the matching annotated tag and GitHub
+prerelease point to the same green `main` commit. A release must describe that
+exact tag target and must not reuse an older evidence manifest as proof for a
+newer commit. Version-bearing source, notes, manifest, SBOMs, and artifact paths
+move together. See [Release candidate records](../releases/README.md).
 
 ## 1. Freeze the candidate
 
@@ -89,10 +89,10 @@ python tools/build-sdk-release.py --reproducibility-check
 npm run check:sdk-release
 ```
 
-The tagged rc.3 bundle path is
-`build/sdk-release/openmasu-sdk-0.2.0-rc.3/`, and it is valid release evidence
-only at the exact `v0.2.0-rc.3` source tag. A new candidate must update all
-version-bearing source and checks together before using a different path.
+The configured rc.4 bundle path is
+`build/sdk-release/openmasu-sdk-0.2.0-rc.4/`. It is valid release evidence only
+at the exact source commit named by the matching annotated tag, after every
+required full platform gate is green for that commit.
 
 Verify the Android AAR/POM files, Unity UPM archive, Swift source archive,
 normalized CycloneDX SBOMs, `release-manifest.json`, and `SHA256SUMS`. The two
@@ -126,9 +126,9 @@ visibility, tag name, commit, and explicit authorization for that operation.
 Confirm every required workflow is green on the exact commit. Create an
 annotated or signed tag and release only after the release owner approves it.
 
-The `v0.2.0-rc.3` tag uses
-[its own synthetic evidence manifest](../validation/v0.2.0-rc.3-synthetic-evidence.md).
-A later tag requires a later manifest.
+Candidate `v0.2.0-rc.4` uses
+[its own synthetic evidence manifest](../validation/v0.2.0-rc.4-synthetic-evidence.md).
+The preceding rc.3 record remains immutable historical evidence.
 
 ## Public release contents
 

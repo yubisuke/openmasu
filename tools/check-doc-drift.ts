@@ -94,16 +94,17 @@ export function documentationDriftFailures(
     "the current M0.4 roadmap gate differs from the measured inventory",
   );
   expect(
-    normalizedIncludes(documents.readme, `latest tagged source and SDK release candidate is \`v${releaseVersion}\``),
-    "README release candidate differs from the SDK release version",
+    normalizedIncludes(documents.readme, `source and SDK are configured for candidate \`v${releaseVersion}\``),
+    "README configured candidate differs from the SDK release version",
   );
   expect(
-    normalizedIncludes(documents.status, `latest tagged source and SDK release candidate is \`v${releaseVersion}\``),
-    "STATUS release candidate differs from the SDK release version",
+    normalizedIncludes(documents.status, `source and SDK are configured for candidate \`v${releaseVersion}\``),
+    "STATUS configured candidate differs from the SDK release version",
   );
   expect(
-    normalizedIncludes(documents.readme, "current `main` branch is unreleased") && documents.readme.includes(`v${contractPatch}`),
-    "README does not identify the active contract patch as unreleased development source",
+    normalizedIncludes(documents.readme, "candidate is published only if the matching annotated tag") &&
+      documents.readme.includes(`v${contractPatch}`),
+    "README does not separate the configured candidate from publication or identify the active contract patch",
   );
   expect(
     normalizedIncludes(documents.status, "document describes the current `main` source tree") &&
@@ -111,12 +112,12 @@ export function documentationDriftFailures(
     "STATUS does not identify the active contract patch as current development source",
   );
   expect(
-    documents.readme.includes(`must not be published as \`v${releaseVersion}\``),
-    "README does not prevent post-tag source from reusing the tagged release identity",
+    normalizedIncludes(documents.readme, "An untagged bundle is only a local candidate artifact"),
+    "README does not prevent an untagged bundle from being treated as release evidence",
   );
   expect(
-    documents.releaseRunbook.includes(`must not be published as \`v${releaseVersion}\``),
-    "release runbook does not prevent post-tag source from reusing the tagged release identity",
+    normalizedIncludes(documents.releaseRunbook, "must not be treated as published unless the matching annotated tag"),
+    "release runbook does not separate a configured candidate from a published release",
   );
   expect(documents.releaseRunbook.includes(bundlePath), "release runbook bundle path differs from the SDK release version");
   expect(documents.releaseNotes.includes(`# OpenMasu v${releaseVersion}`), "release notes heading differs from the SDK release version");
