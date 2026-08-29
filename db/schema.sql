@@ -1315,10 +1315,6 @@ CREATE TABLE ledger.apple_postback_facts (
   tenant_id control.identifier NOT NULL,
   app_id control.identifier NOT NULL,
   event_name text NOT NULL CHECK (event_name IN ('skan_postback', 'adattributionkit_postback')),
-  conversion_type text CHECK (
-    conversion_type IS NULL
-    OR conversion_type IN ('download', 'redownload', 're-engagement')
-  ),
   signature_verified boolean NOT NULL,
   did_win boolean NOT NULL,
   source_identifier_present boolean NOT NULL,
@@ -1328,6 +1324,10 @@ CREATE TABLE ledger.apple_postback_facts (
   ),
   received_at control.canonical_timestamp NOT NULL,
   artifact jsonb NOT NULL,
+  conversion_type text CHECK (
+    conversion_type IS NULL
+    OR conversion_type IN ('download', 'redownload', 're-engagement')
+  ),
   FOREIGN KEY (tenant_id, app_id) REFERENCES control.apps (tenant_id, app_id),
   FOREIGN KEY (tenant_id, app_id, logical_event_id)
     REFERENCES ledger.logical_events (tenant_id, app_id, logical_event_id)
