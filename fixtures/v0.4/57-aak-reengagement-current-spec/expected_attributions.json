@@ -1,0 +1,58 @@
+[
+  {
+    "attribution_id": "attr:aak-download-57",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "aggregate",
+    "subject_ref": "aggregate:adattributionkit:aak-download-57",
+    "status": "non_organic",
+    "method": "adattributionkit",
+    "model": "aggregate",
+    "reason_code": "skan_postback_verified",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "aak-download-57",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-30T05:00:00.000Z",
+    "decided_at": "2026-08-31T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-31T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "apple-postback-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "91181289d7e6604c8a73b7e83d6950334db9bc1067b78ab25216ecaa24bcb896"
+  },
+  {
+    "attribution_id": "attr:aak-reengagement-57",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "aggregate",
+    "subject_ref": "aggregate:adattributionkit:aak-reengagement-57",
+    "status": "non_organic",
+    "method": "adattributionkit",
+    "model": "aggregate",
+    "reason_code": "skan_postback_verified",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "aak-reengagement-57",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-30T06:00:00.000Z",
+    "decided_at": "2026-08-31T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-31T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "apple-postback-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "91181289d7e6604c8a73b7e83d6950334db9bc1067b78ab25216ecaa24bcb896"
+  }
+]

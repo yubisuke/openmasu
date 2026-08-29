@@ -1315,6 +1315,10 @@ CREATE TABLE ledger.apple_postback_facts (
   tenant_id control.identifier NOT NULL,
   app_id control.identifier NOT NULL,
   event_name text NOT NULL CHECK (event_name IN ('skan_postback', 'adattributionkit_postback')),
+  conversion_type text CHECK (
+    conversion_type IS NULL
+    OR conversion_type IN ('download', 'redownload', 're-engagement')
+  ),
   signature_verified boolean NOT NULL,
   did_win boolean NOT NULL,
   source_identifier_present boolean NOT NULL,
@@ -1331,7 +1335,7 @@ CREATE TABLE ledger.apple_postback_facts (
 
 CREATE INDEX apple_postback_facts_metric_idx
   ON ledger.apple_postback_facts (
-    tenant_id, app_id, event_name, received_at, conversion_bucket
+    tenant_id, app_id, event_name, conversion_type, received_at, conversion_bucket
   );
 
 -- Unregistered Apple application identifiers do not have a tenant scope. Keep a

@@ -187,11 +187,12 @@ async function eventCountValue(
     if (grouping.attribution_status !== undefined) {
       throw new Error(`SQL aggregate event_count forbids attribution_status: ${definition.metric_name}`);
     }
-    const expectedEventName = definition.metric_name === "aak_attributed_installs"
+    const expectedEventName = definition.metric_name.startsWith("aak_attributed_")
       ? "adattributionkit_postback"
       : "skan_postback";
     if (![
       "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
+      "aak_attributed_reengagements",
     ].includes(definition.metric_name) || eventName !== expectedEventName) {
       throw new Error(`SQL aggregate metric and event mismatch: ${definition.metric_name}`);
     }
@@ -233,6 +234,9 @@ async function eventCountValue(
          AND fact.did_win
          AND fact.source_identifier_present
          AND fact.conversion_bucket IS NOT NULL
+         AND ($8::text IS NULL
+           OR ($8='install' AND (fact.conversion_type IS NULL OR fact.conversion_type IN ('download','redownload')))
+           OR ($8='re-engagement' AND fact.conversion_type='re-engagement'))
          AND timezone('UTC', control.canonical_timestamp_value(fact.received_at))::date=$6::date
          AND ($7::text IS NULL OR fact.conversion_bucket=$7)`,
       [
@@ -243,6 +247,11 @@ async function eventCountValue(
         eventName,
         grouping.metric_date,
         conversionBucket ?? null,
+        definition.metric_name === "aak_attributed_installs"
+          ? "install"
+          : definition.metric_name === "aak_attributed_reengagements"
+            ? "re-engagement"
+            : null,
       ],
     );
     return { value_state: "present", value_unscaled: aggregate.rows[0].value_unscaled };
@@ -977,6 +986,7 @@ function assertMetricDefinitionSeries(definition: Any): void {
   ]);
   const aggregateNames = new Set([
     "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
+    "aak_attributed_reengagements",
   ]);
   const eventNames = definition.event_names ?? [];
   const grouping = definition.grouping_dimensions ?? [];
@@ -1019,7 +1029,7 @@ function assertMetricDefinitionSeries(definition: Any): void {
     return;
   }
   if (aggregateNames.has(definition.metric_name)) {
-    const expectedEvent = definition.metric_name === "aak_attributed_installs"
+    const expectedEvent = definition.metric_name.startsWith("aak_attributed_")
       ? "adattributionkit_postback" : "skan_postback";
     const expectedGrouping = definition.metric_name === "skan_conversion_value_distribution"
       ? ["metric_date", "apple_conversion_bucket"] : ["metric_date"];

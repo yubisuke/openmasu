@@ -33,11 +33,22 @@ Aggregate postbacks are grouped and reported by receive-date authority. They
 never become installation identity and never merge with deterministic
 installation-level attribution.
 
+Contract patch v0.4.10 accepts Apple's current `re-engagement` conversion type
+only for click-through winning postbacks. It remains aggregate evidence and is
+reported in `aak_attributed_reengagements`, separately from `download` and
+`redownload` in `aak_attributed_installs`.
+
 ## Conversion policy
 
 Conversion schema and value policy are versioned and bound to emitted lifecycle
 evidence. Historical aggregate metrics use the watermark and policy fixed by the
 recorded run rather than the latest policy.
+
+The SDK may target install or re-engagement postbacks on iOS 18+ and may use an
+opaque conversion tag on iOS 18.4+. A requested type or tag fails closed on an
+older OS rather than broadening to every active postback. Conversion tags are
+transient platform bookmarks and are not analytics payloads, identifiers, or
+log fields.
 
 ## Unity bridge
 

@@ -1,0 +1,82 @@
+[
+  {
+    "metric_run_id": "run-57-aak-installs:aak_attributed_installs",
+    "metric_name": "aak_attributed_installs",
+    "metric_definition_version": "0.3.3",
+    "input_snapshot_id": "9acae011edc43763ecdb03ebdc8eee791d69de642df28cb13b39f0eabec383aa",
+    "input_received_at_watermark": "2026-08-31T00:00:00.000Z",
+    "input_ledger_position": "2026-08-30T06:00:01.000Z|aak-reengagement-57",
+    "computed_at": "2026-08-31T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-stage-m4",
+    "rule_bundle_version": "0.3.3",
+    "rule_bundle_hash": "4444444444444444444444444444444444444444444444444444444444444444",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "value_unscaled": "1",
+    "grouping": {
+      "dimensions": {
+        "metric_date": "2026-08-30"
+      },
+      "dimension_digest": "1f49243ec6527f7c18906b3f9730901893f44ecf352ff46a36176162d2d17b0c"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "aak-download-57",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "aak-reengagement-57",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "run-57-aak-reengagements:aak_attributed_reengagements",
+    "metric_name": "aak_attributed_reengagements",
+    "metric_definition_version": "0.4.10",
+    "input_snapshot_id": "9acae011edc43763ecdb03ebdc8eee791d69de642df28cb13b39f0eabec383aa",
+    "input_received_at_watermark": "2026-08-31T00:00:00.000Z",
+    "input_ledger_position": "2026-08-30T06:00:01.000Z|aak-reengagement-57",
+    "computed_at": "2026-08-31T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-aak-reengagement",
+    "rule_bundle_version": "0.4.10",
+    "rule_bundle_hash": "5555555555555555555555555555555555555555555555555555555555555555",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "value_unscaled": "1",
+    "grouping": {
+      "dimensions": {
+        "metric_date": "2026-08-30"
+      },
+      "dimension_digest": "1f49243ec6527f7c18906b3f9730901893f44ecf352ff46a36176162d2d17b0c"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "aak-download-57",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "aak-reengagement-57",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  }
+]

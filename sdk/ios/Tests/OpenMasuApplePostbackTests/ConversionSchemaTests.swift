@@ -43,6 +43,100 @@ final class ConversionSchemaTests: XCTestCase {
     let enabledEvents = await enabledSink.events
     XCTAssertEqual(enabledEvents, ["openmasu.conversion_value_updated"])
   }
+
+  func testCurrentAdAttributionKitTargetingIsOptionalAndValidated() async throws {
+    let legacy = try ConversionUpdate(fineValue: 7, coarseValue: .medium, lockPostback: false)
+    XCTAssertNil(legacy.conversionTypes)
+    XCTAssertNil(legacy.conversionTag)
+
+    let targeted = try ConversionUpdate(
+      fineValue: 7,
+      coarseValue: .medium,
+      lockPostback: false,
+      conversionTypes: [.reengagement],
+      conversionTag: "synthetic-opaque-tag"
+    )
+    XCTAssertEqual(targeted.conversionTypes, [.reengagement])
+    XCTAssertEqual(targeted.conversionTag, "synthetic-opaque-tag")
+    XCTAssertThrowsError(try ConversionUpdate(
+      fineValue: 7,
+      coarseValue: .medium,
+      lockPostback: false,
+      conversionTypes: []
+    ))
+    XCTAssertThrowsError(try ConversionUpdate(
+      fineValue: 7,
+      coarseValue: .medium,
+      lockPostback: false,
+      conversionTypes: [.install, .install]
+    ))
+    XCTAssertThrowsError(try ConversionUpdate(
+      fineValue: 7,
+      coarseValue: .medium,
+      lockPostback: false,
+      conversionTag: ""
+    ))
+  }
+
+  func testReengagementConversionTagIsParsedAsAnOpaqueTransientValue() throws {
+    let url = try XCTUnwrap(URL(string:
+      "https://synthetic.example/open?AdAttributionKitReengagementOpen=opaque%2Fbookmark&dlp_slug=offer"
+    ))
+    XCTAssertEqual(
+      AdAttributionKitReengagementURL.conversionTag(from: url),
+      "opaque/bookmark"
+    )
+    XCTAssertNil(AdAttributionKitReengagementURL.conversionTag(from:
+      try XCTUnwrap(URL(string: "https://synthetic.example/open?dlp_slug=offer"))
+    ))
+  }
+
+  func testControllerForwardsTargetingWithoutLoggingTheOpaqueTag() async throws {
+    let url = try XCTUnwrap(OpenMasuConversionResources.defaultSchemaURL)
+    let schema = try ConversionSchema(data: Data(contentsOf: url))
+    let updater = RecordingUpdater()
+    let sink = RecordingSink()
+    let controller = ConversionValueController(
+      schema: schema,
+      updater: updater,
+      sink: sink,
+      loggingEnabled: true
+    )
+    let value = try await controller.record(
+      eventName: "purchase",
+      conversionTypes: [.reengagement],
+      conversionTag: "synthetic-opaque-tag"
+    )
+    XCTAssertEqual(value.conversionTypes, [.reengagement])
+    XCTAssertEqual(value.conversionTag, "synthetic-opaque-tag")
+    let recordedValues = await updater.values
+    let loggedEvents = await sink.events
+    let loggedTags = await sink.loggedTags
+    XCTAssertEqual(recordedValues.last?.conversionTypes, [.reengagement])
+    XCTAssertEqual(loggedEvents, ["openmasu.conversion_value_updated"])
+    XCTAssertEqual(loggedTags, [])
+  }
+
+  func testInvalidTargetingDoesNotAdvanceConversionSignals() async throws {
+    let url = try XCTUnwrap(OpenMasuConversionResources.defaultSchemaURL)
+    let schema = try ConversionSchema(data: Data(contentsOf: url))
+    let updater = RecordingUpdater()
+    let controller = ConversionValueController(schema: schema, updater: updater)
+
+    do {
+      _ = try await controller.record(eventName: "invalid", conversionTag: "")
+      XCTFail("empty conversion tag must fail")
+    } catch {
+      XCTAssertEqual(error as? OpenMasuError, .conversionSchema("conversion_tag_empty"))
+    }
+
+    let first = try await controller.record(eventName: "first")
+    let second = try await controller.record(eventName: "second")
+    XCTAssertEqual(first.fineValue, 0)
+    XCTAssertEqual(second.fineValue, 0, "the rejected signal must not reach the three-event rule")
+    let recordedValues = await updater.values
+    XCTAssertEqual(recordedValues.count, 2)
+  }
 }
 
 private actor RecordingUpdater: AppleConversionUpdating {
@@ -52,6 +146,7 @@ private actor RecordingUpdater: AppleConversionUpdating {
 
 private actor RecordingSink: ConversionEventSink {
   private(set) var events: [String] = []
+  private(set) var loggedTags: [String] = []
   func recordConversionUpdate(schemaVersion: String, value: ConversionUpdate) {
     events.append("openmasu.conversion_value_updated")
   }

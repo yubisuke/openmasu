@@ -72,7 +72,8 @@ export type RecordCountRow = {
     | "daily_install_count"
     | "skan_attributed_installs"
     | "skan_conversion_value_distribution"
-    | "aak_attributed_installs";
+    | "aak_attributed_installs"
+    | "aak_attributed_reengagements";
   readonly grouping: Readonly<Record<string, string>>;
   readonly count: string;
 };
@@ -83,6 +84,7 @@ const recordCountMetricNames = new Set([
   "skan_attributed_installs",
   "skan_conversion_value_distribution",
   "aak_attributed_installs",
+  "aak_attributed_reengagements",
 ]);
 
 export function supportsRecordCounts(query: MetricQuery): boolean {
@@ -268,6 +270,7 @@ export async function recordCounts(
       AND logical.event_name IN ('click','install')
   ), apple_event AS (
     SELECT logical.event_name,
+      fact.conversion_type,
       timezone('UTC', control.canonical_timestamp_value(fact.received_at))::date::text AS metric_date,
       NULL::text AS campaign_id,
       NULL::text AS network,
@@ -313,6 +316,11 @@ export async function recordCounts(
       UNION ALL
       SELECT 'aak_attributed_installs'::text
       WHERE apple.event_name='adattributionkit_postback'
+        AND (apple.conversion_type IS NULL OR apple.conversion_type IN ('download','redownload'))
+      UNION ALL
+      SELECT 'aak_attributed_reengagements'::text
+      WHERE apple.event_name='adattributionkit_postback'
+        AND apple.conversion_type='re-engagement'
     ) AS series
   )
   , counts AS (

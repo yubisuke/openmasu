@@ -1060,6 +1060,7 @@ function validateMetricDefinitionSeries(definition: Any): void {
   ]);
   const aggregateNames = new Set([
     "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
+    "aak_attributed_reengagements",
   ]);
   const aggregateEvents = new Set(["skan_postback", "adattributionkit_postback"]);
   const eventNames = definition.event_names ?? [];
@@ -1100,7 +1101,7 @@ function validateMetricDefinitionSeries(definition: Any): void {
     return;
   }
   if (aggregateNames.has(definition.metric_name)) {
-    const expectedEvent = definition.metric_name === "aak_attributed_installs"
+    const expectedEvent = definition.metric_name.startsWith("aak_attributed_")
       ? "adattributionkit_postback" : "skan_postback";
     const expectedGrouping = definition.metric_name === "skan_conversion_value_distribution"
       ? ["metric_date", "apple_conversion_bucket"] : ["metric_date"];
@@ -1339,10 +1340,10 @@ function metricRuns(
           if (evaluation.grouping?.attribution_status !== undefined) {
             throw new Error(`aggregate event_count forbids attribution_status: ${metricName}`);
           }
-          const expectedEventName = metricName === "aak_attributed_installs"
+          const expectedEventName = metricName.startsWith("aak_attributed_")
             ? "adattributionkit_postback"
             : "skan_postback";
-          if (!["skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs"].includes(metricName) || eventName !== expectedEventName) {
+          if (!["skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs", "aak_attributed_reengagements"].includes(metricName) || eventName !== expectedEventName) {
             throw new Error(`aggregate event_count metric and event mismatch: ${metricName}`);
           }
           const conversionBucket = evaluation.grouping?.apple_conversion_bucket;
@@ -1355,6 +1356,10 @@ function metricRuns(
           value = BigInt(visible.filter((attempt) => {
             if (attempt.record.event_name !== eventName ||
                 dateAt(attempt.record.received_at, "UTC", "received_at") !== metricDate) return false;
+            if (metricName === "aak_attributed_installs" &&
+                !["download", "redownload"].includes(attempt.record.payload.conversion_type)) return false;
+            if (metricName === "aak_attributed_reengagements" &&
+                attempt.record.payload.conversion_type !== "re-engagement") return false;
             const attribution = attributions.find((candidate) =>
               candidate.tenant_id === attempt.server.tenant_id &&
               candidate.app_id === attempt.server.app_id &&

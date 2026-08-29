@@ -98,15 +98,20 @@ function encodeJson(value: unknown): string {
   return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
 }
 
-function aakBody(): Record<string, unknown> {
+function aakBody(input: {
+  readonly conversionType?: "download" | "redownload" | "re-engagement";
+  readonly didWin?: boolean;
+  readonly interactionType?: "view" | "click";
+  readonly identifierSuffix?: string;
+} = {}): Record<string, unknown> {
   const header = encodeJson({ alg: "ES256", kid: "apple-cas-identifier/0" });
   const claims = encodeJson({
-    "postback-identifier": `00000000-0000-4000-9000-${run.padEnd(12, "1").slice(0, 12)}`,
+    "postback-identifier": `00000000-0000-4000-${input.identifierSuffix ?? "9000"}-${run.padEnd(12, "1").slice(0, 12)}`,
     "impression-type": "app-impression",
     "ad-network-identifier": "synthetic.m4.adattributionkit",
     "advertised-item-identifier": adamA,
-    "conversion-type": "download",
-    "did-win": true,
+    "conversion-type": input.conversionType ?? "download",
+    "did-win": input.didWin ?? true,
     "postback-sequence-index": 0,
     "source-identifier": "4321",
   });
@@ -117,7 +122,7 @@ function aakBody(): Record<string, unknown> {
   return {
     "jws-string": `${header}.${claims}.${signature}`,
     "conversion-value": 7,
-    "ad-interaction-type": "click",
+    "ad-interaction-type": input.interactionType ?? "click",
     "country-code": "US",
   };
 }
@@ -264,6 +269,36 @@ describe("M4 Apple aggregate postback receiver", () => {
     assert.equal((await post("/.well-known/skadnetwork/report-attribution/", Buffer.from("{", "utf8"))).response.status, 400);
     assert.equal((await post("/.well-known/skadnetwork/report-attribution/", Buffer.alloc(17 * 1024, 65))).response.status, 400);
     assert.equal(await scopedCount("ledger.ingest_batches"), before);
+  });
+
+  it("accepts current re-engagement postbacks and rejects non-click or non-winning variants", async () => {
+    const accepted = await post("/.well-known/appattribution/report-attribution/", aakBody({
+      conversionType: "re-engagement",
+      identifierSuffix: "9001",
+    }));
+    assert.equal(accepted.response.status, 200);
+    assert.equal(accepted.bytes.length, 0);
+
+    const beforeRejected = await scopedCount("ledger.ingest_batches");
+    assert.equal((await post("/.well-known/appattribution/report-attribution/", aakBody({
+      conversionType: "re-engagement",
+      interactionType: "view",
+      identifierSuffix: "9002",
+    }))).response.status, 400);
+    assert.equal((await post("/.well-known/appattribution/report-attribution/", aakBody({
+      conversionType: "re-engagement",
+      didWin: false,
+      identifierSuffix: "9003",
+    }))).response.status, 400);
+    assert.equal(await scopedCount("ledger.ingest_batches"), beforeRejected);
+
+    await processSdkInbox(pool, payloadStore, tenantA);
+    const facts = await withTenant(pool, tenantA, (client) => client.query<{ conversion_type: string }>(
+      `SELECT conversion_type FROM ledger.apple_postback_facts
+       WHERE tenant_id=$1 AND app_id=$2 AND conversion_type='re-engagement'`,
+      [tenantA, appA],
+    ));
+    assert.deepEqual(facts.rows, [{ conversion_type: "re-engagement" }]);
   });
 
   it("A07 bounds invalid-signature ledger amplification and retains an audit counter", async () => {

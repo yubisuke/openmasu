@@ -57,8 +57,17 @@ describe("M3 typed reporting query", () => {
     rejects("app_id=app-query&after=not-base64-json", "cursor_invalid");
     rejects("app_id=app-query&metric_name=skan_attributed_installs&grouping_attribution_status=non_organic", "metric_series_mismatch");
     rejects("app_id=app-query&metric_name=aak_attributed_installs&grouping_country=JP", "metric_series_mismatch");
+    rejects("app_id=app-query&metric_name=aak_attributed_reengagements&grouping_country=JP", "metric_series_mismatch");
     rejects("app_id=app-query&metric_name=skan_attributed_installs&grouping_apple_conversion_bucket=fine%3A21", "metric_series_mismatch");
     rejects("app_id=app-query&metric_name=daily_install_count&grouping_apple_conversion_bucket=fine%3A21", "metric_series_mismatch");
+  });
+
+  it("accepts the separated AdAttributionKit re-engagement aggregate series", () => {
+    const parsed = parse(
+      "app_id=app-query&metric_name=aak_attributed_reengagements&grouping_metric_date=2026-08-30",
+    );
+    assert.deepEqual(parsed.query.metricNames, ["aak_attributed_reengagements"]);
+    assert.deepEqual(parsed.query.grouping, { metric_date: "2026-08-30" });
   });
 
   it("C09 binds every filter value and emits keyset rather than offset SQL", () => {

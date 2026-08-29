@@ -203,6 +203,41 @@
       }
     },
     {
+      "if": { "properties": { "metric_name": { "const": "aak_attributed_reengagements" } }, "required": ["metric_name"] },
+      "then": {
+        "required": ["grouping"],
+        "properties": {
+          "metric_definition_version": { "const": "0.4.10" },
+          "aggregation_time_zone": { "const": "UTC" },
+          "value_type": { "const": "count" },
+          "grouping": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "dimensions": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "metric_date": {},
+                  "attribution_status": {},
+                  "apple_conversion_bucket": {}
+                },
+                "required": ["metric_date"],
+                "minProperties": 1,
+                "maxProperties": 1,
+                "not": {
+                  "anyOf": [
+                    { "properties": { "attribution_status": {} }, "required": ["attribution_status"] },
+                    { "properties": { "apple_conversion_bucket": {} }, "required": ["apple_conversion_bucket"] }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "if": {
         "properties": {
           "grouping": {

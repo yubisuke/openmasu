@@ -73,12 +73,22 @@ grouping, privacy state, or fraud meaning changed.
 | 0.4.7 | deep-link event and engagement attribution | 54 |
 | 0.4.8 | installation-anchored purchase/refund net revenue | 55 |
 | 0.4.9 | D30/D90 purchase-net and total-net metrics | 56 |
+| 0.4.10 | AdAttributionKit re-engagement and current conversion targeting | 57 |
 
 These patches leave active schema IDs on the v0.4 minor line. Each new vocabulary
 or definition is exercised by synthetic evidence. Earlier goldens remain
 byte-identical except for the documented fraud-bundle binding correction, which
 replaced placeholder or partial hashes in seven fraud-decision files with the
 registered composite definition.
+
+Patch 0.4.10 adds the `re-engagement` value to the AdAttributionKit postback
+enum with conditional click-only and winner-only constraints. It also adds the
+closed `aak_attributed_reengagements` definition so the existing
+`aak_attributed_installs` series remains limited to `download` and
+`redownload`. The database fact projection adds a nullable, non-identifying
+`conversion_type` column; NULL is retained only for pre-patch rows that could
+not have been re-engagement postbacks. Fixture 57 adds 13 reviewed golden files.
+Fixtures 1 through 56 and their goldens remain byte-identical.
 
 ## Current source of truth
 

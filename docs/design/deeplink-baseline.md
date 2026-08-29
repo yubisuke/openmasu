@@ -56,7 +56,9 @@ install metrics. Organic, non-organic, and unattributed status remains explicit.
 
 - iOS deferred deep links;
 - Apple Ads campaign-level deferred destinations;
-- AdAttributionKit re-engagement claims without supported public evidence;
+- device-level AdAttributionKit re-engagement attribution without supported
+  public evidence. Contract patch v0.4.10 accepts Apple-signed aggregate
+  re-engagement postbacks, but never turns them into a device-level open;
 - custom-scheme routing as the default secure path;
 - any SDK-controlled automatic navigation.
 

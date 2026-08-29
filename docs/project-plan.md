@@ -43,6 +43,7 @@ versions were reached. They do not override current sources of truth.
 | --- | --- | --- |
 | Worker database safety | Complete: separate scheduler/job pools and short transaction phases | Scheduler and MAX inbox integration tests at a one-connection pool limit |
 | SDK queue parity | Complete: one duplicate/conflict policy across Android and iOS | Shared semantic vectors plus each platform's native gate |
+| Apple current-spec compatibility | Accept and separately report aggregate AdAttributionKit re-engagement while preserving install and device-level boundaries | Signed synthetic receiver test, reviewed fixture parity, SQL/reference parity, and macOS SDK gate |
 | Newcomer documentation | One current documentation map and safe synthetic first run | Link check, documentation drift check, threat-model coverage, full validation |
 | Release alignment | Distinguish latest tag from development main and keep all SDK/package identities synchronized | Release-version check, bundle verification, tagged evidence manifest |
 | CI efficiency | Complete: cancel superseded PR runs and gate expensive steps by changed scope | Classifier unit matrix plus GitHub pull-request proof with every required context present |

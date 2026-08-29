@@ -14,7 +14,9 @@ applications.
 - `OpenMasuAppleAds`: `AAAttribution.attributionToken()` provider. The token is
   delivered as protected evidence and is interpreted only by the server.
 - `OpenMasuApplePostback`: versioned conversion schema and independent
-  SKAdNetwork and AdAttributionKit update calls.
+  SKAdNetwork and AdAttributionKit update calls. Callers may target install or
+  re-engagement postbacks on iOS 18+ and may pass an opaque conversion tag on
+  iOS 18.4+; tags are not written to OpenMasu analytics events or logs.
 - `OpenMasuMax`: provider-neutral MAX revenue mapper. The shipping product does
   not depend on the AppLovin SDK; the compile-only probe verifies the adapter
   surface against the exact pinned provider package.
@@ -23,9 +25,11 @@ applications.
 
 ## Local synthetic gates
 
-Run these commands on macOS with an Xcode toolchain that contains the iOS 17.4
-or later build SDK. The package can deploy to iOS 16; AdAttributionKit calls are
-runtime-gated to iOS 17.4 or later:
+Run these commands on macOS with an Xcode toolchain that contains the current
+iOS SDK. The package can deploy to iOS 16; baseline AdAttributionKit calls are
+runtime-gated to iOS 17.4, conversion-type targeting to iOS 18, and conversion
+tags to iOS 18.4. Requested targeting is never silently broadened on an older
+OS:
 
 ```bash
 swift test --package-path sdk/ios

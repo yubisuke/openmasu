@@ -321,7 +321,7 @@
       },
       "then": {
         "properties": {
-          "metric_name": { "enum": ["skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs"] },
+          "metric_name": { "enum": ["skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs", "aak_attributed_reengagements"] },
           "aggregation_time_zone": { "const": "UTC" },
           "grouping_dimensions": {
             "type": "array",
@@ -365,6 +365,18 @@
         "required": ["definition", "event_names", "grouping_dimensions"],
         "properties": {
           "metric_definition_version": { "const": "0.3.3" },
+          "definition": { "type": "object", "additionalProperties": true, "properties": { "calculation": { "const": "event_count" } }, "required": ["calculation"] },
+          "event_names": { "type": "array", "prefixItems": [{ "const": "adattributionkit_postback" }], "minItems": 1, "maxItems": 1 },
+          "grouping_dimensions": { "type": "array", "prefixItems": [{ "const": "metric_date" }], "minItems": 1, "maxItems": 1 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "metric_name": { "const": "aak_attributed_reengagements" } }, "required": ["metric_name"] },
+      "then": {
+        "required": ["definition", "event_names", "grouping_dimensions"],
+        "properties": {
+          "metric_definition_version": { "const": "0.4.10" },
           "definition": { "type": "object", "additionalProperties": true, "properties": { "calculation": { "const": "event_count" } }, "required": ["calculation"] },
           "event_names": { "type": "array", "prefixItems": [{ "const": "adattributionkit_postback" }], "minItems": 1, "maxItems": 1 },
           "grouping_dimensions": { "type": "array", "prefixItems": [{ "const": "metric_date" }], "minItems": 1, "maxItems": 1 }

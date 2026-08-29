@@ -12,16 +12,53 @@ import AdAttributionKit
 
 public enum CoarseValue: String, Codable, Sendable { case low, medium, high }
 
+public enum AppleConversionType: String, Codable, Hashable, Sendable {
+  case install
+  case reengagement = "re-engagement"
+}
+
+public enum AdAttributionKitReengagementURL {
+  public static let conversionTagParameter = "AdAttributionKitReengagementOpen"
+
+  public static func conversionTag(from url: URL) -> String? {
+    guard let value = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+      .queryItems?
+      .first(where: { $0.name == conversionTagParameter })?
+      .value,
+      !value.isEmpty
+    else { return nil }
+    return value
+  }
+}
+
 public struct ConversionUpdate: Codable, Equatable, Sendable {
   public let fineValue: Int
   public let coarseValue: CoarseValue
   public let lockPostback: Bool
+  public let conversionTypes: [AppleConversionType]?
+  public let conversionTag: String?
 
-  public init(fineValue: Int, coarseValue: CoarseValue, lockPostback: Bool) throws {
+  public init(
+    fineValue: Int,
+    coarseValue: CoarseValue,
+    lockPostback: Bool,
+    conversionTypes: [AppleConversionType]? = nil,
+    conversionTag: String? = nil
+  ) throws {
     guard (0...63).contains(fineValue) else { throw OpenMasuError.conversionSchema("fine_value_out_of_range") }
+    if let conversionTypes {
+      guard !conversionTypes.isEmpty, Set(conversionTypes).count == conversionTypes.count else {
+        throw OpenMasuError.conversionSchema("conversion_types_invalid")
+      }
+    }
+    if let conversionTag, conversionTag.isEmpty {
+      throw OpenMasuError.conversionSchema("conversion_tag_empty")
+    }
     self.fineValue = fineValue
     self.coarseValue = coarseValue
     self.lockPostback = lockPostback
+    self.conversionTypes = conversionTypes
+    self.conversionTag = conversionTag
   }
 }
 
@@ -160,9 +197,21 @@ public actor ConversionValueController {
   }
 
   @discardableResult
-  public func record(eventName: String) async throws -> ConversionUpdate {
-    signals.append(ConversionSignal(eventName: eventName))
-    let value = try schema.evaluate(signals: signals)
+  public func record(
+    eventName: String,
+    conversionTypes: [AppleConversionType]? = nil,
+    conversionTag: String? = nil
+  ) async throws -> ConversionUpdate {
+    let nextSignals = signals + [ConversionSignal(eventName: eventName)]
+    let evaluated = try schema.evaluate(signals: nextSignals)
+    let value = try ConversionUpdate(
+      fineValue: evaluated.fineValue,
+      coarseValue: evaluated.coarseValue,
+      lockPostback: evaluated.lockPostback,
+      conversionTypes: conversionTypes,
+      conversionTag: conversionTag
+    )
+    signals = nextSignals
     try await updater.update(value)
     if loggingEnabled, let sink {
       try await sink.recordConversionUpdate(schemaVersion: schema.schemaVersion, value: value)
@@ -175,9 +224,29 @@ public struct SystemAppleConversionUpdater: AppleConversionUpdating {
   public init() {}
 
   public func update(_ value: ConversionUpdate) async throws {
+    #if os(iOS)
+    #if canImport(AdAttributionKit)
+    if value.conversionTag != nil {
+      guard #available(iOS 18.4, *) else {
+        throw OpenMasuError.conversionSchema("conversion_tag_unsupported")
+      }
+    }
+    if value.conversionTypes != nil {
+      guard #available(iOS 18.0, *) else {
+        throw OpenMasuError.conversionSchema("conversion_types_unsupported")
+      }
+    }
+    #else
+    if value.conversionTag != nil || value.conversionTypes != nil {
+      throw OpenMasuError.conversionSchema("conversion_targeting_unsupported")
+    }
+    #endif
+    #endif
     var firstFailure: Error?
+    let updatesInstallPostbacks = value.conversionTag == nil
+      && (value.conversionTypes == nil || value.conversionTypes?.contains(.install) == true)
     #if canImport(StoreKit) && os(iOS)
-    if #available(iOS 16.1, *) {
+    if #available(iOS 16.1, *), updatesInstallPostbacks {
       do {
         let coarse: SKAdNetwork.CoarseConversionValue
         switch value.coarseValue {
@@ -208,14 +277,45 @@ public struct SystemAppleConversionUpdater: AppleConversionUpdating {
         case .medium: coarse = .medium
         case .high: coarse = .high
         }
-        try await AdAttributionKit.Postback.updateConversionValue(
-          value.fineValue,
-          coarseConversionValue: coarse,
-          lockPostback: value.lockPostback
-        )
+        if #available(iOS 18.4, *), let conversionTag = value.conversionTag {
+          let update = AdAttributionKit.PostbackUpdate(
+            fineConversionValue: value.fineValue,
+            lockPostback: value.lockPostback,
+            conversionTag: conversionTag,
+            coarseConversionValue: coarse,
+            conversionTypes: value.conversionTypes?.map(Self.systemConversionType)
+          )
+          try await AdAttributionKit.Postback.updateConversionValue(update)
+        } else if #available(iOS 18.0, *), let conversionTypes = value.conversionTypes {
+          let update = AdAttributionKit.PostbackUpdate(
+            fineConversionValue: value.fineValue,
+            lockPostback: value.lockPostback,
+            coarseConversionValue: coarse,
+            conversionTypes: conversionTypes.map(Self.systemConversionType)
+          )
+          try await AdAttributionKit.Postback.updateConversionValue(update)
+        } else {
+          try await AdAttributionKit.Postback.updateConversionValue(
+            value.fineValue,
+            coarseConversionValue: coarse,
+            lockPostback: value.lockPostback
+          )
+        }
       } catch { if firstFailure == nil { firstFailure = error } }
     }
     #endif
     if let firstFailure { throw firstFailure }
   }
+
+  #if canImport(AdAttributionKit) && os(iOS)
+  @available(iOS 18.0, *)
+  private static func systemConversionType(
+    _ value: AppleConversionType
+  ) -> AdAttributionKit.PostbackUpdate.ConversionType {
+    switch value {
+    case .install: return .install
+    case .reengagement: return .reengagement
+    }
+  }
+  #endif
 }

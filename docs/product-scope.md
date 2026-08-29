@@ -36,7 +36,8 @@ It is intended for teams that need to answer questions such as:
   revenue evidence from the OpenMasu SDK and redirector.
 - Android Install Referrer and supported Meta Install Referrer evidence.
 - Apple Ads installation evidence and privacy-preserving SKAdNetwork or
-  AdAttributionKit aggregate postbacks.
+  AdAttributionKit aggregate postbacks, including separately reported current
+  AdAttributionKit re-engagement postbacks.
 - Manual cost plus bounded authenticated provider cost adapters.
 - AppLovin MAX impression-level or aggregate advertising revenue.
 - Authenticated synthetic lifecycle/read-back paths for Google Play and the App

@@ -56,6 +56,16 @@ All statuses in this fixture are synthetic, provider-neutral client reports; the
 
 One synthetic imported install has USD 1 advertising revenue and USD 8 settled purchase-net revenue inside D30, so total-net revenue and one-install LTV are USD 9 and ROAS against USD 10 cost is 0.9. D31 revenue is excluded from D30 but included in D90; later D60 revenue and commerce bring D90 purchase net to USD 30 and total net/LTV to USD 37, with ROAS 3.7. A USD 100 purchase at the exact D91 boundary is excluded. These calculations use the half-open `[install, install + (day + 1 days))` rule and contain only synthetic values.
 
+### Fixture 57: current AdAttributionKit re-engagement
+
+One synthetic `download` postback and one synthetic `re-engagement` postback
+are both verified, winning aggregate evidence with conversion values. The
+re-engagement is click-through as Apple requires. The reviewed output keeps both
+attributions at aggregate scope while producing one
+`aak_attributed_installs` event and one `aak_attributed_reengagements` event.
+The candidate TypeScript and independent Python evaluators produced the same
+JCS SHA-256 digest before the 13 golden files were hand-promoted.
+
 ### Protected provider matching keys
 
 Provider matching-key values were independently recomputed from the normative `SHA-256(JCS({provider,type,value}))` formula. Every row uses the synthetic provider namespace `synthetic-provider`; the source values below are synthetic fixture inputs, not external data. Fixtures 01, 03, 19, 21, and 23 expose the corresponding digest in an existing reconciliation golden. Fixture 22 uses its digest only in an unmatched candidate input. Fixtures 28 through 31 expose automatically derived digests in their new reconciliation goldens.
@@ -168,6 +178,7 @@ The provenance correction replaces undocumented placeholder hashes on attributio
 | `metric-purchase-net` | `0.4.8` | `01b66078d11af8ace103a5d2cf594ffe79c19bd59a4dc1f20757339a8a7f4f5f` | 12 |
 | `metric-purchase-net` | `0.4.9` | `709f6688c7bb8537b7af3aa3b5a3aa879036a866fe13a21b83244baec6389712` | 6 |
 | `metric-total-net` | `0.4.9` | `fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3` | 18 |
+| `metric-aak-reengagement` | `0.4.10` | `5555555555555555555555555555555555555555555555555555555555555555` | 2 |
 
 The affected field locations are 75 in `expected_attributions.json`, 190 in `expected_metric_definitions.json`, 48 in `expected_metric_runs.json`, and 22 in `input.json`. The inputs changed only where they embed expected definition or run artifacts for parity assertions.
 

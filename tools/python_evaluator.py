@@ -1114,6 +1114,7 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
     }
     aggregate_names = {
         "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
+        "aak_attributed_reengagements",
     }
     aggregate_events = {"skan_postback", "adattributionkit_postback"}
     metric_name = definition["metric_name"]
@@ -1175,7 +1176,7 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
         return
 
     if metric_name in aggregate_names:
-        expected_event = "adattributionkit_postback" if metric_name == "aak_attributed_installs" else "skan_postback"
+        expected_event = "adattributionkit_postback" if metric_name.startswith("aak_attributed_") else "skan_postback"
         expected_grouping = (
             ["metric_date", "apple_conversion_bucket"]
             if metric_name == "skan_conversion_value_distribution" else ["metric_date"]
@@ -1505,10 +1506,11 @@ def metric_runs(
                     if evaluation.get("grouping", {}).get("attribution_status") is not None:
                         raise ValueError(f"aggregate event_count forbids attribution_status: {metric_name}")
                     expected_event_name = (
-                        "adattributionkit_postback" if metric_name == "aak_attributed_installs" else "skan_postback"
+                        "adattributionkit_postback" if metric_name.startswith("aak_attributed_") else "skan_postback"
                     )
                     if metric_name not in {
                         "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
+                        "aak_attributed_reengagements",
                     } or event_name != expected_event_name:
                         raise ValueError(f"aggregate event_count metric and event mismatch: {metric_name}")
                     conversion_bucket = evaluation.get("grouping", {}).get("apple_conversion_bucket")
@@ -1523,6 +1525,11 @@ def metric_runs(
                         if item["record"]["event_name"] != event_name:
                             return False
                         if day(item["record"]["received_at"], "UTC", "received_at") != metric_date:
+                            return False
+                        conversion_type = item["record"].get("payload", {}).get("conversion_type")
+                        if metric_name == "aak_attributed_installs" and conversion_type not in {"download", "redownload"}:
+                            return False
+                        if metric_name == "aak_attributed_reengagements" and conversion_type != "re-engagement":
                             return False
                         attribution = next((candidate for candidate in attributions
                                             if candidate["tenant_id"] == item["server"]["tenant_id"]

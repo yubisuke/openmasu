@@ -176,6 +176,7 @@ export function parseMetricQuery(input: {
   }
   const aggregateMetricNames = new Set([
     "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
+    "aak_attributed_reengagements",
   ]);
   const selectedAggregate = metricNames.filter((name) => aggregateMetricNames.has(name));
   const selectedDeterministic = metricNames.filter((name) => !aggregateMetricNames.has(name));

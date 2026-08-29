@@ -19,7 +19,7 @@
     "ad_interaction_type": { "enum": ["view", "click"] },
     "country_code": { "type": "string", "pattern": "^[A-Z]{2}$" },
     "advertised_item_identifier": { "type": "integer", "minimum": 0 },
-    "conversion_type": { "enum": ["download", "redownload"] },
+    "conversion_type": { "enum": ["download", "redownload", "re-engagement"] },
     "marketplace_identifier": { "type": "string", "minLength": 1, "maxLength": 253 },
     "ad_network_identifier": { "type": "string", "minLength": 1, "maxLength": 128 },
     "impression_type": { "const": "app-impression" },
@@ -29,5 +29,20 @@
     "postback_identifier": { "type": "string", "minLength": 1, "maxLength": 128 },
     "publisher_item_identifier": { "type": "integer", "minimum": 0 },
     "extensions": { "type": "object", "additionalProperties": true }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "conversion_type": { "const": "re-engagement" } },
+        "required": ["conversion_type"]
+      },
+      "then": {
+        "properties": {
+          "ad_interaction_type": { "const": "click" },
+          "did_win": { "const": true }
+        },
+        "required": ["ad_interaction_type", "did_win"]
+      }
+    }
+  ]
 }
