@@ -183,5 +183,6 @@ validation, and immutable reviewed goldens.
 
 No release is production-approved by this threat model. A release may state
 which synthetic controls passed and which private operator gates remain open.
-See [Project status](STATUS.md), [Privacy and security](privacy-security.md), and
-[Validation checklists](validation/README.md).
+See [Project status](STATUS.md), [Privacy and security](privacy-security.md),
+the roadmap's [optional operator evidence](roadmap.md#optional-operator-evidence),
+and [Validation checklists](validation/README.md).

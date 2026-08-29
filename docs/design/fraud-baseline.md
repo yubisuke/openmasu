@@ -1,6 +1,8 @@
 # Deterministic Fraud Design
 
-Status: implemented and synthetically verified.
+Status: implemented and synthetically verified. See
+[Project status](../STATUS.md) for the evidence vocabulary and open operator
+gates.
 
 ## Purpose
 
@@ -75,7 +77,9 @@ structural limits, not future accuracy claims.
 
 A device-reported `deep_link_open` is a forgeable evidence surface. Fraud rules
 may read it, but forged opens can still inflate re-engagement until a future
-server-authority rule is designed from available evidence.
+server-authority rule is designed from available evidence. This residual
+applies to device-reported engagement metrics, not the separately verified
+Apple-signed aggregate `aak_attributed_reengagements` series.
 
 ## Evidence gates
 

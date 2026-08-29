@@ -48,7 +48,10 @@ as trusted executable input and restore only a backup produced by the approved
 deployment.
 
 1. Provision the OpenMasu database roles in a new PostgreSQL 17 cluster. Create
-   an empty destination database; do not point application traffic at it.
+   an empty destination database; do not point application traffic at it. The
+   migration URL must use the privileged bootstrap/admin connection, not
+   `openmasu_app`, `openmasu_reader`, or `openmasu_seed`. Migrations transfer
+   restored object ownership to the NOLOGIN `openmasu_owner` role.
 2. Restore the archive:
 
    ```bash

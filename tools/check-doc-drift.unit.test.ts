@@ -1,18 +1,25 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { documentationDriftFailures, parseValidationSummary, type CurrentDocumentation } from "./check-doc-drift.js";
+import {
+  documentationDriftFailures,
+  latestContractPatch,
+  parseValidationSummary,
+  unexplainedControlReferenceFailures,
+  type CurrentDocumentation,
+} from "./check-doc-drift.js";
 
 const summary = "Validated 28 schemas, 8 registries, 57 reviewed fixtures, 741 golden output artifacts, 57 scenario assertions, 27 acceptance criteria, deterministic TypeScript, independent Python, and RFC 8785 conformance.";
 const version = "0.2.0-rc.3";
 
 function documents(): CurrentDocumentation {
   return {
-    readme: `The latest tagged source and SDK release candidate is \`v${version}\`. Validation checks 28 schemas, 8 registries, 57 reviewed synthetic fixtures,\n741 golden output artifacts, 57 scenario assertions, 27 acceptance criteria.`,
+    readme: `The latest tagged source and SDK release candidate is \`v${version}\`. The current \`main\` branch is unreleased at v0.4.10 and must not be published as \`v${version}\`. Validation checks 28 schemas, 8 registries, 57 reviewed synthetic fixtures,\n741 golden output artifacts, 57 scenario assertions, 27 acceptance criteria.`,
     roadmap: "The current gate preserves parity across 28 schemas, 8 registries, and 57 reviewed synthetic fixtures.",
-    releaseRunbook: `Use build/sdk-release/openmasu-sdk-${version}.`,
+    releaseRunbook: `Use build/sdk-release/openmasu-sdk-${version}. Development source must not be published as \`v${version}\`.`,
     releaseNotes: `# OpenMasu v${version}`,
+    schemaVersioning: "| Patch | Capability |\n| --- | --- |\n| 0.4.9 | Earlier |\n| 0.4.10 | Current |",
     specification: `The literal validation summary is: \`${summary}\``,
-    status: `The latest tagged source and SDK release candidate is \`v${version}\`.`,
+    status: `The latest tagged source and SDK release candidate is \`v${version}\`. This document describes the current \`main\` source tree through v0.4.10.`,
   };
 }
 
@@ -26,6 +33,10 @@ describe("documentation drift check", () => {
       scenarios: 57,
       acceptanceCriteria: 27,
     });
+  });
+
+  it("derives the latest active contract patch from the version ledger", () => {
+    assert.equal(latestContractPatch(documents().schemaVersioning), "0.4.10");
   });
 
   it("accepts matching current documentation while ignoring unrelated historical text", () => {
@@ -42,5 +53,23 @@ describe("documentation drift check", () => {
       "the normative specification does not contain the measured validation summary",
       "STATUS release candidate differs from the SDK release version",
     ]);
+  });
+
+  it("reports an ambiguous post-tag development identity", () => {
+    const current = documents();
+    current.readme = current.readme.replace("The current `main` branch is unreleased at v0.4.10 and ", "");
+    assert.deepEqual(documentationDriftFailures(current, summary, version), [
+      "README does not identify the active contract patch as unreleased development source",
+    ]);
+  });
+
+  it("rejects internal work-order and decision references in current documentation", () => {
+    assert.deepEqual(
+      unexplainedControlReferenceFailures({
+        "docs/current.md": "Implement this in WO-99.",
+        "docs/history.md": "A standalone historical explanation.",
+      }),
+      ["current documentation contains an internal work-order or decision reference: docs/current.md"],
+    );
   });
 });

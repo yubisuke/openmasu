@@ -5,14 +5,24 @@ CI alone. They are optional private operator work. They do not authorize access
 to real credentials, exports, devices, campaigns, domains, or production
 systems.
 
-## Repository-controlled evidence
+## Current source verification
+
+For the current checkout, use the disposable pilot and gates in
+[Getting started](../getting-started.md) and [Development](../development.md).
+Their result applies only to the exact source revision that ran them.
+
+No frozen evidence manifest exists for post-rc.3 `main`. A new manifest is a
+release deliverable, not something to infer from an older tag.
+
+## Tagged and historical repository evidence
 
 - [v0.2.0-rc.3 synthetic evidence](v0.2.0-rc.3-synthetic-evidence.md)
 - [Synthetic load record](m5-load-results.md)
 - [Pull request CI scope validation](ci-scope-routing.md)
 
-These records apply to the exact commit or tag they name. They are not a claim
-about later development branches or production behavior.
+These records apply to the exact commit or tag they name. They are not evidence
+for later development branches or production behavior, and their older fixture
+counts must not be updated to match current `main`.
 
 ## Private deployment and provider checks
 

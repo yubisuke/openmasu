@@ -7,6 +7,10 @@ public registry.
 The latest tagged source and SDK candidate is `v0.2.0-rc.3`. Development `main`
 may be ahead of that tag. A new release must describe the exact tag target and
 must not reuse an older evidence manifest as proof for a newer commit.
+Because post-tag `main` still carries the configured rc.3 SDK version for drift
+checks, a bundle built from `main` must not be published as `v0.2.0-rc.3`.
+Version-bearing source, notes, manifest, and artifact paths must move together
+before the next candidate is published. See [Tagged release records](../releases/README.md).
 
 ## 1. Freeze the candidate
 
@@ -85,8 +89,9 @@ python tools/build-sdk-release.py --reproducibility-check
 npm run check:sdk-release
 ```
 
-The current candidate bundle path is
-`build/sdk-release/openmasu-sdk-0.2.0-rc.3/`. A new candidate must update all
+The tagged rc.3 bundle path is
+`build/sdk-release/openmasu-sdk-0.2.0-rc.3/`, and it is valid release evidence
+only at the exact `v0.2.0-rc.3` source tag. A new candidate must update all
 version-bearing source and checks together before using a different path.
 
 Verify the Android AAR/POM files, Unity UPM archive, Swift source archive,

@@ -179,9 +179,12 @@ server authority.
 
 Tenant scope is set from authenticated server configuration, not from an
 untrusted cookie or query parameter. PostgreSQL row-level security is forced on
-tenant tables. The application, reader, seed, and migration roles receive
-different minimum grants, and CI compares the complete table/grant matrix after
-migrations.
+tenant tables. The runtime roles `openmasu_app`, `openmasu_reader`, and
+`openmasu_seed` receive different minimum grants, and CI compares the complete
+table/grant matrix after migrations. Migrations use the privileged bootstrap
+connection named by `OPENMASU_MIGRATION_DATABASE_URL`, then transfer object
+ownership to the NOLOGIN `openmasu_owner` role; that connection is never an
+application runtime role.
 
 ## Reporting consistency
 

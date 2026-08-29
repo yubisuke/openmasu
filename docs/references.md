@@ -1,6 +1,9 @@
 # Primary References
 
-Checked on 2026-08-17.
+This catalog records public primary sources used by the current design. Each
+group states when its claims were last confirmed. An older confirmation date is
+not live-provider evidence; recheck the primary source before changing code or
+deploying a versioned external adapter.
 
 ## Apple
 
@@ -164,6 +167,11 @@ Design implications:
 
 - [Google Ads App Conversion Tracking API](https://developers.google.com/app-conversion-tracking/api)
 - [AppLovin MAX S2S Impression Revenue API](https://support.applovin.com/en/max/advanced-features/s2s-impression-level-api/)
+
+Versioned adapter references confirmed on 2026-08-30:
+
+- [Google Ads API release notes](https://developers.google.com/google-ads/api/docs/release-notes) list v25 and the backward-compatible v25.1 update. The cost importer deliberately pins the v25 major endpoint and must be reviewed before a later major-version change.
+- [AppLovin MAX Swift Package releases](https://github.com/AppLovin/AppLovin-MAX-Swift-Package/releases) list 13.6.4 as the current tagged package used by the compile-only iOS probe.
 
 These references demonstrate possible integration paths, not completed approval or production support.
 

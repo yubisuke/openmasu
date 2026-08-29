@@ -49,6 +49,12 @@ Support means the repository has a typed path and synthetic evidence. It does
 not mean every account, report version, region, permission tier, or live API has
 been verified.
 
+Apple-signed aggregate re-engagement and device-reported deep-link engagement
+are separate evidence families. The former has no installation identity and is
+reported in an aggregate series; the latter is forgeable client evidence and
+must not inherit Apple's signature authority. See the
+[provider capability matrix](integrations/provider-capability-matrix.md).
+
 ## Measurement invariants
 
 - Raw evidence, normalized facts, decisions, and aggregates remain distinct.

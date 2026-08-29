@@ -127,7 +127,9 @@ repository does not claim that its example durations are universally lawful.
 - Platform callbacks use their documented signature or service authentication
   boundary before tenant resolution.
 - PostgreSQL uses forced tenant row-level security and separate app, reader,
-  seed, and migration roles.
+  and seed runtime roles. Migrations use a privileged bootstrap/admin
+  connection and transfer ownership to the NOLOGIN `openmasu_owner` role; the
+  migration URL must never use an application runtime role.
 
 ## Secrets and encryption
 
@@ -173,4 +175,6 @@ These guards are not a general-purpose secret scanner. Repository hosting must
 configure independent secret scanning and branch protection.
 
 Private checks are listed in [Validation checklists](validation/README.md). The
-current attack analysis is in [Threat model](threat-model.md).
+current attack analysis is in [Threat model](threat-model.md). These open
+deployment checks correspond to the [optional operator evidence](roadmap.md#optional-operator-evidence)
+in the canonical roadmap; they are not hidden release completion criteria.

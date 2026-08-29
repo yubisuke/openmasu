@@ -1,6 +1,8 @@
 # Audit, Privacy, and Rule Provenance Design
 
-Status: implemented and synthetically verified.
+Status: implemented and synthetically verified. See
+[Project status](../STATUS.md) for the evidence vocabulary and open operator
+gates.
 
 ## Data-subject access and portability
 

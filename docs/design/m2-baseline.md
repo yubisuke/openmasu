@@ -1,6 +1,8 @@
 # Android, Unity, and Redirector Design
 
-Status: implemented and synthetically verified.
+Status: implemented and synthetically verified. See
+[Project status](../STATUS.md) for the evidence vocabulary and open operator
+gates.
 
 ## Measurement flow
 
@@ -31,8 +33,9 @@ lifecycle.
 Tracking links store their destination at creation time. Only HTTPS origins in
 the deployment allowlist and explicit supported store destinations are allowed.
 Request input cannot override a stored destination. Random slugs are the
-default; aliases are an explicit deployment choice. A portable Node service and
-optional Cloudflare adapter share the same redirector core.
+default; aliases are an explicit deployment choice. The portable Node service
+is implemented. A Cloudflare adapter is a future optional port and is not
+shipped; any such port must preserve redirector-core contract parity.
 
 ## SDK queue
 

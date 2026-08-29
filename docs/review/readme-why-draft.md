@@ -1,5 +1,10 @@
 # Draft: Why Open MMP Exists
 
+> Historical pre-rename review artifact. The old project name and proposed
+> wording are retained only to preserve the review record. The current product
+> definition is [Product scope](../product-scope.md), and the current project
+> name is OpenMasu.
+
 This file is a proposed replacement for the README's "Why this project exists" section. It is a review artifact only and does not change the current README.
 
 ## Who it is for
