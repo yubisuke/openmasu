@@ -11,6 +11,11 @@ system.
 - Authenticated `/metrics` output uses Prometheus text format.
 - Metrics include fixed-label request, import, scheduler success/failure,
   consecutive-failure, active-lease, and overdue-job state.
+- The `sdk_batches` ingest backlog includes both batches waiting for base
+  ingestion and batches whose base ledger records are complete but whose
+  server-side AdServices, platform-integrity, or Google Play verification work
+  still needs durable queue installation. The worker retries the latter from
+  the append-only `post_processing_pending` batch state.
 - Labels must not contain tenant data, app IDs, event IDs, provider identifiers,
   payloads, or raw paths.
 

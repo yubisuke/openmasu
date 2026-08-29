@@ -287,7 +287,11 @@ export async function queueGooglePlayProductVerification(
     await withTenant(pool, input.tenantId, async (client) => {
       const existing = await client.query(
         `SELECT 1 FROM ephemeral.google_play_product_verifications
-          WHERE tenant_id=$1 AND app_id=$2 AND subject_record_id=$3`,
+          WHERE tenant_id=$1 AND app_id=$2 AND subject_record_id=$3
+         UNION ALL
+         SELECT 1 FROM ledger.google_play_purchase_verification_results
+          WHERE tenant_id=$1 AND app_id=$2 AND subject_record_id=$3
+         LIMIT 1`,
         [input.tenantId, input.appId, input.subjectRecordId],
       );
       if (existing.rowCount === 1) return;

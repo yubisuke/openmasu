@@ -3,6 +3,7 @@ import {
   JOB_HEALTH_ACTOR_REFS,
   JOB_HEALTH_JOBS,
   JOB_HEALTH_OUTCOMES,
+  SDK_POST_PROCESSING_PENDING_REASON,
   SCHEDULED_WORKER_JOBS,
   withTenant,
   type JobHealthJob,
@@ -99,8 +100,9 @@ export async function renderOperationalMetrics(
       `SELECT count(*)::text AS count,
               COALESCE(EXTRACT(EPOCH FROM (clock_timestamp()-min(received_at::timestamptz))),0)::text AS oldest
          FROM ledger.ingest_batches_current
-        WHERE tenant_id=$1 AND status='pending'`,
-      [tenantId],
+        WHERE tenant_id=$1
+          AND (status='pending' OR (status='processed' AND reason_code=$2))`,
+      [tenantId, SDK_POST_PROCESSING_PENDING_REASON],
     );
     const adservices = await client.query<{ count: string; oldest: string }>(
       `SELECT count(*)::text AS count,
