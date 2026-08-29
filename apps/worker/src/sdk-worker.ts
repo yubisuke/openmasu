@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { sha256, type CandidateAttempt } from "@openmasu/attribution-core";
 import { decryptMetaInstallReferrer, type MetaKey } from "@openmasu/meta-install-referrer";
-import { withTenant, type PayloadStore } from "@openmasu/runtime";
+import {
+  SDK_POST_PROCESSING_PENDING_REASON,
+  withTenant,
+  type PayloadStore,
+} from "@openmasu/runtime";
 import { queueAdServicesLookup, type PendingAdServicesLookup } from "./adservices-worker.js";
 import { queueIntegrityVerification, type PendingIntegrityVerification } from "./integrity-verifier.js";
 import {
@@ -21,8 +25,20 @@ type InboxRow = {
   body_ref: string;
   body_digest: string;
   status: "pending" | "processed" | "failed";
+  reason_code: string | null;
   installation_key_id: string | null;
   inbox_seq: string;
+};
+
+type AuxiliaryQueueFunctions = {
+  readonly adServices: typeof queueAdServicesLookup;
+  readonly integrity: typeof queueIntegrityVerification;
+  readonly googlePlayProduct: typeof queueGooglePlayProductVerification;
+};
+
+type ProcessSdkInboxOptions = {
+  readonly metaKeys?: readonly MetaKey[];
+  readonly auxiliaryQueues?: Partial<AuxiliaryQueueFunctions>;
 };
 
 type Withdrawal = {
@@ -318,11 +334,11 @@ export async function processSdkInbox(
   pool: Pool,
   payloadStore: PayloadStore,
   tenantId: string,
-  options: { metaKeys?: readonly MetaKey[] } = {},
+  options: ProcessSdkInboxOptions = {},
 ): Promise<number> {
   const rows = await withTenant(pool, tenantId, (client) => client.query<InboxRow>(
     `SELECT ingest_batch_id::text, tenant_id, app_id, producer, received_at,
-            body_ref, body_digest, status, installation_key_id, inbox_seq::text
+            body_ref, body_digest, status, reason_code, installation_key_id, inbox_seq::text
      FROM ledger.ingest_batches_current
      WHERE tenant_id=$1 AND status IN ('pending','processed')
      ORDER BY received_at, inbox_seq`,
@@ -330,7 +346,8 @@ export async function processSdkInbox(
   ));
   const historical: CandidateAttempt[] = [];
   const pending: CandidateAttempt[] = [];
-  const validPendingRows: InboxRow[] = [];
+  const workRows: InboxRow[] = [];
+  const newlyPendingRows: InboxRow[] = [];
   const decoded: Array<{
     row: InboxRow;
     records: Any[];
@@ -352,40 +369,33 @@ export async function processSdkInbox(
       record,
       batch_id: entry.row.ingest_batch_id,
     }));
-    if (entry.row.status === "processed") historical.push(...attempts);
-    else { pending.push(...attempts); validPendingRows.push(entry.row); }
+    if (entry.row.status === "processed"
+      && entry.row.reason_code !== SDK_POST_PROCESSING_PENDING_REASON) {
+      historical.push(...attempts);
+    } else {
+      pending.push(...attempts);
+      workRows.push(entry.row);
+      if (entry.row.status === "pending") newlyPendingRows.push(entry.row);
+    }
   }
   if (pending.length === 0) return 0;
+  const durablePostProcessing = new Set(workRows
+    .filter((row) => row.status === "processed"
+      && row.reason_code === SDK_POST_PROCESSING_PENDING_REASON)
+    .map((row) => row.ingest_batch_id));
   try {
     const output = await ingestRuntimeBatch(pending, pool, historical);
-    for (const attribution of output.attributions) await persistLateAttribution(pool, attribution);
     const acceptedInstallIds = new Set(output.logical_events
       .filter((logical) => logical.event_name === "install")
       .map((logical) => logical.record_id));
     const acceptedRecordIds = new Set(output.logical_events.map((logical) => logical.record_id));
-    for (const entry of decoded) {
-      if (entry.row.status !== "pending") continue;
-      for (const lookup of entry.adServicesLookups) {
-        if (acceptedInstallIds.has(lookup.installRecordId)) await queueAdServicesLookup(pool, lookup);
-      }
-      for (const verification of entry.integrityVerifications) {
-        if (acceptedRecordIds.has(verification.subjectRecordId)) {
-          await queueIntegrityVerification(pool, verification);
-        }
-      }
-      for (const verification of entry.googlePlayProductVerifications) {
-        if (acceptedRecordIds.has(verification.subjectRecordId)) {
-          await queueGooglePlayProductVerification(pool, verification);
-        }
-      }
-    }
     const recordsByBatch = new Map<string, string[]>();
     for (const attempt of pending) {
       const list = recordsByBatch.get(attempt.batch_id) ?? [];
       list.push(attempt.record.record_id);
       recordsByBatch.set(attempt.batch_id, list);
     }
-    for (const row of validPendingRows) {
+    for (const row of workRows) {
       await withTenant(pool, row.tenant_id, async (client) => {
         for (const recordId of recordsByBatch.get(row.ingest_batch_id) ?? []) {
           await client.query(
@@ -396,12 +406,43 @@ export async function processSdkInbox(
           );
         }
       });
-      await appendState(pool, row, "processed");
+      if (!durablePostProcessing.has(row.ingest_batch_id)) {
+        await appendState(pool, row, "processed", SDK_POST_PROCESSING_PENDING_REASON);
+        durablePostProcessing.add(row.ingest_batch_id);
+      }
     }
-    return validPendingRows.length;
+    for (const attribution of output.attributions) await persistLateAttribution(pool, attribution);
+    const queues: AuxiliaryQueueFunctions = {
+      adServices: options.auxiliaryQueues?.adServices ?? queueAdServicesLookup,
+      integrity: options.auxiliaryQueues?.integrity ?? queueIntegrityVerification,
+      googlePlayProduct: options.auxiliaryQueues?.googlePlayProduct ?? queueGooglePlayProductVerification,
+    };
+    const workIds = new Set(workRows.map((row) => row.ingest_batch_id));
+    for (const entry of decoded) {
+      if (!workIds.has(entry.row.ingest_batch_id)) continue;
+      for (const lookup of entry.adServicesLookups) {
+        if (acceptedInstallIds.has(lookup.installRecordId)) await queues.adServices(pool, lookup);
+      }
+      for (const verification of entry.integrityVerifications) {
+        if (acceptedRecordIds.has(verification.subjectRecordId)) {
+          await queues.integrity(pool, verification);
+        }
+      }
+      for (const verification of entry.googlePlayProductVerifications) {
+        if (acceptedRecordIds.has(verification.subjectRecordId)) {
+          await queues.googlePlayProduct(pool, verification);
+        }
+      }
+      await appendState(pool, entry.row, "processed");
+    }
+    return newlyPendingRows.length;
   } catch (error) {
     const reason = error instanceof Error ? error.message : "evaluation_failed";
-    for (const row of validPendingRows) await appendState(pool, row, "failed", reason);
+    for (const row of newlyPendingRows) {
+      if (!durablePostProcessing.has(row.ingest_batch_id)) {
+        await appendState(pool, row, "failed", reason);
+      }
+    }
     throw error;
   }
 }

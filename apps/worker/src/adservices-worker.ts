@@ -132,7 +132,14 @@ export async function queueAdServicesLookup(pool: Pool, input: PendingAdServices
     `INSERT INTO ephemeral.adservices_lookups (
       lookup_id, tenant_id, app_id, install_record_id, token_ref,
       token_created_at, attempts, next_attempt_at, created_at, artifact
-    ) VALUES ($1,$2,$3,$4,$5,$6,0,$6,$6,$7::jsonb)
+    )
+    SELECT $1::uuid,$2::control.identifier,$3::control.identifier,$4::control.identifier,
+           $5::text,$6::timestamptz,0,$6::timestamptz,$6::timestamptz,$7::jsonb
+    WHERE NOT EXISTS (
+      SELECT 1 FROM ledger.adservices_lookup_results result
+      WHERE result.tenant_id=$2::control.identifier AND result.app_id=$3::control.identifier
+        AND result.install_record_id=$4::control.identifier
+    )
     ON CONFLICT (tenant_id, app_id, install_record_id) DO NOTHING`,
     [lookupId, input.tenantId, input.appId, input.installRecordId, input.tokenRef,
       input.tokenCreatedAt, JSON.stringify(artifact)],

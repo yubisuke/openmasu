@@ -71,6 +71,8 @@ export async function withTenant<T>(
   }
 }
 
+export const SDK_POST_PROCESSING_PENDING_REASON = "post_processing_pending";
+
 export async function queryOne<T extends QueryResultRow>(
   client: PoolClient,
   text: string,
