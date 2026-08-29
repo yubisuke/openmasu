@@ -3,23 +3,23 @@
 Status date: 2026-08-30.
 
 The source and SDK are configured for candidate `v0.2.0-rc.4`.
-This document describes the current `main` source tree. The candidate becomes a
-published prerelease only when its annotated tag and GitHub release point to the
-same commit and every full platform gate is green for that commit. Tagged
-release notes and evidence manifests remain authoritative for the exact source
-revision they name.
+This document describes the current `main` source tree. The matching annotated
+tag and GitHub prerelease were published from commit `2a2f6b5` after every full
+platform gate passed for that commit. Tagged release notes and evidence
+manifests remain authoritative for the exact source revision they name.
 
 ## Release snapshot
 
 | Source line | Contract patch ledger | Reviewed inventory | Release meaning |
 | --- | --- | --- | --- |
 | `v0.2.0-rc.3` tag | through v0.4.9 | 56 fixtures / 728 golden artifacts | Previously published prerelease and frozen historical evidence |
-| `v0.2.0-rc.4` candidate source | through v0.4.10 | 57 fixtures / 741 golden artifacts | Prepared identity; publication requires the matching tag and green exact-commit gates |
+| `v0.2.0-rc.4` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Latest published prerelease and frozen exact-commit evidence |
 
 The Contract wire and package identity remains `0.4.0`; v0.4.10 is the latest
 additive patch ledger entry. The SDK version configured on `main` is
-`0.2.0-rc.4`. That version alone does not prove that a tag, GitHub prerelease,
-or exact-commit platform evidence exists.
+`0.2.0-rc.4`. For this candidate, the tag, GitHub prerelease, and exact-commit
+platform evidence exist at `2a2f6b5`; a version string alone would not prove
+those facts for a later candidate.
 
 ## How to read status
 
@@ -62,16 +62,16 @@ not score a provider, certify its product, or recommend migration.
 
 ## Current engineering focus
 
-The open repository milestone is release evidence rather than another broad
-provider claim:
+The rc.4 release-coherence milestone is complete. Current repository work is
+integration maintenance rather than another broad provider claim:
 
-1. keep the prepared rc.4 notes, SDK identities, SBOMs, bundle paths, and
-   evidence manifest aligned;
-2. run every full platform gate at the exact merge commit;
-3. publish an annotated tag and GitHub prerelease only for that green commit;
-4. continue bounded concurrency and shared queue-vector hardening when existing
+1. preserve the rc.4 notes, SDK identities, SBOMs, bundle paths, tag, and
+   evidence manifest as one immutable release record;
+2. audit current failure-recovery and reconciliation paths before adding new
+   provider breadth;
+3. continue bounded concurrency and shared queue-vector hardening when existing
    runtime or SDK surfaces change;
-5. preserve the current synthetic/operator evidence distinction.
+4. preserve the current synthetic/operator evidence distinction.
 
 Private real-data, real-device, and live-provider work is optional operator work
 and is not required to continue repository-only hardening.

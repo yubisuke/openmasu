@@ -4,13 +4,15 @@ OpenMasu publishes source tags and reproducible local SDK bundles. This runbook
 does not publish Maven, Swift, Unity, npm, container, or hosting artifacts to a
 public registry.
 
-The source and SDK are configured for candidate `v0.2.0-rc.4`; the preceding
-published tag is `v0.2.0-rc.3`. A configured version is not publication. It
-must not be treated as published unless the matching annotated tag and GitHub
-prerelease point to the same green `main` commit. A release must describe that
-exact tag target and must not reuse an older evidence manifest as proof for a
-newer commit. Version-bearing source, notes, manifest, SBOMs, and artifact paths
-move together. See [Release candidate records](../releases/README.md).
+The source and SDK are configured for candidate `v0.2.0-rc.4`, which is the
+latest published prerelease. Its annotated tag and GitHub prerelease point to
+green `main` commit `2a2f6b5`. A configured version is not publication by
+itself: a candidate must not be treated as published unless the matching
+annotated tag and GitHub prerelease point to the same green commit. A release
+must describe that exact tag target and must not reuse an older evidence
+manifest as proof for a newer commit. Version-bearing source, notes, manifest,
+SBOMs, and artifact paths move together. See
+[Release candidate records](../releases/README.md).
 
 ## 1. Freeze the candidate
 
@@ -126,7 +128,7 @@ visibility, tag name, commit, and explicit authorization for that operation.
 Confirm every required workflow is green on the exact commit. Create an
 annotated or signed tag and release only after the release owner approves it.
 
-Candidate `v0.2.0-rc.4` uses
+Published candidate `v0.2.0-rc.4` uses
 [its own synthetic evidence manifest](../validation/v0.2.0-rc.4-synthetic-evidence.md).
 The preceding rc.3 record remains immutable historical evidence.
 

@@ -45,7 +45,7 @@ versions were reached. They do not override current sources of truth.
 | SDK queue parity | Complete: one duplicate/conflict policy across Android and iOS | Shared semantic vectors plus each platform's native gate |
 | Apple current-spec compatibility | Complete: accept and separately report aggregate AdAttributionKit re-engagement while preserving install and device-level boundaries | Signed synthetic receiver test, reviewed fixture parity, SQL/reference parity, and macOS SDK gate |
 | Newcomer documentation | Complete: one current documentation map and safe synthetic first run | Link check, documentation drift check, threat-model coverage, full validation |
-| Release alignment | Open: version the next candidate and distinguish it from development `main` without reusing rc.3 evidence | Release-version check, bundle verification, new tagged evidence manifest |
+| Release alignment | Complete for v0.2.0-rc.4 at green commit `2a2f6b5` | Release-version check, reproducible bundle verification, tagged evidence manifest, and exact-commit platform CI |
 | CI efficiency | Complete: cancel superseded PR runs and gate expensive steps by changed scope | Classifier unit matrix plus GitHub pull-request proof with every required context present |
 
 ## Change acceptance
