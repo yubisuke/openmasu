@@ -2,22 +2,24 @@
 
 Status date: 2026-08-30.
 
-The latest tagged source and SDK release candidate is `v0.2.0-rc.3`.
-This document describes the current `main` source tree, which contains reviewed
-work added after that tag. Tagged release notes and evidence manifests remain
-authoritative for the exact candidate they name.
+The source and SDK are configured for candidate `v0.2.0-rc.4`.
+This document describes the current `main` source tree. The candidate becomes a
+published prerelease only when its annotated tag and GitHub release point to the
+same commit and every full platform gate is green for that commit. Tagged
+release notes and evidence manifests remain authoritative for the exact source
+revision they name.
 
 ## Release snapshot
 
 | Source line | Contract patch ledger | Reviewed inventory | Release meaning |
 | --- | --- | --- | --- |
-| `v0.2.0-rc.3` tag | through v0.4.9 | 56 fixtures / 728 golden artifacts | Latest published prerelease and its frozen evidence |
-| Current `main` | through v0.4.10 | 57 fixtures / 741 golden artifacts | Reviewed but unreleased development source |
+| `v0.2.0-rc.3` tag | through v0.4.9 | 56 fixtures / 728 golden artifacts | Previously published prerelease and frozen historical evidence |
+| `v0.2.0-rc.4` candidate source | through v0.4.10 | 57 fixtures / 741 golden artifacts | Prepared identity; publication requires the matching tag and green exact-commit gates |
 
 The Contract wire and package identity remains `0.4.0`; v0.4.10 is the latest
-additive patch ledger entry. The SDK version configured on `main` still reads
-`0.2.0-rc.3` for drift detection, but artifacts built from post-tag source are
-not rc.3 release artifacts and must not be published under that identity.
+additive patch ledger entry. The SDK version configured on `main` is
+`0.2.0-rc.4`. That version alone does not prove that a tag, GitHub prerelease,
+or exact-commit platform evidence exists.
 
 ## How to read status
 
@@ -60,14 +62,13 @@ not score a provider, certify its product, or recommend migration.
 
 ## Current engineering focus
 
-The open repository milestone is release coherence rather than another broad
+The open repository milestone is release evidence rather than another broad
 provider claim:
 
-1. select and version the next candidate from reviewed `main`;
-2. create a new evidence manifest and run every full platform gate at that
-   exact candidate commit;
-3. keep release notes, SDK identities, SBOMs, bundle paths, and documentation
-   aligned with the tag;
+1. keep the prepared rc.4 notes, SDK identities, SBOMs, bundle paths, and
+   evidence manifest aligned;
+2. run every full platform gate at the exact merge commit;
+3. publish an annotated tag and GitHub prerelease only for that green commit;
 4. continue bounded concurrency and shared queue-vector hardening when existing
    runtime or SDK surfaces change;
 5. preserve the current synthetic/operator evidence distinction.

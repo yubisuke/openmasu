@@ -11,11 +11,13 @@ For the current checkout, use the disposable pilot and gates in
 [Getting started](../getting-started.md) and [Development](../development.md).
 Their result applies only to the exact source revision that ran them.
 
-No frozen evidence manifest exists for post-rc.3 `main`. A new manifest is a
-release deliverable, not something to infer from an older tag.
+The rc.4 evidence manifest is prepared with the configured candidate. It becomes
+release evidence only when the matching annotated tag and GitHub prerelease
+point to the same green `main` commit.
 
 ## Tagged and historical repository evidence
 
+- [v0.2.0-rc.4 synthetic evidence](v0.2.0-rc.4-synthetic-evidence.md)
 - [v0.2.0-rc.3 synthetic evidence](v0.2.0-rc.3-synthetic-evidence.md)
 - [Synthetic load record](m5-load-results.md)
 - [Pull request CI scope validation](ci-scope-routing.md)
