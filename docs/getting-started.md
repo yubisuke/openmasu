@@ -58,6 +58,15 @@ Bootstrap generates `.env` and local secret files. The API listens on
 `http://localhost:8090` unless the generated environment selects different
 host ports. `npm run bootstrap` prints the local admin key once.
 
+`.env.example` is the complete development variable inventory, not a promise
+that the bundled Compose stack forwards every production setting. The local
+Compose bootstrap accepts only variables explicitly listed under its
+`bootstrap.environment` block and fixes other values to safe development
+defaults. At minimum, keep `OPENMASU_PUBLIC_BASE_URL` and
+`OPENMASU_REDIRECTOR_BASE_URL` aligned with any host-port overrides. A custom
+deployment must build and validate its own runtime environment rather than
+treating this reference Compose file as a production template.
+
 `demo:metrics` labels PostgreSQL ledger counts separately from the contract
 fixture preview. The preview is not a database import or live-provider result.
 
@@ -69,6 +78,17 @@ docker compose down --volumes --remove-orphans
 
 This is a destructive reset. Do not run it if the stack contains data you need
 to keep.
+
+The optional `proxy` profile binds only to loopback and uses Caddy's internal
+development certificate authority:
+
+```bash
+docker compose --profile proxy up -d --wait
+```
+
+It is a local TLS aid, not public certificate, DNS, ingress, or production TLS
+evidence. Do not expose it by changing the bind address without a deployment-
+specific security review and trusted certificate plan.
 
 ## Seed and parity
 

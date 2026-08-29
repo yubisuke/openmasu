@@ -1,5 +1,10 @@
 # Commercial MMP Gap Summary
 
+> Historical record. This comparison preserves the public source state checked
+> in August 2026. It is not the current capability matrix. Use the
+> [current platform/provider matrix](../integrations/provider-capability-matrix.md)
+> and [Project status](../STATUS.md) for present behavior.
+
 Checked on 2026-08-21 and corrected against the repository on 2026-08-23.
 
 ## Purpose

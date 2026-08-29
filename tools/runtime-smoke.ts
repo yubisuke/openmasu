@@ -25,8 +25,10 @@ const required = (name: string): string => {
 const port = process.env.OPENMASU_API_HOST_PORT ?? env.OPENMASU_API_HOST_PORT ?? "8080";
 const base = `http://127.0.0.1:${port}`;
 const redirectorPort = process.env.OPENMASU_REDIRECTOR_HOST_PORT ?? env.OPENMASU_REDIRECTOR_HOST_PORT ?? "8090";
-const redirectorBase = process.env.OPENMASU_REDIRECTOR_BASE_URL ?? env.OPENMASU_REDIRECTOR_BASE_URL
+const publicRedirectorBase = process.env.OPENMASU_REDIRECTOR_BASE_URL ?? env.OPENMASU_REDIRECTOR_BASE_URL
   ?? `http://127.0.0.1:${redirectorPort}`;
+const redirectorProbeBase = process.env.OPENMASU_RUNTIME_SMOKE_REDIRECTOR_PROBE_BASE_URL
+  ?? publicRedirectorBase;
 const health = await fetch(`${base}/health`);
 if (!health.ok) throw new Error(`health smoke failed with ${health.status}`);
 const dashboardLoginPage = await fetch(`${base}/dashboard`);
@@ -89,7 +91,17 @@ const linkResponse = await fetch(`${base}/v1/admin/tracking-links`, {
 });
 if (linkResponse.status !== 201) throw new Error(`tracking-link smoke returned ${linkResponse.status}`);
 const link = await linkResponse.json() as { slug: string };
-const redirected = await fetch(`${redirectorBase}/r/${link.slug}?destination=https://attacker.invalid`, {
+const listedResponse = await fetch(`${base}/v1/admin/tracking-links?app_id=${encodeURIComponent(configuredAppId)}`, {
+  headers: { authorization: `Bearer ${required("OPENMASU_ADMIN_KEY")}` },
+});
+if (listedResponse.status !== 200) throw new Error(`tracking-link list smoke returned ${listedResponse.status}`);
+const listed = await listedResponse.json() as { data?: Array<{ slug?: string; measurement_url?: string }> };
+const listedLink = listed.data?.find((candidate) => candidate.slug === link.slug);
+const expectedPublicPrefix = `${publicRedirectorBase.replace(/\/$/, "")}/r/`;
+if (!listedLink?.measurement_url?.startsWith(expectedPublicPrefix)) {
+  throw new Error("tracking-link public redirector base was not preserved");
+}
+const redirected = await fetch(`${redirectorProbeBase}/r/${link.slug}?destination=https://attacker.invalid`, {
   redirect: "manual", headers: { "user-agent": "Synthetic Android" },
 });
 if (redirected.status !== 302 || !redirected.headers.get("location")?.startsWith("https://play.google.com/")) {

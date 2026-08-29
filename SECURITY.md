@@ -8,9 +8,15 @@ OpenMasu contains public contract artifacts, reference evaluators, runtime servi
 
 Do not disclose suspected vulnerabilities, credentials, personal data, or live defense details in a public issue.
 
-Use GitHub's private vulnerability-reporting flow when it is enabled for this repository. If that flow is unavailable, contact the repository owner through a previously established private channel and include only the minimum information needed to arrange a secure report.
+Use GitHub's **Report a vulnerability** flow when the repository Security page
+offers it. The repository does not publish a security email address. If GitHub
+private reporting is unavailable, use only a previously established private
+channel to ask the repository owner for a secure handoff and include no exploit,
+credential, personal data, or live defense detail in that first message.
 
-A maintainer-approved private reporting path must remain enabled for runtime releases. If no private path is available, disclose only enough through a previously established private channel to arrange a secure report.
+If neither private path exists, do not post the vulnerability details in a
+public issue. The absence of an available private channel is a maintainer release
+gap, not authorization for public disclosure of sensitive material.
 
 ## Scope
 

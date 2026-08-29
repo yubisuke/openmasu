@@ -1,5 +1,10 @@
 # Codex Prompt: Create One Approved MMP Gap Issue
 
+> Historical record. This prompt reflects the gap review dated 2026-08-21 and
+> must not be used as a current backlog or GitHub instruction. Start from the
+> [current roadmap](../roadmap.md) and obtain fresh authorization for any
+> GitHub operation.
+
 The current gap summary has no `Build` rows. Use this prompt only after pilot
 evidence causes the owner to change and approve exactly one capability's
 decision as `Build` in `docs/review/mmp-gap-analysis-2026-08-21.md`.

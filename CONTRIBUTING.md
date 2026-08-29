@@ -12,7 +12,11 @@ OpenMasu is a contract-first mobile measurement platform with reference evaluato
 ## Contract artifacts
 
 - Follow the documented workflow in [fixtures/v0.4/README.md](fixtures/v0.4/README.md) when proposing a fixture. Golden outputs require human review and a written derivation; validation must not regenerate them.
-- Treat schema identifiers published at the `contract-v0.1` tag as frozen. Follow [the schema versioning policy](docs/schema-versioning.md) for later changes and document migrations in a version-specific migration guide.
+- Treat every published schema identifier as frozen, including the active
+  Contract v0.4 `$id` values and version constants. Earlier complete lines are
+  preserved by the `contract-v0.1`, `contract-v0.2.1`, and `contract-v0.3.6`
+  tags. Follow [the schema versioning policy](docs/schema-versioning.md) and
+  document compatible patches or migrations in the matching guide.
 - Commit evaluator or schema behavior changes separately from reviewed golden changes. The behavior commit establishes the proposed rule; a following golden-only commit records the independently reviewed expected artifacts and derivations. Never regenerate or silently update approved golden files during validation.
 - Do not include real user, campaign, credential, provider-export, or live fraud-defense data in public fixtures or documentation.
 

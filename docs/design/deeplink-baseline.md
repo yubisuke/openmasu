@@ -1,6 +1,8 @@
 # Deep Link and Re-engagement Design
 
-Status: implemented and synthetically verified.
+Status: implemented and synthetically verified. See
+[Project status](../STATUS.md) for the evidence vocabulary and open operator
+gates.
 
 ## Capability statement
 
@@ -51,6 +53,12 @@ condition but is not itself attribution evidence.
 
 Daily deep-link opens and engagement attribution are reported separately from
 install metrics. Organic, non-organic, and unattributed status remains explicit.
+
+This device-reported engagement surface is not Apple's aggregate
+AdAttributionKit re-engagement postback. Apple-signed aggregate postbacks have
+no installation identity and are reported only in
+`aak_attributed_reengagements`; see the
+[iOS and Apple measurement design](m4-baseline.md#apple-aggregate-postbacks).
 
 ## Deliberate omissions
 

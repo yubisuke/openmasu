@@ -1,8 +1,11 @@
 # Play Integrity and App Attest Operator Checklist
 
-Contract v0.3.5 reserves optional `integrity_verdict` evidence only. OpenMasu
-does not ship a live Play Integrity or App Attest integration and never treats
-one verdict as deterministic attribution or as a complete fraud decision.
+The active Contract v0.4 line retains the optional `integrity_verdict` evidence
+introduced by the v0.3.5 patch. OpenMasu ships server-verification adapter code
+with synthetic provider vectors, but the public repository establishes no live
+Play Integrity project, App Attest key, provider delivery, or calibrated
+enforcement. One verdict is never deterministic attribution or a complete
+fraud decision.
 
 ## Shared requirements
 

@@ -40,18 +40,20 @@ and 57 reviewed synthetic fixtures.
 This milestone consolidates the existing system rather than adding another
 provider or attribution family.
 
-Exit gates:
+Progress:
 
-- scheduler leases cannot consume the job pool, and MAX inbox processing
-  succeeds at a one-connection job-pool limit;
-- Android and iOS queues pass the same duplicate and event-ID conflict vectors;
-- one safe synthetic command is the canonical first run;
-- current documentation contains no unexplained review, work-order, or decision
-  references;
-- release notes, SDK identity, tagged evidence, and post-tag development status
-  are mechanically distinguishable;
-- CI cancels superseded runs and avoids unrelated expensive jobs without
-  skipping relevant platform gates.
+| Integration gate | State |
+| --- | --- |
+| Scheduler leases cannot consume the job pool; MAX processing works with a one-connection job pool | Complete |
+| Android and iOS queues share duplicate and event-ID conflict vectors | Complete |
+| One disposable synthetic command is the canonical first run | Complete |
+| Current documentation excludes unexplained review, work-order, and decision references | Complete |
+| CI cancels superseded runs and routes expensive gates without hiding required contexts | Complete |
+| Release notes, SDK identity, tagged evidence, and post-tag development describe one exact candidate | Open for the next prerelease |
+
+The next release candidate is the only open exit gate. It must receive a new
+version and evidence manifest; post-tag `main` must not reuse rc.3 identity as
+published release evidence.
 
 ## Optional operator evidence
 

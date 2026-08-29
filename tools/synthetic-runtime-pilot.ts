@@ -37,6 +37,8 @@ export function syntheticComposeEnvironment(ports: { api: number; postgres: numb
     OPENMASU_API_HOST_PORT: String(ports.api),
     OPENMASU_POSTGRES_HOST_PORT: String(ports.postgres),
     OPENMASU_REDIRECTOR_HOST_PORT: String(ports.redirector),
+    OPENMASU_PUBLIC_BASE_URL: `http://127.0.0.1:${ports.api}`,
+    OPENMASU_REDIRECTOR_BASE_URL: `http://127.0.0.1:${ports.redirector}`,
     OPENMASU_MAX_TENANT_ID: "tenant-a",
     OPENMASU_MAX_APP_ID: "app-a",
     OPENMASU_ENROLL_RATE_RPS: "10000",
@@ -282,7 +284,7 @@ export async function runSyntheticRuntimePilot(
     }
     runVerifiedStep("runtime_smoke", [
       ...compose, "exec", "-T", "api",
-      ...shell("set -a && . /run/openmasu/app/runtime.env && set +a && OPENMASU_API_HOST_PORT=8080 node --import tsx tools/runtime-smoke.ts"),
+      ...shell("set -a && . /run/openmasu/app/runtime.env && set +a && OPENMASU_API_HOST_PORT=8080 OPENMASU_RUNTIME_SMOKE_REDIRECTOR_PROBE_BASE_URL=http://redirector:8090 node --import tsx tools/runtime-smoke.ts"),
     ], (result) => assert.match(
       result.stdout,
       /^Runtime smoke passed: health=200 dashboard=200\/login303 seeded_metric=visible valid_max=204 tampered_max=401 redirect=302 enrollment=201 sdk_batch=202\.\s*$/,

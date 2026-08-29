@@ -3,8 +3,21 @@
 Status date: 2026-08-30.
 
 The latest tagged source and SDK release candidate is `v0.2.0-rc.3`.
-This document describes the reviewed source state included in that candidate;
-later development may move ahead of the tag and is described separately.
+This document describes the current `main` source tree, which contains reviewed
+work added after that tag. Tagged release notes and evidence manifests remain
+authoritative for the exact candidate they name.
+
+## Release snapshot
+
+| Source line | Contract patch ledger | Reviewed inventory | Release meaning |
+| --- | --- | --- | --- |
+| `v0.2.0-rc.3` tag | through v0.4.9 | 56 fixtures / 728 golden artifacts | Latest published prerelease and its frozen evidence |
+| Current `main` | through v0.4.10 | 57 fixtures / 741 golden artifacts | Reviewed but unreleased development source |
+
+The Contract wire and package identity remains `0.4.0`; v0.4.10 is the latest
+additive patch ledger entry. The SDK version configured on `main` still reads
+`0.2.0-rc.3` for drift detection, but artifacts built from post-tag source are
+not rc.3 release artifacts and must not be published under that identity.
 
 ## How to read status
 
@@ -47,16 +60,17 @@ not score a provider, certify its product, or recommend migration.
 
 ## Current engineering focus
 
-The next development cycle is integration and release coherence rather than
-feature expansion:
+The open repository milestone is release coherence rather than another broad
+provider claim:
 
-1. validate worker database-pool budgets under longer synthetic concurrency and
-   failure campaigns;
-2. expand shared Android/iOS queue vectors when new native event families are
-   introduced;
-3. provide one canonical synthetic onboarding path and safe operator guidance;
-4. keep tagged release state distinct from post-tag development state;
-5. maintain the fail-open CI scope map as new build surfaces are introduced.
+1. select and version the next candidate from reviewed `main`;
+2. create a new evidence manifest and run every full platform gate at that
+   exact candidate commit;
+3. keep release notes, SDK identities, SBOMs, bundle paths, and documentation
+   aligned with the tag;
+4. continue bounded concurrency and shared queue-vector hardening when existing
+   runtime or SDK surfaces change;
+5. preserve the current synthetic/operator evidence distinction.
 
 Private real-data, real-device, and live-provider work is optional operator work
 and is not required to continue repository-only hardening.

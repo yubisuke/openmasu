@@ -16,7 +16,12 @@ npm run sbom
 python tools/build-sdk-release.py --reproducibility-check
 ```
 
-The output under `build/sdk-release/openmasu-sdk-0.2.0-rc.3/` contains Maven AAR/POM pairs, the UPM archive, the Swift Package source archive, three CycloneDX SDK SBOMs, a source/toolchain manifest, and `SHA256SUMS`. It is a local CI artifact, not a public registry publication.
+At the exact `v0.2.0-rc.3` tag, the output under
+`build/sdk-release/openmasu-sdk-0.2.0-rc.3/` contains Maven AAR/POM pairs, the
+UPM archive, the Swift Package source archive, three CycloneDX SDK SBOMs, a
+source/toolchain manifest, and `SHA256SUMS`. It is a local CI artifact, not a
+public registry publication. Changed post-tag `main` source must not be
+published under the rc.3 identity.
 
 MAX integration must subscribe separately to Interstitial, Rewarded, Banner, and MRec revenue callbacks. The compile probe keeps the four-format subscription table closed even when AppLovin is not present in the test environment.
 
@@ -64,12 +69,13 @@ flags default to `false`:
   "collectionEnabledByDefault": false,
   "linkHosts": ["links.synthetic.invalid"],
   "linkSchemes": [],
-  "reengagementPostbackCopiesEnabled": true,
+  "reengagementPostbackCopiesEnabled": false,
   "overlappingConversionsEnabled": false
 }
 ```
 
-Enable `reengagementPostbackCopiesEnabled` only when the deployment-private
+The example preserves both safe defaults. Enable
+`reengagementPostbackCopiesEnabled` only when the deployment-private
 `AttributionCopyEndpoint` is ready to receive and verify those copies. Keep
 `overlappingConversionsEnabled` off unless the host application securely owns
 the conversion-tag mapping and retrieval lifecycle; OpenMasu does not persist

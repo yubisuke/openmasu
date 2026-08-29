@@ -1,6 +1,8 @@
 # iOS and Apple Measurement Design
 
-Status: implemented and synthetically verified.
+Status: implemented and synthetically verified. See
+[Project status](../STATUS.md) for the evidence vocabulary and open operator
+gates.
 
 ## First-party SDK
 
@@ -37,6 +39,11 @@ Contract patch v0.4.10 accepts Apple's current `re-engagement` conversion type
 only for click-through winning postbacks. It remains aggregate evidence and is
 reported in `aak_attributed_reengagements`, separately from `download` and
 `redownload` in `aak_attributed_installs`.
+
+This aggregate series is independent from the device-reported
+`deep_link_open` engagement surface described in the
+[deep-link design](deeplink-baseline.md#re-engagement-attribution). The SDK
+cannot turn an Apple aggregate postback into installation identity.
 
 ## Conversion policy
 

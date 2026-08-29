@@ -12,6 +12,8 @@ function files(path: string): string[] {
 const root = process.cwd();
 const sourceFiles = ["apps", "packages"].flatMap((path) => files(join(root, path)))
   .filter((path) => /\.(?:ts|mts|cts|js|mjs|cjs)$/.test(path));
+const referenceFiles = [...sourceFiles, ...files(join(root, "tools"))
+  .filter((path) => /\.(?:ts|mts|cts|js|mjs|cjs)$/.test(path))];
 const names = new Set<string>();
 const dynamicReads: string[] = [];
 for (const path of sourceFiles) {
@@ -28,4 +30,11 @@ const documented = new Set(
 const missing = [...names].filter((name) => !documented.has(name)).sort();
 if (missing.length) throw new Error(`environment variables missing from .env.example: ${missing.join(", ")}`);
 
-console.log(`Environment coverage passed: ${names.size} variables, 0 missing.`);
+const referenceText = [
+  ...referenceFiles.map((path) => readFileSync(path, "utf8")),
+  readFileSync(join(root, "compose.yaml"), "utf8"),
+].join("\n");
+const stale = [...documented].filter((name) => !referenceText.includes(name)).sort();
+if (stale.length) throw new Error(`unused variables must be removed from .env.example: ${stale.join(", ")}`);
+
+console.log(`Environment coverage passed: ${names.size} runtime variables, 0 missing, ${documented.size} documented variables, 0 unused.`);
