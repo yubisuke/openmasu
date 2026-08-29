@@ -184,7 +184,7 @@ describe("SDK auxiliary queue recovery", () => {
     const value = record(input, "integrity", "install", {
       installation_id: `installation:sdk-recovery-integrity-${run}`,
       install_type: "first_install",
-      install_origin: "play_deep_link",
+      install_origin: "play_first_launch",
       referrer_status: "unavailable",
       extensions: {
         integrity_token_protected: `synthetic-integrity-recovery-${run}`,
