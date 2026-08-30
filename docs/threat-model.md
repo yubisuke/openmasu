@@ -166,6 +166,14 @@ and destination locks shared with deletion recognition and disablement.
 unaudited configuration. Controls include minimum RBAC, encrypted secrets,
 append-only revision history, tenant/job leases, retry state, and audit events.
 
+<!-- threat-component:scheduled-metrics -->
+**Scheduled metrics:** definition substitution, overlapping series, clock or
+watermark drift, cross-tenant execution, and a crash leaving committed output
+without an advanced checkpoint. Controls include immutable JCS-digested
+definitions, disjoint active metric-name sets per app, UTC target dates and
+fixed watermarks, tenant-scoped RLS and advisory locks, persisted pending work,
+deterministic run identifiers, and byte-identical replay verification.
+
 <!-- threat-component:privacy-restore -->
 **Restore path:** deleted payload resurrection and exposure before privacy state
 is reapplied. Controls require restoration into a new target, writer isolation,
