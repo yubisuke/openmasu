@@ -63,6 +63,68 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
     await ingestFixture(name, input, appPool, seedPool);
   }
 
+  function differenceArtifact(
+    reconciliationId: string,
+    differenceReasonCode: string,
+    overrides: Any = {},
+  ): Any {
+    return {
+      contract_version: "0.4.0",
+      reconciliation_id: reconciliationId,
+      tenant_id: "tenant-a",
+      app_id: "app-a",
+      input_snapshot_id: `internal-snapshot:${reconciliationId}`,
+      external_snapshot_id: `external-snapshot:${reconciliationId}`,
+      difference_reason_code: differenceReasonCode,
+      difference_reason_version: "0.4.0",
+      matching_keys: [],
+      candidates: [],
+      exclusions: [],
+      windows: [],
+      joins: [],
+      freshness: "current",
+      ...overrides,
+    };
+  }
+
+  async function insertDifferences(artifacts: Any[]): Promise<void> {
+    await withTenant(appPool, "tenant-a", async (client) => {
+      for (const artifact of artifacts) {
+        await client.query(
+          `INSERT INTO ledger.reconciliation_results (
+            reconciliation_id,tenant_id,app_id,input_snapshot_id,external_snapshot_id,
+            difference_reason_code,difference_reason_version,freshness,
+            supersedes_reconciliation_id,artifact
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)`,
+          [
+            artifact.reconciliation_id, artifact.tenant_id, artifact.app_id,
+            artifact.input_snapshot_id, artifact.external_snapshot_id,
+            artifact.difference_reason_code, artifact.difference_reason_version,
+            artifact.freshness, artifact.supersedes_reconciliation_id ?? null,
+            JSON.stringify(artifact),
+          ],
+        );
+      }
+    });
+  }
+
+  async function waitForReconciliationLockWaiter(): Promise<void> {
+    const lockKey = "openmasu:reconciliation-selection:8:tenant-a:app-a";
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      const locks = await seedPool.query<{ waiting: number }>(
+        `SELECT count(*) FILTER (WHERE NOT granted)::int AS waiting
+           FROM pg_locks
+          WHERE locktype='advisory'
+            AND classid=((hashtextextended($1,0) >> 32) & 4294967295)::oid
+            AND objid=(hashtextextended($1,0) & 4294967295)::oid`,
+        [lockKey],
+      );
+      if ((locks.rows[0]?.waiting ?? 0) === 1) return;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    assert.fail("the expected reconciliation selection lock waiter did not appear");
+  }
+
   before(async () => {
     appPool = createAppPool();
     readerPool = createReaderPool();
@@ -290,42 +352,15 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
   });
 
   it("paginates stored differences without silent truncation and rejects partial exports", async () => {
-    const artifacts = Array.from({ length: 7 }, (_, index) => ({
-      contract_version: "0.4.0",
-      reconciliation_id: `reconciliation:pagination:${index}`,
-      tenant_id: "tenant-a",
-      app_id: "app-a",
-      input_snapshot_id: `internal-snapshot:pagination:${index}`,
-      external_snapshot_id: `external-snapshot:pagination:${index}`,
-      difference_reason_code: "candidate_missing",
-      difference_reason_version: "0.4.0",
-      matching_keys: [],
-      candidates: [],
-      exclusions: [],
-      windows: [],
-      joins: [],
-      freshness: "current",
-    }));
-    await withTenant(appPool, "tenant-a", async (client) => {
-      for (const artifact of artifacts) {
-        await client.query(
-          `INSERT INTO ledger.reconciliation_results (
-            reconciliation_id,tenant_id,app_id,input_snapshot_id,external_snapshot_id,
-            difference_reason_code,difference_reason_version,freshness,artifact
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
-          [
-            artifact.reconciliation_id, artifact.tenant_id, artifact.app_id,
-            artifact.input_snapshot_id, artifact.external_snapshot_id,
-            artifact.difference_reason_code, artifact.difference_reason_version,
-            artifact.freshness, JSON.stringify(artifact),
-          ],
-        );
-      }
-    });
+    const artifacts = Array.from({ length: 7 }, (_, index) =>
+      differenceArtifact(`reconciliation:pagination:${index}`, "candidate_missing"));
+    await insertDifferences(artifacts);
 
     const headers = { authorization: `Bearer ${adminKey}` };
     const seen: string[] = [];
+    const superseded = new Map<string, boolean>();
     let cursor: string | undefined;
+    let pageNumber = 0;
     do {
       const query = new URLSearchParams({
         app_id: "app-a",
@@ -339,10 +374,55 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
       assert.equal(response.status, 200);
       assert.ok(page.data.length >= 1 && page.data.length <= 3);
       seen.push(...page.data.map((row) => row.reconciliation_id));
+      for (const row of page.data) superseded.set(row.reconciliation_id, row.superseded);
       cursor = page.next_cursor;
+      pageNumber += 1;
+      if (pageNumber === 1) {
+        assert.ok(cursor);
+        const decoded = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Any;
+        assert.match(decoded.selectionSequence, /^(0|[1-9]\d*)$/);
+        await insertDifferences([
+          differenceArtifact("reconciliation:pagination:3a-late", "candidate_missing"),
+          differenceArtifact("reconciliation:pagination:replacement-late", "candidate_missing", {
+            supersedes_reconciliation_id: artifacts[4].reconciliation_id,
+          }),
+        ]);
+      }
     } while (cursor);
     assert.deepEqual(seen, artifacts.map((artifact) => artifact.reconciliation_id));
     assert.equal(new Set(seen).size, seen.length);
+    assert.equal(superseded.get(artifacts[4].reconciliation_id), false);
+
+    const latestArtifacts = Array.from({ length: 4 }, (_, index) =>
+      differenceArtifact(`reconciliation:snapshot-latest:${index}`, "scope_mismatch"));
+    await insertDifferences(latestArtifacts);
+    const latestSeen: string[] = [];
+    cursor = undefined;
+    pageNumber = 0;
+    do {
+      const query = new URLSearchParams({
+        app_id: "app-a",
+        difference_reason_code: "scope_mismatch",
+        supersession: "latest",
+        limit: "2",
+      });
+      if (cursor) query.set("after", cursor);
+      const response = await fetch(`${baseUrl}/v1/audit/differences?${query}`, { headers });
+      const page = await response.json() as { data: Any[]; next_cursor?: string };
+      assert.equal(response.status, 200);
+      latestSeen.push(...page.data.map((row) => row.reconciliation_id));
+      cursor = page.next_cursor;
+      pageNumber += 1;
+      if (pageNumber === 1) {
+        await insertDifferences([
+          differenceArtifact("reconciliation:snapshot-latest:2a-late", "scope_mismatch"),
+          differenceArtifact("reconciliation:snapshot-latest:replacement-late", "scope_mismatch", {
+            supersedes_reconciliation_id: latestArtifacts[2].reconciliation_id,
+          }),
+        ]);
+      }
+    } while (cursor);
+    assert.deepEqual(latestSeen, latestArtifacts.map((artifact) => artifact.reconciliation_id));
 
     const csvPage = await fetch(
       `${baseUrl}/v1/audit/differences?app_id=app-a&difference_reason_code=candidate_missing&supersession=all&format=csv&limit=3`,
@@ -359,6 +439,111 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
     assert.equal(overflow.status, 400);
     assert.deepEqual(await overflow.json(), { error: "export_limit_exceeded" });
 
+  });
+
+  it("holds the first difference page until an in-flight same-scope insert commits", async () => {
+    const artifact = differenceArtifact(
+      "reconciliation:snapshot-in-flight:0",
+      "currency_policy_mismatch",
+    );
+    const writer = await appPool.connect();
+    let transactionOpen = false;
+    try {
+      await writer.query("BEGIN");
+      transactionOpen = true;
+      await writer.query("SELECT set_config('openmasu.tenant_id', 'tenant-a', true)");
+      await writer.query(
+        `INSERT INTO ledger.reconciliation_results (
+          reconciliation_id,tenant_id,app_id,input_snapshot_id,external_snapshot_id,
+          difference_reason_code,difference_reason_version,freshness,artifact
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
+        [
+          artifact.reconciliation_id, artifact.tenant_id, artifact.app_id,
+          artifact.input_snapshot_id, artifact.external_snapshot_id,
+          artifact.difference_reason_code, artifact.difference_reason_version,
+          artifact.freshness, JSON.stringify(artifact),
+        ],
+      );
+
+      const responsePromise = fetch(
+        `${baseUrl}/v1/audit/differences?app_id=app-a&difference_reason_code=currency_policy_mismatch&supersession=all`,
+        { headers: { authorization: `Bearer ${adminKey}` } },
+      );
+      await waitForReconciliationLockWaiter();
+
+      await writer.query("COMMIT");
+      transactionOpen = false;
+      const response = await responsePromise;
+      assert.equal(response.status, 200);
+      const page = await response.json() as { data: Any[] };
+      assert.deepEqual(page.data.map((row) => row.reconciliation_id), [artifact.reconciliation_id]);
+    } finally {
+      if (transactionOpen) await writer.query("ROLLBACK");
+      writer.release();
+    }
+  });
+
+  it("assigns a stored-difference selection sequence only after the first-page lock releases", async () => {
+    const artifact = differenceArtifact(
+      "reconciliation:snapshot-reader-first:0",
+      "redaction_caused_recalculation",
+      { freshness: "recalculated" },
+    );
+    const reader = await readerPool.connect();
+    const writer = await appPool.connect();
+    let readerTransactionOpen = false;
+    let writerTransactionOpen = false;
+    let insertion: Promise<unknown> | undefined;
+    try {
+      await reader.query("BEGIN");
+      readerTransactionOpen = true;
+      await reader.query("SELECT set_config('openmasu.tenant_id', 'tenant-a', true)");
+      await reader.query("SELECT ledger.acquire_reconciliation_selection_lock('tenant-a','app-a')");
+
+      await writer.query("BEGIN");
+      writerTransactionOpen = true;
+      await writer.query("SELECT set_config('openmasu.tenant_id', 'tenant-a', true)");
+      insertion = writer.query(
+        `INSERT INTO ledger.reconciliation_results (
+          reconciliation_id,tenant_id,app_id,input_snapshot_id,external_snapshot_id,
+          difference_reason_code,difference_reason_version,freshness,artifact
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
+        [
+          artifact.reconciliation_id, artifact.tenant_id, artifact.app_id,
+          artifact.input_snapshot_id, artifact.external_snapshot_id,
+          artifact.difference_reason_code, artifact.difference_reason_version,
+          artifact.freshness, JSON.stringify(artifact),
+        ],
+      );
+
+      await waitForReconciliationLockWaiter();
+      const cutoffResult = await reader.query<{ selection_seq: string }>(
+        `SELECT COALESCE(MAX(reconciliation_selection_seq),0)::text AS selection_seq
+           FROM ledger.reconciliation_results
+          WHERE tenant_id='tenant-a' AND app_id='app-a'`,
+      );
+      const cutoff = BigInt(cutoffResult.rows[0].selection_seq);
+
+      await reader.query("COMMIT");
+      readerTransactionOpen = false;
+      await insertion;
+      await writer.query("COMMIT");
+      writerTransactionOpen = false;
+
+      const stored = await withTenant(readerPool, "tenant-a", async (client) => client.query<{ selection_seq: string }>(
+        `SELECT reconciliation_selection_seq::text AS selection_seq
+           FROM ledger.reconciliation_results
+          WHERE reconciliation_id=$1`,
+        [artifact.reconciliation_id],
+      ));
+      assert.ok(BigInt(stored.rows[0].selection_seq) > cutoff);
+    } finally {
+      if (readerTransactionOpen) await reader.query("ROLLBACK");
+      if (writerTransactionOpen) await writer.query("ROLLBACK");
+      await insertion?.catch(() => undefined);
+      reader.release();
+      writer.release();
+    }
   });
 
   it("paginates fixed-watermark aggregate counts and preserves privacy on every page", async () => {

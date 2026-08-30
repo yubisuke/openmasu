@@ -193,17 +193,32 @@ export async function differenceAudit(
 ): Promise<DifferenceAuditPage> {
   const statement = buildDifferenceQuery(query);
   return withTenant(pool, identity.tenantId, async (client) => {
-    const result = await client.query<{ artifact: Any; superseded: boolean }>(statement.text, [...statement.values]);
+    if (query.differenceAfter?.selectionSequence === undefined) {
+      // The insert trigger takes the same lock before assigning a sequence.
+      // Acquiring it in a separate statement makes the following MAX() a
+      // committed, race-free boundary for a new or legacy cursor chain.
+      await client.query(
+        "SELECT ledger.acquire_reconciliation_selection_lock($1,$2)",
+        [identity.tenantId, identity.appId],
+      );
+    }
+    const result = await client.query<{ artifact: Any; selection_seq: string; superseded: boolean }>(
+      statement.text,
+      [...statement.values],
+    );
     const hasNext = result.rows.length > query.limit;
-    const rows: Any[] = result.rows.slice(0, query.limit)
+    const selectedRows = result.rows.slice(0, query.limit);
+    const rows: Any[] = selectedRows
       .map(({ artifact, superseded }) => ({ ...artifact, superseded }));
     const last = rows.at(-1);
+    const selectionSequence = selectedRows[0]?.selection_seq;
     return {
       data: rows,
-      ...(hasNext && typeof last?.reconciliation_id === "string" ? {
+      ...(hasNext && typeof last?.reconciliation_id === "string" && selectionSequence !== undefined ? {
         next_cursor: encodeDifferenceCursor({
           kind: "difference",
           reconciliationId: last.reconciliation_id,
+          selectionSequence,
         }),
       } : {}),
     };

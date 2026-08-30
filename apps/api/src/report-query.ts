@@ -22,6 +22,7 @@ export type MetricCursor = {
 export type DifferenceCursor = {
   readonly kind: "difference";
   readonly reconciliationId: string;
+  readonly selectionSequence?: string;
 };
 
 export type RecordCountCursor = {
@@ -72,6 +73,7 @@ const identifierPattern = /^[A-Za-z0-9._:-]{1,128}$/;
 const digestPattern = /^[0-9a-f]{64}$/;
 const canonicalTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const differenceReasonPattern = /^[a-z][a-z0-9_]{2,127}$/;
+const selectionSequencePattern = /^(0|[1-9]\d{0,18})$/;
 const groupingKeyPrefix = "grouping_";
 
 const transportKeys = new Set([
@@ -137,13 +139,26 @@ function parseMetricCursor(encoded: string): MetricCursor {
 
 function parseDifferenceCursor(encoded: string): DifferenceCursor {
   const parsed = decodedCursor(encoded);
-  if (Object.keys(parsed).sort().join(",") !== "kind,reconciliationId"
+  const keys = Object.keys(parsed).sort().join(",");
+  const legacy = keys === "kind,reconciliationId";
+  const bounded = keys === "kind,reconciliationId,selectionSequence";
+  const selectionSequence = parsed.selectionSequence;
+  if ((!legacy && !bounded)
     || parsed.kind !== "difference"
     || typeof parsed.reconciliationId !== "string"
-    || !identifierPattern.test(parsed.reconciliationId)) {
+    || !identifierPattern.test(parsed.reconciliationId)
+    || (bounded && (
+      typeof selectionSequence !== "string"
+      || !selectionSequencePattern.test(selectionSequence)
+      || BigInt(selectionSequence) > 9_223_372_036_854_775_807n
+    ))) {
     throw new ReportQueryError("cursor_invalid");
   }
-  return { kind: "difference", reconciliationId: parsed.reconciliationId };
+  return {
+    kind: "difference",
+    reconciliationId: parsed.reconciliationId,
+    ...(bounded ? { selectionSequence: selectionSequence as string } : {}),
+  };
 }
 
 function parseRecordCountCursor(encoded: string): RecordCountCursor {
@@ -361,7 +376,17 @@ export function buildMetricQuery(query: MetricQuery): ParameterizedQuery {
 
 export function buildDifferenceQuery(query: MetricQuery): ParameterizedQuery {
   const values: unknown[] = [query.tenantId, query.appId];
-  const predicates = ["rr.tenant_id=$1", "rr.app_id=$2"];
+  const selection = query.differenceAfter?.selectionSequence;
+  const selectionQuery = selection === undefined
+    ? `SELECT COALESCE(MAX(candidate.reconciliation_selection_seq), 0)::bigint AS selection_seq
+         FROM ledger.reconciliation_results AS candidate
+        WHERE candidate.tenant_id=$1 AND candidate.app_id=$2`
+    : `SELECT ${push(values, selection)}::bigint AS selection_seq`;
+  const predicates = [
+    "rr.tenant_id=$1",
+    "rr.app_id=$2",
+    "rr.reconciliation_selection_seq <= selection_fence.selection_seq",
+  ];
   if (query.differenceReasonCode) {
     predicates.push(`rr.difference_reason_code=${push(values, query.differenceReasonCode)}`);
   }
@@ -373,6 +398,7 @@ export function buildDifferenceQuery(query: MetricQuery): ParameterizedQuery {
       SELECT 1 FROM ledger.reconciliation_results AS replacement
       WHERE replacement.tenant_id=rr.tenant_id AND replacement.app_id=rr.app_id
         AND replacement.supersedes_reconciliation_id=rr.reconciliation_id
+        AND replacement.reconciliation_selection_seq <= selection_fence.selection_seq
     )`);
   }
   if (query.differenceAfter) {
@@ -380,13 +406,18 @@ export function buildDifferenceQuery(query: MetricQuery): ParameterizedQuery {
   }
   const limit = push(values, query.limit + 1);
   return {
-    text: `SELECT rr.artifact,
+    text: `WITH selection_fence AS MATERIALIZED (
+      ${selectionQuery}
+    )
+    SELECT rr.artifact, selection_fence.selection_seq::text AS selection_seq,
       EXISTS (
         SELECT 1 FROM ledger.reconciliation_results AS replacement
         WHERE replacement.tenant_id=rr.tenant_id AND replacement.app_id=rr.app_id
           AND replacement.supersedes_reconciliation_id=rr.reconciliation_id
+          AND replacement.reconciliation_selection_seq <= selection_fence.selection_seq
       ) AS superseded
       FROM ledger.reconciliation_results AS rr
+      CROSS JOIN selection_fence
       WHERE ${predicates.join("\n        AND ")}
       ORDER BY rr.reconciliation_id COLLATE "C"
       LIMIT ${limit}`,
