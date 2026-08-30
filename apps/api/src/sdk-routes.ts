@@ -268,18 +268,32 @@ export async function handleSdkBatch(
     return writeJson(response, 403, { error: reason });
   }
   const durableBody = Buffer.from(JSON.stringify({ records }), "utf8");
-  const ingestBatchId = await appendDurableBatch(dependencies.pool, dependencies.payloadStore, {
-    tenantId: identity.tenantId,
-    appId: identity.appId,
-    producer: identity.platform === "ios" ? "sdk-ios" : "sdk-android",
-    body: durableBody,
-    eventCount: records.length,
-    receivedAt,
-    sdkKeyId: identity.sdkKeyId,
-    installationKeyId: identity.installationKeyId,
-    requestNonce: identity.nonce,
-    requestTimestampMs: identity.timestampMs,
-  });
+  let ingestBatchId: string;
+  try {
+    ingestBatchId = await appendDurableBatch(dependencies.pool, dependencies.payloadStore, {
+      tenantId: identity.tenantId,
+      appId: identity.appId,
+      producer: identity.platform === "ios" ? "sdk-ios" : "sdk-android",
+      body: durableBody,
+      eventCount: records.length,
+      receivedAt,
+      sdkKeyId: identity.sdkKeyId,
+      installationKeyId: identity.installationKeyId,
+      subjectDigest: identity.installationIdDigest,
+      requestNonce: identity.nonce,
+      requestTimestampMs: identity.timestampMs,
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "ingest_batch_append_failed";
+    if (!["installation_credential_inactive", "privacy_subject_inactive"].includes(reason)) throw error;
+    await recordSdkAudit(dependencies.pool, dependencies.config, {
+      actorType: "sdk_installation", actorRef: `sdk_installation:${identity.installationKeyId}`,
+      action: "ingest_batch_append", targetScope: "record",
+      targetRef: `request-digest:${identity.requestDigest.slice(0, 32)}`,
+      requestDigest: identity.requestDigest, outcome: "failed", reasonCode: reason,
+    });
+    return writeJson(response, 401, { error: "unauthorized" });
+  }
   await recordSdkAudit(dependencies.pool, dependencies.config, {
     actorType: "sdk_installation", actorRef: `sdk_installation:${identity.installationKeyId}`,
     action: "ingest_batch_append", targetScope: "ingest_batch", targetRef: ingestBatchId,

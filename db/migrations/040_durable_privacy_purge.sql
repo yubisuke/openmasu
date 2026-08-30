@@ -20,7 +20,9 @@ CREATE TABLE control.privacy_payload_purges (
   tenant_id control.identifier NOT NULL,
   app_id control.identifier NOT NULL,
   reference_digest text NOT NULL CHECK (reference_digest ~ '^[a-f0-9]{64}$'),
-  payload_ref text NOT NULL CHECK (payload_ref ~ '^encrypted:[A-Za-z0-9._-]{1,512}$'),
+  payload_ref text NOT NULL CHECK (
+    payload_ref ~ '^encrypted:[A-Za-z0-9._-]{1,512}$' AND position('..' in payload_ref)=0
+  ),
   status text NOT NULL CHECK (status IN ('queued', 'purged')),
   attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
   last_error_code text,

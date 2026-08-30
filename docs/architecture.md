@@ -178,11 +178,13 @@ job, fail-closed evidence lifecycle, installation-credential deletion, and one
 row per protected payload reference before touching the external payload store.
 The worker purges and verifies each reference idempotently; only an explicitly
 absent object or wrapped key satisfies the erasure postcondition, and only an
-empty queue can append the completed privacy artifact and audit row. Restore processing
-first drains durable jobs and then reapplies every completed deletion before
-the restored system is released to normal service. External deletion never
-runs inside a PostgreSQL transaction, so a later rollback cannot erase its
-database provenance.
+empty queue can append the completed privacy artifact and audit row. Restore
+processing first drains durable jobs and then reapplies every completed
+deletion before the restored system is released to normal service. External
+deletion never runs inside a PostgreSQL transaction, so a later rollback
+cannot erase its database provenance. Subject-bearing SDK and server admission
+shares a subject-scoped transaction lock with installation deletion
+recognition and rechecks durable state before inbox insertion.
 
 <!-- m1-component:operational-observability -->
 **Operational observability.** Emits closed structured logs and authenticated

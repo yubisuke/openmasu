@@ -128,6 +128,12 @@ export async function executePrivacyRequest(
     ? identity.deletionSubjectDigest
     : sha256([body.tenant_id, body.app_id, body.deletion_scope, body.deletion_subject_ref]);
   const prepared = await withTenant(pool, body.tenant_id, async (client) => {
+    if (body.deletion_scope === "installation") {
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('openmasu:privacy-subject:' || $1 || ':' || $2 || ':' || $3,0))",
+        [body.tenant_id, body.app_id, subjectDigest],
+      );
+    }
     const records = await affectedRecordIds(client, body);
     // Serialize deletion recognition with operator-webhook discovery and delivery.
     // If deletion takes the lock first, no pending request can cross the boundary;

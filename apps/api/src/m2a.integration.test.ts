@@ -2061,4 +2061,77 @@ describe("M2a signed SDK ingestion", () => {
       payloadsPurged: 0,
     });
   });
+
+  it("serializes a verified SDK append against installation deletion recognition", async () => {
+    const racedInstallationId = `installation:privacy-race-${run}`;
+    const enrollment = await signed("/v1/installations", { installation_id: racedInstallationId });
+    assert.equal(enrollment.status, 201);
+    const credential = await enrollment.json() as {
+      installation_key_id: string;
+      installation_secret: string;
+    };
+    const subjectDigest = installationIdDigest(authConfig, racedInstallationId);
+    let writeStarted!: () => void;
+    let releaseWrite!: () => void;
+    const started = new Promise<void>((resolve) => { writeStarted = resolve; });
+    const released = new Promise<void>((resolve) => { releaseWrite = resolve; });
+    let racedReference: string | undefined;
+    const blockingStore: PayloadStore = {
+      read: (reference) => payloadStore.read(reference),
+      purge: (reference) => payloadStore.purge(reference),
+      scanFor: (value) => payloadStore.scanFor(value),
+      write: async (scope, plaintext) => {
+        const reference = await payloadStore.write(scope, plaintext);
+        if (scope.objectId.startsWith("ingest-batch-")) {
+          racedReference = reference;
+          writeStarted();
+          await released;
+        }
+        return reference;
+      },
+    };
+    const append = appendDurableBatch(pool, blockingStore, {
+      tenantId,
+      appId,
+      producer: "sdk-android",
+      body: Buffer.from(JSON.stringify({ records: [sourceEvent(
+        `event:privacy-race-${run}`,
+        "session_start",
+        { installation_id: racedInstallationId, session_id: `session:privacy-race-${run}` },
+      )] }), "utf8"),
+      eventCount: 1,
+      receivedAt: new Date().toISOString(),
+      sdkKeyId,
+      installationKeyId: credential.installation_key_id,
+      subjectDigest,
+    });
+    await started;
+    try {
+      const deletion = await executePrivacyRequest(pool, {
+        tenantId,
+        appId,
+        actorType: "sdk_installation",
+        actorRef: `sdk_installation:${credential.installation_key_id}`,
+        requesterAuthRef: "sdk_auth:synthetic-race",
+        installationKeyId: credential.installation_key_id,
+        deletionSubjectDigest: subjectDigest,
+      }, {
+        tenant_id: tenantId,
+        app_id: appId,
+        requested_via: "on_device_sdk",
+        deletion_scope: "installation",
+        deletion_subject_ref: racedInstallationId,
+      }, payloadStore);
+      assert.equal(deletion.status, "completed");
+    } finally {
+      releaseWrite();
+    }
+    await assert.rejects(append, /privacy_subject_inactive|installation_credential_inactive/);
+    assert.ok(racedReference);
+    await assert.rejects(payloadStore.read(racedReference));
+    assert.equal(await withTenant(pool, tenantId, async (client) => Number((await client.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM ledger.ingest_batches WHERE body_ref=$1",
+      [racedReference],
+    )).rows[0].count)), 0, "the post-recognition batch must never enter the durable inbox");
+  });
 });
