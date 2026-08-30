@@ -119,6 +119,10 @@ through `raw_records_current`.
 
 - An enrolled installation may sign an access or portability request for its
   own installation only.
+- Native SDK installation reset sends its credential-bound deletion to
+  `POST /v1/privacy/installation`. The older `POST /v1/privacy/on-device` path
+  remains an authenticated compatibility alias; both paths enforce the same
+  installation scope before any deletion begins.
 - Tenant administrators use authenticated management routes for broader
   authorized requests.
 - Data-subject output is an allowlisted normalized export, not raw payload or

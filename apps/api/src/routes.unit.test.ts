@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { matchRoute, routes } from "./routes.js";
+import { matchRoute, routes, SDK_INSTALLATION_PRIVACY_PATH } from "./routes.js";
 
 describe("declarative API route security", () => {
   it("C04 keeps cookie and bearer credentials in disjoint namespaces", () => {
@@ -52,6 +52,24 @@ describe("declarative API route security", () => {
     assert.equal(matchRoute("GET", "/metrics")?.handler, "operational_metrics");
     assert.equal(matchRoute("POST", "/v1/events/server")?.handler, "server_batch");
     assert.equal(matchRoute("GET", "/v1/events/server"), undefined);
+  });
+
+  it("keeps every native SDK deletion transport on the registered canonical route", () => {
+    const canonical = matchRoute("POST", SDK_INSTALLATION_PRIVACY_PATH);
+    assert.equal(canonical?.handler, "device_privacy");
+    assert.equal(canonical?.auth, "sdk_hmac");
+    assert.equal(canonical?.mutates, true);
+    assert.equal(matchRoute("POST", "/v1/privacy/on-device")?.handler, "device_privacy");
+    assert.equal(matchRoute("GET", SDK_INSTALLATION_PRIVACY_PATH), undefined);
+
+    for (const source of [
+      "../../../sdk/android/core/src/main/java/dev/openmasu/sdk/HmacHttpTransport.kt",
+      "../../../sdk/ios/Sources/OpenMasuCore/Transport.swift",
+      "../../../sdk/unity/com.openmasu.sdk/Runtime/Plugins/iOS/Sources/OpenMasuCore/Transport.swift",
+    ]) {
+      const contents = readFileSync(new URL(source, import.meta.url), "utf8");
+      assert.ok(contents.includes(`"${SDK_INSTALLATION_PRIVACY_PATH}"`), source);
+    }
   });
 
   it("WO18 matches exact SDK lifecycle, link-state, and provider form routes", () => {
