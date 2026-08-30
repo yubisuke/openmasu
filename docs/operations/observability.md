@@ -18,6 +18,12 @@ system.
   expose queued/retry work and scheduler health with the same fixed-label
   boundary. Object keys, endpoints, buckets, destinations, tenant/app values,
   event names, subject references, and credentials never become metric labels.
+- The `privacy_purges` backlog and `privacy_purge` scheduler metrics expose
+  only a processing count, oldest age, and bounded job state. Payload
+  references, deletion subjects, request IDs, tenants, and apps never become
+  labels. A nonzero backlog with repeated failures means deletion is
+  fail-closed but not physically complete and requires immediate operator
+  investigation.
 - The `metric_run` scheduler health exposes terminal success, failure,
   consecutive-failure, active-lease, and overdue state without metric names,
   schedule identifiers, tenant/app values, groupings, or report values as
@@ -48,6 +54,11 @@ is the current UTC midnight rather than the wall-clock time at which a worker
 obtains that lease. A schedule processes at most 31 pending dates per cycle.
 Repeated `metric_run` failures or a checkpoint that does not advance require
 operator investigation; the worker does not drop dates to catch up.
+
+The `privacy_purge` job retries irreversible storage work from PostgreSQL. A
+request is not completed while any reference remains queued. Operators may run
+`npm run db:drain-privacy-purge -- --tenant <tenant-id>` during an isolated
+restore; exit code 2 means work is stalled or remains queued.
 
 ## Logs
 

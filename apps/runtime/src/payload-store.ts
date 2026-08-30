@@ -4,9 +4,18 @@ import { join, resolve } from "node:path";
 
 export interface PayloadStore {
   write(scope: { tenantId: string; appId: string; objectId: string }, plaintext: Buffer): Promise<string>;
+  /** Throws PayloadNotFoundError only when the object or its wrapped key is absent. */
   read(reference: string): Promise<Buffer>;
   purge(reference: string): Promise<void>;
   scanFor(value: string): Promise<boolean>;
+}
+
+/** A payload reference is no longer backed by either an object or its wrapped key. */
+export class PayloadNotFoundError extends Error {
+  constructor(readonly reference: string, options?: ErrorOptions) {
+    super("payload_not_found", options);
+    this.name = "PayloadNotFoundError";
+  }
 }
 
 type EncryptedObject = {
@@ -87,8 +96,17 @@ export class EncryptedFilePayloadStore implements PayloadStore {
 
   async read(reference: string): Promise<Buffer> {
     const keyId = referenceKeyId(reference);
-    const object = JSON.parse(readFileSync(join(this.objectRoot, `${keyId}.json`), "utf8")) as EncryptedObject;
-    const wrapped = JSON.parse(readFileSync(join(this.keyRoot, `${keyId}.json`), "utf8")) as WrappedKey;
+    let object: EncryptedObject;
+    let wrapped: WrappedKey;
+    try {
+      object = JSON.parse(readFileSync(join(this.objectRoot, `${keyId}.json`), "utf8")) as EncryptedObject;
+      wrapped = JSON.parse(readFileSync(join(this.keyRoot, `${keyId}.json`), "utf8")) as WrappedKey;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new PayloadNotFoundError(reference, { cause: error });
+      }
+      throw error;
+    }
     const dataKey = decrypt(this.wrappingKey, wrapped, Buffer.from(keyId, "utf8"));
     const aad = Buffer.from(`${object.tenant_id}\u0000${object.app_id}\u0000${keyId}`, "utf8");
     return decrypt(dataKey, object, aad);

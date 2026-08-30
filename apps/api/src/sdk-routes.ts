@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
 import { appendDurableBatch, uuidV7, type PayloadStore } from "@openmasu/runtime";
-import { executePrivacyRequest, type PrivacyRequestBody } from "./privacy.js";
+import { executePrivacyRequest, privacyResponseStatus, type PrivacyRequestBody } from "./privacy.js";
 import { assertDsarResponseSafe, generateDsarResponse, parseDsarRequest } from "./dsar.js";
 import { type KeyedTokenBucket } from "./rate-limit.js";
 import { parseJsonBody, readRawBody, RequestBodyError } from "./raw-body.js";
@@ -9,7 +9,6 @@ import {
   installationIdDigest,
   issueInstallationCredential,
   recordSdkAudit,
-  revokeInstallationCredential,
   verifySdkRequest,
   type SdkAuthConfig,
   type VerifiedSdkRequest,
@@ -328,8 +327,7 @@ export async function handleDevicePrivacy(
     requesterAuthRef: `sdk_auth:${auditLogId}`, installationKeyId: identity.installationKeyId,
     deletionSubjectDigest: identity.installationIdDigest,
   }, privacyBody, dependencies.payloadStore);
-  await revokeInstallationCredential({ pool: dependencies.pool, payloadStore: dependencies.payloadStore, identity });
-  writeJson(response, 201, artifact);
+  writeJson(response, privacyResponseStatus(artifact), artifact);
 }
 
 export async function handleDeviceDsar(

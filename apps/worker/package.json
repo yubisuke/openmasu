@@ -19,6 +19,7 @@
     "metrics:run": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/metrics/run.ts",
     "demo:metrics": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/demo-metrics.ts",
     "db:reapply-privacy": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/reapply-privacy.ts --",
+    "db:drain-privacy-purge": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/drain-privacy-purge.ts --",
     "seed": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/seed.ts",
     "verify:parity": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/verify-parity.ts"
   },

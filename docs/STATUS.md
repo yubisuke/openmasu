@@ -51,7 +51,7 @@ MMP.
 | Fraud and integrity evidence | Implemented with deterministic public rules, bundle provenance, aggregates, and synthetic provider normalization | Live integrity projects, threshold calibration, false-positive measurement, and device-farm coverage |
 | Deep links and re-engagement | Implemented for direct Android/iOS and deferred Android flows plus separate aggregate AdAttributionKit re-engagement postbacks | Real domains, association propagation, devices, stores, Apple delivery, and long-running observation |
 | Verified commerce lifecycle | Implemented with authenticated synthetic Google and Apple lifecycle/read-back paths | Live credentials, quotas, delivery, key rotation, complete recovery, entitlement, tax, and payout |
-| Operations and release | Implemented for bootstrap, migration, scheduler state, metrics, backup/restore logic, SBOMs, and release packaging | Production hosting, alerts, real backup recovery, incident response, and measured capacity |
+| Operations and release | Implemented for bootstrap, migration, scheduler state, metrics, DB-first durable privacy purge and restore reapplication, SBOMs, and release packaging | Production hosting, alerts, real backup recovery, incident response, and measured capacity |
 
 ## Product direction
 

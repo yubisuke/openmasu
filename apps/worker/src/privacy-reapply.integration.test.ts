@@ -10,6 +10,7 @@ import {
   createAppPool,
   createSeedPool,
   EncryptedFilePayloadStore,
+  processPrivacyDeletionJobs,
   uuidV7,
   withTenant,
 } from "@openmasu/runtime";
@@ -153,11 +154,54 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
     const dumpPath = join(snapshot, `${databaseName}.dump`);
     const restoredPayloadRoot = mkdtempSync(join(tmpdir(), "openmasu-m5-restored-payload-"));
     cpSync(join(snapshot, "payloads"), restoredPayloadRoot, { recursive: true, force: true });
+    const processingRequestId = `privacy:${uuidV7()}`;
+    const processingRequestedAt = "2026-08-20T02:05:00.000Z";
+    const processingReference = await payloadStore.write(
+      { tenantId: "tenant-a", appId: "app-a", objectId: "synthetic-processing-restore" },
+      Buffer.from("synthetic processing payload only", "utf8"),
+    );
+    await withTenant(appPool, "tenant-a", async (client) => {
+      const template = {
+        contract_version: "0.4.0",
+        tenant_id: "tenant-a",
+        app_id: "app-a",
+        privacy_request_id: processingRequestId,
+        deletion_subject_digest: sha256("synthetic-processing-subject"),
+        deletion_scope: "app",
+        requested_via: "tenant_admin_api",
+        requester_auth_ref: "admin_key:synthetic-restore",
+        requested_at: processingRequestedAt,
+        reason_code: "privacy_deletion",
+        policy_version: "privacy-v0.3",
+        affected_records: [],
+      };
+      await client.query(
+        `INSERT INTO control.privacy_deletion_jobs (
+          privacy_request_id,tenant_id,app_id,status,requested_at,artifact_template,
+          actor_type,actor_ref,request_digest,updated_at
+        ) VALUES ($1,'tenant-a','app-a','processing',$2,$3::jsonb,'admin_key',
+          'admin_key:synthetic-restore',$4,$2)`,
+        [processingRequestId, processingRequestedAt, JSON.stringify(template), sha256(template)],
+      );
+      await client.query(
+        `INSERT INTO control.privacy_payload_purges (
+          privacy_request_id,tenant_id,app_id,reference_digest,payload_ref,status,updated_at
+        ) VALUES ($1,'tenant-a','app-a',$2,$3,'queued',$4)`,
+        [processingRequestId, sha256(processingReference), processingReference, processingRequestedAt],
+      );
+    });
+    cpSync(root, restoredPayloadRoot, { recursive: true, force: true });
     const admin = new Client({ connectionString: migrationUrl });
     await admin.connect();
     let restoredPool: Pool | undefined;
     try {
       runPostgresTool("pg_dump", ["--format=custom", "--no-owner", "--file", dumpPath, migrationUrl], dumpPath);
+      const liveDrain = await processPrivacyDeletionJobs({
+        pool: appPool,
+        payloadStore,
+        tenantId: "tenant-a",
+      });
+      assert.equal(liveDrain.completed, 1);
       await admin.query(`CREATE DATABASE "${databaseName}"`);
       const restoredAdminUrl = new URL(migrationUrl);
       restoredAdminUrl.pathname = `/${databaseName}`;
@@ -173,12 +217,20 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
         "synthetic-m5-privacy-master-key-000000000000000",
       );
       assert.equal((await restoredPayloadStore.read(payloadReference)).toString("utf8"), "synthetic payload only");
+      assert.equal((await restoredPayloadStore.read(processingReference)).toString("utf8"), "synthetic processing payload only");
+      const drained = await processPrivacyDeletionJobs({
+        pool: restoredPool,
+        payloadStore: restoredPayloadStore,
+        tenantId: "tenant-a",
+      });
+      assert.equal(drained.completed, 1);
+      await assert.rejects(restoredPayloadStore.read(processingReference));
       const result = await reapplyCompletedPrivacyRequests({
         pool: restoredPool,
         payloadStore: restoredPayloadStore,
         tenantId: "tenant-a",
       });
-      assert.equal(result.privacy_requests, 1);
+      assert.equal(result.privacy_requests, 2);
       assert.equal(result.metrics_recalculated, 8);
       await assert.rejects(restoredPayloadStore.read(payloadReference));
       const auditCount = await withTenant(restoredPool, "tenant-a", async (client) => Number((await client.query<{ count: string }>(
@@ -186,6 +238,9 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
         [privacyRequestId],
       )).rows[0].count));
       assert.equal(auditCount, 1);
+      assert.equal(await withTenant(restoredPool, "tenant-a", async (client) => Number((await client.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM control.privacy_deletion_jobs WHERE status='processing'",
+      )).rows[0].count)), 0);
     } finally {
       await restoredPool?.end();
       await admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`).catch(() => undefined);

@@ -12,6 +12,7 @@ import {
   appendDurableBatch,
   createAppPool,
   EncryptedFilePayloadStore,
+  processPrivacyDeletionJobs,
   type PayloadStore,
   uuidV7,
   withTenant,
@@ -24,10 +25,11 @@ import {
 } from "../../worker/src/google-play-product-verifier.js";
 import { processCommerceReadbacks } from "../../worker/src/commerce-readback-worker.js";
 import { createRequestHandler } from "./router.js";
+import { executePrivacyRequest } from "./privacy.js";
 import { KeyedTokenBucket } from "./rate-limit.js";
 import { parseMetricQuery } from "./report-query.js";
 import { encodeMetricReport, metricReport } from "./reporting.js";
-import { ensureSdkKeys, signSdkRequest } from "./sdk-auth.js";
+import { ensureSdkKeys, installationIdDigest, signSdkRequest } from "./sdk-auth.js";
 import { createTrackingLink } from "./tracking-links.js";
 import { SDK_INSTALLATION_PRIVACY_PATH } from "./routes.js";
 import { verifyCompactJws } from "@openmasu/commerce-lifecycle";
@@ -1937,5 +1939,126 @@ describe("M2a signed SDK ingestion", () => {
     }
     await assert.rejects(payloadStore.read(secretRef));
     assert.equal((await signed("/v1/events/batch", { records: [sourceEvent(`event:after-delete:${run}`, "session_start", { installation_id: installationId, session_id: `session:after-delete:${run}` })] }, { secret: installationSecret, installationKeyId })).status, 401);
+  });
+
+  it("recovers idempotently when a payload purge succeeds before its queue acknowledgement", async () => {
+    const crashInstallationId = `installation:privacy-crash-${run}`;
+    const enrollment = await signed("/v1/installations", { installation_id: crashInstallationId });
+    assert.equal(enrollment.status, 201);
+    const credential = await enrollment.json() as {
+      installation_key_id: string;
+      installation_secret: string;
+    };
+    const eventId = `event:privacy-crash-${run}`;
+    const batch = await signed("/v1/events/batch", { records: [sourceEvent(
+      eventId,
+      "session_start",
+      { installation_id: crashInstallationId, session_id: `session:privacy-crash-${run}` },
+    )] }, {
+      secret: credential.installation_secret,
+      installationKeyId: credential.installation_key_id,
+    });
+    assert.equal(batch.status, 202, await batch.text());
+    await processSdkInbox(pool, payloadStore, tenantId);
+
+    const secretRef = await withTenant(pool, tenantId, async (client) => (await client.query<{ secret_ref: string }>(
+      "SELECT secret_ref FROM control.installation_credentials WHERE installation_key_id=$1",
+      [credential.installation_key_id],
+    )).rows[0].secret_ref);
+    let injected = false;
+    const purgeThenThrow: PayloadStore = {
+      write: (scope, plaintext) => payloadStore.write(scope, plaintext),
+      read: (reference) => payloadStore.read(reference),
+      scanFor: (value) => payloadStore.scanFor(value),
+      purge: async (reference) => {
+        await payloadStore.purge(reference);
+        if (!injected) {
+          injected = true;
+          throw new Error("synthetic_crash_after_payload_purge");
+        }
+      },
+    };
+    const processing = await executePrivacyRequest(pool, {
+      tenantId,
+      appId,
+      actorType: "sdk_installation",
+      actorRef: `sdk_installation:${credential.installation_key_id}`,
+      requesterAuthRef: "sdk_auth:synthetic-crash-recovery",
+      installationKeyId: credential.installation_key_id,
+      deletionSubjectDigest: installationIdDigest(authConfig, crashInstallationId),
+    }, {
+      tenant_id: tenantId,
+      app_id: appId,
+      requested_via: "on_device_sdk",
+      deletion_scope: "installation",
+      deletion_subject_ref: crashInstallationId,
+    }, purgeThenThrow);
+    assert.equal(processing.status, "processing");
+    assert.equal(processing.deletion_subject_ref, crashInstallationId);
+    assert.equal(processing.deletion_subject_digest, undefined);
+
+    const prepared = await withTenant(pool, tenantId, async (client) => ({
+      jobStatus: (await client.query<{ status: string }>(
+        "SELECT status FROM control.privacy_deletion_jobs WHERE privacy_request_id=$1",
+        [processing.privacy_request_id],
+      )).rows[0]?.status,
+      credentialStatus: (await client.query<{ status: string }>(
+        "SELECT status FROM control.installation_credentials_current WHERE installation_key_id=$1",
+        [credential.installation_key_id],
+      )).rows[0]?.status,
+      completedRows: Number((await client.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM ledger.privacy_requests WHERE privacy_request_id=$1",
+        [processing.privacy_request_id],
+      )).rows[0].count),
+      tombstones: Number((await client.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM ledger.privacy_tombstones WHERE privacy_request_id=$1",
+        [processing.privacy_request_id],
+      )).rows[0].count),
+      references: (await client.query<{ payload_ref: string }>(
+        "SELECT payload_ref FROM control.privacy_payload_purges WHERE privacy_request_id=$1 ORDER BY reference_digest",
+        [processing.privacy_request_id],
+      )).rows.map((row) => row.payload_ref),
+    }));
+    assert.equal(prepared.jobStatus, "processing");
+    assert.equal(prepared.credentialStatus, "deleted");
+    assert.equal(prepared.completedRows, 0, "completion must wait for every protected reference to become unreadable");
+    assert.ok(prepared.tombstones >= 1, "the DB-first deletion boundary must remain fail closed");
+    assert.ok(prepared.references.includes(secretRef));
+    assert.ok((await listRuntimeWorkTenants(pool)).includes(tenantId),
+      "the tenant discovery boundary must expose durable privacy work to the worker");
+    assert.equal((await signed("/v1/events/batch", { records: [sourceEvent(
+      `event:privacy-crash-rejected-${run}`,
+      "session_start",
+      { installation_id: crashInstallationId, session_id: `session:privacy-crash-rejected-${run}` },
+    )] }, {
+      secret: credential.installation_secret,
+      installationKeyId: credential.installation_key_id,
+    })).status, 401, "credential revocation must commit before physical purge retries");
+
+    const recovered = await processPrivacyDeletionJobs({ pool, payloadStore, tenantId });
+    assert.equal(recovered.completed, 1);
+    assert.ok(recovered.payloadsPurged >= 1);
+    for (const reference of prepared.references) await assert.rejects(payloadStore.read(reference));
+    const completed = await withTenant(pool, tenantId, async (client) => ({
+      jobs: Number((await client.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM control.privacy_deletion_jobs WHERE privacy_request_id=$1 AND status='completed'",
+        [processing.privacy_request_id],
+      )).rows[0].count),
+      artifacts: Number((await client.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM ledger.privacy_requests WHERE privacy_request_id=$1 AND status='completed'",
+        [processing.privacy_request_id],
+      )).rows[0].count),
+      audits: Number((await client.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM ledger.audit_logs WHERE action='privacy_delete' AND target_ref=$1",
+        [processing.privacy_request_id],
+      )).rows[0].count),
+    }));
+    assert.deepEqual(completed, { jobs: 1, artifacts: 1, audits: 1 });
+    assert.deepEqual(await processPrivacyDeletionJobs({ pool, payloadStore, tenantId }), {
+      jobs: 0,
+      completed: 0,
+      processing: 0,
+      payloadsPurged: 0,
+    });
   });
 });

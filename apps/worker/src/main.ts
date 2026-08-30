@@ -4,6 +4,7 @@ import {
   EncryptedFilePayloadStore,
   EnvironmentSecretStore,
   PostgresSchedulerStore,
+  processPrivacyDeletionJobs,
   runScheduledJob,
   uuidV7,
   withTenant,
@@ -183,6 +184,12 @@ const tick = async (): Promise<void> => {
     ].filter((value): value is { key_id: string; key_hex: string } => value !== undefined);
     const inboxTenants = new Set([sdkTenantId, ...await listRuntimeWorkTenants(pool)]);
     for (const tenantId of [...inboxTenants].sort()) {
+      await runWorkerJob(tenantId, "privacy_purge", async () => {
+        const privacy = await processPrivacyDeletionJobs({ pool, payloadStore, tenantId });
+        if (privacy.jobs > 0) {
+          process.stdout.write(`${JSON.stringify({ event: "privacy_purge_cycle", component: "worker", ...privacy })}\n`);
+        }
+      });
       await runWorkerJob(tenantId, "sdk_inbox", async () => {
         await processSdkInbox(pool, payloadStore, tenantId, { metaKeys });
       });
