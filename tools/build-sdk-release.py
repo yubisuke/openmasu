@@ -17,26 +17,27 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
-MODULES = {
+Dependency = tuple[str, str, str | None, str, bool]
+MODULES: dict[str, list[Dependency]] = {
     "core": [
         ("org.jetbrains.kotlin", "kotlin-stdlib", "2.3.0", "compile", False),
         ("androidx.room", "room-runtime", "2.8.4", "runtime", False),
         ("androidx.work", "work-runtime", "2.11.2", "runtime", False),
     ],
     "installreferrer": [
-        ("dev.openmasu", "core", "0.2.0-rc.4", "compile", False),
+        ("dev.openmasu", "core", None, "compile", False),
         ("com.android.installreferrer", "installreferrer", "2.2", "runtime", False),
     ],
-    "metareferrer": [("dev.openmasu", "core", "0.2.0-rc.4", "compile", False)],
+    "metareferrer": [("dev.openmasu", "core", None, "compile", False)],
     "max": [
-        ("dev.openmasu", "core", "0.2.0-rc.4", "compile", False),
+        ("dev.openmasu", "core", None, "compile", False),
         ("com.applovin", "applovin-sdk", "13.6.2", "provided", True),
     ],
     "unitybridge": [
-        ("dev.openmasu", "core", "0.2.0-rc.4", "compile", False),
-        ("dev.openmasu", "installreferrer", "0.2.0-rc.4", "runtime", False),
-        ("dev.openmasu", "metareferrer", "0.2.0-rc.4", "runtime", False),
-        ("dev.openmasu", "max", "0.2.0-rc.4", "compile", False),
+        ("dev.openmasu", "core", None, "compile", False),
+        ("dev.openmasu", "installreferrer", None, "runtime", False),
+        ("dev.openmasu", "metareferrer", None, "runtime", False),
+        ("dev.openmasu", "max", None, "compile", False),
     ],
 }
 UPM_ANDROID_MODULES = ("core", "installreferrer", "metareferrer", "max")
@@ -128,10 +129,25 @@ def write_upm_archive(
                     archive.addfile(info, io.BytesIO(data))
 
 
+def resolved_dependency_version(
+    group: str,
+    name: str,
+    configured_version: str | None,
+    release_version: str,
+) -> str:
+    if group == "dev.openmasu":
+        if configured_version is not None:
+            raise RuntimeError(f"Internal dependency {name} must use the generated release version")
+        return release_version
+    if configured_version is None:
+        raise RuntimeError(f"External dependency {group}:{name} requires a pinned version")
+    return configured_version
+
+
 def pom_xml(artifact: str, version: str) -> str:
     dependencies = []
     for group, name, dependency_version, scope, optional in MODULES[artifact]:
-        resolved_version = version if group == "dev.openmasu" else dependency_version
+        resolved_version = resolved_dependency_version(group, name, dependency_version, version)
         optional_xml = "\n      <optional>true</optional>" if optional else ""
         dependencies.append(
             "    <dependency>\n"

@@ -86,6 +86,7 @@ Confirm:
 
 ```bash
 npm run sbom
+npm run test:sdk-release-tool
 npm run build:sdk-release
 python tools/build-sdk-release.py --reproducibility-check
 npm run check:sdk-release
@@ -100,6 +101,9 @@ required full platform gate is green for that commit.
 Verify the Android AAR/POM files, Unity UPM archive, Swift source archive,
 normalized CycloneDX SBOMs, `release-manifest.json`, and `SHA256SUMS`. The two
 packaging passes must be byte-identical.
+OpenMasu Maven modules derive their internal dependency versions from the one
+SDK version being packaged; only third-party dependencies carry independent
+version pins.
 
 | Artifact | Repository output | Not provided |
 | --- | --- | --- |
