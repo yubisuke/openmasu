@@ -52,9 +52,11 @@ npm run check:threat-model
 npm run check:operational-logs
 ```
 
-Run the pinned Android, iOS, Unity, emulator, and simulator workflows at the
-exact candidate commit. Platform CI is required even when the contributor's
-local operating system cannot run a platform gate.
+Run the pinned Android and iOS workflows at the exact candidate commit. Their
+jobs include the Unity package and bridge gates plus the Android emulator and
+iOS Simulator gates; there is no separate Unity workflow. Platform CI is
+required even when the contributor's local operating system cannot run a
+platform gate.
 
 Pull-request path selection never applies to a `main` push or manual workflow
 dispatch. Release evidence must come from one of those full-gate events at the
@@ -90,6 +92,10 @@ python tools/build-sdk-release.py --reproducibility-check
 npm run check:sdk-release
 npm run test:unity-upm
 ```
+
+The packager regenerates the ignored SDK SBOM and Android binary inputs from a
+clean checkout before it creates the bundle. It does not trust existing
+`sbom/` or Gradle `build/` files as release inputs.
 
 The configured v0.2.0 bundle path is
 `build/sdk-release/openmasu-sdk-0.2.0/`. It is valid release evidence only

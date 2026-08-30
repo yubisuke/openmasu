@@ -4,6 +4,7 @@ import argparse
 import gzip
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -71,6 +72,31 @@ def assert_release_worktree() -> None:
             "Release inputs differ from HEAD; commit the candidate before packaging. "
             f"Unexpected path count: {len(unexpected)}"
         )
+
+
+def prepare_release_inputs() -> None:
+    """Regenerate every ignored binary/SBOM input from the checked-out source."""
+    npm = "npm.cmd" if os.name == "nt" else "npm"
+    gradle = ROOT / "sdk/android" / ("gradlew.bat" if os.name == "nt" else "gradlew")
+    subprocess.run([npm, "run", "sbom"], cwd=ROOT, check=True)
+    subprocess.run(
+        [
+            str(gradle),
+            "-p",
+            "sdk/android",
+            "clean",
+            "androidAcceptance",
+            ":core:assembleRelease",
+            ":installreferrer:assembleRelease",
+            ":metareferrer:assembleRelease",
+            ":max:assembleRelease",
+            ":unitybridge:assembleRelease",
+            "verifySdkSbom",
+            "--no-daemon",
+        ],
+        cwd=ROOT,
+        check=True,
+    )
 
 
 def tracked_files(prefix: str) -> list[Path]:
@@ -281,7 +307,7 @@ def build_bundle(output_root: Path) -> Path:
         "commands": [
             "npm ci",
             "npm run sbom",
-            "./sdk/android/gradlew -p sdk/android :core:assembleRelease :installreferrer:assembleRelease :metareferrer:assembleRelease :max:assembleRelease :unitybridge:assembleRelease verifySdkSbom --no-daemon",
+            "./sdk/android/gradlew -p sdk/android clean androidAcceptance :core:assembleRelease :installreferrer:assembleRelease :metareferrer:assembleRelease :max:assembleRelease :unitybridge:assembleRelease verifySdkSbom --no-daemon",
             "python tools/build-sdk-release.py --reproducibility-check",
             "python tools/verify-unity-upm.py",
         ],
@@ -496,6 +522,7 @@ def main() -> None:
         return
     if arguments.verify_tag:
         parser.error("--verify-tag requires --verify-only")
+    prepare_release_inputs()
     if arguments.reproducibility_check:
         with tempfile.TemporaryDirectory(prefix="openmasu-sdk-release-") as temporary:
             temporary_root = Path(temporary)

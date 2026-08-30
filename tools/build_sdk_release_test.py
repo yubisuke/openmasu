@@ -92,6 +92,21 @@ class SdkReleaseDependencyVersionTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "not annotated"):
                 RELEASE.verify_release_tag("0.2.0", revision)
 
+    def test_release_inputs_are_regenerated_before_packaging(self) -> None:
+        with patch.object(RELEASE.os, "name", "nt"), patch.object(
+            RELEASE.subprocess, "run"
+        ) as run:
+            RELEASE.prepare_release_inputs()
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(run.call_args_list[0].args[0], ["npm.cmd", "run", "sbom"])
+        gradle = run.call_args_list[1].args[0]
+        self.assertTrue(str(gradle[0]).endswith("gradlew.bat"))
+        self.assertIn("clean", gradle)
+        self.assertIn("androidAcceptance", gradle)
+        self.assertIn("verifySdkSbom", gradle)
+        self.assertTrue(run.call_args_list[0].kwargs["check"])
+        self.assertTrue(run.call_args_list[1].kwargs["check"])
+
 
 if __name__ == "__main__":
     unittest.main()
