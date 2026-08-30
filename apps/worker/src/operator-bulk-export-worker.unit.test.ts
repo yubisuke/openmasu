@@ -67,6 +67,7 @@ describe("operator bulk export files", () => {
       cursorAfter: {
         event_received_at: candidate.received_at, event_record_id: candidate.record_id, deletion_seq: "1",
       },
+      referenceSecret: secret,
       rows,
     } as const;
     const first = prepareOperatorBulkExport(input);
@@ -77,6 +78,9 @@ describe("operator bulk export files", () => {
     const lines = gunzipSync(first.body).toString("utf8").trimEnd().split("\n").map((line) => JSON.parse(line));
     assert.equal(lines[0].schema, "openmasu.operator_event_export_manifest.v1");
     assert.equal(lines[0].row_count, 2);
+    assert.equal(lines[0].cursor_after.event_record_id, undefined);
+    assert.match(lines[0].cursor_after.event_record_ref, /^[a-f0-9]{64}$/);
+    assert.equal(JSON.stringify(lines[0]).includes(candidate.record_id), false);
     assert.deepEqual(lines[1], {
       schema: "openmasu.operator_event_export.v1",
       record_kind: "privacy_deletion",

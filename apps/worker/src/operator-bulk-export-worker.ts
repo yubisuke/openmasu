@@ -4,6 +4,7 @@ import type { Pool, PoolClient } from "pg";
 import {
   putS3Object,
   recordJobOutcome,
+  operatorWebhookReference,
   uuidV7,
   withTenant,
   type PayloadStore,
@@ -26,6 +27,12 @@ export type OperatorBulkDeletionCandidate = Readonly<{
 export type OperatorBulkCursor = Readonly<{
   event_received_at: string | null;
   event_record_id: string | null;
+  deletion_seq: string;
+}>;
+
+export type OperatorBulkManifestCursor = Readonly<{
+  event_received_at: string | null;
+  event_record_ref: string | null;
   deletion_seq: string;
 }>;
 
@@ -54,8 +61,8 @@ export type OperatorBulkManifest = Readonly<{
   content_type: "application/x-ndjson";
   row_count: number;
   row_content_sha256: string;
-  cursor_before: OperatorBulkCursor;
-  cursor_after: OperatorBulkCursor;
+  cursor_before: OperatorBulkManifestCursor;
+  cursor_after: OperatorBulkManifestCursor;
 }>;
 
 export type PreparedOperatorBulkExport = Readonly<{
@@ -115,12 +122,20 @@ export function prepareOperatorBulkExport(input: Readonly<{
   generatedAt: string;
   cursorBefore: OperatorBulkCursor;
   cursorAfter: OperatorBulkCursor;
+  referenceSecret: Buffer;
   rows: readonly OperatorBulkExportRow[];
 }>): PreparedOperatorBulkExport {
   if (input.rows.length < 1 || input.rows.length > 10_000) throw new Error("operator_bulk_row_count_invalid");
   const generatedAt = canonicalTimestamp(input.generatedAt, "operator_bulk_generated_at_invalid");
   const rowLines = input.rows.map((row) => JSON.stringify(row));
   const rowBytes = Buffer.from(`${rowLines.join("\n")}\n`, "utf8");
+  if (input.referenceSecret.length < 32) throw new Error("operator_bulk_reference_secret_invalid");
+  const publicCursor = (cursor: OperatorBulkCursor): OperatorBulkManifestCursor => ({
+    event_received_at: cursor.event_received_at,
+    event_record_ref: cursor.event_record_id === null ? null
+      : operatorWebhookReference(input.referenceSecret, "cursor_record_ref", cursor.event_record_id),
+    deletion_seq: cursor.deletion_seq,
+  });
   const manifest: OperatorBulkManifest = {
     schema: "openmasu.operator_event_export_manifest.v1",
     export_id: input.exportId,
@@ -131,8 +146,8 @@ export function prepareOperatorBulkExport(input: Readonly<{
     content_type: "application/x-ndjson",
     row_count: input.rows.length,
     row_content_sha256: sha256(rowBytes),
-    cursor_before: input.cursorBefore,
-    cursor_after: input.cursorAfter,
+    cursor_before: publicCursor(input.cursorBefore),
+    cursor_after: publicCursor(input.cursorAfter),
   };
   const ndjson = Buffer.from(`${JSON.stringify(manifest)}\n${rowLines.join("\n")}\n`, "utf8");
   const body = gzipSync(ndjson, {
@@ -368,6 +383,7 @@ export async function discoverOperatorBulkExports(
           generatedAt: now.toISOString(),
           cursorBefore,
           cursorAfter,
+          referenceSecret,
           rows,
         });
         if (prepared.body.length > maximumObjectBytes) throw new Error("operator_bulk_object_too_large");

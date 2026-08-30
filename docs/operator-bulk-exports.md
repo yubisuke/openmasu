@@ -32,9 +32,10 @@ Each object is gzip-compressed UTF-8 NDJSON:
 3. zero or more event rows.
 
 The manifest records the destination, app, generation time, row count, SHA-256
-of the uncompressed data rows, and the before/after durable cursors. Object
-bytes and the object key remain identical across a retry. The default object
-key is:
+of the uncompressed data rows, and safe before/after cursor evidence. The
+cursor's record component is a destination-scoped HMAC reference, never the
+internal record ID used by PostgreSQL ordering. Object bytes and the object key
+remain identical across a retry. The default object key is:
 
 ```text
 <prefix>/date=YYYY-MM-DD/<destination>-<export>.ndjson.gz
