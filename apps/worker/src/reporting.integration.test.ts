@@ -358,6 +358,7 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
     );
     assert.equal(overflow.status, 400);
     assert.deepEqual(await overflow.json(), { error: "export_limit_exceeded" });
+
   });
 
   it("paginates fixed-watermark aggregate counts and preserves privacy on every page", async () => {
@@ -424,6 +425,23 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
     );
     assert.equal(overflow.status, 400);
     assert.deepEqual(await overflow.json(), { error: "export_limit_exceeded" });
+
+    const login = await fetch(`${baseUrl}/dashboard/session`, {
+      method: "POST",
+      redirect: "manual",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ admin_key: adminKey }),
+    });
+    assert.equal(login.status, 303);
+    const cookie = (login.headers.get("set-cookie") ?? "").split(";", 1)[0];
+    const recordsPage = await fetch(
+      `${baseUrl}/dashboard/apps/app-a/records?metric_name=daily_click_count&date_from=2026-08-01&date_to=2026-08-08&watermark_at_most=2026-08-31T00%3A00%3A00.000Z&limit=1`,
+      { headers: { cookie } },
+    );
+    const recordsHtml = await recordsPage.text();
+    assert.equal(recordsPage.status, 200);
+    assert.match(recordsHtml, /Next aggregate-record page/);
+    assert.equal(recordsHtml.includes("<script"), false);
   });
 
   it("C16 serves byte-identical aggregate CSV through bearer and dashboard-session paths", async () => {
@@ -457,13 +475,5 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
     assert.match(html, /data-metric-run-id="run-42-click:daily_click_count"/);
     assert.equal(html.includes("<script"), false);
 
-    const recordsPage = await fetch(
-      `${baseUrl}/dashboard/apps/app-a/records?metric_name=daily_click_count&date_from=2026-08-01&date_to=2026-08-08&watermark_at_most=2026-08-31T00%3A00%3A00.000Z&limit=1`,
-      { headers: { cookie } },
-    );
-    const recordsHtml = await recordsPage.text();
-    assert.equal(recordsPage.status, 200);
-    assert.match(recordsHtml, /Next aggregate-record page/);
-    assert.equal(recordsHtml.includes("<script"), false);
   });
 });
