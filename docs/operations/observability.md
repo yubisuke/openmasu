@@ -97,6 +97,16 @@ lost response after provider acceptance can still cause a same-transaction-ID
 resend after expiry; the local claim does not establish provider-side exactly-
 once delivery.
 
+AdServices lookup uses the same local ownership boundary for one queue only.
+`OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS` bounds each network wait and must be
+shorter than `OPENMASU_ADSERVICES_CLAIM_LEASE_MS`; the defaults are 30 seconds
+and five minutes. Retry releases the claim, expired claims can be recovered,
+and only the current claim may commit a protected response. Investigate growing
+due age, repeated lease expiry, and timeout retries without logging tokens,
+response bodies, campaign values, tenant/app identifiers, or payload references.
+An expired lease may cause another provider read and does not establish
+provider-side exactly-once behavior.
+
 Scheduled metric work uses a daily durable lease, but every artifact watermark
 is the current UTC midnight rather than the wall-clock time at which a worker
 obtains that lease. A schedule processes at most 31 pending dates per cycle.

@@ -1,6 +1,12 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
-import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
+import {
+  acquirePrivacyTenantXactFence,
+  PayloadNotFoundError,
+  uuidV7,
+  withTenant,
+  type PayloadStore,
+} from "@openmasu/runtime";
 
 type JsonObject = Record<string, unknown>;
 
@@ -20,6 +26,8 @@ type LookupRow = {
   token_ref: string;
   token_created_at: Date;
   attempts: number;
+  claim_token: string | null;
+  claimed_until: Date | string | null;
 };
 
 export type AdServicesResponse = {
@@ -31,6 +39,13 @@ export type AdServicesHttpClient = (input: {
   readonly endpoint: string;
   readonly token: string;
 }) => Promise<AdServicesResponse>;
+
+export const DEFAULT_ADSERVICES_CLAIM_LEASE_MS = 5 * 60_000;
+export const DEFAULT_ADSERVICES_REQUEST_TIMEOUT_MS = 30_000;
+const MIN_ADSERVICES_CLAIM_LEASE_MS = 1_000;
+const MAX_ADSERVICES_CLAIM_LEASE_MS = 15 * 60_000;
+const MIN_ADSERVICES_REQUEST_TIMEOUT_MS = 10;
+const MAX_ADSERVICES_REQUEST_TIMEOUT_MS = 2 * 60_000;
 
 export class AdServicesLookupLimiter {
   readonly #entries = new Map<string, { tokens: number; updatedAt: number }>();
@@ -58,6 +73,42 @@ export class AdServicesLookupLimiter {
 
 function sha256(value: Buffer | string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function boundedInteger(
+  value: number | undefined,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+  reason: string,
+): number {
+  const selected = value ?? fallback;
+  if (!Number.isSafeInteger(selected) || selected < minimum || selected > maximum) {
+    throw new Error(reason);
+  }
+  return selected;
+}
+
+async function withRequestTimeout<T>(
+  timeoutMs: number,
+  operation: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation(controller.signal),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          controller.abort();
+          reject(new Error("adservices_request_timeout"));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+    controller.abort();
+  }
 }
 
 function parseObject(body: Buffer): JsonObject {
@@ -192,6 +243,55 @@ function terminalContext(status: "token_expired" | "lookup_unavailable"): JsonOb
   return { status, attribution: false };
 }
 
+async function claimAdServicesLookup(
+  pool: Pool,
+  tenantId: string,
+  now: Date,
+  claimToken: string,
+  leaseMs: number,
+): Promise<LookupRow | undefined> {
+  const expiredBefore = new Date(now.getTime() - 23 * 60 * 60 * 1_000);
+  const claimed = await withTenant(pool, tenantId, (client) => client.query<LookupRow>(
+    `WITH due AS (
+       SELECT lookup_id
+         FROM ephemeral.adservices_lookups
+        WHERE tenant_id=$1
+          AND (next_attempt_at <= $2 OR token_created_at <= $3)
+          AND (claimed_until IS NULL OR claimed_until <= clock_timestamp())
+        ORDER BY next_attempt_at,lookup_id
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+     )
+     UPDATE ephemeral.adservices_lookups AS lookup
+        SET claim_token=$4::uuid,
+            claimed_until=clock_timestamp() + ($5::integer * interval '1 millisecond')
+       FROM due
+      WHERE lookup.tenant_id=$1 AND lookup.lookup_id=due.lookup_id
+     RETURNING lookup.lookup_id::text,lookup.tenant_id,lookup.app_id,
+       lookup.install_record_id,lookup.token_ref,lookup.token_created_at,lookup.attempts,
+       lookup.claim_token::text,lookup.claimed_until`,
+    [tenantId, now.toISOString(), expiredBefore.toISOString(), claimToken, leaseMs],
+  ));
+  return claimed.rows[0];
+}
+
+async function lockCurrentCompletion(client: PoolClient, row: LookupRow): Promise<boolean> {
+  if (!row.claim_token || !row.claimed_until) throw new Error("adservices_claim_missing");
+  const current = await client.query(
+    `SELECT 1
+       FROM ephemeral.adservices_lookups AS lookup
+       JOIN ledger.raw_records_current AS raw
+         ON raw.tenant_id=lookup.tenant_id AND raw.app_id=lookup.app_id
+        AND raw.record_id=lookup.install_record_id
+      WHERE lookup.tenant_id=$1 AND lookup.app_id=$2 AND lookup.lookup_id=$3::uuid
+        AND lookup.claim_token=$4::uuid AND lookup.claimed_until > clock_timestamp()
+        AND raw.payload_lifecycle_status='available'
+      FOR UPDATE OF lookup`,
+    [row.tenant_id, row.app_id, row.lookup_id, row.claim_token],
+  );
+  return current.rowCount === 1;
+}
+
 async function completeLookup(
   pool: Pool,
   payloadStore: PayloadStore,
@@ -199,14 +299,17 @@ async function completeLookup(
   context: JsonObject,
   responseBody: Buffer,
   now: Date,
-): Promise<void> {
+): Promise<boolean> {
   const responseDigest = sha256(responseBody);
-  const responseRef = await payloadStore.write(
-    { tenantId: row.tenant_id, appId: row.app_id, objectId: `adservices-result-${row.lookup_id}` },
-    responseBody,
-  );
+  let responseRef: string | undefined;
   try {
-    await withTenant(pool, row.tenant_id, async (client) => {
+    const committed = await withTenant(pool, row.tenant_id, async (client) => {
+      await acquirePrivacyTenantXactFence(client, row.tenant_id, "shared");
+      if (!await lockCurrentCompletion(client, row)) return false;
+      responseRef = await payloadStore.write(
+        { tenantId: row.tenant_id, appId: row.app_id, objectId: `adservices-result-${row.lookup_id}` },
+        responseBody,
+      );
       const prior = await installAttribution(client, row);
       const reasonCode = context.status === "attributed"
         ? "adservices_attributed"
@@ -272,12 +375,15 @@ async function completeLookup(
           context.status, responseRef, responseDigest, now.toISOString(), JSON.stringify(resultArtifact)],
       );
       await client.query(
-        "DELETE FROM ephemeral.adservices_lookups WHERE tenant_id=$1 AND app_id=$2 AND lookup_id=$3",
-        [row.tenant_id, row.app_id, row.lookup_id],
+        `DELETE FROM ephemeral.adservices_lookups
+          WHERE tenant_id=$1 AND app_id=$2 AND lookup_id=$3::uuid AND claim_token=$4::uuid`,
+        [row.tenant_id, row.app_id, row.lookup_id, row.claim_token],
       );
+      return true;
     });
+    return committed;
   } catch (error) {
-    await payloadStore.purge(responseRef);
+    if (responseRef) await payloadStore.purge(responseRef);
     throw error;
   }
 }
@@ -288,33 +394,43 @@ async function reschedule(
   attempts: number,
   nextAttemptAt: Date,
   reason: string,
-): Promise<void> {
-  await withTenant(pool, row.tenant_id, (client) => client.query(
+): Promise<boolean> {
+  if (!row.claim_token || !row.claimed_until) throw new Error("adservices_claim_missing");
+  return withTenant(pool, row.tenant_id, async (client) => (await client.query(
     `UPDATE ephemeral.adservices_lookups
      SET attempts=$4, next_attempt_at=$5,
+         claim_token=NULL, claimed_until=NULL,
          artifact=artifact || $6::jsonb
-     WHERE tenant_id=$1 AND app_id=$2 AND lookup_id=$3`,
+     WHERE tenant_id=$1 AND app_id=$2 AND lookup_id=$3::uuid
+       AND claim_token=$7::uuid AND claimed_until > clock_timestamp()`,
     [row.tenant_id, row.app_id, row.lookup_id, attempts, nextAttemptAt.toISOString(), JSON.stringify({
       attempts,
       next_attempt_at: nextAttemptAt.toISOString(),
       last_outcome: reason,
-    })],
-  ).then(() => undefined));
+    }), row.claim_token],
+  )).rowCount === 1);
 }
 
-async function dropUnavailableToken(pool: Pool, row: LookupRow): Promise<void> {
-  await withTenant(pool, row.tenant_id, (client) => client.query(
-    "DELETE FROM ephemeral.adservices_lookups WHERE tenant_id=$1 AND app_id=$2 AND lookup_id=$3",
-    [row.tenant_id, row.app_id, row.lookup_id],
-  ).then(() => undefined));
+async function dropUnavailableToken(pool: Pool, row: LookupRow): Promise<boolean> {
+  if (!row.claim_token || !row.claimed_until) throw new Error("adservices_claim_missing");
+  return withTenant(pool, row.tenant_id, async (client) => (await client.query(
+    `DELETE FROM ephemeral.adservices_lookups
+      WHERE tenant_id=$1 AND app_id=$2 AND lookup_id=$3::uuid
+        AND claim_token=$4::uuid AND claimed_until > clock_timestamp()`,
+    [row.tenant_id, row.app_id, row.lookup_id, row.claim_token],
+  )).rowCount === 1);
 }
 
-async function defaultClient(input: { endpoint: string; token: string }): Promise<AdServicesResponse> {
+async function defaultClient(
+  input: { endpoint: string; token: string },
+  signal: AbortSignal,
+): Promise<AdServicesResponse> {
   const response = await fetch(input.endpoint, {
     method: "POST",
     headers: { "content-type": "text/plain" },
     body: input.token,
     redirect: "error",
+    signal,
   });
   return { status: response.status, body: Buffer.from(await response.arrayBuffer()) };
 }
@@ -339,76 +455,128 @@ export async function processAdServicesLookups(
     readonly client?: AdServicesHttpClient;
     readonly limiter?: AdServicesLookupLimiter;
     readonly now?: () => Date;
+    readonly claimLeaseMs?: number;
+    readonly requestTimeoutMs?: number;
+    readonly claimToken?: () => string;
   } = {},
 ): Promise<{ readonly completed: number; readonly retried: number }> {
   if (options.enabled === false) return { completed: 0, retried: 0 };
   const now = options.now?.() ?? new Date();
   const endpoint = checkedEndpoint(options.endpoint ?? "https://api-adservices.apple.com/api/v1/");
-  const client = options.client ?? defaultClient;
-  const result = await withTenant(pool, tenantId, (db) => db.query<LookupRow>(
-    `SELECT lookup_id::text, tenant_id, app_id, install_record_id, token_ref,
-            token_created_at, attempts
-     FROM ephemeral.adservices_lookups
-     WHERE tenant_id=$1 AND (next_attempt_at <= $2 OR token_created_at <= $3)
-     ORDER BY next_attempt_at, lookup_id
-     LIMIT 100`,
-    [tenantId, now.toISOString(), new Date(now.getTime() - 23 * 60 * 60 * 1_000).toISOString()],
-  ));
+  const claimLeaseMs = boundedInteger(
+    options.claimLeaseMs,
+    DEFAULT_ADSERVICES_CLAIM_LEASE_MS,
+    MIN_ADSERVICES_CLAIM_LEASE_MS,
+    MAX_ADSERVICES_CLAIM_LEASE_MS,
+    "adservices_claim_lease_invalid",
+  );
+  const requestTimeoutMs = boundedInteger(
+    options.requestTimeoutMs,
+    DEFAULT_ADSERVICES_REQUEST_TIMEOUT_MS,
+    MIN_ADSERVICES_REQUEST_TIMEOUT_MS,
+    MAX_ADSERVICES_REQUEST_TIMEOUT_MS,
+    "adservices_request_timeout_invalid",
+  );
+  if (requestTimeoutMs >= claimLeaseMs) {
+    throw new Error("adservices_request_timeout_must_be_shorter_than_claim_lease");
+  }
   let completed = 0;
   let retried = 0;
-  for (const row of result.rows) {
+  for (let processed = 0; processed < 100; processed += 1) {
+    const row = await claimAdServicesLookup(
+      pool,
+      tenantId,
+      now,
+      (options.claimToken ?? randomUUID)(),
+      claimLeaseMs,
+    );
+    if (!row) break;
     if (now.getTime() - new Date(row.token_created_at).getTime() >= 23 * 60 * 60 * 1_000) {
-      await completeLookup(pool, payloadStore, row, terminalContext("token_expired"),
-        Buffer.from('{"status":"token_expired"}', "utf8"), now);
-      completed += 1;
+      if (await completeLookup(pool, payloadStore, row, terminalContext("token_expired"),
+        Buffer.from('{"status":"token_expired"}', "utf8"), now)) completed += 1;
       continue;
     }
     if (options.limiter && !options.limiter.allow(`${row.tenant_id}\u0000${row.app_id}`)) {
-      await reschedule(pool, row, row.attempts, new Date(now.getTime() + 1_000), "rate_limited");
-      retried += 1;
+      if (await reschedule(
+        pool,
+        row,
+        row.attempts,
+        new Date(now.getTime() + 1_000),
+        "rate_limited",
+      )) retried += 1;
       continue;
     }
     let token: string;
     try {
       token = await tokenFor(payloadStore, row);
     } catch (error) {
-      if (!(error instanceof Error) || error.message !== "adservices_token_missing") throw error;
-      await dropUnavailableToken(pool, row);
-      completed += 1;
+      if (!(error instanceof PayloadNotFoundError)
+        && (!(error instanceof Error) || error.message !== "adservices_token_missing")) throw error;
+      if (await dropUnavailableToken(pool, row)) completed += 1;
       continue;
     }
     let response: AdServicesResponse;
+    let transportFailure: string | undefined;
     try {
-      response = await client({ endpoint, token });
-    } catch {
-      response = { status: 500, body: Buffer.from('{"error":"network_failure"}', "utf8") };
+      response = await withRequestTimeout(requestTimeoutMs, (signal) => options.client
+        ? options.client({ endpoint, token })
+        : defaultClient({ endpoint, token }, signal));
+    } catch (error) {
+      transportFailure = error instanceof Error && error.message === "adservices_request_timeout"
+        ? "request_timeout"
+        : "network_failure";
+      response = {
+        status: 500,
+        body: Buffer.from(JSON.stringify({ error: transportFailure }), "utf8"),
+      };
     }
     if (response.status === 200) {
       const context = normalizeAdServicesResponse(response.body);
-      await completeLookup(pool, payloadStore, row, context, response.body, now);
-      completed += 1;
+      if (await completeLookup(pool, payloadStore, row, context, response.body, now)) completed += 1;
       continue;
     }
     if (response.status === 400) {
-      await completeLookup(pool, payloadStore, row, terminalContext("lookup_unavailable"), response.body, now);
-      completed += 1;
+      if (await completeLookup(
+        pool,
+        payloadStore,
+        row,
+        terminalContext("lookup_unavailable"),
+        response.body,
+        now,
+      )) completed += 1;
       continue;
     }
     if (response.status === 404) {
       const attempts = row.attempts + 1;
       if (attempts >= 3) {
-        await completeLookup(pool, payloadStore, row, terminalContext("lookup_unavailable"), response.body, now);
-        completed += 1;
+        if (await completeLookup(
+          pool,
+          payloadStore,
+          row,
+          terminalContext("lookup_unavailable"),
+          response.body,
+          now,
+        )) completed += 1;
       } else {
-        await reschedule(pool, row, attempts, new Date(now.getTime() + 5_000), "not_found");
-        retried += 1;
+        if (await reschedule(
+          pool,
+          row,
+          attempts,
+          new Date(now.getTime() + 5_000),
+          "not_found",
+        )) retried += 1;
       }
       continue;
     }
     const attempts = Math.min(3, row.attempts + 1);
     const backoffMs = Math.min(3_600_000, 60_000 * (2 ** Math.min(attempts, 3)));
-    await reschedule(pool, row, attempts, new Date(now.getTime() + backoffMs), `http_${response.status}`);
-    retried += 1;
+    if (await reschedule(
+      pool,
+      row,
+      attempts,
+      new Date(now.getTime() + backoffMs),
+      transportFailure ?? `http_${response.status}`,
+    )) retried += 1;
   }
   return { completed, retried };
 }
