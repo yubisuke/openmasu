@@ -81,18 +81,20 @@ worker replicas do not provide tenant-wide ordering. SDK and MAX inboxes use
 bounded FIFO slices. Google conversion delivery and server-side AdServices
 lookup now claim one durable row immediately before provider I/O and fence
 completion by claim token. AdServices also rechecks source availability under
-the tenant privacy barrier before persisting its protected response. Lease
-expiry can still repeat a provider operation. Integrity, Google Play product
-verification, commerce read-back, and distributed provider quotas remain
-separate hardening work.
+the tenant privacy barrier before persisting its protected response. Platform
+integrity verification now applies the same local ownership and privacy
+boundary to its own queue, including protected result purge during deletion
+and backup restore reapplication. Lease expiry can still repeat a provider
+operation. Google Play product verification, commerce read-back, and
+distributed provider quotas remain separate hardening work.
 
 1. preserve the rc.4 notes, SDK identities, SBOMs, bundle paths, tag, and
    evidence manifest as one immutable release record;
 2. preserve the server-event, operator-webhook, and bulk-export key, replay,
    egress, privacy, and durable-queue invariants while auditing other
    high-impact compatibility gaps;
-3. preserve bounded tenant concurrency and the Google conversion and AdServices
-   claim-fencing slices while continuing other per-tenant queue-vector, claim,
+3. preserve bounded tenant concurrency and the Google conversion, AdServices,
+   and integrity claim-fencing slices while continuing other per-tenant queue
    and provider-quota hardening;
 4. preserve durable scheduled-metric checkpoints and exact replay, the
    tenant-scoped SDK admission/projection privacy barrier, and deletion-state
