@@ -44,7 +44,7 @@ public final class OpenMasuUnityBridge {
     Set<String> configuredLinkHosts = csvHostSet(deepLinkHosts);
     requireLinkHostsMatch(configuredLinkHosts, manifestLinkHosts(context));
     OpenMasuConfiguration configuration = new OpenMasuConfiguration(
-        endpoint, keyId, secret, "0.2.0-rc.4", wrapperVersion, 10_000,
+        endpoint, keyId, secret, "0.2.0", wrapperVersion, 10_000,
         configuredLinkHosts, csvSet(deepLinkSchemes), 604_800);
     sdk = OpenMasuSdkFactory.create(
         context,

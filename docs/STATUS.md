@@ -2,11 +2,12 @@
 
 Status date: 2026-08-31.
 
-The source and SDK are configured for candidate `v0.2.0-rc.4`.
-This document describes the current `main` source tree. The matching annotated
-tag and GitHub prerelease were published from commit `2a2f6b5` after every full
-platform gate passed for that commit. Tagged release notes and evidence
-manifests remain authoritative for the exact source revision they name.
+The source and SDK are configured for candidate `v0.2.0`.
+This document describes the current `main` source tree. The candidate is not a
+published release until its annotated tag, GitHub Release, and every required
+full platform gate identify the same green commit. Tagged release notes and
+evidence manifests remain authoritative only for the exact source revision
+they name.
 
 ## Release snapshot
 
@@ -14,12 +15,13 @@ manifests remain authoritative for the exact source revision they name.
 | --- | --- | --- | --- |
 | `v0.2.0-rc.3` tag | through v0.4.9 | 56 fixtures / 728 golden artifacts | Previously published prerelease and frozen historical evidence |
 | `v0.2.0-rc.4` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Latest published prerelease and frozen exact-commit evidence |
+| `v0.2.0` source candidate | through v0.4.10 | 57 fixtures / 741 golden artifacts | Configured on current `main`; untagged until publication gates pass |
 
 The Contract wire and package identity remains `0.4.0`; v0.4.10 is the latest
-additive patch ledger entry. The SDK version configured on `main` is
-`0.2.0-rc.4`. For this candidate, the tag, GitHub prerelease, and exact-commit
-platform evidence exist at `2a2f6b5`; a version string alone would not prove
-those facts for a later candidate.
+additive patch ledger entry. The SDK version configured on `main` is `0.2.0`.
+The rc.4 tag, GitHub prerelease, and exact-commit platform evidence remain
+frozen at `2a2f6b5`; they are not evidence for the current candidate. A version
+string alone never proves publication or exact-commit validation.
 
 ## How to read status
 
@@ -65,12 +67,12 @@ not score a provider, certify its product, or recommend migration.
 
 ## Current engineering focus
 
-The rc.4 release-coherence milestone is complete. Provider-neutral backend
-event submission and outbound operator event webhooks are implemented in the
-current source tree with synthetic evidence. Deterministic operator-owned bulk
-event exports are implemented in the current source milestone; live object
-storage remains an operator gate. Current work remains integration
-hardening rather than another broad provider claim:
+The v0.2.0 source candidate consolidates the release-coherence work completed
+after rc.4. Provider-neutral backend event submission, outbound operator event
+webhooks, deterministic operator-owned bulk event exports, durable scheduled
+metrics, and the queue/privacy hardening below are implemented with synthetic
+evidence. Live provider and object-storage use remain operator gates. Current
+work remains integration hardening rather than another broad provider claim:
 
 Source-level synthetic tests now show that the worker admits independent tenant
 cycles through a bounded FIFO coordinator while preserving the existing serial
@@ -93,7 +95,8 @@ cursor completion. Lease expiry can still repeat a provider operation, and
 distributed provider quotas remain separate operational work.
 
 1. preserve the rc.4 notes, SDK identities, SBOMs, bundle paths, tag, and
-   evidence manifest as one immutable release record;
+   evidence manifest as one immutable historical release record while binding
+   v0.2.0 to its own source, SBOM, bundle, tag, and evidence;
 2. preserve the server-event, operator-webhook, and bulk-export key, replay,
    egress, privacy, and durable-queue invariants while auditing other
    high-impact compatibility gaps;

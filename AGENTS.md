@@ -10,7 +10,7 @@
 
 ## Current state
 
-- Contract v0.4 and the ledger, metrics, Android/iOS/Unity, dashboard, operations, fraud, deep-link, verified-commerce, and import-compatibility milestones are implemented with synthetic evidence. Runtime services, PostgreSQL, HTTP APIs, Kotlin and Swift SDKs, Unity bridges, and separate deterministic/SKAdNetwork/AdAttributionKit reporting exist. Real-device, live-provider, Unity-export, App Store, and production-deployment evidence does not yet exist.
+- Contract v0.4 and the ledger, metrics, Android/iOS/Unity, dashboard, operations, fraud, deep-link, verified-commerce, and import-compatibility milestones are implemented with synthetic evidence. Runtime services, PostgreSQL, HTTP APIs, Kotlin and Swift SDKs, Unity bridges, and separate deterministic/SKAdNetwork/AdAttributionKit reporting exist. A synthetic Unity 6 Android export/APK probe exists; real-device, live-provider, real consumer-project Unity export, App Store, and production-deployment evidence does not yet exist.
 - The active contract lives in `schemas/`, `schemas/events/`, `registries/`, `fixtures/v0.4/`, and `spec/event-metric-contract-v0.4.md`. The spec is normative for current contract behavior. Earlier complete contract lines remain at the `contract-v0.1`, `contract-v0.2.1`, and `contract-v0.3.6` tags. Issue drafts are historical records, not live checklists.
 - Future work must follow `docs/roadmap.md` and preserve the residual boundaries in `docs/STATUS.md`.
 - Current documentation must be understandable from the repository alone. Do not use unexplained review labels, work-order numbers, or decision IDs as the reason for present behavior; describe the behavior and rationale directly and keep historical records outside the newcomer reading path.

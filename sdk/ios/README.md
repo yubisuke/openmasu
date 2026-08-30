@@ -86,9 +86,9 @@ synthetic cases from `sdk/queue-semantics-vectors.json`.
 
 ## Immutable source bundle
 
-For configured candidate `v0.2.0-rc.4`, the repository release tool packages the
+For configured candidate `v0.2.0`, the repository release tool packages the
 tracked `sdk/ios` tree as a deterministic source ZIP tied to the same
-`0.2.0-rc.4` SDK identity and commit as the Android Maven layout and Unity UPM
+`0.2.0` SDK identity and commit as the Android Maven layout and Unity UPM
 archive. Treat it as release evidence only when the matching annotated tag names
 the exact green source commit. The tool does not
 publish a Swift registry package or binary XCFramework. Run the repository-level commands in

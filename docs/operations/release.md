@@ -4,15 +4,13 @@ OpenMasu publishes source tags and reproducible local SDK bundles. This runbook
 does not publish Maven, Swift, Unity, npm, container, or hosting artifacts to a
 public registry.
 
-The source and SDK are configured for candidate `v0.2.0-rc.4`, which is the
-latest published prerelease. Its annotated tag and GitHub prerelease point to
-green `main` commit `2a2f6b5`. A configured version is not publication by
-itself: a candidate must not be treated as published unless the matching
-annotated tag and GitHub prerelease point to the same green commit. A release
-must describe that exact tag target and must not reuse an older evidence
-manifest as proof for a newer commit. Version-bearing source, notes, manifest,
-SBOMs, and artifact paths move together. See
-[Release candidate records](../releases/README.md).
+The source and SDK are configured for candidate `v0.2.0`. A configured version
+is not publication by itself: a candidate must not be treated as published
+unless the matching annotated tag and GitHub Release point to the same green
+commit. A release must describe that exact tag target and must not reuse an
+older evidence manifest as proof for a newer commit. Version-bearing source,
+notes, manifest, SBOMs, and artifact paths move together. See
+[Release records](../releases/README.md).
 
 ## 1. Freeze the candidate
 
@@ -93,8 +91,8 @@ npm run check:sdk-release
 npm run test:unity-upm
 ```
 
-The configured rc.4 bundle path is
-`build/sdk-release/openmasu-sdk-0.2.0-rc.4/`. It is valid release evidence only
+The configured v0.2.0 bundle path is
+`build/sdk-release/openmasu-sdk-0.2.0/`. It is valid release evidence only
 at the exact source commit named by the matching annotated tag, after every
 required full platform gate is green for that commit.
 
@@ -132,10 +130,18 @@ Before any GitHub write, verify the authenticated account, exact repository,
 visibility, tag name, commit, and explicit authorization for that operation.
 Confirm every required workflow is green on the exact commit. Create an
 annotated or signed tag and release only after the release owner approves it.
+After creating the annotated tag and rebuilding the bundle at its target, run:
 
-Published candidate `v0.2.0-rc.4` uses
-[its own synthetic evidence manifest](../validation/v0.2.0-rc.4-synthetic-evidence.md).
-The preceding rc.3 record remains immutable historical evidence.
+```bash
+python tools/build-sdk-release.py --verify-only build/sdk-release/openmasu-sdk-0.2.0 --verify-tag
+```
+
+This final check requires the annotated `v0.2.0` target, current checkout, and
+bundle manifest revision to be identical.
+
+Candidate `v0.2.0` uses
+[its own synthetic evidence manifest](../validation/v0.2.0-synthetic-evidence.md).
+The published rc.4 and preceding records remain immutable historical evidence.
 
 ## Public release contents
 
