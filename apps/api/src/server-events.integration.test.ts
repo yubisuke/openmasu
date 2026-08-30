@@ -239,7 +239,9 @@ describe("authenticated server-to-server event ingestion", { concurrency: false 
     const invalid = event(`event:server-invalid:${run}`, installationId, {
       payload: { event_name: "custom_event", installation_id: installationId },
     });
-    assert.equal((await signed({ records: [invalid] })).status, 202);
+    const invalidResponse = await signed({ records: [invalid] });
+    assert.equal(invalidResponse.status, 202);
+    const invalidBatch = await invalidResponse.json() as { ingest_batch_id: string };
     const duplicate = event(`event:server-duplicate:${run}`, installationId);
     assert.equal((await signed({ records: [duplicate] })).status, 202);
     assert.equal((await signed({ records: [duplicate] })).status, 202);
@@ -249,10 +251,11 @@ describe("authenticated server-to-server event ingestion", { concurrency: false 
         `SELECT rejection.reason_code,
                 rejection.artifact->>'payload_disposition' AS payload_disposition
            FROM ledger.rejections AS rejection
-           JOIN ledger.raw_records AS raw
-             ON raw.tenant_id=rejection.tenant_id AND raw.app_id=rejection.app_id AND raw.record_id=rejection.record_id
-          WHERE raw.tenant_id=$1 AND raw.app_id=$2 AND raw.event_id=$3`,
-        [tenantId, appId, invalid.event_id],
+           JOIN ledger.ingest_batch_records AS member
+             ON member.tenant_id=rejection.tenant_id AND member.app_id=rejection.app_id
+            AND member.record_id=rejection.record_id
+          WHERE rejection.tenant_id=$1 AND rejection.app_id=$2 AND member.ingest_batch_id=$3`,
+        [tenantId, appId, invalidBatch.ingest_batch_id],
       )).rows,
       deliveries: (await client.query<{ duplicate_resolution: string; count: number }>(
         `SELECT delivery.duplicate_resolution, count(*)::int AS count
