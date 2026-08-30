@@ -76,7 +76,7 @@ const ephemeralExpected = new Map<string, Record<Role, Privilege[]>>([
     openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: [], openmasu_seed: ["TRUNCATE"],
   }],
   ["ephemeral.operator_webhook_deliveries", {
-    openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: [], openmasu_seed: ["TRUNCATE"],
+    openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: ["SELECT"], openmasu_seed: ["TRUNCATE"],
   }],
 ]);
 

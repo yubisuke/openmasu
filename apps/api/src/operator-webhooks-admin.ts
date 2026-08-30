@@ -159,13 +159,16 @@ export async function disableOperatorWebhookDestination(options: Readonly<{
   if (!Number.isFinite(now.valueOf())) throw new Error("operator_webhook_changed_at_invalid");
   const changedAt = now.toISOString();
   const protectedRefs = await withTenant(options.pool, options.identity.tenantId, async (client) => {
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended('openmasu:operator-webhook-destination:' || $1 || ':' || $2 || ':' || $3,0))",
+      [options.identity.tenantId, options.identity.appId, options.destinationId],
+    );
     const selected = await client.query<{ status: string; secret_ref: string }>(
       `SELECT current.status,base.secret_ref
          FROM control.operator_webhook_destinations AS base
          JOIN control.operator_webhook_destinations_current AS current
            USING (destination_id,tenant_id,app_id)
-        WHERE base.tenant_id=$1 AND base.app_id=$2 AND base.destination_id=$3
-        FOR UPDATE OF base`,
+        WHERE base.tenant_id=$1 AND base.app_id=$2 AND base.destination_id=$3`,
       [options.identity.tenantId, options.identity.appId, options.destinationId],
     );
     const destination = selected.rows[0];

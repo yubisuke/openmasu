@@ -243,6 +243,18 @@ async function lockRecord(client: PoolClient, recordId: string): Promise<void> {
   );
 }
 
+async function lockDestination(
+  client: PoolClient,
+  tenantId: string,
+  appId: string,
+  destinationId: string,
+): Promise<void> {
+  await client.query(
+    "SELECT pg_advisory_xact_lock(hashtextextended('openmasu:operator-webhook-destination:' || $1 || ':' || $2 || ':' || $3,0))",
+    [tenantId, appId, destinationId],
+  );
+}
+
 async function appendResult(
   client: PoolClient,
   row: Pick<DeliveryRow, "delivery_id" | "destination_id" | "app_id" | "request_digest">,
@@ -353,6 +365,7 @@ export async function discoverOperatorWebhookDeliveries(
     try {
       const inserted = await withTenant(pool, tenantId, async (client) => {
         await lockRecord(client, candidate.record_id);
+        await lockDestination(client, tenantId, candidate.app_id, candidate.destination_id);
         const eligible = await client.query<{ eligible: boolean }>(
           `SELECT destination.status='active'
                   AND raw.payload_lifecycle_status='available'
@@ -365,8 +378,7 @@ export async function discoverOperatorWebhookDeliveries(
                USING (destination_id,tenant_id,app_id)
              JOIN ledger.raw_records_current AS raw
                ON raw.tenant_id=$1 AND raw.app_id=$2 AND raw.record_id=$4
-            WHERE base.tenant_id=$1 AND base.app_id=$2 AND base.destination_id=$3
-            FOR UPDATE OF base`,
+            WHERE base.tenant_id=$1 AND base.app_id=$2 AND base.destination_id=$3`,
           [tenantId, candidate.app_id, candidate.destination_id, candidate.record_id],
         );
         if (!eligible.rows[0]?.eligible) return false;

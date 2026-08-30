@@ -138,6 +138,7 @@ GRANT SELECT, INSERT ON
   control.operator_webhook_destination_states
 TO openmasu_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ephemeral.operator_webhook_deliveries TO openmasu_app;
+GRANT SELECT ON ephemeral.operator_webhook_deliveries TO openmasu_reader;
 GRANT SELECT, INSERT ON ledger.operator_webhook_delivery_results TO openmasu_app;
 GRANT SELECT ON
   control.operator_webhook_destinations,
