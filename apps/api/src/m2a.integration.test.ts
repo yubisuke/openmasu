@@ -201,17 +201,22 @@ async function appendPrivacyFenceBatch(input: {
   const subjectDigest = input.scope === "installation"
     ? privacySubjectDigest(digestKey, request)
     : undefined;
-  const event = sourceEvent(eventId, "install", {
-    installation_id: installation,
-    install_type: "first_install",
-    referrer_status: "unavailable",
-    extensions: {
-      integrity_token_protected: `synthetic-privacy-token-${input.label}-${run}`,
-      integrity_provider: "play_integrity",
-      integrity_binding_mode: "challenge",
-      integrity_binding: randomBytes(32).toString("base64url"),
-    },
-  }, input.receivedAt);
+  const event = {
+    ...sourceEvent(eventId, "install", {
+      installation_id: installation,
+      install_type: "first_install",
+      referrer_status: "unavailable",
+      extensions: {
+        integrity_token_protected: `synthetic-privacy-token-${input.label}-${run}`,
+        integrity_provider: "play_integrity",
+        integrity_binding_mode: "challenge",
+        integrity_binding: randomBytes(32).toString("base64url"),
+      },
+    }, input.receivedAt),
+    tenant_id: tenant,
+    app_id: app,
+    producer: "sdk-android",
+  };
   const body = Buffer.from(JSON.stringify({ records: [event] }), "utf8");
   const ingestBatchId = await appendDurableBatch(pool, payloadStore, {
     tenantId: tenant,
@@ -2644,15 +2649,20 @@ describe("M2a signed SDK ingestion", () => {
       assert.equal(await processSdkInbox(pool, decodedStore, before.tenantId), 1);
 
       const afterEventId = `event:privacy-${label}-after:${run}`;
-      const afterBody = Buffer.from(JSON.stringify({ records: [sourceEvent(
-        afterEventId,
-        "session_start",
-        {
-          installation_id: before.installationId,
-          session_id: `session:privacy-${label}-after:${run}`,
-        },
-        "2026-08-30T07:00:00.000Z",
-      )] }), "utf8");
+      const afterBody = Buffer.from(JSON.stringify({ records: [{
+        ...sourceEvent(
+          afterEventId,
+          "session_start",
+          {
+            installation_id: before.installationId,
+            session_id: `session:privacy-${label}-after:${run}`,
+          },
+          "2026-08-30T07:00:00.000Z",
+        ),
+        tenant_id: before.tenantId,
+        app_id: before.appId,
+        producer: "sdk-android",
+      }] }), "utf8");
       const afterBatchId = await appendDurableBatch(pool, payloadStore, {
         tenantId: before.tenantId,
         appId: before.appId,
