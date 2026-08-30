@@ -6,6 +6,7 @@ export * from "./payload-store.js";
 export * from "./job-health.js";
 export * from "./scheduler.js";
 export * from "./privacy-purge.js";
+export * from "./privacy-fence.js";
 export * from "./webhook-security.js";
 export * from "./s3-object-storage.js";
 

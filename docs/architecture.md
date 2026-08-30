@@ -55,7 +55,10 @@ new or explicitly retryable work. Related accepted history is reconstructed at
 a captured ledger position: available normalized facts supply semantic context,
 while redacted or purged records contribute only their immutable identity and
 payload digest for duplicate/conflict classification. Processed SDK batch bodies
-are never reopened by the routine drain.
+are never reopened by the routine drain. Admission and post-decode projection
+take one tenant-scoped privacy barrier shared with deletion recognition. A
+deletion therefore either includes a completed projection in its snapshot or
+commits first and causes the pending batch to finish as `privacy_suppressed`.
 
 <!-- m1-component:server-event-ingestion -->
 **Server event ingestion.** Accepts selected first-party events from an app
@@ -189,8 +192,11 @@ processing first drains durable jobs and then reapplies every completed
 deletion before the restored system is released to normal service. External
 deletion never runs inside a PostgreSQL transaction, so a later rollback
 cannot erase its database provenance. Subject-bearing SDK and server admission
-shares a subject-scoped transaction lock with installation deletion
-recognition and rechecks durable state before inbox insertion.
+and SDK projection share one tenant-scoped barrier with installation, app, and
+tenant deletion recognition. Admission and projection recheck durable deletion
+state while holding that barrier. Provider-completion queues have separate
+claim and deletion-race boundaries and are not covered by the SDK projection
+barrier.
 
 <!-- m1-component:operational-observability -->
 **Operational observability.** Emits closed structured logs and authenticated

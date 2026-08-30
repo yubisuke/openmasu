@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { sha256, type CandidateAttempt } from "@openmasu/attribution-core";
 import { decryptMetaInstallReferrer, type MetaKey } from "@openmasu/meta-install-referrer";
 import {
+  acquirePrivacyProjectionSessionFence,
   SDK_POST_PROCESSING_PENDING_REASON,
   withTenant,
   type PayloadStore,
@@ -893,100 +894,140 @@ export async function processSdkInbox(
     },
   );
   if (workDecoded.length === 0) return 0;
-  await assertWithdrawalProjectionReady(pool, tenantId, workDecoded);
-  const historical = await relevantLedgerHistory(pool, tenantId, workDecoded);
-  const pending: CandidateAttempt[] = [];
-  const workRows: InboxRow[] = [];
-  const newlyPendingRows: InboxRow[] = [];
-  const withdrawals = decodedWithdrawalsFor(
-    workDecoded,
-    await durableWithdrawalsFor(pool, tenantId, workDecoded),
+  const projectionFence = await acquirePrivacyProjectionSessionFence(
+    pool,
+    tenantId,
+    workDecoded.map((entry) => ({
+      entryId: entry.row.ingest_batch_id,
+      tenantId: entry.row.tenant_id,
+      appId: entry.row.app_id,
+      subjectDigest: entry.row.subject_digest,
+      receivedAt: entry.row.received_at,
+    })),
   );
-  const subjectWithdrawals = await durableSubjectWithdrawalsFor(pool, tenantId, workDecoded);
-  for (const entry of workDecoded) {
-    const attempts = entry.records.map((record) => ({
-      server: serverContext(entry.row, record, entry.row.installation_key_id
-        ? withdrawals.get(entry.row.installation_key_id) ?? []
-        : entry.row.server_key_id
-          ? subjectWithdrawals.get(entry.row.ingest_batch_id) ?? []
-          : []),
-      record,
-      batch_id: entry.row.ingest_batch_id,
-    }));
-    pending.push(...attempts);
-    workRows.push(entry.row);
-    if (entry.row.status === "pending") newlyPendingRows.push(entry.row);
-  }
-  if (pending.length === 0) return 0;
-  const durablePostProcessing = new Set(workRows
-    .filter((row) => row.status === "processed"
-      && row.reason_code === SDK_POST_PROCESSING_PENDING_REASON)
-    .map((row) => row.ingest_batch_id));
+  let processingError: unknown;
   try {
-    const output = await ingestRuntimeBatch(pending, pool, historical);
-    // Persist after the evaluator/ledger transaction. If this insert fails, the inbox row
-    // remains retryable; a retry validates the already-written canonical logical event and
-    // completes this projection before the batch is marked processed.
-    await persistRecognizedWithdrawals(pool, workDecoded);
-    const acceptedInstallIds = new Set(output.logical_events
-      .filter((logical) => logical.event_name === "install")
-      .map((logical) => logical.record_id));
-    const acceptedRecordIds = new Set(output.logical_events.map((logical) => logical.record_id));
-    await markConsentProjectionComplete(pool, workDecoded, acceptedRecordIds);
-    const recordsByBatch = new Map<string, string[]>();
-    for (const attempt of pending) {
-      const list = recordsByBatch.get(attempt.batch_id) ?? [];
-      list.push(attempt.record.record_id);
-      recordsByBatch.set(attempt.batch_id, list);
+    const blocked = workDecoded.filter((entry) =>
+      projectionFence.blockedEntryIds.has(entry.row.ingest_batch_id));
+    let suppressedPending = 0;
+    for (const entry of blocked) {
+      await appendState(pool, entry.row, "processed", "privacy_suppressed");
+      if (entry.row.status === "pending") suppressedPending += 1;
     }
-    for (const row of workRows) {
-      await withTenant(pool, row.tenant_id, async (client) => {
-        for (const recordId of recordsByBatch.get(row.ingest_batch_id) ?? []) {
-          await client.query(
-            `INSERT INTO ledger.ingest_batch_records (
-              ingest_batch_id, tenant_id, app_id, record_id, created_at
-            ) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
-            [row.ingest_batch_id, row.tenant_id, row.app_id, recordId, new Date().toISOString()],
-          );
-        }
-      });
-      if (!durablePostProcessing.has(row.ingest_batch_id)) {
-        await appendState(pool, row, "processed", SDK_POST_PROCESSING_PENDING_REASON);
-        durablePostProcessing.add(row.ingest_batch_id);
-      }
+    const activeDecoded = workDecoded.filter((entry) =>
+      !projectionFence.blockedEntryIds.has(entry.row.ingest_batch_id));
+    if (activeDecoded.length === 0) return suppressedPending;
+
+    await assertWithdrawalProjectionReady(pool, tenantId, activeDecoded);
+    const historical = await relevantLedgerHistory(pool, tenantId, activeDecoded);
+    const pending: CandidateAttempt[] = [];
+    const workRows: InboxRow[] = [];
+    const newlyPendingRows: InboxRow[] = [];
+    const withdrawals = decodedWithdrawalsFor(
+      activeDecoded,
+      await durableWithdrawalsFor(pool, tenantId, activeDecoded),
+    );
+    const subjectWithdrawals = await durableSubjectWithdrawalsFor(pool, tenantId, activeDecoded);
+    for (const entry of activeDecoded) {
+      const attempts = entry.records.map((record) => ({
+        server: serverContext(entry.row, record, entry.row.installation_key_id
+          ? withdrawals.get(entry.row.installation_key_id) ?? []
+          : entry.row.server_key_id
+            ? subjectWithdrawals.get(entry.row.ingest_batch_id) ?? []
+            : []),
+        record,
+        batch_id: entry.row.ingest_batch_id,
+      }));
+      pending.push(...attempts);
+      workRows.push(entry.row);
+      if (entry.row.status === "pending") newlyPendingRows.push(entry.row);
     }
-    for (const attribution of output.attributions) await persistLateAttribution(pool, attribution);
-    const queues: AuxiliaryQueueFunctions = {
-      adServices: options.auxiliaryQueues?.adServices ?? queueAdServicesLookup,
-      integrity: options.auxiliaryQueues?.integrity ?? queueIntegrityVerification,
-      googlePlayProduct: options.auxiliaryQueues?.googlePlayProduct ?? queueGooglePlayProductVerification,
-    };
-    const workIds = new Set(workRows.map((row) => row.ingest_batch_id));
-    for (const entry of workDecoded) {
-      if (!workIds.has(entry.row.ingest_batch_id)) continue;
-      for (const lookup of entry.adServicesLookups) {
-        if (acceptedInstallIds.has(lookup.installRecordId)) await queues.adServices(pool, lookup);
+    if (pending.length === 0) return suppressedPending;
+    const durablePostProcessing = new Set(workRows
+      .filter((row) => row.status === "processed"
+        && row.reason_code === SDK_POST_PROCESSING_PENDING_REASON)
+      .map((row) => row.ingest_batch_id));
+    try {
+      const output = await ingestRuntimeBatch(pending, pool, historical);
+      // Persist after the evaluator/ledger transaction. If this insert fails, the inbox row
+      // remains retryable; a retry validates the already-written canonical logical event and
+      // completes this projection before the batch is marked processed.
+      await persistRecognizedWithdrawals(pool, activeDecoded);
+      const acceptedInstallIds = new Set(output.logical_events
+        .filter((logical) => logical.event_name === "install")
+        .map((logical) => logical.record_id));
+      const acceptedRecordIds = new Set(output.logical_events.map((logical) => logical.record_id));
+      await markConsentProjectionComplete(pool, activeDecoded, acceptedRecordIds);
+      const recordsByBatch = new Map<string, string[]>();
+      for (const attempt of pending) {
+        const list = recordsByBatch.get(attempt.batch_id) ?? [];
+        list.push(attempt.record.record_id);
+        recordsByBatch.set(attempt.batch_id, list);
       }
-      for (const verification of entry.integrityVerifications) {
-        if (acceptedRecordIds.has(verification.subjectRecordId)) {
-          await queues.integrity(pool, verification);
+      for (const row of workRows) {
+        await withTenant(pool, row.tenant_id, async (client) => {
+          for (const recordId of recordsByBatch.get(row.ingest_batch_id) ?? []) {
+            await client.query(
+              `INSERT INTO ledger.ingest_batch_records (
+                ingest_batch_id, tenant_id, app_id, record_id, created_at
+              ) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
+              [row.ingest_batch_id, row.tenant_id, row.app_id, recordId, new Date().toISOString()],
+            );
+          }
+        });
+        if (!durablePostProcessing.has(row.ingest_batch_id)) {
+          await appendState(pool, row, "processed", SDK_POST_PROCESSING_PENDING_REASON);
+          durablePostProcessing.add(row.ingest_batch_id);
         }
       }
-      for (const verification of entry.googlePlayProductVerifications) {
-        if (acceptedRecordIds.has(verification.subjectRecordId)) {
-          await queues.googlePlayProduct(pool, verification);
+      for (const attribution of output.attributions) await persistLateAttribution(pool, attribution);
+      const queues: AuxiliaryQueueFunctions = {
+        adServices: options.auxiliaryQueues?.adServices ?? queueAdServicesLookup,
+        integrity: options.auxiliaryQueues?.integrity ?? queueIntegrityVerification,
+        googlePlayProduct: options.auxiliaryQueues?.googlePlayProduct ?? queueGooglePlayProductVerification,
+      };
+      const workIds = new Set(workRows.map((row) => row.ingest_batch_id));
+      for (const entry of activeDecoded) {
+        if (!workIds.has(entry.row.ingest_batch_id)) continue;
+        for (const lookup of entry.adServicesLookups) {
+          if (acceptedInstallIds.has(lookup.installRecordId)) await queues.adServices(pool, lookup);
+        }
+        for (const verification of entry.integrityVerifications) {
+          if (acceptedRecordIds.has(verification.subjectRecordId)) {
+            await queues.integrity(pool, verification);
+          }
+        }
+        for (const verification of entry.googlePlayProductVerifications) {
+          if (acceptedRecordIds.has(verification.subjectRecordId)) {
+            await queues.googlePlayProduct(pool, verification);
+          }
+        }
+        await appendState(pool, entry.row, "processed");
+      }
+      return newlyPendingRows.length + suppressedPending;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "evaluation_failed";
+      for (const row of newlyPendingRows) {
+        if (!durablePostProcessing.has(row.ingest_batch_id)) {
+          await appendState(pool, row, "failed", reason);
         }
       }
-      await appendState(pool, entry.row, "processed");
+      throw error;
     }
-    return newlyPendingRows.length;
   } catch (error) {
-    const reason = error instanceof Error ? error.message : "evaluation_failed";
-    for (const row of newlyPendingRows) {
-      if (!durablePostProcessing.has(row.ingest_batch_id)) {
-        await appendState(pool, row, "failed", reason);
-      }
-    }
+    processingError = error;
     throw error;
+  } finally {
+    try {
+      await projectionFence.release();
+    } catch (releaseError) {
+      if (processingError) {
+        throw new AggregateError(
+          [processingError, releaseError],
+          "SDK projection and privacy fence cleanup both failed",
+        );
+      }
+      throw releaseError;
+    }
   }
 }

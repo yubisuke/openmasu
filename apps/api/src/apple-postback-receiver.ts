@@ -422,6 +422,10 @@ export async function receiveApplePostback(
     });
     writeEmpty(response, 200);
   } catch (error) {
+    if (error instanceof Error && error.message === "privacy_scope_inactive") {
+      writeEmpty(response, 200);
+      return;
+    }
     if (error instanceof PostbackRequestError) {
       writeEmpty(response, error.statusCode);
       return;

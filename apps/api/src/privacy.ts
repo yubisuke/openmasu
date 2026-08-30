@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import { createHash, createHmac } from "node:crypto";
 import { sha256 } from "@openmasu/attribution-core";
 import {
+  acquirePrivacyTenantXactFence,
   operatorWebhookReference,
   processPrivacyDeletionRequest,
   uuidV7,
@@ -138,12 +139,7 @@ export async function executePrivacyRequest(
   const subjectDigest = identity.deletionSubjectDigest;
   if (!/^[a-f0-9]{64}$/.test(subjectDigest)) throw new Error("privacy_subject_digest_invalid");
   const prepared = await withTenant(pool, body.tenant_id, async (client) => {
-    if (body.deletion_scope === "installation") {
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended('openmasu:privacy-subject:' || $1 || ':' || $2 || ':' || $3,0))",
-        [body.tenant_id, body.app_id, subjectDigest],
-      );
-    }
+    await acquirePrivacyTenantXactFence(client, body.tenant_id, "exclusive");
     const records = await affectedRecordIds(client, body);
     // Serialize deletion recognition with operator-webhook discovery and delivery.
     // If deletion takes the lock first, no pending request can cross the boundary;
@@ -242,6 +238,19 @@ export async function executePrivacyRequest(
         )
       : await client.query<{ token_ref: string }>(
           `SELECT token_ref FROM ephemeral.adservices_lookups
+           WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3)
+           ORDER BY token_ref`,
+          [body.tenant_id, body.deletion_scope, body.app_id],
+        );
+    const pendingIntegrityPayloads = body.deletion_scope === "installation"
+      ? await client.query<{ token_ref: string }>(
+          `SELECT token_ref FROM ephemeral.integrity_verifications
+           WHERE tenant_id=$1 AND app_id=$2 AND subject_record_id=ANY($3::text[])
+           ORDER BY token_ref`,
+          [body.tenant_id, body.app_id, records],
+        )
+      : await client.query<{ token_ref: string }>(
+          `SELECT token_ref FROM ephemeral.integrity_verifications
            WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3)
            ORDER BY token_ref`,
           [body.tenant_id, body.deletion_scope, body.app_id],
@@ -446,6 +455,7 @@ export async function executePrivacyRequest(
       ...batchPayloads.rows.map((payload) => payload.body_ref),
       ...adServicesPayloads.rows.map((payload) => payload.response_ref),
       ...pendingAdServicesPayloads.rows.map((payload) => payload.token_ref),
+      ...pendingIntegrityPayloads.rows.map((payload) => payload.token_ref),
       ...googlePlayResultPayloads.rows.map((payload) => payload.evidence_ref),
       ...pendingGooglePlayPayloads.rows.map((payload) => payload.token_ref),
       ...googlePlayRtdnPayloads.rows.map((payload) => payload.evidence_ref),
@@ -521,6 +531,19 @@ export async function executePrivacyRequest(
     } else {
       await client.query(
         `DELETE FROM ephemeral.adservices_lookups
+         WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3)`,
+        [body.tenant_id, body.deletion_scope, body.app_id],
+      );
+    }
+    if (body.deletion_scope === "installation") {
+      await client.query(
+        `DELETE FROM ephemeral.integrity_verifications
+         WHERE tenant_id=$1 AND app_id=$2 AND subject_record_id=ANY($3::text[])`,
+        [body.tenant_id, body.app_id, records],
+      );
+    } else {
+      await client.query(
+        `DELETE FROM ephemeral.integrity_verifications
          WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3)`,
         [body.tenant_id, body.deletion_scope, body.app_id],
       );
