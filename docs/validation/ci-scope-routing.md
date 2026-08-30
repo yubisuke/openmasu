@@ -12,8 +12,8 @@ results:
 
 | Required job | Expected work |
 | --- | --- |
-| `validate (ubuntu-24.04)` | Full contract, documentation, and guardrail validation |
-| `validate (windows-2025)` | Full contract, documentation, and guardrail validation |
+| `validate (ubuntu-24.04)` | Full contract, documentation, threat-model coverage, and guardrail validation |
+| `validate (windows-2025)` | Full contract, documentation, threat-model coverage, and guardrail validation |
 | `runtime` | Successful no-op after changed-scope detection |
 | `android-jvm` | Successful no-op after changed-scope detection |
 | `android-emulator` | Successful no-op after changed-scope detection |
@@ -28,7 +28,8 @@ workflow at the candidate commit, never from a path-reduced pull request.
 
 1. Create a pull request containing only a Markdown change under `docs/`.
 2. Confirm that all six required jobs are present.
-3. Confirm that the two `validate` jobs run the full contract checks.
+3. Confirm that the two `validate` jobs run the full contract checks, including
+   the architecture-to-threat-model component coverage gate.
 4. Confirm that the remaining jobs report their named `No ...-sensitive
    changes` step and complete successfully without dependency installation,
    native builds, emulators, simulators, database migrations, or containers.
@@ -37,11 +38,13 @@ workflow at the candidate commit, never from a path-reduced pull request.
 This validation uses only repository-controlled synthetic inputs. It does not
 exercise credentials, real provider data, devices, or production services.
 
-## Recorded proof
+## Historical routing proof
 
 Pull request [#36](https://github.com/yubisuke/openmasu/pull/36), commit
 `af2487dce980693532ce822e5a28100fa909d5e6`, exercised the documentation-only
-case on 2026-08-27. All six required jobs were present and successful:
+case on 2026-08-27. All six required jobs were present and successful. This run
+predates the addition of `check:threat-model` to the root `validate` command, so
+it proves the job-routing behavior but is not evidence for that newer gate:
 
 | Required job | Result | Duration | Run |
 | --- | --- | --- | --- |
