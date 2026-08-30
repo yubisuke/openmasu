@@ -22,6 +22,7 @@ quota behavior, or production correctness.
 | App Store verified commerce | Signed notification verification and bounded transaction/refund history read-back | Synthetic JWS/certificate vectors, cursor/revision and correction tests | Live App Store keys, notifications, sandbox/production behavior, entitlement, tax, payout |
 | Google Data Manager conversion delivery | Explicitly enabled, bounded service-account delivery of eligible verified conversions | Synthetic authentication, request, retry, idempotency, and diagnostic tests | Provider access, acceptance, quota, diagnostics latency, production policy |
 | Provider-neutral event, cost, and aggregate-revenue imports | Closed mapping DSL, no-write compatibility preview, atomic append-only import | Mapping-schema tests, rejection/idempotency tests, cost-to-ROAS and revenue parity | Authorized export shape, permission, completeness, latency, source-dashboard reconciliation |
+| Provider-neutral server-to-server events | Dedicated app-scoped keys for selected first-party backend events; raw-body HMAC, replay controls, durable evaluation, and ordinary contract rejection | Synthetic key rotation, signing, scope/authority, projection, rejection, idempotency, and deletion-race tests | Production TLS, backend integration, sustained load, secret custody, and operator acceptance |
 
 ## Important separations
 
@@ -37,6 +38,7 @@ quota behavior, or production correctness.
 
 Implementation details and operator commands are in the
 [Import mapping DSL](../import-mappings.md),
+[Server-to-server events](../server-to-server-events.md),
 [Android SDK](../../sdk/android/README.md), [iOS SDK](../../sdk/ios/README.md),
 [Unity SDK](../../sdk/unity/README.md), and
 [validation checklists](../validation/README.md). Primary public sources and

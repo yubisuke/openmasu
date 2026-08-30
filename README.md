@@ -14,7 +14,8 @@ not claim parity with any commercial provider.
 
 OpenMasu provides one reproducible path from evidence to reports:
 
-1. SDKs, redirectors, platform callbacks, and importers submit evidence.
+1. SDKs, authenticated app backends, redirectors, platform callbacks, and
+   importers submit evidence.
 2. PostgreSQL stores received evidence and append-only derived artifacts.
 3. Versioned evaluators produce attribution, fraud, reconciliation, and metric
    results.
@@ -28,7 +29,8 @@ measurement links; Android Install Referrer; selected Apple and Meta evidence;
 manual and bounded provider cost inputs; advertising and verified-commerce
 revenue inputs; cohort metrics; difference auditing; deterministic fraud
 controls; direct deep links; Android deferred deep links; and an operator
-dashboard.
+dashboard. A provider-neutral server-to-server endpoint accepts selected
+first-party backend events through app-scoped, rotatable HMAC keys.
 
 ## What OpenMasu does not claim
 
@@ -98,6 +100,8 @@ campaigns, or provider data.
 For a persistent local development stack and operator commands, follow the
 [getting started guide](docs/getting-started.md). Do not run volume-reset or
 fixture-seed commands against a stack that contains data you need to keep.
+Backend event producers should begin with the
+[server-to-server event guide](docs/server-to-server-events.md).
 
 ## Validation
 

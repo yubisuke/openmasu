@@ -41,6 +41,7 @@ MMP.
 | --- | --- | --- |
 | Contract and deterministic evaluator | Implemented and synthetically verified across 28 schemas, 8 registries, 57 fixtures, and 741 goldens | Real input representativeness and external implementation adoption |
 | Shadow ledger and imports | Implemented for raw events, manual/bounded provider cost, and advertising or verified-commerce revenue | Authorized real export compatibility, account permissions, completeness, latency, and reconciliation |
+| Server-to-server events | Implemented for selected first-party backend events with app-scoped rotatable HMAC keys, durable inbox admission, contract rejection, replay controls, and deletion-race enforcement | Production TLS, secret custody, sustained load, backend integration, and operator acceptance |
 | Attribution and difference audit | Implemented for supported deterministic and aggregate evidence families | Same-cohort comparison with an existing MMP under frozen definitions |
 | Cohort metrics and exports | Implemented for versioned revenue, cost, FX, retention, ROAS, LTV, JSON, CSV, and dashboard output | Real currency/time-zone coverage, source-dashboard reconciliation, and operator acceptance |
 | Android, iOS, and Unity SDKs | Implemented with JVM, emulator, Swift, simulator, packaging, and bridge gates | Physical devices, Unity exports, store delivery, and live provider signals |
@@ -62,13 +63,15 @@ not score a provider, certify its product, or recommend migration.
 
 ## Current engineering focus
 
-The rc.4 release-coherence milestone is complete. Current repository work is
-integration maintenance rather than another broad provider claim:
+The rc.4 release-coherence milestone is complete. The first post-candidate
+capability gap, provider-neutral authenticated backend event submission, is
+implemented in the current source tree with synthetic evidence. Current work remains
+integration hardening rather than another broad provider claim:
 
 1. preserve the rc.4 notes, SDK identities, SBOMs, bundle paths, tag, and
    evidence manifest as one immutable release record;
-2. audit current failure-recovery and reconciliation paths before adding new
-   provider breadth;
+2. preserve the server-event key, replay, privacy, and durable-inbox invariants
+   while auditing other high-impact compatibility gaps;
 3. continue bounded concurrency and shared queue-vector hardening when existing
    runtime or SDK surfaces change;
 4. preserve the current synthetic/operator evidence distinction.

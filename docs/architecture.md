@@ -57,6 +57,17 @@ while redacted or purged records contribute only their immutable identity and
 payload digest for duplicate/conflict classification. Processed SDK batch bodies
 are never reopened by the routine drain.
 
+<!-- m1-component:server-event-ingestion -->
+**Server event ingestion.** Accepts selected first-party events from an app
+operator's backend through an app-scoped, immutable-producer server key. It
+binds the exact body, route, app, key, timestamp, and nonce with HMAC-SHA-256,
+then writes the normalized batch to the same durable inbox used by the contract
+evaluator. Tenant, app, producer, purpose, receipt time, and contract identity
+are server-assigned. Platform/provider authority claims and mixed-installation
+batches fail closed. Pending bodies carry only a deployment-private subject
+digest so deletion can purge them before projection without retaining a second
+plaintext subject index.
+
 <!-- m1-component:import-worker -->
 **Import worker.** Applies the mapping DSL, validates normalized payloads against
 the active event schemas, preserves row-level rejection, and writes each

@@ -98,6 +98,15 @@ installation credential fails with `withdrawal_projection_upgrade_required`.
 Operators must resolve that upgrade state before resuming ingestion; missing
 history is never treated as consent.
 
+Authenticated server-event batches either contain no installation anchor or
+contain exactly one installation across every record. A deployment-private
+HMAC digest of that anchor is attached to the pending batch. An installation
+deletion can therefore purge the encrypted pending body without exposing the
+identifier or deleting another subject's data. Admission rejects already
+deleted or withdrawn subjects, and the worker checks durable withdrawal state
+again before projection. Server occurrence time does not override a withdrawal
+recognized before server processing.
+
 For other historical events, the worker captures an explicit ledger position
 and reconstructs only the related accepted candidates. Available normalized
 facts may participate in attribution, fraud, or commerce decisions. Redacted or
@@ -145,6 +154,9 @@ repository does not claim that its example durations are universally lawful.
   do not authenticate with bearer headers.
 - SDK batches use key identity, an installation credential, HMAC-SHA256 over a
   canonical request string, timestamp bounds, and nonce replay protection.
+- Server-event batches use separate app-scoped server keys, immutable producer
+  scope, raw-body HMAC-SHA256, timestamp bounds, nonce replay protection, and
+  per-key plus per-app limits. A server key is never an admin or SDK key.
 - Platform callbacks use their documented signature or service authentication
   boundary before tenant resolution.
 - PostgreSQL uses forced tenant row-level security and separate app, reader,

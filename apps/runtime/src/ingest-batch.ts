@@ -12,6 +12,8 @@ export type DurableBatchInput = {
   receivedAt: string;
   sdkKeyId?: string;
   installationKeyId?: string;
+  serverKeyId?: string;
+  subjectDigest?: string;
   requestNonce?: string;
   requestTimestampMs?: number;
 };
@@ -47,18 +49,21 @@ export async function appendDurableBatch(
         event_count: input.eventCount,
         ...(input.sdkKeyId ? { sdk_key_id: input.sdkKeyId } : {}),
         ...(input.installationKeyId ? { installation_key_id: input.installationKeyId } : {}),
+        ...(input.serverKeyId ? { server_key_id: input.serverKeyId } : {}),
+        ...(input.subjectDigest ? { subject_digest: input.subjectDigest } : {}),
       };
       await client.query(
         `INSERT INTO ledger.ingest_batches (
           ingest_batch_id, tenant_id, app_id, producer, sdk_key_id,
-          installation_key_id, received_at, body_ref, body_digest, event_count,
-          request_nonce, request_timestamp_ms, artifact
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)`,
+          installation_key_id, server_key_id, subject_digest, received_at, body_ref,
+          body_digest, event_count, request_nonce, request_timestamp_ms, artifact
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)`,
         [
           ingestBatchId, input.tenantId, input.appId, input.producer,
           input.sdkKeyId ?? null, input.installationKeyId ?? null,
-          input.receivedAt, bodyRef, bodyDigest, input.eventCount,
-          input.requestNonce ?? null, input.requestTimestampMs ?? null,
+          input.serverKeyId ?? null, input.subjectDigest ?? null, input.receivedAt,
+          bodyRef, bodyDigest, input.eventCount, input.requestNonce ?? null,
+          input.requestTimestampMs ?? null,
           JSON.stringify(artifact),
         ],
       );

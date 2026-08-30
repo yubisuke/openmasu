@@ -43,6 +43,8 @@ const seedControlTruncate = new Set([
   "control.link_domains",
   "control.metric_replay_manifests",
   "control.public_postback_audits",
+  "control.server_keys",
+  "control.server_key_states",
   "control.rule_bundle_revisions",
   "control.worker_job_schedules",
 ]);

@@ -55,7 +55,7 @@
     "test:env-coverage": "node --import tsx apps/runtime/src/env-coverage.test.ts",
     "test": "node --import tsx --test \"apps/**/*.unit.test.ts\" \"packages/**/*.unit.test.ts\" \"tools/**/*.unit.test.ts\"",
     "test:integration": "node --env-file-if-exists=.env --import tsx --test --test-concurrency=1 \"apps/**/*.integration.test.ts\"",
-    "test:m2a": "node --env-file-if-exists=.env --import tsx --test --test-concurrency=1 apps/api/src/sdk-auth.unit.test.ts apps/api/src/m2a.integration.test.ts apps/worker/src/sdk-auxiliary-recovery.integration.test.ts apps/redirector/src/redirector.integration.test.ts packages/attribution-core/src/install-referrer-mapping.unit.test.ts packages/meta-install-referrer/src/meta-install-referrer.unit.test.ts packages/redirector-core/src/redirector-core.unit.test.ts",
+    "test:m2a": "node --env-file-if-exists=.env --import tsx --test --test-concurrency=1 apps/api/src/sdk-auth.unit.test.ts apps/api/src/server-auth.unit.test.ts apps/api/src/server-events.integration.test.ts apps/api/src/m2a.integration.test.ts apps/worker/src/sdk-auxiliary-recovery.integration.test.ts apps/redirector/src/redirector.integration.test.ts packages/attribution-core/src/install-referrer-mapping.unit.test.ts packages/meta-install-referrer/src/meta-install-referrer.unit.test.ts packages/redirector-core/src/redirector-core.unit.test.ts",
     "test:metric-parity": "node --env-file-if-exists=.env --import tsx --test apps/worker/src/metric-parity.metric.test.ts",
     "test:privacy-e2e": "node --env-file-if-exists=.env --import tsx --test --test-concurrency=1 apps/api/src/m2a.integration.test.ts apps/worker/src/privacy-reapply.integration.test.ts",
     "smoke:runtime": "node --import tsx tools/runtime-smoke.ts",

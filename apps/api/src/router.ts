@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import type { IncomingMessage, RequestListener, ServerResponse } from "node:http";
 import type { Pool } from "pg";
 import type { PayloadStore } from "@openmasu/runtime";
@@ -50,6 +50,8 @@ import { registerAppLinkIdentity, registerLinkDomain } from "./link-domains.js";
 import { receiveGooglePlayRtdn, type GooglePlayRtdnReceiverDependencies } from "./google-play-rtdn-receiver.js";
 import { configureGoogleDataManagerDestination } from "./google-data-manager-admin.js";
 import { issueSdkKey, listSdkKeys, retireSdkKey } from "./sdk-auth.js";
+import { issueServerKey, listServerKeys, retireServerKey } from "./server-auth.js";
+import { handleServerBatch, type ServerRouteDependencies } from "./server-routes.js";
 import {
   receiveAppleStoreNotification,
   type AppleStoreNotificationDependencies,
@@ -82,6 +84,7 @@ export type RequestHandlerDependencies = {
   readonly dashboardLoginBucket?: KeyedTokenBucket;
   readonly dashboardLoginGlobalBucket?: TokenBucket;
   readonly sdk?: SdkRouteDependencies;
+  readonly server?: ServerRouteDependencies;
   readonly trackingDestinationAllowlist?: readonly string[];
   readonly referrerMaximumEncodedCharacters?: number;
   readonly reportMaximumRows?: number;
@@ -212,6 +215,10 @@ function sdkKeyId(pathname: string): string | undefined {
   return decodedPathPart(pathname, /\/sdk-keys\/([^/]+)\/retire$/);
 }
 
+function serverKeyId(pathname: string): string | undefined {
+  return decodedPathPart(pathname, /\/server-keys\/([^/]+)\/retire$/);
+}
+
 function jsonFormValue(body: URLSearchParams, name: string): unknown {
   const value = body.get(name);
   if (value === null || value.trim() === "") throw new Error(`${name}_required`);
@@ -228,7 +235,7 @@ async function rejectDashboardCsrf(
   response: ServerResponse,
   session: DashboardSession,
   action: string,
-  targetScope: "tenant" | "app" | "session" | "tracking_link" | "sdk_key",
+  targetScope: "tenant" | "app" | "session" | "tracking_link" | "sdk_key" | "server_key",
   targetRef: string,
 ): Promise<void> {
   await recordDashboardAudit(dependencies.pool, {
@@ -310,6 +317,13 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
       }
       if (route.handler === "sdk_enrollment" && dependencies.sdk) return handleSdkEnrollment(request, response, dependencies.sdk);
       if (route.handler === "sdk_batch" && dependencies.sdk) return handleSdkBatch(request, response, dependencies.sdk);
+      if (route.handler === "server_batch") {
+        if (!dependencies.server) {
+          json(response, 503, { error: "server_ingest_unavailable" });
+          return;
+        }
+        return handleServerBatch(request, response, dependencies.server);
+      }
       if (route.handler === "device_privacy" && dependencies.sdk) return handleDevicePrivacy(request, response, dependencies.sdk);
       if (route.handler === "device_dsar" && dependencies.sdk) return handleDeviceDsar(request, response, dependencies.sdk);
 
@@ -435,7 +449,8 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
       if ([
         "dashboard_app", "dashboard_export", "dashboard_differences", "dashboard_fraud",
         "dashboard_tracking_links_list", "dashboard_tracking_links_create", "dashboard_tracking_link_transition",
-        "dashboard_sdk_keys_issue", "dashboard_sdk_keys_retire", "dashboard_link_domain",
+        "dashboard_sdk_keys_issue", "dashboard_sdk_keys_retire",
+        "dashboard_server_keys_issue", "dashboard_server_keys_retire", "dashboard_link_domain",
         "dashboard_app_link_identity", "dashboard_apple_registration", "dashboard_conversion_schema",
         "dashboard_rule_bundle", "dashboard_google_data_manager", "dashboard_apps_create",
       ].includes(route.handler)) {
@@ -564,6 +579,47 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             }
             return;
           }
+          if (route.handler === "dashboard_server_keys_issue" || route.handler === "dashboard_server_keys_retire") {
+            const body = await formBody(request);
+            const targetKeyId = serverKeyId(target.pathname);
+            if (!csrfOriginAccepted(request, dependencies.dashboard.publicBaseUrl)
+              || !verifyCsrfToken(session.token, body.get("csrf_token") ?? undefined)) {
+              await rejectDashboardCsrf(dependencies, response, session, "dashboard_server_key_mutation", "server_key", targetKeyId ?? "server_key:new");
+              return;
+            }
+            try {
+              if (route.handler === "dashboard_server_keys_issue") {
+                const issued = await issueServerKey({
+                  pool: dependencies.pool,
+                  payloadStore: dependencies.payloadStore,
+                  scope: appIdentity,
+                  producer: body.get("producer") ?? undefined,
+                  actorRef: `admin_key:${session.adminKeyId}`,
+                });
+                dashboardHtml(response, 201, `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Server key issued</title><link rel="stylesheet" href="/dashboard/app.css"></head><body><main><h1>Server key issued</h1><p>Copy this secret now. It cannot be retrieved again.</p><dl><dt>Server key ID</dt><dd>${escapeHtml(issued.server_key_id)}</dd><dt>Server key</dt><dd><code>${escapeHtml(issued.server_key)}</code></dd><dt>Producer</dt><dd>${escapeHtml(issued.producer)}</dd></dl><p><a href="/dashboard/apps/${encodeURIComponent(appIdentity.appId)}">Return to the app dashboard</a></p></main></body></html>`);
+              } else {
+                if (!targetKeyId) throw new Error("server_key_not_found");
+                await retireServerKey({
+                  pool: dependencies.pool,
+                  payloadStore: dependencies.payloadStore,
+                  scope: appIdentity,
+                  serverKeyId: targetKeyId,
+                  actorRef: `admin_key:${session.adminKeyId}`,
+                });
+                response.writeHead(303, { ...dashboardHeaders, location: `/dashboard/apps/${encodeURIComponent(appIdentity.appId)}` }).end();
+              }
+            } catch (error) {
+              const reason = publicReason(error, "server_key_lifecycle_failed");
+              await recordDashboardAudit(dependencies.pool, {
+                tenantId: appIdentity.tenantId, appId: appIdentity.appId,
+                actorRef: `admin_key:${session.adminKeyId}`, action: "server_key_lifecycle",
+                targetScope: "server_key", targetRef: targetKeyId ?? "server_key:new",
+                outcome: "failed", reasonCode: reason,
+              });
+              dashboardHtml(response, reason === "server_key_not_found" ? 404 : 409, `<!doctype html><html lang="en"><body><h1>Server key operation failed</h1><p>${escapeHtml(reason)}</p></body></html>`);
+            }
+            return;
+          }
           if (["dashboard_app_link_identity", "dashboard_apple_registration", "dashboard_conversion_schema", "dashboard_rule_bundle", "dashboard_google_data_manager"].includes(route.handler)) {
             const body = await formBody(request);
             if (!csrfOriginAccepted(request, dependencies.dashboard.publicBaseUrl)
@@ -684,6 +740,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
           const trackingLinks = (await listTrackingLinks(dependencies.readerPool, appIdentity.tenantId, appIdentity.appId))
             .map((link) => listedTrackingLink(dependencies.redirectorBaseUrl, link));
           const sdkKeys = await listSdkKeys(dependencies.readerPool, appIdentity);
+          const serverKeys = await listServerKeys(dependencies.readerPool, appIdentity);
           const metrics = await metricReport(dependencies.readerPool, appIdentity, parsed.query);
           const effectiveWatermark = parsed.query.watermarkAtMost
             ?? metrics.data.map((row) => row.input_received_at_watermark).sort().at(-1);
@@ -703,6 +760,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             differences: storedDifferences,
             trackingLinks,
             sdkKeys,
+            serverKeys,
             canOperate: roleAllows(session.role, "operate"),
             canAdminister: roleAllows(session.role, "administer"),
             csrfToken: csrfToken(session.token),
@@ -815,6 +873,50 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
                 tenantId: identity.tenantId, appId,
                 actorRef: `admin_key:${identity.keyId}`, action: "sdk_key_lifecycle",
                 targetScope: "sdk_key", targetRef: sdkKeyId(target.pathname) ?? "sdk_key:new",
+                outcome: "failed", reasonCode: reason,
+              });
+              json(response, 409, { error: reason });
+            }
+          }
+          return;
+        }
+        if (route.handler === "admin_server_keys_list" || route.handler === "admin_server_keys_issue" || route.handler === "admin_server_keys_retire") {
+          const appId = adminAppId(target.pathname) ?? "";
+          try {
+            const appIdentity = await requireRegisteredApp(pool, identity, appId);
+            if (route.handler === "admin_server_keys_list") {
+              json(response, 200, { data: await listServerKeys(pool, appIdentity) });
+              return;
+            }
+            if (route.handler === "admin_server_keys_issue") {
+              const body = await jsonBody(request);
+              json(response, 201, await issueServerKey({
+                pool: dependencies.pool,
+                payloadStore: dependencies.payloadStore,
+                scope: appIdentity,
+                producer: body.producer === undefined ? undefined : String(body.producer),
+                actorRef: `admin_key:${identity.keyId}`,
+              }));
+              return;
+            }
+            const targetKeyId = serverKeyId(target.pathname);
+            if (!targetKeyId) throw new Error("server_key_not_found");
+            json(response, 200, await retireServerKey({
+              pool: dependencies.pool,
+              payloadStore: dependencies.payloadStore,
+              scope: appIdentity,
+              serverKeyId: targetKeyId,
+              actorRef: `admin_key:${identity.keyId}`,
+            }));
+          } catch (error) {
+            if (error instanceof AppNotFoundError || (error instanceof Error && error.message === "server_key_not_found")) {
+              json(response, 404, { error: "not_found" });
+            } else {
+              const reason = publicReason(error, "server_key_lifecycle_failed");
+              await recordDashboardAudit(dependencies.pool, {
+                tenantId: identity.tenantId, appId,
+                actorRef: `admin_key:${identity.keyId}`, action: "server_key_lifecycle",
+                targetScope: "server_key", targetRef: serverKeyId(target.pathname) ?? "server_key:new",
                 outcome: "failed", reasonCode: reason,
               });
               json(response, 409, { error: reason });
@@ -1012,7 +1114,17 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
           try {
             const body = await jsonBody(request) as PrivacyRequestBody;
             const appIdentity = await requireRegisteredApp(dependencies.pool, identity, String(body.app_id ?? ""));
-            const result = await executePrivacyRequest(dependencies.pool, appIdentity, body, dependencies.payloadStore);
+            const deletionSubjectDigest = body.deletion_scope === "installation" && dependencies.server
+              ? createHmac("sha256", dependencies.server.installationDigestKey)
+                  .update(`${appIdentity.tenantId}\u0000${appIdentity.appId}\u0000${body.deletion_subject_ref}`, "utf8")
+                  .digest("hex")
+              : undefined;
+            const result = await executePrivacyRequest(
+              dependencies.pool,
+              { ...appIdentity, ...(deletionSubjectDigest ? { deletionSubjectDigest } : {}) },
+              body,
+              dependencies.payloadStore,
+            );
             json(response, 201, result);
           } catch (error) {
             const status = Number((error as { statusCode?: number }).statusCode ?? (error instanceof SyntaxError ? 400 : 500));

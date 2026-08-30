@@ -35,6 +35,14 @@ export type DashboardSdkKey = {
   readonly status_changed_at: string;
 };
 
+export type DashboardServerKey = {
+  readonly server_key_id: string;
+  readonly producer: string;
+  readonly status: "active" | "retired";
+  readonly created_at: string;
+  readonly status_changed_at: string;
+};
+
 export type DashboardView = {
   readonly apps: readonly DashboardApp[];
   readonly selectedAppId?: string;
@@ -50,6 +58,7 @@ export type DashboardView = {
   readonly appleAggregateCharts: readonly DashboardChart[];
   readonly trackingLinks: readonly DashboardTrackingLink[];
   readonly sdkKeys: readonly DashboardSdkKey[];
+  readonly serverKeys: readonly DashboardServerKey[];
   readonly fraudRows: readonly FraudAuditRow[];
   readonly csrfToken: string;
   readonly canOperate: boolean;
@@ -85,6 +94,7 @@ export function buildDashboardView(input: {
   readonly differences?: DifferenceAuditPage;
   readonly trackingLinks?: readonly DashboardTrackingLink[];
   readonly sdkKeys?: readonly DashboardSdkKey[];
+  readonly serverKeys?: readonly DashboardServerKey[];
   readonly fraudRows?: readonly FraudAuditRow[];
   readonly csrfToken: string;
   readonly canOperate?: boolean;
@@ -125,6 +135,9 @@ export function buildDashboardView(input: {
     sdkKeys: [...(input.sdkKeys ?? [])].sort((left, right) =>
       right.created_at.localeCompare(left.created_at, "en")
       || left.sdk_key_id.localeCompare(right.sdk_key_id, "en")),
+    serverKeys: [...(input.serverKeys ?? [])].sort((left, right) =>
+      right.created_at.localeCompare(left.created_at, "en")
+      || left.server_key_id.localeCompare(right.server_key_id, "en")),
     fraudRows: [...(input.fraudRows ?? [])],
     csrfToken: input.csrfToken,
     canOperate: input.canOperate ?? false,
