@@ -168,8 +168,14 @@ through `raw_records_current`.
   removes their pending work first or snapshots and purges the committed
   protected response and derived projection. Google Play also rechecks the
   current claim and source while starting each provider read, so a completed
-  deletion cannot be followed by another local order request. Commerce read-back retains
-  separate durable-claim and deletion-race hardening work.
+  deletion cannot be followed by another local order request. Commerce
+  read-back now uses the same tenant barrier with a queue-specific lease and
+  token-fenced transaction: deletion either removes the pending row first or
+  waits for its lifecycle/refund/cursor completion and then purges the protected
+  references captured by the deletion snapshot. App Store installation scope is
+  available only when an explicit purchase binding already exists; the current
+  notification path does not create that binding, so unbound notifications
+  require an app- or tenant-scoped request.
 - An app- or tenant-scoped request deletes the data included in its durable
   recognition snapshot; it is not an app suspension or tenant deactivation.
   Later lawful processing is a new event with its own purpose and legal-basis

@@ -1,5 +1,11 @@
-import type { Pool } from "pg";
-import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
+import { randomUUID } from "node:crypto";
+import type { Pool, PoolClient } from "pg";
+import {
+  acquirePrivacyTenantXactFence,
+  uuidV7,
+  withTenant,
+  type PayloadStore,
+} from "@openmasu/runtime";
 import {
   decodeCompactJwsPayloadUnverified,
   normalizeAppleNotification,
@@ -24,7 +30,11 @@ type ReadbackRow = {
   evidence_ref: string;
   cursor_ref: string | null;
   attempts: number;
+  claim_token: string | null;
+  claimed_until: Date | string | null;
 };
+
+const DEFAULT_COMMERCE_READBACK_CLAIM_LEASE_MS = 5 * 60 * 1_000;
 
 export type CommerceReadbackResponse = { readonly status: number; readonly body: Buffer };
 export type GoogleCommerceReadbackClient = (input: {
@@ -108,7 +118,7 @@ function string(value: unknown, label: string, maximum = 64 * 1024): string {
   return value;
 }
 
-async function appendLifecycleFact(pool: Pool, row: ReadbackRow, input: {
+type LifecycleInput = {
   readonly eventKind: string;
   readonly providerEventDigest?: string;
   readonly transactionDigest?: string;
@@ -118,7 +128,9 @@ async function appendLifecycleFact(pool: Pool, row: ReadbackRow, input: {
   readonly environment?: "Sandbox" | "Production";
   readonly effectiveAt: string;
   readonly now: Date;
-}): Promise<void> {
+};
+
+async function appendLifecycleFact(client: PoolClient, row: ReadbackRow, input: LifecycleInput): Promise<void> {
   const artifact = {
     lifecycle_fact_id: uuidV7(input.now.getTime()), tenant_id: row.tenant_id, app_id: row.app_id,
     provider: row.provider, event_kind: input.eventKind, transaction_digest: input.transactionDigest,
@@ -127,7 +139,7 @@ async function appendLifecycleFact(pool: Pool, row: ReadbackRow, input: {
     financial_effect: input.financialEffect, environment: input.environment,
     effective_at: input.effectiveAt, recorded_at: input.now.toISOString(),
   };
-  await withTenant(pool, row.tenant_id, async (client) => client.query(
+  await client.query(
     `INSERT INTO ledger.commerce_lifecycle_facts (
        lifecycle_fact_id, provider, tenant_id, app_id, notification_digest, provider_event_digest, event_kind,
        subject_digest, transaction_digest, original_transaction_digest, subscription_state,
@@ -139,11 +151,11 @@ async function appendLifecycleFact(pool: Pool, row: ReadbackRow, input: {
       input.transactionDigest ?? null, input.originalTransactionDigest ?? null,
       input.subscriptionState ?? null, input.financialEffect, input.environment ?? null,
       input.effectiveAt, input.now.toISOString(), JSON.stringify(artifact)],
-  ));
+  );
 }
 
-async function recordReadbackFailure(pool: Pool, row: ReadbackRow, now: Date): Promise<void> {
-  await appendLifecycleFact(pool, row, {
+async function recordReadbackFailure(client: PoolClient, row: ReadbackRow, now: Date): Promise<void> {
+  await appendLifecycleFact(client, row, {
     eventKind: "readback_failed",
     providerEventDigest: sha256(`${row.notification_digest}\0${row.operation}\0failed`),
     subscriptionState: "unavailable",
@@ -153,45 +165,152 @@ async function recordReadbackFailure(pool: Pool, row: ReadbackRow, now: Date): P
   });
 }
 
-async function defer(pool: Pool, row: ReadbackRow, now: Date, status?: number): Promise<void> {
-  const delaySeconds = Math.min(3600, 30 * (2 ** Math.min(row.attempts, 7)));
-  await withTenant(pool, row.tenant_id, async (client) => client.query(
-    `UPDATE ephemeral.commerce_provider_readbacks
-        SET attempts=attempts+1, next_attempt_at=$4::timestamptz + ($5 || ' seconds')::interval, last_status=$6
-      WHERE tenant_id=$1 AND app_id=$2 AND readback_id=$3`,
-    [row.tenant_id, row.app_id, row.readback_id, now.toISOString(), String(delaySeconds), status ?? null],
+async function claimCommerceReadback(
+  pool: Pool,
+  tenantId: string,
+  now: Date,
+  claimToken: string,
+  leaseMs: number,
+  excludedReadbackIds: readonly string[],
+): Promise<ReadbackRow | undefined> {
+  const claimed = await withTenant(pool, tenantId, (client) => client.query<ReadbackRow>(
+    `WITH due AS (
+       SELECT readback_id
+         FROM ephemeral.commerce_provider_readbacks
+        WHERE tenant_id=$1 AND next_attempt_at <= $2
+          AND (claimed_until IS NULL OR claimed_until <= clock_timestamp())
+          AND NOT (readback_id = ANY($5::uuid[]))
+        ORDER BY next_attempt_at,readback_id
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+     )
+     UPDATE ephemeral.commerce_provider_readbacks AS readback
+        SET claim_token=$3::uuid,
+            claimed_until=clock_timestamp() + ($4::integer * interval '1 millisecond')
+       FROM due,
+            control.commerce_provider_notifications AS notification
+      WHERE readback.tenant_id=$1 AND readback.readback_id=due.readback_id
+        AND notification.provider=readback.provider
+        AND notification.notification_digest=readback.notification_digest
+     RETURNING readback.readback_id::text,readback.provider,readback.tenant_id,readback.app_id,
+       readback.notification_digest,readback.operation,notification.evidence_ref,
+       readback.cursor_ref,readback.attempts,readback.claim_token::text,readback.claimed_until`,
+    [tenantId, now.toISOString(), claimToken, leaseMs, excludedReadbackIds],
   ));
+  return claimed.rows[0];
 }
 
-async function retryOrFail(pool: Pool, row: ReadbackRow, now: Date, status?: number): Promise<"deferred" | "failed"> {
+async function lockCurrentClaim(client: PoolClient, row: ReadbackRow): Promise<boolean> {
+  if (!row.claim_token || !row.claimed_until) throw new Error("commerce_readback_claim_missing");
+  const current = await client.query(
+    `SELECT 1
+       FROM ephemeral.commerce_provider_readbacks AS readback
+      WHERE readback.tenant_id=$1 AND readback.app_id=$2
+        AND readback.readback_id=$3::uuid
+        AND readback.claim_token=$4::uuid
+        AND readback.claimed_until > clock_timestamp()
+      FOR UPDATE OF readback`,
+    [row.tenant_id, row.app_id, row.readback_id, row.claim_token],
+  );
+  return current.rowCount === 1;
+}
+
+async function withCurrentClaim<T>(
+  pool: Pool,
+  row: ReadbackRow,
+  operation: (client: PoolClient) => Promise<T>,
+): Promise<T | undefined> {
+  return withTenant(pool, row.tenant_id, async (client) => {
+    await acquirePrivacyTenantXactFence(client, row.tenant_id, "shared");
+    if (!await lockCurrentClaim(client, row)) return undefined;
+    return operation(client);
+  });
+}
+
+async function beginProviderRequest<T>(
+  pool: Pool,
+  row: ReadbackRow,
+  operation: () => Promise<T>,
+): Promise<{ readonly response: Promise<T> } | undefined> {
+  return withTenant(pool, row.tenant_id, async (client) => {
+    await acquirePrivacyTenantXactFence(client, row.tenant_id, "shared");
+    if (!await lockCurrentClaim(client, row)) return undefined;
+    const response = operation();
+    void response.catch(() => undefined);
+    return { response };
+  });
+}
+
+async function defer(pool: Pool, row: ReadbackRow, now: Date, status?: number): Promise<boolean> {
+  if (!row.claim_token || !row.claimed_until) throw new Error("commerce_readback_claim_missing");
+  const delaySeconds = Math.min(3600, 30 * (2 ** Math.min(row.attempts, 7)));
+  return withTenant(pool, row.tenant_id, async (client) => (await client.query(
+    `UPDATE ephemeral.commerce_provider_readbacks
+        SET attempts=attempts+1,
+            next_attempt_at=$4::timestamptz + ($5 || ' seconds')::interval,
+            last_status=$6,
+            claim_token=NULL,
+            claimed_until=NULL
+      WHERE tenant_id=$1 AND app_id=$2 AND readback_id=$3::uuid
+        AND claim_token=$7::uuid AND claimed_until > clock_timestamp()`,
+    [row.tenant_id, row.app_id, row.readback_id, now.toISOString(), String(delaySeconds),
+      status ?? null, row.claim_token],
+  )).rowCount === 1);
+}
+
+async function retryOrFail(
+  pool: Pool,
+  payloadStore: PayloadStore,
+  row: ReadbackRow,
+  now: Date,
+  status?: number,
+): Promise<"deferred" | "failed" | undefined> {
   if (row.attempts < 19) {
-    await defer(pool, row, now, status);
-    return "deferred";
+    return await defer(pool, row, now, status) ? "deferred" : undefined;
   }
-  await recordReadbackFailure(pool, row, now);
-  await finish(pool, row, false, now);
-  return "failed";
+  const completed = await withCurrentClaim(pool, row, async (client) => {
+    if (row.cursor_ref) await payloadStore.purge(row.cursor_ref);
+    await recordReadbackFailure(client, row, now);
+    await finish(client, row, false, now);
+    return true;
+  });
+  return completed ? "failed" : undefined;
+}
+
+async function failReadback(
+  pool: Pool,
+  payloadStore: PayloadStore,
+  row: ReadbackRow,
+  now: Date,
+): Promise<boolean> {
+  return (await withCurrentClaim(pool, row, async (client) => {
+    if (row.cursor_ref) await payloadStore.purge(row.cursor_ref);
+    await recordReadbackFailure(client, row, now);
+    await finish(client, row, false, now);
+    return true;
+  })) === true;
 }
 
 function checkpointStream(row: ReadbackRow): string {
   return `${row.operation}:${row.notification_digest.slice(0, 32)}`;
 }
 
-async function finish(pool: Pool, row: ReadbackRow, completed: boolean, now: Date): Promise<void> {
-  await withTenant(pool, row.tenant_id, async (client) => {
-    if (completed) {
-      await client.query(
-        `UPDATE control.commerce_backfill_checkpoints
-            SET completed=true, cursor_ref=NULL, updated_at=$5
-          WHERE provider=$1 AND tenant_id=$2 AND app_id=$3 AND stream=$4`,
-        [row.provider, row.tenant_id, row.app_id, checkpointStream(row), now.toISOString()],
-      );
-    }
+async function finish(client: PoolClient, row: ReadbackRow, completed: boolean, now: Date): Promise<void> {
+  if (!row.claim_token || !row.claimed_until) throw new Error("commerce_readback_claim_missing");
+  if (completed) {
     await client.query(
-      "DELETE FROM ephemeral.commerce_provider_readbacks WHERE tenant_id=$1 AND app_id=$2 AND readback_id=$3",
-      [row.tenant_id, row.app_id, row.readback_id],
+      `UPDATE control.commerce_backfill_checkpoints
+          SET completed=true, cursor_ref=NULL, updated_at=$5
+        WHERE provider=$1 AND tenant_id=$2 AND app_id=$3 AND stream=$4`,
+      [row.provider, row.tenant_id, row.app_id, checkpointStream(row), now.toISOString()],
     );
-  });
+  }
+  const removed = await client.query(
+    `DELETE FROM ephemeral.commerce_provider_readbacks
+      WHERE tenant_id=$1 AND app_id=$2 AND readback_id=$3::uuid AND claim_token=$4::uuid`,
+    [row.tenant_id, row.app_id, row.readback_id, row.claim_token],
+  );
+  if (removed.rowCount !== 1) throw new Error("commerce_readback_claim_lost_during_completion");
 }
 
 export async function processCommerceReadbacks(
@@ -204,76 +323,112 @@ export async function processCommerceReadbacks(
     readonly verifyAppleSignedData?: AppleSignedDataVerifier;
     readonly now?: Date;
     readonly limit?: number;
+    readonly claimLeaseMs?: number;
+    readonly claimToken?: () => string;
   },
 ): Promise<{ processed: number; deferred: number; failed: number }> {
   const now = options.now ?? new Date();
-  const rows = await withTenant(pool, tenantId, async (client) => (await client.query<ReadbackRow>(
-    `SELECT readback.readback_id::text, readback.provider, readback.tenant_id, readback.app_id,
-            readback.notification_digest, readback.operation, notification.evidence_ref,
-            readback.cursor_ref, readback.attempts
-       FROM ephemeral.commerce_provider_readbacks AS readback
-       JOIN control.commerce_provider_notifications AS notification
-         ON notification.provider=readback.provider AND notification.notification_digest=readback.notification_digest
-      WHERE readback.tenant_id=$1 AND readback.next_attempt_at <= $2
-      ORDER BY readback.next_attempt_at, readback.readback_id LIMIT $3`,
-    [tenantId, now.toISOString(), options.limit ?? 25],
-  )).rows);
+  const limit = options.limit ?? 25;
+  const claimLeaseMs = options.claimLeaseMs ?? DEFAULT_COMMERCE_READBACK_CLAIM_LEASE_MS;
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error("commerce_readback_limit_invalid");
+  if (!Number.isSafeInteger(claimLeaseMs) || claimLeaseMs < 1_000 || claimLeaseMs > 900_000) {
+    throw new Error("commerce_readback_claim_lease_invalid");
+  }
   const counts = { processed: 0, deferred: 0, failed: 0 };
-  for (const row of rows) {
+  const claimedReadbackIds: string[] = [];
+  const record = (outcome: keyof typeof counts | undefined): void => {
+    if (outcome) counts[outcome] += 1;
+  };
+  for (let processed = 0; processed < limit; processed += 1) {
+    const row = await claimCommerceReadback(
+      pool,
+      tenantId,
+      now,
+      (options.claimToken ?? randomUUID)(),
+      claimLeaseMs,
+      claimedReadbackIds,
+    );
+    if (!row) break;
+    claimedReadbackIds.push(row.readback_id);
     try {
       const raw = await payloadStore.read(row.evidence_ref);
       if (row.provider === "google_play") {
-        if (!options.googleClient) { counts[await retryOrFail(pool, row, now)] += 1; continue; }
+        if (!options.googleClient) { record(await retryOrFail(pool, payloadStore, row, now)); continue; }
         const notification = parse(raw, "google_notification");
         const packageName = string(notification.packageName, "google_package", 255);
         if (row.operation === "google_subscription") {
           const subscription = object(notification.subscriptionNotification, "google_subscription");
           const purchaseToken = string(subscription.purchaseToken, "google_purchase_token");
-          const response = await options.googleClient({ operation: "subscription", packageName, purchaseToken });
+          const started = await beginProviderRequest(pool, row, () => options.googleClient!({
+            operation: "subscription", packageName, purchaseToken,
+          }));
+          if (!started) continue;
+          const response = await started.response;
           if (response.status === 429 || response.status >= 500) {
-            counts[await retryOrFail(pool, row, now, response.status)] += 1; continue;
+            record(await retryOrFail(pool, payloadStore, row, now, response.status)); continue;
           }
           if (response.status !== 200) {
-            await recordReadbackFailure(pool, row, now); await finish(pool, row, false, now); counts.failed += 1; continue;
+            if (await failReadback(pool, payloadStore, row, now)) counts.failed += 1;
+            continue;
           }
           const state = string(parse(response.body, "google_subscription_response").subscriptionState, "google_subscription_state", 128);
-          await appendLifecycleFact(pool, row, {
-            eventKind: "subscription_state_verified", subscriptionState: state.toLowerCase(), financialEffect: "none",
-            providerEventDigest: sha256(`${row.notification_digest}\0${state.toLowerCase()}`),
-            effectiveAt: now.toISOString(), now,
+          const committed = await withCurrentClaim(pool, row, async (client) => {
+            await appendLifecycleFact(client, row, {
+              eventKind: "subscription_state_verified", subscriptionState: state.toLowerCase(), financialEffect: "none",
+              providerEventDigest: sha256(`${row.notification_digest}\0${state.toLowerCase()}`),
+              effectiveAt: now.toISOString(), now,
+            });
+            await finish(client, row, true, now);
+            return true;
           });
-          await finish(pool, row, true, now); counts.processed += 1; continue;
+          if (committed) counts.processed += 1;
+          continue;
         }
         const voided = object(notification.voidedPurchaseNotification, "google_voided_purchase");
         const orderId = string(voided.orderId, "google_order_id", 255);
-        const response = await options.googleClient({ operation: "order", packageName, orderId });
+        const started = await beginProviderRequest(pool, row, () => options.googleClient!({
+          operation: "order", packageName, orderId,
+        }));
+        if (!started) continue;
+        const response = await started.response;
         if (response.status === 429 || response.status >= 500) {
-          counts[await retryOrFail(pool, row, now, response.status)] += 1; continue;
+          record(await retryOrFail(pool, payloadStore, row, now, response.status)); continue;
         }
         if (response.status !== 200) {
-          await recordReadbackFailure(pool, row, now); await finish(pool, row, false, now); counts.failed += 1; continue;
+          if (await failReadback(pool, payloadStore, row, now)) counts.failed += 1;
+          continue;
         }
         const orderDigest = sha256(orderId);
         const refundEvents = normalizeGoogleOrderRefunds(response.body, orderDigest);
-        let allPersisted = refundEvents.length > 0;
-        let invalidRefund = false;
-        for (const event of refundEvents) {
-          const persisted = await appendVerifiedGoogleRefundForOrder(pool, row, orderDigest, event, now);
-          if (persisted === "invalid") { invalidRefund = true; allPersisted = false; break; }
-          allPersisted &&= persisted === "persisted";
-          if (persisted === "persisted") await appendLifecycleFact(pool, row, {
-            eventKind: "refund_verified", providerEventDigest: event.eventDigest,
-            transactionDigest: orderDigest, financialEffect: "refund",
-            effectiveAt: event.eventTime, now,
-          });
-        }
-        if (invalidRefund) {
-          await recordReadbackFailure(pool, row, now); await finish(pool, row, false, now); counts.failed += 1; continue;
-        }
-        if (!allPersisted) { counts[await retryOrFail(pool, row, now)] += 1; continue; }
-        await finish(pool, row, true, now); counts.processed += 1; continue;
+        const outcome = refundEvents.length === 0 ? "missing" : await withCurrentClaim(pool, row, async (client) => {
+          const persisted = await appendVerifiedGoogleRefundForOrder(
+            pool, client, row, orderDigest, refundEvents, now,
+          );
+          if (persisted === "invalid") {
+            await recordReadbackFailure(client, row, now);
+            await finish(client, row, false, now);
+            return "failed" as const;
+          }
+          if (persisted === "missing") return "missing" as const;
+          for (const event of refundEvents) {
+            await appendLifecycleFact(client, row, {
+              eventKind: "refund_verified", providerEventDigest: event.eventDigest,
+              transactionDigest: orderDigest, financialEffect: "refund",
+              effectiveAt: event.eventTime, now,
+            });
+          }
+          await finish(client, row, true, now);
+          return "processed" as const;
+        });
+        if (outcome === "failed") counts.failed += 1;
+        else if (outcome === "processed") counts.processed += 1;
+        else if (outcome === "missing") record(await retryOrFail(pool, payloadStore, row, now));
+        continue;
       }
-      if (!options.appleClient || !options.verifyAppleSignedData) { counts[await retryOrFail(pool, row, now)] += 1; continue; }
+      if (!options.appleClient || !options.verifyAppleSignedData) {
+        record(await retryOrFail(pool, payloadStore, row, now));
+        continue;
+      }
       const envelope = parse(raw, "apple_envelope");
       const compact = string(envelope.signedPayload, "apple_signed_payload");
       const untrusted = decodeCompactJwsPayloadUnverified(compact);
@@ -295,19 +450,23 @@ export async function processCommerceReadbacks(
         const cursor = parse(await payloadStore.read(row.cursor_ref), "apple_cursor");
         revision = string(cursor.revision, "apple_revision", 4096);
       }
-      const response = await options.appleClient({
-        operation: row.operation === "apple_refund_history" ? "refund_history" : "transaction_history",
-        transactionId, ...(revision ? { revision } : {}), bundleId,
-        ...(appAppleId === undefined ? {} : { appAppleId }), environment,
-      });
+      const started = await beginProviderRequest(pool, row, () => options.appleClient!({
+          operation: row.operation === "apple_refund_history" ? "refund_history" : "transaction_history",
+          transactionId, ...(revision ? { revision } : {}), bundleId,
+          ...(appAppleId === undefined ? {} : { appAppleId }), environment,
+        }));
+      if (!started) continue;
+      const response = await started.response;
       if (response.status === 429 || response.status >= 500) {
-        counts[await retryOrFail(pool, row, now, response.status)] += 1; continue;
+        record(await retryOrFail(pool, payloadStore, row, now, response.status)); continue;
       }
       if (response.status !== 200) {
-        await recordReadbackFailure(pool, row, now); await finish(pool, row, false, now); counts.failed += 1; continue;
+        if (await failReadback(pool, payloadStore, row, now)) counts.failed += 1;
+        continue;
       }
       const page = parse(response.body, "apple_history");
       if (!Array.isArray(page.signedTransactions)) throw new Error("apple_history_transactions_invalid");
+      const lifecycle: LifecycleInput[] = [];
       for (const signed of page.signedTransactions) {
         const transaction = options.verifyAppleSignedData(string(signed, "apple_signed_transaction"));
         if (transaction.bundleId !== bundleId || transaction.environment !== environment) throw new Error("apple_history_scope_mismatch");
@@ -317,7 +476,7 @@ export async function processCommerceReadbacks(
         const financialEffect = normalized.event.financialEffect === "refund_reversal"
           ? "refund_reversal" as const
           : revoked ? "refund" as const : "purchase" as const;
-        await appendLifecycleFact(pool, row, {
+        lifecycle.push({
           eventKind: financialEffect === "refund_reversal" ? "refund_reversal_verified"
             : revoked ? "refund_history_verified" : "transaction_history_verified",
           providerEventDigest: transactionDigest,
@@ -328,42 +487,72 @@ export async function processCommerceReadbacks(
       }
       if (page.hasMore === true) {
         const nextRevision = string(page.revision, "apple_revision", 4096);
-        const nextRef = await payloadStore.write(
-          { tenantId: row.tenant_id, appId: row.app_id, objectId: `apple-commerce-cursor-${row.readback_id}-${row.attempts}` },
-          Buffer.from(JSON.stringify({ revision: nextRevision }), "utf8"),
-        );
-        await withTenant(pool, row.tenant_id, async (client) => client.query(
-          `WITH updated_readback AS (
-             UPDATE ephemeral.commerce_provider_readbacks SET cursor_ref=$4, attempts=0, next_attempt_at=$5, last_status=200
-              WHERE tenant_id=$1 AND app_id=$2 AND readback_id=$3 RETURNING 1
-           )
-           UPDATE control.commerce_backfill_checkpoints
-              SET cursor_ref=$4, updated_at=$5
-            WHERE provider=$6 AND tenant_id=$1 AND app_id=$2 AND stream=$7`,
-          [row.tenant_id, row.app_id, row.readback_id, nextRef, now.toISOString(), row.provider, checkpointStream(row)],
-        ));
-        if (row.cursor_ref) await payloadStore.purge(row.cursor_ref);
+        let nextRef: string | undefined;
+        try {
+          const committed = await withCurrentClaim(pool, row, async (client) => {
+            nextRef = await payloadStore.write(
+              { tenantId: row.tenant_id, appId: row.app_id, objectId: `apple-commerce-cursor-${row.readback_id}-${row.attempts}` },
+              Buffer.from(JSON.stringify({ revision: nextRevision }), "utf8"),
+            );
+            for (const fact of lifecycle) await appendLifecycleFact(client, row, fact);
+            const updated = await client.query(
+              `UPDATE ephemeral.commerce_provider_readbacks
+                  SET cursor_ref=$4,attempts=0,next_attempt_at=$5,last_status=200,
+                      claim_token=NULL,claimed_until=NULL
+                WHERE tenant_id=$1 AND app_id=$2 AND readback_id=$3::uuid AND claim_token=$6::uuid`,
+              [row.tenant_id, row.app_id, row.readback_id, nextRef, now.toISOString(), row.claim_token],
+            );
+            if (updated.rowCount !== 1) throw new Error("commerce_readback_claim_lost_during_checkpoint");
+            await client.query(
+              `UPDATE control.commerce_backfill_checkpoints
+                  SET cursor_ref=$3,updated_at=$4
+                WHERE provider=$5 AND tenant_id=$1 AND app_id=$2 AND stream=$6`,
+              [row.tenant_id, row.app_id, nextRef, now.toISOString(), row.provider, checkpointStream(row)],
+            );
+            if (row.cursor_ref) await payloadStore.purge(row.cursor_ref);
+            return true;
+          });
+          if (!committed) {
+            continue;
+          }
+        } catch (error) {
+          if (nextRef) await payloadStore.purge(nextRef);
+          throw error;
+        }
       } else {
-        await finish(pool, row, true, now);
-        if (row.cursor_ref) await payloadStore.purge(row.cursor_ref);
+        const committed = await withCurrentClaim(pool, row, async (client) => {
+          for (const fact of lifecycle) await appendLifecycleFact(client, row, fact);
+          if (row.cursor_ref) await payloadStore.purge(row.cursor_ref);
+          await finish(client, row, true, now);
+          return true;
+        });
+        if (!committed) continue;
       }
       counts.processed += 1;
     } catch {
-      counts[await retryOrFail(pool, row, now)] += 1;
+      record(await retryOrFail(pool, payloadStore, row, now));
     }
   }
   return counts;
 }
 
+type GoogleRefundEvent = {
+  readonly eventDigest: string;
+  readonly eventTime: string;
+  readonly amountUnscaled: string;
+  readonly amountScale: number;
+  readonly currency: string;
+};
+
 async function appendVerifiedGoogleRefundForOrder(
   pool: Pool,
+  client: PoolClient,
   row: ReadbackRow,
   orderDigest: string,
-  event: { readonly eventDigest: string; readonly eventTime: string; readonly amountUnscaled: string; readonly amountScale: number; readonly currency: string },
+  events: readonly GoogleRefundEvent[],
   now: Date,
 ): Promise<"persisted" | "missing" | "invalid"> {
-  const resolved = await withTenant(pool, row.tenant_id, async (client) => {
-    const binding = (await client.query<{
+  const binding = (await client.query<{
       purchase_record_id: string; installation_id: string; transaction_id: string; currency: string;
       amount_unscaled: string; amount_scale: number;
       producer: string; producer_version: string; event_id: string; delivery_id: string;
@@ -388,33 +577,37 @@ async function appendVerifiedGoogleRefundForOrder(
         AND binding.transaction_digest=$3`,
     [row.tenant_id, row.app_id, orderDigest],
   )).rows[0];
-    if (!binding) return undefined;
-    const prior = (await client.query<{ transaction_id: string; amount_unscaled: string; amount_scale: number }>(
-      `SELECT transaction_id, amount_unscaled, amount_scale FROM ledger.refund_facts
-        WHERE tenant_id=$1 AND app_id=$2 AND correction_target_record_id=$3`,
-      [row.tenant_id, row.app_id, binding.purchase_record_id],
-    )).rows;
-    return { binding, prior };
-  });
-  if (!resolved) return "missing";
-  const refundTransactionId = `refund:google-play:${event.eventDigest.slice(0, 48)}`;
-  if (resolved.prior.some((value) => value.transaction_id === refundTransactionId)) return "persisted";
-  if (resolved.binding.currency !== event.currency) return "invalid";
+  if (!binding) return "missing";
+  const prior = (await client.query<{ transaction_id: string; amount_unscaled: string; amount_scale: number }>(
+    `SELECT transaction_id, amount_unscaled, amount_scale FROM ledger.refund_facts
+      WHERE tenant_id=$1 AND app_id=$2 AND correction_target_record_id=$3`,
+    [row.tenant_id, row.app_id, binding.purchase_record_id],
+  )).rows;
   const toBindingScale = (amount: string, scale: number): bigint | undefined => {
     const value = BigInt(amount);
-    if (scale <= resolved.binding.amount_scale) return value * (10n ** BigInt(resolved.binding.amount_scale - scale));
-    const divisor = 10n ** BigInt(scale - resolved.binding.amount_scale);
+    if (scale <= binding.amount_scale) return value * (10n ** BigInt(binding.amount_scale - scale));
+    const divisor = 10n ** BigInt(scale - binding.amount_scale);
     return value % divisor === 0n ? value / divisor : undefined;
   };
   let refunded = 0n;
-  for (const prior of resolved.prior) {
-    const value = toBindingScale(prior.amount_unscaled, prior.amount_scale);
+  for (const previous of prior) {
+    const value = toBindingScale(previous.amount_unscaled, previous.amount_scale);
     if (value === undefined) return "invalid";
     refunded += value;
   }
-  const next = toBindingScale(event.amountUnscaled, event.amountScale);
-  if (next === undefined || refunded + next > BigInt(resolved.binding.amount_unscaled)) return "invalid";
-  const purchase = resolved.binding;
+  const existingTransactions = new Set(prior.map((value) => value.transaction_id));
+  const pending: GoogleRefundEvent[] = [];
+  for (const event of events) {
+    const refundTransactionId = `refund:google-play:${event.eventDigest.slice(0, 48)}`;
+    if (existingTransactions.has(refundTransactionId)) continue;
+    if (binding.currency !== event.currency) return "invalid";
+    const next = toBindingScale(event.amountUnscaled, event.amountScale);
+    if (next === undefined || refunded + next > BigInt(binding.amount_unscaled)) return "invalid";
+    refunded += next;
+    existingTransactions.add(refundTransactionId);
+    pending.push(event);
+  }
+  const purchase = binding;
   const historicalPurchase: CandidateAttempt = {
     batch_id: `historical:${purchase.purchase_record_id}`,
     record: {
@@ -444,12 +637,17 @@ async function appendVerifiedGoogleRefundForOrder(
       withdrawals: [], alternative_legal_bases: [], fraud_enabled: false, fraud_actions_enabled: false,
     },
   };
-  return await appendVerifiedGoogleRefundWithBinding(pool, row, purchase, historicalPurchase, event, now)
-    ? "persisted" : "missing";
+  for (const event of pending) {
+    if (!await appendVerifiedGoogleRefundWithBinding(
+      pool, client, row, purchase, historicalPurchase, event, now,
+    )) throw new Error("google_refund_page_not_persisted");
+  }
+  return "persisted";
 }
 
 async function appendVerifiedGoogleRefundWithBinding(
   pool: Pool,
+  client: PoolClient,
   row: ReadbackRow,
   binding: { purchase_record_id: string; installation_id: string; transaction_id: string; currency: string },
   historicalPurchase: CandidateAttempt,
@@ -482,10 +680,10 @@ async function appendVerifiedGoogleRefundWithBinding(
       policy_digest: "verified-commerce-v1", processing_purposes: [{ processing_purpose_id: "revenue_measurement", consent_required: false, policy_version: "verified-commerce-v1" }],
       withdrawals: [], alternative_legal_bases: [], fraud_enabled: false, fraud_actions_enabled: false,
     },
-  }], pool, [historicalPurchase]);
+  }], pool, [historicalPurchase], { persistenceClient: client });
   return output.logical_events.some((value) => value.record_id === recordId)
-    || await withTenant(pool, row.tenant_id, async (client) => (await client.query(
+    || (await client.query(
       "SELECT 1 FROM ledger.refund_facts WHERE tenant_id=$1 AND app_id=$2 AND correction_target_record_id=$3 AND transaction_id=$4",
       [row.tenant_id, row.app_id, binding.purchase_record_id, `refund:google-play:${event.eventDigest.slice(0, 48)}`],
-    )).rowCount === 1);
+    )).rowCount === 1;
 }

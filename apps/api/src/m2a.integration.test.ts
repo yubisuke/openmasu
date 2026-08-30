@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createSign, generateKeyPairSync, randomBytes, sign } from "node:crypto";
+import { createHash, createSign, generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -528,6 +528,224 @@ function googlePlayProviderResponse(
   };
 }
 
+type CommerceReadbackFixture = {
+  readonly tenantId: string;
+  readonly appId: string;
+  readonly installationId: string;
+  readonly notificationDigest: string;
+  readonly readbackId: string;
+  readonly evidenceRef: string;
+  readonly bundleId?: string;
+};
+
+async function prepareCommerceReadback(
+  provider: "google_play" | "app_store",
+  label: string,
+): Promise<CommerceReadbackFixture> {
+  const fixtureTenantId = `tenant-commerce-${label}-${run}`;
+  const fixtureAppId = `app-commerce-${label}-${run}`;
+  const fixtureInstallationId = `installation:commerce-${label}-${run}`;
+  await ensureSdkKeys(pool, payloadStore, { tenantId: fixtureTenantId, appId: fixtureAppId }, [{
+    keyId: `sdk-key-commerce-${label}-${run}`,
+    secret: `sdk-secret-${randomBytes(32).toString("base64url")}`,
+  }]);
+  const receivedAt = new Date(Date.now() - 60_000);
+  const notificationDigest = randomBytes(32).toString("hex");
+  const installationDigest = createHash("sha256")
+    .update(`${fixtureTenantId}\0${fixtureAppId}\0${fixtureInstallationId}`)
+    .digest("hex");
+  const purchaseRecordId = `record:${uuidV7()}`;
+  const purchaseEventId = `event:commerce-binding-${label}:${run}`;
+  const googlePurchaseToken = `synthetic-commerce-token-${label}-${run}`;
+  const appleTransactionId = `apple-transaction-${label}-${run}`;
+  const appleOriginalTransactionId = `apple-original-${label}-${run}`;
+  const purchaseTransactionId = provider === "app_store"
+    ? appleTransactionId
+    : `transaction:commerce-binding-${label}:${run}`;
+  const subjectDigest = createHash("sha256")
+    .update(provider === "google_play" ? googlePurchaseToken : appleOriginalTransactionId)
+    .digest("hex");
+  const purchaseEvent = {
+    ...sourceEvent(purchaseEventId, "purchase", {
+      installation_id: fixtureInstallationId,
+      transaction_id: purchaseTransactionId,
+      original_transaction_id: provider === "app_store" ? appleOriginalTransactionId : purchaseTransactionId,
+      amount_unscaled: "1990000",
+      amount_scale: 6,
+      currency: "USD",
+      financial_status: "settled",
+    }, receivedAt.toISOString()),
+    contract_version: "0.4.0",
+    record_id: purchaseRecordId,
+    delivery_id: `delivery:${uuidV7()}`,
+    tenant_id: fixtureTenantId,
+    app_id: fixtureAppId,
+    producer: provider === "google_play" ? "sdk-android" : "sdk-ios",
+    schema_version: "0.4.0",
+    received_at: receivedAt.toISOString(),
+  };
+  await appendDurableBatch(pool, payloadStore, {
+    tenantId: fixtureTenantId,
+    appId: fixtureAppId,
+    producer: purchaseEvent.producer,
+    body: Buffer.from(JSON.stringify({ records: [purchaseEvent] }), "utf8"),
+    eventCount: 1,
+    receivedAt: receivedAt.toISOString(),
+    subjectDigest: privacySubjectDigest(digestKey, privacyRequestFor(
+      "installation",
+      fixtureTenantId,
+      fixtureAppId,
+      fixtureInstallationId,
+    )),
+  });
+  assert.equal(await processSdkInbox(pool, payloadStore, fixtureTenantId), 1);
+  if (provider === "google_play") {
+    const verificationId = uuidV7();
+    const resultEvidenceRef = await payloadStore.write(
+      { tenantId: fixtureTenantId, appId: fixtureAppId, objectId: `google-play-commerce-result-${verificationId}` },
+      Buffer.from(JSON.stringify({ verified: true, synthetic: true }), "utf8"),
+    );
+    await withTenant(pool, fixtureTenantId, async (client) => {
+      await client.query(
+        `INSERT INTO control.google_play_purchase_tokens (
+           token_digest,tenant_id,app_id,verification_id,registered_at,product_id,purchase_kind
+         ) VALUES ($1,$2,$3,$4,$5,$6,'subscription_initial')`,
+        [subjectDigest, fixtureTenantId, fixtureAppId, verificationId, receivedAt.toISOString(),
+          `subscription.synthetic.${label}.${run}`],
+      );
+      await client.query(
+        `INSERT INTO ledger.google_play_purchase_verification_results (
+           verification_result_id,verification_id,tenant_id,app_id,subject_record_id,verified_record_id,
+           token_digest,verdict,provider_purchase_state,product_matched,evidence_ref,response_digest,
+           decided_at,artifact,purchase_kind
+         ) VALUES ($1,$2,$3,$4,$5,$5,$6,'verified','PURCHASED',true,$7,$8,$9,$10::jsonb,
+           'subscription_initial')`,
+        [uuidV7(), verificationId, fixtureTenantId, fixtureAppId, purchaseRecordId, subjectDigest,
+          resultEvidenceRef, createHash("sha256").update("synthetic-google-play-commerce-result").digest("hex"),
+          receivedAt.toISOString(), JSON.stringify({ synthetic: true, verdict: "verified" })],
+      );
+    });
+  } else {
+    // This state-level fixture represents an existing App Store purchase
+    // binding. Creating that binding from notification ingestion is outside
+    // this read-back-only change.
+    await withTenant(pool, fixtureTenantId, (client) => client.query(
+      `INSERT INTO control.commerce_purchase_bindings (
+         provider,tenant_id,app_id,transaction_digest,original_transaction_digest,
+         purchase_record_id,installation_digest,amount_unscaled,amount_scale,currency,quantity,bound_at
+       ) VALUES ('app_store',$1,$2,$3,$4,$5,$6,'1990000',6,'USD',1,$7)`,
+      [fixtureTenantId, fixtureAppId,
+        createHash("sha256").update(appleTransactionId).digest("hex"), subjectDigest,
+        purchaseRecordId, installationDigest, receivedAt.toISOString()],
+    ));
+  }
+  let payload: Buffer;
+  let bundleId: string | undefined;
+  if (provider === "google_play") {
+    payload = Buffer.from(JSON.stringify({
+      packageName: `dev.openmasu.synthetic.${label.replace(/[^A-Za-z0-9]/g, "")}.${run}`,
+      subscriptionNotification: { purchaseToken: googlePurchaseToken },
+    }));
+  } else {
+    bundleId = `dev.openmasu.synthetic.${label.replace(/[^A-Za-z0-9]/g, "")}.${run}`;
+    const transaction = appleCommerceJws({
+      transactionId: appleTransactionId,
+      originalTransactionId: appleOriginalTransactionId,
+      bundleId,
+      environment: "Sandbox",
+      purchaseDate: receivedAt.getTime(),
+    });
+    payload = Buffer.from(JSON.stringify({
+      signedPayload: appleCommerceJws({
+        notificationType: "DID_RENEW",
+        notificationUUID: `notification-${label}-${run}`,
+        signedDate: receivedAt.getTime(),
+        data: {
+          bundleId,
+          environment: "Sandbox",
+          signedTransactionInfo: transaction,
+          signedRenewalInfo: appleCommerceJws({ environment: "Sandbox", autoRenewStatus: 1 }),
+        },
+      }),
+    }));
+  }
+  assert.equal(await recordCommerceNotification({
+    pool,
+    payloadStore,
+    tenantId: fixtureTenantId,
+    appId: fixtureAppId,
+    payload,
+    notificationDigest,
+    subjectDigest,
+    event: {
+      provider,
+      eventKind: "subscription_renewed",
+      subscriptionState: "active",
+      financialEffect: "none",
+      externalEventDigest: randomBytes(32).toString("hex"),
+      ...(provider === "app_store" ? {
+        transactionDigest: createHash("sha256").update(appleTransactionId).digest("hex"),
+        originalTransactionDigest: subjectDigest,
+      } : {}),
+      effectiveAt: receivedAt.toISOString(),
+    },
+    receivedAt,
+    readbackOperation: provider === "google_play" ? "google_subscription" : "apple_transaction_history",
+  }), true);
+  const stored = await withTenant(pool, fixtureTenantId, async (client) => (await client.query<{
+    readback_id: string;
+    evidence_ref: string;
+  }>(
+    `SELECT readback.readback_id::text,notification.evidence_ref
+       FROM ephemeral.commerce_provider_readbacks AS readback
+       JOIN control.commerce_provider_notifications AS notification
+         ON notification.provider=readback.provider
+        AND notification.notification_digest=readback.notification_digest
+      WHERE readback.tenant_id=$1 AND readback.app_id=$2`,
+    [fixtureTenantId, fixtureAppId],
+  )).rows[0]);
+  assert.ok(stored);
+  return {
+    tenantId: fixtureTenantId,
+    appId: fixtureAppId,
+    installationId: fixtureInstallationId,
+    notificationDigest,
+    readbackId: stored.readback_id,
+    evidenceRef: stored.evidence_ref,
+    ...(bundleId ? { bundleId } : {}),
+  };
+}
+
+async function deleteCommerceReadback(
+  scope: "installation" | "app",
+  fixture: CommerceReadbackFixture,
+): Promise<Awaited<ReturnType<typeof executePrivacyRequest>>> {
+  const body = privacyRequestFor(
+    scope,
+    fixture.tenantId,
+    fixture.appId,
+    fixture.installationId,
+  );
+  const deletionSubjectDigest = privacySubjectDigest(digestKey, body);
+  const identity = scope === "installation"
+    ? {
+        tenantId: fixture.tenantId,
+        appId: fixture.appId,
+        actorType: "sdk_installation" as const,
+        actorRef: `sdk_installation:commerce-${run}`,
+        requesterAuthRef: `sdk_auth:commerce-${run}`,
+        deletionSubjectDigest,
+      }
+    : {
+        keyId: `key:commerce-${run}`,
+        tenantId: fixture.tenantId,
+        appId: fixture.appId,
+        role: "admin" as const,
+        deletionSubjectDigest,
+      };
+  return executePrivacyRequest(pool, identity, body, payloadStore, new Date());
+}
+
 function workerProcess(delayMs: number) {
   const source = `
     import { createAppPool, EncryptedFilePayloadStore } from "@openmasu/runtime";
@@ -704,6 +922,293 @@ describe("M2a signed SDK ingestion", () => {
     }));
     assert.equal(afterReadback.pending, 0);
     assert.deepEqual(afterReadback.facts.map((value) => value.financial_effect).sort(), ["none", "purchase", "refund"]);
+  });
+
+  it("allows only one active Commerce read-back provider call across concurrent workers", async () => {
+    const fixture = await prepareCommerceReadback("google_play", "concurrent-claim");
+    const entered = deferred();
+    const release = deferred();
+    let providerCalls = 0;
+    const first = processCommerceReadbacks(pool, payloadStore, fixture.tenantId, {
+      limit: 1,
+      claimLeaseMs: 60_000,
+      googleClient: async () => {
+        providerCalls += 1;
+        entered.resolve();
+        await release.promise;
+        return {
+          status: 200,
+          body: Buffer.from(JSON.stringify({ subscriptionState: "SUBSCRIPTION_STATE_ACTIVE" })),
+        };
+      },
+    });
+    try {
+      await within(entered.promise, "Commerce concurrent provider entry");
+      assert.deepEqual(await processCommerceReadbacks(pool, payloadStore, fixture.tenantId, {
+        limit: 1,
+        claimLeaseMs: 60_000,
+        googleClient: async () => {
+          providerCalls += 1;
+          throw new Error("an active Commerce claim must not be called twice");
+        },
+      }), { processed: 0, deferred: 0, failed: 0 });
+    } finally {
+      release.resolve();
+    }
+    assert.deepEqual(await within(first, "Commerce concurrent winner"), {
+      processed: 1,
+      deferred: 0,
+      failed: 0,
+    });
+    assert.equal(providerCalls, 1);
+  });
+
+  it("reclaims an expired Apple Commerce claim and rejects the stale cursor completion", async () => {
+    const fixture = await prepareCommerceReadback("app_store", "expired-claim");
+    assert.ok(fixture.bundleId);
+    const entered = deferred();
+    const release = deferred();
+    const staleRevision = `stale-revision-${run}`;
+    const stale = processCommerceReadbacks(pool, payloadStore, fixture.tenantId, {
+      limit: 1,
+      claimLeaseMs: 60_000,
+      verifyAppleSignedData: (value) => verifyCompactJws(value, appleCommerceKeyPair.publicKey),
+      appleClient: async () => {
+        entered.resolve();
+        await release.promise;
+        return {
+          status: 200,
+          body: Buffer.from(JSON.stringify({
+            signedTransactions: [appleCommerceJws({
+              transactionId: `apple-stale-${run}`,
+              originalTransactionId: `apple-original-expired-${run}`,
+              bundleId: fixture.bundleId,
+              environment: "Sandbox",
+              purchaseDate: Date.now(),
+            })],
+            hasMore: true,
+            revision: staleRevision,
+          })),
+        };
+      },
+    });
+    await within(entered.promise, "Commerce stale provider entry");
+    await withTenant(pool, fixture.tenantId, (client) => client.query(
+      `UPDATE ephemeral.commerce_provider_readbacks
+          SET claimed_until=clock_timestamp() - interval '1 second'
+        WHERE tenant_id=$1 AND app_id=$2 AND readback_id=$3::uuid`,
+      [fixture.tenantId, fixture.appId, fixture.readbackId],
+    ));
+    const winner = await processCommerceReadbacks(pool, payloadStore, fixture.tenantId, {
+      limit: 1,
+      claimLeaseMs: 60_000,
+      verifyAppleSignedData: (value) => verifyCompactJws(value, appleCommerceKeyPair.publicKey),
+      appleClient: async () => ({
+        status: 200,
+        body: Buffer.from(JSON.stringify({
+          signedTransactions: [appleCommerceJws({
+            transactionId: `apple-winner-${run}`,
+            originalTransactionId: `apple-original-expired-${run}`,
+            bundleId: fixture.bundleId,
+            environment: "Sandbox",
+            purchaseDate: Date.now(),
+          })],
+          hasMore: false,
+        })),
+      }),
+    });
+    release.resolve();
+    assert.deepEqual(winner, { processed: 1, deferred: 0, failed: 0 });
+    assert.deepEqual(await within(stale, "Commerce stale completion"), {
+      processed: 0,
+      deferred: 0,
+      failed: 0,
+    });
+    const stored = await withTenant(pool, fixture.tenantId, async (client) => ({
+      facts: Number((await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM ledger.commerce_lifecycle_facts
+          WHERE tenant_id=$1 AND app_id=$2 AND event_kind='transaction_history_verified'`,
+        [fixture.tenantId, fixture.appId],
+      )).rows[0].count),
+      queued: Number((await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM ephemeral.commerce_provider_readbacks
+          WHERE tenant_id=$1 AND app_id=$2`,
+        [fixture.tenantId, fixture.appId],
+      )).rows[0].count),
+    }));
+    assert.deepEqual(stored, { facts: 1, queued: 0 });
+    assert.equal(await payloadStore.scanFor(staleRevision), false,
+      "a stale Apple worker must purge its uncommitted cursor payload");
+  });
+
+  it("prevents Google and Apple Commerce completions from crossing privacy deletion", async () => {
+    const google = await prepareCommerceReadback("google_play", "privacy-installation");
+    const googleEntered = deferred();
+    const googleRelease = deferred();
+    const googleWork = processCommerceReadbacks(pool, payloadStore, google.tenantId, {
+      limit: 1,
+      claimLeaseMs: 60_000,
+      googleClient: async () => {
+        googleEntered.resolve();
+        await googleRelease.promise;
+        return {
+          status: 200,
+          body: Buffer.from(JSON.stringify({ subscriptionState: "SUBSCRIPTION_STATE_ACTIVE" })),
+        };
+      },
+    });
+    await within(googleEntered.promise, "Google Commerce privacy provider entry");
+    assert.equal((await deleteCommerceReadback("installation", google)).status, "completed");
+    googleRelease.resolve();
+    assert.deepEqual(await within(googleWork, "Google Commerce privacy completion"), {
+      processed: 0,
+      deferred: 0,
+      failed: 0,
+    });
+
+    const apple = await prepareCommerceReadback("app_store", "privacy-app");
+    assert.ok(apple.bundleId);
+    const appleEntered = deferred();
+    const appleRelease = deferred();
+    const appleWork = processCommerceReadbacks(pool, payloadStore, apple.tenantId, {
+      limit: 1,
+      claimLeaseMs: 60_000,
+      verifyAppleSignedData: (value) => verifyCompactJws(value, appleCommerceKeyPair.publicKey),
+      appleClient: async () => {
+        appleEntered.resolve();
+        await appleRelease.promise;
+        return {
+          status: 200,
+          body: Buffer.from(JSON.stringify({
+            signedTransactions: [appleCommerceJws({
+              transactionId: `apple-deleted-${run}`,
+              originalTransactionId: `apple-original-deleted-${run}`,
+              bundleId: apple.bundleId,
+              environment: "Sandbox",
+              purchaseDate: Date.now(),
+            })],
+            hasMore: false,
+          })),
+        };
+      },
+    });
+    await within(appleEntered.promise, "Apple Commerce privacy provider entry");
+    assert.equal((await deleteCommerceReadback("app", apple)).status, "completed");
+    appleRelease.resolve();
+    assert.deepEqual(await within(appleWork, "Apple Commerce privacy completion"), {
+      processed: 0,
+      deferred: 0,
+      failed: 0,
+    });
+
+    for (const fixture of [google, apple]) {
+      const evidence = await withTenant(pool, fixture.tenantId, async (client) => ({
+        queue: Number((await client.query<{ count: string }>(
+          `SELECT count(*)::text AS count FROM ephemeral.commerce_provider_readbacks
+            WHERE tenant_id=$1 AND app_id=$2`,
+          [fixture.tenantId, fixture.appId],
+        )).rows[0].count),
+        derived: Number((await client.query<{ count: string }>(
+          `SELECT count(*)::text AS count FROM ledger.commerce_lifecycle_facts
+            WHERE tenant_id=$1 AND app_id=$2
+              AND event_kind IN ('subscription_state_verified','transaction_history_verified')`,
+          [fixture.tenantId, fixture.appId],
+        )).rows[0].count),
+      }));
+      assert.deepEqual(evidence, { queue: 0, derived: 0 });
+      await assert.rejects(payloadStore.read(fixture.evidenceRef), PayloadNotFoundError);
+    }
+  });
+
+  it("purges a completion-first Apple cursor when an installation binding exists", async () => {
+    const fixture = await prepareCommerceReadback("app_store", "cursor-installation-delete");
+    assert.ok(fixture.bundleId);
+    const revision = `cursor-before-installation-delete-${run}`;
+    assert.deepEqual(await processCommerceReadbacks(pool, payloadStore, fixture.tenantId, {
+      limit: 1,
+      verifyAppleSignedData: (value) => verifyCompactJws(value, appleCommerceKeyPair.publicKey),
+      appleClient: async () => ({
+        status: 200,
+        body: Buffer.from(JSON.stringify({
+          signedTransactions: [appleCommerceJws({
+            transactionId: `apple-cursor-${run}`,
+            originalTransactionId: `apple-original-cursor-${run}`,
+            bundleId: fixture.bundleId,
+            environment: "Sandbox",
+            purchaseDate: Date.now(),
+          })],
+          hasMore: true,
+          revision,
+        })),
+      }),
+    }), { processed: 1, deferred: 0, failed: 0 });
+    const cursor = await withTenant(pool, fixture.tenantId, async (client) => (await client.query<{
+      cursor_ref: string;
+      claim_token: string | null;
+      claimed_until: string | null;
+    }>(
+      `SELECT cursor_ref,claim_token::text,claimed_until::text
+         FROM ephemeral.commerce_provider_readbacks
+        WHERE tenant_id=$1 AND app_id=$2 AND readback_id=$3::uuid`,
+      [fixture.tenantId, fixture.appId, fixture.readbackId],
+    )).rows[0]);
+    assert.ok(cursor);
+    assert.deepEqual({ claim_token: cursor.claim_token, claimed_until: cursor.claimed_until }, {
+      claim_token: null,
+      claimed_until: null,
+    });
+    assert.deepEqual(JSON.parse((await payloadStore.read(cursor.cursor_ref)).toString("utf8")), {
+      revision,
+    });
+    assert.equal((await deleteCommerceReadback("installation", fixture)).status, "completed");
+    await assert.rejects(payloadStore.read(cursor.cursor_ref), PayloadNotFoundError);
+    await assert.rejects(payloadStore.read(fixture.evidenceRef), PayloadNotFoundError);
+    assert.equal(await withTenant(pool, fixture.tenantId, async (client) => (await client.query(
+      `SELECT 1 FROM ephemeral.commerce_provider_readbacks
+        WHERE tenant_id=$1 AND app_id=$2`,
+      [fixture.tenantId, fixture.appId],
+    )).rowCount), 0);
+  });
+
+  it("purges an Apple pagination cursor before terminal read-back failure", async () => {
+    const fixture = await prepareCommerceReadback("app_store", "cursor-terminal-failure");
+    assert.ok(fixture.bundleId);
+    const revision = `cursor-before-terminal-failure-${run}`;
+    assert.deepEqual(await processCommerceReadbacks(pool, payloadStore, fixture.tenantId, {
+      verifyAppleSignedData: (value) => verifyCompactJws(value, appleCommerceKeyPair.publicKey),
+      appleClient: async () => ({
+        status: 200,
+        body: Buffer.from(JSON.stringify({
+          signedTransactions: [appleCommerceJws({
+            transactionId: `apple-terminal-page-${run}`,
+            originalTransactionId: `apple-original-terminal-${run}`,
+            bundleId: fixture.bundleId,
+            environment: "Sandbox",
+            purchaseDate: Date.now(),
+          })],
+          hasMore: true,
+          revision,
+        })),
+      }),
+    }), { processed: 1, deferred: 0, failed: 0 });
+    const cursorRef = await withTenant(pool, fixture.tenantId, async (client) => (await client.query<{
+      cursor_ref: string;
+    }>(
+      `SELECT cursor_ref FROM ephemeral.commerce_provider_readbacks
+        WHERE tenant_id=$1 AND app_id=$2 AND readback_id=$3::uuid`,
+      [fixture.tenantId, fixture.appId, fixture.readbackId],
+    )).rows[0].cursor_ref);
+    assert.deepEqual(JSON.parse((await payloadStore.read(cursorRef)).toString("utf8")), { revision });
+    assert.deepEqual(await processCommerceReadbacks(pool, payloadStore, fixture.tenantId, {
+      verifyAppleSignedData: (value) => verifyCompactJws(value, appleCommerceKeyPair.publicKey),
+      appleClient: async () => ({ status: 400, body: Buffer.from("{}") }),
+    }), { processed: 0, deferred: 0, failed: 1 });
+    await assert.rejects(payloadStore.read(cursorRef), PayloadNotFoundError);
+    assert.equal(await withTenant(pool, fixture.tenantId, async (client) => (await client.query(
+      `SELECT 1 FROM ephemeral.commerce_provider_readbacks
+        WHERE tenant_id=$1 AND app_id=$2 AND readback_id=$3::uuid`,
+      [fixture.tenantId, fixture.appId, fixture.readbackId],
+    )).rowCount), 0);
   });
 
   it("F-A-14 rejects parsed integrity claims and protects accepted raw tokens", async () => {
@@ -1318,12 +1823,19 @@ describe("M2a signed SDK ingestion", () => {
       now: new Date(Date.now() + 300_000),
       googleClient: async () => ({ status: 200, body: Buffer.from(JSON.stringify({
         orderId: verifiedRenewalOrderId,
-        orderHistory: { refundEvent: { eventTime: fullRefundAt,
-          refundDetails: { total: { currencyCode: "JPY", units: "920", nanos: 0 } } } },
+        orderHistory: { partialRefundEvents: [{
+          state: "PROCESSED_SUCCESSFULLY",
+          processTime: fullRefundAt,
+          refundDetails: { total: { currencyCode: "JPY", units: "10", nanos: 0 } },
+        }, {
+          state: "PROCESSED_SUCCESSFULLY",
+          processTime: new Date(Date.parse(fullRefundAt) + 1_000).toISOString(),
+          refundDetails: { total: { currencyCode: "JPY", units: "920", nanos: 0 } },
+        }] },
       })) }),
     });
     assert.deepEqual(excessive, { processed: 0, deferred: 0, failed: 1 },
-      "cumulative refunds above the verified purchase must fail closed");
+      "a multi-event page above the verified purchase must roll back every new refund");
     assert.equal(await withTenant(pool, tenantId, async (client) => (await client.query(
       `SELECT 1 FROM ledger.refund_facts WHERE tenant_id=$1 AND app_id=$2
         AND transaction_id LIKE 'refund:google-play:%'`, [tenantId, appId],

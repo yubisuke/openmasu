@@ -148,9 +148,16 @@ repeat provider reads; provider-side exactly-once behavior remains unverified.
 
 <!-- threat-component:verified-commerce-lifecycle -->
 **Commerce lifecycle:** out-of-order revisions, missed notifications, unsafe
-cursor storage, double refunds, and public provider identifiers. Controls
-include ascending revision cursors, encrypted payload/cursor state, bounded
-retry, authoritative read-back, per-target refund caps, and opaque public refs.
+cursor storage, double refunds, concurrent or stale completion, deletion-raced
+state resurrection, and public provider identifiers. Controls include ascending
+revision cursors, encrypted payload/cursor state, one database-clock claim per
+read-back, token-fenced retry and transactional completion under the tenant
+privacy barrier, authoritative read-back, per-target refund caps, and opaque
+public refs. An expired lease can repeat a provider read; provider-side
+exactly-once behavior remains unverified. App Store installation deletion is
+limited to notifications with an existing explicit purchase binding; the
+current notification path does not create one, so unbound notifications require
+broader app- or tenant-scoped deletion.
 
 <!-- threat-component:google-data-manager-delivery -->
 **Conversion delivery:** unauthorized export, replay, provider payload leakage,

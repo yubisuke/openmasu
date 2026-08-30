@@ -159,7 +159,17 @@ provider-side exactly-once guarantee.
 <!-- m1-component:verified-commerce-lifecycle -->
 **Verified commerce lifecycle.** Tracks Google and Apple lifecycle revisions,
 refund corrections, encrypted cursors, and privacy coverage without exposing
-provider transaction identifiers publicly.
+provider transaction identifiers publicly. The provider read-back worker claims
+one due row with a database-clock lease, starts the provider request only while
+that claim is current under the tenant privacy barrier, and commits lifecycle
+facts, Google refund projections, Apple cursor/checkpoint transitions, and the
+queue transition in one token-fenced transaction. Expired work can be reclaimed;
+a stale or deletion-raced worker commits no derived state. Lease recovery can
+repeat provider reads and is not a provider-side exactly-once guarantee.
+Installation-scoped App Store purge applies only when an explicit purchase
+binding already exists. The notification path does not create that binding in
+this slice, so unbound notifications remain removable only by app- or
+tenant-scoped privacy requests.
 
 <!-- m1-component:google-data-manager-delivery -->
 **Conversion delivery.** Produces a bounded, authenticated Google Data Manager

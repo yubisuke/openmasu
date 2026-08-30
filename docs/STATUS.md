@@ -50,7 +50,7 @@ MMP.
 | Dashboard and management API | Implemented with server-rendered HTML, RBAC, sessions, RLS, and shared report encoders | Production TLS, browser/operator acceptance, and deployment-specific identity integration |
 | Fraud and integrity evidence | Implemented with deterministic public rules, bundle provenance, aggregates, and synthetic provider normalization | Live integrity projects, threshold calibration, false-positive measurement, and device-farm coverage |
 | Deep links and re-engagement | Implemented for direct Android/iOS and deferred Android flows plus separate aggregate AdAttributionKit re-engagement postbacks | Real domains, association propagation, devices, stores, Apple delivery, and long-running observation |
-| Verified commerce lifecycle | Implemented with authenticated synthetic Google and Apple lifecycle/read-back paths | Live credentials, quotas, delivery, key rotation, complete recovery, entitlement, tax, and payout |
+| Verified commerce lifecycle | Implemented with authenticated synthetic Google and Apple lifecycle/read-back paths plus per-row claims and privacy-fenced completion | Live credentials, quotas, delivery, key rotation, unmatched App Store installation linkage, entitlement, tax, payout, and provider-side duplicate behavior |
 | Operations and release | Implemented for bootstrap, migration, scheduler state, metrics, DB-first durable privacy purge and restore reapplication, SBOMs, and release packaging | Production hosting, alerts, real backup recovery, incident response, and measured capacity |
 
 ## Product direction
@@ -86,9 +86,11 @@ integrity verification now applies the same local ownership and privacy
 boundary to its own queue, including protected result purge during deletion
 and backup restore reapplication. Google Play product verification now claims
 one due row, bounds provider waits, rejects stale completion, and prevents a
-deletion-raced result or settled purchase from becoming available again. Lease
-expiry can still repeat a provider operation. Commerce read-back and
-distributed provider quotas remain separate hardening work.
+deletion-raced result or settled purchase from becoming available again.
+Commerce read-back now applies the same local ownership boundary to Google
+lifecycle/refund and Apple history work, including transactional refund or
+cursor completion. Lease expiry can still repeat a provider operation, and
+distributed provider quotas remain separate operational work.
 
 1. preserve the rc.4 notes, SDK identities, SBOMs, bundle paths, tag, and
    evidence manifest as one immutable release record;
@@ -96,8 +98,8 @@ distributed provider quotas remain separate hardening work.
    egress, privacy, and durable-queue invariants while auditing other
    high-impact compatibility gaps;
 3. preserve bounded tenant concurrency and the Google conversion, AdServices,
-   integrity, and Google Play claim-fencing slices while continuing other
-   per-tenant queue and provider-quota hardening;
+   integrity, Google Play, and commerce read-back claim-fencing slices while
+   continuing provider-quota hardening;
 4. preserve durable scheduled-metric checkpoints and exact replay, the
    tenant-scoped SDK admission/projection privacy barrier, and deletion-state
    rechecks while hardening the remaining provider-completion deletion races;
