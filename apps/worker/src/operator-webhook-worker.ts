@@ -435,8 +435,8 @@ export async function processOperatorWebhookDeliveries(
     let purgeRef: string | undefined;
     let appId: string | undefined;
     await withTenant(pool, tenantId, async (client) => {
-      const candidate = await client.query<{ record_id: string }>(
-        `SELECT record_id
+      const candidate = await client.query<{ record_id: string; app_id: string; destination_id: string }>(
+        `SELECT record_id,app_id,destination_id
            FROM ephemeral.operator_webhook_deliveries
           WHERE tenant_id=$1 AND delivery_id=$2
             AND state IN ('queued','retry') AND next_attempt_at <= $3`,
@@ -446,6 +446,12 @@ export async function processOperatorWebhookDeliveries(
       // Privacy deletion takes this advisory lock before it locks delivery rows.
       // Use the same order here so the privacy/dispatch race cannot deadlock.
       await lockRecord(client, candidate.rows[0].record_id);
+      await lockDestination(
+        client,
+        tenantId,
+        candidate.rows[0].app_id,
+        candidate.rows[0].destination_id,
+      );
       const selected = await client.query<DeliveryRow>(
         `SELECT delivery.delivery_id::text,delivery.destination_id,destination.endpoint_url,
                 destination.secret_ref,delivery.app_id,delivery.record_id,delivery.request_ref,
@@ -467,7 +473,7 @@ export async function processOperatorWebhookDeliveries(
             AND raw.record_id=delivery.record_id
           WHERE delivery.tenant_id=$1 AND delivery.delivery_id=$2
             AND delivery.state IN ('queued','retry') AND delivery.next_attempt_at <= $3
-          FOR UPDATE OF delivery,base`,
+          FOR UPDATE OF delivery`,
         [tenantId, deliveryId, now.toISOString()],
       );
       const row = selected.rows[0];
