@@ -12,6 +12,7 @@ import {
   appendDurableBatch,
   createAppPool,
   EncryptedFilePayloadStore,
+  PayloadNotFoundError,
   processPrivacyDeletionJobs,
   type PayloadStore,
   uuidV7,
@@ -1670,7 +1671,7 @@ describe("M2a signed SDK ingestion", () => {
     assert.equal(withdrawalState.count, 3);
     assert.ok(withdrawalState.bodyRef);
     await payloadStore.purge(withdrawalState.bodyRef);
-    await assert.rejects(payloadStore.read(withdrawalState.bodyRef), /ENOENT|no such file/);
+    await assert.rejects(payloadStore.read(withdrawalState.bodyRef), PayloadNotFoundError);
 
     const eventId = `event:post-withdrawal:${run}`;
     const postWithdrawal = sourceEvent(eventId, "custom_event", {
