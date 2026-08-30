@@ -27,11 +27,14 @@ for (const path of [
   "sdk/unity/com.openmasu.sdk/Runtime/Plugins/iOS/Sources/OpenMasuCore/Models.swift",
   "sdk/unity/com.openmasu.sdk/Runtime/Plugins/iOS/Sources/OpenMasuObjC/OpenMasuObjCBridge.swift",
   "sdk/unity/com.openmasu.sdk/Samples~/AndroidMeasurement/OpenMasuSample.cs",
-  "tools/build-sdk-release.py",
   "tools/sbom.ts",
 ]) {
   assert.ok(read(path).includes(releaseVersion), `${path} does not carry ${releaseVersion}`);
 }
+assert.ok(
+  !read("tools/build-sdk-release.py").includes(releaseVersion),
+  "SDK release packager must derive internal dependency versions instead of embedding the current release",
+);
 
 const bundlePath = `build/sdk-release/openmasu-sdk-${releaseVersion}`;
 for (const path of [
