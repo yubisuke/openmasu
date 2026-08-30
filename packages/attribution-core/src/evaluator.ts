@@ -129,8 +129,34 @@ function dateAt(value: string, zone: "UTC" | "Asia/Tokyo", field: string): strin
   return new Date(time(value, field) + offset).toISOString().slice(0, 10);
 }
 
-export type CandidateAttempt = { server: Any; record: Any; batch_id: string };
+export type CandidateHistoryState = {
+  readonly payload_sha256: string;
+  readonly semantic_available: boolean;
+  readonly ledger_position: string;
+  readonly fraud_exclusion_id?: string;
+};
+
+export type CandidateAttempt = {
+  server: Any;
+  record: Any;
+  batch_id: string;
+  /**
+   * Runtime-only proof for an already accepted canonical ledger record. The
+   * contract evaluator never sets this field. It lets the runtime retain
+   * idempotency after protected payload removal without pretending that a
+   * tombstone still contains semantic evidence.
+   */
+  history_state?: CandidateHistoryState;
+};
 type Attempt = CandidateAttempt;
+
+function candidatePayloadDigest(attempt: Attempt): string {
+  return attempt.history_state?.payload_sha256 ?? sha256(attempt.record.payload);
+}
+
+function semanticCandidate(attempt: Attempt): boolean {
+  return attempt.history_state?.semantic_available !== false;
+}
 
 function attempts(input: Any): Attempt[] {
   if (Array.isArray(input.batches)) {
@@ -168,8 +194,10 @@ export function compareCandidateAttempts(a: CandidateAttempt, b: CandidateAttemp
 
 function candidateAttemptSortKey(attempt: CandidateAttempt): string[] {
   return [
+    attempt.history_state ? "0" : "1",
     attempt.record.received_at, attempt.record.record_id, attempt.record.delivery_id,
-    attempt.server.tenant_id, attempt.server.app_id, attempt.record.schema_version, sha256(attempt.record),
+    attempt.server.tenant_id, attempt.server.app_id, attempt.record.schema_version,
+    attempt.history_state ? candidatePayloadDigest(attempt) : sha256(attempt.record),
   ];
 }
 
@@ -290,19 +318,27 @@ function attemptDecisionKey(attempt: Attempt): string {
   return compositeKey([
     attempt.batch_id, attempt.server.tenant_id, attempt.server.app_id,
     attempt.record.delivery_id, attempt.record.record_id, attempt.record.schema_version,
-    sha256(attempt.record),
+    attempt.history_state ? candidatePayloadDigest(attempt) : sha256(attempt.record),
   ]);
 }
 
 function decisionFor(decisions: Map<string, Any>, attempt: Attempt): Any {
   const decision = decisions.get(attemptDecisionKey(attempt));
+  if (!decision && attempt.history_state) {
+    return {
+      canonical_record_id: attempt.record.record_id,
+      ingestion_status: "accepted",
+      duplicate_resolution: "unique",
+    };
+  }
   if (!decision) throw new Error(`missing decision: ${attempt.record.delivery_id}`);
   return decision;
 }
 
 function assertInstallationAnchors(all: Attempt[], decisions: Map<string, Any>): void {
   const anchors = new Set<string>();
-  const acceptedInstalls = all.filter((entry) => entry.record.event_name === "install" &&
+  const acceptedInstalls = all.filter((entry) => semanticCandidate(entry) &&
+    entry.record.event_name === "install" &&
     decisionFor(decisions, entry).ingestion_status === "accepted" &&
     decisionFor(decisions, entry).duplicate_resolution === "unique",
   );
@@ -392,6 +428,7 @@ function occurredNoLaterThan(candidate: Attempt, refund: Attempt): boolean {
 }
 
 function isBaseAcceptedCandidate(attempt: Attempt, candidates: readonly Attempt[]): boolean {
+  if (attempt.history_state) return attempt.history_state.semantic_available;
   const { server, record } = attempt;
   try {
     time(record.received_at, "received_at");
@@ -658,7 +695,7 @@ function decide(attempt: Attempt, candidates: CandidateProvider): Any {
     ? "record_id_collision"
     : attemptDecisionKey(first) === attemptDecisionKey(attempt)
     ? "unique"
-    : sha256(first.record.payload) === sha256(record.payload)
+    : candidatePayloadDigest(first) === candidatePayloadDigest(attempt)
       ? "duplicate_delivery"
       : "event_id_conflict";
   let canonicalAttempt = first;
@@ -666,7 +703,7 @@ function decide(attempt: Attempt, candidates: CandidateProvider): Any {
     const business = canonicalPurchaseBusinessAttempts(attempt, candidates.all());
     const businessFirst = business[0];
     if (businessFirst && attemptDecisionKey(businessFirst) !== attemptDecisionKey(attempt)) {
-      duplicate_resolution = sha256(businessFirst.record.payload) === sha256(record.payload)
+      duplicate_resolution = candidatePayloadDigest(businessFirst) === candidatePayloadDigest(attempt)
         ? "duplicate_delivery"
         : "event_id_conflict";
       canonicalAttempt = businessFirst;
@@ -675,7 +712,7 @@ function decide(attempt: Attempt, candidates: CandidateProvider): Any {
   if (duplicate_resolution === "unique" && record.event_name === "refund" && isAnchoredCommerce(attempt)) {
     const businessFirst = admittedRefunds(candidates.all()).winners.get(refundBusinessKey(attempt));
     if (businessFirst && compareCandidateAttempts(businessFirst, attempt) < 0) {
-      duplicate_resolution = sha256(businessFirst.record.payload) === sha256(record.payload)
+      duplicate_resolution = candidatePayloadDigest(businessFirst) === candidatePayloadDigest(attempt)
         ? "duplicate_delivery"
         : "event_id_conflict";
       canonicalAttempt = businessFirst;
@@ -1600,7 +1637,11 @@ export function evaluate(
   });
   const decisions = new Map(all.map((attempt, index) => [attemptDecisionKey(attempt), decisionsList[index]]));
   const preIngestionDecisions = (input.pre_ingestion_rejections ?? []).map(preIngestionDecision);
-  assertInstallationAnchors(all, decisions);
+  const acceptedCandidates = candidates.all().filter((attempt) =>
+    semanticCandidate(attempt)
+    && decisionFor(decisions, attempt).ingestion_status === "accepted"
+    && decisionFor(decisions, attempt).duplicate_resolution === "unique");
+  assertInstallationAnchors([...acceptedCandidates], decisions);
   const lifecycle = privacyIndex(input);
   const acceptedUnique = all.filter((attempt) => {
     const decision = decisionFor(decisions, attempt);
@@ -1670,9 +1711,21 @@ export function evaluate(
     record_lifecycle: "active",
     timeliness: attempt.record.late ? "late" : "on_time",
   })), (event) => [event.logical_event_id, event.tenant_id, event.app_id]);
+  const currentClickIds = new Set(acceptedUnique
+    .filter((attempt) => attempt.record.event_name === "click")
+    .map((attempt) => attempt.record.payload.click_id)
+    .filter((clickId): clickId is string => typeof clickId === "string" && clickId.length > 0));
+  const impactedHistoricalInstalls = acceptedCandidates.filter((attempt) =>
+    attempt.history_state !== undefined
+    && attempt.record.event_name === "install"
+    && typeof attempt.record.payload.click_id === "string"
+    && currentClickIds.has(attempt.record.payload.click_id));
+  const attributionInstallAttempts = [
+    ...acceptedUnique.filter((attempt) => attempt.record.event_name === "install"),
+    ...impactedHistoricalInstalls,
+  ];
   const initialAttributions = sortByKey([
-    ...acceptedUnique
-      .filter((attempt) => attempt.record.event_name === "install")
+    ...attributionInstallAttempts
       .map((attempt) => makeAttribution(attempt, candidates, decisions, lifecycle)),
     ...acceptedUnique
       .filter((attempt) => ["skan_postback", "adattributionkit_postback"].includes(attempt.record.event_name))
@@ -1792,7 +1845,7 @@ export function evaluate(
     const bound = boundFraudBundle(attempt.server);
     if (!bound) return [];
     const payload = attempt.record.payload;
-    const matchingClicks = payload.click_id ? acceptedUnique.filter((candidate) =>
+    const matchingClicks = payload.click_id ? acceptedCandidates.filter((candidate) =>
       candidate.server.tenant_id === attempt.server.tenant_id && candidate.server.app_id === attempt.server.app_id
       && candidate.record.event_name === "click" && candidate.record.payload.click_id === payload.click_id
       && candidate.record.payload.redirector_time_status !== "invalid" && candidate.record.payload.redirector_click_at,
@@ -1919,13 +1972,20 @@ export function evaluate(
     }
   }
   const excludedClickIds = new Map<string, FraudDecision>();
+  for (const click of acceptedCandidates.filter((attempt) =>
+    attempt.record.event_name === "click" && attempt.history_state?.fraud_exclusion_id)) {
+    if (!click.server.fraud_actions_enabled || !click.record.payload.click_id) continue;
+    excludedClickIds.set(click.record.payload.click_id, {
+      fraud_decision_id: click.history_state!.fraud_exclusion_id!,
+    } as FraudDecision);
+  }
   for (const decision of fraud_decisions.filter((item) => item.action === "exclude" && item.subject_scope !== "source")) {
-    const click = acceptedUnique.find((attempt) => attempt.record.record_id === decision.subject_ref && attempt.record.event_name === "click");
+    const click = acceptedCandidates.find((attempt) => attempt.record.record_id === decision.subject_ref && attempt.record.event_name === "click");
     if (click?.server.fraud_actions_enabled && click.record.payload.click_id) excludedClickIds.set(click.record.payload.click_id, decision);
   }
   const excludedInstallationIds = new Set<string>();
   const fraudAttributions: Attribution[] = [];
-  for (const install of acceptedUnique.filter((attempt) => attempt.record.event_name === "install")) {
+  for (const install of attributionInstallAttempts) {
     const decision = excludedClickIds.get(install.record.payload.click_id);
     if (!decision) continue;
     excludedInstallationIds.add(install.record.payload.installation_id);

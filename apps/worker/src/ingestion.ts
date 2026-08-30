@@ -355,6 +355,15 @@ function refundProjectionTargets(
     if (explicitTarget === undefined && typeof payload.installation_id !== "string") {
       throw new Error(`missing_resolved_refund_target:${logical.record_id}`);
     }
+    const existing = targets.get(logical.record_id);
+    if (existing !== undefined && !attemptsByRecord.has(
+      `${logical.tenant_id}\u0000${logical.app_id}\u0000${existing}`,
+    )) {
+      // The evaluator resolved this target from a ledger-backed historical
+      // candidate. The deferred database constraints and refund invariant
+      // validate the same-scope persisted target during insertion.
+      continue;
+    }
     const matches = purchases.filter((purchase) =>
       purchase.server.tenant_id === refund.server.tenant_id
       && purchase.server.app_id === refund.server.app_id
@@ -373,7 +382,6 @@ function refundProjectionTargets(
     if (explicitTarget !== undefined && matches[0].record.record_id !== explicitTarget) {
       throw new Error(`missing_resolved_refund_target:${logical.record_id}`);
     }
-    const existing = targets.get(logical.record_id);
     if (existing !== undefined && existing !== matches[0].record.record_id) {
       throw new Error(`refund_target_resolution_mismatch:${logical.record_id}`);
     }
@@ -1185,51 +1193,6 @@ async function resolveDeepLinkAttempts(pool: Pool, attempts: readonly CandidateA
   return resolved;
 }
 
-async function ineligibleHistoricalPurchaseTargetIds(
-  pool: Pool,
-  attempts: readonly CandidateAttempt[],
-): Promise<string[]> {
-  const purchases = attempts.filter((attempt) =>
-    attempt.record.event_name === "purchase"
-    && attempt.record.payload.financial_status === "settled"
-    && typeof attempt.record.payload.installation_id === "string");
-  if (purchases.length === 0) return [];
-  const first = purchases[0];
-  const rows = await withTenant(pool, first.server.tenant_id, (client) => client.query<{
-    record_id: string;
-    installation_id: string | null;
-    transaction_id: string;
-    original_transaction_id: string | null;
-    amount_unscaled: string;
-    amount_scale: number;
-    currency: string;
-    financial_status: string | null;
-    occurred_at_ts: string;
-  }>(
-    `SELECT record_id::text, installation_id, transaction_id, original_transaction_id,
-            amount_unscaled, amount_scale, currency, financial_status, occurred_at_ts::text
-       FROM ledger.purchase_facts
-      WHERE tenant_id=$1 AND app_id=$2 AND record_id::text = ANY($3::text[])`,
-    [first.server.tenant_id, first.server.app_id,
-      [...new Set(purchases.map((attempt) => attempt.record.record_id))]],
-  ));
-  const purchaseByRecord = new Map(purchases.map((attempt) => [attempt.record.record_id, attempt]));
-  const eligible = new Set(rows.rows.filter((row) => {
-    const purchase = purchaseByRecord.get(row.record_id);
-    if (!purchase) return false;
-    const payload = purchase.record.payload;
-    return row.financial_status === "settled"
-      && row.installation_id === payload.installation_id
-      && (row.original_transaction_id ?? row.transaction_id)
-        === (payload.original_transaction_id ?? payload.transaction_id)
-      && row.amount_unscaled === payload.amount_unscaled
-      && row.amount_scale === payload.amount_scale
-      && row.currency === payload.currency
-      && Date.parse(row.occurred_at_ts) === Date.parse(purchase.record.occurred_at);
-  }).map((row) => row.record_id));
-  return [...purchaseByRecord.keys()].filter((recordId) => !eligible.has(recordId)).sort();
-}
-
 const runtimeBulkChunkSize = 1_000;
 
 async function insertJsonRows(
@@ -1589,19 +1552,13 @@ export async function ingestRuntimeBatch(
   const invalid = boundAttempts.map(schemaInvalidArtifacts).filter((value): value is NonNullable<typeof value> => value !== undefined);
   const invalidAttempts = new Set(invalid.map(({ failure }) => `${failure.record_id}\u0000${failure.delivery_id}`));
   const validAttempts = boundAttempts.filter((attempt) => !invalidAttempts.has(`${attempt.record.record_id}\u0000${attempt.record.delivery_id}`));
-  const validHistory = boundHistory.filter((attempt) => !schemaInvalidArtifacts(attempt));
-  const ineligiblePurchaseTargets = await ineligibleHistoricalPurchaseTargetIds(appPool, validHistory);
-  const withPurchaseEligibility = [...validHistory, ...validAttempts].map((attempt) =>
-    ineligiblePurchaseTargets.length === 0 ? attempt : {
-      ...attempt,
-      server: {
-        ...attempt.server,
-        refund_target_ineligible_record_ids: ineligiblePurchaseTargets,
-      },
-    });
-  const allAttempts = sortCandidateAttempts(await resolveDeepLinkAttempts(appPool, withPurchaseEligibility));
-  const input = runtimeInput(allAttempts);
-  const output = evaluate(input, (values) => new IndexedCandidateProvider(values));
+  // Historical runtime candidates are reconstructed from accepted ledger rows.
+  // They have already passed contract validation and must not require protected
+  // payload access merely to process a new delivery.
+  const currentAttempts = sortCandidateAttempts(await resolveDeepLinkAttempts(appPool, validAttempts));
+  const providerAttempts = sortCandidateAttempts([...boundHistory, ...currentAttempts]);
+  const input = runtimeInput(currentAttempts);
+  const output = evaluate(input, () => new IndexedCandidateProvider(providerAttempts));
   const recordIds = new Set(validAttempts.map((attempt) => attempt.record.record_id));
   const deliveryIds = new Set(validAttempts.map((attempt) => attempt.record.delivery_id));
   const refundCorrectionIds = new Set(validAttempts

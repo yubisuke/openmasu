@@ -90,10 +90,21 @@ durable control state before marking its SDK batch complete. Later enforcement
 therefore does not depend on retaining or replaying the encrypted batch body.
 The durable row contains the credential key reference, purpose, sequence,
 recognition time, and canonical source-record reference, but not the consent
-payload or installation identifier. On upgrade, accepted historical consent
-controls are projected once per installation credential before later work is
-evaluated. The worker fails closed if a required historical consent body is no
-longer readable; it does not silently treat missing history as consent.
+payload or installation identifier. The routine worker never reopens processed
+bodies to repair a missing legacy projection. If a deployment contains an
+accepted consent-control event from before durable projection and has neither a
+projection-complete marker nor durable withdrawal rows, later work for that
+installation credential fails with `withdrawal_projection_upgrade_required`.
+Operators must resolve that upgrade state before resuming ingestion; missing
+history is never treated as consent.
+
+For other historical events, the worker captures an explicit ledger position
+and reconstructs only the related accepted candidates. Available normalized
+facts may participate in attribution, fraud, or commerce decisions. Redacted or
+purged records are excluded from those semantic decisions and retain only the
+immutable record/logical identity and payload digest needed to classify a later
+duplicate or conflict. Metric recalculation applies the same lifecycle boundary
+through `raw_records_current`.
 
 ## Access, portability, correction, and deletion
 

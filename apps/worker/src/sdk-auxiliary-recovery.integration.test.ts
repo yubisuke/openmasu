@@ -8,6 +8,7 @@ import {
   SDK_POST_PROCESSING_PENDING_REASON,
   appendDurableBatch,
   createAppPool,
+  createMigrationPool,
   EncryptedFilePayloadStore,
   type PayloadStore,
   uuidV7,
@@ -27,6 +28,8 @@ import {
 } from "./integrity-verifier.js";
 import { processSdkInbox } from "./sdk-worker.js";
 
+type Any = Record<string, any>;
+
 const run = randomBytes(6).toString("hex");
 const root = mkdtempSync(join(tmpdir(), "openmasu-sdk-recovery-"));
 const pool = createAppPool();
@@ -38,7 +41,7 @@ const payloadStore = new EncryptedFilePayloadStore(
 type Scope = {
   readonly tenantId: string;
   readonly appId: string;
-  readonly producer: "sdk-android" | "sdk-ios";
+  readonly producer: "sdk-android" | "sdk-ios" | "redirector";
   readonly receivedAt: string;
 };
 
@@ -54,7 +57,7 @@ function scope(label: string, producer: Scope["producer"]): Scope {
 function record(
   input: Scope,
   label: string,
-  eventName: "install" | "purchase",
+  eventName: "click" | "install" | "purchase" | "refund" | "consent_changed",
   payload: Record<string, unknown>,
 ): Record<string, unknown> {
   return {
@@ -71,13 +74,17 @@ function record(
     occurred_at: input.receivedAt,
     occurred_at_source: "device",
     received_at: input.receivedAt,
-    processing_purpose_id: eventName === "purchase" ? "revenue_measurement" : "attribution",
+    processing_purpose_id: ["purchase", "refund"].includes(eventName) ? "revenue_measurement" : "attribution",
     processing_sequence: 1,
     payload: { event_name: eventName, ...payload },
   };
 }
 
-async function append(input: Scope, value: Record<string, unknown>): Promise<string> {
+async function append(
+  input: Scope,
+  value: Record<string, unknown>,
+  installationKeyId?: string,
+): Promise<string> {
   return appendDurableBatch(pool, payloadStore, {
     tenantId: input.tenantId,
     appId: input.appId,
@@ -85,6 +92,7 @@ async function append(input: Scope, value: Record<string, unknown>): Promise<str
     body: Buffer.from(JSON.stringify({ records: [value] }), "utf8"),
     eventCount: 1,
     receivedAt: input.receivedAt,
+    ...(installationKeyId ? { installationKeyId } : {}),
   });
 }
 
@@ -112,6 +120,37 @@ async function ledgerCount(input: Scope, recordId: string): Promise<number> {
       WHERE raw.tenant_id=$1 AND raw.app_id=$2 AND raw.record_id=$3`,
     [input.tenantId, input.appId, recordId],
   )).rows[0].count);
+}
+
+function countingPayloadStore(reads: string[]): PayloadStore {
+  return {
+    write: (scope, plaintext) => payloadStore.write(scope, plaintext),
+    read: async (reference) => {
+      reads.push(reference);
+      return payloadStore.read(reference);
+    },
+    purge: (reference) => payloadStore.purge(reference),
+    scanFor: (value) => payloadStore.scanFor(value),
+  };
+}
+
+async function purgeRecordEvidence(input: Scope, recordId: string): Promise<void> {
+  const bodyRef = await withTenant(pool, input.tenantId, async (client) => (await client.query<{ body_ref: string }>(
+    `SELECT batch.body_ref
+       FROM ledger.ingest_batches AS batch
+       JOIN ledger.ingest_batch_records AS member USING (ingest_batch_id, tenant_id, app_id)
+      WHERE member.tenant_id=$1 AND member.app_id=$2 AND member.record_id=$3
+      ORDER BY batch.inbox_seq DESC LIMIT 1`,
+    [input.tenantId, input.appId, recordId],
+  )).rows[0].body_ref);
+  await payloadStore.purge(bodyRef);
+  await withTenant(pool, input.tenantId, (client) => client.query(
+    `INSERT INTO ledger.raw_payload_states (
+       tenant_id, app_id, record_id, lifecycle_status, changed_at
+     ) VALUES ($1,$2,$3,'purged',$4)
+     ON CONFLICT (record_id, lifecycle_status) DO NOTHING`,
+    [input.tenantId, input.appId, recordId, new Date().toISOString()],
+  ).then(() => undefined));
 }
 
 after(async () => {
@@ -313,7 +352,217 @@ describe("SDK auxiliary queue recovery", () => {
     assert.deepEqual(terminal, { pending: 0, results: 1 });
   });
 
-  it("reads work and relevant history instead of every lifetime processed SDK batch", async () => {
+  it("reconstructs an available click from the normalized ledger without reopening its processed batch", async () => {
+    const clickScope = scope("ledger-click", "redirector");
+    const clickId = `click_${randomBytes(18).toString("base64url")}`;
+    const click = record(clickScope, "ledger-click", "click", {
+      click_id: clickId,
+      tracking_link_id: `link-ledger-${run}`,
+      campaign_id: `campaign-ledger-${run}`,
+      redirector_click_at: clickScope.receivedAt,
+      redirector_time_status: "available",
+    });
+    await append(clickScope, click);
+    assert.equal(await processSdkInbox(pool, payloadStore, clickScope.tenantId), 1);
+
+    const installAt = new Date(Date.parse(clickScope.receivedAt) + 60_000).toISOString();
+    const installScope: Scope = { ...clickScope, producer: "sdk-android", receivedAt: installAt };
+    const install = record(installScope, "ledger-install", "install", {
+      installation_id: `installation:ledger-click-${run}`,
+      install_type: "first_install",
+      referrer_status: "available",
+      click_id: clickId,
+      install_begin_at_server_status: "available",
+      install_begin_at_server: installAt,
+      protected_referrer_evidence_ref: `protected:ledger-click-${run}`,
+    });
+    await append(installScope, install);
+    const reads: string[] = [];
+    assert.equal(await processSdkInbox(pool, countingPayloadStore(reads), installScope.tenantId), 1);
+    assert.equal(reads.length, 1, "only the new install body may be decrypted");
+    const attribution = await withTenant(pool, installScope.tenantId, async (client) => (await client.query<{
+      reason_code: string;
+    }>(
+      "SELECT reason_code FROM ledger.attribution_results WHERE attribution_id=$1",
+      [`attr:${String(install.record_id)}`],
+    )).rows[0]);
+    assert.deepEqual(attribution, { reason_code: "valid_install_referrer" });
+  });
+
+  it("keeps tombstone idempotency while excluding purged click semantics", async () => {
+    const input = scope("ledger-tombstone", "redirector");
+    const clickId = `click_${randomBytes(18).toString("base64url")}`;
+    const original = record(input, "ledger-tombstone", "click", {
+      click_id: clickId,
+      tracking_link_id: `link-tombstone-${run}`,
+      campaign_id: `campaign-tombstone-${run}`,
+      redirector_click_at: input.receivedAt,
+      redirector_time_status: "available",
+    });
+    await append(input, original);
+    assert.equal(await processSdkInbox(pool, payloadStore, input.tenantId), 1);
+    await purgeRecordEvidence(input, String(original.record_id));
+
+    const laterAt = new Date(Date.parse(input.receivedAt) + 60_000).toISOString();
+    const duplicateScope: Scope = { ...input, receivedAt: laterAt };
+    const duplicate: Any = {
+      ...record(duplicateScope, "ledger-tombstone-duplicate", "click", structuredClone(original.payload as Any)),
+      event_id: original.event_id,
+    };
+    await append(duplicateScope, duplicate);
+    const duplicateReads: string[] = [];
+    assert.equal(await processSdkInbox(pool, countingPayloadStore(duplicateReads), input.tenantId), 1);
+    assert.equal(duplicateReads.length, 1);
+
+    const conflictScope: Scope = {
+      ...input,
+      receivedAt: new Date(Date.parse(laterAt) + 60_000).toISOString(),
+    };
+    const conflictPayload = { ...(original.payload as Any), campaign_id: `campaign-conflict-${run}` };
+    const conflict: Any = {
+      ...record(conflictScope, "ledger-tombstone-conflict", "click", conflictPayload),
+      event_id: original.event_id,
+    };
+    await append(conflictScope, conflict);
+    const conflictReads: string[] = [];
+    assert.equal(await processSdkInbox(pool, countingPayloadStore(conflictReads), input.tenantId), 1);
+    assert.equal(conflictReads.length, 1);
+
+    const installScope: Scope = {
+      ...input,
+      producer: "sdk-android",
+      receivedAt: new Date(Date.parse(conflictScope.receivedAt) + 60_000).toISOString(),
+    };
+    const install = record(installScope, "ledger-tombstone-install", "install", {
+      installation_id: `installation:ledger-tombstone-${run}`,
+      install_type: "first_install",
+      referrer_status: "available",
+      click_id: clickId,
+      install_begin_at_server_status: "available",
+      install_begin_at_server: installScope.receivedAt,
+      protected_referrer_evidence_ref: `protected:ledger-tombstone-${run}`,
+    });
+    await append(installScope, install);
+    const installReads: string[] = [];
+    assert.equal(await processSdkInbox(pool, countingPayloadStore(installReads), input.tenantId), 1);
+    assert.equal(installReads.length, 1);
+
+    const evidence = await withTenant(pool, input.tenantId, async (client) => ({
+      duplicate: (await client.query<{ duplicate_resolution: string; ingestion_status: string }>(
+        `SELECT duplicate_resolution, ingestion_status FROM ledger.event_deliveries
+          WHERE tenant_id=$1 AND app_id=$2 AND delivery_id=$3 ORDER BY ledger_seq DESC LIMIT 1`,
+        [input.tenantId, input.appId, duplicate.delivery_id],
+      )).rows[0],
+      conflict: (await client.query<{ duplicate_resolution: string; ingestion_status: string }>(
+        `SELECT duplicate_resolution, ingestion_status FROM ledger.event_deliveries
+          WHERE tenant_id=$1 AND app_id=$2 AND delivery_id=$3 ORDER BY ledger_seq DESC LIMIT 1`,
+        [input.tenantId, input.appId, conflict.delivery_id],
+      )).rows[0],
+      attribution: (await client.query<{ reason_code: string }>(
+        "SELECT reason_code FROM ledger.attribution_results WHERE attribution_id=$1",
+        [`attr:${String(install.record_id)}`],
+      )).rows[0],
+    }));
+    assert.deepEqual(evidence.duplicate, { duplicate_resolution: "duplicate_delivery", ingestion_status: "accepted" });
+    assert.deepEqual(evidence.conflict, { duplicate_resolution: "event_id_conflict", ingestion_status: "rejected" });
+    assert.deepEqual(evidence.attribution, { reason_code: "unknown_click_id" });
+  });
+
+  it("resolves a refund against an available purchase fact without reopening the purchase batch", async () => {
+    const purchaseScope = scope("ledger-commerce", "sdk-android");
+    const installationId = `installation:ledger-commerce-${run}`;
+    const transactionId = `transaction:ledger-commerce-${run}`;
+    const purchase = record(purchaseScope, "ledger-commerce-purchase", "purchase", {
+      installation_id: installationId,
+      transaction_id: transactionId,
+      amount_unscaled: "2500000",
+      amount_scale: 6,
+      currency: "USD",
+      financial_status: "settled",
+    });
+    await append(purchaseScope, purchase);
+    assert.equal(await processSdkInbox(pool, payloadStore, purchaseScope.tenantId), 1);
+
+    const refundScope: Scope = {
+      ...purchaseScope,
+      receivedAt: new Date(Date.parse(purchaseScope.receivedAt) + 60_000).toISOString(),
+    };
+    const refund = record(refundScope, "ledger-commerce-refund", "refund", {
+      installation_id: installationId,
+      transaction_id: `transaction:ledger-commerce-refund-${run}`,
+      original_transaction_id: transactionId,
+      amount_unscaled: "500000",
+      amount_scale: 6,
+      currency: "USD",
+      financial_status: "settled",
+    });
+    await append(refundScope, refund);
+    const reads: string[] = [];
+    assert.equal(await processSdkInbox(pool, countingPayloadStore(reads), refundScope.tenantId), 1);
+    assert.equal(reads.length, 1, "only the new refund body may be decrypted");
+    const correction = await withTenant(pool, refundScope.tenantId, async (client) => (await client.query<{
+      corrects_record_id: string;
+    }>(
+      "SELECT corrects_record_id FROM ledger.corrections WHERE correction_id=$1",
+      [`correction:${String(refund.record_id)}`],
+    )).rows[0]);
+    assert.deepEqual(correction, { corrects_record_id: purchase.record_id });
+  });
+
+  it("fails closed on an unprojected legacy consent control without reopening its encrypted body", async () => {
+    const input = scope("ledger-consent-upgrade", "sdk-android");
+    const installationKeyId = `installation-key-ledger-consent-${run}`;
+    const consent = record(input, "ledger-consent-upgrade", "consent_changed", {
+      consent_state: "withdrawn",
+      effective_at: input.receivedAt,
+      consent_policy_version: "synthetic-consent-v1",
+    });
+    const consentBatchId = await append(input, consent, installationKeyId);
+    assert.equal(await processSdkInbox(pool, payloadStore, input.tenantId), 1);
+    const migrationPool = createMigrationPool();
+    try {
+      await migrationPool.query(
+        "DELETE FROM control.installation_withdrawal_backfill_states WHERE tenant_id=$1 AND app_id=$2",
+        [input.tenantId, input.appId],
+      );
+      await migrationPool.query(
+        "DELETE FROM control.installation_withdrawals WHERE tenant_id=$1 AND app_id=$2",
+        [input.tenantId, input.appId],
+      );
+    } finally {
+      await migrationPool.end();
+    }
+    const consentBodyRef = await withTenant(pool, input.tenantId, async (client) => (await client.query<{
+      body_ref: string;
+    }>(
+      "SELECT body_ref FROM ledger.ingest_batches WHERE ingest_batch_id=$1",
+      [consentBatchId],
+    )).rows[0].body_ref);
+    await payloadStore.purge(consentBodyRef);
+
+    const later: Scope = {
+      ...input,
+      receivedAt: new Date(Date.parse(input.receivedAt) + 60_000).toISOString(),
+    };
+    const purchase = record(later, "ledger-consent-later", "purchase", {
+      installation_id: `installation:ledger-consent-${run}`,
+      transaction_id: `transaction:ledger-consent-${run}`,
+      amount_unscaled: "1000000",
+      amount_scale: 6,
+      currency: "USD",
+      financial_status: "settled",
+    });
+    const batchId = await append(later, purchase, installationKeyId);
+    const reads: string[] = [];
+    await assert.rejects(
+      processSdkInbox(pool, countingPayloadStore(reads), input.tenantId),
+      /withdrawal_projection_upgrade_required/,
+    );
+    assert.equal(reads.length, 1, "the unavailable historical consent body must not be reopened");
+    assert.deepEqual(await batchState(input, batchId), { status: "pending", reason_code: null });
+  });
+
+  it("reads only new work instead of any lifetime processed SDK batch", async () => {
     const input = scope("bounded-history", "sdk-android");
     const installationId = `installation:sdk-bounded-history-${run}`;
     for (let index = 0; index < 24; index += 1) {
@@ -355,6 +604,6 @@ describe("SDK auxiliary queue recovery", () => {
       scanFor: (value) => payloadStore.scanFor(value),
     };
     assert.equal(await processSdkInbox(pool, countingStore, input.tenantId), 1);
-    assert.equal(reads.length, 1, "one new unrelated batch must not replay 24 processed bodies");
+    assert.equal(reads.length, 1, "one new batch must not replay any processed body");
   });
 });

@@ -30,14 +30,28 @@ type InboxRow = {
   inbox_seq: string;
 };
 
-type HistoryInboxRow = InboxRow & {
-  required_withdrawal_backfill: boolean;
-};
-
-type HistorySelection = {
-  rows: InboxRow[];
-  requiredWithdrawalBackfillBatchIds: Set<string>;
-  installationKeyIdsToMark: Array<{ tenantId: string; appId: string; installationKeyId: string }>;
+type LedgerHistoryRow = {
+  ledger_position: string;
+  record_id: string;
+  tenant_id: string;
+  app_id: string;
+  producer: string;
+  producer_version: string;
+  event_id: string;
+  delivery_id: string;
+  event_name: string;
+  schema_version: string;
+  payload_sha256: string;
+  occurred_at: string;
+  occurred_at_source: string;
+  received_at: string;
+  processing_purpose_id: string | null;
+  payload_lifecycle_status: "available" | "redacted" | "purged";
+  logical_event_id: string | null;
+  record_lifecycle: string | null;
+  timeliness: string | null;
+  fact_payload: Any | null;
+  fraud_exclusion_id: string | null;
 };
 
 type AuxiliaryQueueFunctions = {
@@ -348,28 +362,39 @@ function historySelectors(records: readonly Any[]): HistorySelectors {
   };
 }
 
-async function relevantHistoryRows(
+function ledgerHistoryPayload(row: LedgerHistoryRow): Any {
+  if (row.payload_lifecycle_status !== "available" || row.record_lifecycle !== "active" || !row.fact_payload) {
+    return {};
+  }
+  return Object.fromEntries(Object.entries(structuredClone(row.fact_payload))
+    .filter(([, value]) => value !== null && value !== undefined));
+}
+
+async function relevantLedgerHistory(
   pool: Pool,
   tenantId: string,
   work: readonly DecodedInboxEntry[],
-): Promise<HistorySelection> {
-  const byApp = new Map<string, { records: Any[]; installationKeyIds: Set<string> }>();
+): Promise<CandidateAttempt[]> {
+  const byApp = new Map<string, Any[]>();
+  const retryRecordKeys = new Set<string>();
   for (const entry of work) {
-    const selection = byApp.get(entry.row.app_id) ?? { records: [], installationKeyIds: new Set<string>() };
-    selection.records.push(...entry.records);
-    if (entry.row.installation_key_id) selection.installationKeyIds.add(entry.row.installation_key_id);
-    byApp.set(entry.row.app_id, selection);
+    byApp.set(entry.row.app_id, [...(byApp.get(entry.row.app_id) ?? []), ...entry.records]);
+    if (entry.row.status === "processed" && entry.row.reason_code === SDK_POST_PROCESSING_PENDING_REASON) {
+      for (const record of entry.records) {
+        retryRecordKeys.add(`${entry.row.tenant_id}\u0000${entry.row.app_id}\u0000${record.record_id}`);
+      }
+    }
   }
-  const selected = new Map<string, HistoryInboxRow>();
-  const installationKeyIdsToMark: HistorySelection["installationKeyIdsToMark"] = [];
-  for (const [appId, selection] of [...byApp.entries()].sort(([left], [right]) => left.localeCompare(right))) {
-    const selectors = historySelectors(selection.records);
-    const installationKeyIds = [...selection.installationKeyIds].sort();
-    installationKeyIdsToMark.push(...installationKeyIds.map((installationKeyId) => ({
-      tenantId, appId, installationKeyId,
-    })));
-    const rows = await withTenant(pool, tenantId, (client) => client.query<HistoryInboxRow>(
-      `WITH logical_scopes AS (
+  const selected = new Map<string, CandidateAttempt>();
+  for (const [appId, records] of [...byApp.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+    const selectors = historySelectors(records);
+    const rows = await withTenant(pool, tenantId, (client) => client.query<LedgerHistoryRow>(
+      `WITH history_watermark AS (
+         SELECT COALESCE(max(ledger_seq), 0)::text AS ledger_position,
+                COALESCE(max(ledger_seq), 0) AS ledger_seq
+           FROM ledger.raw_records
+          WHERE tenant_id=$1 AND app_id=$2
+       ), logical_scopes AS (
          SELECT producer, event_id
            FROM jsonb_to_recordset($4::jsonb) AS scope(producer text, event_id text)
        ), candidate_records AS (
@@ -413,73 +438,119 @@ async function relevantHistoryRows(
               OR refund.transaction_id=ANY($8::text[])
               OR refund.original_transaction_id=ANY($8::text[])
               OR refund.correction_target_record_id=ANY($3::text[]))
-       ), candidate_batches AS (
-         SELECT member.ingest_batch_id, false AS required_withdrawal_backfill
-           FROM candidate_records AS candidate
-           JOIN ledger.ingest_batch_records AS member
-             ON member.tenant_id=$1 AND member.app_id=$2 AND member.record_id=candidate.record_id
-         UNION ALL
-         SELECT member.ingest_batch_id, true AS required_withdrawal_backfill
-           FROM ledger.logical_events AS logical
-           JOIN ledger.ingest_batch_records AS member
-             ON member.tenant_id=logical.tenant_id AND member.app_id=logical.app_id
-            AND member.record_id=logical.record_id
-           JOIN ledger.ingest_batches_current AS source_batch
-             ON source_batch.ingest_batch_id=member.ingest_batch_id
-            AND source_batch.tenant_id=member.tenant_id AND source_batch.app_id=member.app_id
-          WHERE logical.tenant_id=$1 AND logical.app_id=$2
-            AND logical.event_name='consent_changed'
-            AND source_batch.status='processed'
-            AND source_batch.installation_key_id=ANY($10::text[])
-            AND NOT EXISTS (
-              SELECT 1
-                FROM control.installation_withdrawal_backfill_states AS backfill
-               WHERE backfill.tenant_id=$1 AND backfill.app_id=$2
-                 AND backfill.installation_key_id=source_batch.installation_key_id
-            )
-       ), selected_batches AS (
-         SELECT ingest_batch_id, bool_or(required_withdrawal_backfill) AS required_withdrawal_backfill
-           FROM candidate_batches
-          GROUP BY ingest_batch_id
        )
-       SELECT batch.ingest_batch_id::text, batch.tenant_id, batch.app_id,
-              batch.producer, batch.received_at, batch.body_ref, batch.body_digest,
-              batch.status, batch.reason_code, batch.installation_key_id,
-              batch.inbox_seq::text, selected.required_withdrawal_backfill
-         FROM selected_batches AS selected
-         JOIN ledger.ingest_batches_current AS batch
-           ON batch.ingest_batch_id=selected.ingest_batch_id
-          AND batch.tenant_id=$1 AND batch.app_id=$2
-        WHERE batch.status='processed'
-          AND batch.reason_code IS DISTINCT FROM $9::text
-        ORDER BY batch.received_at, batch.inbox_seq`,
+       SELECT watermark.ledger_position, raw.record_id, raw.tenant_id, raw.app_id,
+              raw.producer, raw.producer_version, raw.event_id, raw.delivery_id,
+              raw.event_name, raw.schema_version, raw.payload_sha256, raw.occurred_at,
+              raw.occurred_at_source, raw.received_at, raw.processing_purpose_id,
+              raw.payload_lifecycle_status, logical.logical_event_id,
+              logical.record_lifecycle, logical.timeliness,
+              CASE logical.event_name
+                WHEN 'click' THEN jsonb_strip_nulls(jsonb_build_object(
+                  'click_id', click.click_id,
+                  'redirector_click_at', click.redirector_click_at,
+                  'redirector_time_status', CASE WHEN click.redirector_click_at IS NULL THEN 'missing' ELSE 'available' END
+                )) || click.artifact
+                WHEN 'install' THEN install.artifact || jsonb_strip_nulls(jsonb_build_object(
+                  'click_id', install.click_id,
+                  'referrer_status', CASE WHEN install.click_id IS NULL THEN 'none' ELSE 'available' END,
+                  'install_begin_at_server', install.install_begin_at_server,
+                  'install_begin_at_server_status', CASE WHEN install.install_begin_at_server IS NULL THEN 'missing' ELSE 'available' END
+                ))
+                WHEN 'purchase' THEN purchase.artifact
+                WHEN 'refund' THEN refund.artifact
+                ELSE NULL
+              END AS fact_payload,
+              excluded.fraud_decision_id AS fraud_exclusion_id
+         FROM candidate_records AS candidate
+         CROSS JOIN history_watermark AS watermark
+         JOIN ledger.raw_records_current AS raw
+           ON raw.tenant_id=$1 AND raw.app_id=$2 AND raw.record_id=candidate.record_id
+          AND raw.ledger_seq <= watermark.ledger_seq
+         LEFT JOIN ledger.logical_events AS logical
+           ON logical.tenant_id=raw.tenant_id AND logical.app_id=raw.app_id
+          AND logical.record_id=raw.record_id
+         LEFT JOIN ledger.click_facts AS click
+           ON click.tenant_id=logical.tenant_id AND click.app_id=logical.app_id
+          AND click.logical_event_id=logical.logical_event_id
+         LEFT JOIN ledger.install_facts AS install
+           ON install.tenant_id=logical.tenant_id AND install.app_id=logical.app_id
+          AND install.logical_event_id=logical.logical_event_id
+         LEFT JOIN ledger.purchase_facts AS purchase
+           ON purchase.tenant_id=logical.tenant_id AND purchase.app_id=logical.app_id
+          AND purchase.logical_event_id=logical.logical_event_id
+         LEFT JOIN ledger.refund_facts AS refund
+           ON refund.tenant_id=logical.tenant_id AND refund.app_id=logical.app_id
+          AND refund.logical_event_id=logical.logical_event_id
+         LEFT JOIN LATERAL (
+           SELECT fraud.fraud_decision_id
+             FROM ledger.fraud_decisions AS fraud
+            WHERE fraud.tenant_id=raw.tenant_id AND fraud.app_id=raw.app_id
+              AND fraud.subject_scope='record' AND fraud.subject_ref=raw.record_id
+              AND fraud.action='exclude'
+              AND NOT EXISTS (
+                SELECT 1 FROM ledger.fraud_decisions AS newer
+                 WHERE newer.tenant_id=fraud.tenant_id AND newer.app_id=fraud.app_id
+                   AND newer.supersedes_fraud_decision_id=fraud.fraud_decision_id
+              )
+            ORDER BY fraud.evaluated_at DESC, fraud.fraud_decision_id DESC
+            LIMIT 1
+         ) AS excluded ON true
+        ORDER BY raw.received_at, raw.record_id`,
       [tenantId, appId, selectors.recordIds, JSON.stringify(selectors.logicalScopes),
         selectors.clickIds, selectors.remoteClickRefs, selectors.installationIds,
-        selectors.transactionIds, SDK_POST_PROCESSING_PENDING_REASON, installationKeyIds],
+        selectors.transactionIds],
     ));
     for (const row of rows.rows) {
-      const prior = selected.get(row.ingest_batch_id);
-      selected.set(row.ingest_batch_id, {
-        ...row,
-        required_withdrawal_backfill: row.required_withdrawal_backfill
-          || prior?.required_withdrawal_backfill === true,
+      const key = `${row.tenant_id}\u0000${row.app_id}\u0000${row.record_id}`;
+      // A post-processing retry deliberately re-evaluates its own already
+      // persisted record so protected auxiliary material can be queued. Other
+      // related ledger rows still provide bounded candidate history.
+      if (retryRecordKeys.has(key)) continue;
+      const payload = ledgerHistoryPayload(row);
+      const semanticAvailable = row.payload_lifecycle_status === "available"
+        && row.record_lifecycle === "active" && Object.keys(payload).length > 0;
+      selected.set(key, {
+        batch_id: `ledger:${row.record_id}`,
+        server: {
+          tenant_id: row.tenant_id,
+          app_id: row.app_id,
+          received_at: row.received_at,
+          fraud_actions_enabled: process.env.OPENMASU_FRAUD_ENABLED !== "0",
+          processing_purposes: [],
+          withdrawals: [],
+          alternative_legal_bases: [],
+        },
+        record: {
+          record_id: row.record_id,
+          tenant_id: row.tenant_id,
+          app_id: row.app_id,
+          producer: row.producer,
+          producer_version: row.producer_version,
+          event_id: row.event_id,
+          delivery_id: row.delivery_id,
+          event_name: row.event_name,
+          schema_version: row.schema_version,
+          subject_scope: ["skan_postback", "adattributionkit_postback"].includes(row.event_name)
+            ? "aggregate" : "installation_level",
+          occurred_at: row.occurred_at,
+          occurred_at_source: row.occurred_at_source,
+          received_at: row.received_at,
+          processing_purpose_id: row.processing_purpose_id ?? "analytics",
+          processing_sequence: 0,
+          late: row.timeliness === "late",
+          payload,
+        },
+        history_state: {
+          payload_sha256: row.payload_sha256,
+          semantic_available: semanticAvailable,
+          ledger_position: row.ledger_position,
+          ...(row.fraud_exclusion_id ? { fraud_exclusion_id: row.fraud_exclusion_id } : {}),
+        },
       });
     }
   }
-  const values = [...selected.values()].sort((left, right) => {
-    const received = left.received_at.localeCompare(right.received_at);
-    if (received !== 0) return received;
-    const leftSequence = BigInt(left.inbox_seq);
-    const rightSequence = BigInt(right.inbox_seq);
-    return leftSequence < rightSequence ? -1 : leftSequence > rightSequence ? 1 : 0;
-  });
-  return {
-    rows: values,
-    requiredWithdrawalBackfillBatchIds: new Set(values
-      .filter((row) => row.required_withdrawal_backfill)
-      .map((row) => row.ingest_batch_id)),
-    installationKeyIdsToMark,
-  };
+  return [...selected.values()];
 }
 
 async function decodeRows(
@@ -497,22 +568,6 @@ async function decodeRows(
     }
   }
   return decoded;
-}
-
-async function markWithdrawalHistoryBackfilled(
-  pool: Pool,
-  values: HistorySelection["installationKeyIdsToMark"],
-): Promise<void> {
-  const completedAt = new Date().toISOString();
-  for (const value of values) {
-    await withTenant(pool, value.tenantId, (client) => client.query(
-      `INSERT INTO control.installation_withdrawal_backfill_states (
-         installation_key_id, tenant_id, app_id, completed_at
-       ) VALUES ($1,$2,$3,$4)
-       ON CONFLICT (installation_key_id) DO NOTHING`,
-      [value.installationKeyId, value.tenantId, value.appId, completedAt],
-    ).then(() => undefined));
-  }
 }
 
 function decodedWithdrawalsFor(
@@ -562,6 +617,66 @@ async function durableWithdrawalsFor(
     result.set(row.installation_key_id, values);
   }
   return result;
+}
+
+async function assertWithdrawalProjectionReady(
+  pool: Pool,
+  tenantId: string,
+  rows: readonly DecodedInboxEntry[],
+): Promise<void> {
+  const installationKeyIds = [...new Set(rows
+    .map((entry) => entry.row.installation_key_id)
+    .filter((value): value is string => value !== null))];
+  if (installationKeyIds.length === 0) return;
+  const missing = await withTenant(pool, tenantId, (client) => client.query<{ installation_key_id: string }>(
+    `SELECT DISTINCT source_batch.installation_key_id
+       FROM ledger.logical_events AS logical
+       JOIN ledger.ingest_batch_records AS member
+         ON member.tenant_id=logical.tenant_id AND member.app_id=logical.app_id
+        AND member.record_id=logical.record_id
+       JOIN ledger.ingest_batches_current AS source_batch
+         ON source_batch.ingest_batch_id=member.ingest_batch_id
+        AND source_batch.tenant_id=member.tenant_id AND source_batch.app_id=member.app_id
+      WHERE logical.tenant_id=$1 AND logical.event_name='consent_changed'
+        AND source_batch.status='processed'
+        AND source_batch.installation_key_id=ANY($2::text[])
+        AND NOT EXISTS (
+          SELECT 1 FROM control.installation_withdrawal_backfill_states AS projection
+           WHERE projection.tenant_id=logical.tenant_id
+             AND projection.app_id=logical.app_id
+             AND projection.installation_key_id=source_batch.installation_key_id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM control.installation_withdrawals AS withdrawal
+           WHERE withdrawal.tenant_id=logical.tenant_id
+             AND withdrawal.app_id=logical.app_id
+             AND withdrawal.installation_key_id=source_batch.installation_key_id
+        )
+      ORDER BY source_batch.installation_key_id`,
+    [tenantId, installationKeyIds],
+  ));
+  if (missing.rowCount && missing.rowCount > 0) {
+    throw new Error("withdrawal_projection_upgrade_required");
+  }
+}
+
+async function markConsentProjectionComplete(
+  pool: Pool,
+  rows: readonly DecodedInboxEntry[],
+  acceptedRecordIds: ReadonlySet<string>,
+): Promise<void> {
+  const completedAt = new Date().toISOString();
+  for (const entry of rows) {
+    if (!entry.row.installation_key_id || !entry.records.some((record) =>
+      record.event_name === "consent_changed" && acceptedRecordIds.has(record.record_id))) continue;
+    await withTenant(pool, entry.row.tenant_id, (client) => client.query(
+      `INSERT INTO control.installation_withdrawal_backfill_states (
+         installation_key_id, tenant_id, app_id, completed_at
+       ) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (installation_key_id) DO NOTHING`,
+      [entry.row.installation_key_id, entry.row.tenant_id, entry.row.app_id, completedAt],
+    ).then(() => undefined));
+  }
 }
 
 async function persistRecognizedWithdrawals(
@@ -676,45 +791,24 @@ export async function processSdkInbox(
     },
   );
   if (workDecoded.length === 0) return 0;
-  const history = await relevantHistoryRows(pool, tenantId, workDecoded);
-  const historyDecoded = await decodeRows(
-    history.rows,
-    payloadStore,
-    options.metaKeys ?? [],
-    async (row) => {
-      if (history.requiredWithdrawalBackfillBatchIds.has(row.ingest_batch_id)) {
-        throw new Error(`required withdrawal history unavailable for batch ${row.ingest_batch_id}`);
-      }
-    },
-  );
-  const decoded = [...historyDecoded, ...workDecoded];
-  const historical: CandidateAttempt[] = [];
+  await assertWithdrawalProjectionReady(pool, tenantId, workDecoded);
+  const historical = await relevantLedgerHistory(pool, tenantId, workDecoded);
   const pending: CandidateAttempt[] = [];
   const workRows: InboxRow[] = [];
   const newlyPendingRows: InboxRow[] = [];
-  // Existing installations may predate the durable withdrawal projection. Backfill only
-  // consent controls that already have an accepted canonical logical event; invalid or
-  // rejected client payloads can never create server withdrawal state.
-  await persistRecognizedWithdrawals(pool, decoded);
-  await markWithdrawalHistoryBackfilled(pool, history.installationKeyIdsToMark);
   const withdrawals = decodedWithdrawalsFor(
-    decoded,
-    await durableWithdrawalsFor(pool, tenantId, decoded),
+    workDecoded,
+    await durableWithdrawalsFor(pool, tenantId, workDecoded),
   );
-  for (const entry of decoded) {
+  for (const entry of workDecoded) {
     const attempts = entry.records.map((record) => ({
       server: serverContext(entry.row, record, entry.row.installation_key_id ? withdrawals.get(entry.row.installation_key_id) ?? [] : []),
       record,
       batch_id: entry.row.ingest_batch_id,
     }));
-    if (entry.row.status === "processed"
-      && entry.row.reason_code !== SDK_POST_PROCESSING_PENDING_REASON) {
-      historical.push(...attempts);
-    } else {
-      pending.push(...attempts);
-      workRows.push(entry.row);
-      if (entry.row.status === "pending") newlyPendingRows.push(entry.row);
-    }
+    pending.push(...attempts);
+    workRows.push(entry.row);
+    if (entry.row.status === "pending") newlyPendingRows.push(entry.row);
   }
   if (pending.length === 0) return 0;
   const durablePostProcessing = new Set(workRows
@@ -731,6 +825,7 @@ export async function processSdkInbox(
       .filter((logical) => logical.event_name === "install")
       .map((logical) => logical.record_id));
     const acceptedRecordIds = new Set(output.logical_events.map((logical) => logical.record_id));
+    await markConsentProjectionComplete(pool, workDecoded, acceptedRecordIds);
     const recordsByBatch = new Map<string, string[]>();
     for (const attempt of pending) {
       const list = recordsByBatch.get(attempt.batch_id) ?? [];
@@ -760,7 +855,7 @@ export async function processSdkInbox(
       googlePlayProduct: options.auxiliaryQueues?.googlePlayProduct ?? queueGooglePlayProductVerification,
     };
     const workIds = new Set(workRows.map((row) => row.ingest_batch_id));
-    for (const entry of decoded) {
+    for (const entry of workDecoded) {
       if (!workIds.has(entry.row.ingest_batch_id)) continue;
       for (const lookup of entry.adServicesLookups) {
         if (acceptedInstallIds.has(lookup.installRecordId)) await queues.adServices(pool, lookup);
