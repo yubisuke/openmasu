@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -9,6 +9,9 @@ function generatedAppEnvironment(options: {
   readonly allowlist?: string;
   readonly publicBaseUrl?: string;
   readonly redirectorBaseUrl?: string;
+  readonly workerConcurrency?: string;
+  readonly workerShutdownTimeout?: string;
+  readonly reconciledWorkerConcurrency?: string;
 } = {}): string {
   const root = mkdtempSync(join(tmpdir(), "openmasu-bootstrap-"));
   const repositoryRoot = join(root, "repository");
@@ -24,13 +27,39 @@ function generatedAppEnvironment(options: {
   else environment.OPENMASU_PUBLIC_BASE_URL = options.publicBaseUrl;
   if (options.redirectorBaseUrl === undefined) delete environment.OPENMASU_REDIRECTOR_BASE_URL;
   else environment.OPENMASU_REDIRECTOR_BASE_URL = options.redirectorBaseUrl;
+  if (options.workerConcurrency === undefined) delete environment.OPENMASU_WORKER_CONCURRENCY;
+  else environment.OPENMASU_WORKER_CONCURRENCY = options.workerConcurrency;
+  if (options.workerShutdownTimeout === undefined) {
+    delete environment.OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS;
+  } else {
+    environment.OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS = options.workerShutdownTimeout;
+  }
   try {
-    const result = spawnSync(
+    let result = spawnSync(
       process.execPath,
       ["--import", "tsx", "apps/runtime/src/bootstrap.ts"],
       { cwd: process.cwd(), encoding: "utf8", env: environment },
     );
     assert.equal(result.status, 0, result.stderr);
+    if (options.reconciledWorkerConcurrency !== undefined) {
+      const repositoryEnvironmentPath = join(repositoryRoot, ".env");
+      const repositoryEnvironment = readFileSync(repositoryEnvironmentPath, "utf8");
+      writeFileSync(
+        repositoryEnvironmentPath,
+        repositoryEnvironment.replace(
+          /^OPENMASU_WORKER_CONCURRENCY=.*$/m,
+          `OPENMASU_WORKER_CONCURRENCY=${options.reconciledWorkerConcurrency}`,
+        ),
+        "utf8",
+      );
+      delete environment.OPENMASU_WORKER_CONCURRENCY;
+      result = spawnSync(
+        process.execPath,
+        ["--import", "tsx", "apps/runtime/src/bootstrap.ts"],
+        { cwd: process.cwd(), encoding: "utf8", env: environment },
+      );
+      assert.equal(result.status, 0, result.stderr);
+    }
     return readFileSync(join(runtimeRoot, "app", "runtime.env"), "utf8");
   } finally {
     rmSync(root, { force: true, recursive: true });
@@ -81,5 +110,39 @@ describe("runtime bootstrap environment", () => {
       /OPENMASU_REDIRECTOR_BASE_URL: \$\{OPENMASU_REDIRECTOR_BASE_URL:-http:\/\/localhost:8090\}/,
     );
     assert.match(compose, /127\.0\.0\.1:\$\{OPENMASU_PROXY_HOST_PORT:-8443\}:443/);
+    assert.match(
+      compose,
+      /OPENMASU_WORKER_CONCURRENCY: \$\{OPENMASU_WORKER_CONCURRENCY:-4\}/,
+    );
+    assert.match(
+      compose,
+      /OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS: \$\{OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS:-30000\}/,
+    );
+  });
+
+  it("propagates bounded tenant concurrency with a safe development default", () => {
+    assert.match(
+      generatedAppEnvironment(),
+      /^OPENMASU_WORKER_CONCURRENCY=4$/m,
+    );
+    assert.match(
+      generatedAppEnvironment({ workerConcurrency: "7" }),
+      /^OPENMASU_WORKER_CONCURRENCY=7$/m,
+    );
+    assert.match(
+      generatedAppEnvironment({ workerShutdownTimeout: "45000" }),
+      /^OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS=45000$/m,
+    );
+  });
+
+  it("reconciles non-secret worker controls in an existing runtime environment", () => {
+    const appEnvironment = generatedAppEnvironment({
+      workerConcurrency: "7",
+      reconciledWorkerConcurrency: "1",
+    });
+    assert.match(appEnvironment, /^OPENMASU_WORKER_CONCURRENCY=1$/m);
+    assert.doesNotMatch(appEnvironment, /^OPENMASU_WORKER_CONCURRENCY=7$/m);
+    assert.match(appEnvironment, /^OPENMASU_ADMIN_KEY=[A-Za-z0-9_-]+$/m);
+    assert.equal(appEnvironment.match(/^OPENMASU_WORKER_CONCURRENCY=/gm)?.length, 1);
   });
 });

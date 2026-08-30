@@ -58,6 +58,7 @@ Progress:
 | Operators can receive delayed deterministic files without adopting a provider-specific export layout | Complete with synthetic SigV4 vectors, object replay, durable cursor, credential boundary, privacy-notice, and lifecycle tests |
 | App metrics advance without an external cron wrapper | Complete with immutable app schedules, UTC lag/watermark policy, bounded catch-up, exact crash replay, and report/dashboard integration tests |
 | Queue-only tenants are discoverable before tenant-scoped processing begins | Complete for integrity verification and commerce provider read-back, with SELECT-only owner discovery policies and drain-to-terminal integration evidence |
+| A slow tenant does not globally block independent tenant cycles | Synthetic source-level complete within one worker process with a bounded FIFO coordinator, same-tenant deduplication, unchanged per-tenant job order, bounded shutdown, and concurrent scheduler-lease evidence; full process shutdown and multi-replica tenant-wide ordering remain operational boundaries |
 
 Candidate v0.2.0-rc.4 satisfied the release-coherence exit gate at green `main`
 commit `2a2f6b5`. Authenticated backend events and operator event webhooks were

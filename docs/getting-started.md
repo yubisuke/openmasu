@@ -67,6 +67,17 @@ defaults. At minimum, keep `OPENMASU_PUBLIC_BASE_URL` and
 deployment must build and validate its own runtime environment rather than
 treating this reference Compose file as a production template.
 
+The worker runs up to four independent tenant cycles by default. Set
+`OPENMASU_WORKER_CONCURRENCY` from 1 through 16 and rerun `npm run bootstrap` to
+change that limit in an existing local runtime; `1` restores globally serial
+processing. Every tenant still keeps its privacy, ingestion, provider, metric,
+and fraud jobs in their established order within one worker process. The
+reference deployment uses one worker replica because tenant/job leases do not
+provide tenant-wide ordering across replicas. Raising the limit changes
+database and provider load and requires deployment-specific monitoring.
+`OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS` controls the bounded graceful-drain window
+from 1000 through 300000 milliseconds and defaults to 30000.
+
 `demo:metrics` labels PostgreSQL ledger counts separately from the contract
 fixture preview. The preview is not a database import or live-provider result.
 

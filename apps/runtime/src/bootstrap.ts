@@ -1,6 +1,16 @@
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, openSync, closeSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 
 function secret(bytes = 32): string {
   return randomBytes(bytes).toString("base64url");
@@ -20,6 +30,42 @@ function exclusiveWrite(path: string, content: string): void {
   }
 }
 
+function boundedIntegerSetting(
+  name: string,
+  value: string | undefined,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): string {
+  const parsed = Number(value ?? String(fallback));
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`${name} must be an integer from ${minimum} through ${maximum}`);
+  }
+  return String(parsed);
+}
+
+function reconcileEnvSetting(path: string, name: string, value: string): void {
+  const current = readFileSync(path, "utf8").trimEnd();
+  const line = `${name}=${value}`;
+  const matcher = new RegExp(`^${name}=.*$`, "m");
+  const next = matcher.test(current) ? current.replace(matcher, line) : `${current}\n${line}`;
+  const temporaryPath = join(
+    dirname(path),
+    `.${basename(path)}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`,
+  );
+  const descriptor = openSync(temporaryPath, "wx", 0o600);
+  try {
+    writeFileSync(descriptor, `${next}\n`, "utf8");
+    fsyncSync(descriptor);
+    closeSync(descriptor);
+    renameSync(temporaryPath, path);
+  } catch (error) {
+    try { closeSync(descriptor); } catch { /* already closed */ }
+    if (existsSync(temporaryPath)) unlinkSync(temporaryPath);
+    throw error;
+  }
+}
+
 function url(user: string, password: string, host: string, port: string, database: string): string {
   return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
 }
@@ -33,21 +79,6 @@ const appEnvPath = join(runtimeSecretRoot, "app", "runtime.env");
 const seedEnvPath = join(runtimeSecretRoot, "seed", "runtime.env");
 const postgresPasswordPath = join(runtimeSecretRoot, "postgres", "password");
 const repositoryEnvPath = join(repositoryRoot, ".env");
-const publicBaseUrl = process.env.OPENMASU_PUBLIC_BASE_URL ?? "http://localhost:8080";
-const redirectorBaseUrl = process.env.OPENMASU_REDIRECTOR_BASE_URL ?? "http://localhost:8090";
-const databaseHost = process.env.OPENMASU_DATABASE_HOST ?? "localhost";
-const databasePort = process.env.OPENMASU_DATABASE_PORT ?? "5432";
-const databaseName = process.env.OPENMASU_DATABASE_NAME ?? "openmasu";
-const defaultTenantId = process.env.OPENMASU_MAX_TENANT_ID ?? "tenant-local";
-const defaultAppId = process.env.OPENMASU_MAX_APP_ID ?? "app-local";
-
-const runtimePaths = [migrationEnvPath, appEnvPath, seedEnvPath, postgresPasswordPath];
-if (runtimePaths.every(existsSync)) {
-  console.log(`OpenMasu runtime secrets already exist: ${runtimeSecretRoot}`);
-  process.exit(0);
-}
-if (runtimePaths.some(existsSync)) throw new Error(`incomplete runtime secret set: ${runtimeSecretRoot}`);
-
 const existing = existsSync(repositoryEnvPath)
   ? Object.fromEntries(
       readFileSync(repositoryEnvPath, "utf8").split(/\r?\n/).flatMap((line) => {
@@ -56,6 +87,42 @@ const existing = existsSync(repositoryEnvPath)
       }),
     )
   : {};
+const publicBaseUrl = process.env.OPENMASU_PUBLIC_BASE_URL ?? "http://localhost:8080";
+const redirectorBaseUrl = process.env.OPENMASU_REDIRECTOR_BASE_URL ?? "http://localhost:8090";
+const databaseHost = process.env.OPENMASU_DATABASE_HOST ?? "localhost";
+const databasePort = process.env.OPENMASU_DATABASE_PORT ?? "5432";
+const databaseName = process.env.OPENMASU_DATABASE_NAME ?? "openmasu";
+const defaultTenantId = process.env.OPENMASU_MAX_TENANT_ID ?? "tenant-local";
+const defaultAppId = process.env.OPENMASU_MAX_APP_ID ?? "app-local";
+const workerConcurrency = boundedIntegerSetting(
+  "OPENMASU_WORKER_CONCURRENCY",
+  process.env.OPENMASU_WORKER_CONCURRENCY ?? existing.OPENMASU_WORKER_CONCURRENCY,
+  4,
+  1,
+  16,
+);
+const workerShutdownTimeout = boundedIntegerSetting(
+  "OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS",
+  process.env.OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS
+    ?? existing.OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS,
+  30_000,
+  1_000,
+  300_000,
+);
+
+const runtimePaths = [migrationEnvPath, appEnvPath, seedEnvPath, postgresPasswordPath];
+if (runtimePaths.every(existsSync)) {
+  reconcileEnvSetting(appEnvPath, "OPENMASU_WORKER_CONCURRENCY", workerConcurrency);
+  reconcileEnvSetting(
+    appEnvPath,
+    "OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS",
+    workerShutdownTimeout,
+  );
+  console.log(`OpenMasu runtime secrets already exist: ${runtimeSecretRoot}`);
+  process.exit(0);
+}
+if (runtimePaths.some(existsSync)) throw new Error(`incomplete runtime secret set: ${runtimeSecretRoot}`);
+
 const postgresPassword = existing.OPENMASU_POSTGRES_BOOTSTRAP_PASSWORD ?? secret();
 const appPassword = existing.OPENMASU_APP_DATABASE_PASSWORD ?? secret();
 const readerPassword = existing.OPENMASU_READER_DATABASE_PASSWORD ?? secret();
@@ -98,6 +165,8 @@ const appEntries: Record<string, string> = {
   OPENMASU_PUBLIC_BASE_URL: publicBaseUrl,
   OPENMASU_API_PORT: "8080",
   OPENMASU_WORKER_POLL_MS: "5000",
+  OPENMASU_WORKER_CONCURRENCY: workerConcurrency,
+  OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS: workerShutdownTimeout,
   OPENMASU_SYNTHETIC_MODE: "0",
   OPENMASU_MAX_TENANT_ID: defaultTenantId,
   OPENMASU_MAX_APP_ID: defaultAppId,

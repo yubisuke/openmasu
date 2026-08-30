@@ -32,12 +32,24 @@ import {
 } from "./commerce-readback-worker.js";
 import { processMetricSchedules } from "./metric-schedule-worker.js";
 import { appleLeafKeyFromChain, verifyCompactJws } from "@openmasu/commerce-lifecycle";
+import {
+  TenantWorkCoordinator,
+  parseWorkerConcurrency,
+  parseWorkerShutdownTimeout,
+  waitForWorkerDrain,
+  workerPoolSizes,
+} from "./tenant-work-coordinator.js";
 
 const connectionString = process.env.OPENMASU_APP_DATABASE_URL;
 if (!connectionString) throw new Error("OPENMASU_APP_DATABASE_URL is required");
 
-const pool = new Pool({ connectionString, max: 2 });
-const schedulerPool = new Pool({ connectionString, max: 1 });
+const workerConcurrency = parseWorkerConcurrency(process.env.OPENMASU_WORKER_CONCURRENCY);
+const workerShutdownTimeout = parseWorkerShutdownTimeout(
+  process.env.OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS,
+);
+const poolSizes = workerPoolSizes(workerConcurrency);
+const pool = new Pool({ connectionString, max: poolSizes.jobs });
+const schedulerPool = new Pool({ connectionString, max: poolSizes.scheduler });
 await Promise.all([pool.query("SELECT 1"), schedulerPool.query("SELECT 1")]);
 process.stdout.write('{"event":"service_started","component":"worker"}\n');
 
@@ -131,7 +143,6 @@ async function sweepDashboardSessions(): Promise<void> {
     );
   });
 }
-let busy = false;
 const schedulerStore = new PostgresSchedulerStore(schedulerPool);
 const schedulePolicy = {
   intervalMs: interval,
@@ -171,145 +182,185 @@ async function runWorkerJob(
   }
 }
 
-const tick = async (): Promise<void> => {
-  if (busy) return;
-  busy = true;
-  try {
+async function processTenantCycle(tenantId: string): Promise<void> {
+  if (tenantId === maxTenantId) {
     await runWorkerJob(maxTenantId, "max_inbox", async () => {
       await processMaxInbox(pool, payloadStore, maxTenantId);
     });
-    const metaKeys = [
-      secrets.read("OPENMASU_META_IR_DECRYPTION_KEY") ? { key_id: "current", key_hex: secrets.read("OPENMASU_META_IR_DECRYPTION_KEY")! } : undefined,
-      secrets.read("OPENMASU_META_IR_DECRYPTION_KEY_PREVIOUS") ? { key_id: "previous", key_hex: secrets.read("OPENMASU_META_IR_DECRYPTION_KEY_PREVIOUS")! } : undefined,
-    ].filter((value): value is { key_id: string; key_hex: string } => value !== undefined);
-    const inboxTenants = new Set([sdkTenantId, ...await listRuntimeWorkTenants(pool)]);
-    for (const tenantId of [...inboxTenants].sort()) {
-      await runWorkerJob(tenantId, "privacy_purge", async () => {
-        const privacy = await processPrivacyDeletionJobs({ pool, payloadStore, tenantId });
-        if (privacy.jobs > 0) {
-          process.stdout.write(`${JSON.stringify({ event: "privacy_purge_cycle", component: "worker", ...privacy })}\n`);
-        }
+  }
+  const metaKeys = [
+    secrets.read("OPENMASU_META_IR_DECRYPTION_KEY") ? { key_id: "current", key_hex: secrets.read("OPENMASU_META_IR_DECRYPTION_KEY")! } : undefined,
+    secrets.read("OPENMASU_META_IR_DECRYPTION_KEY_PREVIOUS") ? { key_id: "previous", key_hex: secrets.read("OPENMASU_META_IR_DECRYPTION_KEY_PREVIOUS")! } : undefined,
+  ].filter((value): value is { key_id: string; key_hex: string } => value !== undefined);
+  await runWorkerJob(tenantId, "privacy_purge", async () => {
+    const privacy = await processPrivacyDeletionJobs({ pool, payloadStore, tenantId });
+    if (privacy.jobs > 0) {
+      process.stdout.write(`${JSON.stringify({ event: "privacy_purge_cycle", component: "worker", ...privacy })}\n`);
+    }
+  });
+  await runWorkerJob(tenantId, "sdk_inbox", async () => {
+    await processSdkInbox(pool, payloadStore, tenantId, { metaKeys });
+  });
+  await runWorkerJob(tenantId, "adservices_lookup", async () => {
+    await processAdServicesLookups(pool, payloadStore, tenantId, {
+      enabled: process.env.OPENMASU_ADSERVICES_LOOKUP !== "off",
+      endpoint: process.env.OPENMASU_ADSERVICES_ENDPOINT,
+      limiter: adServicesLimiter,
+    });
+  });
+  await runWorkerJob(tenantId, "integrity_verification", async () => {
+    await processIntegrityVerifications(pool, payloadStore, tenantId, {
+      providerMode: integrityProviderMode,
+      playEndpoint: process.env.OPENMASU_PLAY_INTEGRITY_ENDPOINT,
+      appAttestEndpoint: process.env.OPENMASU_APP_ATTEST_ENDPOINT,
+    });
+  });
+  await runWorkerJob(tenantId, "google_play_verification", async () => {
+    await processGooglePlayProductVerifications(pool, payloadStore, tenantId, {
+      enabled: process.env.OPENMASU_GOOGLE_PLAY_PRODUCT_VERIFICATION === "on"
+        || process.env.OPENMASU_GOOGLE_PLAY_SUBSCRIPTION_VERIFICATION === "on"
+        || process.env.OPENMASU_GOOGLE_PLAY_RTDN_RENEWAL_VERIFICATION === "on",
+      enabledKinds: [
+        ...(process.env.OPENMASU_GOOGLE_PLAY_PRODUCT_VERIFICATION === "on" ? ["one_time_product" as const] : []),
+        ...(process.env.OPENMASU_GOOGLE_PLAY_SUBSCRIPTION_VERIFICATION === "on" ? ["subscription_initial" as const] : []),
+        ...(process.env.OPENMASU_GOOGLE_PLAY_RTDN_RENEWAL_VERIFICATION === "on" ? ["subscription_renewal" as const] : []),
+      ],
+      credentialsJson: secrets.read("OPENMASU_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"),
+      apiBaseUrl: process.env.OPENMASU_GOOGLE_PLAY_ANDROID_PUBLISHER_BASE_URL,
+      tokenUrl: process.env.OPENMASU_GOOGLE_PLAY_OAUTH_TOKEN_URL,
+    });
+  });
+  await runWorkerJob(tenantId, "commerce_readback", async () => {
+    if (process.env.OPENMASU_COMMERCE_READBACKS === "on") {
+      const commerce = await processCommerceReadbacks(pool, payloadStore, tenantId, {
+        googleClient: googleCommerceClient,
+        appleClient: appleCommerceClient,
+        verifyAppleSignedData: verifyAppleCommerce,
       });
-      await runWorkerJob(tenantId, "sdk_inbox", async () => {
-        await processSdkInbox(pool, payloadStore, tenantId, { metaKeys });
-      });
-      await runWorkerJob(tenantId, "adservices_lookup", async () => {
-        await processAdServicesLookups(pool, payloadStore, tenantId, {
-          enabled: process.env.OPENMASU_ADSERVICES_LOOKUP !== "off",
-          endpoint: process.env.OPENMASU_ADSERVICES_ENDPOINT,
-          limiter: adServicesLimiter,
-        });
-      });
-      await runWorkerJob(tenantId, "integrity_verification", async () => {
-        await processIntegrityVerifications(pool, payloadStore, tenantId, {
-          providerMode: integrityProviderMode,
-          playEndpoint: process.env.OPENMASU_PLAY_INTEGRITY_ENDPOINT,
-          appAttestEndpoint: process.env.OPENMASU_APP_ATTEST_ENDPOINT,
-        });
-      });
-      await runWorkerJob(tenantId, "google_play_verification", async () => {
-        await processGooglePlayProductVerifications(pool, payloadStore, tenantId, {
-          enabled: process.env.OPENMASU_GOOGLE_PLAY_PRODUCT_VERIFICATION === "on"
-            || process.env.OPENMASU_GOOGLE_PLAY_SUBSCRIPTION_VERIFICATION === "on"
-            || process.env.OPENMASU_GOOGLE_PLAY_RTDN_RENEWAL_VERIFICATION === "on",
-          enabledKinds: [
-            ...(process.env.OPENMASU_GOOGLE_PLAY_PRODUCT_VERIFICATION === "on" ? ["one_time_product" as const] : []),
-            ...(process.env.OPENMASU_GOOGLE_PLAY_SUBSCRIPTION_VERIFICATION === "on" ? ["subscription_initial" as const] : []),
-            ...(process.env.OPENMASU_GOOGLE_PLAY_RTDN_RENEWAL_VERIFICATION === "on" ? ["subscription_renewal" as const] : []),
-          ],
-          credentialsJson: secrets.read("OPENMASU_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"),
-          apiBaseUrl: process.env.OPENMASU_GOOGLE_PLAY_ANDROID_PUBLISHER_BASE_URL,
-          tokenUrl: process.env.OPENMASU_GOOGLE_PLAY_OAUTH_TOKEN_URL,
-        });
-      });
-      await runWorkerJob(tenantId, "commerce_readback", async () => {
-        if (process.env.OPENMASU_COMMERCE_READBACKS === "on") {
-          const commerce = await processCommerceReadbacks(pool, payloadStore, tenantId, {
-            googleClient: googleCommerceClient,
-            appleClient: appleCommerceClient,
-            verifyAppleSignedData: verifyAppleCommerce,
-          });
-          if (commerce.processed + commerce.deferred + commerce.failed > 0) {
-            process.stdout.write(`${JSON.stringify({ event: "commerce_readback_cycle", component: "worker", ...commerce })}\n`);
-          }
-        }
-      });
-      await runWorkerJob(tenantId, "google_conversion_delivery", async () => {
-        if (process.env.OPENMASU_GOOGLE_DATA_MANAGER_ENABLED === "on") {
-          await discoverGoogleConversionDeliveries(pool, payloadStore, tenantId);
-          await processGoogleConversionDeliveries(pool, payloadStore, tenantId, {
-            enabled: true,
-            credentialsJson: secrets.read("OPENMASU_GOOGLE_DATA_MANAGER_SERVICE_ACCOUNT_JSON"),
-            apiBaseUrl: process.env.OPENMASU_GOOGLE_DATA_MANAGER_BASE_URL,
-            tokenUrl: process.env.OPENMASU_GOOGLE_DATA_MANAGER_OAUTH_TOKEN_URL,
-          });
-        }
-      });
-      await runWorkerJob(tenantId, "operator_webhook_delivery", async () => {
-        if (process.env.OPENMASU_OPERATOR_WEBHOOKS_ENABLED === "on") {
-          await discoverOperatorWebhookDeliveries(pool, payloadStore, tenantId);
-          await processOperatorWebhookDeliveries(pool, payloadStore, tenantId, {
-            enabled: true,
-            destinationAllowlist: (process.env.OPENMASU_OPERATOR_WEBHOOK_DESTINATION_ALLOWLIST ?? "")
-              .split(",").map((value) => value.trim()).filter(Boolean),
-            timeoutMilliseconds: Number(process.env.OPENMASU_OPERATOR_WEBHOOK_TIMEOUT_MS ?? "5000"),
-            maximumAttempts: Number(process.env.OPENMASU_OPERATOR_WEBHOOK_MAX_ATTEMPTS ?? "8"),
-          });
-        }
-      });
-      await runWorkerJob(tenantId, "operator_bulk_export", async () => {
-        if (process.env.OPENMASU_OPERATOR_BULK_EXPORTS_ENABLED === "on") {
-          await discoverOperatorBulkExports(pool, payloadStore, tenantId, {
-            maximumRows: Number(process.env.OPENMASU_OPERATOR_BULK_EXPORT_MAX_ROWS ?? "500"),
-            maximumObjectBytes: Number(process.env.OPENMASU_OPERATOR_BULK_EXPORT_MAX_OBJECT_BYTES ?? "10485760"),
-          });
-          await processOperatorBulkExports(pool, payloadStore, tenantId, {
-            enabled: true,
-            destinationAllowlist: (process.env.OPENMASU_OPERATOR_BULK_EXPORT_DESTINATION_ALLOWLIST ?? "")
-              .split(",").map((value) => value.trim()).filter(Boolean),
-            timeoutMilliseconds: Number(process.env.OPENMASU_OPERATOR_BULK_EXPORT_TIMEOUT_MS ?? "5000"),
-            maximumAttempts: Number(process.env.OPENMASU_OPERATOR_BULK_EXPORT_MAX_ATTEMPTS ?? "8"),
-            maximumObjectBytes: Number(process.env.OPENMASU_OPERATOR_BULK_EXPORT_MAX_OBJECT_BYTES ?? "10485760"),
-          });
-        }
-      });
-      await runWorkerJob(tenantId, "metric_run", async () => {
-        const metrics = await processMetricSchedules(pool, tenantId);
-        if (metrics.completedDates > 0) {
-          process.stdout.write(`${JSON.stringify({ event: "metric_schedule_cycle", component: "worker", ...metrics })}\n`);
-        }
-      }, {
-        intervalMs: 86_400_000,
-        retryMs: Math.min(86_400_000, Math.max(60_000, interval)),
-        leaseMs: 86_400_000,
-      });
-      await runWorkerJob(tenantId, "fraud_maintenance", async () => {
-        if (fraudEnabled) {
-          const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-          await aggregateSourceDay(pool, tenantId, yesterday);
-          await resolveExpiredQuarantines(pool, tenantId);
-        }
+      if (commerce.processed + commerce.deferred + commerce.failed > 0) {
+        process.stdout.write(`${JSON.stringify({ event: "commerce_readback_cycle", component: "worker", ...commerce })}\n`);
+      }
+    }
+  });
+  await runWorkerJob(tenantId, "google_conversion_delivery", async () => {
+    if (process.env.OPENMASU_GOOGLE_DATA_MANAGER_ENABLED === "on") {
+      await discoverGoogleConversionDeliveries(pool, payloadStore, tenantId);
+      await processGoogleConversionDeliveries(pool, payloadStore, tenantId, {
+        enabled: true,
+        credentialsJson: secrets.read("OPENMASU_GOOGLE_DATA_MANAGER_SERVICE_ACCOUNT_JSON"),
+        apiBaseUrl: process.env.OPENMASU_GOOGLE_DATA_MANAGER_BASE_URL,
+        tokenUrl: process.env.OPENMASU_GOOGLE_DATA_MANAGER_OAUTH_TOKEN_URL,
       });
     }
+  });
+  await runWorkerJob(tenantId, "operator_webhook_delivery", async () => {
+    if (process.env.OPENMASU_OPERATOR_WEBHOOKS_ENABLED === "on") {
+      await discoverOperatorWebhookDeliveries(pool, payloadStore, tenantId);
+      await processOperatorWebhookDeliveries(pool, payloadStore, tenantId, {
+        enabled: true,
+        destinationAllowlist: (process.env.OPENMASU_OPERATOR_WEBHOOK_DESTINATION_ALLOWLIST ?? "")
+          .split(",").map((value) => value.trim()).filter(Boolean),
+        timeoutMilliseconds: Number(process.env.OPENMASU_OPERATOR_WEBHOOK_TIMEOUT_MS ?? "5000"),
+        maximumAttempts: Number(process.env.OPENMASU_OPERATOR_WEBHOOK_MAX_ATTEMPTS ?? "8"),
+      });
+    }
+  });
+  await runWorkerJob(tenantId, "operator_bulk_export", async () => {
+    if (process.env.OPENMASU_OPERATOR_BULK_EXPORTS_ENABLED === "on") {
+      await discoverOperatorBulkExports(pool, payloadStore, tenantId, {
+        maximumRows: Number(process.env.OPENMASU_OPERATOR_BULK_EXPORT_MAX_ROWS ?? "500"),
+        maximumObjectBytes: Number(process.env.OPENMASU_OPERATOR_BULK_EXPORT_MAX_OBJECT_BYTES ?? "10485760"),
+      });
+      await processOperatorBulkExports(pool, payloadStore, tenantId, {
+        enabled: true,
+        destinationAllowlist: (process.env.OPENMASU_OPERATOR_BULK_EXPORT_DESTINATION_ALLOWLIST ?? "")
+          .split(",").map((value) => value.trim()).filter(Boolean),
+        timeoutMilliseconds: Number(process.env.OPENMASU_OPERATOR_BULK_EXPORT_TIMEOUT_MS ?? "5000"),
+        maximumAttempts: Number(process.env.OPENMASU_OPERATOR_BULK_EXPORT_MAX_ATTEMPTS ?? "8"),
+        maximumObjectBytes: Number(process.env.OPENMASU_OPERATOR_BULK_EXPORT_MAX_OBJECT_BYTES ?? "10485760"),
+      });
+    }
+  });
+  await runWorkerJob(tenantId, "metric_run", async () => {
+    const metrics = await processMetricSchedules(pool, tenantId);
+    if (metrics.completedDates > 0) {
+      process.stdout.write(`${JSON.stringify({ event: "metric_schedule_cycle", component: "worker", ...metrics })}\n`);
+    }
+  }, {
+    intervalMs: 86_400_000,
+    retryMs: Math.min(86_400_000, Math.max(60_000, interval)),
+    leaseMs: 86_400_000,
+  });
+  await runWorkerJob(tenantId, "fraud_maintenance", async () => {
+    if (fraudEnabled) {
+      const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+      await aggregateSourceDay(pool, tenantId, yesterday);
+      await resolveExpiredQuarantines(pool, tenantId);
+    }
+  });
+  if (tenantId === maxTenantId) {
     await runWorkerJob(maxTenantId, "dashboard_session_sweep", sweepDashboardSessions);
   }
-  finally { busy = false; }
-};
-const poll = async (): Promise<void> => {
+}
+
+const coordinator = new TenantWorkCoordinator({
+  concurrency: workerConcurrency,
+  onFailure: () => {
+    process.stderr.write('{"event":"worker_tenant_cycle_failed","component":"worker","retry":"next_poll"}\n');
+  },
+});
+let pollInFlight: Promise<void> | undefined;
+let stopping = false;
+
+async function discoverAndSubmitTenantWork(): Promise<void> {
   try {
-    await tick();
+    const tenants = new Set([
+      maxTenantId,
+      sdkTenantId,
+      ...await listRuntimeWorkTenants(pool),
+    ]);
+    for (const tenantId of [...tenants].sort()) {
+      coordinator.submit(tenantId, () => processTenantCycle(tenantId));
+    }
   }
   catch {
     process.stderr.write('{"event":"worker_tick_failed","component":"worker","retry":"next_poll"}\n');
   }
-};
+}
+
+function poll(): Promise<void> {
+  if (stopping) return Promise.resolve();
+  if (pollInFlight) return pollInFlight;
+  pollInFlight = discoverAndSubmitTenantWork().finally(() => { pollInFlight = undefined; });
+  return pollInFlight;
+}
+
 await poll();
 const timer = setInterval(() => void poll(), interval);
 
+let stopPromise: Promise<void> | undefined;
 async function stop(): Promise<void> {
-  clearInterval(timer);
-  await Promise.all([pool.end(), schedulerPool.end()]);
-  process.exit(0);
+  if (!stopPromise) {
+    stopPromise = (async () => {
+      stopping = true;
+      clearInterval(timer);
+      coordinator.close();
+      const drained = await waitForWorkerDrain(
+        coordinator,
+        pollInFlight,
+        AbortSignal.timeout(workerShutdownTimeout),
+      );
+      if (!drained) {
+        process.stderr.write(
+          '{"event":"worker_shutdown_deadline_exceeded","component":"worker","outcome":"forced_exit"}\n',
+        );
+        process.exit(1);
+      }
+      await Promise.all([pool.end(), schedulerPool.end()]);
+      process.exit(0);
+    })();
+  }
+  await stopPromise;
 }
 
 process.on("SIGINT", () => void stop());
