@@ -43,6 +43,15 @@ export type DashboardServerKey = {
   readonly status_changed_at: string;
 };
 
+export type DashboardOperatorWebhook = {
+  readonly destination_id: string;
+  readonly endpoint_url: string;
+  readonly events: readonly string[];
+  readonly status: "active" | "disabled";
+  readonly created_at: string;
+  readonly status_changed_at: string;
+};
+
 export type DashboardView = {
   readonly apps: readonly DashboardApp[];
   readonly selectedAppId?: string;
@@ -59,6 +68,7 @@ export type DashboardView = {
   readonly trackingLinks: readonly DashboardTrackingLink[];
   readonly sdkKeys: readonly DashboardSdkKey[];
   readonly serverKeys: readonly DashboardServerKey[];
+  readonly operatorWebhooks: readonly DashboardOperatorWebhook[];
   readonly fraudRows: readonly FraudAuditRow[];
   readonly csrfToken: string;
   readonly canOperate: boolean;
@@ -95,6 +105,7 @@ export function buildDashboardView(input: {
   readonly trackingLinks?: readonly DashboardTrackingLink[];
   readonly sdkKeys?: readonly DashboardSdkKey[];
   readonly serverKeys?: readonly DashboardServerKey[];
+  readonly operatorWebhooks?: readonly DashboardOperatorWebhook[];
   readonly fraudRows?: readonly FraudAuditRow[];
   readonly csrfToken: string;
   readonly canOperate?: boolean;
@@ -138,6 +149,9 @@ export function buildDashboardView(input: {
     serverKeys: [...(input.serverKeys ?? [])].sort((left, right) =>
       right.created_at.localeCompare(left.created_at, "en")
       || left.server_key_id.localeCompare(right.server_key_id, "en")),
+    operatorWebhooks: [...(input.operatorWebhooks ?? [])].sort((left, right) =>
+      right.created_at.localeCompare(left.created_at, "en")
+      || left.destination_id.localeCompare(right.destination_id, "en")),
     fraudRows: [...(input.fraudRows ?? [])],
     csrfToken: input.csrfToken,
     canOperate: input.canOperate ?? false,

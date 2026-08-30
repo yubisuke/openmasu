@@ -51,6 +51,11 @@ import { receiveGooglePlayRtdn, type GooglePlayRtdnReceiverDependencies } from "
 import { configureGoogleDataManagerDestination } from "./google-data-manager-admin.js";
 import { issueSdkKey, listSdkKeys, retireSdkKey } from "./sdk-auth.js";
 import { issueServerKey, listServerKeys, retireServerKey } from "./server-auth.js";
+import {
+  disableOperatorWebhookDestination,
+  listOperatorWebhookDestinations,
+  registerOperatorWebhookDestination,
+} from "./operator-webhooks-admin.js";
 import { handleServerBatch, type ServerRouteDependencies } from "./server-routes.js";
 import {
   receiveAppleStoreNotification,
@@ -86,6 +91,10 @@ export type RequestHandlerDependencies = {
   readonly sdk?: SdkRouteDependencies;
   readonly server?: ServerRouteDependencies;
   readonly trackingDestinationAllowlist?: readonly string[];
+  readonly operatorWebhooks?: Readonly<{
+    destinationAllowlist: readonly string[];
+    allowSyntheticLoopback?: boolean;
+  }>;
   readonly referrerMaximumEncodedCharacters?: number;
   readonly reportMaximumRows?: number;
   readonly reportMaximumExportRows?: number;
@@ -219,6 +228,10 @@ function serverKeyId(pathname: string): string | undefined {
   return decodedPathPart(pathname, /\/server-keys\/([^/]+)\/retire$/);
 }
 
+function operatorWebhookDestinationId(pathname: string): string | undefined {
+  return decodedPathPart(pathname, /\/operator-webhooks\/([^/]+)\/disable$/);
+}
+
 function jsonFormValue(body: URLSearchParams, name: string): unknown {
   const value = body.get(name);
   if (value === null || value.trim() === "") throw new Error(`${name}_required`);
@@ -235,7 +248,7 @@ async function rejectDashboardCsrf(
   response: ServerResponse,
   session: DashboardSession,
   action: string,
-  targetScope: "tenant" | "app" | "session" | "tracking_link" | "sdk_key" | "server_key",
+  targetScope: "tenant" | "app" | "session" | "tracking_link" | "sdk_key" | "server_key" | "webhook_destination",
   targetRef: string,
 ): Promise<void> {
   await recordDashboardAudit(dependencies.pool, {
@@ -451,6 +464,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
         "dashboard_tracking_links_list", "dashboard_tracking_links_create", "dashboard_tracking_link_transition",
         "dashboard_sdk_keys_issue", "dashboard_sdk_keys_retire",
         "dashboard_server_keys_issue", "dashboard_server_keys_retire", "dashboard_link_domain",
+        "dashboard_operator_webhooks_register", "dashboard_operator_webhooks_disable",
         "dashboard_app_link_identity", "dashboard_apple_registration", "dashboard_conversion_schema",
         "dashboard_rule_bundle", "dashboard_google_data_manager", "dashboard_apps_create",
       ].includes(route.handler)) {
@@ -620,6 +634,67 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             }
             return;
           }
+          if (route.handler === "dashboard_operator_webhooks_register"
+            || route.handler === "dashboard_operator_webhooks_disable") {
+            const body = await formBody(request);
+            const destinationId = operatorWebhookDestinationId(target.pathname);
+            if (!csrfOriginAccepted(request, dependencies.dashboard.publicBaseUrl)
+              || !verifyCsrfToken(session.token, body.get("csrf_token") ?? undefined)) {
+              await rejectDashboardCsrf(
+                dependencies,
+                response,
+                session,
+                "dashboard_operator_webhook_mutation",
+                "webhook_destination",
+                destinationId ?? "webhook:new",
+              );
+              return;
+            }
+            try {
+              if (route.handler === "dashboard_operator_webhooks_register") {
+                if (!dependencies.operatorWebhooks) throw new Error("operator_webhooks_not_configured");
+                const issued = await registerOperatorWebhookDestination({
+                  pool: dependencies.pool,
+                  payloadStore: dependencies.payloadStore,
+                  identity: appIdentity,
+                  body: {
+                    endpoint_url: body.get("endpoint_url") ?? "",
+                    events: body.getAll("events"),
+                  },
+                  destinationAllowlist: dependencies.operatorWebhooks.destinationAllowlist,
+                  allowSyntheticLoopback: dependencies.operatorWebhooks.allowSyntheticLoopback,
+                });
+                dashboardHtml(response, 201, `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Operator webhook registered</title><link rel="stylesheet" href="/dashboard/app.css"></head><body><main><h1>Operator webhook registered</h1><p>Copy this signing secret now. It cannot be retrieved again.</p><dl><dt>Destination ID</dt><dd>${escapeHtml(issued.destination_id)}</dd><dt>Endpoint</dt><dd>${escapeHtml(issued.endpoint_url)}</dd><dt>Signing secret</dt><dd><code>${escapeHtml(issued.signing_secret)}</code></dd></dl><p><a href="/dashboard/apps/${encodeURIComponent(appIdentity.appId)}">Return to the app dashboard</a></p></main></body></html>`);
+              } else {
+                if (!destinationId) throw new Error("operator_webhook_destination_not_found");
+                await disableOperatorWebhookDestination({
+                  pool: dependencies.pool,
+                  payloadStore: dependencies.payloadStore,
+                  identity: appIdentity,
+                  destinationId,
+                });
+                response.writeHead(303, {
+                  ...dashboardHeaders,
+                  location: `/dashboard/apps/${encodeURIComponent(appIdentity.appId)}`,
+                }).end();
+              }
+            } catch (error) {
+              const reason = publicReason(error, "operator_webhook_lifecycle_failed");
+              await recordDashboardAudit(dependencies.pool, {
+                tenantId: appIdentity.tenantId,
+                appId: appIdentity.appId,
+                actorRef: `admin_key:${session.adminKeyId}`,
+                action: "operator_webhook_lifecycle",
+                targetScope: "webhook_destination",
+                targetRef: destinationId ?? "webhook:new",
+                outcome: "failed",
+                reasonCode: reason,
+              });
+              dashboardHtml(response, reason === "operator_webhook_destination_not_found" ? 404 : 400,
+                `<!doctype html><html lang="en"><body><h1>Operator webhook operation failed</h1><p>${escapeHtml(reason)}</p></body></html>`);
+            }
+            return;
+          }
           if (["dashboard_app_link_identity", "dashboard_apple_registration", "dashboard_conversion_schema", "dashboard_rule_bundle", "dashboard_google_data_manager"].includes(route.handler)) {
             const body = await formBody(request);
             if (!csrfOriginAccepted(request, dependencies.dashboard.publicBaseUrl)
@@ -741,6 +816,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             .map((link) => listedTrackingLink(dependencies.redirectorBaseUrl, link));
           const sdkKeys = await listSdkKeys(dependencies.readerPool, appIdentity);
           const serverKeys = await listServerKeys(dependencies.readerPool, appIdentity);
+          const operatorWebhooks = await listOperatorWebhookDestinations(dependencies.readerPool, appIdentity);
           const metrics = await metricReport(dependencies.readerPool, appIdentity, parsed.query);
           const effectiveWatermark = parsed.query.watermarkAtMost
             ?? metrics.data.map((row) => row.input_received_at_watermark).sort().at(-1);
@@ -761,6 +837,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             trackingLinks,
             sdkKeys,
             serverKeys,
+            operatorWebhooks,
             canOperate: roleAllows(session.role, "operate"),
             canAdminister: roleAllows(session.role, "administer"),
             csrfToken: csrfToken(session.token),
@@ -920,6 +997,57 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
                 outcome: "failed", reasonCode: reason,
               });
               json(response, 409, { error: reason });
+            }
+          }
+          return;
+        }
+        if (route.handler === "admin_operator_webhooks_list"
+          || route.handler === "admin_operator_webhooks_register"
+          || route.handler === "admin_operator_webhooks_disable") {
+          const appId = adminAppId(target.pathname) ?? "";
+          try {
+            const appIdentity = await requireRegisteredApp(pool, identity, appId);
+            if (route.handler === "admin_operator_webhooks_list") {
+              json(response, 200, { data: await listOperatorWebhookDestinations(pool, appIdentity) });
+              return;
+            }
+            if (route.handler === "admin_operator_webhooks_register") {
+              if (!dependencies.operatorWebhooks) throw new Error("operator_webhooks_not_configured");
+              const body = await jsonBody(request);
+              json(response, 201, await registerOperatorWebhookDestination({
+                pool: dependencies.pool,
+                payloadStore: dependencies.payloadStore,
+                identity: appIdentity,
+                body,
+                destinationAllowlist: dependencies.operatorWebhooks.destinationAllowlist,
+                allowSyntheticLoopback: dependencies.operatorWebhooks.allowSyntheticLoopback,
+              }));
+              return;
+            }
+            const destinationId = operatorWebhookDestinationId(target.pathname);
+            if (!destinationId) throw new Error("operator_webhook_destination_not_found");
+            json(response, 200, await disableOperatorWebhookDestination({
+              pool: dependencies.pool,
+              payloadStore: dependencies.payloadStore,
+              identity: appIdentity,
+              destinationId,
+            }));
+          } catch (error) {
+            const reason = publicReason(error, "operator_webhook_lifecycle_failed");
+            if (error instanceof AppNotFoundError || reason === "operator_webhook_destination_not_found") {
+              json(response, 404, { error: "not_found" });
+            } else {
+              await recordDashboardAudit(dependencies.pool, {
+                tenantId: identity.tenantId,
+                appId,
+                actorRef: `admin_key:${identity.keyId}`,
+                action: "operator_webhook_lifecycle",
+                targetScope: "webhook_destination",
+                targetRef: operatorWebhookDestinationId(target.pathname) ?? "webhook:new",
+                outcome: "failed",
+                reasonCode: reason,
+              });
+              json(response, reason === "operator_webhook_destination_not_active" ? 409 : 400, { error: reason });
             }
           }
           return;

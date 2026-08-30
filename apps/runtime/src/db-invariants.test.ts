@@ -59,6 +59,7 @@ try {
   for (const fragment of [
     "system_job", "job_completed", "job-health-v1", "job:mmp_import", "job:cost_import", "job:max_revenue_import",
     "job:google_conversion_delivery",
+    "job:operator_webhook_delivery",
     "job:metric_run", "succeeded", "failed", "target_scope", "app_id", "target_ref",
     "reason_code", "job_failed",
   ]) {

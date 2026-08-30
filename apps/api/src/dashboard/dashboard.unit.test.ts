@@ -146,6 +146,11 @@ describe("M3 zero-JavaScript dashboard", () => {
         server_key_id: "server-key:one", producer: "postback:first-party", status: "active" as const,
         created_at: "2026-08-20T00:00:00.000Z", status_changed_at: "2026-08-20T00:00:00.000Z",
       }],
+      operatorWebhooks: [{
+        destination_id: "webhook:one", endpoint_url: "https://events.example.test/openmasu",
+        events: ["custom_event"], status: "active" as const,
+        created_at: "2026-08-20T00:00:00.000Z", status_changed_at: "2026-08-20T00:00:00.000Z",
+      }],
       csrfToken: "synthetic-csrf",
     };
     const readOnly = renderDashboard(buildDashboardView(base));
@@ -158,6 +163,9 @@ describe("M3 zero-JavaScript dashboard", () => {
     assert.match(admin, /Issue successor key/);
     assert.match(admin, /Server-to-server keys/);
     assert.match(admin, /postback:first-party/);
+    assert.match(admin, /Operator event webhooks/);
+    assert.match(admin, /events\.example\.test/);
+    assert.match(admin, />Disable</);
     assert.match(admin, /Register a link domain/);
     assert.match(admin, /Complete activation request JSON/);
     assert.equal(admin.includes("<script"), false);

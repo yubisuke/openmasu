@@ -11,6 +11,9 @@ system.
 - Authenticated `/metrics` output uses Prometheus text format.
 - Metrics include fixed-label request, import, scheduler success/failure,
   consecutive-failure, active-lease, and overdue-job state.
+- The `operator_webhooks` backlog and `operator_webhook_delivery` job metrics
+  expose pending work and terminal scheduler health without destination,
+  tenant, app, event, or subject labels.
 - The `sdk_batches` ingest backlog includes both batches waiting for base
   ingestion and batches whose base ledger records are complete but whose
   server-side AdServices, platform-integrity, or Google Play verification work

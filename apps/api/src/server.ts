@@ -93,6 +93,10 @@ const server = createServer(createRequestHandler({
   reportMaximumExportRows: Number(process.env.OPENMASU_REPORT_EXPORT_MAX_ROWS ?? "200000"),
   trackingDestinationAllowlist: (process.env.OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST ?? "")
     .split(",").map((value) => value.trim()).filter(Boolean),
+  operatorWebhooks: {
+    destinationAllowlist: (process.env.OPENMASU_OPERATOR_WEBHOOK_DESTINATION_ALLOWLIST ?? "")
+      .split(",").map((value) => value.trim()).filter(Boolean),
+  },
   referrerMaximumEncodedCharacters: Number(process.env.OPENMASU_REFERRER_MAX_ENCODED_CHARS ?? "512"),
   applePostback: {
     pool,

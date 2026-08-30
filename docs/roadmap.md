@@ -32,6 +32,7 @@ in [Project plan](project-plan.md).
 | Verified commerce lifecycle | Synthetic complete | Authenticated lifecycle signals, authoritative read-back, refund corrections, and protected cursors |
 | Import and financial compatibility | Synthetic complete | No-write raw/cost/revenue compatibility plus PostgreSQL cost-to-ROAS and revenue parity |
 | Authenticated backend events | Synthetic complete | Provider-neutral server keys, raw-body HMAC, replay limits, durable inbox evaluation, contract rejection, and deletion-race enforcement |
+| Operator event webhooks | Synthetic complete | Default-off app destinations, a closed event envelope, exact-body HMAC, public-address egress controls, durable retries, and deletion-race enforcement |
 
 The current contract gate preserves parity across 28 schemas, 8 registries,
 and 57 reviewed synthetic fixtures.
@@ -52,12 +53,14 @@ Progress:
 | CI cancels superseded runs and routes expensive gates without hiding required contexts | Complete |
 | Release notes, SDK identity, tagged evidence, and source revision describe one exact candidate | Complete for v0.2.0-rc.4 |
 | App backends can submit selected first-party events without SDK-key reuse or advertising identifiers | Complete with synthetic server-key lifecycle, ingestion, rejection, idempotency, and privacy tests |
+| Operators can receive a closed subset of accepted events without raw identifiers or provider-specific wire coupling | Complete with synthetic destination lifecycle, DNS/SSRF, signature, retry, privacy, and disablement tests |
 
 Candidate v0.2.0-rc.4 satisfied the release-coherence exit gate at green `main`
-commit `2a2f6b5`. Authenticated backend events were then added as a bounded
-integration milestone rather than a provider or attribution claim. The next
-repository work is selected from current-code audits of compatibility,
-failure recovery, reconciliation completeness, and operational correctness.
+commit `2a2f6b5`. Authenticated backend events and operator event webhooks were
+then added as bounded integration milestones rather than provider or
+attribution claims. The next repository work is selected from current-code
+audits of compatibility, failure recovery, reconciliation completeness, and
+operational correctness.
 
 ## Optional operator evidence
 

@@ -5,6 +5,7 @@ export * from "./secrets.js";
 export * from "./payload-store.js";
 export * from "./job-health.js";
 export * from "./scheduler.js";
+export * from "./webhook-security.js";
 
 const identifierPattern = /^[A-Za-z0-9._:-]{1,128}$/;
 

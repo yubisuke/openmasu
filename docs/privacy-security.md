@@ -157,6 +157,11 @@ repository does not claim that its example durations are universally lawful.
 - Server-event batches use separate app-scoped server keys, immutable producer
   scope, raw-body HMAC-SHA256, timestamp bounds, nonce replay protection, and
   per-key plus per-app limits. A server key is never an admin or SDK key.
+- Operator event webhooks use separate destination secrets and disclose only a
+  closed event envelope to an explicitly registered HTTPS origin. Event,
+  subject, and transaction references are HMAC-scoped to that destination and
+  cannot be joined across destinations. Raw payloads and raw identifiers are
+  never placed in the webhook body.
 - Platform callbacks use their documented signature or service authentication
   boundary before tenant resolution.
 - PostgreSQL uses forced tenant row-level security and separate app, reader,
@@ -171,6 +176,14 @@ an external secret-management process and rotate keys without committing them.
 Protected payloads use envelope encryption through the payload-store
 abstraction. Logs, metrics, audit events, and public artifacts must not include
 plaintext payloads, keys, tokens, signed messages, or identifying references.
+
+Pending operator-webhook bodies are encrypted and purged after terminal
+delivery, destination disablement, or applicable deletion. Dispatch and
+deletion recognition serialize on one per-record lock: deletion first means
+suppression; dispatch first means the bounded network request completes before
+recognition. Withdrawal or deletion does not retroactively recall data already
+received by an external operator system. That receiver has its own lawful
+basis, retention, access, deletion, and incident-response obligations.
 
 ## Fraud capability boundary
 

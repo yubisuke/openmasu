@@ -142,6 +142,15 @@ and ambiguous delivery status. Controls include explicit enablement, eligible
 event selection, service authentication, idempotent delivery records, bounded
 status vocabulary, and sanitized logs.
 
+<!-- threat-component:operator-event-webhooks -->
+**Operator event webhooks:** unauthorized disclosure, SSRF and DNS rebinding,
+secret theft, replayed receiver effects, redirect escape, deletion races, and
+identifier leakage. Controls include default-off enablement, exact HTTPS-origin
+allowlists, public-address DNS validation and connection pinning, no redirects,
+one-time encrypted destination secrets, exact-body HMAC, stable delivery IDs,
+a closed minimal envelope, encrypted durable retries, and one shared record
+lock for dispatch and deletion recognition.
+
 <!-- threat-component:production-control-plane -->
 **Control plane:** key misuse, stale rule activation, scheduler overlap, and
 unaudited configuration. Controls include minimum RBAC, encrypted secrets,
@@ -190,6 +199,13 @@ validation, and immutable reviewed goldens.
   capacity, production TLS, or operator key custody. A stolen active server key
   can submit plausible first-party events within its event allowlist until it
   is retired.
+- Synthetic operator-webhook vectors do not prove receiver availability,
+  production DNS/TLS, capacity, secret custody, or downstream deletion. A
+  receiver learns every field in the selected closed event class, and a request
+  already transmitted before deletion recognition cannot be recalled.
+- A slow operator-webhook receiver holds the bounded per-record dispatch lock
+  until that attempt finishes. The timeout limits the interval but does not
+  eliminate database contention or serial worker delay.
 - Self-hosting operators remain responsible for TLS, secret custody, host
   security, backup media, alert routing, and incident response.
 

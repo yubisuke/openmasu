@@ -17,6 +17,10 @@ import { processIntegrityVerifications, type IntegrityProvider } from "./integri
 import { processGooglePlayProductVerifications } from "./google-play-product-verifier.js";
 import { discoverGoogleConversionDeliveries, processGoogleConversionDeliveries } from "./google-conversion-worker.js";
 import {
+  discoverOperatorWebhookDeliveries,
+  processOperatorWebhookDeliveries,
+} from "./operator-webhook-worker.js";
+import {
   createAppleCommerceReadbackClient,
   createGoogleCommerceReadbackClient,
   processCommerceReadbacks,
@@ -225,6 +229,18 @@ const tick = async (): Promise<void> => {
             credentialsJson: secrets.read("OPENMASU_GOOGLE_DATA_MANAGER_SERVICE_ACCOUNT_JSON"),
             apiBaseUrl: process.env.OPENMASU_GOOGLE_DATA_MANAGER_BASE_URL,
             tokenUrl: process.env.OPENMASU_GOOGLE_DATA_MANAGER_OAUTH_TOKEN_URL,
+          });
+        }
+      });
+      await runWorkerJob(tenantId, "operator_webhook_delivery", async () => {
+        if (process.env.OPENMASU_OPERATOR_WEBHOOKS_ENABLED === "on") {
+          await discoverOperatorWebhookDeliveries(pool, payloadStore, tenantId);
+          await processOperatorWebhookDeliveries(pool, payloadStore, tenantId, {
+            enabled: true,
+            destinationAllowlist: (process.env.OPENMASU_OPERATOR_WEBHOOK_DESTINATION_ALLOWLIST ?? "")
+              .split(",").map((value) => value.trim()).filter(Boolean),
+            timeoutMilliseconds: Number(process.env.OPENMASU_OPERATOR_WEBHOOK_TIMEOUT_MS ?? "5000"),
+            maximumAttempts: Number(process.env.OPENMASU_OPERATOR_WEBHOOK_MAX_ATTEMPTS ?? "8"),
           });
         }
       });
