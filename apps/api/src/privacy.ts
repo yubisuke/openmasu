@@ -410,10 +410,11 @@ export async function executePrivacyRequest(
     }
     const commercePayloads = body.deletion_scope === "installation"
       ? await client.query<{ reference: string }>(
-          `SELECT DISTINCT notification.evidence_ref AS reference
-             FROM control.commerce_provider_notifications AS notification
-            WHERE notification.tenant_id=$1 AND notification.app_id=$2
-              AND notification.subject_digest IN (
+          `WITH protected_notifications AS (
+             SELECT notification.provider,notification.notification_digest,notification.evidence_ref
+               FROM control.commerce_provider_notifications AS notification
+              WHERE notification.tenant_id=$1 AND notification.app_id=$2
+                AND notification.subject_digest IN (
                 SELECT token.token_digest
                   FROM control.google_play_purchase_tokens AS token
                   JOIN ledger.google_play_purchase_verification_results AS result
@@ -427,7 +428,21 @@ export async function executePrivacyRequest(
                 SELECT binding.transaction_digest
                   FROM control.commerce_purchase_bindings AS binding
                  WHERE binding.tenant_id=$1 AND binding.app_id=$2 AND binding.installation_digest=$4
-              )`,
+                UNION
+                SELECT binding.original_transaction_digest
+                  FROM control.commerce_purchase_bindings AS binding
+                 WHERE binding.tenant_id=$1 AND binding.app_id=$2 AND binding.installation_digest=$4
+                   AND binding.original_transaction_digest IS NOT NULL
+                )
+           )
+           SELECT DISTINCT evidence_ref AS reference FROM protected_notifications
+           UNION
+           SELECT DISTINCT readback.cursor_ref AS reference
+             FROM ephemeral.commerce_provider_readbacks AS readback
+             JOIN protected_notifications AS notification
+               ON notification.provider=readback.provider
+              AND notification.notification_digest=readback.notification_digest
+            WHERE readback.cursor_ref IS NOT NULL`,
           [body.tenant_id, body.app_id, body.deletion_subject_ref,
             commerceInstallationDigest(body.tenant_id, body.app_id, body.deletion_subject_ref)],
         )
@@ -608,6 +623,10 @@ export async function executePrivacyRequest(
               UNION
               SELECT binding.transaction_digest FROM control.commerce_purchase_bindings AS binding
                WHERE binding.tenant_id=$1 AND binding.app_id=$2 AND binding.installation_digest=$4
+              UNION
+              SELECT binding.original_transaction_digest FROM control.commerce_purchase_bindings AS binding
+               WHERE binding.tenant_id=$1 AND binding.app_id=$2 AND binding.installation_digest=$4
+                 AND binding.original_transaction_digest IS NOT NULL
             )`,
         [body.tenant_id, body.app_id, body.deletion_subject_ref,
           commerceInstallationDigest(body.tenant_id, body.app_id, body.deletion_subject_ref)],

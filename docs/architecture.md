@@ -159,7 +159,17 @@ provider-side exactly-once guarantee.
 <!-- m1-component:verified-commerce-lifecycle -->
 **Verified commerce lifecycle.** Tracks Google and Apple lifecycle revisions,
 refund corrections, encrypted cursors, and privacy coverage without exposing
-provider transaction identifiers publicly.
+provider transaction identifiers publicly. The provider read-back worker claims
+one due row with a database-clock lease, starts the provider request only while
+that claim is current under the tenant privacy barrier, and commits lifecycle
+facts, Google refund projections, Apple cursor/checkpoint transitions, and the
+queue transition in one token-fenced transaction. Expired work can be reclaimed;
+a stale or deletion-raced worker commits no derived state. Lease recovery can
+repeat provider reads and is not a provider-side exactly-once guarantee. A
+verified App Store transaction is installation-bound only when its signed
+original transaction identity matches exactly one settled iOS purchase already
+in the ledger; unmatched or ambiguous notifications remain removable only by
+app- or tenant-scoped privacy requests.
 
 <!-- m1-component:google-data-manager-delivery -->
 **Conversion delivery.** Produces a bounded, authenticated Google Data Manager

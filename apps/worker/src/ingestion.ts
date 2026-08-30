@@ -678,8 +678,8 @@ async function persistFixtureCosts(appPool: Pool, input: Any): Promise<void> {
   }
 }
 
-async function persistCorrection(appPool: Pool, artifact: Any): Promise<Any> {
-  return withTenant(appPool, artifact.tenant_id, (client) => storedArtifact(
+async function persistCorrectionWithClient(client: PoolClient, artifact: Any): Promise<Any> {
+  return storedArtifact(
     client,
     `INSERT INTO ledger.corrections (
       correction_id, tenant_id, app_id, corrects_record_id, effective_at, artifact
@@ -688,7 +688,11 @@ async function persistCorrection(appPool: Pool, artifact: Any): Promise<Any> {
     [artifact.correction_id, artifact.tenant_id, artifact.app_id, artifact.corrects_record_id, artifact.effective_at, JSON.stringify(artifact)],
     "SELECT artifact FROM ledger.corrections WHERE correction_id = $1",
     [artifact.correction_id],
-  ));
+  );
+}
+
+async function persistCorrection(appPool: Pool, artifact: Any): Promise<Any> {
+  return withTenant(appPool, artifact.tenant_id, (client) => persistCorrectionWithClient(client, artifact));
 }
 
 async function persistRejectionWithClient(client: PoolClient, artifact: Any): Promise<Any> {
@@ -1660,7 +1664,6 @@ export async function ingestRuntimeBatch(
   };
   if (options.persistenceClient && (
     selected.attributions.length > 0
-    || selected.corrections.length > 0
     || selected.fraud_decisions.length > 0
     || selected.reconciliation.length > 0
   )) {
@@ -1712,7 +1715,12 @@ export async function ingestRuntimeBatch(
     if (options.persistenceClient) await persistAttempt(options.persistenceClient);
     else await withTenant(appPool, attempt.server.tenant_id, persistAttempt);
   }
-  if (options.persistenceClient) return selected;
+  if (options.persistenceClient) {
+    for (const correction of selected.corrections) {
+      await persistCorrectionWithClient(options.persistenceClient, correction);
+    }
+    return selected;
+  }
   for (const attribution of selected.attributions) {
     const binding = nonFraudBindings.get(attribution.rule_bundle_id);
     if (!binding) throw new Error("non_fraud_rule_bundle_binding_missing");

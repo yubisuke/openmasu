@@ -127,6 +127,15 @@ values, payload references, tenants, apps, or installations. Lease recovery
 can repeat product or order reads and does not establish provider-side
 exactly-once behavior.
 
+Commerce provider read-back claims one Google Play or App Store row with a
+five-minute database-clock lease. Retry and Apple pagination clear only the
+current token; terminal lifecycle, refund, cursor, checkpoint, and queue changes
+share one privacy-fenced transaction. Monitor due age, claim age, repeated
+expiry, retry count, and terminal failure count without logging provider bodies,
+transaction values, payload references, tenants, apps, or installations. A
+reclaimed lease can repeat a subscription, order, or history read and does not
+establish provider-side exactly-once behavior.
+
 Scheduled metric work uses a daily durable lease, but every artifact watermark
 is the current UTC midnight rather than the wall-clock time at which a worker
 obtains that lease. A schedule processes at most 31 pending dates per cycle.
