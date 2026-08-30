@@ -112,8 +112,6 @@ export async function receiveAppleStoreNotification(
     }
     const notificationDigest = sha256(normalized.notificationUuid);
     const subjectDigest = normalized.event.originalTransactionDigest ?? normalized.event.transactionDigest;
-    const transactionId = normalized.transaction?.transactionId;
-    const originalTransactionId = normalized.transaction?.originalTransactionId;
     await recordCommerceNotification({
       pool: dependencies.pool,
       payloadStore: dependencies.payloadStore,
@@ -127,12 +125,6 @@ export async function receiveAppleStoreNotification(
       event: { ...normalized.event, financialEffect: "none" },
       receivedAt: now,
       readbackOperation: normalized.event.financialEffect === "refund" ? "apple_refund_history" : "apple_transaction_history",
-      ...(typeof transactionId === "string" ? {
-        appStorePurchaseIdentity: {
-          transactionId,
-          ...(typeof originalTransactionId === "string" ? { originalTransactionId } : {}),
-        },
-      } : {}),
     });
     empty(response, 200);
   } catch (error) {

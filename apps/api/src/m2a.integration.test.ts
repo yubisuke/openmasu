@@ -551,6 +551,9 @@ async function prepareCommerceReadback(
   }]);
   const receivedAt = new Date(Date.now() - 60_000);
   const notificationDigest = randomBytes(32).toString("hex");
+  const installationDigest = createHash("sha256")
+    .update(`${fixtureTenantId}\0${fixtureAppId}\0${fixtureInstallationId}`)
+    .digest("hex");
   const purchaseRecordId = `record:${uuidV7()}`;
   const purchaseEventId = `event:commerce-binding-${label}:${run}`;
   const googlePurchaseToken = `synthetic-commerce-token-${label}-${run}`;
@@ -622,6 +625,19 @@ async function prepareCommerceReadback(
           receivedAt.toISOString(), JSON.stringify({ synthetic: true, verdict: "verified" })],
       );
     });
+  } else {
+    // This state-level fixture represents an existing App Store purchase
+    // binding. Creating that binding from notification ingestion is outside
+    // this read-back-only change.
+    await withTenant(pool, fixtureTenantId, (client) => client.query(
+      `INSERT INTO control.commerce_purchase_bindings (
+         provider,tenant_id,app_id,transaction_digest,original_transaction_digest,
+         purchase_record_id,installation_digest,amount_unscaled,amount_scale,currency,quantity,bound_at
+       ) VALUES ('app_store',$1,$2,$3,$4,$5,$6,'1990000',6,'USD',1,$7)`,
+      [fixtureTenantId, fixtureAppId,
+        createHash("sha256").update(appleTransactionId).digest("hex"), subjectDigest,
+        purchaseRecordId, installationDigest, receivedAt.toISOString()],
+    ));
   }
   let payload: Buffer;
   let bundleId: string | undefined;
@@ -675,30 +691,7 @@ async function prepareCommerceReadback(
     },
     receivedAt,
     readbackOperation: provider === "google_play" ? "google_subscription" : "apple_transaction_history",
-    ...(provider === "app_store" ? {
-      appStorePurchaseIdentity: {
-        transactionId: appleTransactionId,
-        originalTransactionId: appleOriginalTransactionId,
-      },
-    } : {}),
   }), true);
-  if (provider === "app_store") {
-    const binding = await withTenant(pool, fixtureTenantId, async (client) => (await client.query<{
-      transaction_digest: string;
-      original_transaction_digest: string;
-      purchase_record_id: string;
-    }>(
-      `SELECT transaction_digest,original_transaction_digest,purchase_record_id
-         FROM control.commerce_purchase_bindings
-        WHERE provider='app_store' AND tenant_id=$1 AND app_id=$2`,
-      [fixtureTenantId, fixtureAppId],
-    )).rows[0]);
-    assert.deepEqual(binding, {
-      transaction_digest: createHash("sha256").update(appleTransactionId).digest("hex"),
-      original_transaction_digest: subjectDigest,
-      purchase_record_id: purchaseRecordId,
-    });
-  }
   const stored = await withTenant(pool, fixtureTenantId, async (client) => (await client.query<{
     readback_id: string;
     evidence_ref: string;
@@ -1127,7 +1120,7 @@ describe("M2a signed SDK ingestion", () => {
     }
   });
 
-  it("purges a completion-first Apple cursor during installation deletion", async () => {
+  it("purges a completion-first Apple cursor when an installation binding exists", async () => {
     const fixture = await prepareCommerceReadback("app_store", "cursor-installation-delete");
     assert.ok(fixture.bundleId);
     const revision = `cursor-before-installation-delete-${run}`;

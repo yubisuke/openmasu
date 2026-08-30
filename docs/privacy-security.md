@@ -173,9 +173,9 @@ through `raw_records_current`.
   token-fenced transaction: deletion either removes the pending row first or
   waits for its lifecycle/refund/cursor completion and then purges the protected
   references captured by the deletion snapshot. App Store installation scope is
-  available only after a signed transaction matches exactly one settled iOS
-  purchase; unmatched or ambiguous notifications require an app- or
-  tenant-scoped request.
+  available only when an explicit purchase binding already exists; the current
+  notification path does not create that binding, so unbound notifications
+  require an app- or tenant-scoped request.
 - An app- or tenant-scoped request deletes the data included in its durable
   recognition snapshot; it is not an app suspension or tenant deactivation.
   Later lawful processing is a new event with its own purpose and legal-basis

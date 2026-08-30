@@ -13,10 +13,6 @@ export async function recordCommerceNotification(input: {
   readonly event: CommerceLifecycleEvent;
   readonly receivedAt: Date;
   readonly readbackOperation?: "google_subscription" | "google_order_refund" | "apple_transaction_history" | "apple_refund_history";
-  readonly appStorePurchaseIdentity?: {
-    readonly transactionId: string;
-    readonly originalTransactionId?: string;
-  };
 }): Promise<boolean> {
   const lifecycleFactId = uuidV7(input.receivedAt.getTime());
   const evidenceRef = await input.payloadStore.write(
@@ -34,44 +30,6 @@ export async function recordCommerceNotification(input: {
           input.subjectDigest ?? null, evidenceRef, sha256(input.payload), input.event.effectiveAt, input.receivedAt.toISOString()],
       );
       if (notification.rowCount !== 1) return false;
-      if (input.event.provider === "app_store" && input.appStorePurchaseIdentity) {
-        const bindingTransactionDigest = input.event.transactionDigest ?? input.event.originalTransactionDigest;
-        if (bindingTransactionDigest) {
-          const purchaseIdentity = input.appStorePurchaseIdentity.originalTransactionId
-            ?? input.appStorePurchaseIdentity.transactionId;
-          const matches = await client.query<{
-            record_id: string;
-            installation_id: string;
-            amount_unscaled: string;
-            amount_scale: number;
-            currency: string;
-          }>(
-            `SELECT record_id::text,installation_id,amount_unscaled,amount_scale,currency
-               FROM ledger.purchase_facts
-              WHERE tenant_id=$1 AND app_id=$2
-                AND COALESCE(original_transaction_id,transaction_id)=$3
-                AND installation_id IS NOT NULL AND financial_status='settled'
-              ORDER BY record_id
-              LIMIT 2`,
-            [input.tenantId, input.appId, purchaseIdentity],
-          );
-          if (matches.rowCount === 1) {
-            const purchase = matches.rows[0];
-            await client.query(
-              `INSERT INTO control.commerce_purchase_bindings (
-                 provider,tenant_id,app_id,transaction_digest,original_transaction_digest,
-                 purchase_record_id,installation_digest,amount_unscaled,amount_scale,currency,quantity,bound_at
-               ) VALUES ('app_store',$1,$2,$3,$4,$5,$6,$7,$8,$9,1,$10)
-               ON CONFLICT DO NOTHING`,
-              [input.tenantId, input.appId, bindingTransactionDigest,
-                input.event.originalTransactionDigest ?? null, purchase.record_id,
-                sha256(`${input.tenantId}\0${input.appId}\0${purchase.installation_id}`),
-                purchase.amount_unscaled, purchase.amount_scale, purchase.currency,
-                input.receivedAt.toISOString()],
-            );
-          }
-        }
-      }
       const artifact = {
         lifecycle_fact_id: lifecycleFactId,
         tenant_id: input.tenantId,

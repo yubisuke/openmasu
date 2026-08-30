@@ -155,8 +155,9 @@ read-back, token-fenced retry and transactional completion under the tenant
 privacy barrier, authoritative read-back, per-target refund caps, and opaque
 public refs. An expired lease can repeat a provider read; provider-side
 exactly-once behavior remains unverified. App Store installation deletion is
-fail-closed to a unique signed-transaction-to-settled-purchase match; unmatched
-or ambiguous notifications require broader app- or tenant-scoped deletion.
+limited to notifications with an existing explicit purchase binding; the
+current notification path does not create one, so unbound notifications require
+broader app- or tenant-scoped deletion.
 
 <!-- threat-component:google-data-manager-delivery -->
 **Conversion delivery:** unauthorized export, replay, provider payload leakage,
