@@ -355,6 +355,15 @@ function refundProjectionTargets(
     if (explicitTarget === undefined && typeof payload.installation_id !== "string") {
       throw new Error(`missing_resolved_refund_target:${logical.record_id}`);
     }
+    const existing = targets.get(logical.record_id);
+    if (existing !== undefined && !attemptsByRecord.has(
+      `${logical.tenant_id}\u0000${logical.app_id}\u0000${existing}`,
+    )) {
+      // The evaluator resolved this target from a ledger-backed historical
+      // candidate. The deferred database constraints and refund invariant
+      // validate the same-scope persisted target during insertion.
+      continue;
+    }
     const matches = purchases.filter((purchase) =>
       purchase.server.tenant_id === refund.server.tenant_id
       && purchase.server.app_id === refund.server.app_id
@@ -373,7 +382,6 @@ function refundProjectionTargets(
     if (explicitTarget !== undefined && matches[0].record.record_id !== explicitTarget) {
       throw new Error(`missing_resolved_refund_target:${logical.record_id}`);
     }
-    const existing = targets.get(logical.record_id);
     if (existing !== undefined && existing !== matches[0].record.record_id) {
       throw new Error(`refund_target_resolution_mismatch:${logical.record_id}`);
     }
@@ -1589,19 +1597,31 @@ export async function ingestRuntimeBatch(
   const invalid = boundAttempts.map(schemaInvalidArtifacts).filter((value): value is NonNullable<typeof value> => value !== undefined);
   const invalidAttempts = new Set(invalid.map(({ failure }) => `${failure.record_id}\u0000${failure.delivery_id}`));
   const validAttempts = boundAttempts.filter((attempt) => !invalidAttempts.has(`${attempt.record.record_id}\u0000${attempt.record.delivery_id}`));
-  const validHistory = boundHistory.filter((attempt) => !schemaInvalidArtifacts(attempt));
-  const ineligiblePurchaseTargets = await ineligibleHistoricalPurchaseTargetIds(appPool, validHistory);
-  const withPurchaseEligibility = [...validHistory, ...validAttempts].map((attempt) =>
+  // Historical runtime candidates are reconstructed from accepted ledger rows.
+  // They have already passed contract validation and must not require protected
+  // payload access merely to process a new delivery.
+  const currentAttempts = sortCandidateAttempts(await resolveDeepLinkAttempts(appPool, validAttempts));
+  // Non-SDK importers still supply fully decoded historical attempts. Keep
+  // those in the evaluator input until their own ledger-backed projection is
+  // introduced; SDK history is explicitly marked and remains provider-only.
+  const decodedHistory = boundHistory.filter((attempt) => attempt.history_state === undefined);
+  const ineligiblePurchaseTargets = await ineligibleHistoricalPurchaseTargetIds(appPool, decodedHistory);
+  const applyPurchaseEligibility = (attempt: CandidateAttempt): CandidateAttempt =>
     ineligiblePurchaseTargets.length === 0 ? attempt : {
       ...attempt,
       server: {
         ...attempt.server,
         refund_target_ineligible_record_ids: ineligiblePurchaseTargets,
       },
-    });
-  const allAttempts = sortCandidateAttempts(await resolveDeepLinkAttempts(appPool, withPurchaseEligibility));
-  const input = runtimeInput(allAttempts);
-  const output = evaluate(input, (values) => new IndexedCandidateProvider(values));
+    };
+  const evaluationHistory = boundHistory.map(applyPurchaseEligibility);
+  const evaluationCurrent = currentAttempts.map(applyPurchaseEligibility);
+  const providerAttempts = sortCandidateAttempts([...evaluationHistory, ...evaluationCurrent]);
+  const input = runtimeInput([
+    ...evaluationHistory.filter((attempt) => attempt.history_state === undefined),
+    ...evaluationCurrent,
+  ]);
+  const output = evaluate(input, () => new IndexedCandidateProvider(providerAttempts));
   const recordIds = new Set(validAttempts.map((attempt) => attempt.record.record_id));
   const deliveryIds = new Set(validAttempts.map((attempt) => attempt.record.delivery_id));
   const refundCorrectionIds = new Set(validAttempts

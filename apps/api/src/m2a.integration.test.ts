@@ -11,7 +11,6 @@ import type { AddressInfo } from "node:net";
 import {
   appendDurableBatch,
   createAppPool,
-  createMigrationPool,
   EncryptedFilePayloadStore,
   type PayloadStore,
   uuidV7,
@@ -1726,89 +1725,6 @@ describe("M2a signed SDK ingestion", () => {
        WHERE logical.tenant_id=$1 AND logical.app_id=$2 AND logical.event_id=$3`,
       [tenantId, appId, rejectedRefund.event_id],
     )).rowCount), 0);
-  });
-
-  it("backfills a pre-projection withdrawal once and rejects later work without tenant-wide replay", async () => {
-    const legacyInstallationId = `installation:withdrawal-backfill-${run}`;
-    const enrollment = await signed("/v1/installations", { installation_id: legacyInstallationId });
-    assert.equal(enrollment.status, 201);
-    const credential = await enrollment.json() as {
-      installation_key_id: string;
-      installation_secret: string;
-    };
-    const legacyWithdrawal = sourceEvent(`event:withdrawal-backfill:${run}`, "consent_changed", {
-      consent_state: "withdrawn",
-      effective_at: "2026-08-19T00:00:00.000Z",
-      consent_policy_version: "synthetic-consent-v1",
-    });
-    assert.equal((await signed("/v1/events/batch", { records: [legacyWithdrawal] }, {
-      secret: credential.installation_secret,
-      installationKeyId: credential.installation_key_id,
-    })).status, 202);
-    await processSdkInbox(pool, payloadStore, tenantId);
-
-    // Recreate the pre-migration state: the canonical consent event and encrypted body
-    // exist, but the durable withdrawal projection and its one-time backfill marker do not.
-    const migrationPool = createMigrationPool();
-    try {
-      await migrationPool.query(
-        "DELETE FROM control.installation_withdrawal_backfill_states WHERE installation_key_id=$1",
-        [credential.installation_key_id],
-      );
-      await migrationPool.query(
-        "DELETE FROM control.installation_withdrawals WHERE installation_key_id=$1",
-        [credential.installation_key_id],
-      );
-    } finally {
-      await migrationPool.end();
-    }
-
-    const before = await withTenant(pool, tenantId, async (client) => (await client.query<{ count: number }>(
-      `SELECT count(*)::int AS count FROM ledger.rejections
-       WHERE tenant_id=$1 AND app_id=$2 AND reason_code='consent_withdrawn'`,
-      [tenantId, appId],
-    )).rows[0].count);
-    const later = sourceEvent(`event:after-withdrawal-backfill:${run}`, "custom_event", {
-      installation_id: legacyInstallationId,
-      event_key: "after_withdrawal_backfill",
-      attributes: { source: "synthetic" },
-    }, "2026-08-18T00:00:00.000Z");
-    later.processing_sequence = 2;
-    assert.equal((await signed("/v1/events/batch", { records: [later] }, {
-      secret: credential.installation_secret,
-      installationKeyId: credential.installation_key_id,
-    })).status, 202);
-    const reads: string[] = [];
-    const countingStore: PayloadStore = {
-      write: (scope, plaintext) => payloadStore.write(scope, plaintext),
-      read: async (reference) => {
-        reads.push(reference);
-        return payloadStore.read(reference);
-      },
-      purge: (reference) => payloadStore.purge(reference),
-      scanFor: (value) => payloadStore.scanFor(value),
-    };
-    assert.equal(await processSdkInbox(pool, countingStore, tenantId), 1);
-    assert.equal(reads.length, 2, "the drain reads only current work and its required consent history batch");
-
-    const state = await withTenant(pool, tenantId, async (client) => ({
-      rejected: (await client.query<{ count: number }>(
-        `SELECT count(*)::int AS count FROM ledger.rejections
-         WHERE tenant_id=$1 AND app_id=$2 AND reason_code='consent_withdrawn'`,
-        [tenantId, appId],
-      )).rows[0].count,
-      withdrawals: (await client.query<{ count: number }>(
-        `SELECT count(*)::int AS count FROM control.installation_withdrawals
-         WHERE tenant_id=$1 AND app_id=$2 AND installation_key_id=$3`,
-        [tenantId, appId, credential.installation_key_id],
-      )).rows[0].count,
-      backfills: (await client.query<{ count: number }>(
-        `SELECT count(*)::int AS count FROM control.installation_withdrawal_backfill_states
-         WHERE tenant_id=$1 AND app_id=$2 AND installation_key_id=$3`,
-        [tenantId, appId, credential.installation_key_id],
-      )).rows[0].count,
-    }));
-    assert.deepEqual(state, { rejected: before + 1, withdrawals: 3, backfills: 1 });
   });
 
   it("WO20 returns a subject-scoped portable response without protected payload material", async () => {
