@@ -77,20 +77,38 @@ the exact published record from ongoing development and historical prereleases.
 
 Requirements:
 
-- Docker with Compose
 - Node.js `22.18.0`
 - npm `11.6.2`
-- Python `3.13.5` only when running the independent Python evaluator
+- Docker with Compose only for the disposable runtime pilot
+- Python `3.13.5` only for the independent Python evaluator
 
 The Node.js and npm versions are exact because `.npmrc` enables
 `engine-strict`. Use `.nvmrc` with nvm, fnm, or an equivalent version manager.
 
-Install dependencies:
+Install the Node.js dependencies required by the offline demo:
 
 ```bash
 npm ci
+```
+
+Install the Python dependencies only when running the independent evaluator:
+
+```bash
 python -m pip install --require-hashes --requirement requirements-contract.txt
 ```
+
+For the shortest offline view of the Shadow MMP value, run:
+
+```bash
+npm run --silent demo:shadow
+```
+
+It evaluates three reviewed synthetic fixtures and prints deterministic JSON
+for `window_mismatch`, `provider_modeled_conversion`, and
+`crowd_anonymity_suppressed`. The command validates those evaluator artifacts
+against their existing goldens. It does not start PostgreSQL or claim that the
+rows were stored or served by a runtime API; `stored_runtime_claim` remains
+`not_run`.
 
 Run the isolated end-to-end synthetic pilot from a clean worktree with no
 `.env` file or `.openmasu` directory:

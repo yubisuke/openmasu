@@ -25,6 +25,7 @@
     "db:schema:dump": "npm run db:schema:dump --workspace @openmasu/runtime",
     "db:schema:check": "npm run db:schema:check --workspace @openmasu/runtime",
     "demo:metrics": "npm run demo:metrics --workspace @openmasu/worker",
+    "demo:shadow": "node --import tsx tools/synthetic-shadow-demo.ts",
     "generate:types": "npm run generate:types --workspace @openmasu/contracts",
     "import": "npm run import --workspace @openmasu/worker --",
     "import:preview": "npm run import:preview --workspace @openmasu/worker --",
