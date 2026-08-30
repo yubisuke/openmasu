@@ -171,25 +171,12 @@ services:
       - backend
       - edge
 
-  s3:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-    profiles: ["s3"]
-    command: server /data --console-address :9001
-    environment:
-      MINIO_ROOT_USER: openmasu-local
-      MINIO_ROOT_PASSWORD: openmasu-local-synthetic-only
-    volumes:
-      - minio-data:/data
-    networks:
-      - backend
-
 volumes:
   postgres-data:
   migration-secrets:
   app-secrets:
   seed-secrets:
   postgres-secrets:
-  minio-data:
   payload-objects:
 
 networks:
