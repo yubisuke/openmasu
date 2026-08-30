@@ -76,6 +76,23 @@ final class ConversionSchemaTests: XCTestCase {
       lockPostback: false,
       conversionTag: ""
     ))
+    XCTAssertThrowsError(try ConversionUpdate(
+      fineValue: 7,
+      coarseValue: .medium,
+      lockPostback: false,
+      conversionTypes: [.install],
+      conversionTag: "synthetic-opaque-tag"
+    )) { error in
+      XCTAssertEqual(error as? OpenMasuError, .conversionSchema("conversion_tag_requires_reengagement"))
+    }
+    XCTAssertThrowsError(try ConversionUpdate(
+      fineValue: 7,
+      coarseValue: .medium,
+      lockPostback: false,
+      conversionTag: "synthetic-opaque-tag"
+    )) { error in
+      XCTAssertEqual(error as? OpenMasuError, .conversionSchema("conversion_tag_requires_reengagement"))
+    }
   }
 
   func testReengagementConversionTagIsParsedAsAnOpaqueTransientValue() throws {
@@ -137,6 +154,59 @@ final class ConversionSchemaTests: XCTestCase {
     let recordedValues = await updater.values
     XCTAssertEqual(recordedValues.count, 2)
   }
+
+  func testPlatformFailureDoesNotAdvanceConversionSignals() async throws {
+    let url = try XCTUnwrap(OpenMasuConversionResources.defaultSchemaURL)
+    let schema = try ConversionSchema(data: Data(contentsOf: url))
+    let updater = FailingOnceUpdater()
+    let controller = ConversionValueController(schema: schema, updater: updater)
+
+    do {
+      _ = try await controller.record(eventName: "failed")
+      XCTFail("the synthetic platform failure must be visible")
+    } catch {
+      XCTAssertEqual(error as? SyntheticConversionError, .updateFailed)
+    }
+
+    let first = try await controller.record(eventName: "first")
+    let second = try await controller.record(eventName: "second")
+    let third = try await controller.record(eventName: "third")
+    XCTAssertEqual(first.fineValue, 0)
+    XCTAssertEqual(second.fineValue, 0)
+    XCTAssertEqual(third.fineValue, 21, "only successful platform updates may advance the signal set")
+  }
+
+  func testLoggingFailureDoesNotRollBackSuccessfulPlatformState() async throws {
+    let url = try XCTUnwrap(OpenMasuConversionResources.defaultSchemaURL)
+    let schema = try ConversionSchema(data: Data(contentsOf: url))
+    let updater = RecordingUpdater()
+    let sink = FailingOnceSink()
+    let controller = ConversionValueController(
+      schema: schema,
+      updater: updater,
+      sink: sink,
+      loggingEnabled: true
+    )
+
+    do {
+      _ = try await controller.record(eventName: "first")
+      XCTFail("the synthetic logging failure must be visible")
+    } catch {
+      XCTAssertEqual(error as? SyntheticConversionError, .loggingFailed)
+    }
+
+    let second = try await controller.record(eventName: "second")
+    let third = try await controller.record(eventName: "third")
+    XCTAssertEqual(second.fineValue, 0)
+    XCTAssertEqual(third.fineValue, 21, "a successful platform update must not be rolled back by optional logging")
+    let updateCount = await updater.values.count
+    XCTAssertEqual(updateCount, 3)
+  }
+}
+
+private enum SyntheticConversionError: Error, Equatable {
+  case updateFailed
+  case loggingFailed
 }
 
 private actor RecordingUpdater: AppleConversionUpdating {
@@ -149,5 +219,27 @@ private actor RecordingSink: ConversionEventSink {
   private(set) var loggedTags: [String] = []
   func recordConversionUpdate(schemaVersion: String, value: ConversionUpdate) {
     events.append("openmasu.conversion_value_updated")
+  }
+}
+
+private actor FailingOnceUpdater: AppleConversionUpdating {
+  private var failed = false
+
+  func update(_ value: ConversionUpdate) async throws {
+    if !failed {
+      failed = true
+      throw SyntheticConversionError.updateFailed
+    }
+  }
+}
+
+private actor FailingOnceSink: ConversionEventSink {
+  private var failed = false
+
+  func recordConversionUpdate(schemaVersion: String, value: ConversionUpdate) async throws {
+    if !failed {
+      failed = true
+      throw SyntheticConversionError.loggingFailed
+    }
   }
 }
