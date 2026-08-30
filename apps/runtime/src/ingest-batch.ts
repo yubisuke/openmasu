@@ -34,6 +34,37 @@ export async function appendDurableBatch(
   );
   try {
     await withTenant(pool, input.tenantId, async (client) => {
+      if (input.subjectDigest) {
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended('openmasu:privacy-subject:' || $1 || ':' || $2 || ':' || $3,0))",
+          [input.tenantId, input.appId, input.subjectDigest],
+        );
+        const deleted = await client.query(
+          `SELECT 1
+             FROM control.privacy_deletion_jobs AS job
+            WHERE job.tenant_id=$1 AND job.app_id=$2 AND job.status='processing'
+              AND job.artifact_template->>'deletion_scope'='installation'
+              AND job.artifact_template->>'deletion_subject_digest'=$3
+            UNION ALL
+           SELECT 1
+             FROM ledger.privacy_requests AS request
+            WHERE request.tenant_id=$1 AND request.app_id=$2 AND request.status='completed'
+              AND request.artifact->>'deletion_scope'='installation'
+              AND request.artifact->>'deletion_subject_digest'=$3
+            LIMIT 1`,
+          [input.tenantId, input.appId, input.subjectDigest],
+        );
+        if ((deleted.rowCount ?? 0) > 0) throw new Error("privacy_subject_inactive");
+      }
+      if (input.installationKeyId && input.subjectDigest) {
+        const credential = await client.query(
+          `SELECT 1 FROM control.installation_credentials_current
+            WHERE tenant_id=$1 AND app_id=$2 AND installation_key_id=$3
+              AND installation_id_digest=$4 AND status='active'`,
+          [input.tenantId, input.appId, input.installationKeyId, input.subjectDigest],
+        );
+        if ((credential.rowCount ?? 0) !== 1) throw new Error("installation_credential_inactive");
+      }
       await client.query(
         `INSERT INTO control.apps (tenant_id, app_id, created_at)
          VALUES ($1,$2,$3) ON CONFLICT (tenant_id, app_id) DO NOTHING`,

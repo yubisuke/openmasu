@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 import { sha256 } from "@openmasu/attribution-core";
-import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
+import { PayloadNotFoundError, uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 import { computeSqlMetricRunsWithClient, persistMetricRun } from "./metrics/cohort.js";
 
 type Any = Record<string, any>;
@@ -24,7 +24,9 @@ function affectedRecords(request: CompletedPrivacyRequest): string[] {
   const artifact = request.artifact;
   if (artifact.status !== "completed" || artifact.privacy_request_id !== request.privacy_request_id
       || artifact.tenant_id !== request.tenant_id || artifact.app_id !== request.app_id
-      || "deletion_subject_ref" in artifact) {
+      || "deletion_subject_ref" in artifact
+      || typeof artifact.deletion_subject_digest !== "string"
+      || !/^[a-f0-9]{64}$/.test(artifact.deletion_subject_digest)) {
     throw new Error(`privacy_reapply_artifact_invalid:${request.privacy_request_id}`);
   }
   const values = artifact.affected_records;
@@ -106,8 +108,11 @@ async function encryptedReferences(
   const batches = await client.query<{ reference: string }>(
     `SELECT DISTINCT batch.body_ref AS reference
        FROM ledger.ingest_batches AS batch
-      WHERE ${batchScope} AND batch.body_ref LIKE 'encrypted:%'`,
-    values,
+      WHERE (${batchScope}${scope === "installation" ? " OR (batch.tenant_id=$1 AND batch.app_id=$2 AND batch.subject_digest=$4)" : ""})
+        AND batch.body_ref LIKE 'encrypted:%'`,
+    scope === "installation"
+      ? [request.tenant_id, request.app_id, records, request.artifact.deletion_subject_digest]
+      : values,
   );
   const resultScope = scope === "tenant"
     ? "result.tenant_id=$1"
@@ -202,23 +207,57 @@ async function encryptedReferences(
       WHERE ${commerceScope} AND readback.cursor_ref LIKE 'encrypted:%'`,
     values,
   );
+  const webhookScope = scope === "tenant"
+    ? "delivery.tenant_id=$1"
+    : scope === "app"
+      ? "delivery.tenant_id=$1 AND delivery.app_id=$2"
+      : "delivery.tenant_id=$1 AND delivery.app_id=$2 AND delivery.record_id=ANY($3::text[])";
+  const webhooks = await client.query<{ reference: string }>(
+    `SELECT DISTINCT delivery.request_ref AS reference
+       FROM ephemeral.operator_webhook_deliveries AS delivery
+      WHERE ${webhookScope}
+        AND delivery.state IN ('queued','retry','suppressed')
+        AND delivery.request_ref LIKE 'encrypted:%'`,
+    values,
+  );
+  const bulkScope = scope === "tenant"
+    ? "batch.tenant_id=$1"
+    : "batch.tenant_id=$1 AND batch.app_id=$2";
+  const bulk = await client.query<{ reference: string }>(
+    `SELECT DISTINCT batch.object_ref AS reference
+       FROM ephemeral.operator_bulk_export_batches AS batch
+      WHERE ${bulkScope}
+        AND batch.state IN ('queued','retry','suppressed')
+        AND batch.object_ref LIKE 'encrypted:%'`,
+    scope === "tenant" ? [request.tenant_id] : [request.tenant_id, request.app_id],
+  );
+  const credentials = scope === "installation"
+    ? await client.query<{ reference: string }>(
+        `SELECT DISTINCT credential.secret_ref AS reference
+           FROM control.installation_credentials AS credential
+          WHERE credential.tenant_id=$1 AND credential.app_id=$2
+            AND credential.installation_id_digest=$3
+            AND credential.secret_ref LIKE 'encrypted:%'`,
+        [request.tenant_id, request.app_id, request.artifact.deletion_subject_digest],
+      )
+    : { rows: [] as Array<{ reference: string }> };
   return [...new Set([
     ...raw.rows, ...inbox.rows, ...batches.rows, ...results.rows, ...lookups.rows,
     ...googleResults.rows, ...googleLookups.rows, ...googleRtdn.rows, ...googleConversions.rows, ...commerce.rows,
+    ...webhooks.rows, ...bulk.rows, ...credentials.rows,
   ].map((row) => row.reference))].sort();
 }
 
 async function purgeAndVerify(payloadStore: PayloadStore, references: readonly string[]): Promise<void> {
   for (const reference of references) {
     await payloadStore.purge(reference);
-    let readable = false;
     try {
       await payloadStore.read(reference);
-      readable = true;
-    } catch {
-      // The required postcondition is unreadability, including an already absent object.
+    } catch (error) {
+      if (error instanceof PayloadNotFoundError) continue;
+      throw error;
     }
-    if (readable) throw new Error("privacy_reapply_payload_still_readable");
+    throw new Error("privacy_reapply_payload_still_readable");
   }
 }
 
@@ -352,15 +391,13 @@ async function recalculateMetrics(
   return { recalculated, unsupported: Number(affectedRunCount.rows[0]?.count ?? "0") };
 }
 
-async function reapplyOne(
+async function applyRecreatedDatabaseState(
   client: PoolClient,
-  payloadStore: PayloadStore,
   request: CompletedPrivacyRequest,
+  records: readonly string[],
+  references: readonly string[],
 ): Promise<Omit<PrivacyReapplyResult, "privacy_requests">> {
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [request.privacy_request_id]);
-  const records = affectedRecords(request);
-  const references = await encryptedReferences(client, request, records);
-  await purgeAndVerify(payloadStore, references);
   await appendPrivacyArtifacts(client, request, records);
   const scope = String(request.artifact.deletion_scope ?? "");
   await client.query(
@@ -430,36 +467,61 @@ async function reapplyOne(
   };
 }
 
+async function reapplyOne(
+  pool: Pool,
+  payloadStore: PayloadStore,
+  request: CompletedPrivacyRequest,
+): Promise<Omit<PrivacyReapplyResult, "privacy_requests">> {
+  const lockClient = await pool.connect();
+  const lockKey = `openmasu:privacy-reapply:${request.tenant_id}:${request.privacy_request_id}`;
+  try {
+    await lockClient.query("SELECT pg_advisory_lock(hashtextextended($1,0))", [lockKey]);
+    const plan = await withTenant(pool, request.tenant_id, async (client) => {
+      const records = affectedRecords(request);
+      const references = await encryptedReferences(client, request, records);
+      return { records, references };
+    });
+    // PayloadStore deletion is irreversible and therefore must not run inside a
+    // PostgreSQL transaction. Repeating it after a crash is intentionally safe.
+    await purgeAndVerify(payloadStore, plan.references);
+    return withTenant(pool, request.tenant_id, (client) => applyRecreatedDatabaseState(
+      client,
+      request,
+      plan.records,
+      plan.references,
+    ));
+  } finally {
+    try { await lockClient.query("SELECT pg_advisory_unlock(hashtextextended($1,0))", [lockKey]); }
+    catch { /* releasing the connection also releases the session lock */ }
+    lockClient.release();
+  }
+}
+
 export async function reapplyCompletedPrivacyRequests(input: {
   readonly pool: Pool;
   readonly payloadStore: PayloadStore;
   readonly tenantId: string;
 }): Promise<PrivacyReapplyResult> {
-  return withTenant(input.pool, input.tenantId, async (client) => {
-    const requests = await client.query<CompletedPrivacyRequest>(
+  const requests = await withTenant(input.pool, input.tenantId, async (client) => (await client.query<CompletedPrivacyRequest>(
       `SELECT privacy_request_id, tenant_id, app_id, completed_at, artifact
          FROM ledger.privacy_requests
         WHERE tenant_id=$1 AND status='completed' AND completed_at IS NOT NULL
         ORDER BY completed_at, privacy_request_id`,
       [input.tenantId],
-    );
-    const total: {
-      privacy_requests: number;
-      payloads_purged: number;
-      metrics_recalculated: number;
-      unsupported_metric_runs: number;
-    } = {
-      privacy_requests: requests.rows.length,
-      payloads_purged: 0,
-      metrics_recalculated: 0,
-      unsupported_metric_runs: 0,
-    };
-    for (const request of requests.rows) {
-      const result = await reapplyOne(client, input.payloadStore, request);
-      total.payloads_purged += result.payloads_purged;
-      total.metrics_recalculated += result.metrics_recalculated;
-      total.unsupported_metric_runs += result.unsupported_metric_runs;
-    }
-    return total;
-  });
+    )).rows);
+  let payloadsPurged = 0;
+  let metricsRecalculated = 0;
+  let unsupportedMetricRuns = 0;
+  for (const request of requests) {
+    const result = await reapplyOne(input.pool, input.payloadStore, request);
+    payloadsPurged += result.payloads_purged;
+    metricsRecalculated += result.metrics_recalculated;
+    unsupportedMetricRuns += result.unsupported_metric_runs;
+  }
+  return {
+    privacy_requests: requests.length,
+    payloads_purged: payloadsPurged,
+    metrics_recalculated: metricsRecalculated,
+    unsupported_metric_runs: unsupportedMetricRuns,
+  };
 }

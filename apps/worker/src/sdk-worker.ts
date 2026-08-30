@@ -612,6 +612,17 @@ async function durableWithdrawalsFor(
             withdrawal_recognized_sequence::text
        FROM control.installation_withdrawals
       WHERE tenant_id=$1 AND installation_key_id=ANY($2::text[])
+      UNION ALL
+     SELECT credential.installation_key_id,
+            purpose.processing_purpose_id,
+            credential.status_changed_at,
+            '0'::text
+       FROM control.installation_credentials_current AS credential
+       CROSS JOIN (VALUES ('attribution'),('analytics'),('revenue_measurement'))
+         AS purpose(processing_purpose_id)
+      WHERE credential.tenant_id=$1
+        AND credential.installation_key_id=ANY($2::text[])
+        AND credential.status='deleted'
       ORDER BY installation_key_id, processing_purpose_id`,
     [tenantId, installationKeyIds],
   ));

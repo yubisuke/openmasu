@@ -16,7 +16,7 @@ import { buildDashboardView } from "./dashboard/view.js";
 import { receiveMax, type MaxReceiverConfig } from "./max-receiver.js";
 import { OperationalMetrics, renderOperationalMetrics } from "./operational-metrics.js";
 import { boundedMethod, writeOperationalLog, type OperationalLogWriter } from "./observability.js";
-import { executePrivacyRequest, type PrivacyRequestBody } from "./privacy.js";
+import { executePrivacyRequest, privacyResponseStatus, type PrivacyRequestBody } from "./privacy.js";
 import {
   differenceAudit,
   encodeDifferenceAudit,
@@ -1458,7 +1458,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
               body,
               dependencies.payloadStore,
             );
-            json(response, 201, result);
+            json(response, privacyResponseStatus(result), result);
           } catch (error) {
             const status = Number((error as { statusCode?: number }).statusCode ?? (error instanceof SyntaxError ? 400 : 500));
             json(response, status, { error: error instanceof Error ? error.message : "privacy_request_failed" });

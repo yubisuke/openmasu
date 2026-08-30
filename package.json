@@ -21,6 +21,7 @@
     "commerce:backfill": "npm run commerce:backfill --workspace @openmasu/worker --",
     "db:migrate": "npm run db:migrate --workspace @openmasu/runtime",
     "db:reapply-privacy": "npm run db:reapply-privacy --workspace @openmasu/worker --",
+    "db:drain-privacy-purge": "npm run db:drain-privacy-purge --workspace @openmasu/worker --",
     "db:schema:dump": "npm run db:schema:dump --workspace @openmasu/runtime",
     "db:schema:check": "npm run db:schema:check --workspace @openmasu/runtime",
     "demo:metrics": "npm run demo:metrics --workspace @openmasu/worker",

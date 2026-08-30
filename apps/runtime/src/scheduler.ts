@@ -11,6 +11,7 @@ export const SCHEDULED_WORKER_JOBS = [
   "google_conversion_delivery",
   "operator_webhook_delivery",
   "operator_bulk_export",
+  "privacy_purge",
   "metric_run",
   "fraud_maintenance",
   "dashboard_session_sweep",

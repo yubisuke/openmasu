@@ -312,6 +312,7 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
     assert.match(body, /openmasu_ingest_backlog\{queue="operator_webhooks"\}/);
     assert.match(body, /openmasu_ingest_oldest_pending_seconds\{queue="operator_webhooks"\}/);
     assert.match(body, /openmasu_ingest_backlog\{queue="operator_bulk_exports"\}/);
+    assert.match(body, /openmasu_ingest_backlog\{queue="privacy_purges"\}/);
     assert.match(body, /openmasu_ingest_oldest_pending_seconds\{queue="operator_bulk_exports"\}/);
     assert.match(body, /openmasu_scheduled_job_runs_total\{job="sdk_inbox",outcome="failed"\} 0/);
     assert.match(body, /openmasu_scheduled_job_consecutive_failures\{job="sdk_inbox"\} 0/);

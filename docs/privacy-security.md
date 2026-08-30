@@ -131,8 +131,28 @@ through `raw_records_current`.
 - Completed deletion removes or crypto-erases protected payloads, appends a
   tombstone with non-identifying provenance, revokes the installation
   credential, and recalculates affected derived output.
+- Deletion recognition is database-first. One transaction records the
+  fail-closed lifecycle, credential deletion, recalculation lineage, and an
+  encrypted-reference purge queue before any irreversible payload-store
+  operation begins. A request may return HTTP 202 and remain `processing` while
+  that queue is retried. It returns HTTP 201 only when synchronously completed,
+  and becomes `completed` only after every queued protected reference is
+  confirmed absent and the completed privacy artifact and audit row commit
+  together. Transport, authorization, corruption, and decryption failures are
+  not treated as proof of erasure. A crash after physical purge but before
+  queue acknowledgement is safe to retry because purge is idempotent.
+- Installation deletion and subject-bearing SDK or server batch admission use
+  the same subject-scoped database lock. Admission rechecks the durable
+  credential and deletion state while holding that lock, so a batch verified
+  before recognition cannot enter the inbox after recognition commits.
+- An app- or tenant-scoped request deletes the data included in its durable
+  recognition snapshot; it is not an app suspension or tenant deactivation.
+  Later lawful processing is a new event with its own purpose and legal-basis
+  decision. An installation-scoped request also deletes its installation
+  credential, so that installation cannot resume ingestion with the old key.
 - Backup restoration must reapply completed privacy state before normal service
-  resumes.
+  resumes. Restored `processing` purge jobs must also drain before traffic is
+  enabled.
 
 ## Retention
 

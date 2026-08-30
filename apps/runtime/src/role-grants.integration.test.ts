@@ -27,6 +27,8 @@ const readerNoTableSelect = new Set([
   "control.google_data_manager_destinations",
   "control.metric_replay_manifests",
   "control.public_postback_audits",
+  "control.privacy_deletion_jobs",
+  "control.privacy_payload_purges",
   "ledger.adservices_lookup_results",
 ]);
 const seedControlTruncate = new Set([
@@ -53,6 +55,8 @@ const seedControlTruncate = new Set([
   "control.metric_schedules",
   "control.metric_schedule_states",
   "control.metric_schedule_checkpoints",
+  "control.privacy_deletion_jobs",
+  "control.privacy_payload_purges",
   "control.rule_bundle_revisions",
   "control.worker_job_schedules",
 ]);
@@ -106,6 +110,8 @@ function expected(row: Row): Privilege[] {
     if (qualified === "control.worker_job_schedules") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.operator_bulk_export_checkpoints") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.metric_schedule_checkpoints") return ["SELECT", "INSERT", "UPDATE"];
+    if (qualified === "control.privacy_deletion_jobs") return ["SELECT", "INSERT", "UPDATE"];
+    if (qualified === "control.privacy_payload_purges") return ["SELECT", "INSERT", "UPDATE"];
     return qualified === "control.public_postback_audits" ? ["INSERT"] : ["SELECT", "INSERT"];
   }
   if (row.role_name === "openmasu_reader") {
@@ -154,6 +160,17 @@ try {
      ORDER BY role_name
   `);
   assert.deepEqual(scheduleView.rows, [
+    { role_name: "openmasu_app", allowed: true },
+    { role_name: "openmasu_reader", allowed: true },
+    { role_name: "openmasu_seed", allowed: false },
+  ]);
+  const privacyBacklog = await pool.query<{ role_name: Role; allowed: boolean }>(`
+    SELECT role_name,
+           has_function_privilege(role_name, 'control.privacy_deletion_backlog()', 'EXECUTE') AS allowed
+      FROM unnest(ARRAY['openmasu_app','openmasu_reader','openmasu_seed']) AS role_name
+     ORDER BY role_name
+  `);
+  assert.deepEqual(privacyBacklog.rows, [
     { role_name: "openmasu_app", allowed: true },
     { role_name: "openmasu_reader", allowed: true },
     { role_name: "openmasu_seed", allowed: false },

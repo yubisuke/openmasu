@@ -16,12 +16,12 @@ A recoverable OpenMasu backup has three separately protected parts:
    directories; and
 3. the payload master key from the deployment's out-of-band secret manager.
 
-The database archive contains the append-only privacy-request ledger. A backup
-that predates a completed deletion request cannot prove that request existed.
-Before serving a restored system, the operator must restore an authoritative
-ledger that includes every completed request or choose a newer backup. The
-public reapply command does not accept an unaudited side file and does not
-invent missing requests.
+The database archive contains completed privacy-request artifacts and durable
+processing jobs. A backup that predates deletion recognition cannot prove that
+request existed. Before serving a restored system, the operator must restore an
+authoritative database that includes every recognized request or choose a newer
+backup. The public drain and reapply commands do not accept an unaudited side
+file and do not invent missing requests.
 
 ## Create a backup
 
@@ -60,23 +60,34 @@ deployment.
 
 3. Restore the matching encrypted object and wrapped-key snapshot. Configure
    the same out-of-band payload master key and application database role.
-4. For each tenant present in the restored database, run:
+4. For each tenant present in the restored database, first drain recognized
+   requests whose protected payload purge was still processing:
+
+   ```bash
+   npm run db:drain-privacy-purge -- --tenant tenant-example
+   ```
+
+   The command must report `"drained":true` and exit zero. It is safe to
+   repeat. A stalled queue or exit code 2 is a hard stop.
+5. Reapply every completed request to the restored payload snapshot and
+   derived database state:
 
    ```bash
    npm run db:reapply-privacy -- --tenant tenant-example
    ```
 
-5. The command must exit zero and report `unsupported_metric_runs: 0`. A
+6. The reapply command must exit zero and report `unsupported_metric_runs: 0`. A
    nonzero unsupported count is a hard stop: do not serve reports until the
    missing versioned replay input has been resolved through an approved newer
    backup or migration.
-6. Verify that protected references affected by completed requests cannot be
+7. Verify that no `control.privacy_deletion_jobs` row remains `processing`,
+   protected references affected by completed requests cannot be
    decrypted, completed artifacts contain no deletion subject, replacement
    metrics are the latest runs, old runs remain immutable, and one idempotent
    `privacy_reapply` audit row exists per request.
-7. Repeat the command. Counts may describe the same requests, but it must not
+8. Repeat both commands. Counts may describe the same requests, but they must not
    create another replacement or audit row.
-8. Run schema, integration, reporting, and health checks before allowing
+9. Run schema, integration, reporting, and health checks before allowing
    traffic.
 
 ## Repository evidence
@@ -84,8 +95,9 @@ deployment.
 `npm run test:backup-restore` uses only synthetic fixture data. With
 `OPENMASU_M5_BACKUP_RESTORE=1`, CI creates a PostgreSQL 17 custom archive,
 restores it into a new disposable database, restores a synthetic encrypted
-payload snapshot, reapplies completed privacy requests, and proves the payload
-is unreadable and the recalculated latest export excludes redacted evidence.
+payload snapshot, drains any processing purge queue, reapplies completed
+privacy requests, and proves the payload is unreadable and the recalculated
+latest export excludes redacted evidence.
 The test does not prove storage durability, a recovery-time objective, or an
 operator's credentials and access controls.
 

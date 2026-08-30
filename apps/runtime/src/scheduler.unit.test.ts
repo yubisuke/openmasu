@@ -34,6 +34,7 @@ describe("durable worker scheduler", () => {
       "google_play_verification", "commerce_readback", "google_conversion_delivery",
       "operator_webhook_delivery",
       "operator_bulk_export",
+      "privacy_purge",
       "metric_run",
       "fraud_maintenance", "dashboard_session_sweep",
     ]);

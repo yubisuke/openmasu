@@ -1,7 +1,13 @@
 import type { Pool } from "pg";
 import { createHash } from "node:crypto";
 import { sha256 } from "@openmasu/attribution-core";
-import { operatorWebhookReference, uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
+import {
+  operatorWebhookReference,
+  processPrivacyDeletionRequest,
+  uuidV7,
+  withTenant,
+  type PayloadStore,
+} from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 
 type Any = Record<string, any>;
@@ -118,7 +124,16 @@ export async function executePrivacyRequest(
   }
   const completedAt = currentTimestamp(now);
   const requestId = `privacy:${uuidV7(now?.valueOf())}`;
-  return withTenant(pool, body.tenant_id, async (client) => {
+  const subjectDigest = "deletionSubjectDigest" in identity && identity.deletionSubjectDigest
+    ? identity.deletionSubjectDigest
+    : sha256([body.tenant_id, body.app_id, body.deletion_scope, body.deletion_subject_ref]);
+  const prepared = await withTenant(pool, body.tenant_id, async (client) => {
+    if (body.deletion_scope === "installation") {
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('openmasu:privacy-subject:' || $1 || ':' || $2 || ':' || $3,0))",
+        [body.tenant_id, body.app_id, subjectDigest],
+      );
+    }
     const records = await affectedRecordIds(client, body);
     // Serialize deletion recognition with operator-webhook discovery and delivery.
     // If deletion takes the lock first, no pending request can cross the boundary;
@@ -392,7 +407,30 @@ export async function executePrivacyRequest(
             WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3) AND cursor_ref IS NOT NULL`,
           [body.tenant_id, body.deletion_scope, body.app_id],
         );
-    for (const reference of new Set([
+    const credentialPayloads = body.deletion_scope === "installation"
+      ? await client.query<{ installation_key_id: string; secret_ref: string }>(
+          `SELECT installation_key_id,secret_ref
+             FROM control.installation_credentials_current
+            WHERE tenant_id=$1 AND app_id=$2 AND installation_id_digest=$3 AND status='active'
+            ORDER BY installation_key_id`,
+          [body.tenant_id, body.app_id, subjectDigest],
+        )
+      : { rows: [] as Array<{ installation_key_id: string; secret_ref: string }> };
+    for (const credential of credentialPayloads.rows) {
+      await client.query(
+        `INSERT INTO control.installation_credential_states (
+          installation_key_id,tenant_id,app_id,status,changed_at,reason_code,artifact
+        ) VALUES ($1,$2,$3,'deleted',$4,'privacy_deletion',$5::jsonb)`,
+        [credential.installation_key_id, body.tenant_id, body.app_id, completedAt,
+          JSON.stringify({
+            installation_key_id: credential.installation_key_id,
+            status: "deleted",
+            changed_at: completedAt,
+            reason_code: "privacy_deletion",
+          })],
+      );
+    }
+    const protectedReferences = [...new Set([
       ...rawPayloads.rows.map((payload) => payload.raw_payload_ref),
       ...payloads.rows.map((payload) => payload.raw_query_ref),
       ...batchPayloads.rows.map((payload) => payload.body_ref),
@@ -405,7 +443,8 @@ export async function executePrivacyRequest(
       ...operatorWebhookPayloads.rows.map((payload) => payload.request_ref),
       ...operatorBulkPayloads.map((payload) => payload.object_ref),
       ...commercePayloads.rows.map((payload) => payload.reference),
-    ])) await payloadStore.purge(reference);
+      ...credentialPayloads.rows.map((payload) => payload.secret_ref),
+    ])].filter((reference) => reference.startsWith("encrypted:")).sort();
     for (const delivery of operatorWebhookPayloads.rows) {
       await client.query(
         `UPDATE ephemeral.operator_webhook_deliveries
@@ -533,10 +572,7 @@ export async function executePrivacyRequest(
         [body.tenant_id, body.deletion_scope, body.app_id],
       );
     }
-    const subjectDigest = "deletionSubjectDigest" in identity && identity.deletionSubjectDigest
-      ? identity.deletionSubjectDigest
-      : sha256([body.tenant_id, body.app_id, body.deletion_scope, body.deletion_subject_ref]);
-    const artifact = {
+    const artifactTemplate = {
       contract_version: "0.4.0",
       tenant_id: body.tenant_id,
       app_id: body.app_id,
@@ -546,23 +582,33 @@ export async function executePrivacyRequest(
       requested_via: body.requested_via,
       requester_auth_ref: "requesterAuthRef" in identity ? identity.requesterAuthRef : `admin_key:${identity.keyId}`,
       requested_at: completedAt,
-      completed_at: completedAt,
-      status: "completed",
       reason_code: "privacy_deletion",
-      policy_version: "privacy-v0.2",
+      policy_version: "privacy-v0.3",
       affected_records: records.map((record_id) => ({ record_id, lifecycle_status: "purged" })),
     };
     await client.query(
-      `INSERT INTO ledger.privacy_requests (
-        privacy_request_id, tenant_id, app_id, requested_at, completed_at, status, artifact
-      ) VALUES ($1,$2,$3,$4,$4,'completed',$5::jsonb)`,
-      [requestId, body.tenant_id, body.app_id, completedAt, JSON.stringify(artifact)],
+      `INSERT INTO control.privacy_deletion_jobs (
+        privacy_request_id,tenant_id,app_id,status,requested_at,artifact_template,
+        actor_type,actor_ref,request_digest,updated_at
+      ) VALUES ($1,$2,$3,'processing',$4,$5::jsonb,$6,$7,$8,$4)`,
+      [requestId, body.tenant_id, body.app_id, completedAt, JSON.stringify(artifactTemplate),
+        "actorType" in identity ? identity.actorType : "admin_key",
+        "actorRef" in identity ? identity.actorRef : `admin_key:${identity.keyId}`,
+        sha256(body)],
     );
+    for (const reference of protectedReferences) {
+      await client.query(
+        `INSERT INTO control.privacy_payload_purges (
+          privacy_request_id,tenant_id,app_id,reference_digest,payload_ref,status,updated_at
+        ) VALUES ($1,$2,$3,$4,$5,'queued',$6)`,
+        [requestId, body.tenant_id, body.app_id, sha256(reference), reference, completedAt],
+      );
+    }
     for (const recordId of records) {
       const tombstone = {
         contract_version: "0.4.0", tenant_id: body.tenant_id, app_id: body.app_id,
         privacy_request_id: requestId, record_id: recordId, lifecycle_status: "purged",
-        reason_code: "privacy_deletion", policy_version: "privacy-v0.2",
+        reason_code: "privacy_deletion", policy_version: "privacy-v0.3",
         provenance_digest: sha256([requestId, recordId, completedAt]), created_at: completedAt,
       };
       await client.query(
@@ -658,18 +704,32 @@ export async function executePrivacyRequest(
           replacement.supersedes_metric_run_id, JSON.stringify(replacement)],
       );
     }
-    await client.query(
-      `INSERT INTO ledger.audit_logs (
-        audit_log_id, tenant_id, app_id, occurred_at, actor_type, actor_ref,
-        action, target_scope, target_ref, policy_version, request_digest,
-        outcome, reason_code
-      ) VALUES ($1,$2,$3,$4,$5,$6,'privacy_delete','privacy_request',$7,
-        'privacy-v0.2',$8,'succeeded',NULL)`,
-      [uuidV7(), body.tenant_id, body.app_id, completedAt,
-        "actorType" in identity ? identity.actorType : "admin_key",
-        "actorRef" in identity ? identity.actorRef : `admin_key:${identity.keyId}`,
-        requestId, sha256(body)],
-    );
-    return artifact;
+    const { deletion_subject_digest: _completedDigest, ...processingTemplate } = artifactTemplate;
+    return {
+      processingArtifact: {
+        ...processingTemplate,
+        deletion_subject_ref: body.deletion_subject_ref,
+        status: "processing",
+      },
+    };
   });
+  try {
+    const purge = await processPrivacyDeletionRequest({
+      pool,
+      payloadStore,
+      tenantId: body.tenant_id,
+      privacyRequestId: requestId,
+      now: now ? () => now : undefined,
+    });
+    return purge.artifact ?? prepared.processingArtifact;
+  } catch {
+    // Recognition is already durable and fail closed. A synchronous worker
+    // failure must not turn an accepted deletion into a client-visible 5xx;
+    // the scheduled worker resumes the same request from PostgreSQL.
+    return prepared.processingArtifact;
+  }
+}
+
+export function privacyResponseStatus(artifact: Any): 201 | 202 {
+  return artifact.status === "completed" ? 201 : 202;
 }

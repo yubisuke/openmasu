@@ -258,18 +258,32 @@ export async function handleServerBatch(
     return writeJson(response, 403, { error: "subject_withdrawn" });
   }
   const durableBody = Buffer.from(JSON.stringify({ records }), "utf8");
-  const ingestBatchId = await appendDurableBatch(dependencies.pool, dependencies.payloadStore, {
-    tenantId: identity.tenantId,
-    appId: identity.appId,
-    producer: identity.producer,
-    body: durableBody,
-    eventCount: records.length,
-    receivedAt,
-    serverKeyId: identity.serverKeyId,
-    ...(batchSubjectDigest ? { subjectDigest: batchSubjectDigest } : {}),
-    requestNonce: identity.nonce,
-    requestTimestampMs: identity.timestampMs,
-  });
+  let ingestBatchId: string;
+  try {
+    ingestBatchId = await appendDurableBatch(dependencies.pool, dependencies.payloadStore, {
+      tenantId: identity.tenantId,
+      appId: identity.appId,
+      producer: identity.producer,
+      body: durableBody,
+      eventCount: records.length,
+      receivedAt,
+      serverKeyId: identity.serverKeyId,
+      ...(batchSubjectDigest ? { subjectDigest: batchSubjectDigest } : {}),
+      requestNonce: identity.nonce,
+      requestTimestampMs: identity.timestampMs,
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "server_ingest_append_failed";
+    if (reason !== "privacy_subject_inactive") throw error;
+    await recordServerAudit(dependencies, identity, {
+      action: "server_ingest_rejected",
+      targetScope: "record",
+      targetRef: `request-digest:${identity.requestDigest.slice(0, 32)}`,
+      outcome: "failed",
+      reasonCode: "subject_withdrawn",
+    });
+    return writeJson(response, 403, { error: "subject_withdrawn" });
+  }
   await recordServerAudit(dependencies, identity, {
     action: "server_ingest_batch_append",
     targetScope: "ingest_batch",

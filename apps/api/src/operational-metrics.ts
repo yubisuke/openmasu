@@ -129,6 +129,10 @@ export async function renderOperationalMetrics(
         WHERE tenant_id=$1 AND state IN ('queued','retry')`,
       [tenantId],
     );
+    const privacyPurges = await client.query<{ count: string; oldest: string }>(
+      `SELECT pending_count::text AS count, oldest_seconds::text AS oldest
+         FROM control.privacy_deletion_backlog()`,
+    );
     const completedJobs = await client.query<{
       actor_ref: string;
       outcome: JobHealthOutcome;
@@ -196,6 +200,7 @@ export async function renderOperationalMetrics(
       adservices: adservices.rows[0],
       operatorWebhooks: operatorWebhooks.rows[0],
       operatorBulkExports: operatorBulkExports.rows[0],
+      privacyPurges: privacyPurges.rows[0],
       jobs,
       scheduledJobs: new Map(scheduledJobs.rows.map((row) => [row.job_name, row])),
     };
@@ -209,6 +214,7 @@ export async function renderOperationalMetrics(
     `openmasu_ingest_backlog${labels({ queue: "adservices" })} ${durable.adservices.count}`,
     `openmasu_ingest_backlog${labels({ queue: "operator_webhooks" })} ${durable.operatorWebhooks.count}`,
     `openmasu_ingest_backlog${labels({ queue: "operator_bulk_exports" })} ${durable.operatorBulkExports.count}`,
+    `openmasu_ingest_backlog${labels({ queue: "privacy_purges" })} ${durable.privacyPurges.count}`,
     "# HELP openmasu_ingest_oldest_pending_seconds Age of the oldest pending item in a bounded queue.",
     "# TYPE openmasu_ingest_oldest_pending_seconds gauge",
     `openmasu_ingest_oldest_pending_seconds${labels({ queue: "max_inbox" })} ${durable.inbox.oldest}`,
@@ -216,6 +222,7 @@ export async function renderOperationalMetrics(
     `openmasu_ingest_oldest_pending_seconds${labels({ queue: "adservices" })} ${durable.adservices.oldest}`,
     `openmasu_ingest_oldest_pending_seconds${labels({ queue: "operator_webhooks" })} ${durable.operatorWebhooks.oldest}`,
     `openmasu_ingest_oldest_pending_seconds${labels({ queue: "operator_bulk_exports" })} ${durable.operatorBulkExports.oldest}`,
+    `openmasu_ingest_oldest_pending_seconds${labels({ queue: "privacy_purges" })} ${durable.privacyPurges.oldest}`,
     "# HELP openmasu_job_runs_total Durable terminal operator job runs by fixed job and outcome.",
     "# TYPE openmasu_job_runs_total counter",
   );
