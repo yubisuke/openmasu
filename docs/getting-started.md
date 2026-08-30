@@ -186,6 +186,13 @@ send that value back as `after` to continue the same route. Cursors are specific
 to their route and a mismatched cursor is rejected. Dashboard report pages show
 an explicit **Next** link rather than silently hiding additional rows.
 
+The first stored-difference page fixes an internal selection boundary. Later
+rows and later superseding artifacts are excluded while that cursor chain is
+continued. This is a database selection snapshot, not the source-event
+`watermark_at_most`; start without `after` when a fresh difference view is
+required. Legacy difference cursors remain readable and acquire a boundary when
+they are next continued.
+
 Use `format=csv&export=true` only when the result fits within the configured
 export maximum. OpenMasu returns `export_limit_exceeded` instead of a partial
 CSV. A non-export CSV page exposes its continuation in `X-Next-Cursor`.

@@ -47,9 +47,11 @@ CSV export fails closed with `export_limit_exceeded` instead of returning a
 partial file; paged CSV responses expose the continuation in `X-Next-Cursor`.
 
 `watermark_at_most` fixes metric and raw aggregate-record selection. Stored
-reconciliation artifacts do not currently carry a comparable selection
-watermark, so the difference route does not claim that filter as a reproducible
-reconciliation cutoff.
+reconciliation artifacts do not carry a comparable source watermark. Instead,
+the first difference page fixes an internal database selection sequence and
+every continuation cursor reuses it for both base and superseding rows. This
+keeps one page chain stable, but it is not a reproducible reconciliation source
+cutoff and is not part of the public artifact.
 
 ## Consistency gate
 

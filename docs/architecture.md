@@ -290,9 +290,10 @@ public reproducibility digest.
 Metric rows, aggregate record counts, and stored difference-audit rows are all
 bounded with route-specific keyset cursors. JSON pages carry `next_cursor`,
 paged CSV responses carry `X-Next-Cursor`, and complete CSV exports fail rather
-than silently truncating. Stored reconciliation artifacts have no selection
-watermark today; their pagination is deterministic, but it is not described as
-a fixed-watermark snapshot.
+than silently truncating. A stored-difference cursor carries an internal
+selection sequence fixed by the first page; later rows and later superseding
+artifacts do not alter that cursor chain. The sequence is not a source
+`received_at` watermark or part of an artifact reproducibility digest.
 
 Undefined values remain absent with a closed reason. Organic, non-organic,
 unattributed, deterministic installation-level, and aggregate platform series

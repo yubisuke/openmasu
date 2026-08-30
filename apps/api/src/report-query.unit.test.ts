@@ -108,7 +108,11 @@ describe("M3 typed reporting query", () => {
   });
 
   it("parses route-specific difference and record cursors without accepting the wrong kind", () => {
-    const difference = encodeDifferenceCursor({ kind: "difference", reconciliationId: "reconciliation:page-1" });
+    const difference = encodeDifferenceCursor({
+      kind: "difference",
+      reconciliationId: "reconciliation:page-1",
+      selectionSequence: "9223372036854775807",
+    });
     const record = encodeRecordCountCursor({
       kind: "record",
       metricName: "daily_install_count",
@@ -127,6 +131,7 @@ describe("M3 typed reporting query", () => {
     assert.deepEqual(differenceQuery.query.differenceAfter, {
       kind: "difference",
       reconciliationId: "reconciliation:page-1",
+      selectionSequence: "9223372036854775807",
     });
     assert.deepEqual(recordQuery.query.recordAfter, {
       kind: "record",
@@ -136,10 +141,32 @@ describe("M3 typed reporting query", () => {
     rejectsKind(`after=${encodeURIComponent(record)}`, "difference", "cursor_invalid");
     rejectsKind(`after=${encodeURIComponent(difference)}`, "record", "cursor_invalid");
     rejects(`after=${encodeURIComponent(difference)}`, "cursor_invalid");
+
+    const legacy = encodeDifferenceCursor({ kind: "difference", reconciliationId: "reconciliation:legacy" });
+    assert.deepEqual(parseMetricQuery({
+      ...scope,
+      searchParams: new URLSearchParams({ after: legacy }),
+      cursorKind: "difference",
+    }).query.differenceAfter, {
+      kind: "difference",
+      reconciliationId: "reconciliation:legacy",
+    });
+    for (const selectionSequence of ["-1", "01", "1.5", "9223372036854775808"]) {
+      const invalid = Buffer.from(JSON.stringify({
+        kind: "difference",
+        reconciliationId: "reconciliation:invalid",
+        selectionSequence,
+      })).toString("base64url");
+      rejectsKind(`after=${invalid}`, "difference", "cursor_invalid");
+    }
   });
 
   it("binds the difference cursor and emits keyset SQL without offset", () => {
-    const cursor = encodeDifferenceCursor({ kind: "difference", reconciliationId: "reconciliation:bound-90731" });
+    const cursor = encodeDifferenceCursor({
+      kind: "difference",
+      reconciliationId: "reconciliation:bound-90731",
+      selectionSequence: "90731",
+    });
     const parsed = parseMetricQuery({
       ...scope,
       searchParams: new URLSearchParams({
@@ -152,7 +179,26 @@ describe("M3 typed reporting query", () => {
     const statement = buildDifferenceQuery(parsed.query);
     assert.equal(statement.text.includes("reconciliation:bound-90731"), false);
     assert.equal(statement.values.includes("reconciliation:bound-90731"), true);
+    assert.equal(statement.text.includes("90731"), false);
+    assert.equal(statement.values.includes("90731"), true);
     assert.match(statement.text, /rr\.reconciliation_id COLLATE "C" >/);
+    assert.match(statement.text, /rr\.reconciliation_selection_seq <= selection_fence\.selection_seq/);
+    assert.equal(
+      (statement.text.match(/replacement\.reconciliation_selection_seq <= selection_fence\.selection_seq/g) ?? []).length,
+      2,
+    );
+    assert.equal(/\bOFFSET\b/i.test(statement.text), false);
+  });
+
+  it("starts a stored-difference selection fence inside the first-page query", () => {
+    const parsed = parseMetricQuery({
+      ...scope,
+      searchParams: new URLSearchParams({ limit: "7" }),
+      cursorKind: "difference",
+    });
+    const statement = buildDifferenceQuery(parsed.query);
+    assert.match(statement.text, /MAX\(candidate\.reconciliation_selection_seq\)/);
+    assert.match(statement.text, /selection_fence\.selection_seq::text AS selection_seq/);
     assert.equal(/\bOFFSET\b/i.test(statement.text), false);
   });
 });
