@@ -1,6 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
-import { recordJobOutcome, uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
+import {
+  acquirePrivacyTenantXactFence,
+  PayloadNotFoundError,
+  recordJobOutcome,
+  uuidV7,
+  withTenant,
+  type PayloadStore,
+} from "@openmasu/runtime";
 import {
   buildGoogleDataManagerIngestRequest,
   googleDiagnosticPollPlan,
@@ -10,7 +17,7 @@ import {
 import { googleServiceAccountAccessToken } from "./google-service-account.js";
 
 type Candidate = {
-  verification_result_id: string; verified_record_id: string; app_id: string;
+  verification_result_id: string; verified_record_id: string; click_record_id: string; app_id: string;
   destination_id: string; operating_account_id: string; conversion_action_id: string;
   app_audience: "general" | "mixed" | "child_directed"; amount_unscaled: string;
   amount_scale: number; currency: string; occurred_at: string; status: "non_organic" | "organic" | "unattributed";
@@ -112,6 +119,83 @@ async function claimGoogleConversionDeliveries(
   return rows.rows[0];
 }
 
+async function lockCurrentDelivery(
+  client: PoolClient,
+  tenantId: string,
+  row: DeliveryRow,
+): Promise<boolean> {
+  if (!row.claim_token || !row.claimed_until) {
+    throw new Error("google_conversion_claim_missing");
+  }
+  const current = await client.query(
+    `SELECT 1
+       FROM ephemeral.google_conversion_deliveries AS delivery
+       JOIN ledger.google_play_purchase_verification_results AS result
+         ON result.tenant_id=delivery.tenant_id AND result.app_id=delivery.app_id
+        AND result.verification_result_id=delivery.verification_result_id
+       JOIN ledger.purchase_facts AS purchase
+         ON purchase.tenant_id=result.tenant_id AND purchase.app_id=result.app_id
+        AND purchase.record_id=result.verified_record_id
+       JOIN ledger.install_facts AS install
+         ON install.tenant_id=purchase.tenant_id AND install.app_id=purchase.app_id
+        AND install.installation_id=purchase.installation_id
+       JOIN ledger.click_facts AS click
+         ON click.tenant_id=install.tenant_id AND click.app_id=install.app_id
+        AND click.click_id=install.click_id
+       JOIN ledger.logical_events AS click_event
+         ON click_event.tenant_id=click.tenant_id AND click_event.app_id=click.app_id
+        AND click_event.logical_event_id=click.logical_event_id
+       JOIN ledger.raw_records_current AS purchase_raw
+         ON purchase_raw.tenant_id=purchase.tenant_id AND purchase_raw.app_id=purchase.app_id
+        AND purchase_raw.record_id=purchase.record_id
+       JOIN ledger.raw_records_current AS click_raw
+         ON click_raw.tenant_id=click_event.tenant_id AND click_raw.app_id=click_event.app_id
+        AND click_raw.record_id=click_event.record_id
+      WHERE delivery.tenant_id=$1 AND delivery.app_id=$2 AND delivery.delivery_id=$3::uuid
+        AND delivery.claim_token=$4::uuid AND delivery.claimed_until > clock_timestamp()
+        AND delivery.state=$5
+        AND purchase_raw.payload_lifecycle_status='available'
+        AND click_raw.payload_lifecycle_status='available'
+        AND purchase_raw.withdrawal_recognized_at IS NULL
+        AND click_raw.withdrawal_recognized_at IS NULL
+        AND purchase_raw.consent_decision_reason_code <> 'consent_withdrawn'
+        AND click_raw.consent_decision_reason_code <> 'consent_withdrawn'
+        AND NOT EXISTS (SELECT 1 FROM ledger.privacy_tombstones AS tombstone
+          WHERE tombstone.tenant_id=delivery.tenant_id AND tombstone.app_id=delivery.app_id
+            AND tombstone.record_id IN (purchase.record_id,click_event.record_id))
+      FOR UPDATE OF delivery`,
+    [tenantId, row.app_id, row.delivery_id, row.claim_token, row.state],
+  );
+  return current.rowCount === 1;
+}
+
+async function withCurrentDelivery<T>(
+  pool: Pool,
+  tenantId: string,
+  row: DeliveryRow,
+  operation: (client: PoolClient) => T,
+): Promise<T | undefined> {
+  return withTenant(pool, tenantId, async (client) => {
+    await acquirePrivacyTenantXactFence(client, tenantId, "shared");
+    if (!await lockCurrentDelivery(client, tenantId, row)) return undefined;
+    return operation(client);
+  });
+}
+
+async function beginProviderRequest<T>(
+  pool: Pool,
+  tenantId: string,
+  row: DeliveryRow,
+  operation: () => Promise<T>,
+): Promise<{ readonly response: Promise<T> } | undefined> {
+  return withCurrentDelivery(pool, tenantId, row, () => {
+    const response = operation();
+    // The provider request starts before the shared privacy fence is released.
+    void response.catch(() => undefined);
+    return { response };
+  });
+}
+
 async function finalizeGoogleConversionDelivery(
   pool: Pool,
   tenantId: string,
@@ -127,6 +211,8 @@ async function finalizeGoogleConversionDelivery(
     if (!row.claim_token || !row.claimed_until) {
       throw new Error("google_conversion_claim_missing");
     }
+    await acquirePrivacyTenantXactFence(client, tenantId, "shared");
+    if (!await lockCurrentDelivery(client, tenantId, row)) return false;
     const updated = await client.query(
       `UPDATE ephemeral.google_conversion_deliveries
           SET state=$4,attempts=attempts+1,next_attempt_at=$5,provider_request_id=$6,
@@ -153,11 +239,43 @@ async function finalizeGoogleConversionDelivery(
   });
 }
 
+async function discoveryCandidateIsEligible(
+  client: PoolClient,
+  tenantId: string,
+  candidate: Candidate,
+): Promise<boolean> {
+  const eligible = await client.query(
+    `SELECT 1
+       FROM ledger.raw_records_current AS purchase_raw
+       JOIN ledger.raw_records_current AS click_raw
+         ON click_raw.tenant_id=purchase_raw.tenant_id AND click_raw.app_id=purchase_raw.app_id
+       JOIN control.google_data_manager_destinations AS destination
+         ON destination.tenant_id=purchase_raw.tenant_id AND destination.app_id=purchase_raw.app_id
+      WHERE purchase_raw.tenant_id=$1 AND purchase_raw.app_id=$2
+        AND purchase_raw.record_id=$3 AND click_raw.record_id=$4
+        AND destination.destination_id=$5::uuid AND destination.enabled=true
+        AND destination.app_audience <> 'child_directed'
+        AND purchase_raw.payload_lifecycle_status='available'
+        AND click_raw.payload_lifecycle_status='available'
+        AND purchase_raw.withdrawal_recognized_at IS NULL
+        AND click_raw.withdrawal_recognized_at IS NULL
+        AND purchase_raw.consent_decision_reason_code <> 'consent_withdrawn'
+        AND click_raw.consent_decision_reason_code <> 'consent_withdrawn'
+        AND NOT EXISTS (SELECT 1 FROM ledger.privacy_tombstones AS tombstone
+          WHERE tombstone.tenant_id=$1 AND tombstone.app_id=$2
+            AND tombstone.record_id IN ($3,$4))`,
+    [tenantId, candidate.app_id, candidate.verified_record_id,
+      candidate.click_record_id, candidate.destination_id],
+  );
+  return eligible.rowCount === 1;
+}
+
 export async function discoverGoogleConversionDeliveries(
   pool: Pool, payloadStore: PayloadStore, tenantId: string, now = new Date(),
 ): Promise<number> {
   const candidates = await withTenant(pool, tenantId, (client) => client.query<Candidate>(
-    `SELECT result.verification_result_id::text, result.verified_record_id::text, result.app_id,
+    `SELECT result.verification_result_id::text, result.verified_record_id::text,
+            click_event.record_id AS click_record_id, result.app_id,
             destination.destination_id::text, destination.operating_account_id,
             destination.conversion_action_id, destination.app_audience,
             purchase.amount_unscaled, purchase.amount_scale, purchase.currency,
@@ -227,6 +345,8 @@ export async function discoverGoogleConversionDeliveries(
       objectId: `google-conversion-${deliveryId}` }, prepared.body);
     try {
       const inserted = await withTenant(pool, tenantId, async (client) => {
+        await acquirePrivacyTenantXactFence(client, tenantId, "shared");
+        if (!await discoveryCandidateIsEligible(client, tenantId, candidate)) return false;
         const result = await client.query(
           `INSERT INTO ephemeral.google_conversion_deliveries (
              delivery_id,tenant_id,app_id,destination_id,verification_result_id,verified_record_id,
@@ -270,31 +390,51 @@ export async function processGoogleConversionDeliveries(pool: Pool, payloadStore
       leaseMs,
     );
     if (!row) break;
-    accessToken ??= await dependencies.accessToken({ credentialsJson: options.credentialsJson,
-      scope: "https://www.googleapis.com/auth/datamanager", tokenUrl: options.tokenUrl });
+    const providerAccessToken = accessToken ?? await dependencies.accessToken({
+      credentialsJson: options.credentialsJson,
+      scope: "https://www.googleapis.com/auth/datamanager",
+      tokenUrl: options.tokenUrl,
+    });
+    accessToken = providerAccessToken;
     let state = row.state; let reason: string | undefined; let providerRequestId = row.provider_request_id ?? undefined;
     let next = new Date(now.valueOf() + Math.min(900_000, 60_000 * (2 ** Math.min(row.attempts, 4))));
     let deadline = row.diagnostics_deadline_at ? new Date(row.diagnostics_deadline_at) : undefined;
     if (row.state === "queued") {
-      const body = await payloadStore.read(row.request_ref);
+      let body: Buffer;
+      try {
+        body = await payloadStore.read(row.request_ref);
+      } catch (error) {
+        if (!(error instanceof PayloadNotFoundError)) throw error;
+        const stillCurrent = await withCurrentDelivery(pool, tenantId, row, () => true);
+        if (stillCurrent === undefined) continue;
+        throw error;
+      }
       if (sha256(body) !== row.request_digest) throw new Error("google_conversion_request_digest_mismatch");
       const request = JSON.parse(body.toString("utf8")) as any;
       const transactionId = String(request.events?.[0]?.transactionId);
       if (sha256(transactionId) !== row.transaction_digest) {
         throw new Error("google_conversion_transaction_digest_mismatch");
       }
-      const result = await dependencies.sendEvent({ transactionId, request, body },
-        { accessToken, baseUrl: options.apiBaseUrl });
+      const started = await beginProviderRequest(pool, tenantId, row, () => dependencies.sendEvent(
+        { transactionId, request, body },
+        { accessToken: providerAccessToken, baseUrl: options.apiBaseUrl },
+      ));
+      if (!started) continue;
+      const result = await started.response;
       if (result.outcome === "accepted") {
         state = "http_accepted"; providerRequestId = result.requestId;
         next = new Date(now.valueOf() + 30 * 60_000); deadline = new Date(now.valueOf() + 24 * 60 * 60_000);
       } else if (result.outcome === "terminal") { state = "failed"; reason = result.reason; }
       else reason = result.reason;
     } else if (providerRequestId && deadline) {
+      const diagnosticRequestId = providerRequestId;
       if (now >= deadline) { state = "expired"; reason = "diagnostics_expired"; }
       else {
-        const result = await dependencies.retrieveStatus(providerRequestId,
-          { accessToken, baseUrl: options.apiBaseUrl });
+        const started = await beginProviderRequest(pool, tenantId, row, () =>
+          dependencies.retrieveStatus(diagnosticRequestId,
+            { accessToken: providerAccessToken, baseUrl: options.apiBaseUrl }));
+        if (!started) continue;
+        const result = await started.response;
         if (result.outcome === "status") {
           if (result.status === "processing") {
             state = "diagnostics_processing";
