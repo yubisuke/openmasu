@@ -141,9 +141,9 @@ export async function executePrivacyRequest(
   const prepared = await withTenant(pool, body.tenant_id, async (client) => {
     await acquirePrivacyTenantXactFence(client, body.tenant_id, "exclusive");
     const records = await affectedRecordIds(client, body);
-    // Serialize deletion recognition with operator-webhook discovery and delivery.
+    // Serialize deletion recognition with tenant-scoped projection and provider fences.
     // If deletion takes the lock first, no pending request can cross the boundary;
-    // if delivery already owns it, that request necessarily precedes recognition.
+    // if work already owns the shared fence, that work precedes recognition.
     for (const recordId of records) {
       await client.query(
         "SELECT pg_advisory_xact_lock(hashtextextended('openmasu:operator-webhook:' || $1,0))",
