@@ -32,13 +32,24 @@ Reader routes use the PostgreSQL reader role and never mutate state.
 ## Reporting contract
 
 One query parser validates app, metric, grouping, half-open date range,
-watermark, supersession mode, limit, and keyset cursor. Unknown or identifying
-grouping fields are rejected. SQL uses fixed fragments and bound values only.
+watermark, supersession mode, limit, and route-specific keyset cursor. Unknown
+or identifying grouping fields are rejected. Metric, aggregate-record, and
+stored-difference cursors are distinct and cannot be used on the wrong route.
+SQL uses fixed fragments and bound values only.
 
 Latest mode excludes artifacts superseded in the same tenant/app scope. All mode
 includes history and marks superseded rows. Ordering is deterministic by metric
-name, grouping digest, and run ID. CSV retains stable column order and uses the
-same row encoder as JSON and dashboard export.
+name, grouping digest, and run ID. Aggregate-record ordering uses metric name
+and canonical PostgreSQL `jsonb` text; stored differences use reconciliation
+ID. Every JSON page returns an optional `next_cursor`. CSV retains stable column
+order and uses the same row encoder as JSON and dashboard export. A complete
+CSV export fails closed with `export_limit_exceeded` instead of returning a
+partial file; paged CSV responses expose the continuation in `X-Next-Cursor`.
+
+`watermark_at_most` fixes metric and raw aggregate-record selection. Stored
+reconciliation artifacts do not currently carry a comparable selection
+watermark, so the difference route does not claim that filter as a reproducible
+reconciliation cutoff.
 
 ## Consistency gate
 

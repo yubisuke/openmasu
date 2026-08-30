@@ -88,6 +88,8 @@ export type DashboardView = {
   readonly canOperate: boolean;
   readonly canAdminister: boolean;
   readonly nextCursor?: string;
+  readonly recordNextCursor?: string;
+  readonly differenceNextCursor?: string;
   readonly metadata: {
     readonly watermark?: string;
     readonly snapshotIds: readonly string[];
@@ -115,7 +117,9 @@ export function buildDashboardView(input: {
   readonly query?: MetricQuery;
   readonly metrics?: MetricReportPage;
   readonly records?: readonly RecordCountRow[];
+  readonly recordNextCursor?: string;
   readonly differences?: DifferenceAuditPage;
+  readonly differenceNextCursor?: string;
   readonly trackingLinks?: readonly DashboardTrackingLink[];
   readonly sdkKeys?: readonly DashboardSdkKey[];
   readonly serverKeys?: readonly DashboardServerKey[];
@@ -175,6 +179,8 @@ export function buildDashboardView(input: {
     canOperate: input.canOperate ?? false,
     canAdminister: input.canAdminister ?? false,
     ...(input.metrics?.next_cursor ? { nextCursor: input.metrics.next_cursor } : {}),
+    ...(input.recordNextCursor ? { recordNextCursor: input.recordNextCursor } : {}),
+    ...(input.differenceNextCursor ? { differenceNextCursor: input.differenceNextCursor } : {}),
     metadata: {
       ...(input.query?.watermarkAtMost ? { watermark: input.query.watermarkAtMost } : {}),
       snapshotIds: unique(rows.map((row) => row.input_snapshot_id)),

@@ -289,6 +289,161 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
     assert.equal(identifying.status, 400);
   });
 
+  it("paginates stored differences without silent truncation and rejects partial exports", async () => {
+    const artifacts = Array.from({ length: 7 }, (_, index) => ({
+      contract_version: "0.4.0",
+      reconciliation_id: `reconciliation:pagination:${index}`,
+      tenant_id: "tenant-a",
+      app_id: "app-a",
+      input_snapshot_id: `internal-snapshot:pagination:${index}`,
+      external_snapshot_id: `external-snapshot:pagination:${index}`,
+      difference_reason_code: "candidate_missing",
+      difference_reason_version: "0.4.0",
+      matching_keys: [],
+      candidates: [],
+      exclusions: [],
+      windows: [],
+      joins: [],
+      freshness: "current",
+    }));
+    await withTenant(appPool, "tenant-a", async (client) => {
+      for (const artifact of artifacts) {
+        await client.query(
+          `INSERT INTO ledger.reconciliation_results (
+            reconciliation_id,tenant_id,app_id,input_snapshot_id,external_snapshot_id,
+            difference_reason_code,difference_reason_version,freshness,artifact
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
+          [
+            artifact.reconciliation_id, artifact.tenant_id, artifact.app_id,
+            artifact.input_snapshot_id, artifact.external_snapshot_id,
+            artifact.difference_reason_code, artifact.difference_reason_version,
+            artifact.freshness, JSON.stringify(artifact),
+          ],
+        );
+      }
+    });
+
+    const headers = { authorization: `Bearer ${adminKey}` };
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const query = new URLSearchParams({
+        app_id: "app-a",
+        difference_reason_code: "candidate_missing",
+        supersession: "all",
+        limit: "3",
+      });
+      if (cursor) query.set("after", cursor);
+      const response = await fetch(`${baseUrl}/v1/audit/differences?${query}`, { headers });
+      const page = await response.json() as { data: Any[]; next_cursor?: string };
+      assert.equal(response.status, 200);
+      assert.ok(page.data.length >= 1 && page.data.length <= 3);
+      seen.push(...page.data.map((row) => row.reconciliation_id));
+      cursor = page.next_cursor;
+    } while (cursor);
+    assert.deepEqual(seen, artifacts.map((artifact) => artifact.reconciliation_id));
+    assert.equal(new Set(seen).size, seen.length);
+
+    const csvPage = await fetch(
+      `${baseUrl}/v1/audit/differences?app_id=app-a&difference_reason_code=candidate_missing&supersession=all&format=csv&limit=3`,
+      { headers },
+    );
+    assert.equal(csvPage.status, 200);
+    assert.ok(csvPage.headers.get("x-next-cursor"));
+    assert.equal((await csvPage.text()).trimEnd().split("\n").length, 4);
+
+    const overflow = await fetch(
+      `${baseUrl}/v1/audit/differences?app_id=app-a&difference_reason_code=candidate_missing&supersession=all&format=csv&export=true&limit=3`,
+      { headers },
+    );
+    assert.equal(overflow.status, 400);
+    assert.deepEqual(await overflow.json(), { error: "export_limit_exceeded" });
+
+  });
+
+  it("paginates fixed-watermark aggregate counts and preserves privacy on every page", async () => {
+    const input = fixture("42-daily-metric-date");
+    input.metric_evaluations = [];
+    input.records = Array.from({ length: 7 }, (_, index) => {
+      const day = String(index + 1).padStart(2, "0");
+      return {
+        ...structuredClone(input.records[0]),
+        record_id: `click-pagination-${day}`,
+        delivery_id: `delivery:click-pagination-${day}`,
+        event_id: `event:click-pagination-${day}`,
+        occurred_at: `2026-08-${day}T12:00:00.000Z`,
+        received_at: `2026-08-${day}T12:00:01.000Z`,
+        payload: {
+          ...structuredClone(input.records[0].payload),
+          click_id: `click-pagination-${day}_0000000000000000`,
+          campaign_id: `campaign-pagination-${day}`,
+          redirector_click_at: `2026-08-${day}T12:00:00.000Z`,
+        },
+      };
+    });
+    await registerAndIngest("m3-record-pagination", input);
+
+    const headers = { authorization: `Bearer ${adminKey}` };
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const query = new URLSearchParams({
+        app_id: "app-a",
+        metric_name: "daily_click_count",
+        date_from: "2026-08-01",
+        date_to: "2026-08-08",
+        watermark_at_most: "2026-08-31T00:00:00.000Z",
+        limit: "3",
+      });
+      if (cursor) query.set("after", cursor);
+      const response = await fetch(`${baseUrl}/v1/reports/records?${query}`, { headers });
+      const text = await response.text();
+      assert.equal(response.status, 200);
+      for (const forbidden of ["installation_id", "click_id", "record_id", "payload", "payload_ref"]) {
+        assert.equal(text.includes(forbidden), false, `${forbidden} leaked from a paginated record page`);
+      }
+      const page = JSON.parse(text) as { data: Any[]; next_cursor?: string };
+      assert.ok(page.data.length >= 1 && page.data.length <= 3);
+      seen.push(...page.data.map((row) => `${row.metric_name}:${row.grouping.metric_date}`));
+      cursor = page.next_cursor;
+    } while (cursor);
+    assert.deepEqual(seen, Array.from({ length: 7 }, (_, index) =>
+      `daily_click_count:2026-08-${String(index + 1).padStart(2, "0")}`));
+    assert.equal(new Set(seen).size, seen.length);
+
+    const csvPage = await fetch(
+      `${baseUrl}/v1/reports/records?app_id=app-a&metric_name=daily_click_count&date_from=2026-08-01&date_to=2026-08-08&watermark_at_most=2026-08-31T00%3A00%3A00.000Z&format=csv&limit=3`,
+      { headers },
+    );
+    assert.equal(csvPage.status, 200);
+    assert.ok(csvPage.headers.get("x-next-cursor"));
+    assert.equal((await csvPage.text()).trimEnd().split("\n").length, 4);
+
+    const overflow = await fetch(
+      `${baseUrl}/v1/reports/records?app_id=app-a&metric_name=daily_click_count&date_from=2026-08-01&date_to=2026-08-08&watermark_at_most=2026-08-31T00%3A00%3A00.000Z&format=csv&export=true&limit=3`,
+      { headers },
+    );
+    assert.equal(overflow.status, 400);
+    assert.deepEqual(await overflow.json(), { error: "export_limit_exceeded" });
+
+    const login = await fetch(`${baseUrl}/dashboard/session`, {
+      method: "POST",
+      redirect: "manual",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ admin_key: adminKey }),
+    });
+    assert.equal(login.status, 303);
+    const cookie = (login.headers.get("set-cookie") ?? "").split(";", 1)[0];
+    const recordsPage = await fetch(
+      `${baseUrl}/dashboard/apps/app-a/records?metric_name=daily_click_count&date_from=2026-08-01&date_to=2026-08-08&watermark_at_most=2026-08-31T00%3A00%3A00.000Z&limit=1`,
+      { headers: { cookie } },
+    );
+    const recordsHtml = await recordsPage.text();
+    assert.equal(recordsPage.status, 200);
+    assert.match(recordsHtml, /Next aggregate-record page/);
+    assert.equal(recordsHtml.includes("<script"), false);
+  });
+
   it("C16 serves byte-identical aggregate CSV through bearer and dashboard-session paths", async () => {
     const input = fixture("42-daily-metric-date");
     await registerAndIngest("42-daily-metric-date-export", input);
@@ -319,5 +474,6 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
     assert.equal(page.status, 200);
     assert.match(html, /data-metric-run-id="run-42-click:daily_click_count"/);
     assert.equal(html.includes("<script"), false);
+
   });
 });

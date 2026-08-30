@@ -47,6 +47,7 @@ describe("declarative API route security", () => {
     assert.equal(matchRoute("GET", "/v1/admin/tracking-links")?.handler, "admin_tracking_links_list");
     assert.equal(matchRoute("POST", "/v1/admin/tracking-links")?.handler, "admin_tracking_links");
     assert.equal(matchRoute("GET", "/dashboard/apps/app-a/tracking-links")?.handler, "dashboard_tracking_links_list");
+    assert.equal(matchRoute("GET", "/dashboard/apps/app-a/records")?.handler, "dashboard_records");
     assert.equal(matchRoute("POST", "/dashboard/apps/app-a/tracking-links")?.handler, "dashboard_tracking_links_create");
     assert.equal(matchRoute("POST", APPLE_SKAN_POSTBACK_PATH)?.handler, "apple_skan_postback");
     assert.equal(matchRoute("POST", APPLE_AAK_POSTBACK_PATH)?.handler, "apple_aak_postback");

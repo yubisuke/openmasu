@@ -4,7 +4,9 @@ import type { AppAdminIdentity } from "./admin-auth.js";
 import {
   buildDifferenceQuery,
   buildMetricQuery,
+  encodeDifferenceCursor,
   encodeMetricCursor,
+  encodeRecordCountCursor,
   ReportQueryError,
   type GroupingDimension,
   type MetricQuery,
@@ -64,6 +66,7 @@ export type MetricReportPage = {
 
 export type DifferenceAuditPage = {
   readonly data: readonly Any[];
+  readonly next_cursor?: string;
 };
 
 export type RecordCountRow = {
@@ -77,6 +80,13 @@ export type RecordCountRow = {
   readonly grouping: Readonly<Record<string, string>>;
   readonly count: string;
 };
+
+export type RecordCountPage = {
+  readonly data: readonly RecordCountRow[];
+  readonly next_cursor?: string;
+};
+
+export const recordCountColumns = ["metric_name", "grouping", "count"] as const;
 
 const recordCountMetricNames = new Set([
   "daily_click_count",
@@ -184,8 +194,18 @@ export async function differenceAudit(
   const statement = buildDifferenceQuery(query);
   return withTenant(pool, identity.tenantId, async (client) => {
     const result = await client.query<{ artifact: Any; superseded: boolean }>(statement.text, [...statement.values]);
+    const hasNext = result.rows.length > query.limit;
+    const rows: Any[] = result.rows.slice(0, query.limit)
+      .map(({ artifact, superseded }) => ({ ...artifact, superseded }));
+    const last = rows.at(-1);
     return {
-      data: result.rows.slice(0, query.limit).map(({ artifact, superseded }) => ({ ...artifact, superseded })),
+      data: rows,
+      ...(hasNext && typeof last?.reconciliation_id === "string" ? {
+        next_cursor: encodeDifferenceCursor({
+          kind: "difference",
+          reconciliationId: last.reconciliation_id,
+        }),
+      } : {}),
     };
   });
 }
@@ -209,7 +229,7 @@ export async function recordCounts(
   pool: Pool,
   identity: AppAdminIdentity,
   query: MetricQuery,
-): Promise<readonly RecordCountRow[]> {
+): Promise<RecordCountPage> {
   if (!query.watermarkAtMost) throw new Error("watermark_required");
   if (!supportsRecordCounts(query)) throw new ReportQueryError("raw_metric_unsupported");
   const values: unknown[] = [query.tenantId, query.appId, query.watermarkAtMost];
@@ -242,6 +262,14 @@ export async function recordCounts(
     groupingPairs.push(`'${dimension}'`, dimensionSql[dimension]);
   }
   const groupingExpression = `jsonb_strip_nulls(jsonb_build_object(${groupingPairs.join(",")}))`;
+  let pagePredicate: string | undefined;
+  if (query.recordAfter) {
+    const metric = bind(values, query.recordAfter.metricName);
+    const grouping = bind(values, query.recordAfter.groupingText);
+    pagePredicate = `(metric_name COLLATE "C", grouping::text COLLATE "C")
+      > (${metric} COLLATE "C", ${grouping} COLLATE "C")`;
+  }
+  const limit = bind(values, query.limit + 1);
   const sql = `WITH deterministic_event AS (
     SELECT CASE logical.event_name
         WHEN 'click' THEN 'daily_click_count'
@@ -331,13 +359,27 @@ export async function recordCounts(
     WHERE ${eventPredicates.length ? eventPredicates.join("\n      AND ") : "true"}
     GROUP BY event.metric_name, ${groupingExpression}
   )
-  SELECT metric_name, grouping, count
+  SELECT metric_name, grouping, count, grouping::text AS grouping_text
   FROM counts
-  ORDER BY metric_name COLLATE "C", grouping::text COLLATE "C"`;
+  ${pagePredicate ? `WHERE ${pagePredicate}` : ""}
+  ORDER BY metric_name COLLATE "C", grouping::text COLLATE "C"
+  LIMIT ${limit}`;
 
   return withTenant(pool, identity.tenantId, async (client) => {
-    const result = await client.query<RecordCountRow>(sql, values);
-    return result.rows;
+    const result = await client.query<RecordCountRow & { grouping_text: string }>(sql, values);
+    const hasNext = result.rows.length > query.limit;
+    const rows = result.rows.slice(0, query.limit);
+    const last = rows.at(-1);
+    return {
+      data: rows.map(({ metric_name, grouping, count }) => ({ metric_name, grouping, count })),
+      ...(hasNext && last ? {
+        next_cursor: encodeRecordCountCursor({
+          kind: "record",
+          metricName: last.metric_name,
+          groupingText: last.grouping_text,
+        }),
+      } : {}),
+    };
   });
 }
 
@@ -356,5 +398,14 @@ export function encodeDifferenceAudit(page: DifferenceAuditPage, format: ReportF
 } {
   return format === "csv"
     ? { contentType: "text/csv; charset=utf-8", body: encodeCsv(page.data, differenceColumns) }
+    : { contentType: "application/json", body: `${JSON.stringify(page)}\n` };
+}
+
+export function encodeRecordCounts(page: RecordCountPage, format: ReportFormat): {
+  readonly contentType: string;
+  readonly body: string;
+} {
+  return format === "csv"
+    ? { contentType: "text/csv; charset=utf-8", body: encodeCsv(page.data, recordCountColumns) }
     : { contentType: "application/json", body: `${JSON.stringify(page)}\n` };
 }

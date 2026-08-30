@@ -21,6 +21,7 @@ import {
   differenceAudit,
   encodeDifferenceAudit,
   encodeMetricReport,
+  encodeRecordCounts,
   metricReport,
   recordCounts,
   supportsRecordCounts,
@@ -473,7 +474,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
       }
 
       if ([
-        "dashboard_app", "dashboard_export", "dashboard_differences", "dashboard_fraud",
+        "dashboard_app", "dashboard_export", "dashboard_records", "dashboard_differences", "dashboard_fraud",
         "dashboard_tracking_links_list", "dashboard_tracking_links_create", "dashboard_tracking_link_transition",
         "dashboard_sdk_keys_issue", "dashboard_sdk_keys_retire",
         "dashboard_server_keys_issue", "dashboard_server_keys_retire", "dashboard_link_domain",
@@ -873,6 +874,9 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             searchParams: params,
             maximumRows: dependencies.reportMaximumRows,
             maximumExportRows: dependencies.reportMaximumExportRows,
+            cursorKind: route.handler === "dashboard_differences"
+              ? "difference"
+              : route.handler === "dashboard_records" ? "record" : "metric",
           });
           if (route.handler === "dashboard_export") {
             const page = await metricReport(dependencies.readerPool, appIdentity, parsed.query);
@@ -908,15 +912,17 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             : parsed.query;
           const records = effectiveWatermark && supportsRecordCounts(effectiveQuery)
             ? await recordCounts(dependencies.readerPool, appIdentity, effectiveQuery)
-            : [];
+            : { data: [] };
           const storedDifferences = await differenceAudit(dependencies.readerPool, appIdentity, effectiveQuery);
           dashboardHtml(response, 200, renderDashboard(buildDashboardView({
             apps,
             selectedAppId: appIdentity.appId,
             query: effectiveQuery,
-            metrics: route.handler === "dashboard_differences" || route.handler === "dashboard_tracking_links_list" ? { data: [] } : metrics,
-            records: route.handler === "dashboard_differences" || route.handler === "dashboard_tracking_links_list" ? [] : records,
+            metrics: ["dashboard_differences", "dashboard_records", "dashboard_tracking_links_list"].includes(route.handler) ? { data: [] } : metrics,
+            records: ["dashboard_differences", "dashboard_tracking_links_list"].includes(route.handler) ? [] : records.data,
+            ...(records.next_cursor ? { recordNextCursor: records.next_cursor } : {}),
             differences: storedDifferences,
+            ...(storedDifferences.next_cursor ? { differenceNextCursor: storedDifferences.next_cursor } : {}),
             trackingLinks,
             sdkKeys,
             serverKeys,
@@ -1270,35 +1276,44 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
               searchParams: target.searchParams,
               maximumRows: dependencies.reportMaximumRows,
               maximumExportRows: dependencies.reportMaximumExportRows,
+              cursorKind: route.handler === "audit_differences"
+                ? "difference"
+                : route.handler === "report_records" ? "record" : "metric",
             });
-            if (route.handler === "report_records") {
-              const data = await recordCounts(pool, appIdentity, parsed.query);
-              json(response, 200, { data });
-              return;
-            }
             const format = parsed.format as ReportFormat;
             let encoded: { contentType: string; body: string };
             let first: { input_snapshot_id?: string } | undefined;
+            let nextCursor: string | undefined;
             if (route.handler === "report_metrics") {
               const page = await metricReport(pool, appIdentity, parsed.query);
-              if (parsed.export && page.next_cursor) {
-                json(response, 400, { error: "export_limit_exceeded" });
-                return;
-              }
               encoded = encodeMetricReport(page, format);
               first = page.data[0];
-            } else {
+              nextCursor = page.next_cursor;
+            } else if (route.handler === "audit_differences") {
               const page = await differenceAudit(pool, appIdentity, parsed.query);
               encoded = encodeDifferenceAudit(page, format);
               first = page.data[0] as { input_snapshot_id?: string } | undefined;
+              nextCursor = page.next_cursor;
+            } else {
+              const page = await recordCounts(pool, appIdentity, parsed.query);
+              encoded = encodeRecordCounts(page, format);
+              nextCursor = page.next_cursor;
+            }
+            if (parsed.export && nextCursor) {
+              json(response, 400, { error: "export_limit_exceeded" });
+              return;
             }
             const range = `${parsed.query.dateFrom ?? "all"}-${parsed.query.dateTo ?? "all"}`;
+            const fileIdentity = route.handler === "report_records"
+              ? "record-counts"
+              : first?.input_snapshot_id?.slice(0, 8) ?? "empty";
             response.writeHead(200, {
               "content-type": encoded.contentType,
               "cache-control": "no-store",
               "x-content-type-options": "nosniff",
+              ...(!parsed.export && nextCursor ? { "x-next-cursor": nextCursor } : {}),
               ...(format === "csv" ? {
-                "content-disposition": `attachment; filename="openmasu-${appIdentity.appId}-${range}-${first?.input_snapshot_id?.slice(0, 8) ?? "empty"}.csv"`,
+                "content-disposition": `attachment; filename="openmasu-${appIdentity.appId}-${range}-${fileIdentity}.csv"`,
               } : {}),
             });
             response.end(encoded.body);
