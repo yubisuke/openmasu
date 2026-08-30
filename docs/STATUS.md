@@ -2,11 +2,11 @@
 
 Status date: 2026-08-31.
 
-The source and SDK are configured for candidate `v0.2.0`.
-This document describes the current `main` source tree. The candidate is not a
-published release until its annotated tag, GitHub Release, and every required
-full platform gate identify the same green commit. Tagged release notes and
-evidence manifests remain authoritative only for the exact source revision
+`v0.2.0` is the current published source and SDK release. Its annotated tag,
+[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.2.0),
+and every required full platform gate identify green commit `68b8c48`. This
+document describes the later current `main` source tree; tagged release notes
+and evidence manifests remain authoritative only for the exact source revision
 they name.
 
 ## Release snapshot
@@ -15,13 +15,14 @@ they name.
 | --- | --- | --- | --- |
 | `v0.2.0-rc.3` tag | through v0.4.9 | 56 fixtures / 728 golden artifacts | Previously published prerelease and frozen historical evidence |
 | `v0.2.0-rc.4` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Latest published prerelease and frozen exact-commit evidence |
-| `v0.2.0` source candidate | through v0.4.10 | 57 fixtures / 741 golden artifacts | Configured on current `main`; untagged until publication gates pass |
+| `v0.2.0` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Published non-prerelease at green commit `68b8c48`; frozen exact-commit evidence |
 
 The Contract wire and package identity remains `0.4.0`; v0.4.10 is the latest
 additive patch ledger entry. The SDK version configured on `main` is `0.2.0`.
 The rc.4 tag, GitHub prerelease, and exact-commit platform evidence remain
-frozen at `2a2f6b5`; they are not evidence for the current candidate. A version
-string alone never proves publication or exact-commit validation.
+frozen at `2a2f6b5`; the stable v0.2.0 record is independently frozen at
+`68b8c48`. A version string alone never proves publication or exact-commit
+validation.
 
 ## How to read status
 
@@ -67,7 +68,7 @@ not score a provider, certify its product, or recommend migration.
 
 ## Current engineering focus
 
-The v0.2.0 source candidate consolidates the release-coherence work completed
+The published v0.2.0 release consolidates the release-coherence work completed
 after rc.4. Provider-neutral backend event submission, outbound operator event
 webhooks, deterministic operator-owned bulk event exports, durable scheduled
 metrics, and the queue/privacy hardening below are implemented with synthetic
@@ -95,8 +96,8 @@ cursor completion. Lease expiry can still repeat a provider operation, and
 distributed provider quotas remain separate operational work.
 
 1. preserve the rc.4 notes, SDK identities, SBOMs, bundle paths, tag, and
-   evidence manifest as one immutable historical release record while binding
-   v0.2.0 to its own source, SBOM, bundle, tag, and evidence;
+   evidence manifest as one immutable historical release record while keeping
+   v0.2.0 bound to its own source, SBOM, bundle, tag, and evidence;
 2. preserve the server-event, operator-webhook, and bulk-export key, replay,
    egress, privacy, and durable-queue invariants while auditing other
    high-impact compatibility gaps;

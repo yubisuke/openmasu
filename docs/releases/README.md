@@ -14,8 +14,9 @@ describe later `main` behavior.
 | `v0.2.0-rc.2` | [Release notes](v0.2.0-rc.2.md) | [Synthetic evidence](../validation/v0.2.0-rc.2-synthetic-evidence.md) |
 | `v0.2.0-rc.1` | [Release notes](v0.2.0-rc.1.md) | [Synthetic pilot record](../validation/v0.2.0-rc.1-pilot.md) |
 
-`v0.2.0` is currently a prepared source and SDK candidate. It is not published
-until its annotated tag and GitHub Release point to the same green commit.
+`v0.2.0` is the current published source and SDK release. Its annotated tag,
+[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.2.0),
+and full platform workflows identify green `main` commit `68b8c48`.
 `v0.2.0-rc.4` remains the latest published prerelease and frozen historical
 record. Verify the tag, source commit, and full-gate results independently when
 consuming a release. See [Project status](../STATUS.md). An untagged bundle is

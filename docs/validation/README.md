@@ -11,11 +11,11 @@ For the current checkout, use the disposable pilot and gates in
 [Getting started](../getting-started.md) and [Development](../development.md).
 Their result applies only to the exact source revision that ran them.
 
-The v0.2.0 evidence manifest is prepared for the current source candidate. It
-becomes release evidence only when its annotated tag, GitHub Release, and full
-platform gates identify the same commit. The rc.4 evidence manifest remains
-release evidence only for tagged commit `2a2f6b5`; it does not apply to later
-`main` changes.
+The v0.2.0 evidence manifest is the frozen public record for green commit
+`68b8c48`, identified by the annotated tag and
+[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.2.0).
+The rc.4 evidence manifest remains release evidence only for tagged commit
+`2a2f6b5`; neither record applies to later `main` changes.
 
 ## Tagged and historical repository evidence
 
