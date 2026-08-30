@@ -7,6 +7,7 @@ import org.json.JSONObject
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.security.SecureRandom
+import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
@@ -55,7 +56,7 @@ class MaxRevenueMapper(
       .put("revenue_source", "client_estimated")
       .put("revenue_precision", precision)
       .put("extensions", JSONObject().apply {
-        put("ad_format", observation.format)
+        put("ad_format", normalizeFormat(observation.format))
         observation.placement?.let { put("placement", it) }
         observation.networkPlacement?.let { put("network_placement", it) }
       })
@@ -99,13 +100,35 @@ object OpenMasuMaxBridge {
     adUnitId: String,
     placement: String?,
     networkPlacement: String?,
+  ): Boolean = track(
+    sdk, revenue, precision, networkName, adUnitId, "unknown", placement, networkPlacement,
+  )
+
+  @JvmStatic
+  fun track(
+    sdk: OpenMasuSdk,
+    revenue: Double,
+    precision: String,
+    networkName: String,
+    adUnitId: String,
+    format: String,
+    placement: String?,
+    networkPlacement: String?,
   ): Boolean {
     val payload = MaxRevenueMapper(sdk::installationIdForMeasurement).map(
-      MaxRevenueObservation(revenue, precision, networkName, adUnitId, placement, networkPlacement),
+      MaxRevenueObservation(revenue, precision, networkName, adUnitId, placement, networkPlacement, format),
     ) ?: return false
     sdk.enqueueAdRevenue(payload, payload.getString("impression_id"))
     return true
   }
+}
+
+internal fun normalizeFormat(value: String): String = when (value.trim().lowercase(Locale.ROOT)) {
+  "inter", "interstitial" -> "interstitial"
+  "rewarded" -> "rewarded"
+  "banner" -> "banner"
+  "mrec" -> "mrec"
+  else -> "unknown"
 }
 
 private object UuidV7 {

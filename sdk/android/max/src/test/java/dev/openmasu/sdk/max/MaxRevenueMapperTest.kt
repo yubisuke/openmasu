@@ -45,6 +45,24 @@ class MaxRevenueMapperTest {
     assertEquals(2, uuid.variant())
   }
 
+  @Test fun `preserves every supported Unity format and normalizes unknown values`() {
+    for ((providerLabel, format) in mapOf(
+      "INTER" to "interstitial",
+      "REWARDED" to "rewarded",
+      "BANNER" to "banner",
+      "MREC" to "mrec",
+    )) {
+      val payload = mapper.map(MaxRevenueObservation(
+        0.1, "exact", "Synthetic", "ad-unit:synthetic", format = providerLabel,
+      ))!!
+      assertEquals(format, payload.getJSONObject("extensions").getString("ad_format"))
+    }
+    val unknown = mapper.map(MaxRevenueObservation(
+      0.1, "exact", "Synthetic", "ad-unit:synthetic", format = "native",
+    ))!!
+    assertEquals("unknown", unknown.getJSONObject("extensions").getString("ad_format"))
+  }
+
   @Test fun `M4 A29 matches the shared Android and Swift mapping vectors`() {
     val root = generateSequence(File(requireNotNull(System.getProperty("user.dir")))) { it.parentFile }
       .first { File(it, "sdk/max-revenue-mapping-vectors.json").isFile }

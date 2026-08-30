@@ -9,6 +9,7 @@ import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 
 @RunWith(RobolectricTestRunner.class)
@@ -60,5 +61,13 @@ public final class OpenMasuUnityBridgeTest {
             OpenMasuUnityBridge.csvHostSet("a.synthetic.example,b.synthetic.example"),
             OpenMasuUnityBridge.csvHostSet("a.synthetic.example")));
     assertEquals("deep_link_hosts_manifest_mismatch", error.getMessage());
+  }
+
+  @Test public void maxRevenueBridgeKeepsLegacyAndFormatAwareOverloads() throws Exception {
+    assertNotNull(OpenMasuUnityBridge.class.getMethod(
+        "trackMaxRevenue", double.class, String.class, String.class, String.class, String.class, String.class));
+    assertNotNull(OpenMasuUnityBridge.class.getMethod(
+        "trackMaxRevenue", double.class, String.class, String.class, String.class, String.class, String.class,
+        String.class));
   }
 }

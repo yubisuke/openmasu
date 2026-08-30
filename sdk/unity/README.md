@@ -23,7 +23,7 @@ source/toolchain manifest, and `SHA256SUMS`. It is a local CI artifact, not a
 public registry publication. Treat the bundle as release evidence only when the
 matching annotated tag names the exact green source commit.
 
-MAX integration must subscribe separately to Interstitial, Rewarded, Banner, and MRec revenue callbacks. The compile probe keeps the four-format subscription table closed even when AppLovin is not present in the test environment.
+MAX integration must subscribe separately to Interstitial, Rewarded, Banner, and MRec revenue callbacks. The Unity bridge carries the callback's normalized `interstitial`, `rewarded`, `banner`, or `mrec` value into `extensions.ad_format` on both Android and iOS. Unknown formats remain explicit as `unknown`; they are never guessed from placement or ad-unit identifiers. The compile probe keeps the four-format subscription table and Android argument shape closed even when AppLovin is not present in the test environment.
 
 Import the `Android measurement sample` from Package Manager to obtain a small `MonoBehaviour` that initialises the bridge and exposes a synthetic custom-event button. Supply deployment credentials outside source control; the sample intentionally contains no endpoint, key, secret, campaign, or device identifier.
 

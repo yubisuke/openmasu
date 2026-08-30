@@ -48,6 +48,7 @@ internal static class Program
         ExerciseAppleConversionPlatformCompatibility();
         ExerciseAndroidManifestGeneration();
         Require(MaxRevenueSubscriptions.Formats.SequenceEqual(new[] { "Interstitial", "Rewarded", "Banner", "MRec" }), "MAX format subscription table is incomplete");
+        ExerciseAndroidMaxFormatBridge();
         OpenMasuMaxUnityAdapter.Subscribe();
         OpenMasuMaxUnityAdapter.Unsubscribe();
         var plist = OpenMasu.Unity.Editor.OpenMasuIosPlistSettings.Apply(
@@ -97,6 +98,27 @@ internal static class Program
         Require(!entitlements.Contains("?mode="), "development associated-domain mode reached generated output");
         Console.WriteLine("Unity bridge probe passed: Android/iOS callbacks, purchase/refund and Apple conversion platforms, validation, Apple plist keys, 4 MAX formats.");
         return 0;
+    }
+
+    private static void ExerciseAndroidMaxFormatBridge()
+    {
+        var adInfo = new MaxSdk.AdInfo
+        {
+            Revenue = 0.25,
+            RevenuePrecision = "exact",
+            NetworkName = "Synthetic Network",
+            AdUnitIdentifier = "ad-unit:synthetic",
+            Placement = "placement:synthetic",
+            NetworkPlacement = "network-placement:synthetic",
+        };
+        foreach (var format in new[] { "interstitial", "rewarded", "banner", "mrec" })
+        {
+            var arguments = OpenMasuMaxUnityAdapter.AndroidRevenueArguments(adInfo, format.ToUpperInvariant());
+            Require(arguments.Length == 7, "Unity Android MAX bridge argument count changed");
+            Require((string)arguments[4] == format, "Unity Android MAX format was lost");
+        }
+        Require(OpenMasuMaxUnityAdapter.NormalizeFormat("native") == "unknown",
+            "unsupported Unity MAX format was not normalized explicitly");
     }
 
     private static void ExerciseAndroidManifestGeneration()

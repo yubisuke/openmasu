@@ -66,7 +66,9 @@ manifest and publish matching domain association statements:
 
 - Google Play Install Referrer;
 - typed Meta Install Referrer evidence with server-managed decryption keys;
-- AppLovin MAX impression-level revenue;
+- AppLovin MAX impression-level revenue, preserving the closed Interstitial,
+  Rewarded, Banner, and MRec format across native Android, native iOS, and Unity
+  bridges;
 - custom events and first-party purchase or refund events;
 - Unity Android bridge and sample.
 
