@@ -36,6 +36,11 @@ to an explicitly allowlisted, operator-owned HTTPS receiver. Optional operator
 bulk exports write the same closed event object as deterministic gzip NDJSON to
 allowlisted, operator-owned S3-compatible storage.
 
+App-scoped durable metric schedules can calculate disjoint daily metric sets
+with fixed UTC dates and watermarks. They reuse the same cohort engine as the
+manual metric command and fail closed on partial or non-identical replay. See
+[Scheduled metric runs](docs/scheduled-metrics.md).
+
 ## What OpenMasu does not claim
 
 - It is not production-ready.
@@ -110,6 +115,8 @@ need outbound callbacks should use the separate
 [operator event webhook guide](docs/operator-event-webhooks.md).
 Operators who need delayed files should use the separate
 [operator bulk export guide](docs/operator-bulk-exports.md).
+Operators who need daily cohort or calendar metrics should use the
+[scheduled metric guide](docs/scheduled-metrics.md).
 
 ## Validation
 

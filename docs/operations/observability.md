@@ -18,6 +18,10 @@ system.
   expose queued/retry work and scheduler health with the same fixed-label
   boundary. Object keys, endpoints, buckets, destinations, tenant/app values,
   event names, subject references, and credentials never become metric labels.
+- The `metric_run` scheduler health exposes terminal success, failure,
+  consecutive-failure, active-lease, and overdue state without metric names,
+  schedule identifiers, tenant/app values, groupings, or report values as
+  labels. Inspect the admin schedule list for its last completed target date.
 - The `sdk_batches` ingest backlog includes both batches waiting for base
   ingestion and batches whose base ledger records are complete but whose
   server-side AdServices, platform-integrity, or Google Play verification work
@@ -38,6 +42,12 @@ tenant can delay later jobs. External monitoring should alert on process health,
 overdue jobs, consecutive failures, and database availability. If the worker
 process or database is unavailable, no in-process notification can be emitted;
 the monitor must observe from outside that failure domain.
+
+Scheduled metric work uses a daily durable lease, but every artifact watermark
+is the current UTC midnight rather than the wall-clock time at which a worker
+obtains that lease. A schedule processes at most 31 pending dates per cycle.
+Repeated `metric_run` failures or a checkpoint that does not advance require
+operator investigation; the worker does not drop dates to catch up.
 
 ## Logs
 

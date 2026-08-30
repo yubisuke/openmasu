@@ -62,6 +62,11 @@ import {
   listOperatorBulkExportDestinations,
   registerOperatorBulkExportDestination,
 } from "./operator-bulk-exports-admin.js";
+import {
+  disableMetricSchedule,
+  listMetricSchedules,
+  registerMetricSchedule,
+} from "./metric-schedules.js";
 import { handleServerBatch, type ServerRouteDependencies } from "./server-routes.js";
 import {
   receiveAppleStoreNotification,
@@ -244,6 +249,10 @@ function operatorWebhookDestinationId(pathname: string): string | undefined {
 
 function operatorBulkExportDestinationId(pathname: string): string | undefined {
   return decodedPathPart(pathname, /\/operator-bulk-exports\/([^/]+)\/disable$/);
+}
+
+function metricScheduleId(pathname: string): string | undefined {
+  return decodedPathPart(pathname, /\/metric-schedules\/([^/]+)\/disable$/);
 }
 
 function jsonFormValue(body: URLSearchParams, name: string): unknown {
@@ -1189,6 +1198,52 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
                 reasonCode: reason,
               });
               json(response, reason === "operator_bulk_destination_not_active" ? 409 : 400, { error: reason });
+            }
+          }
+          return;
+        }
+        if (route.handler === "admin_metric_schedules_list"
+          || route.handler === "admin_metric_schedules_register"
+          || route.handler === "admin_metric_schedules_disable") {
+          const appId = adminAppId(target.pathname) ?? "";
+          try {
+            const appIdentity = await requireRegisteredApp(pool, identity, appId);
+            if (route.handler === "admin_metric_schedules_list") {
+              json(response, 200, { data: await listMetricSchedules(pool, appIdentity) });
+              return;
+            }
+            if (route.handler === "admin_metric_schedules_register") {
+              json(response, 201, await registerMetricSchedule({
+                pool: dependencies.pool,
+                identity: appIdentity,
+                body: await jsonBody(request),
+              }));
+              return;
+            }
+            const scheduleId = metricScheduleId(target.pathname);
+            if (!scheduleId) throw new Error("metric_schedule_not_found");
+            json(response, 200, await disableMetricSchedule({
+              pool: dependencies.pool,
+              identity: appIdentity,
+              metricScheduleId: scheduleId,
+            }));
+          } catch (error) {
+            const reason = publicReason(error, "metric_schedule_lifecycle_failed");
+            if (error instanceof AppNotFoundError || reason === "metric_schedule_not_found") {
+              json(response, 404, { error: "not_found" });
+            } else {
+              await recordDashboardAudit(dependencies.pool, {
+                tenantId: identity.tenantId,
+                appId,
+                actorRef: `admin_key:${identity.keyId}`,
+                action: "metric_schedule_lifecycle",
+                targetScope: "metric_schedule",
+                targetRef: metricScheduleId(target.pathname) ?? "metric_schedule:new",
+                outcome: "failed",
+                reasonCode: reason,
+              });
+              json(response, ["metric_schedule_not_active", "metric_schedule_metric_overlap"].includes(reason)
+                ? 409 : 400, { error: reason });
             }
           }
           return;

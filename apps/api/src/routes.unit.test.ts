@@ -100,6 +100,9 @@ describe("declarative API route security", () => {
     assert.equal(matchRoute("GET", "/v1/admin/apps/app-a/operator-bulk-exports")?.handler, "admin_operator_bulk_exports_list");
     assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/operator-bulk-exports")?.handler, "admin_operator_bulk_exports_register");
     assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/operator-bulk-exports/bulk%3Aone/disable")?.handler, "admin_operator_bulk_exports_disable");
+    assert.equal(matchRoute("GET", "/v1/admin/apps/app-a/metric-schedules")?.handler, "admin_metric_schedules_list");
+    assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/metric-schedules")?.handler, "admin_metric_schedules_register");
+    assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/metric-schedules/metric-schedule%3Aone/disable")?.handler, "admin_metric_schedules_disable");
     assert.equal(matchRoute("POST", "/dashboard/apps/app-a/operator-bulk-exports")?.handler, "dashboard_operator_bulk_exports_register");
     assert.equal(matchRoute("POST", "/dashboard/apps/app-a/operator-bulk-exports/bulk%3Aone/disable")?.handler, "dashboard_operator_bulk_exports_disable");
     for (const path of [
@@ -123,6 +126,7 @@ describe("declarative API route security", () => {
       "admin_operator_webhooks_list", "admin_operator_webhooks_register", "admin_operator_webhooks_disable",
       "dashboard_operator_webhooks_register", "dashboard_operator_webhooks_disable",
       "admin_operator_bulk_exports_list", "admin_operator_bulk_exports_register", "admin_operator_bulk_exports_disable",
+      "admin_metric_schedules_list", "admin_metric_schedules_register", "admin_metric_schedules_disable",
       "dashboard_operator_bulk_exports_register", "dashboard_operator_bulk_exports_disable",
       "dashboard_app_link_identity", "dashboard_apple_registration", "dashboard_conversion_schema",
       "dashboard_rule_bundle", "dashboard_google_data_manager",

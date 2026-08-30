@@ -50,6 +50,9 @@ const seedControlTruncate = new Set([
   "control.operator_bulk_export_destinations",
   "control.operator_bulk_export_destination_states",
   "control.operator_bulk_export_checkpoints",
+  "control.metric_schedules",
+  "control.metric_schedule_states",
+  "control.metric_schedule_checkpoints",
   "control.rule_bundle_revisions",
   "control.worker_job_schedules",
 ]);
@@ -102,6 +105,7 @@ function expected(row: Row): Privilege[] {
     if (qualified === "control.commerce_backfill_checkpoints") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.worker_job_schedules") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.operator_bulk_export_checkpoints") return ["SELECT", "INSERT", "UPDATE"];
+    if (qualified === "control.metric_schedule_checkpoints") return ["SELECT", "INSERT", "UPDATE"];
     return qualified === "control.public_postback_audits" ? ["INSERT"] : ["SELECT", "INSERT"];
   }
   if (row.role_name === "openmasu_reader") {
@@ -143,6 +147,17 @@ try {
     const actual = privileges.filter((privilege) => row[`${privilege.toLowerCase()}_privilege` as keyof Row] === true);
     assert.deepEqual(actual, expected(row), `${row.role_name} privilege drift on ${row.schema_name}.${row.table_name}`);
   }
+  const scheduleView = await pool.query<{ role_name: Role; allowed: boolean }>(`
+    SELECT role_name,
+           has_table_privilege(role_name, 'control.metric_schedules_current', 'SELECT') AS allowed
+      FROM unnest(ARRAY['openmasu_app','openmasu_reader','openmasu_seed']) AS role_name
+     ORDER BY role_name
+  `);
+  assert.deepEqual(scheduleView.rows, [
+    { role_name: "openmasu_app", allowed: true },
+    { role_name: "openmasu_reader", allowed: true },
+    { role_name: "openmasu_seed", allowed: false },
+  ]);
   console.log(`WO16 role grant matrix passed for ${(result.rowCount ?? 0) / 3} migrated tables and 3 runtime roles.`);
 } finally {
   await pool.end();
