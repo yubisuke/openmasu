@@ -63,7 +63,7 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     await ingestFixture(`metric-schedule-${randomBytes(6).toString("hex")}`, fixtureInput, appPool, seedPool);
     await seedPool.query(
       `TRUNCATE control.metric_schedule_checkpoints,control.metric_schedule_states,
-         control.metric_schedules RESTART IDENTITY CASCADE`,
+         control.metric_schedules CASCADE`,
     );
     await ensureAdminKeys(appPool, { tenantId, appId }, [adminKey]);
     api = createServer(createRequestHandler({
