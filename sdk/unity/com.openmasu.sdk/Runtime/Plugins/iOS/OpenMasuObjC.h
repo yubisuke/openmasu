@@ -18,6 +18,13 @@ void openmasu_ios_track_custom_event(
   int64_t request_id,
   OpenMasuCStringCallback callback
 );
+void openmasu_ios_record_conversion(
+  const char *event_name,
+  int32_t target_mask,
+  const char *conversion_tag,
+  int64_t request_id,
+  OpenMasuCStringCallback callback
+);
 void openmasu_ios_track_purchase(
   const char *transaction_id,
   const char *amount_unscaled,

@@ -98,6 +98,36 @@ The example preserves both safe defaults. Enable
 the conversion-tag mapping and retrieval lifecycle; OpenMasu does not persist
 the opaque tag in analytics or logs.
 
+## Apple conversion updates
+
+On iOS, `OpenMasuClient.RecordAppleConversion` reaches the bundled
+SKAdNetwork and AdAttributionKit updater through the C bridge. The caller must
+always choose `OpenMasuAppleConversionTarget.Install`,
+`OpenMasuAppleConversionTarget.Reengagement`, or both. Omitting the target is
+not supported, so a Unity integration cannot accidentally broaden an update to
+every active postback.
+
+An opaque conversion tag is accepted only with the re-engagement target:
+
+```csharp
+client.RecordAppleConversion(
+    "purchase",
+    OpenMasuAppleConversionTarget.Reengagement,
+    conversionTag,
+    updated => Debug.Log($"Apple conversion updated: {updated}"));
+```
+
+The application obtains and protects `conversionTag`; the SDK passes it to
+Apple transiently and does not put it in the OpenMasu queue or logs. Without a
+tag, use the overload whose third argument is the completion callback. A
+platform update failure does not advance the local conversion signal set, so a
+retry evaluates the same successful history. The callback is marshalled to the
+Unity dispatcher and runs when the application calls `PumpCallbacks()`.
+
+These APIs have synthetic bridge and Apple-SDK compile evidence only. A real
+Unity export, device conversion window, App Store build, and Apple postback
+delivery remain operator checks.
+
 Direct delivery is supported on Android and iOS. Deferred delivery is Android
 only through Google Play Install Referrer. Actual Unity exports and platform
 domain verification remain the operator procedures in

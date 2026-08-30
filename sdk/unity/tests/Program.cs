@@ -44,6 +44,7 @@ internal static class Program
         ExerciseIosCallbackPath(mainThread);
         Require(OpenMasuiOSPlatform.ActiveCallbackCount == 0, "iOS function-pointer callback leaked");
         ExerciseRevenuePlatformCompatibility();
+        ExerciseAppleConversionPlatformCompatibility();
         Require(MaxRevenueSubscriptions.Formats.SequenceEqual(new[] { "Interstitial", "Rewarded", "Banner", "MRec" }), "MAX format subscription table is incomplete");
         OpenMasuMaxUnityAdapter.Subscribe();
         OpenMasuMaxUnityAdapter.Unsubscribe();
@@ -92,7 +93,7 @@ internal static class Program
         Require(entitlements.Contains("com.apple.developer.associated-domains"), "associated domains key was not written");
         Require(entitlements.Contains("applinks:links.synthetic.invalid"), "associated domain host was not written");
         Require(!entitlements.Contains("?mode="), "development associated-domain mode reached generated output");
-        Console.WriteLine("Unity bridge probe passed: Android/iOS callbacks, additive purchase/refund platform, validation, Apple plist keys, 4 MAX formats.");
+        Console.WriteLine("Unity bridge probe passed: Android/iOS callbacks, purchase/refund and Apple conversion platforms, validation, Apple plist keys, 4 MAX formats.");
         return 0;
     }
 
@@ -122,6 +123,56 @@ internal static class Program
             try { client.TrackPurchase("transaction:negative-49", "-1", 2, "USD"); }
             catch (ArgumentException) { rejected = true; }
             Require(rejected && platform.PurchaseCount == 1, "negative money reached the native bridge");
+        }
+    }
+
+    private static void ExerciseAppleConversionPlatformCompatibility()
+    {
+        using (var legacyPlatform = new SyntheticPlatform())
+        using (var legacyClient = new OpenMasuClient(legacyPlatform, new OpenMasuDispatcher(8)))
+        {
+            var unavailable = false;
+            try
+            {
+                legacyClient.RecordAppleConversion(
+                    "purchase",
+                    OpenMasuAppleConversionTarget.Install,
+                    _ => { });
+            }
+            catch (NotSupportedException) { unavailable = true; }
+            Require(unavailable, "legacy IOpenMasuPlatform implementer was treated as an Apple conversion platform");
+        }
+
+        var dispatcher = new OpenMasuDispatcher(8);
+        using (var platform = new SyntheticAppleConversionPlatform())
+        using (var client = new OpenMasuClient(platform, dispatcher))
+        {
+            var rejected = false;
+            try
+            {
+                client.RecordAppleConversion(
+                    "purchase",
+                    OpenMasuAppleConversionTarget.Install,
+                    "synthetic-tag",
+                    _ => { });
+            }
+            catch (ArgumentException) { rejected = true; }
+            Require(rejected && platform.ConversionCount == 0,
+                "an install-only conversion tag reached the native bridge");
+
+            bool? completed = null;
+            client.RecordAppleConversion(
+                "purchase",
+                OpenMasuAppleConversionTarget.Reengagement,
+                "synthetic-tag",
+                value => completed = value);
+            while (completed == null) { dispatcher.Pump(); Thread.Yield(); }
+            Require(completed == true, "Apple conversion callback failed");
+            Require(platform.ConversionCount == 1, "Apple conversion did not reach the additive platform");
+            Require(platform.EventName == "purchase", "Apple conversion event changed");
+            Require(platform.Targets == OpenMasuAppleConversionTarget.Reengagement,
+                "Apple conversion target changed");
+            Require(platform.ConversionTag == "synthetic-tag", "Apple conversion tag changed");
         }
     }
 
@@ -161,6 +212,19 @@ internal static class Program
             Require(health != null && health.PendingCount == 0 && health.LogicalBytes == 0 &&
                 health.EvictedTotal == 0 && health.RejectedTotal == 0,
                 "iOS queue-health callback changed aggregate values");
+            bool? conversionUpdated = null;
+            client.RecordAppleConversion(
+                "purchase",
+                OpenMasuAppleConversionTarget.Reengagement,
+                "synthetic-tag",
+                value => conversionUpdated = value);
+            var conversionDeadline = DateTime.UtcNow.AddSeconds(5);
+            while (conversionUpdated == null && DateTime.UtcNow < conversionDeadline)
+            {
+                client.PumpCallbacks();
+                Thread.Yield();
+            }
+            Require(conversionUpdated == true, "iOS Apple conversion callback failed");
         }
     }
 
@@ -217,6 +281,35 @@ internal static class Program
             string currency)
         {
             RefundCount++;
+        }
+        public void StartSession() { }
+        public void SetCollectionEnabled(bool enabled) { }
+        public void ResetInstallationId(Action<bool> completion) => completion(true);
+        public void PingFromBackground(string value, Action<string> completion) => completion(value);
+        public void SetDeepLinkListener(Action<string> listener) { }
+        public void HandleDeepLink(string url) { }
+        public void Dispose() { }
+    }
+
+    private sealed class SyntheticAppleConversionPlatform : IOpenMasuPlatform, IOpenMasuAppleConversionPlatform
+    {
+        public int ConversionCount { get; private set; }
+        public string EventName { get; private set; }
+        public OpenMasuAppleConversionTarget Targets { get; private set; }
+        public string ConversionTag { get; private set; }
+        public void Initialize(OpenMasuOptions options) { }
+        public void TrackCustomEvent(string eventKey) { }
+        public void RecordAppleConversion(
+            string eventName,
+            OpenMasuAppleConversionTarget targets,
+            string conversionTag,
+            Action<bool> completion)
+        {
+            ConversionCount++;
+            EventName = eventName;
+            Targets = targets;
+            ConversionTag = conversionTag;
+            completion(true);
         }
         public void StartSession() { }
         public void SetCollectionEnabled(bool enabled) { }
