@@ -14,7 +14,9 @@ runtime, Android, and iOS workflows are green. The iOS workflow must include:
 - Swift unit tests and an iOS Simulator build of shipping products and sample;
 - a compile-only probe against the pinned AppLovin MAX Swift Package;
 - the built-product privacy-manifest, Required Reason API, and forbidden-symbol audits;
-- the Unity C# callback and generated-plist probe; and
+- the Unity C# callback and generated-plist probe;
+- the synthetic Unity PBX target-membership probe, with Swift and sqlite on
+  `UnityFramework` and app-bundle resources on the main target; and
 - a CycloneDX iOS SDK SBOM with no runtime dependency components.
 
 CI is synthetic evidence. It is not proof of a real device, provider account,
@@ -80,10 +82,12 @@ campaign, App Store build, Unity export, or privacy-review outcome.
 ## Unity export and MAX
 
 - Export the Unity iOS sample with the supported Unity version.
-- Confirm Swift sources, `PrivacyInfo.xcprivacy`, conversion schema, sqlite3
-  linker setting, both Apple endpoint keys, both explicit AdAttributionKit
-  opt-in Booleans, and the collection-default key reach the generated Xcode
-  project.
+- Confirm Swift sources and the sqlite3 linker setting reach the generated
+  `UnityFramework` target. Confirm `PrivacyInfo.xcprivacy`, the conversion
+  schema, and associated-domain entitlements remain on the main application
+  target. Also confirm both Apple endpoint keys, both explicit
+  AdAttributionKit opt-in Booleans, and the collection-default key reach the
+  generated Xcode project.
 - Build and run the exported application, then exercise all four MAX formats.
 - From C#, update one install conversion and one explicitly targeted
   re-engagement conversion. If overlapping conversions are enabled, restore a

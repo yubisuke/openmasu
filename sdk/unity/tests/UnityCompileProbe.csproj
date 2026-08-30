@@ -5,7 +5,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <LangVersion>9.0</LangVersion>
-    <DefineConstants>$(DefineConstants);OPENMASU_APPLOVIN_MAX;UNITY_EDITOR;UNITY_ANDROID</DefineConstants>
+    <DefineConstants>$(DefineConstants);OPENMASU_APPLOVIN_MAX;UNITY_EDITOR;UNITY_ANDROID;UNITY_IOS</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\com.openmasu.sdk\Runtime\*.cs" Link="Runtime\%(Filename)%(Extension)" />
