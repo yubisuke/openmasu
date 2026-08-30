@@ -79,6 +79,12 @@ export type RouteDefinition = {
 };
 
 export const SDK_INSTALLATION_PRIVACY_PATH = "/v1/privacy/installation";
+export const APPLE_SKAN_POSTBACK_PATH = "/.well-known/skadnetwork/report-attribution/";
+export const APPLE_AAK_POSTBACK_PATH = "/.well-known/appattribution/report-attribution/";
+
+function exactPathPattern(path: string): RegExp {
+  return new RegExp(`^${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
+}
 
 export const routes: readonly RouteDefinition[] = [
   { handler: "health", method: "GET", pattern: /^\/health$/, auth: "public", mutates: false },
@@ -91,11 +97,11 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "sdk_enrollment", method: "POST", pattern: /^\/v1\/installations$/, auth: "sdk_hmac", mutates: true },
   { handler: "sdk_batch", method: "POST", pattern: /^\/v1\/events\/batch$/, auth: "sdk_hmac", mutates: true },
   { handler: "server_batch", method: "POST", pattern: /^\/v1\/events\/server$/, auth: "server_hmac", mutates: true },
-  { handler: "device_privacy", method: "POST", pattern: new RegExp(`^${SDK_INSTALLATION_PRIVACY_PATH}$`), auth: "sdk_hmac", mutates: true },
+  { handler: "device_privacy", method: "POST", pattern: exactPathPattern(SDK_INSTALLATION_PRIVACY_PATH), auth: "sdk_hmac", mutates: true },
   { handler: "device_privacy", method: "POST", pattern: /^\/v1\/privacy\/on-device$/, auth: "sdk_hmac", mutates: true },
   { handler: "device_dsar", method: "POST", pattern: /^\/v1\/privacy\/access$/, auth: "sdk_hmac", mutates: true },
-  { handler: "apple_skan_postback", method: "POST", pattern: /^\/\.well-known\/skadnetwork\/report-attribution\/$/, auth: "public", mutates: true },
-  { handler: "apple_aak_postback", method: "POST", pattern: /^\/\.well-known\/appattribution\/report-attribution\/$/, auth: "public", mutates: true },
+  { handler: "apple_skan_postback", method: "POST", pattern: exactPathPattern(APPLE_SKAN_POSTBACK_PATH), auth: "public", mutates: true },
+  { handler: "apple_aak_postback", method: "POST", pattern: exactPathPattern(APPLE_AAK_POSTBACK_PATH), auth: "public", mutates: true },
   { handler: "google_play_rtdn", method: "POST", pattern: /^\/v1\/google-play\/rtdn$/, auth: "google_oidc", mutates: true },
   { handler: "apple_store_notification", method: "POST", pattern: /^\/v1\/apple\/app-store\/notifications$/, auth: "public", mutates: true },
   { handler: "admin_apps_list", method: "GET", pattern: /^\/v1\/admin\/apps$/, auth: "admin_bearer", mutates: false, capability: "read" },

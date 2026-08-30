@@ -34,6 +34,11 @@ AdAttributionKit re-engagement references confirmed on 2026-08-30:
 - [Re-engagement postback copies](https://developer.apple.com/documentation/bundleresources/information-property-list/eligibleforadattributionkitreengagementpostbackcopies) defines the separate developer-copy Info.plist opt-in.
 - [WWDC25: What's new in AdAttributionKit](https://developer.apple.com/videos/play/wwdc2025/221/) defines the `EligibleForAdAttributionKitOverlappingConversions` opt-in for simultaneous conversion windows.
 
+Apple postback-copy endpoint references confirmed on 2026-08-30:
+
+- [Configuring an AdAttributionKit advertised app](https://developer.apple.com/documentation/adattributionkit/configuring-an-advertised-app) requires an HTTPS origin in `AttributionCopyEndpoint` and defines the generated `/.well-known/appattribution/report-attribution/` receiver path.
+- [NSAdvertisingAttributionReportEndpoint](https://developer.apple.com/documentation/BundleResources/Information-Property-List/NSAdvertisingAttributionReportEndpoint) requires an HTTPS origin and defines the generated `/.well-known/skadnetwork/report-attribution/` receiver path.
+
 Universal Links references confirmed on 2026-08-21:
 
 - [Supporting associated domains](https://developer.apple.com/documentation/xcode/supporting-associated-domains) defines the extensionless AASA path, HTTPS/no-redirect requirement, `applinks:` entitlement shape, Apple CDN behavior, and the prohibition on path/query/trailing-slash components in the entitlement.

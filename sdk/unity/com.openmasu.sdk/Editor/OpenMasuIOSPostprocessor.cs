@@ -18,8 +18,8 @@ namespace OpenMasu.Unity.Editor
             bool reengagementPostbackCopiesEnabled = false,
             bool overlappingConversionsEnabled = false)
         {
-            RequireHttps(skanEndpoint, nameof(skanEndpoint));
-            RequireHttps(attributionCopyEndpoint, nameof(attributionCopyEndpoint));
+            RequireHttpsOrigin(skanEndpoint, nameof(skanEndpoint));
+            RequireHttpsOrigin(attributionCopyEndpoint, nameof(attributionCopyEndpoint));
             var document = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
             var dictionary = document.Root?.Element("dict") ?? throw new InvalidDataException("plist dictionary missing");
             SetString(dictionary, "NSAdvertisingAttributionReportEndpoint", skanEndpoint);
@@ -89,10 +89,17 @@ namespace OpenMasu.Unity.Editor
             dictionary.Add(new XElement("key", key), new XElement(value ? "true" : "false"));
         }
 
-        private static void RequireHttps(string value, string name)
+        private static void RequireHttpsOrigin(string value, string name)
         {
-            if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
-                throw new ArgumentException("endpoint_must_be_https", name);
+            if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
+                || uri.Scheme != Uri.UriSchemeHttps
+                || Uri.CheckHostName(uri.Host) != UriHostNameType.Dns
+                || !uri.IsDefaultPort
+                || uri.UserInfo.Length != 0
+                || uri.AbsolutePath != "/"
+                || uri.Query.Length != 0
+                || uri.Fragment.Length != 0)
+                throw new ArgumentException("endpoint_must_be_https_origin", name);
         }
     }
 

@@ -56,7 +56,13 @@ campaign, App Store build, Unity export, or privacy-review outcome.
 ## Apple developer-copy postbacks
 
 - Configure `NSAdvertisingAttributionReportEndpoint` and
-  `AttributionCopyEndpoint` only in the deployment-private test application.
+  `AttributionCopyEndpoint` as HTTPS origins without path, query, fragment,
+  user-info, or non-default port, only in the deployment-private test
+  application. Confirm Apple delivers to the corresponding OpenMasu
+  `/.well-known/skadnetwork/report-attribution/` and
+  `/.well-known/appattribution/report-attribution/` routes.
+- Confirm the registrable domain used by SKAdNetwork serves its well-known
+  route; Apple documents that SKAdNetwork ignores configured subdomains.
 - Set `EligibleForAdAttributionKitReengagementPostbackCopies` to `true`, then
   confirm a signed winning re-engagement copy reaches the configured endpoint.
 - If overlapping conversion windows are part of the application design, set

@@ -31,6 +31,16 @@ explicit production or allowed-development key environment, rejects replay or
 conflict by transaction ID, and persists protected evidence before asynchronous
 evaluation.
 
+The host application's `NSAdvertisingAttributionReportEndpoint` and
+`AttributionCopyEndpoint` values are HTTPS origins only. Apple derives the
+SKAdNetwork and AdAttributionKit well-known receiver paths from those origins;
+an application must not place an OpenMasu route or custom suffix in either
+plist value. The Unity postprocessor enforces this shape before export.
+Apple documents that SKAdNetwork uses the registrable part of its configured
+domain and ignores subdomains. Deployments must route the SKAdNetwork
+well-known endpoint at that registrable domain rather than assuming an API
+subdomain is retained.
+
 Aggregate postbacks are grouped and reported by receive-date authority. They
 never become installation identity and never merge with deterministic
 installation-level attribution.
