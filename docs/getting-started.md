@@ -90,6 +90,13 @@ dashboard. The [operator bulk export guide](operator-bulk-exports.md) describes
 the deterministic gzip NDJSON format, SigV4 credentials, immutable write and
 retry behavior, cursor semantics, and downstream deletion responsibility.
 
+To calculate a stable metric set every day, register an app-scoped durable
+schedule through the admin API. The worker fixes the UTC target date and
+watermark, persists crash-recovery state, and writes through the ordinary
+cohort engine. Start with the checked-in synthetic configuration and the
+[scheduled metric guide](scheduled-metrics.md). Keep `npm run metrics:run` for
+explicit one-off or historical operator runs.
+
 To remove only this repository's local Compose stack and its data:
 
 ```bash

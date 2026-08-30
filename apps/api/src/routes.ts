@@ -28,6 +28,9 @@ export type RouteHandler =
   | "admin_operator_bulk_exports_list"
   | "admin_operator_bulk_exports_register"
   | "admin_operator_bulk_exports_disable"
+  | "admin_metric_schedules_list"
+  | "admin_metric_schedules_register"
+  | "admin_metric_schedules_disable"
   | "admin_tracking_links_list"
   | "admin_tracking_links"
   | "admin_tracking_link_transition"
@@ -119,6 +122,9 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "admin_operator_bulk_exports_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-bulk-exports$/, auth: "admin_bearer", mutates: false, capability: "administer" },
   { handler: "admin_operator_bulk_exports_register", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-bulk-exports$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_operator_bulk_exports_disable", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-bulk-exports\/[^/]+\/disable$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "admin_metric_schedules_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-schedules$/, auth: "admin_bearer", mutates: false, capability: "administer" },
+  { handler: "admin_metric_schedules_register", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-schedules$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "admin_metric_schedules_disable", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-schedules\/[^/]+\/disable$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_tracking_links_list", method: "GET", pattern: /^\/v1\/admin\/tracking-links$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_tracking_links", method: "POST", pattern: /^\/v1\/admin\/tracking-links$/, auth: "admin_bearer", mutates: true, capability: "operate" },
   { handler: "admin_tracking_link_transition", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/tracking-links\/[^/]+\/(?:pause|archive)$/, auth: "admin_bearer", mutates: true, capability: "operate" },

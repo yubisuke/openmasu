@@ -56,10 +56,12 @@ Progress:
 | App backends can submit selected first-party events without SDK-key reuse or advertising identifiers | Complete with synthetic server-key lifecycle, ingestion, rejection, idempotency, and privacy tests |
 | Operators can receive a closed subset of accepted events without raw identifiers or provider-specific wire coupling | Complete with synthetic destination lifecycle, DNS/SSRF, signature, retry, privacy, and disablement tests |
 | Operators can receive delayed deterministic files without adopting a provider-specific export layout | Complete with synthetic SigV4 vectors, object replay, durable cursor, credential boundary, privacy-notice, and lifecycle tests |
+| App metrics advance without an external cron wrapper | Complete with immutable app schedules, UTC lag/watermark policy, bounded catch-up, exact crash replay, and report/dashboard integration tests |
 
 Candidate v0.2.0-rc.4 satisfied the release-coherence exit gate at green `main`
 commit `2a2f6b5`. Authenticated backend events and operator event webhooks were
-then followed by bounded operator-owned bulk event exports. These are
+then followed by bounded operator-owned bulk event exports and durable daily
+metric execution. These are
 integration milestones rather than provider or attribution claims. The next
 repository work is selected from current-code
 audits of compatibility, failure recovery, reconciliation completeness, and

@@ -17,6 +17,7 @@ private provider material.
 | Send events from an app backend | [Server-to-server events](server-to-server-events.md) |
 | Deliver accepted events to an operator receiver | [Operator event webhooks](operator-event-webhooks.md) |
 | Deliver deterministic event files to operator storage | [Operator bulk event exports](operator-bulk-exports.md) |
+| Run daily cohort or calendar metrics | [Scheduled metric runs](scheduled-metrics.md) |
 | Operate or release a deployment | [Operator documentation](#operator-documentation) and [Release records](releases/README.md) |
 
 For a complete newcomer reading path, use this order:
@@ -39,6 +40,7 @@ For a complete newcomer reading path, use this order:
 - [Server-to-server events](server-to-server-events.md)
 - [Operator event webhooks](operator-event-webhooks.md)
 - [Operator bulk event exports](operator-bulk-exports.md)
+- [Scheduled metric runs](scheduled-metrics.md)
 - [Privacy and security](privacy-security.md)
 - [Threat model](threat-model.md)
 - [Schema versioning](schema-versioning.md)

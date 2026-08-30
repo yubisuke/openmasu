@@ -164,6 +164,14 @@ object create or digest-verified replay succeeds.
 **Production control plane.** Holds tenant/app configuration, RBAC, rule-bundle
 history, keys, durable schedules, and audited administrative changes.
 
+<!-- m1-component:scheduled-metrics -->
+**Scheduled metrics.** Stores immutable app-scoped metric definitions, fixed
+UTC lag policy, definition digests, active/disabled history, and mutable
+checkpoints. The worker persists a pending target date and watermark before
+calling the repeatable-read cohort engine. Deterministic IDs and exact artifact
+replay close the crash window between metric commit and checkpoint advancement.
+Active schedules for one app must have disjoint metric-name sets.
+
 <!-- m1-component:privacy-restore -->
 **Privacy restore path.** Reapplies completed deletion state after a database
 restore before the restored system is released to normal service.
@@ -237,6 +245,12 @@ a fixed-watermark snapshot.
 Undefined values remain absent with a closed reason. Organic, non-organic,
 unattributed, deterministic installation-level, and aggregate platform series
 are never merged implicitly.
+
+Durable schedules advance dates without embedding the mutable scheduler lease
+or database sequence in a result digest. Each cycle is bounded to 31 dates; a
+larger backlog stays pending for retry rather than being skipped. Calendar-day
+metrics receive `metric_date` only, while cohort metrics receive `cohort_date`
+only.
 
 ## Known architectural limits
 

@@ -29,6 +29,7 @@ import {
   createGoogleCommerceReadbackClient,
   processCommerceReadbacks,
 } from "./commerce-readback-worker.js";
+import { processMetricSchedules } from "./metric-schedule-worker.js";
 import { appleLeafKeyFromChain, verifyCompactJws } from "@openmasu/commerce-lifecycle";
 
 const connectionString = process.env.OPENMASU_APP_DATABASE_URL;
@@ -141,13 +142,14 @@ async function runWorkerJob(
   tenantId: string,
   job: ScheduledWorkerJob,
   task: () => Promise<void>,
+  policy = schedulePolicy,
 ): Promise<void> {
   try {
     const outcome = await runScheduledJob({
       store: schedulerStore,
       tenantId,
       job,
-      policy: schedulePolicy,
+      policy,
       task,
     });
     if (outcome === "failed") {
@@ -263,6 +265,16 @@ const tick = async (): Promise<void> => {
             maximumObjectBytes: Number(process.env.OPENMASU_OPERATOR_BULK_EXPORT_MAX_OBJECT_BYTES ?? "10485760"),
           });
         }
+      });
+      await runWorkerJob(tenantId, "metric_run", async () => {
+        const metrics = await processMetricSchedules(pool, tenantId);
+        if (metrics.completedDates > 0) {
+          process.stdout.write(`${JSON.stringify({ event: "metric_schedule_cycle", component: "worker", ...metrics })}\n`);
+        }
+      }, {
+        intervalMs: 86_400_000,
+        retryMs: Math.min(86_400_000, Math.max(60_000, interval)),
+        leaseMs: 86_400_000,
       });
       await runWorkerJob(tenantId, "fraud_maintenance", async () => {
         if (fraudEnabled) {
