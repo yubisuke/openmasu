@@ -54,6 +54,9 @@ public struct ConversionUpdate: Codable, Equatable, Sendable {
     if let conversionTag, conversionTag.isEmpty {
       throw OpenMasuError.conversionSchema("conversion_tag_empty")
     }
+    if conversionTag != nil, conversionTypes != [.reengagement] {
+      throw OpenMasuError.conversionSchema("conversion_tag_requires_reengagement")
+    }
     self.fineValue = fineValue
     self.coarseValue = coarseValue
     self.lockPostback = lockPostback
@@ -211,8 +214,8 @@ public actor ConversionValueController {
       conversionTypes: conversionTypes,
       conversionTag: conversionTag
     )
-    signals = nextSignals
     try await updater.update(value)
+    signals = nextSignals
     if loggingEnabled, let sink {
       try await sink.recordConversionUpdate(schemaVersion: schema.schemaVersion, value: value)
     }

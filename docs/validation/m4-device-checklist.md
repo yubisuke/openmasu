@@ -85,6 +85,13 @@ campaign, App Store build, Unity export, or privacy-review outcome.
   opt-in Booleans, and the collection-default key reach the generated Xcode
   project.
 - Build and run the exported application, then exercise all four MAX formats.
+- From C#, update one install conversion and one explicitly targeted
+  re-engagement conversion. If overlapping conversions are enabled, restore a
+  deployment-private tag and confirm the tagged update completes; never put
+  the tag in Unity logs or committed evidence.
+- Force one retryable Apple update failure and confirm the next attempt uses
+  the same successful conversion history rather than advancing past the failed
+  signal.
 - Confirm callbacks raised off the Unity thread are delivered once on the Unity
   main thread and no callback allocation remains after completion.
 

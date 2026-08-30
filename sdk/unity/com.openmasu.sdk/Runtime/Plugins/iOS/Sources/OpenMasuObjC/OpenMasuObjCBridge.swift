@@ -2,6 +2,9 @@ import Foundation
 #if canImport(OpenMasuAppleAds)
 import OpenMasuAppleAds
 #endif
+#if canImport(OpenMasuApplePostback)
+import OpenMasuApplePostback
+#endif
 #if canImport(OpenMasuCore)
 import OpenMasuCore
 #endif
@@ -14,14 +17,20 @@ public typealias OpenMasuCStringCallback = @convention(c) (Int64, UnsafePointer<
 private enum BridgeState {
   static let lock = NSLock()
   static var sdk: OpenMasuSDK?
+  static var conversionController: ConversionValueController?
 
-  static func set(_ value: OpenMasuSDK) {
-    lock.lock(); sdk = value; lock.unlock()
+  static func set(_ value: OpenMasuSDK, conversionController valueController: ConversionValueController) {
+    lock.lock(); sdk = value; conversionController = valueController; lock.unlock()
   }
 
   static func get() -> OpenMasuSDK? {
     lock.lock(); defer { lock.unlock() }
     return sdk
+  }
+
+  static func getConversionController() -> ConversionValueController? {
+    lock.lock(); defer { lock.unlock() }
+    return conversionController
   }
 }
 
@@ -44,11 +53,18 @@ public func openmasuIOSInitialize(
         let endpointURL = URL(string: String(cString: endpoint))
   else { callback(callbackValue, requestId: requestId, value: "error:configuration_invalid"); return }
   do {
+    guard let schemaURL = OpenMasuConversionResources.defaultSchemaURL else {
+      callback(callbackValue, requestId: requestId, value: "error:conversion_schema_missing")
+      return
+    }
+    let schema = try ConversionSchema(data: Data(contentsOf: schemaURL))
     let configuration = OpenMasuConfiguration(
       endpoint: endpointURL,
       sdkKeyId: String(cString: sdkKeyId),
       sdkSecret: String(cString: sdkSecret),
       wrapperVersion: "unity-0.2.0-rc.4",
+      conversionSchemaVersion: schema.schemaVersion,
+      conversionSchemaSha256: schema.sha256,
       deepLinkHosts: Set(Bundle.main.object(forInfoDictionaryKey: "OpenMasuLinkHosts") as? [String] ?? []),
       deepLinkSchemes: Set(Bundle.main.object(forInfoDictionaryKey: "OpenMasuLinkSchemes") as? [String] ?? [])
     )
@@ -56,13 +72,62 @@ public func openmasuIOSInitialize(
       configuration: configuration,
       tokenProvider: SystemAdServicesTokenProvider()
     )
-    BridgeState.set(sdk)
+    BridgeState.set(
+      sdk,
+      conversionController: ConversionValueController(
+        schema: schema,
+        updater: SystemAppleConversionUpdater()
+      )
+    )
     Task {
       do { try await sdk.initialize(); callback(callbackValue, requestId: requestId, value: "ok") }
       catch { callback(callbackValue, requestId: requestId, value: "error:initialize_failed") }
     }
   } catch {
     callback(callbackValue, requestId: requestId, value: "error:storage_failed")
+  }
+}
+
+@_cdecl("openmasu_ios_record_conversion")
+public func openmasuIOSRecordConversion(
+  _ eventName: UnsafePointer<CChar>?,
+  _ targetMask: Int32,
+  _ conversionTag: UnsafePointer<CChar>?,
+  _ requestId: Int64,
+  _ callbackValue: OpenMasuCStringCallback?
+) {
+  guard let controller = BridgeState.getConversionController(), let eventName else {
+    callback(callbackValue, requestId: requestId, value: "error:not_initialized")
+    return
+  }
+  guard targetMask > 0, targetMask & ~3 == 0 else {
+    callback(callbackValue, requestId: requestId, value: "error:conversion_targets_invalid")
+    return
+  }
+  let tag = conversionTag.map(String.init(cString:))
+  guard tag == nil || (targetMask == 2 && tag?.isEmpty == false) else {
+    callback(callbackValue, requestId: requestId, value: "error:conversion_tag_invalid")
+    return
+  }
+  var targets: [AppleConversionType] = []
+  if targetMask & 1 != 0 { targets.append(.install) }
+  if targetMask & 2 != 0 { targets.append(.reengagement) }
+  let eventNameValue = String(cString: eventName)
+  guard eventNameValue.range(of: "^[A-Za-z0-9._:-]{1,128}$", options: .regularExpression) != nil else {
+    callback(callbackValue, requestId: requestId, value: "error:conversion_event_name_invalid")
+    return
+  }
+  Task {
+    do {
+      _ = try await controller.record(
+        eventName: eventNameValue,
+        conversionTypes: targets,
+        conversionTag: tag
+      )
+      callback(callbackValue, requestId: requestId, value: "ok")
+    } catch {
+      callback(callbackValue, requestId: requestId, value: "error:conversion_update_failed")
+    }
   }
 }
 

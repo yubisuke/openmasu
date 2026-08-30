@@ -67,6 +67,14 @@ targeted update helpers but never writes a tag to its analytics queue or logs.
 Do not enable overlapping conversions until that caller-owned lifecycle and the
 corresponding device test have been implemented.
 
+`ConversionValueController` commits a signal only after the platform update
+succeeds. A failed SKAdNetwork or AdAttributionKit call can therefore be
+retried against the same successful signal history. If an explicitly enabled
+OpenMasu event sink fails after the platform accepted the update, the platform
+state remains committed rather than being rolled back locally. Conversion tags
+are accepted only for an explicitly targeted re-engagement update; they never
+silently broaden an update to install or every active postback.
+
 ## Queue identity
 
 A normal retry is idempotent only when every persisted field is identical. A

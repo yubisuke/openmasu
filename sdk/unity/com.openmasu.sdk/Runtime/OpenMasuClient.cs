@@ -5,6 +5,13 @@ using UnityEngine;
 
 namespace OpenMasu.Unity
 {
+    [Flags]
+    public enum OpenMasuAppleConversionTarget
+    {
+        Install = 1,
+        Reengagement = 2,
+    }
+
     public interface IOpenMasuPlatform : IDisposable
     {
         void Initialize(OpenMasuOptions options);
@@ -35,6 +42,15 @@ namespace OpenMasu.Unity
     public interface IOpenMasuQueueHealthPlatform
     {
         void GetQueueHealth(Action<string> completion);
+    }
+
+    public interface IOpenMasuAppleConversionPlatform
+    {
+        void RecordAppleConversion(
+            string eventName,
+            OpenMasuAppleConversionTarget targets,
+            string conversionTag,
+            Action<bool> completion);
     }
 
     public sealed class OpenMasuQueueHealth
@@ -150,6 +166,33 @@ namespace OpenMasu.Unity
             RevenuePlatform().TrackRefund(transactionId, originalTransactionId, amountUnscaled, amountScale, currency);
         }
         public void StartSession() => platform.StartSession();
+        public void RecordAppleConversion(
+            string eventName,
+            OpenMasuAppleConversionTarget targets,
+            Action<bool> completion) =>
+            RecordAppleConversion(eventName, targets, null, completion);
+        public void RecordAppleConversion(
+            string eventName,
+            OpenMasuAppleConversionTarget targets,
+            string conversionTag,
+            Action<bool> completion)
+        {
+            if (!IsIdentifier(eventName))
+                throw new ArgumentException("conversion_event_name_invalid", nameof(eventName));
+            const OpenMasuAppleConversionTarget knownTargets =
+                OpenMasuAppleConversionTarget.Install | OpenMasuAppleConversionTarget.Reengagement;
+            if (targets == 0 || (targets & ~knownTargets) != 0)
+                throw new ArgumentOutOfRangeException(nameof(targets), "conversion_targets_invalid");
+            if (conversionTag != null &&
+                (conversionTag.Length == 0 || targets != OpenMasuAppleConversionTarget.Reengagement))
+                throw new ArgumentException("conversion_tag_requires_reengagement", nameof(conversionTag));
+            if (completion == null) throw new ArgumentNullException(nameof(completion));
+            AppleConversionPlatform().RecordAppleConversion(
+                eventName,
+                targets,
+                conversionTag,
+                value => dispatcher.Post(() => completion(value)));
+        }
         public void GetQueueHealth(Action<OpenMasuQueueHealth> completion) =>
             QueueHealthPlatform().GetQueueHealth(value =>
                 dispatcher.Post(() => completion(OpenMasuQueueHealth.Parse(value))));
@@ -181,6 +224,13 @@ namespace OpenMasu.Unity
         {
             var value = platform as IOpenMasuQueueHealthPlatform;
             if (value == null) throw new NotSupportedException("openmasu_queue_health_platform_unavailable");
+            return value;
+        }
+
+        private IOpenMasuAppleConversionPlatform AppleConversionPlatform()
+        {
+            var value = platform as IOpenMasuAppleConversionPlatform;
+            if (value == null) throw new NotSupportedException("openmasu_apple_conversion_platform_unavailable");
             return value;
         }
 

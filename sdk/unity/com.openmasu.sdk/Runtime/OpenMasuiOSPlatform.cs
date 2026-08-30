@@ -6,7 +6,7 @@ using AOT;
 
 namespace OpenMasu.Unity
 {
-    public sealed class OpenMasuiOSPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform
+    public sealed class OpenMasuiOSPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform, IOpenMasuAppleConversionPlatform
     {
         private delegate void NativeCallback(long requestId, IntPtr value);
         private static readonly NativeCallback Callback = OnNativeCallback;
@@ -35,6 +35,21 @@ namespace OpenMasu.Unity
             var requestId = Register(_ => { });
 #if UNITY_IOS && !UNITY_EDITOR
             openmasu_ios_track_custom_event(eventKey, requestId, Callback);
+#else
+            CompleteSynthetic(requestId, "ok");
+#endif
+        }
+
+        public void RecordAppleConversion(
+            string eventName,
+            OpenMasuAppleConversionTarget targets,
+            string conversionTag,
+            Action<bool> completion)
+        {
+            ThrowIfDisposed();
+            var requestId = Register(value => completion(value == "ok"));
+#if UNITY_IOS && !UNITY_EDITOR
+            openmasu_ios_record_conversion(eventName, (int)targets, conversionTag, requestId, Callback);
 #else
             CompleteSynthetic(requestId, "ok");
 #endif
@@ -195,6 +210,13 @@ namespace OpenMasu.Unity
             string endpoint, string sdkKeyId, string sdkSecret, long requestId, NativeCallback callback);
         [DllImport("__Internal")]
         private static extern void openmasu_ios_track_custom_event(string eventKey, long requestId, NativeCallback callback);
+        [DllImport("__Internal")]
+        private static extern void openmasu_ios_record_conversion(
+            string eventName,
+            int targetMask,
+            string conversionTag,
+            long requestId,
+            NativeCallback callback);
         [DllImport("__Internal")]
         private static extern void openmasu_ios_track_purchase(
             string transactionId,
