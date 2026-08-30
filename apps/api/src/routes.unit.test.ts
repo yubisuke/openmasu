@@ -50,6 +50,8 @@ describe("declarative API route security", () => {
     assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/conversion-schemas")?.handler, "admin_conversion_schema");
     assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/rule-bundles")?.handler, "admin_rule_bundle");
     assert.equal(matchRoute("GET", "/metrics")?.handler, "operational_metrics");
+    assert.equal(matchRoute("POST", "/v1/events/server")?.handler, "server_batch");
+    assert.equal(matchRoute("GET", "/v1/events/server"), undefined);
   });
 
   it("WO18 matches exact SDK lifecycle, link-state, and provider form routes", () => {
@@ -60,6 +62,11 @@ describe("declarative API route security", () => {
     assert.equal(matchRoute("POST", "/dashboard/apps/app-a/tracking-links/tracking-link%3Aone/archive")?.handler, "dashboard_tracking_link_transition");
     assert.equal(matchRoute("POST", "/dashboard/apps/app-a/sdk-keys")?.handler, "dashboard_sdk_keys_issue");
     assert.equal(matchRoute("POST", "/dashboard/apps/app-a/sdk-keys/sdk-key%3Aone/retire")?.handler, "dashboard_sdk_keys_retire");
+    assert.equal(matchRoute("GET", "/v1/admin/apps/app-a/server-keys")?.handler, "admin_server_keys_list");
+    assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/server-keys")?.handler, "admin_server_keys_issue");
+    assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/server-keys/server-key%3Aone/retire")?.handler, "admin_server_keys_retire");
+    assert.equal(matchRoute("POST", "/dashboard/apps/app-a/server-keys")?.handler, "dashboard_server_keys_issue");
+    assert.equal(matchRoute("POST", "/dashboard/apps/app-a/server-keys/server-key%3Aone/retire")?.handler, "dashboard_server_keys_retire");
     for (const path of [
       "/dashboard/link-domain",
       "/dashboard/apps/app-a/link-identity",
@@ -76,6 +83,8 @@ describe("declarative API route security", () => {
     for (const handler of [
       "admin_sdk_keys_list", "admin_sdk_keys_issue", "admin_sdk_keys_retire",
       "dashboard_sdk_keys_issue", "dashboard_sdk_keys_retire", "dashboard_link_domain",
+      "admin_server_keys_list", "admin_server_keys_issue", "admin_server_keys_retire",
+      "dashboard_server_keys_issue", "dashboard_server_keys_retire",
       "dashboard_app_link_identity", "dashboard_apple_registration", "dashboard_conversion_schema",
       "dashboard_rule_bundle", "dashboard_google_data_manager",
     ]) assert.equal(routes.find((route) => route.handler === handler)?.capability, "administer", handler);

@@ -27,6 +27,8 @@ type InboxRow = {
   status: "pending" | "processed" | "failed";
   reason_code: string | null;
   installation_key_id: string | null;
+  server_key_id: string | null;
+  subject_digest: string | null;
   inbox_seq: string;
 };
 
@@ -73,6 +75,13 @@ type Withdrawal = {
 
 type StoredWithdrawal = {
   installation_key_id: string;
+  processing_purpose_id: string;
+  withdrawal_recognized_at: string;
+  withdrawal_recognized_sequence: string;
+};
+
+type StoredSubjectWithdrawal = {
+  subject_digest: string;
   processing_purpose_id: string;
   withdrawal_recognized_at: string;
   withdrawal_recognized_sequence: string;
@@ -619,6 +628,77 @@ async function durableWithdrawalsFor(
   return result;
 }
 
+async function durableSubjectWithdrawalsFor(
+  pool: Pool,
+  tenantId: string,
+  rows: readonly DecodedInboxEntry[],
+): Promise<Map<string, Withdrawal[]>> {
+  const serverRows = rows.filter((entry) => entry.row.server_key_id !== null);
+  const digests = [...new Set(serverRows.map((entry) => entry.row.subject_digest).filter(
+    (value): value is string => typeof value === "string",
+  ))].sort();
+  for (const entry of serverRows) {
+    const installationIds = entry.records.map((record) => record.payload?.installation_id);
+    const hasInstallation = installationIds.some((value) => typeof value === "string");
+    if (hasInstallation && (!entry.row.subject_digest
+      || installationIds.some((value) => typeof value !== "string")
+      || new Set(installationIds).size !== 1)) {
+      throw new Error("server_subject_digest_missing");
+    }
+  }
+  const byDigest = new Map<string, Withdrawal[]>();
+  if (digests.length === 0) return new Map();
+  const result = await withTenant(pool, tenantId, (client) => client.query<StoredSubjectWithdrawal>(
+    `SELECT credential.installation_id_digest AS subject_digest,
+            withdrawal.processing_purpose_id,
+            withdrawal.withdrawal_recognized_at,
+            withdrawal.withdrawal_recognized_sequence::text
+       FROM control.installation_credentials AS credential
+       JOIN control.installation_withdrawals AS withdrawal
+         ON withdrawal.tenant_id=credential.tenant_id AND withdrawal.app_id=credential.app_id
+        AND withdrawal.installation_key_id=credential.installation_key_id
+      WHERE credential.tenant_id=$1 AND credential.installation_id_digest=ANY($2::text[])
+      UNION ALL
+     SELECT credential.installation_id_digest,
+            purpose.processing_purpose_id,
+            credential.status_changed_at,
+            '0'::text
+       FROM control.installation_credentials_current AS credential
+       CROSS JOIN (VALUES ('attribution'),('analytics'),('revenue_measurement'))
+         AS purpose(processing_purpose_id)
+      WHERE credential.tenant_id=$1 AND credential.installation_id_digest=ANY($2::text[])
+        AND credential.status='deleted'
+      UNION ALL
+     SELECT request.artifact->>'deletion_subject_digest',
+            purpose.processing_purpose_id,
+            request.completed_at,
+            '0'::text
+       FROM ledger.privacy_requests AS request
+       CROSS JOIN (VALUES ('attribution'),('analytics'),('revenue_measurement'))
+         AS purpose(processing_purpose_id)
+      WHERE request.tenant_id=$1 AND request.status='completed'
+        AND request.artifact->>'deletion_scope'='installation'
+        AND request.artifact->>'deletion_subject_digest'=ANY($2::text[])
+      ORDER BY subject_digest, processing_purpose_id, withdrawal_recognized_at`,
+    [tenantId, digests],
+  ));
+  for (const row of result.rows) {
+    const values = byDigest.get(row.subject_digest) ?? [];
+    if (!values.some((value) => value.processing_purpose_id === row.processing_purpose_id)) {
+      values.push({
+        processing_purpose_id: row.processing_purpose_id,
+        withdrawal_recognized_at: row.withdrawal_recognized_at,
+        withdrawal_recognized_sequence: Number(row.withdrawal_recognized_sequence),
+      });
+    }
+    byDigest.set(row.subject_digest, values);
+  }
+  return new Map(serverRows.map((entry) => [
+    entry.row.ingest_batch_id,
+    entry.row.subject_digest ? byDigest.get(entry.row.subject_digest) ?? [] : [],
+  ]));
+}
+
 async function assertWithdrawalProjectionReady(
   pool: Pool,
   tenantId: string,
@@ -769,7 +849,8 @@ export async function processSdkInbox(
 ): Promise<number> {
   const work = await withTenant(pool, tenantId, (client) => client.query<InboxRow>(
     `SELECT ingest_batch_id::text, tenant_id, app_id, producer, received_at,
-            body_ref, body_digest, status, reason_code, installation_key_id, inbox_seq::text
+            body_ref, body_digest, status, reason_code, installation_key_id,
+            server_key_id, subject_digest, inbox_seq::text
      FROM ledger.ingest_batches_current
      WHERE tenant_id=$1
        AND (status='pending' OR (status='processed' AND reason_code=$2))
@@ -800,9 +881,14 @@ export async function processSdkInbox(
     workDecoded,
     await durableWithdrawalsFor(pool, tenantId, workDecoded),
   );
+  const subjectWithdrawals = await durableSubjectWithdrawalsFor(pool, tenantId, workDecoded);
   for (const entry of workDecoded) {
     const attempts = entry.records.map((record) => ({
-      server: serverContext(entry.row, record, entry.row.installation_key_id ? withdrawals.get(entry.row.installation_key_id) ?? [] : []),
+      server: serverContext(entry.row, record, entry.row.installation_key_id
+        ? withdrawals.get(entry.row.installation_key_id) ?? []
+        : entry.row.server_key_id
+          ? subjectWithdrawals.get(entry.row.ingest_batch_id) ?? []
+          : []),
       record,
       batch_id: entry.row.ingest_batch_id,
     }));

@@ -338,6 +338,52 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     assert.equal(refreshedApp.includes(successorSecret), false);
     assert.match(refreshedApp, /secrets are never listed/);
 
+    const firstServerIssue = await fetch(`${baseUrl}/dashboard/apps/${newAppId}/server-keys`, {
+      method: "POST",
+      headers: { cookie: dashboardCookie, origin: configuredOrigin, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ csrf_token: csrf, producer: "postback:first-party" }),
+    });
+    assert.equal(firstServerIssue.status, 201);
+    const firstServerHtml = await firstServerIssue.text();
+    const firstServerKeyId = /<dt>Server key ID<\/dt><dd>([^<]+)<\/dd>/.exec(firstServerHtml)?.[1];
+    const firstServerSecret = /<dt>Server key<\/dt><dd><code>([^<]+)<\/code>/.exec(firstServerHtml)?.[1];
+    assert.ok(firstServerKeyId);
+    assert.ok(firstServerSecret);
+    const secondServerIssue = await fetch(`${baseUrl}/dashboard/apps/${newAppId}/server-keys`, {
+      method: "POST",
+      headers: { cookie: dashboardCookie, origin: configuredOrigin, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ csrf_token: csrf, producer: "postback:first-party" }),
+    });
+    assert.equal(secondServerIssue.status, 201);
+    const secondServerHtml = await secondServerIssue.text();
+    const secondServerKeyId = /<dt>Server key ID<\/dt><dd>([^<]+)<\/dd>/.exec(secondServerHtml)?.[1];
+    const secondServerSecret = /<dt>Server key<\/dt><dd><code>([^<]+)<\/code>/.exec(secondServerHtml)?.[1];
+    assert.ok(secondServerKeyId);
+    assert.ok(secondServerSecret);
+    const serverMetadataPage = await (await fetch(`${baseUrl}/dashboard/apps/${newAppId}`, {
+      headers: { cookie: dashboardCookie },
+    })).text();
+    assert.match(serverMetadataPage, /Server-to-server keys/);
+    assert.match(serverMetadataPage, new RegExp(firstServerKeyId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(serverMetadataPage, new RegExp(secondServerKeyId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.equal(serverMetadataPage.includes(firstServerSecret), false);
+    assert.equal(serverMetadataPage.includes(secondServerSecret), false);
+    assert.equal(serverMetadataPage.includes("secret_ref"), false);
+    const retiredServer = await fetch(`${baseUrl}/dashboard/apps/${newAppId}/server-keys/${encodeURIComponent(firstServerKeyId)}/retire`, {
+      method: "POST",
+      redirect: "manual",
+      headers: { cookie: dashboardCookie, origin: configuredOrigin, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ csrf_token: csrf }),
+    });
+    assert.equal(retiredServer.status, 303);
+    const lastServer = await fetch(`${baseUrl}/dashboard/apps/${newAppId}/server-keys/${encodeURIComponent(secondServerKeyId)}/retire`, {
+      method: "POST",
+      headers: { cookie: dashboardCookie, origin: configuredOrigin, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ csrf_token: csrf }),
+    });
+    assert.equal(lastServer.status, 409);
+    assert.match(await lastServer.text(), /last_active_server_key/);
+
     const linkDomain = await fetch(`${baseUrl}/dashboard/link-domain`, {
       method: "POST",
       redirect: "manual",

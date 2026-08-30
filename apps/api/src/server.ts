@@ -165,6 +165,26 @@ const server = createServer(createRequestHandler({
       Number(process.env.OPENMASU_DEVICE_PRIVACY_RATE_BURST ?? "3"),
     ),
   },
+  server: {
+    pool,
+    payloadStore,
+    config: {
+      tenantId: maxConfig.tenantId,
+      timestampSkewMs: Number(process.env.OPENMASU_SERVER_INGEST_SKEW_MS ?? "300000"),
+      nonceTtlMs: Number(process.env.OPENMASU_SERVER_NONCE_TTL_MS ?? "900000"),
+    },
+    installationDigestKey: secrets.require("OPENMASU_INSTALLATION_DIGEST_KEY"),
+    maximumBytes: Number(process.env.OPENMASU_SERVER_INGEST_MAX_BYTES ?? String(256 * 1024)),
+    maximumEvents: Number(process.env.OPENMASU_SERVER_INGEST_MAX_EVENTS ?? "100"),
+    keyBucket: new KeyedTokenBucket(
+      Number(process.env.OPENMASU_SERVER_INGEST_RATE_RPS ?? "50"),
+      Number(process.env.OPENMASU_SERVER_INGEST_RATE_BURST ?? "100"),
+    ),
+    appBucket: new KeyedTokenBucket(
+      Number(process.env.OPENMASU_SERVER_INGEST_APP_RATE_RPS ?? "500"),
+      Number(process.env.OPENMASU_SERVER_INGEST_APP_RATE_BURST ?? "1000"),
+    ),
+  },
 }));
 
 server.listen(port, "0.0.0.0", () => {

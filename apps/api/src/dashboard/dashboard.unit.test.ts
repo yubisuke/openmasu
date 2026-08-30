@@ -142,6 +142,10 @@ describe("M3 zero-JavaScript dashboard", () => {
         sdk_key_id: "sdk-key:one", platform: "android" as const, status: "active" as const,
         created_at: "2026-08-20T00:00:00.000Z", status_changed_at: "2026-08-20T00:00:00.000Z",
       }],
+      serverKeys: [{
+        server_key_id: "server-key:one", producer: "postback:first-party", status: "active" as const,
+        created_at: "2026-08-20T00:00:00.000Z", status_changed_at: "2026-08-20T00:00:00.000Z",
+      }],
       csrfToken: "synthetic-csrf",
     };
     const readOnly = renderDashboard(buildDashboardView(base));
@@ -152,6 +156,8 @@ describe("M3 zero-JavaScript dashboard", () => {
     assert.doesNotMatch(operator, /Issue successor key|Register a link domain/);
     const admin = renderDashboard(buildDashboardView({ ...base, canOperate: true, canAdminister: true }));
     assert.match(admin, /Issue successor key/);
+    assert.match(admin, /Server-to-server keys/);
+    assert.match(admin, /postback:first-party/);
     assert.match(admin, /Register a link domain/);
     assert.match(admin, /Complete activation request JSON/);
     assert.equal(admin.includes("<script"), false);
@@ -171,6 +177,21 @@ describe("M3 zero-JavaScript dashboard", () => {
     assert.match(html, /sdk-key:one/);
     assert.equal(html.includes(secret), false);
     assert.doesNotMatch(html, /secret_ref|SDK key <code>/);
+  });
+
+  it("never renders server secrets in key metadata", () => {
+    const secret = "synthetic-server-secret-that-must-not-be-rendered";
+    const html = renderDashboard(buildDashboardView({
+      apps: [], selectedAppId: "app-one", csrfToken: "synthetic-csrf", canAdminister: true,
+      serverKeys: [{
+        server_key_id: "server-key:one", producer: "postback:first-party", status: "retired",
+        created_at: "2026-08-20T00:00:00.000Z", status_changed_at: "2026-08-21T00:00:00.000Z",
+      }],
+    }));
+    assert.match(html, /Server key metadata \(secrets are never listed\)/);
+    assert.match(html, /server-key:one/);
+    assert.equal(html.includes(secret), false);
+    assert.doesNotMatch(html, /secret_ref|Server key <code>/);
   });
 
   it("reports signed purchase net revenue without exposing purchase identifiers", () => {

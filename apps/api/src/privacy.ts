@@ -26,6 +26,8 @@ export type PrivacyIdentity = {
   deletionSubjectDigest?: string;
 };
 
+type AppPrivacyIdentity = AppAdminIdentity & { deletionSubjectDigest?: string };
+
 function currentTimestamp(now?: Date): string { return (now ?? new Date()).toISOString(); }
 
 async function affectedRecordIds(client: any, body: PrivacyRequestBody): Promise<string[]> {
@@ -93,7 +95,7 @@ async function affectedRecordIds(client: any, body: PrivacyRequestBody): Promise
 
 export async function executePrivacyRequest(
   pool: Pool,
-  identity: AppAdminIdentity | PrivacyIdentity,
+  identity: AppPrivacyIdentity | PrivacyIdentity,
   body: PrivacyRequestBody,
   payloadStore: PayloadStore,
   now?: Date,
@@ -167,14 +169,16 @@ export async function executePrivacyRequest(
              ON member.ingest_batch_id=batch.ingest_batch_id
             AND member.tenant_id=batch.tenant_id AND member.app_id=batch.app_id
            WHERE batch.tenant_id=$1 AND batch.app_id=$2
-             AND (member.record_id=ANY($3::text[]) OR batch.installation_key_id=$4)
+             AND (member.record_id=ANY($3::text[]) OR batch.installation_key_id=$4
+               OR batch.subject_digest=$5)
              AND NOT EXISTS (
                SELECT 1 FROM ledger.ingest_batch_records AS shared
                 WHERE shared.ingest_batch_id=batch.ingest_batch_id
                   AND NOT (shared.record_id=ANY($3::text[]))
              )
            ORDER BY batch.body_ref`,
-          [body.tenant_id, body.app_id, records, installationKeyId ?? null],
+          [body.tenant_id, body.app_id, records, installationKeyId ?? null,
+            "deletionSubjectDigest" in identity ? identity.deletionSubjectDigest ?? null : null],
         )
       : await client.query<{ body_ref: string }>(
           `SELECT body_ref FROM ledger.ingest_batches
