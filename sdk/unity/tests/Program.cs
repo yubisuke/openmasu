@@ -50,6 +50,7 @@ internal static class Program
         ExerciseAndroidManifestGeneration();
         ExerciseAndroidGradleSettings();
         ExerciseAndroidPostprocessorWithoutLinkSettings();
+        ExerciseIosPostprocessorTargetMembership();
         Require(MaxRevenueSubscriptions.Formats.SequenceEqual(new[] { "Interstitial", "Rewarded", "Banner", "MRec" }), "MAX format subscription table is incomplete");
         ExerciseAndroidMaxFormatBridge();
         OpenMasuMaxUnityAdapter.Subscribe();
@@ -228,6 +229,87 @@ internal static class Program
             var generated = File.ReadAllText(Path.Combine(root, "export", "settings.gradle"));
             Require(generated.Contains(OpenMasu.Unity.Editor.OpenMasuAndroidGradleSettings.BeginMarker),
                 "packaged Maven repository depends on optional App Links settings");
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(previous);
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    private static void ExerciseIosPostprocessorTargetMembership()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openmasu-unity-ios-postprocessor-" + Guid.NewGuid().ToString("N"));
+        var previous = Directory.GetCurrentDirectory();
+        try
+        {
+            var export = Path.Combine(root, "export");
+            var projectSettings = Path.Combine(root, "ProjectSettings");
+            var packageRoot = Path.Combine(root, "Packages", "com.openmasu.sdk", "Runtime", "Plugins", "iOS");
+            var swiftRoot = Path.Combine(packageRoot, "Sources");
+            var coreSource = Path.Combine(swiftRoot, "OpenMasuCore", "Synthetic.swift");
+            var bridgeSource = Path.Combine(swiftRoot, "OpenMasuObjC", "SyntheticBridge.swift");
+            var schemaSource = Path.Combine(
+                swiftRoot, "OpenMasuApplePostback", "Resources", "conversion-schema-v1.json");
+            Directory.CreateDirectory(projectSettings);
+            Directory.CreateDirectory(Path.GetDirectoryName(coreSource));
+            Directory.CreateDirectory(Path.GetDirectoryName(bridgeSource));
+            Directory.CreateDirectory(Path.GetDirectoryName(schemaSource));
+            Directory.CreateDirectory(Path.Combine(export, "Unity-iPhone.xcodeproj"));
+            File.WriteAllText(Path.Combine(projectSettings, "OpenMasuIOSSettings.json"),
+                "{\"skanEndpoint\":\"https://measurement.example\"," +
+                "\"attributionCopyEndpoint\":\"https://measurement.example\"," +
+                "\"linkHosts\":[\"links.example\"]}");
+            File.WriteAllText(coreSource, "public enum SyntheticCore {}\n");
+            File.WriteAllText(bridgeSource, "public enum SyntheticBridge {}\n");
+            File.WriteAllText(schemaSource, "{\"version\":1}\n");
+            File.WriteAllText(Path.Combine(packageRoot, "PrivacyInfo.xcprivacy"),
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict/></plist>");
+            File.WriteAllText(Path.Combine(export, "Info.plist"),
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict/></plist>");
+            File.WriteAllText(
+                Path.Combine(export, "Unity-iPhone.xcodeproj", "project.pbxproj"),
+                "// synthetic input\n");
+
+            Directory.SetCurrentDirectory(root);
+            OpenMasu.Unity.Editor.OpenMasuIOSPostprocessor.OnPostProcessBuild(
+                UnityEditor.BuildTarget.iOS, export);
+
+            var project = UnityEditor.iOS.Xcode.PBXProject.LastWrittenProject;
+            Require(project != null, "Unity iOS postprocessor did not write the PBX project");
+            var main = UnityEditor.iOS.Xcode.PBXProject.MainTargetGuid;
+            var framework = UnityEditor.iOS.Xcode.PBXProject.FrameworkTargetGuid;
+            foreach (var source in new[] {
+                "OpenMasu/Sources/OpenMasuCore/Synthetic.swift",
+                "OpenMasu/Sources/OpenMasuObjC/SyntheticBridge.swift"
+            })
+            {
+                Require(project.HasBuildFile(framework, source),
+                    "Swift source was not added to UnityFramework: " + source);
+                Require(!project.HasBuildFile(main, source),
+                    "Swift source was incorrectly added to the main app target: " + source);
+            }
+            Require(project.HasBuildProperty(framework, "SWIFT_VERSION", "5.0"),
+                "UnityFramework Swift version is missing");
+            Require(project.HasBuildProperty(framework, "CLANG_ENABLE_MODULES", "YES"),
+                "UnityFramework modules setting is missing");
+            Require(project.HasBuildProperty(framework, "OTHER_LDFLAGS", "-lsqlite3"),
+                "UnityFramework sqlite linker setting is missing");
+            Require(!project.HasAnyBuildProperty(main, "SWIFT_VERSION"),
+                "Swift version leaked onto the main app target");
+            Require(!project.HasAnyBuildProperty(main, "OTHER_LDFLAGS"),
+                "sqlite linker setting leaked onto the main app target");
+            Require(project.HasBuildProperty(main, "CODE_SIGN_ENTITLEMENTS", "OpenMasu/OpenMasu.entitlements"),
+                "associated-domain entitlements were not assigned to the main app target");
+            Require(!project.HasAnyBuildProperty(framework, "CODE_SIGN_ENTITLEMENTS"),
+                "app entitlements were incorrectly assigned to UnityFramework");
+            foreach (var resource in new[] { "PrivacyInfo.xcprivacy", "OpenMasu/conversion-schema-v1.json" })
+            {
+                Require(project.HasBuildFile(main, resource),
+                    "app-bundle resource was not added to the main target: " + resource);
+                Require(!project.HasBuildFile(framework, resource),
+                    "app-bundle resource was incorrectly added to UnityFramework: " + resource);
+            }
         }
         finally
         {

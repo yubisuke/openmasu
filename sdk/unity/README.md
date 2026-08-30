@@ -8,6 +8,13 @@ OpenMasu does not publish a Maven or UPM registry artifact. CI and local release
 
 The repository's standalone Gradle consumer gate rejects project-level repositories and compiles the generated UPM package with `RepositoriesMode.FAIL_ON_PROJECT_REPOS`. The local probe also imports that archive into a temporary Unity project, exports Android Gradle, validates generated App Links and repository wiring, and builds a synthetic APK. Unity 6.3.11f1 has synthetic package/export evidence; Unity 2022.3, physical-device execution, and live platform signals remain operator checks.
 
+The managed iOS compile probe also executes the shipping postprocessor against
+a synthetic PBXProject API. It verifies that Swift sources and their compile or
+link settings belong to `UnityFramework`, while entitlements, the privacy
+manifest, and the conversion schema remain in the main application target.
+This catches target-membership regressions without claiming an actual Unity
+iOS export or Xcode link; those remain operator checks.
+
 Generate the local bundle after building the five release AARs and SDK SBOMs:
 
 ```bash

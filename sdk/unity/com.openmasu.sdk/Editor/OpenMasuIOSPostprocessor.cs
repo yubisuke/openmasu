@@ -162,16 +162,17 @@ namespace OpenMasu.Unity.Editor
             var pbxPath = PBXProject.GetPBXProjectPath(projectPath);
             var project = new PBXProject();
             project.ReadFromFile(pbxPath);
-            var targetGuid = project.GetUnityMainTargetGuid();
-            project.SetBuildProperty(targetGuid, "SWIFT_VERSION", "5.0");
-            project.SetBuildProperty(targetGuid, "CLANG_ENABLE_MODULES", "YES");
-            project.AddBuildProperty(targetGuid, "OTHER_LDFLAGS", "-lsqlite3");
+            var mainTargetGuid = project.GetUnityMainTargetGuid();
+            var frameworkTargetGuid = project.GetUnityFrameworkTargetGuid();
+            project.SetBuildProperty(frameworkTargetGuid, "SWIFT_VERSION", "5.0");
+            project.SetBuildProperty(frameworkTargetGuid, "CLANG_ENABLE_MODULES", "YES");
+            project.AddBuildProperty(frameworkTargetGuid, "OTHER_LDFLAGS", "-lsqlite3");
             var entitlementsRelative = "OpenMasu/OpenMasu.entitlements";
             var entitlementsPath = Path.Combine(projectPath, entitlementsRelative.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(entitlementsPath));
             var emptyEntitlements = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict/></plist>";
             File.WriteAllText(entitlementsPath, OpenMasuAssociatedDomains.Apply(emptyEntitlements, settings.linkHosts));
-            project.SetBuildProperty(targetGuid, "CODE_SIGN_ENTITLEMENTS", entitlementsRelative);
+            project.SetBuildProperty(mainTargetGuid, "CODE_SIGN_ENTITLEMENTS", entitlementsRelative);
 
             var packageRoot = Path.Combine(
                 Directory.GetCurrentDirectory(), "Packages", "com.openmasu.sdk", "Runtime", "Plugins", "iOS");
@@ -184,14 +185,14 @@ namespace OpenMasu.Unity.Editor
                 Directory.CreateDirectory(Path.GetDirectoryName(destination));
                 File.Copy(source, destination, true);
                 var guid = project.AddFile(projectRelative, projectRelative);
-                project.AddFileToBuild(targetGuid, guid);
+                project.AddFileToBuild(frameworkTargetGuid, guid);
             }
 
             var manifestSource = Path.Combine(packageRoot, "PrivacyInfo.xcprivacy");
             var manifestDestination = Path.Combine(projectPath, "PrivacyInfo.xcprivacy");
             File.Copy(manifestSource, manifestDestination, true);
             var manifestGuid = project.AddFile("PrivacyInfo.xcprivacy", "PrivacyInfo.xcprivacy");
-            project.AddFileToBuild(targetGuid, manifestGuid);
+            project.AddFileToBuild(mainTargetGuid, manifestGuid);
 
             var schemaSource = Path.Combine(
                 swiftRoot, "OpenMasuApplePostback", "Resources", "conversion-schema-v1.json");
@@ -200,7 +201,7 @@ namespace OpenMasu.Unity.Editor
             Directory.CreateDirectory(Path.GetDirectoryName(schemaDestination));
             File.Copy(schemaSource, schemaDestination, true);
             var schemaGuid = project.AddFile(schemaRelative, schemaRelative);
-            project.AddFileToBuild(targetGuid, schemaGuid);
+            project.AddFileToBuild(mainTargetGuid, schemaGuid);
             project.WriteToFile(pbxPath);
         }
     }
