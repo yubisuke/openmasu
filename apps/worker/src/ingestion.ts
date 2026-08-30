@@ -1532,13 +1532,16 @@ export async function ingestRuntimeBatch(
   attempts: readonly CandidateAttempt[],
   appPool: Pool,
   historicalAttempts: readonly CandidateAttempt[] = [],
-  options: { bulkPersistence?: boolean } = {},
+  options: { bulkPersistence?: boolean; persistenceClient?: PoolClient } = {},
 ): Promise<RuntimeIngestionResult> {
   if (attempts.length === 0) {
     return { raw_records: [], deliveries: [], logical_events: [], corrections: [], rejections: [], attributions: [], fraud_decisions: [], reconciliation: [], validation_failures: [] };
   }
   const scopes = [...new Set(attempts.map((attempt) =>
     `${attempt.server.tenant_id}\u0000${attempt.server.app_id}`))];
+  if (options.persistenceClient && scopes.length !== 1) {
+    throw new Error("runtime_transaction_requires_one_scope");
+  }
   if (scopes.length > 1) {
     const combined: RuntimeIngestionResult = {
       raw_records: [], deliveries: [], logical_events: [], corrections: [], rejections: [], attributions: [],
@@ -1557,7 +1560,16 @@ export async function ingestRuntimeBatch(
     }
     return combined;
   }
-  await ensureApps(appPool, runtimeInput(attempts));
+  if (options.persistenceClient) {
+    const [scopeTenantId, scopeAppId] = scopes[0].split("\u0000");
+    await options.persistenceClient.query(
+      `INSERT INTO control.apps (tenant_id, app_id, created_at)
+       VALUES ($1, $2, $3) ON CONFLICT (tenant_id, app_id) DO NOTHING`,
+      [scopeTenantId, scopeAppId, defaultTimestamp(runtimeInput(attempts))],
+    );
+  } else {
+    await ensureApps(appPool, runtimeInput(attempts));
+  }
   const [tenantId, appId] = scopes[0].split("\u0000");
   const activeRevision = await resolveActiveFraudBundle(appPool, tenantId, appId);
   const attributionBinding = await resolveNonFraudBundle(appPool, tenantId, appId, "attribution-default");
@@ -1646,7 +1658,16 @@ export async function ingestRuntimeBatch(
       artifact.tenant_id === attempts[0].server.tenant_id && artifact.app_id === attempts[0].server.app_id),
     validation_failures: invalid.map(({ failure }) => failure),
   };
+  if (options.persistenceClient && (
+    selected.attributions.length > 0
+    || selected.corrections.length > 0
+    || selected.fraud_decisions.length > 0
+    || selected.reconciliation.length > 0
+  )) {
+    throw new Error("runtime_transaction_auxiliary_artifacts_unsupported");
+  }
   if (options.bulkPersistence) {
+    if (options.persistenceClient) throw new Error("runtime_transaction_bulk_persistence_unsupported");
     await persistRuntimeBulk(appPool, attempts, selected, input, activeRevision, nonFraudBindings, output.logical_events);
     return selected;
   }
@@ -1670,7 +1691,7 @@ export async function ingestRuntimeBatch(
     const delivery = deliveryByRecord.get(`${attempt.record.record_id}\u0000${attempt.record.delivery_id}`);
     const logical = logicalByRecord.get(attempt.record.record_id);
     const rejection = rejectionByRecord.get(`${attempt.record.record_id}\u0000${attempt.record.delivery_id}`);
-    await withTenant(appPool, attempt.server.tenant_id, async (client) => {
+    const persistAttempt = async (client: PoolClient): Promise<void> => {
       if (raw) {
         await persistRawWithClient(client, raw, policyDigestForRecord(input, raw.record_id));
         await client.query(
@@ -1687,8 +1708,11 @@ export async function ingestRuntimeBatch(
         await persistProjectionWithClient(client, logical, input, refundTargets);
       }
       if (rejection) await persistRejectionWithClient(client, rejection);
-    });
+    };
+    if (options.persistenceClient) await persistAttempt(options.persistenceClient);
+    else await withTenant(appPool, attempt.server.tenant_id, persistAttempt);
   }
+  if (options.persistenceClient) return selected;
   for (const attribution of selected.attributions) {
     const binding = nonFraudBindings.get(attribution.rule_bundle_id);
     if (!binding) throw new Error("non_fraud_rule_bundle_binding_missing");

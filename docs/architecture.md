@@ -146,7 +146,15 @@ exactly-once guarantee. Live projects remain an operator configuration.
 <!-- m1-component:google-play-product-verifier -->
 **Google Play product verifier.** Converts authenticated notifications into
 non-financial state signals and uses authoritative read-back before emitting
-settled money.
+settled money. A worker claims one due verification with a database-clock
+lease, performs the bounded provider reads without holding a database lock,
+and starts each read only after a short privacy-barrier recheck confirms the
+current claim and available source. It then completes only while that token
+and source remain current. Completion shares the tenant privacy barrier with deletion and
+keeps the result, renewal-order state, purchase binding, and queue removal in
+one database transaction; the settled purchase projection is produced while
+that barrier is held. Lease recovery can repeat provider reads and is not a
+provider-side exactly-once guarantee.
 
 <!-- m1-component:verified-commerce-lifecycle -->
 **Verified commerce lifecycle.** Tracks Google and Apple lifecycle revisions,

@@ -84,8 +84,10 @@ completion by claim token. AdServices also rechecks source availability under
 the tenant privacy barrier before persisting its protected response. Platform
 integrity verification now applies the same local ownership and privacy
 boundary to its own queue, including protected result purge during deletion
-and backup restore reapplication. Lease expiry can still repeat a provider
-operation. Google Play product verification, commerce read-back, and
+and backup restore reapplication. Google Play product verification now claims
+one due row, bounds provider waits, rejects stale completion, and prevents a
+deletion-raced result or settled purchase from becoming available again. Lease
+expiry can still repeat a provider operation. Commerce read-back and
 distributed provider quotas remain separate hardening work.
 
 1. preserve the rc.4 notes, SDK identities, SBOMs, bundle paths, tag, and
@@ -94,8 +96,8 @@ distributed provider quotas remain separate hardening work.
    egress, privacy, and durable-queue invariants while auditing other
    high-impact compatibility gaps;
 3. preserve bounded tenant concurrency and the Google conversion, AdServices,
-   and integrity claim-fencing slices while continuing other per-tenant queue
-   and provider-quota hardening;
+   integrity, and Google Play claim-fencing slices while continuing other
+   per-tenant queue and provider-quota hardening;
 4. preserve durable scheduled-metric checkpoints and exact replay, the
    tenant-scoped SDK admission/projection privacy barrier, and deletion-state
    rechecks while hardening the remaining provider-completion deletion races;

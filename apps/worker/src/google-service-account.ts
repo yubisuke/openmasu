@@ -15,6 +15,7 @@ export async function googleServiceAccountAccessToken(options: {
   tokenUrl?: string;
   fetch?: typeof fetch;
   now?: Date;
+  signal?: AbortSignal;
 }): Promise<string> {
   const credentials = object(Buffer.from(options.credentialsJson, "utf8"), "google_credentials");
   if (typeof credentials.client_email !== "string" || typeof credentials.private_key !== "string") {
@@ -37,7 +38,7 @@ export async function googleServiceAccountAccessToken(options: {
   const response = await (options.fetch ?? fetch)(tokenUrl, {
     method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
-    redirect: "error", signal: AbortSignal.timeout(10_000),
+    redirect: "error", signal: options.signal ?? AbortSignal.timeout(10_000),
   });
   if (response.status !== 200) throw new Error("google_oauth_unavailable");
   const body = object(Buffer.from(await response.arrayBuffer()), "google_oauth_response");

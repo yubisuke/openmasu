@@ -163,11 +163,13 @@ through `raw_records_current`.
   through raw projection, auxiliary enqueue, and terminal inbox state. Deletion
   therefore either snapshots the completed projection or commits first and
   makes the in-flight batch terminal as `privacy_suppressed`. Server-side
-  AdServices and platform-integrity completion reuse the same barrier after
-  their network calls: deletion either removes their pending work first or
-  snapshots and purges the committed protected response. Other provider
-  completion queues retain separate durable-claim and deletion-race hardening
-  work.
+  AdServices, platform-integrity, and Google Play purchase verification
+  completion reuse the same barrier after their network calls: deletion either
+  removes their pending work first or snapshots and purges the committed
+  protected response and derived projection. Google Play also rechecks the
+  current claim and source while starting each provider read, so a completed
+  deletion cannot be followed by another local order request. Commerce read-back retains
+  separate durable-claim and deletion-race hardening work.
 - An app- or tenant-scoped request deletes the data included in its durable
   recognition snapshot; it is not an app suspension or tenant deactivation.
   Later lawful processing is a new event with its own purpose and legal-basis
