@@ -72,7 +72,14 @@ limited local measure and is not claimed to erase every filesystem copy.
 The SDK uses installation-scoped storage rather than IDFA or fingerprinting.
 Its privacy manifest describes the shipped SDK behavior. AdServices and
 aggregate postback evidence remain distinct from first-party installation
-attribution. ATT and IDFA are not required by the default implementation.
+attribution. ATT and IDFA are not required by the default implementation. A
+server-side AdServices response becomes durable only while the worker still
+owns its database lease, the source record remains available, and the worker
+holds the same tenant privacy barrier used by deletion recognition. If deletion
+commits first, the late response is discarded; if completion commits first,
+deletion includes its protected response in the purge snapshot. Lease recovery
+may repeat the provider read, so this is a local privacy and concurrency
+boundary rather than an exactly-once claim about Apple.
 
 ### Deep links
 

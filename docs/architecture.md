@@ -100,7 +100,14 @@ Android/iOS vector set.
 <!-- m1-component:sdk-ios -->
 **iOS SDK.** Provides the corresponding queue, signed delivery, consent/reset
 lifecycle, AdServices and Apple conversion hooks, privacy manifest, and Unity
-bridge. It consumes the same queue identity vectors as Android.
+bridge. It consumes the same queue identity vectors as Android. The server-side
+AdServices worker claims one due lookup with a database-clock lease before
+network I/O. It holds no database or privacy lock while waiting for Apple, then
+uses the tenant privacy barrier to verify the current claim and available source
+record before writing the protected response, superseding attribution, result,
+and queue transition in one transaction. A stale or deletion-raced completion
+writes no derived result. Lease recovery can repeat a provider read and is not
+a provider-side exactly-once guarantee.
 
 <!-- m1-component:unity-bridge -->
 **Unity bridge.** Presents one C# surface backed by the Android and iOS native

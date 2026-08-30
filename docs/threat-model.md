@@ -85,9 +85,13 @@ still fabricate device-reported events.
 
 <!-- threat-component:sdk-ios -->
 **iOS SDK:** the same queue, credential, backup, reset, and fabricated-evidence
-risks plus privacy-manifest drift. Controls include native parity tests,
-Keychain-free installation identity, backup exclusion, privacy manifest, and
-source/built-product audits.
+risks plus privacy-manifest drift, duplicate AdServices reads, stale worker
+completion, and protected-response resurrection after deletion. Controls
+include native parity tests, Keychain-free installation identity, backup
+exclusion, privacy manifest, source/built-product audits, one database-clock
+claim per lookup, bounded provider waits, token-fenced completion, and the
+tenant privacy barrier. Lease expiry can repeat a provider read; provider-side
+exactly-once behavior remains unverified.
 
 <!-- threat-component:unity-bridge -->
 **Unity bridge:** native signature drift, duplicate SDK copies, wrong wrapper

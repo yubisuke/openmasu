@@ -1,6 +1,6 @@
 # Project Status
 
-Status date: 2026-08-30.
+Status date: 2026-08-31.
 
 The source and SDK are configured for candidate `v0.2.0-rc.4`.
 This document describes the current `main` source tree. The matching annotated
@@ -78,23 +78,25 @@ job order inside each tenant in one worker process. The default is four
 concurrent tenants, with a
 documented rollback setting of one and a bounded shutdown drain. Multiple
 worker replicas do not provide tenant-wide ordering. SDK and MAX inboxes use
-bounded FIFO slices. Google conversion delivery now claims one durable row
-immediately before provider I/O and fences completion by claim token; a crash
-after provider acceptance can still cause a same-transaction-ID resend after
-lease expiry. Durable claims for other provider queues and distributed provider
-quotas remain separate hardening work.
+bounded FIFO slices. Google conversion delivery and server-side AdServices
+lookup now claim one durable row immediately before provider I/O and fence
+completion by claim token. AdServices also rechecks source availability under
+the tenant privacy barrier before persisting its protected response. Lease
+expiry can still repeat a provider operation. Integrity, Google Play product
+verification, commerce read-back, and distributed provider quotas remain
+separate hardening work.
 
 1. preserve the rc.4 notes, SDK identities, SBOMs, bundle paths, tag, and
    evidence manifest as one immutable release record;
 2. preserve the server-event, operator-webhook, and bulk-export key, replay,
    egress, privacy, and durable-queue invariants while auditing other
    high-impact compatibility gaps;
-3. preserve bounded tenant concurrency and the Google conversion claim-fencing
-   slice while continuing other per-tenant queue-vector, claim, and provider-
-   quota hardening;
+3. preserve bounded tenant concurrency and the Google conversion and AdServices
+   claim-fencing slices while continuing other per-tenant queue-vector, claim,
+   and provider-quota hardening;
 4. preserve durable scheduled-metric checkpoints and exact replay, the
    tenant-scoped SDK admission/projection privacy barrier, and deletion-state
-   rechecks while hardening provider-completion deletion races;
+   rechecks while hardening the remaining provider-completion deletion races;
 5. ensure every durable runtime queue can independently make its tenant
    discoverable to the worker before a tenant RLS context exists;
 6. preserve the current synthetic/operator evidence distinction.
