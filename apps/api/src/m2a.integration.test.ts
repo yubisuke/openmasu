@@ -213,9 +213,14 @@ async function appendPrivacyFenceBatch(input: {
         integrity_binding: randomBytes(32).toString("base64url"),
       },
     }, input.receivedAt),
+    contract_version: "0.4.0",
+    record_id: `record:${uuidV7()}`,
+    delivery_id: `delivery:${uuidV7()}`,
     tenant_id: tenant,
     app_id: app,
     producer: "sdk-android",
+    schema_version: "0.4.0",
+    received_at: input.receivedAt,
   };
   const body = Buffer.from(JSON.stringify({ records: [event] }), "utf8");
   const ingestBatchId = await appendDurableBatch(pool, payloadStore, {
@@ -2659,9 +2664,14 @@ describe("M2a signed SDK ingestion", () => {
           },
           "2026-08-30T07:00:00.000Z",
         ),
+        contract_version: "0.4.0",
+        record_id: `record:${uuidV7()}`,
+        delivery_id: `delivery:${uuidV7()}`,
         tenant_id: before.tenantId,
         app_id: before.appId,
         producer: "sdk-android",
+        schema_version: "0.4.0",
+        received_at: "2026-08-30T07:00:00.000Z",
       }] }), "utf8");
       const afterBatchId = await appendDurableBatch(pool, payloadStore, {
         tenantId: before.tenantId,
