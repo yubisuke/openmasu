@@ -42,6 +42,14 @@ references or deployment-private HMAC digests when correlation is necessary.
 SHA-256 or canonical digests prove equality or provenance; they do not make an
 identifying source safe to publish.
 
+Completed privacy artifacts use HMAC-SHA-256 for every deletion scope. The
+installation namespace remains `tenant_id NUL app_id NUL installation_id` for
+credential compatibility. App and tenant requests use the distinct canonical
+namespace `openmasu:privacy-subject:v1 NUL tenant_id NUL app_id NUL scope NUL
+subject_ref`. All namespaces use the deployment-private installation digest
+key; a missing key fails the admin privacy route closed instead of falling back
+to an unhashed or unkeyed subject digest.
+
 ### Advertising identifiers
 
 OpenMasu does not collect advertising identifiers by default. A deployment may

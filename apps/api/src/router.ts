@@ -16,7 +16,12 @@ import { buildDashboardView } from "./dashboard/view.js";
 import { receiveMax, type MaxReceiverConfig } from "./max-receiver.js";
 import { OperationalMetrics, renderOperationalMetrics } from "./operational-metrics.js";
 import { boundedMethod, writeOperationalLog, type OperationalLogWriter } from "./observability.js";
-import { executePrivacyRequest, privacyResponseStatus, type PrivacyRequestBody } from "./privacy.js";
+import {
+  executePrivacyRequest,
+  privacyResponseStatus,
+  privacySubjectDigest,
+  type PrivacyRequestBody,
+} from "./privacy.js";
 import {
   differenceAudit,
   encodeDifferenceAudit,
@@ -101,6 +106,7 @@ export type RequestHandlerDependencies = {
   readonly dashboardLoginGlobalBucket?: TokenBucket;
   readonly sdk?: SdkRouteDependencies;
   readonly server?: ServerRouteDependencies;
+  readonly privacySubjectDigestKey?: string;
   readonly trackingDestinationAllowlist?: readonly string[];
   readonly operatorWebhooks?: Readonly<{
     destinationAllowlist: readonly string[];
@@ -1447,14 +1453,18 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
           try {
             const body = await jsonBody(request) as PrivacyRequestBody;
             const appIdentity = await requireRegisteredApp(dependencies.pool, identity, String(body.app_id ?? ""));
-            const deletionSubjectDigest = body.deletion_scope === "installation" && dependencies.server
-              ? createHmac("sha256", dependencies.server.installationDigestKey)
-                  .update(`${appIdentity.tenantId}\u0000${appIdentity.appId}\u0000${body.deletion_subject_ref}`, "utf8")
-                  .digest("hex")
-              : undefined;
+            const digestKey = dependencies.privacySubjectDigestKey
+              ?? dependencies.server?.installationDigestKey
+              ?? dependencies.sdk?.config.installationDigestKey;
+            if (!digestKey) {
+              const error = new Error("privacy_subject_digest_key_unavailable");
+              (error as { statusCode?: number }).statusCode = 503;
+              throw error;
+            }
+            const deletionSubjectDigest = privacySubjectDigest(digestKey, body);
             const result = await executePrivacyRequest(
               dependencies.pool,
-              { ...appIdentity, ...(deletionSubjectDigest ? { deletionSubjectDigest } : {}) },
+              { ...appIdentity, deletionSubjectDigest },
               body,
               dependencies.payloadStore,
             );

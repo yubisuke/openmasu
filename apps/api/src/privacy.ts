@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { sha256 } from "@openmasu/attribution-core";
 import {
   operatorWebhookReference,
@@ -29,12 +29,23 @@ export type PrivacyIdentity = {
   actorRef: string;
   requesterAuthRef: string;
   installationKeyId?: string;
-  deletionSubjectDigest?: string;
+  deletionSubjectDigest: string;
 };
 
-type AppPrivacyIdentity = AppAdminIdentity & { deletionSubjectDigest?: string };
+type AppPrivacyIdentity = AppAdminIdentity & { deletionSubjectDigest: string };
 
 function currentTimestamp(now?: Date): string { return (now ?? new Date()).toISOString(); }
+
+export function privacySubjectDigest(
+  key: string,
+  body: Pick<PrivacyRequestBody, "tenant_id" | "app_id" | "deletion_scope" | "deletion_subject_ref">,
+): string {
+  if (!key) throw new Error("privacy_subject_digest_key_required");
+  const namespace = body.deletion_scope === "installation"
+    ? `${body.tenant_id}\u0000${body.app_id}\u0000${body.deletion_subject_ref}`
+    : `openmasu:privacy-subject:v1\u0000${body.tenant_id}\u0000${body.app_id}\u0000${body.deletion_scope}\u0000${body.deletion_subject_ref}`;
+  return createHmac("sha256", key).update(namespace, "utf8").digest("hex");
+}
 
 async function affectedRecordIds(client: any, body: PrivacyRequestBody): Promise<string[]> {
   if (body.deletion_scope !== "installation") {
@@ -124,9 +135,8 @@ export async function executePrivacyRequest(
   }
   const completedAt = currentTimestamp(now);
   const requestId = `privacy:${uuidV7(now?.valueOf())}`;
-  const subjectDigest = "deletionSubjectDigest" in identity && identity.deletionSubjectDigest
-    ? identity.deletionSubjectDigest
-    : sha256([body.tenant_id, body.app_id, body.deletion_scope, body.deletion_subject_ref]);
+  const subjectDigest = identity.deletionSubjectDigest;
+  if (!/^[a-f0-9]{64}$/.test(subjectDigest)) throw new Error("privacy_subject_digest_invalid");
   const prepared = await withTenant(pool, body.tenant_id, async (client) => {
     if (body.deletion_scope === "installation") {
       await client.query(

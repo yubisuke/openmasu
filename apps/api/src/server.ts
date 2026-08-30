@@ -144,6 +144,7 @@ const server = createServer(createRequestHandler({
     : undefined,
   operationalMetrics,
   operationalLogWriter,
+  privacySubjectDigestKey: secrets.require("OPENMASU_INSTALLATION_DIGEST_KEY"),
   sdk: {
     pool,
     payloadStore,

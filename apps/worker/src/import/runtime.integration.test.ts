@@ -27,6 +27,7 @@ import { expectedMaxTokenAll, receiveMax, type MaxReceiverConfig } from "../../.
 import { processMaxInbox } from "./max-worker.js";
 import { ensureAdminKeys } from "../../../api/src/admin-auth.js";
 import { createRequestHandler } from "../../../api/src/router.js";
+import { privacySubjectDigest } from "../../../api/src/privacy.js";
 import { TokenBucket } from "../../../api/src/rate-limit.js";
 
 const appPool = createAppPool();
@@ -969,6 +970,7 @@ describe("admin privacy integration", () => {
   it("A9 authenticates, deletes through append-only artifacts, supersedes D0, and rejects the device path", async () => {
     const adminKey = "synthetic-admin-key-00000000000000000000000000000001";
     const previousKey = "synthetic-admin-key-previous-000000000000000000000001";
+    const privacyDigestKey = "synthetic-private-digest-key";
     await ensureAdminKeys(appPool, { tenantId: "tenant-local", appId: "app-local" }, [adminKey, previousKey], "2026-08-19T13:00:00.000Z");
     const metric = {
       metric_run_id: "metric:privacy-baseline", metric_name: "d0_install_to_24h_ad_revenue_usd",
@@ -1007,6 +1009,7 @@ describe("admin privacy integration", () => {
       pool: appPool, readerPool: appPool, payloadStore, maxConfig: config,
       publicBaseUrl: "http://localhost:8080", redirectorBaseUrl: "http://localhost:8090",
       dashboard: { enabled: false, publicBaseUrl: "http://localhost:8080", tenantId: config.tenantId, sessionTtlSeconds: 43200 },
+      privacySubjectDigestKey: privacyDigestKey,
     }));
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const address = server.address();
@@ -1021,6 +1024,15 @@ describe("admin privacy integration", () => {
       assert.deepEqual(await device.json(), { error: "on_device_path_not_implemented" });
       const success = await fetch(endpoint, { method: "POST", headers: { authorization: `Bearer ${previousKey}`, "content-type": "application/json" }, body: JSON.stringify({ ...base, requested_via: "tenant_admin_api" }) });
       assert.equal(success.status, 201);
+      const artifact = await success.json() as Record<string, unknown>;
+      assert.equal(artifact.deletion_subject_ref, undefined);
+      assert.equal(artifact.deletion_subject_digest, privacySubjectDigest(privacyDigestKey, {
+        ...base,
+        deletion_scope: "app",
+      }));
+      assert.notEqual(artifact.deletion_subject_digest, sha256([
+        base.tenant_id, base.app_id, base.deletion_scope, base.deletion_subject_ref,
+      ]));
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }
