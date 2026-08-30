@@ -206,7 +206,6 @@ const appEntries: Record<string, string> = {
   OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS: workerShutdownTimeout,
   OPENMASU_SDK_INBOX_BATCH_LIMIT: sdkInboxBatchLimit,
   OPENMASU_MAX_INBOX_BATCH_LIMIT: maxInboxBatchLimit,
-  OPENMASU_SYNTHETIC_MODE: "0",
   OPENMASU_MAX_TENANT_ID: defaultTenantId,
   OPENMASU_MAX_APP_ID: defaultAppId,
   OPENMASU_MAX_TOKEN_MODE: "all_with_event_fallback",
@@ -273,11 +272,7 @@ const appEntries: Record<string, string> = {
   OPENMASU_REDIRECTOR_LINK_HOST_MODE: "host_header",
   OPENMASU_FRAUD_ENABLED: "1",
   OPENMASU_FRAUD_ACTIONS_ENABLED: "0",
-  OPENMASU_FRAUD_AGGREGATE_HOUR_UTC: "2",
   OPENMASU_INTEGRITY_PROVIDER: "off",
-  OPENMASU_INTEGRITY_MODE: "observe",
-  OPENMASU_INTEGRITY_RATE_RPS: "10",
-  OPENMASU_INTEGRITY_RATE_BURST: "50",
   OPENMASU_PLAY_INTEGRITY_ENDPOINT: "",
   OPENMASU_APP_ATTEST_ENDPOINT: "",
   OPENMASU_GOOGLE_PLAY_PRODUCT_VERIFICATION: "off",
@@ -326,7 +321,6 @@ const appEntries: Record<string, string> = {
 const seedEntries: Record<string, string> = {
   OPENMASU_APP_DATABASE_URL: appDatabaseUrl,
   OPENMASU_SEED_DATABASE_URL: seedDatabaseUrl,
-  OPENMASU_SYNTHETIC_MODE: "1",
 };
 const repositoryEntries: Record<string, string> = {
   OPENMASU_POSTGRES_BOOTSTRAP_PASSWORD: postgresPassword,
