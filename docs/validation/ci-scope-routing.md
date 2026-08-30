@@ -29,7 +29,8 @@ workflow at the candidate commit, never from a path-reduced pull request.
 1. Create a pull request containing only a Markdown change under `docs/`.
 2. Confirm that all six required jobs are present.
 3. Confirm that the two `validate` jobs run the full contract checks, including
-   the architecture-to-threat-model component coverage gate.
+   the architecture-to-threat-model component coverage gate and the required
+   risk/control body for every declared component.
 4. Confirm that the remaining jobs report their named `No ...-sensitive
    changes` step and complete successfully without dependency installation,
    native builds, emulators, simulators, database migrations, or containers.
