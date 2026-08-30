@@ -65,8 +65,10 @@ for (const entry of symbols.required_reason_apis) {
 
 const originalSources = join(root, "sdk", "ios", "Sources");
 const vendoredSources = join(root, "sdk", "unity", "com.openmasu.sdk", "Runtime", "Plugins", "iOS", "Sources");
-const originalFiles = filesUnder(originalSources).map((path) => relative(originalSources, path).replaceAll("\\", "/"));
-const vendoredFiles = filesUnder(vendoredSources).map((path) => relative(vendoredSources, path).replaceAll("\\", "/"));
+const originalFiles = filesUnder(originalSources, (path) => !path.endsWith(".meta"))
+  .map((path) => relative(originalSources, path).replaceAll("\\", "/"));
+const vendoredFiles = filesUnder(vendoredSources, (path) => !path.endsWith(".meta"))
+  .map((path) => relative(vendoredSources, path).replaceAll("\\", "/"));
 check(JSON.stringify(originalFiles) === JSON.stringify(vendoredFiles), "Unity vendored Swift source inventory differs from sdk/ios");
 for (const name of originalFiles) {
   const original = readFileSync(join(originalSources, name));
