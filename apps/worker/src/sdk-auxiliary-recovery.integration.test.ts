@@ -512,6 +512,34 @@ describe("SDK auxiliary queue recovery", () => {
   it("fails closed on an unprojected legacy consent control without reopening its encrypted body", async () => {
     const input = scope("ledger-consent-upgrade", "sdk-android");
     const installationKeyId = `installation-key-ledger-consent-${run}`;
+    const sdkKeyId = `sdk-key-ledger-consent-${run}`;
+    const migrationPool = createMigrationPool();
+    try {
+      await migrationPool.query(
+        `INSERT INTO control.apps (tenant_id, app_id, created_at)
+         VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+        [input.tenantId, input.appId, input.receivedAt],
+      );
+      await migrationPool.query(
+        `INSERT INTO control.sdk_keys (
+           sdk_key_id, tenant_id, app_id, secret_ref, created_at, artifact
+         ) VALUES ($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT DO NOTHING`,
+        [sdkKeyId, input.tenantId, input.appId, `synthetic:${sdkKeyId}`, input.receivedAt,
+          JSON.stringify({ sdk_key_id: sdkKeyId, synthetic: true })],
+      );
+      await migrationPool.query(
+        `INSERT INTO control.installation_credentials (
+           installation_key_id, tenant_id, app_id, installation_id_digest,
+           sdk_key_id, secret_ref, created_at, artifact
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb) ON CONFLICT DO NOTHING`,
+        [installationKeyId, input.tenantId, input.appId,
+          createHash("sha256").update(`synthetic:${installationKeyId}`).digest("hex"),
+          sdkKeyId, `synthetic:${installationKeyId}`, input.receivedAt,
+          JSON.stringify({ installation_key_id: installationKeyId, synthetic: true })],
+      );
+    } finally {
+      await migrationPool.end();
+    }
     const consent = record(input, "ledger-consent-upgrade", "consent_changed", {
       consent_state: "withdrawn",
       effective_at: input.receivedAt,
@@ -519,18 +547,18 @@ describe("SDK auxiliary queue recovery", () => {
     });
     const consentBatchId = await append(input, consent, installationKeyId);
     assert.equal(await processSdkInbox(pool, payloadStore, input.tenantId), 1);
-    const migrationPool = createMigrationPool();
+    const cleanupPool = createMigrationPool();
     try {
-      await migrationPool.query(
+      await cleanupPool.query(
         "DELETE FROM control.installation_withdrawal_backfill_states WHERE tenant_id=$1 AND app_id=$2",
         [input.tenantId, input.appId],
       );
-      await migrationPool.query(
+      await cleanupPool.query(
         "DELETE FROM control.installation_withdrawals WHERE tenant_id=$1 AND app_id=$2",
         [input.tenantId, input.appId],
       );
     } finally {
-      await migrationPool.end();
+      await cleanupPool.end();
     }
     const consentBodyRef = await withTenant(pool, input.tenantId, async (client) => (await client.query<{
       body_ref: string;

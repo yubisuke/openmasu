@@ -1741,7 +1741,7 @@ export function evaluate(
     if (!legacy && attempt.record.payload.financial_status !== "settled") continue;
     const correctsRecordId = legacy
       ? attempt.record.payload.correction_target_record_id
-      : resolveRefundTarget(attempt, acceptedUnique)?.record.record_id;
+      : resolveRefundTarget(attempt, acceptedCandidates)?.record.record_id;
     if (typeof correctsRecordId !== "string") continue;
     corrections.push({
       contract_version: CONTRACT_VERSION,

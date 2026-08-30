@@ -1557,7 +1557,11 @@ export async function ingestRuntimeBatch(
   // payload access merely to process a new delivery.
   const currentAttempts = sortCandidateAttempts(await resolveDeepLinkAttempts(appPool, validAttempts));
   const providerAttempts = sortCandidateAttempts([...boundHistory, ...currentAttempts]);
-  const input = runtimeInput(currentAttempts);
+  // Non-SDK importers still supply fully decoded historical attempts. Keep
+  // those in the evaluator input until their own ledger-backed projection is
+  // introduced; SDK history is explicitly marked and remains provider-only.
+  const decodedHistory = boundHistory.filter((attempt) => attempt.history_state === undefined);
+  const input = runtimeInput([...decodedHistory, ...currentAttempts]);
   const output = evaluate(input, () => new IndexedCandidateProvider(providerAttempts));
   const recordIds = new Set(validAttempts.map((attempt) => attempt.record.record_id));
   const deliveryIds = new Set(validAttempts.map((attempt) => attempt.record.delivery_id));
