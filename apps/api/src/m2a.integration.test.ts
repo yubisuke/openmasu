@@ -30,7 +30,7 @@ import {
 import { processCommerceReadbacks } from "../../worker/src/commerce-readback-worker.js";
 import { createRequestHandler } from "./router.js";
 import { recordCommerceNotification } from "./commerce-notifications.js";
-import { executePrivacyRequest } from "./privacy.js";
+import { executePrivacyRequest, privacySubjectDigest } from "./privacy.js";
 import { KeyedTokenBucket } from "./rate-limit.js";
 import { parseMetricQuery } from "./report-query.js";
 import { encodeMetricReport, metricReport } from "./reporting.js";
@@ -159,6 +159,193 @@ async function count(table: string): Promise<number> {
     const result = await client.query<{ count: number }>(`SELECT count(*)::int AS count FROM ledger.${table} WHERE tenant_id=$1 AND app_id=$2`, [tenantId, appId]);
     return result.rows[0].count;
   });
+}
+
+type PrivacyFenceScope = "installation" | "app" | "tenant";
+
+type PrivacyFenceBatch = {
+  readonly tenantId: string;
+  readonly appId: string;
+  readonly eventId: string;
+  readonly installationId: string;
+  readonly ingestBatchId: string;
+  readonly bodyRef: string;
+  readonly subjectDigest?: string;
+};
+
+function privacyRequestFor(
+  scope: PrivacyFenceScope,
+  tenant: string,
+  app: string,
+  installation: string,
+) {
+  return {
+    tenant_id: tenant,
+    app_id: app,
+    requested_via: scope === "installation" ? "on_device_sdk" as const : "tenant_admin_api" as const,
+    deletion_scope: scope,
+    deletion_subject_ref: scope === "installation" ? installation : scope === "app" ? app : tenant,
+  };
+}
+
+async function appendPrivacyFenceBatch(input: {
+  readonly scope: PrivacyFenceScope;
+  readonly label: string;
+  readonly receivedAt: string;
+}): Promise<PrivacyFenceBatch> {
+  const tenant = `tenant-privacy-${input.label}-${run}`;
+  const app = `app-privacy-${input.label}-${run}`;
+  const installation = `installation:privacy-${input.label}-${run}`;
+  const eventId = `event:privacy-${input.label}:${run}`;
+  const request = privacyRequestFor(input.scope, tenant, app, installation);
+  const subjectDigest = input.scope === "installation"
+    ? privacySubjectDigest(digestKey, request)
+    : undefined;
+  const event = sourceEvent(eventId, "install", {
+    installation_id: installation,
+    install_type: "first_install",
+    referrer_status: "unavailable",
+    extensions: {
+      integrity_token_protected: `synthetic-privacy-token-${input.label}-${run}`,
+      integrity_provider: "play_integrity",
+      integrity_binding_mode: "challenge",
+      integrity_binding: randomBytes(32).toString("base64url"),
+    },
+  }, input.receivedAt);
+  const body = Buffer.from(JSON.stringify({ records: [event] }), "utf8");
+  const ingestBatchId = await appendDurableBatch(pool, payloadStore, {
+    tenantId: tenant,
+    appId: app,
+    producer: "sdk-android",
+    body,
+    eventCount: 1,
+    receivedAt: input.receivedAt,
+    subjectDigest,
+  });
+  const bodyRef = await withTenant(pool, tenant, async (client) => (await client.query<{ body_ref: string }>(
+    `SELECT body_ref FROM ledger.ingest_batches
+      WHERE tenant_id=$1 AND app_id=$2 AND ingest_batch_id=$3`,
+    [tenant, app, ingestBatchId],
+  )).rows[0].body_ref);
+  return {
+    tenantId: tenant,
+    appId: app,
+    eventId,
+    installationId: installation,
+    ingestBatchId,
+    bodyRef,
+    subjectDigest,
+  };
+}
+
+async function deletePrivacyFenceScope(
+  scope: PrivacyFenceScope,
+  batch: PrivacyFenceBatch,
+  at: string,
+) {
+  const body = privacyRequestFor(scope, batch.tenantId, batch.appId, batch.installationId);
+  const deletionSubjectDigest = privacySubjectDigest(digestKey, body);
+  const identity = scope === "installation"
+    ? {
+        tenantId: batch.tenantId,
+        appId: batch.appId,
+        actorType: "sdk_installation" as const,
+        actorRef: `sdk_installation:synthetic-${scope}-${run}`,
+        requesterAuthRef: `sdk_auth:synthetic-${scope}-${run}`,
+        deletionSubjectDigest,
+      }
+    : {
+        keyId: `key:synthetic-${scope}-${run}`,
+        tenantId: batch.tenantId,
+        appId: batch.appId,
+        role: "admin" as const,
+        deletionSubjectDigest,
+      };
+  return executePrivacyRequest(pool, identity, body, payloadStore, new Date(at));
+}
+
+async function privacyFenceEvidence(batch: PrivacyFenceBatch) {
+  return withTenant(pool, batch.tenantId, async (client) => ({
+    batch: (await client.query<{ status: string; reason_code: string | null }>(
+      `SELECT status,reason_code FROM ledger.ingest_batches_current
+        WHERE tenant_id=$1 AND app_id=$2 AND ingest_batch_id=$3`,
+      [batch.tenantId, batch.appId, batch.ingestBatchId],
+    )).rows[0],
+    rawRecords: Number((await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM ledger.raw_records
+        WHERE tenant_id=$1 AND app_id=$2 AND event_id=$3`,
+      [batch.tenantId, batch.appId, batch.eventId],
+    )).rows[0].count),
+    deliveries: Number((await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM ledger.event_deliveries AS delivery
+        JOIN ledger.raw_records AS raw USING (tenant_id,app_id,record_id)
+       WHERE raw.tenant_id=$1 AND raw.app_id=$2 AND raw.event_id=$3`,
+      [batch.tenantId, batch.appId, batch.eventId],
+    )).rows[0].count),
+    logicalEvents: Number((await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM ledger.logical_events
+        WHERE tenant_id=$1 AND app_id=$2 AND event_id=$3`,
+      [batch.tenantId, batch.appId, batch.eventId],
+    )).rows[0].count),
+    installFacts: Number((await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM ledger.install_facts AS install
+        JOIN ledger.logical_events AS logical USING (tenant_id,app_id,logical_event_id)
+       WHERE logical.tenant_id=$1 AND logical.app_id=$2 AND logical.event_id=$3`,
+      [batch.tenantId, batch.appId, batch.eventId],
+    )).rows[0].count),
+    availablePayloadStates: Number((await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM ledger.raw_payload_states AS state
+        JOIN ledger.raw_records AS raw USING (tenant_id,app_id,record_id)
+       WHERE raw.tenant_id=$1 AND raw.app_id=$2 AND raw.event_id=$3
+         AND state.lifecycle_status='available'`,
+      [batch.tenantId, batch.appId, batch.eventId],
+    )).rows[0].count),
+    batchMembers: Number((await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM ledger.ingest_batch_records
+        WHERE tenant_id=$1 AND app_id=$2 AND ingest_batch_id=$3`,
+      [batch.tenantId, batch.appId, batch.ingestBatchId],
+    )).rows[0].count),
+    integrityQueue: Number((await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM ephemeral.integrity_verifications
+        WHERE tenant_id=$1 AND app_id=$2`,
+      [batch.tenantId, batch.appId],
+    )).rows[0].count),
+    completedDeletions: Number((await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM control.privacy_deletion_jobs
+        WHERE tenant_id=$1 AND status='completed'`,
+      [batch.tenantId],
+    )).rows[0].count),
+  }));
+}
+
+async function waitForBlockedAdvisoryLock(tenant: string): Promise<void> {
+  const lockKey = `openmasu:privacy-tenant:${tenant}`;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const waiting = await withTenant(pool, tenant, async (client) => Number((await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM pg_locks
+        WHERE locktype='advisory' AND NOT granted AND objsubid=1
+          AND classid=((hashtextextended($1,0) >> 32) & 4294967295)::oid
+          AND objid=(hashtextextended($1,0) & 4294967295)::oid`,
+      [lockKey],
+    )).rows[0].count));
+    if (waiting > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("privacy deletion did not wait for the projection fence");
+}
+
+async function within<T>(promise: Promise<T>, label: string, timeoutMs = 5_000): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 function workerProcess(delayMs: number) {
@@ -2301,5 +2488,209 @@ describe("M2a signed SDK ingestion", () => {
       "SELECT count(*)::text AS count FROM ledger.ingest_batches WHERE body_ref=$1",
       [racedReference],
     )).rows[0].count)), 0, "the post-recognition batch must never enter the durable inbox");
+  });
+
+  it("privacy projection fence suppresses deletion-first SDK batches for installation, app, and tenant scopes", async () => {
+    for (const scope of ["installation", "app", "tenant"] as const) {
+      const batch = await appendPrivacyFenceBatch({
+        scope,
+        label: `${scope}-deletion-first`,
+        receivedAt: "2026-08-30T01:00:00.000Z",
+      });
+      let readStarted!: () => void;
+      let releaseRead!: () => void;
+      const started = new Promise<void>((resolve) => { readStarted = resolve; });
+      const released = new Promise<void>((resolve) => { releaseRead = resolve; });
+      const blockingStore: PayloadStore = {
+        write: (payloadScope, plaintext) => payloadStore.write(payloadScope, plaintext),
+        purge: (reference) => payloadStore.purge(reference),
+        scanFor: (value) => payloadStore.scanFor(value),
+        read: async (reference) => {
+          const plaintext = await payloadStore.read(reference);
+          if (reference === batch.bodyRef) {
+            readStarted();
+            await released;
+          }
+          return plaintext;
+        },
+      };
+      const processing = processSdkInbox(pool, blockingStore, batch.tenantId);
+      try {
+        await within(started, `${scope} deletion-first read barrier`);
+        const deletion = await deletePrivacyFenceScope(
+          scope,
+          batch,
+          "2026-08-30T02:00:00.000Z",
+        );
+        assert.equal(deletion.status, "completed");
+      } finally {
+        releaseRead();
+        await within(Promise.allSettled([processing]), `${scope} deletion-first cleanup`);
+      }
+      assert.equal(await within(processing, `${scope} deletion-first processing`), 1);
+      assert.equal(await processSdkInbox(pool, payloadStore, batch.tenantId), 0,
+        `${scope} suppression must be terminal and idempotent`);
+      await assert.rejects(payloadStore.read(batch.bodyRef));
+      assert.deepEqual(await privacyFenceEvidence(batch), {
+        batch: { status: "processed", reason_code: "privacy_suppressed" },
+        rawRecords: 0,
+        deliveries: 0,
+        logicalEvents: 0,
+        installFacts: 0,
+        availablePayloadStates: 0,
+        batchMembers: 0,
+        integrityQueue: 0,
+        completedDeletions: 1,
+      });
+    }
+  });
+
+  it("privacy projection fence lets projection-first batches finish before deletion purges them for installation, app, and tenant scopes", async () => {
+    for (const scope of ["installation", "app", "tenant"] as const) {
+      const batch = await appendPrivacyFenceBatch({
+        scope,
+        label: `${scope}-projection-first`,
+        receivedAt: "2026-08-30T03:00:00.000Z",
+      });
+      let queueStarted!: () => void;
+      let releaseQueue!: () => void;
+      const started = new Promise<void>((resolve) => { queueStarted = resolve; });
+      const released = new Promise<void>((resolve) => { releaseQueue = resolve; });
+      const processing = processSdkInbox(pool, payloadStore, batch.tenantId, {
+        auxiliaryQueues: {
+          integrity: async (queuePool, input) => {
+            queueStarted();
+            await released;
+            await queueIntegrityVerification(queuePool, input);
+          },
+        },
+      });
+      let deletion: ReturnType<typeof deletePrivacyFenceScope> | undefined;
+      try {
+        await within(started, `${scope} projection-first queue barrier`);
+        assert.equal((await privacyFenceEvidence(batch)).rawRecords, 1,
+          `${scope} projection must commit before its auxiliary queue callback`);
+
+        const lockClient = await pool.connect();
+        try {
+          const acquired = (await lockClient.query<{ acquired: boolean }>(
+            "SELECT pg_try_advisory_lock(hashtextextended($1,0)) AS acquired",
+            [`openmasu:privacy-tenant:${batch.tenantId}`],
+          )).rows[0].acquired;
+          if (acquired) {
+            await lockClient.query("SELECT pg_advisory_unlock(hashtextextended($1,0))", [
+              `openmasu:privacy-tenant:${batch.tenantId}`,
+            ]);
+          }
+          assert.equal(acquired, false, `${scope} projection must hold the shared tenant fence`);
+        } finally {
+          lockClient.release();
+        }
+
+        let deletionSettled = false;
+        deletion = deletePrivacyFenceScope(
+          scope,
+          batch,
+          "2026-08-30T04:00:00.000Z",
+        ).finally(() => { deletionSettled = true; });
+        await within(waitForBlockedAdvisoryLock(batch.tenantId), `${scope} deletion lock wait`);
+        assert.equal(deletionSettled, false, `${scope} deletion must wait for projection completion`);
+      } finally {
+        releaseQueue();
+        await within(
+          Promise.allSettled([processing, ...(deletion ? [deletion] : [])]),
+          `${scope} projection-first cleanup`,
+        );
+      }
+      assert.equal(await within(processing, `${scope} projection-first processing`), 1);
+      assert.ok(deletion);
+      assert.equal((await within(deletion, `${scope} projection-first deletion`)).status, "completed");
+      await assert.rejects(payloadStore.read(batch.bodyRef));
+      const evidence = await privacyFenceEvidence(batch);
+      assert.deepEqual(evidence.batch, { status: "processed", reason_code: null });
+      assert.equal(evidence.rawRecords, 1);
+      assert.equal(evidence.deliveries, 1);
+      assert.equal(evidence.logicalEvents, 1);
+      assert.equal(evidence.installFacts, 1);
+      assert.equal(evidence.availablePayloadStates, 0);
+      assert.equal(evidence.batchMembers, 1);
+      assert.equal(evidence.integrityQueue, 0);
+      assert.equal(evidence.completedDeletions, 1);
+    }
+  });
+
+  it("app and tenant deletion boundaries admit only post-recognition SDK batches", async () => {
+    for (const scope of ["app", "tenant"] as const) {
+      const label = `${scope}-recognition-boundary`;
+      const before = await appendPrivacyFenceBatch({
+        scope,
+        label,
+        receivedAt: "2026-08-30T05:00:00.000Z",
+      });
+      const decodedBeforeDeletion = await payloadStore.read(before.bodyRef);
+      assert.equal((await deletePrivacyFenceScope(
+        scope,
+        before,
+        "2026-08-30T06:00:00.000Z",
+      )).status, "completed");
+      const decodedStore: PayloadStore = {
+        write: (payloadScope, plaintext) => payloadStore.write(payloadScope, plaintext),
+        purge: (reference) => payloadStore.purge(reference),
+        scanFor: (value) => payloadStore.scanFor(value),
+        read: (reference) => reference === before.bodyRef
+          ? Promise.resolve(decodedBeforeDeletion)
+          : payloadStore.read(reference),
+      };
+      assert.equal(await processSdkInbox(pool, decodedStore, before.tenantId), 1);
+
+      const afterEventId = `event:privacy-${label}-after:${run}`;
+      const afterBody = Buffer.from(JSON.stringify({ records: [sourceEvent(
+        afterEventId,
+        "session_start",
+        {
+          installation_id: before.installationId,
+          session_id: `session:privacy-${label}-after:${run}`,
+        },
+        "2026-08-30T07:00:00.000Z",
+      )] }), "utf8");
+      const afterBatchId = await appendDurableBatch(pool, payloadStore, {
+        tenantId: before.tenantId,
+        appId: before.appId,
+        producer: "sdk-android",
+        body: afterBody,
+        eventCount: 1,
+        receivedAt: "2026-08-30T07:00:00.000Z",
+      });
+      const afterBodyRef = await withTenant(pool, before.tenantId, async (client) =>
+        (await client.query<{ body_ref: string }>(
+          `SELECT body_ref FROM ledger.ingest_batches
+            WHERE tenant_id=$1 AND app_id=$2 AND ingest_batch_id=$3`,
+          [before.tenantId, before.appId, afterBatchId],
+        )).rows[0].body_ref);
+      assert.equal(await processSdkInbox(pool, payloadStore, before.tenantId), 1);
+
+      const beforeEvidence = await privacyFenceEvidence(before);
+      assert.deepEqual(beforeEvidence.batch, {
+        status: "processed",
+        reason_code: "privacy_suppressed",
+      });
+      assert.equal(beforeEvidence.rawRecords, 0);
+      assert.equal(beforeEvidence.deliveries, 0);
+      assert.equal(beforeEvidence.logicalEvents, 0);
+      assert.equal(beforeEvidence.installFacts, 0);
+      const afterEvidence = await privacyFenceEvidence({
+        ...before,
+        eventId: afterEventId,
+        ingestBatchId: afterBatchId,
+        bodyRef: afterBodyRef,
+      });
+      assert.deepEqual(afterEvidence.batch, { status: "processed", reason_code: null });
+      assert.equal(afterEvidence.rawRecords, 1);
+      assert.equal(afterEvidence.deliveries, 1);
+      assert.equal(afterEvidence.logicalEvents, 1);
+      assert.equal(afterEvidence.installFacts, 0);
+      assert.equal(afterEvidence.availablePayloadStates, 1);
+      assert.equal(afterEvidence.batchMembers, 1);
+    }
   });
 });

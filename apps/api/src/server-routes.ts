@@ -274,15 +274,16 @@ export async function handleServerBatch(
     });
   } catch (error) {
     const reason = error instanceof Error ? error.message : "server_ingest_append_failed";
-    if (reason !== "privacy_subject_inactive") throw error;
+    if (!["privacy_subject_inactive", "privacy_scope_inactive"].includes(reason)) throw error;
+    const auditReason = reason === "privacy_scope_inactive" ? reason : "subject_withdrawn";
     await recordServerAudit(dependencies, identity, {
       action: "server_ingest_rejected",
       targetScope: "record",
       targetRef: `request-digest:${identity.requestDigest.slice(0, 32)}`,
       outcome: "failed",
-      reasonCode: "subject_withdrawn",
+      reasonCode: auditReason,
     });
-    return writeJson(response, 403, { error: "subject_withdrawn" });
+    return writeJson(response, 403, { error: auditReason });
   }
   await recordServerAudit(dependencies, identity, {
     action: "server_ingest_batch_append",

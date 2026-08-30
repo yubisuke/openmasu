@@ -285,7 +285,9 @@ export async function handleSdkBatch(
     });
   } catch (error) {
     const reason = error instanceof Error ? error.message : "ingest_batch_append_failed";
-    if (!["installation_credential_inactive", "privacy_subject_inactive"].includes(reason)) throw error;
+    if (!["installation_credential_inactive", "privacy_subject_inactive", "privacy_scope_inactive"].includes(reason)) {
+      throw error;
+    }
     await recordSdkAudit(dependencies.pool, dependencies.config, {
       actorType: "sdk_installation", actorRef: `sdk_installation:${identity.installationKeyId}`,
       action: "ingest_batch_append", targetScope: "record",

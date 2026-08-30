@@ -217,7 +217,8 @@ export function createRedirectorHandler(dependencies: RedirectorDependencies): R
           sourceRateClass,
           ...(clientClass ? { clientClass } : {}),
         });
-        await persistClick(dependencies, result);
+        try { await persistClick(dependencies, result); }
+        catch { return send(response, fallback); }
         return send(response, result);
       }
       if (link.destination_kind === "play_store" && !/Android/i.test(request.headers["user-agent"] ?? "")) {

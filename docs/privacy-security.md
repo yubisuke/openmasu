@@ -149,10 +149,15 @@ through `raw_records_current`.
   together. Transport, authorization, corruption, and decryption failures are
   not treated as proof of erasure. A crash after physical purge but before
   queue acknowledgement is safe to retry because purge is idempotent.
-- Installation deletion and subject-bearing SDK or server batch admission use
-  the same subject-scoped database lock. Admission rechecks the durable
-  credential and deletion state while holding that lock, so a batch verified
-  before recognition cannot enter the inbox after recognition commits.
+- SDK/server batch admission and SDK post-decode projection use one
+  tenant-scoped database barrier shared with deletion recognition. Admission
+  rechecks credentials and durable deletion state before inbox insertion. The
+  worker rechecks again after decrypting a pending body and holds the barrier
+  through raw projection, auxiliary enqueue, and terminal inbox state. Deletion
+  therefore either snapshots the completed projection or commits first and
+  makes the in-flight batch terminal as `privacy_suppressed`. This barrier does
+  not claim to cover later provider-completion responses, which have separate
+  durable-claim and deletion-race hardening work.
 - An app- or tenant-scoped request deletes the data included in its durable
   recognition snapshot; it is not an app suspension or tenant deactivation.
   Later lawful processing is a new event with its own purpose and legal-basis

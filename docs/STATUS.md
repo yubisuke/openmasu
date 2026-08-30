@@ -92,8 +92,9 @@ quotas remain separate hardening work.
 3. preserve bounded tenant concurrency and the Google conversion claim-fencing
    slice while continuing other per-tenant queue-vector, claim, and provider-
    quota hardening;
-4. preserve durable scheduled-metric checkpoints and exact replay while
-   hardening privacy deletion atomicity;
+4. preserve durable scheduled-metric checkpoints and exact replay, the
+   tenant-scoped SDK admission/projection privacy barrier, and deletion-state
+   rechecks while hardening provider-completion deletion races;
 5. ensure every durable runtime queue can independently make its tenant
    discoverable to the worker before a tenant RLS context exists;
 6. preserve the current synthetic/operator evidence distinction.
