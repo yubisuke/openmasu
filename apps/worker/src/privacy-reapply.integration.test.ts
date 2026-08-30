@@ -101,6 +101,8 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
   let payloadReference: string;
   let integrityEvidenceReference: string;
   let integrityPendingReference: string;
+  let googlePlayEvidenceReference: string;
+  let googlePlayPendingReference: string;
   let privacyRequestId: string;
 
   before(async () => {
@@ -127,6 +129,14 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
     integrityPendingReference = await payloadStore.write(
       { tenantId: "tenant-a", appId: "app-a", objectId: "synthetic-restored-integrity-token" },
       Buffer.from("synthetic integrity pending token only", "utf8"),
+    );
+    googlePlayEvidenceReference = await payloadStore.write(
+      { tenantId: "tenant-a", appId: "app-a", objectId: "synthetic-restored-google-play-result" },
+      Buffer.from("synthetic Google Play evidence only", "utf8"),
+    );
+    googlePlayPendingReference = await payloadStore.write(
+      { tenantId: "tenant-a", appId: "app-a", objectId: "synthetic-restored-google-play-token" },
+      Buffer.from("synthetic Google Play pending token only", "utf8"),
     );
     await withTenant(appPool, "tenant-a", async (client) => {
       await client.query(
@@ -161,6 +171,29 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
         [uuidV7(), integrityPendingReference, recordId,
           sha256("synthetic restored integrity pending binding")],
       );
+      const googleResultId = uuidV7();
+      const googleVerificationId = uuidV7();
+      const googleResultDigest = sha256("synthetic restored Google Play result token");
+      await client.query(
+        `INSERT INTO ledger.google_play_purchase_verification_results (
+          verification_result_id,verification_id,tenant_id,app_id,subject_record_id,
+          verified_record_id,token_digest,verdict,provider_purchase_state,
+          product_matched,evidence_ref,response_digest,decided_at,artifact,purchase_kind
+        ) VALUES ($1,$2,'tenant-a','app-a',$3,NULL,$4,'failed','CANCELED',false,
+          $5,$6,'2026-08-19T00:00:00.000Z',$7::jsonb,'one_time_product')`,
+        [googleResultId, googleVerificationId, recordId, googleResultDigest,
+          googlePlayEvidenceReference, sha256("synthetic Google Play evidence only"),
+          JSON.stringify({ verification_result_id: googleResultId, synthetic: true })],
+      );
+      await client.query(
+        `INSERT INTO ephemeral.google_play_product_verifications (
+          verification_id,tenant_id,app_id,subject_record_id,token_ref,token_digest,
+          product_id,purchase_kind,verified_record_id,attempts,next_attempt_at,requested_at
+        ) VALUES ($1,'tenant-a','app-a',$2,$3,$4,'product.synthetic.restore',
+          'one_time_product',$5,0,'2026-08-19T00:00:00.000Z','2026-08-19T00:00:00.000Z')`,
+        [uuidV7(), recordId, googlePlayPendingReference,
+          sha256("synthetic restored Google Play pending token"), `record:google-play:${uuidV7()}`],
+      );
     });
     cpSync(root, join(snapshot, "payloads"), { recursive: true });
 
@@ -186,6 +219,8 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
     await assert.rejects(payloadStore.read(payloadReference));
     await assert.rejects(payloadStore.read(integrityEvidenceReference));
     await assert.rejects(payloadStore.read(integrityPendingReference));
+    await assert.rejects(payloadStore.read(googlePlayEvidenceReference));
+    await assert.rejects(payloadStore.read(googlePlayPendingReference));
 
     // Simulate an object-store snapshot restored after the database already recorded deletion.
     cpSync(join(snapshot, "payloads"), root, { recursive: true, force: true });
@@ -194,6 +229,10 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
       "synthetic integrity evidence only");
     assert.equal((await payloadStore.read(integrityPendingReference)).toString("utf8"),
       "synthetic integrity pending token only");
+    assert.equal((await payloadStore.read(googlePlayEvidenceReference)).toString("utf8"),
+      "synthetic Google Play evidence only");
+    assert.equal((await payloadStore.read(googlePlayPendingReference)).toString("utf8"),
+      "synthetic Google Play pending token only");
     const restoredRecordId = await withTenant(appPool, "tenant-a", async (client) => (await client.query<{
       record_id: string;
     }>(
@@ -208,6 +247,15 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
         '2026-08-19T00:00:00.000Z',$4)`,
       [uuidV7(), integrityPendingReference, restoredRecordId,
         sha256("synthetic restored integrity replay binding")],
+    ));
+    await withTenant(appPool, "tenant-a", (client) => client.query(
+      `INSERT INTO ephemeral.google_play_product_verifications (
+        verification_id,tenant_id,app_id,subject_record_id,token_ref,token_digest,
+        product_id,purchase_kind,verified_record_id,attempts,next_attempt_at,requested_at
+      ) VALUES ($1,'tenant-a','app-a',$2,$3,$4,'product.synthetic.restore-replay',
+        'one_time_product',$5,0,'2026-08-19T00:00:00.000Z','2026-08-19T00:00:00.000Z')`,
+      [uuidV7(), restoredRecordId, googlePlayPendingReference,
+        sha256("synthetic restored Google Play replay token"), `record:google-play:${uuidV7()}`],
     ));
   });
 
@@ -231,10 +279,18 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
     await assert.rejects(payloadStore.read(payloadReference));
     await assert.rejects(payloadStore.read(integrityEvidenceReference));
     await assert.rejects(payloadStore.read(integrityPendingReference));
+    await assert.rejects(payloadStore.read(googlePlayEvidenceReference));
+    await assert.rejects(payloadStore.read(googlePlayPendingReference));
     assert.equal(await withTenant(appPool, "tenant-a", async (client) => Number((await client.query<{
       count: string;
     }>(
       "SELECT count(*)::text AS count FROM ephemeral.integrity_verifications WHERE tenant_id=$1 AND app_id=$2",
+      ["tenant-a", "app-a"],
+    )).rows[0].count)), 0);
+    assert.equal(await withTenant(appPool, "tenant-a", async (client) => Number((await client.query<{
+      count: string;
+    }>(
+      "SELECT count(*)::text AS count FROM ephemeral.google_play_product_verifications WHERE tenant_id=$1 AND app_id=$2",
       ["tenant-a", "app-a"],
     )).rows[0].count)), 0);
 

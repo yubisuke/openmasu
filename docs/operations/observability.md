@@ -116,6 +116,17 @@ provider bodies, payload references, tenants, apps, or subjects. Lease recovery
 can repeat verification and does not establish provider-side exactly-once
 behavior.
 
+Google Play purchase verification claims one due product, subscription, or
+renewal row before its bounded provider reads. The local defaults bound each
+read to 10 seconds and the claim to five minutes. Retry clears only the current
+token; each provider request starts only after rechecking the unexpired token
+and source under the tenant privacy barrier, and completion repeats that check.
+Monitor due age, claim age, repeated expiry, retry count, and
+unavailable verdicts without logging purchase tokens, provider bodies, order
+values, payload references, tenants, apps, or installations. Lease recovery
+can repeat product or order reads and does not establish provider-side
+exactly-once behavior.
+
 Scheduled metric work uses a daily durable lease, but every artifact watermark
 is the current UTC midnight rather than the wall-clock time at which a worker
 obtains that lease. A schedule processes at most 31 pending dates per cycle.

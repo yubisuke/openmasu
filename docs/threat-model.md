@@ -137,9 +137,14 @@ exactly-once behavior remains unverified.
 
 <!-- threat-component:google-play-product-verifier -->
 **Google Play verifier:** forged notification, stale purchase state, duplicated
-money, credential leakage, and refund mismatch. Controls include authenticated
-notifications, authoritative API read-back, revision/idempotency state,
-protected tokens, exact money, and correction constraints.
+money, concurrent or stale worker completion, protected-response resurrection
+after deletion, credential leakage, and refund mismatch. Controls include
+authenticated notifications, authoritative bounded API read-back, a one-row
+database-clock claim, token-fenced retry and completion, source-lifecycle
+revalidation under the tenant privacy barrier before each provider request
+and at completion, revision/idempotency state,
+protected tokens, exact money, and correction constraints. Lease recovery can
+repeat provider reads; provider-side exactly-once behavior remains unverified.
 
 <!-- threat-component:verified-commerce-lifecycle -->
 **Commerce lifecycle:** out-of-order revisions, missed notifications, unsafe

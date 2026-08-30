@@ -398,6 +398,136 @@ async function prepareIntegrityQueue(scope: PrivacyFenceScope, label: string): P
   return { batch, verificationId: queued.verification_id, challengeDigest: queued.challenge_digest };
 }
 
+type GooglePlayQueueFixture = {
+  readonly batch: PrivacyFenceBatch;
+  readonly verificationId: string;
+  readonly purchaseToken: string;
+  readonly productId: string;
+  readonly orderId: string;
+  readonly packageName: string;
+};
+
+async function prepareGooglePlayQueue(
+  scope: PrivacyFenceScope,
+  label: string,
+): Promise<GooglePlayQueueFixture> {
+  const tenant = `tenant-google-play-${label}-${run}`;
+  const app = `app-google-play-${label}-${run}`;
+  const installation = `installation:google-play-${label}-${run}`;
+  const eventId = `event:google-play-${label}:${run}`;
+  const recordId = `record:${uuidV7()}`;
+  const deliveryId = `delivery:${uuidV7()}`;
+  const receivedAt = "2026-08-30T10:00:00.000Z";
+  const purchaseToken = `synthetic-google-play-token-${label}-${run}`;
+  const productId = `product.synthetic.${label}.${run}`;
+  const orderId = `order:synthetic:${label}:${run}`;
+  const packageName = `dev.openmasu.synthetic.${label.replace(/[^A-Za-z0-9]/g, "")}.${run}`;
+  const request = privacyRequestFor(scope, tenant, app, installation);
+  const subjectDigest = scope === "installation" ? privacySubjectDigest(digestKey, request) : undefined;
+  const event = {
+    ...sourceEvent(eventId, "purchase", {
+      installation_id: installation,
+      transaction_id: `transaction:client:${label}:${run}`,
+      amount_unscaled: "1990000",
+      amount_scale: 6,
+      currency: "USD",
+      financial_status: "pending",
+      extensions: {
+        google_play_purchase_token_protected: purchaseToken,
+        google_play_product_id_protected: productId,
+      },
+    }, receivedAt),
+    contract_version: "0.4.0",
+    record_id: recordId,
+    delivery_id: deliveryId,
+    tenant_id: tenant,
+    app_id: app,
+    producer: "sdk-android",
+    schema_version: "0.4.0",
+    received_at: receivedAt,
+  };
+  const ingestBatchId = await appendDurableBatch(pool, payloadStore, {
+    tenantId: tenant,
+    appId: app,
+    producer: "sdk-android",
+    body: Buffer.from(JSON.stringify({ records: [event] }), "utf8"),
+    eventCount: 1,
+    receivedAt,
+    subjectDigest,
+  });
+  await withTenant(pool, tenant, (client) => client.query(
+    `INSERT INTO control.app_link_identities (
+       tenant_id, app_id, android_package_name, registered_at, artifact
+     ) VALUES ($1,$2,$3,$4,$5::jsonb)`,
+    [tenant, app, packageName, receivedAt,
+      JSON.stringify({ tenant_id: tenant, app_id: app, android_package_name: packageName })],
+  ));
+  assert.equal(await processSdkInbox(pool, payloadStore, tenant), 1);
+  const queued = await withTenant(pool, tenant, async (client) => (await client.query<{
+    verification_id: string;
+  }>(
+    `SELECT verification_id::text
+       FROM ephemeral.google_play_product_verifications
+      WHERE tenant_id=$1 AND app_id=$2 AND subject_record_id=$3`,
+    [tenant, app, recordId],
+  )).rows[0]);
+  assert.ok(queued);
+  const bodyRef = await withTenant(pool, tenant, async (client) => (await client.query<{ body_ref: string }>(
+    `SELECT body_ref FROM ledger.ingest_batches
+      WHERE tenant_id=$1 AND app_id=$2 AND ingest_batch_id=$3`,
+    [tenant, app, ingestBatchId],
+  )).rows[0].body_ref);
+  return {
+    batch: {
+      tenantId: tenant,
+      appId: app,
+      eventId,
+      installationId: installation,
+      ingestBatchId,
+      bodyRef,
+      subjectDigest,
+    },
+    verificationId: queued.verification_id,
+    purchaseToken,
+    productId,
+    orderId,
+    packageName,
+  };
+}
+
+function googlePlayProviderResponse(
+  fixture: GooglePlayQueueFixture,
+  operation: "product" | "subscription" | "order",
+  marker: string,
+) {
+  if (operation !== "order") {
+    return {
+      status: 200,
+      body: Buffer.from(JSON.stringify({
+        purchaseStateContext: { purchaseState: "PURCHASED" },
+        purchaseCompletionTime: "2026-08-30T10:01:00.000Z",
+        orderId: fixture.orderId,
+        productLineItem: [{ productId: fixture.productId }],
+        synthetic_marker: marker,
+      })),
+    };
+  }
+  return {
+    status: 200,
+    body: Buffer.from(JSON.stringify({
+      orderId: fixture.orderId,
+      purchaseToken: fixture.purchaseToken,
+      state: "PROCESSED",
+      lineItems: [{
+        productId: fixture.productId,
+        total: { currencyCode: "USD", units: "3", nanos: 250_000_000 },
+        oneTimePurchaseDetails: { quantity: 1 },
+      }],
+      synthetic_marker: marker,
+    })),
+  };
+}
+
 function workerProcess(delayMs: number) {
   const source = `
     import { createAppPool, EncryptedFilePayloadStore } from "@openmasu/runtime";
@@ -2879,6 +3009,339 @@ describe("M2a signed SDK ingestion", () => {
       assert.equal(state.pending, 0);
       await assert.rejects(payloadStore.read(state.evidence_ref), PayloadNotFoundError);
     }
+  });
+
+  it("allows only one active Google Play verification across concurrent workers", async () => {
+    const fixture = await prepareGooglePlayQueue("installation", "google-play-concurrent-claim");
+    const entered = deferred();
+    const release = deferred();
+    const operations: string[] = [];
+    const first = processGooglePlayProductVerifications(pool, payloadStore, fixture.batch.tenantId, {
+      enabled: true,
+      enabledKinds: ["one_time_product"],
+      now: () => new Date("2026-08-30T10:05:00.000Z"),
+      client: async ({ operation }) => {
+        operations.push(operation);
+        if (operation === "product") {
+          entered.resolve();
+          await release.promise;
+        }
+        return googlePlayProviderResponse(fixture, operation, "concurrent-winner");
+      },
+    });
+    try {
+      await within(entered.promise, "Google Play concurrent provider entry");
+      assert.deepEqual(await processGooglePlayProductVerifications(
+        pool,
+        payloadStore,
+        fixture.batch.tenantId,
+        {
+          enabled: true,
+          enabledKinds: ["one_time_product"],
+          now: () => new Date("2026-08-30T10:05:00.000Z"),
+          client: async () => {
+            throw new Error("a concurrent worker must not reach Google Play");
+          },
+        },
+      ), { verified: 0, failed: 0, unavailable: 0, deferred: 0 });
+    } finally {
+      release.resolve();
+    }
+    assert.deepEqual(await within(first, "Google Play concurrent completion"), {
+      verified: 1, failed: 0, unavailable: 0, deferred: 0,
+    });
+    assert.deepEqual(operations, ["product", "order"]);
+  });
+
+  it("reclaims an expired Google Play lease and rejects the stale completion", async () => {
+    const fixture = await prepareGooglePlayQueue("installation", "google-play-expired-claim");
+    const entered = deferred();
+    const release = deferred();
+    const stale = processGooglePlayProductVerifications(pool, payloadStore, fixture.batch.tenantId, {
+      enabled: true,
+      enabledKinds: ["one_time_product"],
+      now: () => new Date("2026-08-30T10:05:00.000Z"),
+      claimLeaseMs: 10_000,
+      requestTimeoutMs: 5_000,
+      client: async ({ operation }) => {
+        if (operation === "product") {
+          entered.resolve();
+          await release.promise;
+        }
+        return googlePlayProviderResponse(fixture, operation, "stale-loser");
+      },
+    });
+    await within(entered.promise, "Google Play stale provider entry");
+    await withTenant(pool, fixture.batch.tenantId, (client) => client.query(
+      `UPDATE ephemeral.google_play_product_verifications
+          SET claimed_until=clock_timestamp() - interval '1 second'
+        WHERE tenant_id=$1 AND app_id=$2 AND verification_id=$3::uuid`,
+      [fixture.batch.tenantId, fixture.batch.appId, fixture.verificationId],
+    ));
+    assert.deepEqual(await processGooglePlayProductVerifications(
+      pool,
+      payloadStore,
+      fixture.batch.tenantId,
+      {
+        enabled: true,
+        enabledKinds: ["one_time_product"],
+        now: () => new Date("2026-08-30T10:05:00.000Z"),
+        claimLeaseMs: 10_000,
+        requestTimeoutMs: 5_000,
+        client: async ({ operation }) => googlePlayProviderResponse(fixture, operation, "reclaimed-winner"),
+      },
+    ), { verified: 1, failed: 0, unavailable: 0, deferred: 0 });
+    release.resolve();
+    assert.deepEqual(await within(stale, "Google Play stale completion"), {
+      verified: 0, failed: 0, unavailable: 0, deferred: 0,
+    });
+    const evidence = await withTenant(pool, fixture.batch.tenantId, async (client) => (await client.query<{
+      evidence_ref: string;
+      results: number;
+      purchases: number;
+      pending: number;
+    }>(
+      `SELECT result.evidence_ref,
+        (SELECT count(*)::int FROM ledger.google_play_purchase_verification_results
+          WHERE tenant_id=$1 AND app_id=$2) AS results,
+        (SELECT count(*)::int FROM ledger.purchase_facts AS purchase
+          JOIN ledger.raw_records AS raw USING (tenant_id,app_id,record_id)
+          WHERE purchase.tenant_id=$1 AND purchase.app_id=$2
+            AND raw.producer='adapter:google-play') AS purchases,
+        (SELECT count(*)::int FROM ephemeral.google_play_product_verifications
+          WHERE tenant_id=$1 AND app_id=$2) AS pending
+       FROM ledger.google_play_purchase_verification_results AS result
+       WHERE result.tenant_id=$1 AND result.app_id=$2`,
+      [fixture.batch.tenantId, fixture.batch.appId],
+    )).rows[0]);
+    assert.deepEqual({
+      results: evidence.results,
+      purchases: evidence.purchases,
+      pending: evidence.pending,
+    }, { results: 1, purchases: 1, pending: 0 });
+    const storedEvidence = JSON.parse((await payloadStore.read(evidence.evidence_ref)).toString("utf8")) as {
+      purchase_response_base64: string;
+    };
+    assert.equal(JSON.parse(Buffer.from(storedEvidence.purchase_response_base64, "base64").toString("utf8")).synthetic_marker,
+      "reclaimed-winner");
+  });
+
+  it("bounds a Google Play provider call even when an injected client never settles", async () => {
+    const fixture = await prepareGooglePlayQueue("installation", "google-play-provider-timeout");
+    assert.deepEqual(await within(processGooglePlayProductVerifications(
+      pool,
+      payloadStore,
+      fixture.batch.tenantId,
+      {
+        enabled: true,
+        enabledKinds: ["one_time_product"],
+        now: () => new Date("2026-08-30T10:05:00.000Z"),
+        maximumAttempts: 1,
+        claimLeaseMs: 1_000,
+        requestTimeoutMs: 20,
+        client: async () => new Promise<never>(() => undefined),
+      },
+    ), "Google Play provider timeout"), { verified: 0, failed: 0, unavailable: 1, deferred: 0 });
+  });
+
+  it("suppresses deletion-first Google Play completions for installation, app, and tenant scopes", async () => {
+    for (const scope of ["installation", "app", "tenant"] as const) {
+      const fixture = await prepareGooglePlayQueue(scope, `google-play-${scope}-deletion-first`);
+      const entered = deferred();
+      const release = deferred();
+      const operations: string[] = [];
+      let responseWrites = 0;
+      const observingStore: PayloadStore = {
+        read: (reference) => payloadStore.read(reference),
+        purge: (reference) => payloadStore.purge(reference),
+        scanFor: (value) => payloadStore.scanFor(value),
+        write: (payloadScope, plaintext) => {
+          if (payloadScope.objectId.startsWith("google-play-purchase-result-")) responseWrites += 1;
+          return payloadStore.write(payloadScope, plaintext);
+        },
+      };
+      const processing = processGooglePlayProductVerifications(
+        pool,
+        observingStore,
+        fixture.batch.tenantId,
+        {
+          enabled: true,
+          enabledKinds: ["one_time_product"],
+          now: () => new Date("2026-08-30T10:05:00.000Z"),
+          client: async ({ operation }) => {
+            operations.push(operation);
+            if (operation === "product") {
+              entered.resolve();
+              await release.promise;
+            }
+            return googlePlayProviderResponse(fixture, operation, `${scope}-stale`);
+          },
+        },
+      );
+      try {
+        await within(entered.promise, `${scope} Google Play deletion-first provider entry`);
+        assert.equal((await deletePrivacyFenceScope(
+          scope,
+          fixture.batch,
+          "2026-08-30T11:00:00.000Z",
+        )).status, "completed");
+      } finally {
+        release.resolve();
+      }
+      assert.deepEqual(await within(processing, `${scope} Google Play deletion-first completion`), {
+        verified: 0, failed: 0, unavailable: 0, deferred: 0,
+      });
+      assert.deepEqual(operations, ["product"], `${scope} deletion must prevent a later order request`);
+      assert.equal(responseWrites, 0, `${scope} stale completion must not write provider evidence`);
+      assert.deepEqual(await withTenant(pool, fixture.batch.tenantId, async (client) => (await client.query<{
+        pending: number;
+        results: number;
+        settled: number;
+      }>(
+        `SELECT
+          (SELECT count(*)::int FROM ephemeral.google_play_product_verifications
+            WHERE tenant_id=$1 AND app_id=$2) AS pending,
+          (SELECT count(*)::int FROM ledger.google_play_purchase_verification_results
+            WHERE tenant_id=$1 AND app_id=$2) AS results,
+          (SELECT count(*)::int FROM ledger.purchase_facts AS purchase
+            JOIN ledger.raw_records AS raw USING (tenant_id,app_id,record_id)
+            WHERE purchase.tenant_id=$1 AND purchase.app_id=$2
+              AND raw.producer='adapter:google-play') AS settled`,
+        [fixture.batch.tenantId, fixture.batch.appId],
+      )).rows[0]), { pending: 0, results: 0, settled: 0 });
+    }
+  });
+
+  it("lets Google Play completion finish before deletion purges its evidence and settled projection", async () => {
+    for (const scope of ["installation", "app", "tenant"] as const) {
+      const fixture = await prepareGooglePlayQueue(scope, `google-play-${scope}-completion-first`);
+      const writeEntered = deferred();
+      const releaseWrite = deferred();
+      const blockingStore: PayloadStore = {
+        read: (reference) => payloadStore.read(reference),
+        purge: (reference) => payloadStore.purge(reference),
+        scanFor: (value) => payloadStore.scanFor(value),
+        write: async (payloadScope, plaintext) => {
+          if (payloadScope.objectId.startsWith("google-play-purchase-result-")) {
+            writeEntered.resolve();
+            await releaseWrite.promise;
+          }
+          return payloadStore.write(payloadScope, plaintext);
+        },
+      };
+      const processing = processGooglePlayProductVerifications(
+        pool,
+        blockingStore,
+        fixture.batch.tenantId,
+        {
+          enabled: true,
+          enabledKinds: ["one_time_product"],
+          now: () => new Date("2026-08-30T10:05:00.000Z"),
+          client: async ({ operation }) => googlePlayProviderResponse(fixture, operation, `${scope}-committed`),
+        },
+      );
+      let deletion: ReturnType<typeof deletePrivacyFenceScope> | undefined;
+      try {
+        await within(writeEntered.promise, `${scope} Google Play completion-first evidence write`);
+        deletion = deletePrivacyFenceScope(
+          scope,
+          fixture.batch,
+          "2026-08-30T11:00:00.000Z",
+        );
+        await within(waitForBlockedAdvisoryLock(fixture.batch.tenantId), `${scope} Google Play privacy wait`);
+      } finally {
+        releaseWrite.resolve();
+      }
+      assert.deepEqual(await within(processing, `${scope} Google Play completion-first processing`), {
+        verified: 1, failed: 0, unavailable: 0, deferred: 0,
+      });
+      assert.ok(deletion);
+      assert.equal((await within(deletion, `${scope} Google Play completion-first deletion`)).status, "completed");
+      const state = await withTenant(pool, fixture.batch.tenantId, async (client) => (await client.query<{
+        evidence_ref: string;
+        pending: number;
+        available_settled: number;
+      }>(
+        `SELECT result.evidence_ref,
+          (SELECT count(*)::int FROM ephemeral.google_play_product_verifications
+            WHERE tenant_id=$1 AND app_id=$2) AS pending,
+          (SELECT count(*)::int FROM ledger.raw_records_current AS raw
+            WHERE raw.tenant_id=$1 AND raw.app_id=$2 AND raw.producer='adapter:google-play'
+              AND raw.payload_lifecycle_status='available') AS available_settled
+         FROM ledger.google_play_purchase_verification_results AS result
+         WHERE result.tenant_id=$1 AND result.app_id=$2`,
+        [fixture.batch.tenantId, fixture.batch.appId],
+      )).rows[0]);
+      assert.deepEqual({ pending: state.pending, available_settled: state.available_settled }, {
+        pending: 0,
+        available_settled: 0,
+      });
+      await assert.rejects(payloadStore.read(state.evidence_ref), PayloadNotFoundError);
+    }
+  });
+
+  it("rolls back a Google Play settled projection when result persistence fails", async () => {
+    const fixture = await prepareGooglePlayQueue("installation", "google-play-atomic-completion");
+    const invalidEvidenceRef = `synthetic-invalid-google-play-evidence-${run}`;
+    let evidenceWrites = 0;
+    const rejectingStore: PayloadStore = {
+      read: (reference) => payloadStore.read(reference),
+      scanFor: (value) => payloadStore.scanFor(value),
+      purge: (reference) => reference === invalidEvidenceRef
+        ? Promise.resolve()
+        : payloadStore.purge(reference),
+      write: (payloadScope, plaintext) => {
+        if (payloadScope.objectId.startsWith("google-play-purchase-result-")) {
+          evidenceWrites += 1;
+          return Promise.resolve(invalidEvidenceRef);
+        }
+        return payloadStore.write(payloadScope, plaintext);
+      },
+    };
+    await assert.rejects(processGooglePlayProductVerifications(
+      pool,
+      rejectingStore,
+      fixture.batch.tenantId,
+      {
+        enabled: true,
+        enabledKinds: ["one_time_product"],
+        now: () => new Date("2026-08-30T10:05:00.000Z"),
+        client: async ({ operation }) => googlePlayProviderResponse(fixture, operation, "atomic-rollback"),
+      },
+    ));
+    assert.equal(evidenceWrites, 1);
+    assert.deepEqual(await withTenant(pool, fixture.batch.tenantId, async (client) => (await client.query<{
+      pending: number;
+      claimed: number;
+      results: number;
+      settled: number;
+      bindings: number;
+      renewal_orders: number;
+    }>(
+      `SELECT
+        (SELECT count(*)::int FROM ephemeral.google_play_product_verifications
+          WHERE tenant_id=$1 AND app_id=$2) AS pending,
+        (SELECT count(*)::int FROM ephemeral.google_play_product_verifications
+          WHERE tenant_id=$1 AND app_id=$2 AND claim_token IS NOT NULL) AS claimed,
+        (SELECT count(*)::int FROM ledger.google_play_purchase_verification_results
+          WHERE tenant_id=$1 AND app_id=$2) AS results,
+        (SELECT count(*)::int FROM ledger.purchase_facts AS purchase
+          JOIN ledger.raw_records AS raw USING (tenant_id,app_id,record_id)
+          WHERE purchase.tenant_id=$1 AND purchase.app_id=$2
+            AND raw.producer='adapter:google-play') AS settled,
+        (SELECT count(*)::int FROM control.commerce_purchase_bindings
+          WHERE tenant_id=$1 AND app_id=$2 AND provider='google_play') AS bindings,
+        (SELECT count(*)::int FROM control.google_play_order_digests
+          WHERE tenant_id=$1 AND app_id=$2) AS renewal_orders`,
+      [fixture.batch.tenantId, fixture.batch.appId],
+    )).rows[0]), {
+      pending: 1,
+      claimed: 1,
+      results: 0,
+      settled: 0,
+      bindings: 0,
+      renewal_orders: 0,
+    });
   });
 
   it("app and tenant deletion boundaries admit only post-recognition SDK batches", async () => {
