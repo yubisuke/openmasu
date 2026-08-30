@@ -13,9 +13,13 @@ function generatedAppEnvironment(options: {
   readonly workerShutdownTimeout?: string;
   readonly sdkInboxBatchLimit?: string;
   readonly maxInboxBatchLimit?: string;
+  readonly adServicesProviderTimeout?: string;
+  readonly adServicesClaimLease?: string;
   readonly reconciledWorkerConcurrency?: string;
   readonly reconciledSdkInboxBatchLimit?: string;
   readonly reconciledMaxInboxBatchLimit?: string;
+  readonly reconciledAdServicesProviderTimeout?: string;
+  readonly reconciledAdServicesClaimLease?: string;
 } = {}): string {
   const root = mkdtempSync(join(tmpdir(), "openmasu-bootstrap-"));
   const repositoryRoot = join(root, "repository");
@@ -42,6 +46,16 @@ function generatedAppEnvironment(options: {
   else environment.OPENMASU_SDK_INBOX_BATCH_LIMIT = options.sdkInboxBatchLimit;
   if (options.maxInboxBatchLimit === undefined) delete environment.OPENMASU_MAX_INBOX_BATCH_LIMIT;
   else environment.OPENMASU_MAX_INBOX_BATCH_LIMIT = options.maxInboxBatchLimit;
+  if (options.adServicesProviderTimeout === undefined) {
+    delete environment.OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS;
+  } else {
+    environment.OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS = options.adServicesProviderTimeout;
+  }
+  if (options.adServicesClaimLease === undefined) {
+    delete environment.OPENMASU_ADSERVICES_CLAIM_LEASE_MS;
+  } else {
+    environment.OPENMASU_ADSERVICES_CLAIM_LEASE_MS = options.adServicesClaimLease;
+  }
   try {
     let result = spawnSync(
       process.execPath,
@@ -51,7 +65,9 @@ function generatedAppEnvironment(options: {
     assert.equal(result.status, 0, result.stderr);
     if (options.reconciledWorkerConcurrency !== undefined
       || options.reconciledSdkInboxBatchLimit !== undefined
-      || options.reconciledMaxInboxBatchLimit !== undefined) {
+      || options.reconciledMaxInboxBatchLimit !== undefined
+      || options.reconciledAdServicesProviderTimeout !== undefined
+      || options.reconciledAdServicesClaimLease !== undefined) {
       const repositoryEnvironmentPath = join(repositoryRoot, ".env");
       let repositoryEnvironment = readFileSync(repositoryEnvironmentPath, "utf8");
       if (options.reconciledWorkerConcurrency !== undefined) {
@@ -72,12 +88,26 @@ function generatedAppEnvironment(options: {
           `OPENMASU_MAX_INBOX_BATCH_LIMIT=${options.reconciledMaxInboxBatchLimit}`,
         );
       }
+      if (options.reconciledAdServicesProviderTimeout !== undefined) {
+        repositoryEnvironment = repositoryEnvironment.replace(
+          /^OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS=.*$/m,
+          `OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS=${options.reconciledAdServicesProviderTimeout}`,
+        );
+      }
+      if (options.reconciledAdServicesClaimLease !== undefined) {
+        repositoryEnvironment = repositoryEnvironment.replace(
+          /^OPENMASU_ADSERVICES_CLAIM_LEASE_MS=.*$/m,
+          `OPENMASU_ADSERVICES_CLAIM_LEASE_MS=${options.reconciledAdServicesClaimLease}`,
+        );
+      }
       writeFileSync(
         repositoryEnvironmentPath,
         repositoryEnvironment,
         "utf8",
       );
       delete environment.OPENMASU_WORKER_CONCURRENCY;
+      delete environment.OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS;
+      delete environment.OPENMASU_ADSERVICES_CLAIM_LEASE_MS;
       result = spawnSync(
         process.execPath,
         ["--import", "tsx", "apps/runtime/src/bootstrap.ts"],
@@ -151,6 +181,14 @@ describe("runtime bootstrap environment", () => {
       compose,
       /OPENMASU_MAX_INBOX_BATCH_LIMIT: \$\{OPENMASU_MAX_INBOX_BATCH_LIMIT:-100\}/,
     );
+    assert.match(
+      compose,
+      /OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS: \$\{OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS:-30000\}/,
+    );
+    assert.match(
+      compose,
+      /OPENMASU_ADSERVICES_CLAIM_LEASE_MS: \$\{OPENMASU_ADSERVICES_CLAIM_LEASE_MS:-300000\}/,
+    );
   });
 
   it("propagates bounded tenant concurrency with a safe development default", () => {
@@ -169,9 +207,13 @@ describe("runtime bootstrap environment", () => {
     const boundedInboxEnvironment = generatedAppEnvironment({
       sdkInboxBatchLimit: "2",
       maxInboxBatchLimit: "3",
+      adServicesProviderTimeout: "12000",
+      adServicesClaimLease: "90000",
     });
     assert.match(boundedInboxEnvironment, /^OPENMASU_SDK_INBOX_BATCH_LIMIT=2$/m);
     assert.match(boundedInboxEnvironment, /^OPENMASU_MAX_INBOX_BATCH_LIMIT=3$/m);
+    assert.match(boundedInboxEnvironment, /^OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS=12000$/m);
+    assert.match(boundedInboxEnvironment, /^OPENMASU_ADSERVICES_CLAIM_LEASE_MS=90000$/m);
   });
 
   it("reconciles non-secret worker controls in an existing runtime environment", () => {
@@ -180,6 +222,8 @@ describe("runtime bootstrap environment", () => {
       reconciledWorkerConcurrency: "1",
       reconciledSdkInboxBatchLimit: "2",
       reconciledMaxInboxBatchLimit: "3",
+      reconciledAdServicesProviderTimeout: "12000",
+      reconciledAdServicesClaimLease: "90000",
     });
     assert.match(appEnvironment, /^OPENMASU_WORKER_CONCURRENCY=1$/m);
     assert.doesNotMatch(appEnvironment, /^OPENMASU_WORKER_CONCURRENCY=7$/m);
@@ -189,5 +233,19 @@ describe("runtime bootstrap environment", () => {
     assert.equal(appEnvironment.match(/^OPENMASU_SDK_INBOX_BATCH_LIMIT=/gm)?.length, 1);
     assert.match(appEnvironment, /^OPENMASU_MAX_INBOX_BATCH_LIMIT=3$/m);
     assert.equal(appEnvironment.match(/^OPENMASU_MAX_INBOX_BATCH_LIMIT=/gm)?.length, 1);
+    assert.match(appEnvironment, /^OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS=12000$/m);
+    assert.equal(appEnvironment.match(/^OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS=/gm)?.length, 1);
+    assert.match(appEnvironment, /^OPENMASU_ADSERVICES_CLAIM_LEASE_MS=90000$/m);
+    assert.equal(appEnvironment.match(/^OPENMASU_ADSERVICES_CLAIM_LEASE_MS=/gm)?.length, 1);
+  });
+
+  it("rejects an AdServices timeout that is not shorter than its claim lease", () => {
+    assert.throws(
+      () => generatedAppEnvironment({
+        adServicesProviderTimeout: "30000",
+        adServicesClaimLease: "30000",
+      }),
+      /must be shorter than OPENMASU_ADSERVICES_CLAIM_LEASE_MS/,
+    );
   });
 });

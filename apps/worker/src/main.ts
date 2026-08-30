@@ -218,6 +218,8 @@ async function processTenantCycle(tenantId: string): Promise<void> {
       enabled: process.env.OPENMASU_ADSERVICES_LOOKUP !== "off",
       endpoint: process.env.OPENMASU_ADSERVICES_ENDPOINT,
       limiter: adServicesLimiter,
+      requestTimeoutMs: Number(process.env.OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS ?? "30000"),
+      claimLeaseMs: Number(process.env.OPENMASU_ADSERVICES_CLAIM_LEASE_MS ?? "300000"),
     });
   });
   await runWorkerJob(tenantId, "integrity_verification", async () => {

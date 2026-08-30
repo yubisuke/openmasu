@@ -9,7 +9,9 @@ import { after, before, describe, it } from "node:test";
 import {
   createAppPool,
   EncryptedFilePayloadStore,
+  PayloadNotFoundError,
   withTenant,
+  type PayloadStore,
 } from "@openmasu/runtime";
 import { createRequestHandler } from "../../api/src/router.js";
 import { KeyedTokenBucket } from "../../api/src/rate-limit.js";
@@ -36,6 +38,46 @@ const authConfig = {
 };
 let server: ReturnType<typeof createServer>;
 let baseUrl = "";
+
+function deferred(): { readonly promise: Promise<void>; readonly resolve: () => void } {
+  let resolve!: () => void;
+  return {
+    promise: new Promise<void>((done) => { resolve = done; }),
+    resolve: () => resolve(),
+  };
+}
+
+async function within<T>(promise: Promise<T>, label: string, timeoutMs = 5_000): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+async function waitForBlockedPrivacyFence(): Promise<void> {
+  const lockKey = `openmasu:privacy-tenant:${tenantId}`;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const waiting = await withTenant(pool, tenantId, async (client) => Number((await client.query<{
+      count: string;
+    }>(
+      `SELECT count(*)::text AS count FROM pg_locks
+        WHERE locktype='advisory' AND NOT granted AND objsubid=1
+          AND classid=((hashtextextended($1,0) >> 32) & 4294967295)::oid
+          AND objid=(hashtextextended($1,0) & 4294967295)::oid`,
+      [lockKey],
+    )).rows[0].count));
+    if (waiting > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("privacy deletion did not wait for the AdServices completion fence");
+}
 
 async function signed(input: {
   readonly path: string;
@@ -351,6 +393,236 @@ describe("M4 AdServices server-side lookup", () => {
       endpoint: "http://127.0.0.1/apple-adservices",
       client: async () => ({ status: 400, body: Buffer.from('{"error":"synthetic_cleanup"}') }),
     });
+  });
+
+  it("claims one AdServices lookup across concurrent workers", async () => {
+    await submitInstall("concurrent-claim", `synthetic-concurrent-${run}`);
+    const called = deferred();
+    const release = deferred();
+    let providerCalls = 0;
+    const client = async () => {
+      providerCalls += 1;
+      called.resolve();
+      await release.promise;
+      return { status: 200, body: Buffer.from('{"attribution":false}') };
+    };
+    const first = processAdServicesLookups(pool, payloadStore, tenantId, {
+      endpoint: "http://127.0.0.1/apple-adservices",
+      client,
+    });
+    try {
+      await within(called.promise, "first AdServices provider call");
+      assert.deepEqual(await processAdServicesLookups(pool, payloadStore, tenantId, {
+        endpoint: "http://127.0.0.1/apple-adservices",
+        client,
+      }), { completed: 0, retried: 0 });
+    } finally {
+      release.resolve();
+    }
+    assert.deepEqual(await within(first, "claimed AdServices completion"), {
+      completed: 1,
+      retried: 0,
+    });
+    assert.equal(providerCalls, 1);
+  });
+
+  it("reclaims an expired AdServices lease and rejects its stale completion", async () => {
+    const install = await submitInstall("expired-claim", `synthetic-expired-claim-${run}`);
+    const called = deferred();
+    const release = deferred();
+    const stale = processAdServicesLookups(pool, payloadStore, tenantId, {
+      endpoint: "http://127.0.0.1/apple-adservices",
+      client: async () => {
+        called.resolve();
+        await release.promise;
+        return { status: 200, body: Buffer.from('{"attribution":true,"campaignId":"111"}') };
+      },
+    });
+    try {
+      await within(called.promise, "stale AdServices provider call");
+      await withTenant(pool, tenantId, (client) => client.query(
+        `UPDATE ephemeral.adservices_lookups
+            SET claimed_until=clock_timestamp() - interval '1 second'
+          WHERE tenant_id=$1 AND app_id=$2 AND install_record_id=$3`,
+        [tenantId, appId, install.recordId],
+      ).then(() => undefined));
+      assert.deepEqual(await processAdServicesLookups(pool, payloadStore, tenantId, {
+        endpoint: "http://127.0.0.1/apple-adservices",
+        client: async () => ({ status: 200, body: Buffer.from('{"attribution":false}') }),
+      }), { completed: 1, retried: 0 });
+    } finally {
+      release.resolve();
+    }
+    assert.deepEqual(await within(stale, "stale AdServices completion"), {
+      completed: 0,
+      retried: 0,
+    });
+    const state = await withTenant(pool, tenantId, (client) => client.query<{
+      result_count: number;
+      attributed_count: number;
+      pending_count: number;
+    }>(
+      `SELECT
+         (SELECT count(*)::int FROM ledger.adservices_lookup_results
+           WHERE tenant_id=$1 AND app_id=$2 AND install_record_id=$3) AS result_count,
+         (SELECT count(*)::int FROM ledger.attribution_results
+           WHERE tenant_id=$1 AND app_id=$2 AND reason_code='adservices_attributed'
+             AND subject_ref=$4) AS attributed_count,
+         (SELECT count(*)::int FROM ephemeral.adservices_lookups
+           WHERE tenant_id=$1 AND app_id=$2 AND install_record_id=$3) AS pending_count`,
+      [tenantId, appId, install.recordId, install.installationId],
+    ));
+    assert.deepEqual(state.rows[0], { result_count: 1, attributed_count: 0, pending_count: 0 });
+  });
+
+  it("bounds an AdServices provider call even when the client ignores abort", async () => {
+    const install = await submitInstall("provider-timeout", `synthetic-timeout-${run}`);
+    const startedAt = Date.now();
+    assert.deepEqual(await processAdServicesLookups(pool, payloadStore, tenantId, {
+      endpoint: "http://127.0.0.1/apple-adservices",
+      requestTimeoutMs: 20,
+      claimLeaseMs: 1_000,
+      client: async () => new Promise<never>(() => undefined),
+    }), { completed: 0, retried: 1 });
+    assert.ok(Date.now() - startedAt < 1_000, "AdServices timeout did not bound the worker call");
+    const state = await withTenant(pool, tenantId, (client) => client.query<{
+      attempts: number;
+      claim_token: string | null;
+      claimed_until: string | null;
+      last_outcome: string;
+    }>(
+      `SELECT attempts,claim_token::text,claimed_until::text,
+              artifact->>'last_outcome' AS last_outcome
+         FROM ephemeral.adservices_lookups
+        WHERE tenant_id=$1 AND app_id=$2 AND install_record_id=$3`,
+      [tenantId, appId, install.recordId],
+    ));
+    assert.deepEqual(state.rows[0], {
+      attempts: 1,
+      claim_token: null,
+      claimed_until: null,
+      last_outcome: "request_timeout",
+    });
+  });
+
+  it("rejects an AdServices completion after privacy deletion wins the fence", async () => {
+    const install = await submitInstall("privacy-completion", `synthetic-privacy-completion-${run}`);
+    const called = deferred();
+    const release = deferred();
+    const processing = processAdServicesLookups(pool, payloadStore, tenantId, {
+      endpoint: "http://127.0.0.1/apple-adservices",
+      client: async () => {
+        called.resolve();
+        await release.promise;
+        return { status: 200, body: Buffer.from('{"attribution":true,"campaignId":"222"}') };
+      },
+    });
+    try {
+      await within(called.promise, "privacy-raced AdServices provider call");
+      const response = await signed({
+        path: "/v1/privacy/on-device",
+        value: { installation_id: install.installationId },
+        secret: install.installationSecret,
+        installationKeyId: install.installationKeyId,
+      });
+      assert.equal(response.status, 201);
+    } finally {
+      release.resolve();
+    }
+    assert.deepEqual(await within(processing, "privacy-raced AdServices completion"), {
+      completed: 0,
+      retried: 0,
+    });
+    const state = await withTenant(pool, tenantId, (client) => client.query<{
+      result_count: number;
+      attributed_count: number;
+      pending_count: number;
+    }>(
+      `SELECT
+         (SELECT count(*)::int FROM ledger.adservices_lookup_results
+           WHERE tenant_id=$1 AND app_id=$2 AND install_record_id=$3) AS result_count,
+         (SELECT count(*)::int FROM ledger.attribution_results
+           WHERE tenant_id=$1 AND app_id=$2 AND reason_code='adservices_attributed'
+             AND subject_ref=$4) AS attributed_count,
+         (SELECT count(*)::int FROM ephemeral.adservices_lookups
+           WHERE tenant_id=$1 AND app_id=$2 AND install_record_id=$3) AS pending_count`,
+      [tenantId, appId, install.recordId, install.installationId],
+    ));
+    assert.deepEqual(state.rows[0], { result_count: 0, attributed_count: 0, pending_count: 0 });
+  });
+
+  it("lets AdServices completion finish before deletion purges its protected response", async () => {
+    const install = await submitInstall("completion-before-privacy", `synthetic-completion-first-${run}`);
+    const writeStarted = deferred();
+    const releaseWrite = deferred();
+    const blockingStore: PayloadStore = {
+      write: async (scope, plaintext) => {
+        const reference = await payloadStore.write(scope, plaintext);
+        if (scope.objectId.startsWith("adservices-result-")) {
+          writeStarted.resolve();
+          await releaseWrite.promise;
+        }
+        return reference;
+      },
+      read: (reference) => payloadStore.read(reference),
+      purge: (reference) => payloadStore.purge(reference),
+      scanFor: (value) => payloadStore.scanFor(value),
+    };
+    const processing = processAdServicesLookups(pool, blockingStore, tenantId, {
+      endpoint: "http://127.0.0.1/apple-adservices",
+      client: async () => ({
+        status: 200,
+        body: Buffer.from('{"attribution":true,"campaignId":"333"}'),
+      }),
+    });
+    let deletion: Promise<Response> | undefined;
+    let barrierError: unknown;
+    try {
+      await within(writeStarted.promise, "AdServices protected response write");
+      deletion = signed({
+        path: "/v1/privacy/on-device",
+        value: { installation_id: install.installationId },
+        secret: install.installationSecret,
+        installationKeyId: install.installationKeyId,
+      });
+      await within(waitForBlockedPrivacyFence(), "AdServices privacy fence wait");
+    } catch (error) {
+      barrierError = error;
+    } finally {
+      releaseWrite.resolve();
+      await within(
+        Promise.allSettled([processing, ...(deletion ? [deletion] : [])]),
+        "AdServices completion-first cleanup",
+      );
+    }
+    if (barrierError) throw barrierError;
+    assert.deepEqual(await within(processing, "AdServices completion-first processing"), {
+      completed: 1,
+      retried: 0,
+    });
+    assert.ok(deletion);
+    const deletionResponse = await within(deletion, "AdServices completion-first deletion");
+    assert.equal(deletionResponse.status, 201);
+    const result = await withTenant(pool, tenantId, (client) => client.query<{
+      response_ref: string;
+      available_payloads: number;
+      pending_count: number;
+    }>(
+      `SELECT result.response_ref,
+              (SELECT count(*)::int FROM ledger.raw_records_current AS raw
+                WHERE raw.tenant_id=$1 AND raw.app_id=$2 AND raw.record_id=$3
+                  AND raw.payload_lifecycle_status='available') AS available_payloads,
+              (SELECT count(*)::int FROM ephemeral.adservices_lookups AS lookup
+                WHERE lookup.tenant_id=$1 AND lookup.app_id=$2
+                  AND lookup.install_record_id=$3) AS pending_count
+         FROM ledger.adservices_lookup_results AS result
+        WHERE result.tenant_id=$1 AND result.app_id=$2 AND result.install_record_id=$3`,
+      [tenantId, appId, install.recordId],
+    ));
+    assert.equal(result.rows.length, 1);
+    assert.equal(result.rows[0].available_payloads, 0);
+    assert.equal(result.rows[0].pending_count, 0);
+    await assert.rejects(payloadStore.read(result.rows[0].response_ref), PayloadNotFoundError);
   });
 
   it("A08 retries 404 three times, backs off 500, terminates 400, and skips expired tokens", async () => {

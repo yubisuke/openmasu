@@ -125,6 +125,25 @@ const maxInboxBatchLimit = boundedIntegerSetting(
   1,
   1_000,
 );
+const adServicesProviderTimeout = boundedIntegerSetting(
+  "OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS",
+  process.env.OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS
+    ?? existing.OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS,
+  30_000,
+  10,
+  120_000,
+);
+const adServicesClaimLease = boundedIntegerSetting(
+  "OPENMASU_ADSERVICES_CLAIM_LEASE_MS",
+  process.env.OPENMASU_ADSERVICES_CLAIM_LEASE_MS
+    ?? existing.OPENMASU_ADSERVICES_CLAIM_LEASE_MS,
+  300_000,
+  1_000,
+  900_000,
+);
+if (Number(adServicesProviderTimeout) >= Number(adServicesClaimLease)) {
+  throw new Error("OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS must be shorter than OPENMASU_ADSERVICES_CLAIM_LEASE_MS");
+}
 
 const runtimePaths = [migrationEnvPath, appEnvPath, seedEnvPath, postgresPasswordPath];
 if (runtimePaths.every(existsSync)) {
@@ -133,6 +152,8 @@ if (runtimePaths.every(existsSync)) {
     OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS: workerShutdownTimeout,
     OPENMASU_SDK_INBOX_BATCH_LIMIT: sdkInboxBatchLimit,
     OPENMASU_MAX_INBOX_BATCH_LIMIT: maxInboxBatchLimit,
+    OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS: adServicesProviderTimeout,
+    OPENMASU_ADSERVICES_CLAIM_LEASE_MS: adServicesClaimLease,
   });
   console.log(`OpenMasu runtime secrets already exist: ${runtimeSecretRoot}`);
   process.exit(0);
@@ -299,6 +320,8 @@ const appEntries: Record<string, string> = {
   OPENMASU_ADSERVICES_ENDPOINT: "https://api-adservices.apple.com/api/v1/",
   OPENMASU_ADSERVICES_LOOKUP_RATE_RPS: "10",
   OPENMASU_ADSERVICES_LOOKUP_RATE_BURST: "50",
+  OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS: adServicesProviderTimeout,
+  OPENMASU_ADSERVICES_CLAIM_LEASE_MS: adServicesClaimLease,
 };
 const seedEntries: Record<string, string> = {
   OPENMASU_APP_DATABASE_URL: appDatabaseUrl,
