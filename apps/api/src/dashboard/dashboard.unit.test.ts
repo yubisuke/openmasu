@@ -127,6 +127,40 @@ describe("M3 zero-JavaScript dashboard", () => {
     assert.equal(/(?:href|src)=/i.test(first), false);
   });
 
+  it("renders explicit continuation links for every bounded report surface", () => {
+    const html = renderDashboard(buildDashboardView({
+      apps: [{ app_id: "app-one", created_at: "2026-08-20T00:00:00.000Z" }],
+      selectedAppId: "app-one",
+      query: {
+        tenantId: "tenant-one",
+        appId: "app-one",
+        metricNames: ["daily_click_count"],
+        watermarkAtMost: "2026-08-30T00:00:00.000Z",
+        supersession: "latest",
+        limit: 2,
+      },
+      metrics: { data: [metric()], next_cursor: "metric-cursor" },
+      records: [{ metric_name: "daily_click_count", grouping: { metric_date: "2026-08-29" }, count: "1" }],
+      recordNextCursor: "record-cursor",
+      differences: { data: [{
+        reconciliation_id: "reconciliation:one",
+        difference_reason_code: "candidate_missing",
+        input_snapshot_id: "input:one",
+        external_snapshot_id: "external:one",
+        matching_keys: [], candidates: [], exclusions: [], windows: [], joins: [], freshness: "current",
+      }] },
+      differenceNextCursor: "difference-cursor",
+      csrfToken: "synthetic-csrf",
+    }));
+    assert.match(html, /Next metric page/);
+    assert.match(html, /Next aggregate-record page/);
+    assert.match(html, /Next difference-audit page/);
+    assert.match(html, /\/dashboard\/apps\/app-one\/records\?/);
+    assert.match(html, /\/dashboard\/apps\/app-one\/differences\?/);
+    assert.equal(html.includes("tenant-one"), false);
+    assert.equal(html.includes("<script"), false);
+  });
+
   it("WO18 renders zero-JavaScript lifecycle forms only for permitted roles", () => {
     const base = {
       apps: [{ app_id: "app-one", created_at: "2026-08-20T00:00:00.000Z" }],

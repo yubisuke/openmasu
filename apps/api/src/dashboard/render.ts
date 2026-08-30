@@ -15,9 +15,35 @@ function grouping(value: Readonly<Record<string, string>>): string {
   return entries.length ? entries.map(([key, item]) => `${key}=${item}`).join(", ") : "all";
 }
 
+function continuationHref(view: DashboardView, suffix: string, cursor: string): string | undefined {
+  if (!view.selectedAppId || !view.query) return undefined;
+  const params = new URLSearchParams();
+  for (const metricName of view.query.metricNames ?? []) params.append("metric_name", metricName);
+  if (view.query.metricDefinitionVersion) params.set("metric_definition_version", view.query.metricDefinitionVersion);
+  for (const [dimension, value] of Object.entries(view.query.grouping ?? {})) {
+    params.set(`grouping_${dimension}`, value);
+  }
+  if (view.query.dateFrom) params.set("date_from", view.query.dateFrom);
+  if (view.query.dateTo) params.set("date_to", view.query.dateTo);
+  if (view.query.watermarkAtMost) params.set("watermark_at_most", view.query.watermarkAtMost);
+  if (view.query.differenceReasonCode) params.set("difference_reason_code", view.query.differenceReasonCode);
+  params.set("supersession", view.query.supersession);
+  params.set("limit", String(view.query.limit));
+  params.set("after", cursor);
+  return `/dashboard/apps/${encodeURIComponent(view.selectedAppId)}${suffix}?${params.toString()}`;
+}
+
+function continuation(view: DashboardView, suffix: string, cursor: string | undefined, label: string): string {
+  if (!cursor) return "";
+  const href = continuationHref(view, suffix, cursor);
+  return href
+    ? `<p class="pagination"><a rel="next" href="${escapeHtml(href)}">${escapeHtml(label)}</a></p>`
+    : `<p class="pagination">${escapeHtml(label)} is available through the paginated API.</p>`;
+}
+
 function differences(view: DashboardView): string {
   if (view.differences.length === 0) return "<p>No stored difference-audit rows match this filter.</p>";
-  return `<table><caption>Stored difference audit</caption><thead><tr><th scope="col">Reason</th><th scope="col">Input snapshot</th><th scope="col">External snapshot</th><th scope="col">Matching keys</th><th scope="col">Candidates</th><th scope="col">Exclusions</th><th scope="col">Windows</th><th scope="col">Joins</th><th scope="col">Freshness</th></tr></thead><tbody>${view.differences.map((row) => `<tr><td>${escapeHtml(row.difference_reason_code)}</td><td>${escapeHtml(row.input_snapshot_id)}</td><td>${escapeHtml(row.external_snapshot_id)}</td><td>${escapeHtml(JSON.stringify(row.matching_keys ?? []))}</td><td>${escapeHtml(JSON.stringify(row.candidates ?? []))}</td><td>${escapeHtml(JSON.stringify(row.exclusions ?? []))}</td><td>${escapeHtml(JSON.stringify(row.windows ?? []))}</td><td>${escapeHtml(JSON.stringify(row.joins ?? []))}</td><td>${escapeHtml(row.freshness)}</td></tr>`).join("")}</tbody></table>`;
+  return `<table><caption>Stored difference audit</caption><thead><tr><th scope="col">Reason</th><th scope="col">Input snapshot</th><th scope="col">External snapshot</th><th scope="col">Matching keys</th><th scope="col">Candidates</th><th scope="col">Exclusions</th><th scope="col">Windows</th><th scope="col">Joins</th><th scope="col">Freshness</th></tr></thead><tbody>${view.differences.map((row) => `<tr><td>${escapeHtml(row.difference_reason_code)}</td><td>${escapeHtml(row.input_snapshot_id)}</td><td>${escapeHtml(row.external_snapshot_id)}</td><td>${escapeHtml(JSON.stringify(row.matching_keys ?? []))}</td><td>${escapeHtml(JSON.stringify(row.candidates ?? []))}</td><td>${escapeHtml(JSON.stringify(row.exclusions ?? []))}</td><td>${escapeHtml(JSON.stringify(row.windows ?? []))}</td><td>${escapeHtml(JSON.stringify(row.joins ?? []))}</td><td>${escapeHtml(row.freshness)}</td></tr>`).join("")}</tbody></table>${continuation(view, "/differences", view.differenceNextCursor, "Next difference-audit page")}`;
 }
 
 function list(values: readonly string[]): string {
@@ -111,17 +137,17 @@ export function renderDashboard(view: DashboardView): string {
   const appNavigation = view.apps.length
     ? `<nav aria-label="Applications"><ul>${view.apps.map((app) => `<li><a href="/dashboard/apps/${encodeURIComponent(app.app_id)}">${escapeHtml(app.app_id)}</a></li>`).join("")}</ul></nav>`
     : "<p>No applications are registered.</p>";
-  const empty = selected && view.rows.length === 0
-    ? "<p>No data yet; run <code>npm run seed</code>.</p>"
+  const empty = selected && view.rows.length === 0 && view.records.length === 0 && view.differences.length === 0
+    ? "<p>No report data match this view.</p>"
     : "";
   const deterministicMetrics = metricTable("Deterministic cohort metrics", view.deterministicRows);
   const appleAggregateMetrics = metricTable("Apple aggregate postback metrics", view.appleAggregateRows);
-  const recordRows = view.records.length === 0 ? "" : `<table><caption>Aggregate record counts at the fixed watermark</caption><thead><tr><th scope="col">Metric</th><th scope="col">Grouping</th><th scope="col">Count</th></tr></thead><tbody>${view.records.map((row) => `<tr><th scope="row">${escapeHtml(row.metric_name)}</th><td>${escapeHtml(grouping(row.grouping))}</td><td>${escapeHtml(row.count)}</td></tr>`).join("")}</tbody></table>`;
+  const recordRows = view.records.length === 0 ? "" : `<table><caption>Aggregate record counts at the fixed watermark</caption><thead><tr><th scope="col">Metric</th><th scope="col">Grouping</th><th scope="col">Count</th></tr></thead><tbody>${view.records.map((row) => `<tr><th scope="row">${escapeHtml(row.metric_name)}</th><td>${escapeHtml(grouping(row.grouping))}</td><td>${escapeHtml(row.count)}</td></tr>`).join("")}</tbody></table>${continuation(view, "/records", view.recordNextCursor, "Next aggregate-record page")}`;
   const deterministicCharts = chartSection("Deterministic metric charts", view.deterministicCharts);
   const appleAggregateCharts = chartSection("Apple aggregate postback charts", view.appleAggregateCharts);
   const exportLink = selected ? `<p><a href="/dashboard/apps/${encodeURIComponent(selected)}/cohorts.csv${view.query?.watermarkAtMost ? `?watermark_at_most=${encodeURIComponent(view.query.watermarkAtMost)}&export=true` : "?export=true"}">Export aggregate CSV</a></p>` : "";
   const reportNavigation = selected
-    ? `<nav aria-label="Report views"><a href="/dashboard/apps/${encodeURIComponent(selected)}">Cohorts and activity</a> <a href="/dashboard/apps/${encodeURIComponent(selected)}/differences">Stored difference audit</a> <a href="/dashboard/apps/${encodeURIComponent(selected)}/fraud">Fraud audit</a> <a href="/dashboard/apps/${encodeURIComponent(selected)}/tracking-links">Measurement links</a></nav>`
+    ? `<nav aria-label="Report views"><a href="/dashboard/apps/${encodeURIComponent(selected)}">Cohorts and activity</a> <a href="/dashboard/apps/${encodeURIComponent(selected)}/records">Aggregate record counts</a> <a href="/dashboard/apps/${encodeURIComponent(selected)}/differences">Stored difference audit</a> <a href="/dashboard/apps/${encodeURIComponent(selected)}/fraud">Fraud audit</a> <a href="/dashboard/apps/${encodeURIComponent(selected)}/tracking-links">Measurement links</a></nav>`
     : "";
   const metadata = selected ? `<section aria-label="Report metadata"><h3>Report metadata</h3><dl><dt>Fixed watermark</dt><dd>${escapeHtml(view.metadata.watermark ?? "not selected")}</dd><dt>Snapshot IDs</dt><dd>${list(view.metadata.snapshotIds)}</dd><dt>Aggregation time zones</dt><dd>${list(view.metadata.aggregationTimeZones)}</dd><dt>Metric definition versions</dt><dd>${list(view.metadata.metricDefinitionVersions)}</dd><dt>Rule bundles</dt><dd>${list(view.metadata.ruleBundles)}</dd><dt>Policy versions</dt><dd>${list(view.metadata.policyVersions)}</dd><dt>Freshness</dt><dd>${list(view.metadata.freshnessStates)}</dd></dl></section>` : "";
   const createApp = view.canAdminister ? `<section><h2>Register an app</h2><form method="post" action="/dashboard/apps"><input type="hidden" name="csrf_token" value="${escapeHtml(view.csrfToken)}"><label>App ID <input name="app_id" required pattern="[A-Za-z0-9._:-]{1,128}"></label><button type="submit">Register app and issue SDK key</button></form></section>` : "";
@@ -129,5 +155,6 @@ export function renderDashboard(view: DashboardView): string {
   const createTrackingLink = selected && view.canOperate
     ? `<section><h2>Create a tracking link</h2><form method="post" action="/dashboard/apps/${encodeURIComponent(selected)}/tracking-links"><input type="hidden" name="csrf_token" value="${escapeHtml(view.csrfToken)}"><label>Destination kind <select name="destination_kind"><option value="play_store">Play Store</option><option value="custom_https">Custom HTTPS</option></select></label><label>Destination URL <input type="url" name="destination_url" required></label><label>Play package name <input name="play_package_name"></label><label>Network <input name="network"></label><label>Campaign ID <input name="campaign_id"></label><button type="submit">Create tracking link</button></form></section>`
     : "";
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>OpenMasu dashboard</title><link rel="stylesheet" href="/dashboard/app.css"></head><body><header><h1>OpenMasu dashboard</h1><p>${view.undefinedCount} undefined value${view.undefinedCount === 1 ? "" : "s"} on this page.</p></header><main>${appNavigation}${selected ? `<h2>${escapeHtml(selected)}</h2>` : "<h2>Applications</h2>"}${reportNavigation}${metadata}${empty}${exportLink}${deterministicMetrics}${appleAggregateMetrics}${recordRows}${deterministicCharts}${appleAggregateCharts}${fraudAudit(view)}${selected ? differences(view) : ""}${trackingLinks(view)}${createTrackingLink}${sdkKeys(view)}${serverKeys(view)}${operatorWebhooks(view)}${operatorBulkExports(view)}${configurationForms(view)}${createLinkDomain}${createApp}<form method="post" action="/dashboard/session/delete"><input type="hidden" name="csrf_token" value="${escapeHtml(view.csrfToken)}"><button type="submit">Sign out</button></form></main></body></html>`;
+  const metricContinuation = continuation(view, "", view.nextCursor, "Next metric page");
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>OpenMasu dashboard</title><link rel="stylesheet" href="/dashboard/app.css"></head><body><header><h1>OpenMasu dashboard</h1><p>${view.undefinedCount} undefined value${view.undefinedCount === 1 ? "" : "s"} on this page.</p></header><main>${appNavigation}${selected ? `<h2>${escapeHtml(selected)}</h2>` : "<h2>Applications</h2>"}${reportNavigation}${metadata}${empty}${exportLink}${deterministicMetrics}${appleAggregateMetrics}${metricContinuation}${recordRows}${deterministicCharts}${appleAggregateCharts}${fraudAudit(view)}${selected ? differences(view) : ""}${trackingLinks(view)}${createTrackingLink}${sdkKeys(view)}${serverKeys(view)}${operatorWebhooks(view)}${operatorBulkExports(view)}${configurationForms(view)}${createLinkDomain}${createApp}<form method="post" action="/dashboard/session/delete"><input type="hidden" name="csrf_token" value="${escapeHtml(view.csrfToken)}"><button type="submit">Sign out</button></form></main></body></html>`;
 }

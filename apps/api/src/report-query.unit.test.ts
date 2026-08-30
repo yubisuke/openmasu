@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  buildDifferenceQuery,
   buildMetricQuery,
+  encodeDifferenceCursor,
   encodeMetricCursor,
+  encodeRecordCountCursor,
   parseMetricQuery,
   ReportQueryError,
 } from "./report-query.js";
@@ -16,6 +19,17 @@ function parse(query: string) {
 function rejects(query: string, code: string): void {
   assert.throws(
     () => parse(query),
+    (error: unknown) => error instanceof ReportQueryError && error.code === code,
+  );
+}
+
+function rejectsKind(query: string, cursorKind: "difference" | "record", code: string): void {
+  assert.throws(
+    () => parseMetricQuery({
+      ...scope,
+      searchParams: new URLSearchParams(query),
+      cursorKind,
+    }),
     (error: unknown) => error instanceof ReportQueryError && error.code === code,
   );
 }
@@ -90,6 +104,55 @@ describe("M3 typed reporting query", () => {
     assert.match(statement.text, /mr\.grouping->>'campaign_id'/);
     assert.match(statement.text, /mr\.grouping->>'metric_date'/);
     assert.equal(statement.text.includes("grouping->'dimensions'"), false);
+    assert.equal(/\bOFFSET\b/i.test(statement.text), false);
+  });
+
+  it("parses route-specific difference and record cursors without accepting the wrong kind", () => {
+    const difference = encodeDifferenceCursor({ kind: "difference", reconciliationId: "reconciliation:page-1" });
+    const record = encodeRecordCountCursor({
+      kind: "record",
+      metricName: "daily_install_count",
+      groupingText: '{"metric_date": "2026-08-30"}',
+    });
+    const differenceQuery = parseMetricQuery({
+      ...scope,
+      searchParams: new URLSearchParams({ after: difference }),
+      cursorKind: "difference",
+    });
+    const recordQuery = parseMetricQuery({
+      ...scope,
+      searchParams: new URLSearchParams({ after: record }),
+      cursorKind: "record",
+    });
+    assert.deepEqual(differenceQuery.query.differenceAfter, {
+      kind: "difference",
+      reconciliationId: "reconciliation:page-1",
+    });
+    assert.deepEqual(recordQuery.query.recordAfter, {
+      kind: "record",
+      metricName: "daily_install_count",
+      groupingText: '{"metric_date": "2026-08-30"}',
+    });
+    rejectsKind(`after=${encodeURIComponent(record)}`, "difference", "cursor_invalid");
+    rejectsKind(`after=${encodeURIComponent(difference)}`, "record", "cursor_invalid");
+    rejects(`after=${encodeURIComponent(difference)}`, "cursor_invalid");
+  });
+
+  it("binds the difference cursor and emits keyset SQL without offset", () => {
+    const cursor = encodeDifferenceCursor({ kind: "difference", reconciliationId: "reconciliation:bound-90731" });
+    const parsed = parseMetricQuery({
+      ...scope,
+      searchParams: new URLSearchParams({
+        difference_reason_code: "candidate_missing",
+        after: cursor,
+        limit: "7",
+      }),
+      cursorKind: "difference",
+    });
+    const statement = buildDifferenceQuery(parsed.query);
+    assert.equal(statement.text.includes("reconciliation:bound-90731"), false);
+    assert.equal(statement.values.includes("reconciliation:bound-90731"), true);
+    assert.match(statement.text, /rr\.reconciliation_id COLLATE "C" >/);
     assert.equal(/\bOFFSET\b/i.test(statement.text), false);
   });
 });

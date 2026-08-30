@@ -156,6 +156,18 @@ origins the redirector may use. An empty allowlist rejects every destination.
 Stored destinations are authoritative. Request headers and query parameters
 cannot replace them.
 
+## Paginated reports
+
+Metric rows, aggregate record counts, and stored difference-audit rows are
+bounded. JSON responses include `next_cursor` only when another page exists;
+send that value back as `after` to continue the same route. Cursors are specific
+to their route and a mismatched cursor is rejected. Dashboard report pages show
+an explicit **Next** link rather than silently hiding additional rows.
+
+Use `format=csv&export=true` only when the result fits within the configured
+export maximum. OpenMasu returns `export_limit_exceeded` instead of a partial
+CSV. A non-export CSV page exposes its continuation in `X-Next-Cursor`.
+
 ## Stop and troubleshoot
 
 Inspect the stack without exposing generated secrets:

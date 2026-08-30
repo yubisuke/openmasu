@@ -115,10 +115,10 @@ describe("M3 four-surface consistency", { concurrency: false }, () => {
         selectedAppId: identity.appId,
         query: parsed.query,
         metrics: api,
-        records: raw,
+        records: raw.data,
         csrfToken: "synthetic-consistency-csrf",
       });
-      const expected = "empty" in candidate && candidate.empty ? [] : normalizedRecords(raw);
+      const expected = "empty" in candidate && candidate.empty ? [] : normalizedRecords(raw.data);
       assert.deepEqual(normalizedMetrics(api.data), expected);
       assert.deepEqual(normalizedMetrics(view.rows), expected);
       assert.deepEqual(normalizedRecords(view.records), expected);

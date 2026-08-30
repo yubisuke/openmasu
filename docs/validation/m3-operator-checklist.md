@@ -2,7 +2,7 @@
 
 This checklist records observations that cannot be established by the synthetic code gate. Do not commit real campaign names, values, exports, credentials, session tokens, source IP addresses, screenshots containing real data, or operator notes from a live deployment to this public repository.
 
-The automated baseline is `npm run verify:consistency` plus the Runtime workflow. It covers the typed query contract, PostgreSQL reader isolation, metric parity, aggregate-only record counts, API/dashboard CSV byte identity, undefined-value rendering, zero-JavaScript CSP, and the API runtime SBOM component baseline.
+The automated baseline is `npm run verify:consistency` plus the Runtime workflow. It covers the typed query contract, PostgreSQL reader isolation, metric parity, aggregate-only record counts, API/dashboard CSV byte identity, route-specific keyset pagination for metrics, record counts, and stored differences, fail-closed export limits, undefined-value rendering, zero-JavaScript CSP, and the API runtime SBOM component baseline.
 
 ## Five-day morning test
 
@@ -35,7 +35,8 @@ For five working days, an authorized operator opens the dashboard once and recor
 
 - [ ] Campaign × country × date cardinality is tested outside the public repository
 - [ ] Query latency and export size are recorded privately
-- [ ] The keyset walk is checked for duplicates and omissions under normal ingestion
+- [ ] Metric, aggregate-record, and stored-difference keyset walks are checked for duplicates and omissions under normal ingestion
+- [ ] A complete CSV export that exceeds the configured maximum fails instead of returning a partial file
 - [ ] Undefined values remain visible as undefined rather than zero
 - [ ] Organic, non-organic, and unattributed rows remain separate
 - [ ] Aggregate CSV is not represented as a DSAR or installation-level export

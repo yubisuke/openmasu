@@ -48,6 +48,7 @@ export type RouteHandler =
   | "dashboard_logout"
   | "dashboard_app"
   | "dashboard_export"
+  | "dashboard_records"
   | "dashboard_differences"
   | "dashboard_fraud"
   | "dashboard_tracking_links_list"
@@ -133,6 +134,7 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_login", method: "POST", pattern: /^\/dashboard\/session$/, auth: "public", mutates: true },
   { handler: "dashboard_logout", method: "POST", pattern: /^\/dashboard\/session\/delete$/, auth: "dashboard_session", mutates: true, capability: "read" },
   { handler: "dashboard_export", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/cohorts\.csv$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_records", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/records$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_differences", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/differences$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_fraud", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/fraud$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_tracking_links_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/tracking-links$/, auth: "dashboard_session", mutates: false, capability: "read" },

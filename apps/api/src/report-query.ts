@@ -19,6 +19,19 @@ export type MetricCursor = {
   readonly metricRunId: string;
 };
 
+export type DifferenceCursor = {
+  readonly kind: "difference";
+  readonly reconciliationId: string;
+};
+
+export type RecordCountCursor = {
+  readonly kind: "record";
+  readonly metricName: string;
+  readonly groupingText: string;
+};
+
+export type ReportCursorKind = "metric" | "difference" | "record";
+
 export type MetricQuery = {
   readonly tenantId: string;
   readonly appId: string;
@@ -32,6 +45,8 @@ export type MetricQuery = {
   readonly supersession: "latest" | "all";
   readonly limit: number;
   readonly after?: MetricCursor;
+  readonly differenceAfter?: DifferenceCursor;
+  readonly recordAfter?: RecordCountCursor;
 };
 
 export type ParsedReportQuery = {
@@ -93,26 +108,73 @@ function one(params: URLSearchParams, key: string): string | undefined {
   return values[0];
 }
 
-function parseCursor(encoded: string): MetricCursor {
+function decodedCursor(encoded: string): Record<string, unknown> {
   try {
-    const parsed = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as Record<string, unknown>;
-    if (Object.keys(parsed).sort().join(",") !== "groupingDigest,metricName,metricRunId"
-      || typeof parsed.metricName !== "string" || !metricNamePattern.test(parsed.metricName)
-      || typeof parsed.groupingDigest !== "string" || !digestPattern.test(parsed.groupingDigest)
-      || typeof parsed.metricRunId !== "string" || !identifierPattern.test(parsed.metricRunId)) {
-      throw new Error("invalid");
-    }
-    return {
-      metricName: parsed.metricName,
-      groupingDigest: parsed.groupingDigest,
-      metricRunId: parsed.metricRunId,
-    };
+    const decoded = Buffer.from(encoded, "base64url").toString("utf8");
+    if (decoded.length < 2 || decoded.length > 4096) throw new Error("invalid");
+    const parsed = JSON.parse(decoded) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid");
+    return parsed as Record<string, unknown>;
   } catch {
     throw new ReportQueryError("cursor_invalid");
   }
 }
 
+function parseMetricCursor(encoded: string): MetricCursor {
+  const parsed = decodedCursor(encoded);
+  if (Object.keys(parsed).sort().join(",") !== "groupingDigest,metricName,metricRunId"
+    || typeof parsed.metricName !== "string" || !metricNamePattern.test(parsed.metricName)
+    || typeof parsed.groupingDigest !== "string" || !digestPattern.test(parsed.groupingDigest)
+    || typeof parsed.metricRunId !== "string" || !identifierPattern.test(parsed.metricRunId)) {
+    throw new ReportQueryError("cursor_invalid");
+  }
+  return {
+    metricName: parsed.metricName,
+    groupingDigest: parsed.groupingDigest,
+    metricRunId: parsed.metricRunId,
+  };
+}
+
+function parseDifferenceCursor(encoded: string): DifferenceCursor {
+  const parsed = decodedCursor(encoded);
+  if (Object.keys(parsed).sort().join(",") !== "kind,reconciliationId"
+    || parsed.kind !== "difference"
+    || typeof parsed.reconciliationId !== "string"
+    || !identifierPattern.test(parsed.reconciliationId)) {
+    throw new ReportQueryError("cursor_invalid");
+  }
+  return { kind: "difference", reconciliationId: parsed.reconciliationId };
+}
+
+function parseRecordCountCursor(encoded: string): RecordCountCursor {
+  const parsed = decodedCursor(encoded);
+  if (Object.keys(parsed).sort().join(",") !== "groupingText,kind,metricName"
+    || parsed.kind !== "record"
+    || typeof parsed.metricName !== "string" || !metricNamePattern.test(parsed.metricName)
+    || typeof parsed.groupingText !== "string" || parsed.groupingText.length > 2048) {
+    throw new ReportQueryError("cursor_invalid");
+  }
+  try {
+    const grouping = JSON.parse(parsed.groupingText) as unknown;
+    if (!grouping || typeof grouping !== "object" || Array.isArray(grouping)) throw new Error("invalid");
+    if (Object.keys(grouping as Record<string, unknown>).some((key) => !(key in groupingDimensionAllowlist))) {
+      throw new Error("invalid");
+    }
+  } catch {
+    throw new ReportQueryError("cursor_invalid");
+  }
+  return { kind: "record", metricName: parsed.metricName, groupingText: parsed.groupingText };
+}
+
 export function encodeMetricCursor(cursor: MetricCursor): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+export function encodeDifferenceCursor(cursor: DifferenceCursor): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+export function encodeRecordCountCursor(cursor: RecordCountCursor): string {
   return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
 }
 
@@ -135,6 +197,7 @@ export function parseMetricQuery(input: {
   readonly searchParams: URLSearchParams;
   readonly maximumRows?: number;
   readonly maximumExportRows?: number;
+  readonly cursorKind?: ReportCursorKind;
 }): ParsedReportQuery {
   const maximumRows = input.maximumRows ?? 1000;
   const maximumExportRows = input.maximumExportRows ?? 200_000;
@@ -217,6 +280,14 @@ export function parseMetricQuery(input: {
   const limitMaximum = exportRows ? maximumExportRows : maximumRows;
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > limitMaximum) throw new ReportQueryError("limit_invalid");
   const afterValue = one(input.searchParams, "after");
+  const cursorKind = input.cursorKind ?? "metric";
+  const cursor = afterValue === undefined
+    ? {}
+    : cursorKind === "metric"
+      ? { after: parseMetricCursor(afterValue) }
+      : cursorKind === "difference"
+        ? { differenceAfter: parseDifferenceCursor(afterValue) }
+        : { recordAfter: parseRecordCountCursor(afterValue) };
 
   return {
     format,
@@ -233,7 +304,7 @@ export function parseMetricQuery(input: {
       ...(differenceReasonCode !== undefined ? { differenceReasonCode } : {}),
       supersession,
       limit,
-      ...(afterValue !== undefined ? { after: parseCursor(afterValue) } : {}),
+      ...cursor,
     },
   };
 }
@@ -303,6 +374,9 @@ export function buildDifferenceQuery(query: MetricQuery): ParameterizedQuery {
       WHERE replacement.tenant_id=rr.tenant_id AND replacement.app_id=rr.app_id
         AND replacement.supersedes_reconciliation_id=rr.reconciliation_id
     )`);
+  }
+  if (query.differenceAfter) {
+    predicates.push(`rr.reconciliation_id COLLATE "C" > ${push(values, query.differenceAfter.reconciliationId)} COLLATE "C"`);
   }
   const limit = push(values, query.limit + 1);
   return {

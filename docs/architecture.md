@@ -227,6 +227,13 @@ CSV export, dashboard views, and rendered values use a fixed watermark and
 shared types. `ledger_seq` may support internal ordering but is not part of a
 public reproducibility digest.
 
+Metric rows, aggregate record counts, and stored difference-audit rows are all
+bounded with route-specific keyset cursors. JSON pages carry `next_cursor`,
+paged CSV responses carry `X-Next-Cursor`, and complete CSV exports fail rather
+than silently truncating. Stored reconciliation artifacts have no selection
+watermark today; their pagination is deterministic, but it is not described as
+a fixed-watermark snapshot.
+
 Undefined values remain absent with a closed reason. Organic, non-organic,
 unattributed, deterministic installation-level, and aggregate platform series
 are never merged implicitly.
