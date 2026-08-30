@@ -107,6 +107,15 @@ response bodies, campaign values, tenant/app identifiers, or payload references.
 An expired lease may cause another provider read and does not establish
 provider-side exactly-once behavior.
 
+Platform-integrity verification also claims one due row before provider I/O.
+The local defaults bound a request to 10 seconds and its claim to five minutes.
+Only the current unexpired token may commit a result, and completion rechecks
+the source under the tenant privacy barrier. Monitor due age, claim age,
+repeated expiry, and unavailable verdict counts without logging tokens,
+provider bodies, payload references, tenants, apps, or subjects. Lease recovery
+can repeat verification and does not establish provider-side exactly-once
+behavior.
+
 Scheduled metric work uses a daily durable lease, but every artifact watermark
 is the current UTC midnight rather than the wall-clock time at which a worker
 obtains that lease. A schedule processes at most 31 pending dates per cycle.

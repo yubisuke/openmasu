@@ -126,9 +126,14 @@ signal set.
 
 <!-- threat-component:integrity-verifier -->
 **Integrity verifier:** forged provider response, raw token disclosure,
-incorrect project configuration, and treating unavailable evidence as success.
-Controls include server-side provider verification, protected references,
-closed neutral verdicts, policy provenance, and fail-closed configuration.
+incorrect project configuration, duplicate provider calls, stale completion,
+protected-response resurrection after deletion, and treating unavailable
+evidence as success. Controls include server-side provider verification,
+protected references, one database-clock claim per request, bounded provider
+waits, token-fenced transactional completion, source-lifecycle revalidation,
+the tenant privacy barrier, closed neutral verdicts, policy provenance, and
+fail-closed configuration. Lease expiry can repeat provider I/O; provider-side
+exactly-once behavior remains unverified.
 
 <!-- threat-component:google-play-product-verifier -->
 **Google Play verifier:** forged notification, stale purchase state, duplicated

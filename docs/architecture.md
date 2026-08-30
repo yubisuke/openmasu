@@ -135,8 +135,13 @@ default action separate from metric exclusion.
 
 <!-- m1-component:integrity-verifier -->
 **Integrity verifier.** Normalizes protected Play Integrity or App Attest
-responses through server-side verification boundaries. Live projects remain an
-operator configuration.
+responses through server-side verification boundaries. Each provider request
+is preceded by a one-row database-clock claim. Completion holds the tenant
+privacy barrier, revalidates the claim and source lifecycle, and commits the
+protected response, result, and queue removal in one transaction. An expired
+claim can be recovered; a stale or deletion-raced worker writes no result.
+Lease recovery can repeat a provider request and is not a provider-side
+exactly-once guarantee. Live projects remain an operator configuration.
 
 <!-- m1-component:google-play-product-verifier -->
 **Google Play product verifier.** Converts authenticated notifications into

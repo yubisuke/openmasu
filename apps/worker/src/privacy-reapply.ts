@@ -147,6 +147,28 @@ async function encryptedReferences(
       WHERE ${googleResultScope} AND result.evidence_ref LIKE 'encrypted:%'`,
     values,
   );
+  const integrityResultScope = scope === "tenant"
+    ? "result.tenant_id=$1"
+    : scope === "app"
+      ? "result.tenant_id=$1 AND result.app_id=$2"
+      : "result.tenant_id=$1 AND result.app_id=$2 AND result.subject_record_id=ANY($3::text[])";
+  const integrityResults = await client.query<{ reference: string }>(
+    `SELECT DISTINCT result.evidence_ref AS reference
+       FROM ledger.integrity_verification_results AS result
+      WHERE ${integrityResultScope} AND result.evidence_ref LIKE 'encrypted:%'`,
+    values,
+  );
+  const integrityLookupScope = scope === "tenant"
+    ? "lookup.tenant_id=$1"
+    : scope === "app"
+      ? "lookup.tenant_id=$1 AND lookup.app_id=$2"
+      : "lookup.tenant_id=$1 AND lookup.app_id=$2 AND lookup.subject_record_id=ANY($3::text[])";
+  const integrityLookups = await client.query<{ reference: string }>(
+    `SELECT DISTINCT lookup.token_ref AS reference
+       FROM ephemeral.integrity_verifications AS lookup
+      WHERE ${integrityLookupScope} AND lookup.token_ref LIKE 'encrypted:%'`,
+    values,
+  );
   const googleLookupScope = scope === "tenant"
     ? "lookup.tenant_id=$1"
     : scope === "app"
@@ -243,7 +265,9 @@ async function encryptedReferences(
     : { rows: [] as Array<{ reference: string }> };
   return [...new Set([
     ...raw.rows, ...inbox.rows, ...batches.rows, ...results.rows, ...lookups.rows,
-    ...googleResults.rows, ...googleLookups.rows, ...googleRtdn.rows, ...googleConversions.rows, ...commerce.rows,
+    ...googleResults.rows, ...integrityResults.rows, ...integrityLookups.rows, ...googleLookups.rows,
+    ...googleRtdn.rows,
+    ...googleConversions.rows, ...commerce.rows,
     ...webhooks.rows, ...bulk.rows, ...credentials.rows,
   ].map((row) => row.reference))].sort();
 }
@@ -409,6 +433,13 @@ async function applyRecreatedDatabaseState(
   );
   await client.query(
     `DELETE FROM ephemeral.google_play_product_verifications
+      WHERE tenant_id=$1
+        AND ($2='tenant' OR ($2='app' AND app_id=$3)
+          OR ($2='installation' AND app_id=$3 AND subject_record_id=ANY($4::text[])))`,
+    [request.tenant_id, scope, request.app_id, records],
+  );
+  await client.query(
+    `DELETE FROM ephemeral.integrity_verifications
       WHERE tenant_id=$1
         AND ($2='tenant' OR ($2='app' AND app_id=$3)
           OR ($2='installation' AND app_id=$3 AND subject_record_id=ANY($4::text[])))`,

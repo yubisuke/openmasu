@@ -1,6 +1,11 @@
-import { createHash } from "node:crypto";
-import type { Pool } from "pg";
-import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
+import { createHash, randomUUID } from "node:crypto";
+import type { Pool, PoolClient } from "pg";
+import {
+  acquirePrivacyTenantXactFence,
+  uuidV7,
+  withTenant,
+  type PayloadStore,
+} from "@openmasu/runtime";
 
 type JsonObject = Record<string, unknown>;
 export type IntegrityProvider = "play_integrity" | "app_attest";
@@ -24,6 +29,9 @@ type VerificationRow = {
   token_ref: string;
   subject_record_id: string;
   challenge_digest: string;
+  attempts: number;
+  claim_token: string | null;
+  claimed_until: Date | string | null;
 };
 
 export type IntegrityProviderResponse = { readonly status: number; readonly body: Buffer };
@@ -34,8 +42,51 @@ export type IntegrityProviderClient = (input: {
   readonly bindingDigest: string;
 }) => Promise<IntegrityProviderResponse>;
 
+export const DEFAULT_INTEGRITY_CLAIM_LEASE_MS = 5 * 60_000;
+export const DEFAULT_INTEGRITY_REQUEST_TIMEOUT_MS = 10_000;
+const MIN_INTEGRITY_CLAIM_LEASE_MS = 1_000;
+const MAX_INTEGRITY_CLAIM_LEASE_MS = 15 * 60_000;
+const MIN_INTEGRITY_REQUEST_TIMEOUT_MS = 10;
+const MAX_INTEGRITY_REQUEST_TIMEOUT_MS = 2 * 60_000;
+
 function sha256(value: Buffer | string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function boundedInteger(
+  value: number | undefined,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+  reason: string,
+): number {
+  const selected = value ?? fallback;
+  if (!Number.isSafeInteger(selected) || selected < minimum || selected > maximum) {
+    throw new Error(reason);
+  }
+  return selected;
+}
+
+async function withRequestTimeout<T>(
+  timeoutMs: number,
+  operation: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation(controller.signal),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          controller.abort();
+          reject(new Error("integrity_request_timeout"));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+    controller.abort();
+  }
 }
 
 function object(body: Buffer): JsonObject {
@@ -157,15 +208,73 @@ async function defaultClient(input: {
   endpoint: string;
   token: string;
   bindingDigest: string;
-}): Promise<IntegrityProviderResponse> {
+}, signal: AbortSignal): Promise<IntegrityProviderResponse> {
   const response = await fetch(input.endpoint, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ provider: input.provider, token: input.token, binding_digest: input.bindingDigest }),
     redirect: "error",
-    signal: AbortSignal.timeout(10_000),
+    signal,
   });
   return { status: response.status, body: Buffer.from(await response.arrayBuffer()) };
+}
+
+async function claimIntegrityVerification(
+  pool: Pool,
+  tenantId: string,
+  providerMode: IntegrityProvider | "both",
+  now: Date,
+  claimToken: string,
+  leaseMs: number,
+): Promise<VerificationRow | undefined> {
+  const claimed = await withTenant(pool, tenantId, (client) => client.query<VerificationRow>(
+    `WITH due AS (
+       SELECT verification_id
+         FROM ephemeral.integrity_verifications
+        WHERE tenant_id=$1 AND next_attempt_at <= $2
+          AND ($3='both' OR provider=$3)
+          AND (claimed_until IS NULL OR claimed_until <= clock_timestamp())
+        ORDER BY next_attempt_at,verification_id
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+     )
+     UPDATE ephemeral.integrity_verifications AS verification
+        SET claim_token=$4::uuid,
+            claimed_until=clock_timestamp() + ($5::integer * interval '1 millisecond')
+       FROM due
+      WHERE verification.tenant_id=$1 AND verification.verification_id=due.verification_id
+     RETURNING verification.verification_id::text,verification.tenant_id,verification.app_id,
+       verification.provider,verification.token_ref,verification.subject_record_id,
+       verification.challenge_digest,verification.attempts,verification.claim_token::text,
+       verification.claimed_until`,
+    [tenantId, now.toISOString(), providerMode, claimToken, leaseMs],
+  ));
+  return claimed.rows[0];
+}
+
+async function lockCurrentClaim(client: PoolClient, row: VerificationRow): Promise<boolean> {
+  if (!row.claim_token || !row.claimed_until) throw new Error("integrity_claim_missing");
+  const current = await client.query(
+    `SELECT 1
+       FROM ephemeral.integrity_verifications AS verification
+      WHERE verification.tenant_id=$1 AND verification.app_id=$2
+        AND verification.verification_id=$3::uuid
+        AND verification.claim_token=$4::uuid
+        AND verification.claimed_until > clock_timestamp()
+      FOR UPDATE OF verification`,
+    [row.tenant_id, row.app_id, row.verification_id, row.claim_token],
+  );
+  return current.rowCount === 1;
+}
+
+async function sourceIsAvailable(client: PoolClient, row: VerificationRow): Promise<boolean> {
+  const source = await client.query(
+    `SELECT 1 FROM ledger.raw_records_current
+      WHERE tenant_id=$1 AND app_id=$2 AND record_id=$3
+        AND payload_lifecycle_status='available'`,
+    [row.tenant_id, row.app_id, row.subject_record_id],
+  );
+  return source.rowCount === 1;
 }
 
 async function complete(
@@ -175,46 +284,76 @@ async function complete(
   verdict: IntegrityVerdict,
   responseBody: Buffer | undefined,
   now: Date,
-): Promise<void> {
+): Promise<boolean> {
   const responseDigest = responseBody && verdict !== "unavailable" ? sha256(responseBody) : undefined;
-  const evidenceRef = responseBody && verdict !== "unavailable"
-    ? await payloadStore.write(
-      { tenantId: row.tenant_id, appId: row.app_id, objectId: `integrity-result-${row.verification_id}` },
-      responseBody,
-    )
-    : undefined;
+  let evidenceRef: string | undefined;
   try {
-    const resultId = uuidV7(now.getTime());
-    const integrityVerdict = {
-      provider: row.provider,
-      verdict,
-      ...(evidenceRef ? { evidence_ref: evidenceRef } : {}),
-    };
-    const artifact = {
-      verification_result_id: resultId,
-      tenant_id: row.tenant_id,
-      app_id: row.app_id,
-      subject_record_id: row.subject_record_id,
-      integrity_verdict: integrityVerdict,
-      binding_digest: row.challenge_digest,
-      decided_at: now.toISOString(),
-      observation_mode: true,
-    };
-    await withTenant(pool, row.tenant_id, async (client) => {
+    return await withTenant(pool, row.tenant_id, async (client) => {
+      await acquirePrivacyTenantXactFence(client, row.tenant_id, "shared");
+      if (!await lockCurrentClaim(client, row)) return false;
+      if (!await sourceIsAvailable(client, row)) {
+        await client.query(
+          `DELETE FROM ephemeral.integrity_verifications
+            WHERE tenant_id=$1 AND app_id=$2 AND verification_id=$3::uuid
+              AND claim_token=$4::uuid`,
+          [row.tenant_id, row.app_id, row.verification_id, row.claim_token],
+        );
+        return false;
+      }
+      const prior = await client.query(
+        `SELECT 1 FROM ledger.integrity_verification_results
+          WHERE tenant_id=$1 AND app_id=$2 AND provider=$3 AND binding_digest=$4
+          LIMIT 1`,
+        [row.tenant_id, row.app_id, row.provider, row.challenge_digest],
+      );
+      if (prior.rowCount === 1) {
+        const removed = await client.query(
+          `DELETE FROM ephemeral.integrity_verifications
+            WHERE tenant_id=$1 AND app_id=$2 AND verification_id=$3::uuid
+              AND claim_token=$4::uuid`,
+          [row.tenant_id, row.app_id, row.verification_id, row.claim_token],
+        );
+        return removed.rowCount === 1;
+      }
+      evidenceRef = responseBody && verdict !== "unavailable"
+        ? await payloadStore.write(
+          { tenantId: row.tenant_id, appId: row.app_id, objectId: `integrity-result-${row.verification_id}` },
+          responseBody,
+        )
+        : undefined;
+      const resultId = uuidV7(now.getTime());
+      const integrityVerdict = {
+        provider: row.provider,
+        verdict,
+        ...(evidenceRef ? { evidence_ref: evidenceRef } : {}),
+      };
+      const artifact = {
+        verification_result_id: resultId,
+        tenant_id: row.tenant_id,
+        app_id: row.app_id,
+        subject_record_id: row.subject_record_id,
+        integrity_verdict: integrityVerdict,
+        binding_digest: row.challenge_digest,
+        decided_at: now.toISOString(),
+        observation_mode: true,
+      };
       await client.query(
         `INSERT INTO ledger.integrity_verification_results (
           verification_result_id, tenant_id, app_id, subject_record_id, provider,
           verdict, evidence_ref, response_digest, binding_digest, decided_at, artifact
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
-        ON CONFLICT (tenant_id, app_id, provider, binding_digest) DO NOTHING`,
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
         [resultId, row.tenant_id, row.app_id, row.subject_record_id, row.provider,
           verdict, evidenceRef ?? null, responseDigest ?? null, row.challenge_digest,
           now.toISOString(), JSON.stringify(artifact)],
       );
-      await client.query(
-        "DELETE FROM ephemeral.integrity_verifications WHERE tenant_id=$1 AND app_id=$2 AND verification_id=$3",
-        [row.tenant_id, row.app_id, row.verification_id],
+      const removed = await client.query(
+        `DELETE FROM ephemeral.integrity_verifications
+          WHERE tenant_id=$1 AND app_id=$2 AND verification_id=$3::uuid
+            AND claim_token=$4::uuid`,
+        [row.tenant_id, row.app_id, row.verification_id, row.claim_token],
       );
+      if (removed.rowCount !== 1) throw new Error("integrity_claim_lost_during_completion");
+      return true;
     });
   } catch (error) {
     if (evidenceRef) await payloadStore.purge(evidenceRef);
@@ -232,55 +371,91 @@ export async function processIntegrityVerifications(
     readonly appAttestEndpoint?: string;
     readonly client?: IntegrityProviderClient;
     readonly now?: () => Date;
+    readonly claimLeaseMs?: number;
+    readonly requestTimeoutMs?: number;
+    readonly claimToken?: () => string;
   } = {},
 ): Promise<{ readonly completed: number; readonly unavailable: number }> {
   const mode = options.providerMode ?? "off";
   if (mode === "off") return { completed: 0, unavailable: 0 };
   const now = options.now?.() ?? new Date();
-  const rows = await withTenant(pool, tenantId, (client) => client.query<VerificationRow>(
-    `SELECT verification_id::text, tenant_id, app_id, provider, token_ref,
-            subject_record_id, challenge_digest
-     FROM ephemeral.integrity_verifications
-     WHERE tenant_id=$1 AND next_attempt_at <= $2
-       AND ($3='both' OR provider=$3)
-     ORDER BY next_attempt_at, verification_id
-     LIMIT 100`,
-    [tenantId, now.toISOString(), mode],
-  ));
+  const claimLeaseMs = boundedInteger(
+    options.claimLeaseMs,
+    DEFAULT_INTEGRITY_CLAIM_LEASE_MS,
+    MIN_INTEGRITY_CLAIM_LEASE_MS,
+    MAX_INTEGRITY_CLAIM_LEASE_MS,
+    "integrity_claim_lease_invalid",
+  );
+  const requestTimeoutMs = boundedInteger(
+    options.requestTimeoutMs,
+    DEFAULT_INTEGRITY_REQUEST_TIMEOUT_MS,
+    MIN_INTEGRITY_REQUEST_TIMEOUT_MS,
+    MAX_INTEGRITY_REQUEST_TIMEOUT_MS,
+    "integrity_request_timeout_invalid",
+  );
+  if (requestTimeoutMs >= claimLeaseMs) {
+    throw new Error("integrity_request_timeout_must_be_shorter_than_claim_lease");
+  }
   let completed = 0;
   let unavailable = 0;
-  for (const row of rows.rows) {
+  for (let processed = 0; processed < 100; processed += 1) {
+    const row = await claimIntegrityVerification(
+      pool,
+      tenantId,
+      mode,
+      now,
+      (options.claimToken ?? randomUUID)(),
+      claimLeaseMs,
+    );
+    if (!row) break;
     const endpointValue = row.provider === "play_integrity" ? options.playEndpoint : options.appAttestEndpoint;
     if (!endpointValue) {
-      await complete(pool, payloadStore, row, "unavailable", undefined, now);
-      completed += 1;
-      unavailable += 1;
+      if (await complete(pool, payloadStore, row, "unavailable", undefined, now)) {
+        completed += 1;
+        unavailable += 1;
+      }
       continue;
     }
     let token: string;
     try {
       token = await tokenFor(payloadStore, row);
     } catch {
-      await complete(pool, payloadStore, row, "unavailable", undefined, now);
-      completed += 1;
-      unavailable += 1;
+      if (await complete(pool, payloadStore, row, "unavailable", undefined, now)) {
+        completed += 1;
+        unavailable += 1;
+      }
       continue;
     }
     let response: IntegrityProviderResponse;
     try {
-      response = await (options.client ?? defaultClient)({
-        provider: row.provider,
-        endpoint: checkedEndpoint(endpointValue),
-        token,
-        bindingDigest: row.challenge_digest,
-      });
+      response = await withRequestTimeout(requestTimeoutMs, (signal) => options.client
+        ? options.client({
+          provider: row.provider,
+          endpoint: checkedEndpoint(endpointValue),
+          token,
+          bindingDigest: row.challenge_digest,
+        })
+        : defaultClient({
+          provider: row.provider,
+          endpoint: checkedEndpoint(endpointValue),
+          token,
+          bindingDigest: row.challenge_digest,
+        }, signal));
     } catch {
       response = { status: 503, body: Buffer.alloc(0) };
     }
     const outcome = classifyIntegrityProviderResponse(row.provider, response, row.challenge_digest);
-    await complete(pool, payloadStore, row, outcome.verdict, outcome.retainEvidence ? response.body : undefined, now);
-    if (outcome.verdict === "unavailable") unavailable += 1;
-    completed += 1;
+    if (await complete(
+      pool,
+      payloadStore,
+      row,
+      outcome.verdict,
+      outcome.retainEvidence ? response.body : undefined,
+      now,
+    )) {
+      if (outcome.verdict === "unavailable") unavailable += 1;
+      completed += 1;
+    }
   }
   return { completed, unavailable };
 }

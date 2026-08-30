@@ -162,9 +162,12 @@ through `raw_records_current`.
   worker rechecks again after decrypting a pending body and holds the barrier
   through raw projection, auxiliary enqueue, and terminal inbox state. Deletion
   therefore either snapshots the completed projection or commits first and
-  makes the in-flight batch terminal as `privacy_suppressed`. This barrier does
-  not claim to cover later provider-completion responses, which have separate
-  durable-claim and deletion-race hardening work.
+  makes the in-flight batch terminal as `privacy_suppressed`. Server-side
+  AdServices and platform-integrity completion reuse the same barrier after
+  their network calls: deletion either removes their pending work first or
+  snapshots and purges the committed protected response. Other provider
+  completion queues retain separate durable-claim and deletion-race hardening
+  work.
 - An app- or tenant-scoped request deletes the data included in its durable
   recognition snapshot; it is not an app suspension or tenant deactivation.
   Later lawful processing is a new event with its own purpose and legal-basis

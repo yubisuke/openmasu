@@ -357,6 +357,47 @@ async function within<T>(promise: Promise<T>, label: string, timeoutMs = 5_000):
   }
 }
 
+function deferred(): { readonly promise: Promise<void>; readonly resolve: () => void } {
+  let resolve!: () => void;
+  return {
+    promise: new Promise<void>((done) => { resolve = done; }),
+    resolve: () => resolve(),
+  };
+}
+
+function verifiedIntegrityBody(bindingDigest: string, marker: string): Buffer {
+  return Buffer.from(JSON.stringify({
+    requestDetails: { requestHash: bindingDigest },
+    appIntegrity: { appRecognitionVerdict: "PLAY_RECOGNIZED" },
+    deviceIntegrity: { deviceRecognitionVerdict: ["MEETS_DEVICE_INTEGRITY"] },
+    synthetic_marker: marker,
+  }), "utf8");
+}
+
+async function prepareIntegrityQueue(scope: PrivacyFenceScope, label: string): Promise<{
+  readonly batch: PrivacyFenceBatch;
+  readonly verificationId: string;
+  readonly challengeDigest: string;
+}> {
+  const batch = await appendPrivacyFenceBatch({
+    scope,
+    label,
+    receivedAt: "2026-08-30T08:00:00.000Z",
+  });
+  assert.equal(await processSdkInbox(pool, payloadStore, batch.tenantId), 1);
+  const queued = await withTenant(pool, batch.tenantId, async (client) => (await client.query<{
+    verification_id: string;
+    challenge_digest: string;
+  }>(
+    `SELECT verification_id::text,challenge_digest
+       FROM ephemeral.integrity_verifications
+      WHERE tenant_id=$1 AND app_id=$2`,
+    [batch.tenantId, batch.appId],
+  )).rows[0]);
+  assert.ok(queued);
+  return { batch, verificationId: queued.verification_id, challengeDigest: queued.challenge_digest };
+}
+
 function workerProcess(delayMs: number) {
   const source = `
     import { createAppPool, EncryptedFilePayloadStore } from "@openmasu/runtime";
@@ -659,7 +700,7 @@ describe("M2a signed SDK ingestion", () => {
     assert.deepEqual(await processIntegrityVerifications(pool, payloadStore, integrityTenantId, {
       providerMode: "play_integrity",
       now: () => new Date(),
-    }), { completed: 1, unavailable: 1 });
+    }), { completed: 0, unavailable: 0 });
     assert.deepEqual(await processCommerceReadbacks(pool, payloadStore, commerceTenantId, {
       now: new Date(),
       googleClient: async () => ({
@@ -692,7 +733,7 @@ describe("M2a signed SDK ingestion", () => {
       })),
     ]);
     assert.deepEqual(drained, [
-      { pending: 0, results: 1 },
+      { pending: 0, results: 0 },
       { pending: 0, verified: 1 },
     ]);
     const afterDrain = await listRuntimeWorkTenants(pool);
@@ -2625,6 +2666,218 @@ describe("M2a signed SDK ingestion", () => {
       assert.equal(evidence.batchMembers, 1);
       assert.equal(evidence.integrityQueue, 0);
       assert.equal(evidence.completedDeletions, 1);
+    }
+  });
+
+  it("allows only one active Integrity provider call across concurrent workers", async () => {
+    const { batch } = await prepareIntegrityQueue("installation", "integrity-concurrent-claim");
+    const entered = deferred();
+    const release = deferred();
+    let providerCalls = 0;
+    const first = processIntegrityVerifications(pool, payloadStore, batch.tenantId, {
+      providerMode: "play_integrity",
+      playEndpoint: "http://127.0.0.1/integrity",
+      client: async ({ bindingDigest }) => {
+        providerCalls += 1;
+        entered.resolve();
+        await release.promise;
+        return { status: 200, body: verifiedIntegrityBody(bindingDigest, "concurrent-winner") };
+      },
+    });
+    try {
+      await within(entered.promise, "Integrity concurrent provider entry");
+      assert.deepEqual(await processIntegrityVerifications(pool, payloadStore, batch.tenantId, {
+        providerMode: "play_integrity",
+        playEndpoint: "http://127.0.0.1/integrity",
+        client: async () => {
+          providerCalls += 1;
+          throw new Error("a concurrent worker must not reach the provider");
+        },
+      }), { completed: 0, unavailable: 0 });
+      assert.equal(providerCalls, 1);
+    } finally {
+      release.resolve();
+    }
+    assert.deepEqual(await within(first, "Integrity concurrent completion"), {
+      completed: 1, unavailable: 0,
+    });
+    assert.equal(providerCalls, 1);
+  });
+
+  it("reclaims an expired Integrity lease and rejects the stale completion", async () => {
+    const { batch, verificationId } = await prepareIntegrityQueue("installation", "integrity-expired-claim");
+    const entered = deferred();
+    const release = deferred();
+    const stale = processIntegrityVerifications(pool, payloadStore, batch.tenantId, {
+      providerMode: "play_integrity",
+      playEndpoint: "http://127.0.0.1/integrity",
+      claimLeaseMs: 10_000,
+      requestTimeoutMs: 5_000,
+      client: async ({ bindingDigest }) => {
+        entered.resolve();
+        await release.promise;
+        return { status: 200, body: verifiedIntegrityBody(bindingDigest, "stale-loser") };
+      },
+    });
+    await within(entered.promise, "Integrity stale provider entry");
+    await withTenant(pool, batch.tenantId, (client) => client.query(
+      `UPDATE ephemeral.integrity_verifications
+          SET claimed_until=clock_timestamp() - interval '1 second'
+        WHERE tenant_id=$1 AND app_id=$2 AND verification_id=$3::uuid`,
+      [batch.tenantId, batch.appId, verificationId],
+    ));
+    assert.deepEqual(await processIntegrityVerifications(pool, payloadStore, batch.tenantId, {
+      providerMode: "play_integrity",
+      playEndpoint: "http://127.0.0.1/integrity",
+      claimLeaseMs: 10_000,
+      requestTimeoutMs: 5_000,
+      client: async ({ bindingDigest }) => ({
+        status: 200,
+        body: verifiedIntegrityBody(bindingDigest, "reclaimed-winner"),
+      }),
+    }), { completed: 1, unavailable: 0 });
+    release.resolve();
+    assert.deepEqual(await within(stale, "Integrity stale completion"), {
+      completed: 0, unavailable: 0,
+    });
+    const evidence = await withTenant(pool, batch.tenantId, async (client) => (await client.query<{
+      evidence_ref: string;
+      results: number;
+      pending: number;
+    }>(
+      `SELECT result.evidence_ref,
+        (SELECT count(*)::int FROM ledger.integrity_verification_results
+          WHERE tenant_id=$1 AND app_id=$2) AS results,
+        (SELECT count(*)::int FROM ephemeral.integrity_verifications
+          WHERE tenant_id=$1 AND app_id=$2) AS pending
+       FROM ledger.integrity_verification_results AS result
+       WHERE result.tenant_id=$1 AND result.app_id=$2`,
+      [batch.tenantId, batch.appId],
+    )).rows[0]);
+    assert.deepEqual({ results: evidence.results, pending: evidence.pending }, { results: 1, pending: 0 });
+    assert.equal(JSON.parse((await payloadStore.read(evidence.evidence_ref)).toString("utf8")).synthetic_marker,
+      "reclaimed-winner");
+  });
+
+  it("bounds an Integrity provider call even when an injected client never settles", async () => {
+    const { batch } = await prepareIntegrityQueue("installation", "integrity-provider-timeout");
+    assert.deepEqual(await within(processIntegrityVerifications(pool, payloadStore, batch.tenantId, {
+      providerMode: "play_integrity",
+      playEndpoint: "http://127.0.0.1/integrity",
+      claimLeaseMs: 1_000,
+      requestTimeoutMs: 20,
+      client: async () => new Promise<never>(() => undefined),
+    }), "Integrity provider timeout"), { completed: 1, unavailable: 1 });
+  });
+
+  it("suppresses deletion-first Integrity completions for installation, app, and tenant scopes", async () => {
+    for (const scope of ["installation", "app", "tenant"] as const) {
+      const { batch } = await prepareIntegrityQueue(scope, `integrity-${scope}-deletion-first`);
+      const entered = deferred();
+      const release = deferred();
+      let responseWrites = 0;
+      const observingStore: PayloadStore = {
+        read: (reference) => payloadStore.read(reference),
+        purge: (reference) => payloadStore.purge(reference),
+        scanFor: (value) => payloadStore.scanFor(value),
+        write: (payloadScope, plaintext) => {
+          if (payloadScope.objectId.startsWith("integrity-result-")) responseWrites += 1;
+          return payloadStore.write(payloadScope, plaintext);
+        },
+      };
+      const processing = processIntegrityVerifications(pool, observingStore, batch.tenantId, {
+        providerMode: "play_integrity",
+        playEndpoint: "http://127.0.0.1/integrity",
+        client: async ({ bindingDigest }) => {
+          entered.resolve();
+          await release.promise;
+          return { status: 200, body: verifiedIntegrityBody(bindingDigest, `${scope}-stale`) };
+        },
+      });
+      try {
+        await within(entered.promise, `${scope} Integrity deletion-first provider entry`);
+        assert.equal((await deletePrivacyFenceScope(
+          scope,
+          batch,
+          "2026-08-30T09:00:00.000Z",
+        )).status, "completed");
+      } finally {
+        release.resolve();
+      }
+      assert.deepEqual(await within(processing, `${scope} Integrity deletion-first completion`), {
+        completed: 0, unavailable: 0,
+      });
+      assert.equal(responseWrites, 0, `${scope} stale completion must not write response evidence`);
+      const state = await withTenant(pool, batch.tenantId, async (client) => (await client.query<{
+        pending: number;
+        results: number;
+      }>(
+        `SELECT
+          (SELECT count(*)::int FROM ephemeral.integrity_verifications
+            WHERE tenant_id=$1 AND app_id=$2) AS pending,
+          (SELECT count(*)::int FROM ledger.integrity_verification_results
+            WHERE tenant_id=$1 AND app_id=$2) AS results`,
+        [batch.tenantId, batch.appId],
+      )).rows[0]);
+      assert.deepEqual(state, { pending: 0, results: 0 });
+    }
+  });
+
+  it("lets Integrity completion finish before deletion purges its evidence for installation, app, and tenant scopes", async () => {
+    for (const scope of ["installation", "app", "tenant"] as const) {
+      const { batch } = await prepareIntegrityQueue(scope, `integrity-${scope}-completion-first`);
+      const writeEntered = deferred();
+      const releaseWrite = deferred();
+      const blockingStore: PayloadStore = {
+        read: (reference) => payloadStore.read(reference),
+        purge: (reference) => payloadStore.purge(reference),
+        scanFor: (value) => payloadStore.scanFor(value),
+        write: async (payloadScope, plaintext) => {
+          if (payloadScope.objectId.startsWith("integrity-result-")) {
+            writeEntered.resolve();
+            await releaseWrite.promise;
+          }
+          return payloadStore.write(payloadScope, plaintext);
+        },
+      };
+      const processing = processIntegrityVerifications(pool, blockingStore, batch.tenantId, {
+        providerMode: "play_integrity",
+        playEndpoint: "http://127.0.0.1/integrity",
+        client: async ({ bindingDigest }) => ({
+          status: 200,
+          body: verifiedIntegrityBody(bindingDigest, `${scope}-committed`),
+        }),
+      });
+      let deletion: ReturnType<typeof deletePrivacyFenceScope> | undefined;
+      try {
+        await within(writeEntered.promise, `${scope} Integrity completion-first evidence write`);
+        deletion = deletePrivacyFenceScope(
+          scope,
+          batch,
+          "2026-08-30T09:00:00.000Z",
+        );
+        await within(waitForBlockedAdvisoryLock(batch.tenantId), `${scope} Integrity privacy wait`);
+      } finally {
+        releaseWrite.resolve();
+      }
+      assert.deepEqual(await within(processing, `${scope} Integrity completion-first processing`), {
+        completed: 1, unavailable: 0,
+      });
+      assert.ok(deletion);
+      assert.equal((await within(deletion, `${scope} Integrity completion-first deletion`)).status, "completed");
+      const state = await withTenant(pool, batch.tenantId, async (client) => (await client.query<{
+        evidence_ref: string;
+        pending: number;
+      }>(
+        `SELECT result.evidence_ref,
+          (SELECT count(*)::int FROM ephemeral.integrity_verifications
+            WHERE tenant_id=$1 AND app_id=$2) AS pending
+         FROM ledger.integrity_verification_results AS result
+         WHERE result.tenant_id=$1 AND result.app_id=$2`,
+        [batch.tenantId, batch.appId],
+      )).rows[0]);
+      assert.equal(state.pending, 0);
+      await assert.rejects(payloadStore.read(state.evidence_ref), PayloadNotFoundError);
     }
   });
 
