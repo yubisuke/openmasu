@@ -1376,6 +1376,67 @@ describe("M2a signed SDK ingestion", () => {
     assert.equal(afterDrain.includes(commerceTenantId), false);
   });
 
+  it("discovers only SDK batches that can produce another worker action", async () => {
+    const cases = [
+      { label: "pending", status: "pending", reasonCode: null, expected: true },
+      { label: "completed", status: "processed", reasonCode: null, expected: false },
+      {
+        label: "post-processing",
+        status: "processed",
+        reasonCode: "post_processing_pending",
+        expected: true,
+      },
+    ] as const;
+    const batches: Array<{ tenantId: string; appId: string; ingestBatchId: string }> = [];
+
+    for (const item of cases) {
+      const sdkTenantId = `tenant-sdk-discovery-${item.label}-${run}`;
+      const sdkAppId = `app-sdk-discovery-${item.label}-${run}`;
+      await ensureSdkKeys(pool, payloadStore, { tenantId: sdkTenantId, appId: sdkAppId }, [{
+        keyId: `sdk-key-discovery-${item.label}-${run}`,
+        secret: `sdk-secret-${randomBytes(32).toString("base64url")}`,
+      }]);
+      const receivedAt = new Date().toISOString();
+      const ingestBatchId = await appendDurableBatch(pool, payloadStore, {
+        tenantId: sdkTenantId,
+        appId: sdkAppId,
+        producer: "sdk-android",
+        body: Buffer.from(JSON.stringify({ records: [{ synthetic: true }] }), "utf8"),
+        eventCount: 1,
+        receivedAt,
+      });
+      if (item.status === "processed") {
+        await withTenant(pool, sdkTenantId, (client) => client.query(
+          `INSERT INTO ledger.ingest_batch_states (
+             ingest_batch_id, tenant_id, app_id, status, changed_at, reason_code, artifact
+           ) VALUES ($1,$2,$3,'processed',$4,$5,$6::jsonb)`,
+          [ingestBatchId, sdkTenantId, sdkAppId, receivedAt, item.reasonCode, JSON.stringify({
+            status: "processed",
+            reason_code: item.reasonCode,
+          })],
+        ).then(() => undefined));
+      }
+      batches.push({ tenantId: sdkTenantId, appId: sdkAppId, ingestBatchId });
+    }
+
+    const discovered = await listRuntimeWorkTenants(pool);
+    for (const [index, item] of cases.entries()) {
+      assert.equal(discovered.includes(batches[index].tenantId), item.expected, item.label);
+    }
+
+    for (const batch of batches) {
+      await withTenant(pool, batch.tenantId, (client) => client.query(
+        `INSERT INTO ledger.ingest_batch_states (
+           ingest_batch_id, tenant_id, app_id, status, changed_at, reason_code, artifact
+         ) VALUES ($1,$2,$3,'failed',$4,'synthetic_test_cleanup',$5::jsonb)`,
+        [batch.ingestBatchId, batch.tenantId, batch.appId, new Date().toISOString(), JSON.stringify({
+          status: "failed",
+          reason_code: "synthetic_test_cleanup",
+        })],
+      ).then(() => undefined));
+    }
+  });
+
   it("F-A-15 maps provider outages to unavailable without evidence or metric effects", async () => {
     const before = await withTenant(pool, tenantId, async (client) => ({
       fraud: (await client.query<{ count: number }>(
