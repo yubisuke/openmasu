@@ -3069,6 +3069,36 @@ ALTER TABLE ledger.ingest_batches
   ADD COLUMN server_key_id control.identifier REFERENCES control.server_keys (server_key_id),
   ADD COLUMN subject_digest text CHECK (subject_digest ~ '^[a-f0-9]{64}$');
 
+-- PostgreSQL expands batch.* when the view is created. Preserve every existing
+-- view column in place and append the new server-ingest columns so migrations
+-- from an existing database expose them without renaming status columns.
+CREATE OR REPLACE VIEW ledger.ingest_batches_current
+WITH (security_invoker = true)
+AS
+SELECT DISTINCT ON (batch.ingest_batch_id)
+  batch.inbox_seq,
+  batch.ingest_batch_id,
+  batch.tenant_id,
+  batch.app_id,
+  batch.producer,
+  batch.sdk_key_id,
+  batch.installation_key_id,
+  batch.received_at,
+  batch.body_ref,
+  batch.body_digest,
+  batch.event_count,
+  batch.request_nonce,
+  batch.request_timestamp_ms,
+  batch.artifact,
+  state.status,
+  state.changed_at AS status_changed_at,
+  state.reason_code,
+  batch.server_key_id,
+  batch.subject_digest
+FROM ledger.ingest_batches AS batch
+JOIN ledger.ingest_batch_states AS state USING (ingest_batch_id, tenant_id, app_id)
+ORDER BY batch.ingest_batch_id, state.ingest_batch_state_seq DESC;
+
 CREATE INDEX ingest_batches_server_key_idx
   ON ledger.ingest_batches (tenant_id, app_id, server_key_id, received_at, inbox_seq)
   WHERE server_key_id IS NOT NULL;
