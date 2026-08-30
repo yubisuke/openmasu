@@ -50,14 +50,32 @@ namespace OpenMasu.Unity
             {
                 bridge.CallStatic<bool>(
                     "trackMaxRevenue",
-                    adInfo.Revenue,
-                    adInfo.RevenuePrecision,
-                    adInfo.NetworkName,
-                    adInfo.AdUnitIdentifier,
-                    adInfo.Placement,
-                    adInfo.NetworkPlacement);
+                    AndroidRevenueArguments(adInfo, format));
             }
 #endif
+        }
+
+        internal static object[] AndroidRevenueArguments(MaxSdk.AdInfo adInfo, string format) => new object[]
+        {
+            adInfo.Revenue,
+            adInfo.RevenuePrecision,
+            adInfo.NetworkName,
+            adInfo.AdUnitIdentifier,
+            NormalizeFormat(format),
+            adInfo.Placement,
+            adInfo.NetworkPlacement,
+        };
+
+        internal static string NormalizeFormat(string format)
+        {
+            switch ((format ?? string.Empty).Trim().ToLowerInvariant())
+            {
+                case "interstitial": return "interstitial";
+                case "rewarded": return "rewarded";
+                case "banner": return "banner";
+                case "mrec": return "mrec";
+                default: return "unknown";
+            }
         }
     }
 }

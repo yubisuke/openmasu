@@ -152,7 +152,13 @@ public final class OpenMasuUnityBridge {
 
   public static boolean trackMaxRevenue(double revenue, String precision, String networkName,
       String adUnitId, String placement, String networkPlacement) {
-    return OpenMasuMaxBridge.track(requireSdk(), revenue, precision, networkName, adUnitId, placement, networkPlacement);
+    return trackMaxRevenue(revenue, precision, networkName, adUnitId, "unknown", placement, networkPlacement);
+  }
+
+  public static boolean trackMaxRevenue(double revenue, String precision, String networkName,
+      String adUnitId, String format, String placement, String networkPlacement) {
+    return OpenMasuMaxBridge.track(
+        requireSdk(), revenue, precision, networkName, adUnitId, format, placement, networkPlacement);
   }
 
   static PlayReferrerReader createPlayReferrerReader(Context context, boolean enabled) {
