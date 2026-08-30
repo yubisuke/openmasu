@@ -28,8 +28,8 @@ Run the actual Unity 6 headless export probe on a machine with the Android
 module installed (replace the Editor path for that machine):
 
 ```powershell
-npm run probe:unity-android-export -- --unity "C:\Program Files\Unity\Hub\Editor\6000.3.11f1\Editor\Unity.exe" --bundle build/sdk-release/openmasu-sdk-0.2.0-rc.4
-npm run probe:unity-android-export -- --unity "C:\Program Files\Unity\Hub\Editor\6000.3.11f1\Editor\Unity.exe" --bundle build/sdk-release/openmasu-sdk-0.2.0-rc.4 --without-settings
+npm run probe:unity-android-export -- --unity "C:\Program Files\Unity\Hub\Editor\6000.3.11f1\Editor\Unity.exe" --bundle build/sdk-release/openmasu-sdk-0.2.0
+npm run probe:unity-android-export -- --unity "C:\Program Files\Unity\Hub\Editor\6000.3.11f1\Editor\Unity.exe" --bundle build/sdk-release/openmasu-sdk-0.2.0 --without-settings
 ```
 
 The second invocation proves that packaged Android dependency resolution does
@@ -37,8 +37,8 @@ not depend on the optional App Links settings file. Both probes create and
 remove a temporary synthetic project. They do not use a
 device, account, credential, provider payload, or production identifier.
 
-For configured candidate `v0.2.0-rc.4`, the output under
-`build/sdk-release/openmasu-sdk-0.2.0-rc.4/` contains Maven AAR/POM pairs, the
+For configured candidate `v0.2.0`, the output under
+`build/sdk-release/openmasu-sdk-0.2.0/` contains Maven AAR/POM pairs, the
 UPM archive, the Swift Package source archive, three CycloneDX SDK SBOMs, a
 source/toolchain manifest, and `SHA256SUMS`. It is a local CI artifact, not a
 public registry publication. Treat the bundle as release evidence only when the

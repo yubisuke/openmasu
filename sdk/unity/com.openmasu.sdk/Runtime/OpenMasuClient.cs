@@ -122,7 +122,7 @@ namespace OpenMasu.Unity
         public string Endpoint { get; set; } = string.Empty;
         public string SdkKeyId { get; set; } = string.Empty;
         public string SdkSecret { get; set; } = string.Empty;
-        public string WrapperVersion { get; set; } = "0.2.0-rc.4";
+        public string WrapperVersion { get; set; } = "0.2.0";
         public string[] DeepLinkHosts { get; set; } = Array.Empty<string>();
         public string[] DeepLinkSchemes { get; set; } = Array.Empty<string>();
         public bool EnablePlayReferrer { get; set; } = true;

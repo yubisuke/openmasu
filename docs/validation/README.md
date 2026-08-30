@@ -11,12 +11,15 @@ For the current checkout, use the disposable pilot and gates in
 [Getting started](../getting-started.md) and [Development](../development.md).
 Their result applies only to the exact source revision that ran them.
 
-The rc.4 evidence manifest is release evidence for tagged commit `2a2f6b5`; the
-matching annotated tag, GitHub prerelease, and full platform gates all identify
-that commit. It does not apply to later `main` changes.
+The v0.2.0 evidence manifest is prepared for the current source candidate. It
+becomes release evidence only when its annotated tag, GitHub Release, and full
+platform gates identify the same commit. The rc.4 evidence manifest remains
+release evidence only for tagged commit `2a2f6b5`; it does not apply to later
+`main` changes.
 
 ## Tagged and historical repository evidence
 
+- [v0.2.0 synthetic evidence](v0.2.0-synthetic-evidence.md)
 - [v0.2.0-rc.4 synthetic evidence](v0.2.0-rc.4-synthetic-evidence.md)
 - [v0.2.0-rc.3 synthetic evidence](v0.2.0-rc.3-synthetic-evidence.md)
 - [Synthetic load record](m5-load-results.md)

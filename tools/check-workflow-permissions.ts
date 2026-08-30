@@ -30,6 +30,20 @@ export function assertLeastPrivilegeWorkflow(source: string, label = "workflow")
   }
 }
 
+export function assertPinnedWorkflowActions(source: string, label = "workflow"): number {
+  const actions = source
+    .split(/\r?\n/)
+    .map((line) => /^\s*-?\s*uses:\s*([^\s#]+)\s*(?:#.*)?$/.exec(line)?.[1])
+    .filter((value): value is string => value !== undefined);
+  for (const action of actions) {
+    if (action.startsWith("./") || action.startsWith("docker://")) continue;
+    if (!/@[0-9a-f]{40}$/.test(action)) {
+      throw new Error(`${label} action must use an immutable 40-hex revision: ${action}`);
+    }
+  }
+  return actions.length;
+}
+
 export function checkWorkflowPermissions(root = process.cwd()): number {
   const workflowDirectory = resolve(root, ".github/workflows");
   const workflowNames = readdirSync(workflowDirectory)
@@ -37,12 +51,14 @@ export function checkWorkflowPermissions(root = process.cwd()): number {
     .sort();
   if (workflowNames.length === 0) throw new Error("repository contains no GitHub Actions workflows");
   for (const name of workflowNames) {
-    assertLeastPrivilegeWorkflow(readFileSync(resolve(workflowDirectory, name), "utf8"), name);
+    const source = readFileSync(resolve(workflowDirectory, name), "utf8");
+    assertLeastPrivilegeWorkflow(source, name);
+    assertPinnedWorkflowActions(source, name);
   }
   return workflowNames.length;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const count = checkWorkflowPermissions();
-  console.log(`Workflow permission check passed: ${count} workflows use only contents: read.`);
+  console.log(`Workflow security check passed: ${count} workflows use only contents: read and immutable action revisions.`);
 }

@@ -1,6 +1,6 @@
 {
   "name": "com.openmasu.sdk",
-  "version": "0.2.0-rc.4",
+  "version": "0.2.0",
   "displayName": "OpenMasu SDK",
   "description": "Auditable OpenMasu Android and iOS bridge for Unity.",
   "unity": "2022.3",

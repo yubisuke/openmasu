@@ -4,6 +4,7 @@ import argparse
 import gzip
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -11,6 +12,7 @@ import tarfile
 import tempfile
 import uuid
 import zipfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +53,50 @@ def source_revision() -> str:
     return subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, encoding="utf-8"
     ).strip()
+
+
+def unexpected_release_changes(status: str) -> list[str]:
+    return [line for line in status.splitlines() if len(line) >= 4]
+
+
+def assert_release_worktree() -> None:
+    status = subprocess.check_output(
+        ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+        cwd=ROOT,
+        text=True,
+        encoding="utf-8",
+    )
+    unexpected = unexpected_release_changes(status)
+    if unexpected:
+        raise RuntimeError(
+            "Release inputs differ from HEAD; commit the candidate before packaging. "
+            f"Unexpected path count: {len(unexpected)}"
+        )
+
+
+def prepare_release_inputs() -> None:
+    """Regenerate every ignored binary/SBOM input from the checked-out source."""
+    npm = "npm.cmd" if os.name == "nt" else "npm"
+    gradle = ROOT / "sdk/android" / ("gradlew.bat" if os.name == "nt" else "gradlew")
+    subprocess.run([npm, "run", "sbom"], cwd=ROOT, check=True)
+    subprocess.run(
+        [
+            str(gradle),
+            "-p",
+            "sdk/android",
+            "clean",
+            "androidAcceptance",
+            ":core:assembleRelease",
+            ":installreferrer:assembleRelease",
+            ":metareferrer:assembleRelease",
+            ":max:assembleRelease",
+            ":unitybridge:assembleRelease",
+            "verifySdkSbom",
+            "--no-daemon",
+        ],
+        cwd=ROOT,
+        check=True,
+    )
 
 
 def tracked_files(prefix: str) -> list[Path]:
@@ -261,7 +307,7 @@ def build_bundle(output_root: Path) -> Path:
         "commands": [
             "npm ci",
             "npm run sbom",
-            "./sdk/android/gradlew -p sdk/android :core:assembleRelease :installreferrer:assembleRelease :metareferrer:assembleRelease :max:assembleRelease :unitybridge:assembleRelease verifySdkSbom --no-daemon",
+            "./sdk/android/gradlew -p sdk/android clean androidAcceptance :core:assembleRelease :installreferrer:assembleRelease :metareferrer:assembleRelease :max:assembleRelease :unitybridge:assembleRelease verifySdkSbom --no-daemon",
             "python tools/build-sdk-release.py --reproducibility-check",
             "python tools/verify-unity-upm.py",
         ],
@@ -272,13 +318,67 @@ def build_bundle(output_root: Path) -> Path:
         "".join(f"{file_hash(path)}  {path.relative_to(output).as_posix()}\n" for path in checksum_paths),
         encoding="utf-8", newline="\n",
     )
-    verify_bundle(output)
+    verify_bundle(output, expected_revision=revision, expected_version=version)
     return output
 
 
-def verify_bundle(output: Path) -> None:
+def verify_manifest_identity(
+    manifest: dict[str, Any],
+    *,
+    expected_revision: str | None = None,
+    expected_version: str | None = None,
+) -> tuple[str, str]:
+    if manifest.get("format") != "openmasu-sdk-release-v1":
+        raise RuntimeError("Release manifest format differs")
+    version = manifest.get("version")
+    if not isinstance(version, str) or not version:
+        raise RuntimeError("Release manifest version is invalid")
+    revision = manifest.get("source_revision")
+    if not isinstance(revision, str) or re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+        raise RuntimeError("Release manifest source revision is invalid")
+    if expected_revision is not None and revision != expected_revision:
+        raise RuntimeError(
+            f"Release manifest revision differs: bundle={revision} source={expected_revision}"
+        )
+    if expected_version is not None and version != expected_version:
+        raise RuntimeError(
+            f"Release manifest version differs: bundle={version} source={expected_version}"
+        )
+    return version, revision
+
+
+def verify_release_tag(version: str, revision: str) -> None:
+    tag = f"v{version}"
+    tag_type = subprocess.check_output(
+        ["git", "cat-file", "-t", f"refs/tags/{tag}"],
+        cwd=ROOT,
+        text=True,
+        encoding="utf-8",
+    ).strip()
+    if tag_type != "tag":
+        raise RuntimeError(f"Release tag is not annotated: {tag}")
+    target = subprocess.check_output(
+        ["git", "rev-parse", f"refs/tags/{tag}^{{commit}}"],
+        cwd=ROOT,
+        text=True,
+        encoding="utf-8",
+    ).strip()
+    if target != revision:
+        raise RuntimeError(f"Release tag target differs: tag={target} bundle={revision}")
+
+
+def verify_bundle(
+    output: Path,
+    *,
+    expected_revision: str | None = None,
+    expected_version: str | None = None,
+) -> None:
     manifest = json.loads(read_text(output / "release-manifest.json"))
-    version = manifest["version"]
+    version, _revision = verify_manifest_identity(
+        manifest,
+        expected_revision=expected_revision,
+        expected_version=expected_version,
+    )
     expected = {
         f"maven/dev/openmasu/{name}/{version}/{name}-{version}.{suffix}"
         for name in MODULES for suffix in ("aar", "pom")
@@ -296,6 +396,9 @@ def verify_bundle(output: Path) -> None:
     actual = {path.relative_to(output).as_posix() for path in output.rglob("*") if path.is_file()}
     if actual != expected | {"SHA256SUMS"}:
         raise RuntimeError(f"Release contents differ: missing={sorted(expected - actual)} extra={sorted(actual - expected - {'SHA256SUMS'})}")
+    manifest_artifacts = manifest.get("artifacts")
+    if not isinstance(manifest_artifacts, list) or set(manifest_artifacts) != expected - {"release-manifest.json"}:
+        raise RuntimeError("Release manifest artifact inventory differs from release files")
     checksum_lines = read_text(output / "SHA256SUMS").splitlines()
     seen: set[str] = set()
     for line in checksum_lines:
@@ -341,9 +444,52 @@ def verify_bundle(output: Path) -> None:
             raise RuntimeError("Swift source archive is incomplete")
         if any("/.build/" in name or "/build/" in name for name in names):
             raise RuntimeError("Swift source archive contains generated output")
+    pom_namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
+    for name in MODULES:
+        pom_path = output / f"maven/dev/openmasu/{name}/{version}/{name}-{version}.pom"
+        root = ET.parse(pom_path).getroot()
+        if root.findtext("m:version", namespaces=pom_namespace) != version:
+            raise RuntimeError(f"Maven artifact version differs: {pom_path.relative_to(output)}")
+        for dependency in root.findall("m:dependencies/m:dependency", pom_namespace):
+            if dependency.findtext("m:groupId", namespaces=pom_namespace) != "dev.openmasu":
+                continue
+            if dependency.findtext("m:version", namespaces=pom_namespace) != version:
+                raise RuntimeError(
+                    f"Maven internal dependency version differs: {pom_path.relative_to(output)}"
+                )
+    sbom_expectations = {
+        "sdk-android.cdx.json": ("openmasu-android", set()),
+        "sdk-ios.cdx.json": ("OpenMasuIOS", set()),
+        "sdk-unity.cdx.json": ("com.openmasu.sdk", set(UPM_ANDROID_MODULES)),
+    }
     for sbom in (output / "sbom").glob("*.json"):
-        if json.loads(read_text(sbom)).get("bomFormat") != "CycloneDX":
+        document = json.loads(read_text(sbom))
+        if document.get("bomFormat") != "CycloneDX":
             raise RuntimeError(f"Invalid CycloneDX SBOM: {sbom.name}")
+        metadata_component = document.get("metadata", {}).get("component")
+        components = list(document.get("components", []))
+        expected_name, expected_internal_names = sbom_expectations[sbom.name]
+        if not isinstance(metadata_component, dict):
+            raise RuntimeError(f"SDK SBOM metadata component is missing: {sbom.name}")
+        if (
+            metadata_component.get("group") != "dev.openmasu"
+            or metadata_component.get("name") != expected_name
+            or metadata_component.get("version") != version
+        ):
+            raise RuntimeError(f"SDK SBOM root component differs: {sbom.name}")
+        internal_names = {
+            component.get("name")
+            for component in components
+            if component.get("group") == "dev.openmasu"
+        }
+        if internal_names != expected_internal_names:
+            raise RuntimeError(f"SDK SBOM internal component set differs: {sbom.name}")
+        components.append(metadata_component)
+        for component in components:
+            if component.get("group") == "dev.openmasu" and component.get("version") != version:
+                raise RuntimeError(
+                    f"OpenMasu SBOM component version differs: {sbom.name}:{component.get('name')}"
+                )
 
 
 def compare_trees(first: Path, second: Path) -> None:
@@ -358,12 +504,25 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build and verify the reproducible OpenMasu SDK release bundle")
     parser.add_argument("--output", type=Path, default=ROOT / "build/sdk-release")
     parser.add_argument("--verify-only", type=Path)
+    parser.add_argument("--verify-tag", action="store_true")
     parser.add_argument("--reproducibility-check", action="store_true")
     arguments = parser.parse_args()
+    assert_release_worktree()
     if arguments.verify_only:
-        verify_bundle(arguments.verify_only.resolve())
+        revision = source_revision()
+        version = sdk_version()
+        verify_bundle(
+            arguments.verify_only.resolve(),
+            expected_revision=revision,
+            expected_version=version,
+        )
+        if arguments.verify_tag:
+            verify_release_tag(version, revision)
         print(f"Verified SDK release bundle: {arguments.verify_only}")
         return
+    if arguments.verify_tag:
+        parser.error("--verify-tag requires --verify-only")
+    prepare_release_inputs()
     if arguments.reproducibility_check:
         with tempfile.TemporaryDirectory(prefix="openmasu-sdk-release-") as temporary:
             temporary_root = Path(temporary)
