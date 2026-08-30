@@ -14,6 +14,10 @@ import {
   type PendingGooglePlayProductVerification,
 } from "./google-play-product-verifier.js";
 import { ingestRuntimeBatch } from "./ingestion.js";
+import {
+  DEFAULT_WORKER_INBOX_BATCH_LIMIT,
+  parseWorkerInboxBatchLimit,
+} from "./tenant-work-coordinator.js";
 
 type Any = Record<string, any>;
 type InboxRow = {
@@ -65,6 +69,7 @@ type AuxiliaryQueueFunctions = {
 type ProcessSdkInboxOptions = {
   readonly metaKeys?: readonly MetaKey[];
   readonly auxiliaryQueues?: Partial<AuxiliaryQueueFunctions>;
+  readonly batchLimit?: number;
 };
 
 type Withdrawal = {
@@ -858,6 +863,10 @@ export async function processSdkInbox(
   tenantId: string,
   options: ProcessSdkInboxOptions = {},
 ): Promise<number> {
+  const batchLimit = parseWorkerInboxBatchLimit(
+    "OPENMASU_SDK_INBOX_BATCH_LIMIT",
+    String(options.batchLimit ?? DEFAULT_WORKER_INBOX_BATCH_LIMIT),
+  );
   const work = await withTenant(pool, tenantId, (client) => client.query<InboxRow>(
     `SELECT ingest_batch_id::text, tenant_id, app_id, producer, received_at,
             body_ref, body_digest, status, reason_code, installation_key_id,
@@ -865,8 +874,9 @@ export async function processSdkInbox(
      FROM ledger.ingest_batches_current
      WHERE tenant_id=$1
        AND (status='pending' OR (status='processed' AND reason_code=$2))
-     ORDER BY received_at, inbox_seq`,
-    [tenantId, SDK_POST_PROCESSING_PENDING_REASON],
+     ORDER BY received_at, inbox_seq
+     LIMIT $3`,
+    [tenantId, SDK_POST_PROCESSING_PENDING_REASON, batchLimit],
   ));
   const workDecoded = await decodeRows(
     work.rows,

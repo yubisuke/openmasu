@@ -11,7 +11,11 @@ function generatedAppEnvironment(options: {
   readonly redirectorBaseUrl?: string;
   readonly workerConcurrency?: string;
   readonly workerShutdownTimeout?: string;
+  readonly sdkInboxBatchLimit?: string;
+  readonly maxInboxBatchLimit?: string;
   readonly reconciledWorkerConcurrency?: string;
+  readonly reconciledSdkInboxBatchLimit?: string;
+  readonly reconciledMaxInboxBatchLimit?: string;
 } = {}): string {
   const root = mkdtempSync(join(tmpdir(), "openmasu-bootstrap-"));
   const repositoryRoot = join(root, "repository");
@@ -34,6 +38,10 @@ function generatedAppEnvironment(options: {
   } else {
     environment.OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS = options.workerShutdownTimeout;
   }
+  if (options.sdkInboxBatchLimit === undefined) delete environment.OPENMASU_SDK_INBOX_BATCH_LIMIT;
+  else environment.OPENMASU_SDK_INBOX_BATCH_LIMIT = options.sdkInboxBatchLimit;
+  if (options.maxInboxBatchLimit === undefined) delete environment.OPENMASU_MAX_INBOX_BATCH_LIMIT;
+  else environment.OPENMASU_MAX_INBOX_BATCH_LIMIT = options.maxInboxBatchLimit;
   try {
     let result = spawnSync(
       process.execPath,
@@ -41,15 +49,32 @@ function generatedAppEnvironment(options: {
       { cwd: process.cwd(), encoding: "utf8", env: environment },
     );
     assert.equal(result.status, 0, result.stderr);
-    if (options.reconciledWorkerConcurrency !== undefined) {
+    if (options.reconciledWorkerConcurrency !== undefined
+      || options.reconciledSdkInboxBatchLimit !== undefined
+      || options.reconciledMaxInboxBatchLimit !== undefined) {
       const repositoryEnvironmentPath = join(repositoryRoot, ".env");
-      const repositoryEnvironment = readFileSync(repositoryEnvironmentPath, "utf8");
-      writeFileSync(
-        repositoryEnvironmentPath,
-        repositoryEnvironment.replace(
+      let repositoryEnvironment = readFileSync(repositoryEnvironmentPath, "utf8");
+      if (options.reconciledWorkerConcurrency !== undefined) {
+        repositoryEnvironment = repositoryEnvironment.replace(
           /^OPENMASU_WORKER_CONCURRENCY=.*$/m,
           `OPENMASU_WORKER_CONCURRENCY=${options.reconciledWorkerConcurrency}`,
-        ),
+        );
+      }
+      if (options.reconciledSdkInboxBatchLimit !== undefined) {
+        repositoryEnvironment = repositoryEnvironment.replace(
+          /^OPENMASU_SDK_INBOX_BATCH_LIMIT=.*$/m,
+          `OPENMASU_SDK_INBOX_BATCH_LIMIT=${options.reconciledSdkInboxBatchLimit}`,
+        );
+      }
+      if (options.reconciledMaxInboxBatchLimit !== undefined) {
+        repositoryEnvironment = repositoryEnvironment.replace(
+          /^OPENMASU_MAX_INBOX_BATCH_LIMIT=.*$/m,
+          `OPENMASU_MAX_INBOX_BATCH_LIMIT=${options.reconciledMaxInboxBatchLimit}`,
+        );
+      }
+      writeFileSync(
+        repositoryEnvironmentPath,
+        repositoryEnvironment,
         "utf8",
       );
       delete environment.OPENMASU_WORKER_CONCURRENCY;
@@ -118,6 +143,14 @@ describe("runtime bootstrap environment", () => {
       compose,
       /OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS: \$\{OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS:-30000\}/,
     );
+    assert.match(
+      compose,
+      /OPENMASU_SDK_INBOX_BATCH_LIMIT: \$\{OPENMASU_SDK_INBOX_BATCH_LIMIT:-100\}/,
+    );
+    assert.match(
+      compose,
+      /OPENMASU_MAX_INBOX_BATCH_LIMIT: \$\{OPENMASU_MAX_INBOX_BATCH_LIMIT:-100\}/,
+    );
   });
 
   it("propagates bounded tenant concurrency with a safe development default", () => {
@@ -133,16 +166,28 @@ describe("runtime bootstrap environment", () => {
       generatedAppEnvironment({ workerShutdownTimeout: "45000" }),
       /^OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS=45000$/m,
     );
+    const boundedInboxEnvironment = generatedAppEnvironment({
+      sdkInboxBatchLimit: "2",
+      maxInboxBatchLimit: "3",
+    });
+    assert.match(boundedInboxEnvironment, /^OPENMASU_SDK_INBOX_BATCH_LIMIT=2$/m);
+    assert.match(boundedInboxEnvironment, /^OPENMASU_MAX_INBOX_BATCH_LIMIT=3$/m);
   });
 
   it("reconciles non-secret worker controls in an existing runtime environment", () => {
     const appEnvironment = generatedAppEnvironment({
       workerConcurrency: "7",
       reconciledWorkerConcurrency: "1",
+      reconciledSdkInboxBatchLimit: "2",
+      reconciledMaxInboxBatchLimit: "3",
     });
     assert.match(appEnvironment, /^OPENMASU_WORKER_CONCURRENCY=1$/m);
     assert.doesNotMatch(appEnvironment, /^OPENMASU_WORKER_CONCURRENCY=7$/m);
     assert.match(appEnvironment, /^OPENMASU_ADMIN_KEY=[A-Za-z0-9_-]+$/m);
     assert.equal(appEnvironment.match(/^OPENMASU_WORKER_CONCURRENCY=/gm)?.length, 1);
+    assert.match(appEnvironment, /^OPENMASU_SDK_INBOX_BATCH_LIMIT=2$/m);
+    assert.equal(appEnvironment.match(/^OPENMASU_SDK_INBOX_BATCH_LIMIT=/gm)?.length, 1);
+    assert.match(appEnvironment, /^OPENMASU_MAX_INBOX_BATCH_LIMIT=3$/m);
+    assert.equal(appEnvironment.match(/^OPENMASU_MAX_INBOX_BATCH_LIMIT=/gm)?.length, 1);
   });
 });

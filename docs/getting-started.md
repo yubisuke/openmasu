@@ -77,6 +77,10 @@ provide tenant-wide ordering across replicas. Raising the limit changes
 database and provider load and requires deployment-specific monitoring.
 `OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS` controls the bounded graceful-drain window
 from 1000 through 300000 milliseconds and defaults to 30000.
+`OPENMASU_SDK_INBOX_BATCH_LIMIT` and `OPENMASU_MAX_INBOX_BATCH_LIMIT` control the
+number of durable inbox rows processed per tenant cycle. Both default to 100,
+accept 1 through 1000, preserve FIFO order, and can be changed in `.env` before
+rerunning `npm run bootstrap`.
 
 `demo:metrics` labels PostgreSQL ledger counts separately from the contract
 fixture preview. The preview is not a database import or live-provider result.

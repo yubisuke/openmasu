@@ -270,10 +270,11 @@ only.
   submitted twice, while each tenant keeps the existing privacy, ingestion,
   provider, metric, and fraud job order within one worker process. A slow tenant
   therefore occupies one bounded slot instead of blocking every other tenant.
-- Work inside one tenant remains serial. A single-tenant deployment, an
-  unbounded SDK or MAX inbox batch, or enough slow tenants to fill every slot
-  can still delay later work and requires deployment-specific capacity
-  monitoring.
+- Work inside one tenant remains serial. SDK and MAX inbox work is sliced to 100
+  durable rows per cycle by default; both limits accept 1 through 1000 and
+  preserve FIFO order. A single slow row, a large backlog spanning many cycles,
+  or enough slow tenants to fill every slot can still delay later work and
+  requires deployment-specific capacity monitoring.
 - Scheduler leases are tenant/job scoped. Multiple worker replicas may
   interleave different jobs for the same tenant, so the reference deployment
   uses one worker replica. Tenant-wide distributed ordering is not claimed.

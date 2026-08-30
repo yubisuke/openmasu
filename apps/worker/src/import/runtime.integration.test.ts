@@ -780,6 +780,47 @@ describe("MAX receiver integration", () => {
     }
   });
 
+  it("bounds each MAX inbox cycle and resumes the FIFO backlog on the next cycle", async () => {
+    assert.equal(await processMaxInbox(appPool, payloadStore, config.tenantId), 0);
+    const eventIds: string[] = [];
+    for (let index = 0; index < 3; index += 1) {
+      const eventId = `abcdef0123456789abcdef0123456789abcde${index}89`;
+      assert.equal((await send(eventId)).status, 204);
+      eventIds.push(eventId);
+    }
+    const orderedRows = await withTenant(appPool, config.tenantId, (client) => client.query<{
+      event_id: string;
+      status: string;
+    }>(
+      `SELECT event_id::text,status
+         FROM ledger.ingest_inbox_current
+        WHERE tenant_id=$1 AND app_id=$2 AND event_id::text=ANY($3::text[])
+        ORDER BY received_at, inbox_id`,
+      [config.tenantId, config.appId, eventIds],
+    ));
+    const orderedEventIds = orderedRows.rows.map((row) => row.event_id);
+    assert.equal(orderedEventIds.length, 3);
+    assert.deepEqual([...orderedEventIds].sort(), [...eventIds].sort());
+    assert.equal(await processMaxInbox(appPool, payloadStore, config.tenantId, 2), 2);
+    const firstStates = await withTenant(appPool, config.tenantId, (client) => client.query<{
+      event_id: string;
+      status: string;
+    }>(
+      `SELECT event_id::text,status
+         FROM ledger.ingest_inbox_current
+        WHERE tenant_id=$1 AND app_id=$2 AND event_id::text=ANY($3::text[])
+        ORDER BY received_at, inbox_id`,
+      [config.tenantId, config.appId, eventIds],
+    ));
+    assert.deepEqual(firstStates.rows, [
+      { event_id: orderedEventIds[0], status: "processed" },
+      { event_id: orderedEventIds[1], status: "processed" },
+      { event_id: orderedEventIds[2], status: "pending" },
+    ]);
+    assert.equal(await processMaxInbox(appPool, payloadStore, config.tenantId, 2), 1);
+    assert.equal(await processMaxInbox(appPool, payloadStore, config.tenantId, 2), 0);
+  });
+
   it("A6 rejects a changed MAX payload that reuses an event ID", async () => {
     const eventId = "abcdef0123456789abcdef0123456789abcdef03";
     assert.equal((await send(eventId, "0.123456")).status, 204);

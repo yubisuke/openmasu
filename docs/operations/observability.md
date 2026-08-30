@@ -81,6 +81,12 @@ The global MAX inbox and dashboard-session sweep are attached to the configured
 MAX tenant cycle and may overlap work for other tenants; neither is a barrier
 for all tenant cycles.
 
+`OPENMASU_SDK_INBOX_BATCH_LIMIT` and `OPENMASU_MAX_INBOX_BATCH_LIMIT` bound each
+tenant cycle to 100 durable rows by default and accept 1 through 1000. Rows keep
+their existing FIFO order and remaining backlog resumes on a later poll. Alert
+on backlog count and oldest age: slicing prevents one cycle from being
+unbounded, but does not guarantee that arrival rate stays below drain rate.
+
 Scheduled metric work uses a daily durable lease, but every artifact watermark
 is the current UTC midnight rather than the wall-clock time at which a worker
 obtains that lease. A schedule processes at most 31 pending dates per cycle.
