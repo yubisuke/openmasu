@@ -172,6 +172,11 @@ General server-event capability reference confirmed on 2026-08-30:
 
 - [Adjust server-to-server events](https://dev.adjust.com/en/api/s2s-api/events/) documents authenticated HTTP submission of custom and revenue events from an app backend. OpenMasu uses this only as evidence that backend event submission is a common measurement capability. Its endpoint, HMAC format, identifiers, contract, and authority boundary are OpenMasu-specific; no Adjust wire compatibility, device-identifier requirement, partnership, or live integration is claimed.
 
+Outbound event-webhook capability references confirmed on 2026-08-30:
+
+- [Branch webhooks](https://help.branch.io/marketer-hub/docs/webhooks) documents exporting install and downstream event activity to an operator system and filtering which events are exported. OpenMasu uses this only as evidence that outbound event notification is a common measurement capability. Its envelope, destination-scoped references, lifecycle, and signature are OpenMasu-specific; no Branch compatibility, partnership, or live integration is claimed.
+- [RFC 2104](https://www.rfc-editor.org/rfc/rfc2104) defines HMAC. OpenMasu signs the exact request-body bytes with HMAC-SHA-256 and requires the receiver to compare the signature before parsing. This does not define a third-party webhook wire format.
+
 Versioned adapter references confirmed on 2026-08-30:
 
 - [Google Ads API release notes](https://developers.google.com/google-ads/api/docs/release-notes) list v25 and the backward-compatible v25.1 update. The cost importer deliberately pins the v25 major endpoint and must be reviewed before a later major-version change.

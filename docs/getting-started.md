@@ -76,6 +76,14 @@ server key in the dashboard and follow the
 is displayed once. Do not put it in `.env.example`, shell history, source code,
 or logs.
 
+To deliver accepted events to an operator-owned receiver, first set
+`OPENMASU_OPERATOR_WEBHOOKS_ENABLED=on` and list the exact synthetic or private
+HTTPS origin in `OPENMASU_OPERATOR_WEBHOOK_DESTINATION_ALLOWLIST`. Open the app
+dashboard, register an operator webhook, and copy its signing secret once. The
+empty allowlist and the default `off` flag both fail closed. See
+[Operator event webhooks](operator-event-webhooks.md) for the closed event
+vocabulary, exact-body signature, retry behavior, and deletion boundary.
+
 To remove only this repository's local Compose stack and its data:
 
 ```bash

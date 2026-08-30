@@ -30,6 +30,9 @@ It is intended for teams that need to answer questions such as:
    definition, and rule bundle before comparing results.
 6. **Explain differences.** Report candidates, exclusions, windows, joins,
    freshness, and closed neutral reason codes.
+7. **Export a bounded event subset when explicitly enabled.** Deliver selected
+   accepted first-party events to an operator-owned, allowlisted HTTPS receiver
+   with destination-scoped references and exact-body authentication.
 
 ## Supported evidence families
 
@@ -38,6 +41,9 @@ It is intended for teams that need to answer questions such as:
 - Selected session, custom-event, advertising, purchase, and refund evidence
   from an app-scoped authenticated backend. This path does not accept install,
   click, consent, platform-signature, or provider-authority claims.
+- Optional outbound operator webhooks for accepted session, custom-event,
+  purchase, refund, and advertising-revenue events. This path is not an event
+  ingress, an attribution claim, or a provider wire-compatibility promise.
 - Android Install Referrer and supported Meta Install Referrer evidence.
 - Apple Ads installation evidence and privacy-preserving SKAdNetwork or
   AdAttributionKit aggregate postbacks, including separately reported current
@@ -89,6 +95,9 @@ must not inherit Apple's signature authority. See the
 - Shipping real fraud thresholds, credentials, watchlists, or customer data in
   the public repository.
 - Claiming production readiness from synthetic CI.
+- Exporting raw payloads, installation or transaction identifiers, advertising
+  identifiers, provider click identifiers, or platform-authority evidence
+  through operator event webhooks.
 
 ## Public and private boundary
 

@@ -142,6 +142,14 @@ provider transaction identifiers publicly.
 **Conversion delivery.** Produces a bounded, authenticated Google Data Manager
 delivery path from eligible stored evidence with idempotent delivery state.
 
+<!-- m1-component:operator-event-webhooks -->
+**Operator event webhooks.** Select an app-scoped, closed event subset from
+accepted ledger facts, build a minimal destination-scoped envelope, and place
+its encrypted exact bytes in a durable outbox. The worker rechecks destination
+and privacy lifecycle under a per-record lock, pins an allowlisted public DNS
+address, signs the exact body with the destination secret, and appends bounded
+delivery results. Redirects are rejected and receiver bodies are discarded.
+
 <!-- m1-component:production-control-plane -->
 **Production control plane.** Holds tenant/app configuration, RBAC, rule-bundle
 history, keys, durable schedules, and audited administrative changes.
@@ -217,6 +225,10 @@ are never merged implicitly.
 
 - The default worker runs job types serially; slow tenant or provider work can
   delay later jobs until bounded concurrency is introduced.
+- An operator-webhook attempt holds its per-record privacy lock and delivery
+  row lock through the bounded network request. This gives deletion a precise
+  before-or-after boundary but means a slow receiver can temporarily increase
+  database lock contention.
 - Scheduler advisory leases use a dedicated one-connection pool. Job work uses
   a separate bounded pool, and lease completion or failure is committed on the
   held scheduler connection. A lease therefore cannot consume the connection

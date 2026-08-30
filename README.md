@@ -30,7 +30,9 @@ manual and bounded provider cost inputs; advertising and verified-commerce
 revenue inputs; cohort metrics; difference auditing; deterministic fraud
 controls; direct deep links; Android deferred deep links; and an operator
 dashboard. A provider-neutral server-to-server endpoint accepts selected
-first-party backend events through app-scoped, rotatable HMAC keys.
+first-party backend events through app-scoped, rotatable HMAC keys. Optional
+operator event webhooks deliver a closed subset of accepted first-party events
+to an explicitly allowlisted, operator-owned HTTPS receiver.
 
 ## What OpenMasu does not claim
 
@@ -101,7 +103,9 @@ For a persistent local development stack and operator commands, follow the
 [getting started guide](docs/getting-started.md). Do not run volume-reset or
 fixture-seed commands against a stack that contains data you need to keep.
 Backend event producers should begin with the
-[server-to-server event guide](docs/server-to-server-events.md).
+[server-to-server event guide](docs/server-to-server-events.md). Operators who
+need outbound callbacks should use the separate
+[operator event webhook guide](docs/operator-event-webhooks.md).
 
 ## Validation
 
