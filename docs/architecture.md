@@ -50,7 +50,10 @@ destinations.
 <!-- m1-component:sdk-ingestion -->
 **SDK ingestion.** Verifies SDK-key and installation credentials, HMAC body
 signatures, timestamp and nonce replay windows, request limits, and durable
-inbox admission before asynchronous evaluation.
+inbox admission before asynchronous evaluation. Routine drains use normalized
+ledger keys to load only history related to the pending records rather than
+decrypting every processed SDK batch. A one-time, fail-closed projection keeps
+pre-existing withdrawal controls effective across that transition.
 
 <!-- m1-component:import-worker -->
 **Import worker.** Applies the mapping DSL, validates normalized payloads against

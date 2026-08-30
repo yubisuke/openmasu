@@ -9,6 +9,7 @@ import {
   appendDurableBatch,
   createAppPool,
   EncryptedFilePayloadStore,
+  type PayloadStore,
   uuidV7,
   withTenant,
 } from "@openmasu/runtime";
@@ -310,5 +311,50 @@ describe("SDK auxiliary queue recovery", () => {
       [input.tenantId, input.appId, recordId],
     )).rows[0]);
     assert.deepEqual(terminal, { pending: 0, results: 1 });
+  });
+
+  it("reads work and relevant history instead of every lifetime processed SDK batch", async () => {
+    const input = scope("bounded-history", "sdk-android");
+    const installationId = `installation:sdk-bounded-history-${run}`;
+    for (let index = 0; index < 24; index += 1) {
+      const value = {
+        ...record(input, `irrelevant-${index}`, "purchase", {
+          installation_id: `${installationId}-${index}`,
+          transaction_id: `transaction:sdk-bounded-history-${index}-${run}`,
+          amount_unscaled: "1000000",
+          amount_scale: 6,
+          currency: "USD",
+          financial_status: "settled",
+        }),
+        processing_sequence: index + 1,
+      };
+      await append(input, value);
+      assert.equal(await processSdkInbox(pool, payloadStore, input.tenantId), 1);
+    }
+
+    const current = {
+      ...record(input, "current", "purchase", {
+        installation_id: installationId,
+        transaction_id: `transaction:sdk-bounded-history-current-${run}`,
+        amount_unscaled: "2000000",
+        amount_scale: 6,
+        currency: "USD",
+        financial_status: "settled",
+      }),
+      processing_sequence: 100,
+    };
+    await append(input, current);
+    const reads: string[] = [];
+    const countingStore: PayloadStore = {
+      write: (scope, plaintext) => payloadStore.write(scope, plaintext),
+      read: async (reference) => {
+        reads.push(reference);
+        return payloadStore.read(reference);
+      },
+      purge: (reference) => payloadStore.purge(reference),
+      scanFor: (value) => payloadStore.scanFor(value),
+    };
+    assert.equal(await processSdkInbox(pool, countingStore, input.tenantId), 1);
+    assert.equal(reads.length, 1, "one new unrelated batch must not replay 24 processed bodies");
   });
 });

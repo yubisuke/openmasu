@@ -90,7 +90,10 @@ durable control state before marking its SDK batch complete. Later enforcement
 therefore does not depend on retaining or replaying the encrypted batch body.
 The durable row contains the credential key reference, purpose, sequence,
 recognition time, and canonical source-record reference, but not the consent
-payload or installation identifier.
+payload or installation identifier. On upgrade, accepted historical consent
+controls are projected once per installation credential before later work is
+evaluated. The worker fails closed if a required historical consent body is no
+longer readable; it does not silently treat missing history as consent.
 
 ## Access, portability, correction, and deletion
 
