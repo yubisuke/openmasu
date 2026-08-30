@@ -10,6 +10,7 @@ export const SCHEDULED_WORKER_JOBS = [
   "commerce_readback",
   "google_conversion_delivery",
   "operator_webhook_delivery",
+  "operator_bulk_export",
   "fraud_maintenance",
   "dashboard_session_sweep",
 ] as const;

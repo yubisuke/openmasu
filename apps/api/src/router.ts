@@ -56,6 +56,11 @@ import {
   listOperatorWebhookDestinations,
   registerOperatorWebhookDestination,
 } from "./operator-webhooks-admin.js";
+import {
+  disableOperatorBulkExportDestination,
+  listOperatorBulkExportDestinations,
+  registerOperatorBulkExportDestination,
+} from "./operator-bulk-exports-admin.js";
 import { handleServerBatch, type ServerRouteDependencies } from "./server-routes.js";
 import {
   receiveAppleStoreNotification,
@@ -92,6 +97,10 @@ export type RequestHandlerDependencies = {
   readonly server?: ServerRouteDependencies;
   readonly trackingDestinationAllowlist?: readonly string[];
   readonly operatorWebhooks?: Readonly<{
+    destinationAllowlist: readonly string[];
+    allowSyntheticLoopback?: boolean;
+  }>;
+  readonly operatorBulkExports?: Readonly<{
     destinationAllowlist: readonly string[];
     allowSyntheticLoopback?: boolean;
   }>;
@@ -232,6 +241,10 @@ function operatorWebhookDestinationId(pathname: string): string | undefined {
   return decodedPathPart(pathname, /\/operator-webhooks\/([^/]+)\/disable$/);
 }
 
+function operatorBulkExportDestinationId(pathname: string): string | undefined {
+  return decodedPathPart(pathname, /\/operator-bulk-exports\/([^/]+)\/disable$/);
+}
+
 function jsonFormValue(body: URLSearchParams, name: string): unknown {
   const value = body.get(name);
   if (value === null || value.trim() === "") throw new Error(`${name}_required`);
@@ -248,7 +261,7 @@ async function rejectDashboardCsrf(
   response: ServerResponse,
   session: DashboardSession,
   action: string,
-  targetScope: "tenant" | "app" | "session" | "tracking_link" | "sdk_key" | "server_key" | "webhook_destination",
+  targetScope: "tenant" | "app" | "session" | "tracking_link" | "sdk_key" | "server_key" | "webhook_destination" | "bulk_export_destination",
   targetRef: string,
 ): Promise<void> {
   await recordDashboardAudit(dependencies.pool, {
@@ -465,6 +478,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
         "dashboard_sdk_keys_issue", "dashboard_sdk_keys_retire",
         "dashboard_server_keys_issue", "dashboard_server_keys_retire", "dashboard_link_domain",
         "dashboard_operator_webhooks_register", "dashboard_operator_webhooks_disable",
+        "dashboard_operator_bulk_exports_register", "dashboard_operator_bulk_exports_disable",
         "dashboard_app_link_identity", "dashboard_apple_registration", "dashboard_conversion_schema",
         "dashboard_rule_bundle", "dashboard_google_data_manager", "dashboard_apps_create",
       ].includes(route.handler)) {
@@ -695,6 +709,74 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             }
             return;
           }
+          if (route.handler === "dashboard_operator_bulk_exports_register"
+            || route.handler === "dashboard_operator_bulk_exports_disable") {
+            const body = await formBody(request);
+            const destinationId = operatorBulkExportDestinationId(target.pathname);
+            if (!csrfOriginAccepted(request, dependencies.dashboard.publicBaseUrl)
+              || !verifyCsrfToken(session.token, body.get("csrf_token") ?? undefined)) {
+              await rejectDashboardCsrf(
+                dependencies,
+                response,
+                session,
+                "dashboard_operator_bulk_export_mutation",
+                "bulk_export_destination",
+                destinationId ?? "bulk:new",
+              );
+              return;
+            }
+            try {
+              if (route.handler === "dashboard_operator_bulk_exports_register") {
+                if (!dependencies.operatorBulkExports) throw new Error("operator_bulk_exports_not_configured");
+                await registerOperatorBulkExportDestination({
+                  pool: dependencies.pool,
+                  payloadStore: dependencies.payloadStore,
+                  identity: appIdentity,
+                  body: {
+                    endpoint_url: body.get("endpoint_url") ?? "",
+                    bucket_name: body.get("bucket_name") ?? "",
+                    object_prefix: body.get("object_prefix") ?? "",
+                    region: body.get("region") ?? "",
+                    start_at: body.get("start_at") ?? "",
+                    access_key_id: body.get("access_key_id") ?? "",
+                    secret_access_key: body.get("secret_access_key") ?? "",
+                    session_token: body.get("session_token") ?? "",
+                    events: body.getAll("events"),
+                  },
+                  destinationAllowlist: dependencies.operatorBulkExports.destinationAllowlist,
+                  allowSyntheticLoopback: dependencies.operatorBulkExports.allowSyntheticLoopback,
+                });
+                dashboardHtml(response, 201, `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Bulk export registered</title><link rel="stylesheet" href="/dashboard/app.css"></head><body><main><h1>Bulk export registered</h1><p>The protected storage credential was accepted and will not be displayed.</p><p><a href="/dashboard/apps/${encodeURIComponent(appIdentity.appId)}">Return to the app dashboard</a></p></main></body></html>`);
+              } else {
+                if (!destinationId) throw new Error("operator_bulk_destination_not_found");
+                await disableOperatorBulkExportDestination({
+                  pool: dependencies.pool,
+                  payloadStore: dependencies.payloadStore,
+                  identity: appIdentity,
+                  destinationId,
+                });
+                response.writeHead(303, {
+                  ...dashboardHeaders,
+                  location: `/dashboard/apps/${encodeURIComponent(appIdentity.appId)}`,
+                }).end();
+              }
+            } catch (error) {
+              const reason = publicReason(error, "operator_bulk_lifecycle_failed");
+              await recordDashboardAudit(dependencies.pool, {
+                tenantId: appIdentity.tenantId,
+                appId: appIdentity.appId,
+                actorRef: `admin_key:${session.adminKeyId}`,
+                action: "operator_bulk_export_lifecycle",
+                targetScope: "bulk_export_destination",
+                targetRef: destinationId ?? "bulk:new",
+                outcome: "failed",
+                reasonCode: reason,
+              });
+              dashboardHtml(response, reason === "operator_bulk_destination_not_found" ? 404 : 400,
+                `<!doctype html><html lang="en"><body><h1>Bulk export operation failed</h1><p>${escapeHtml(reason)}</p></body></html>`);
+            }
+            return;
+          }
           if (["dashboard_app_link_identity", "dashboard_apple_registration", "dashboard_conversion_schema", "dashboard_rule_bundle", "dashboard_google_data_manager"].includes(route.handler)) {
             const body = await formBody(request);
             if (!csrfOriginAccepted(request, dependencies.dashboard.publicBaseUrl)
@@ -817,6 +899,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
           const sdkKeys = await listSdkKeys(dependencies.readerPool, appIdentity);
           const serverKeys = await listServerKeys(dependencies.readerPool, appIdentity);
           const operatorWebhooks = await listOperatorWebhookDestinations(dependencies.readerPool, appIdentity);
+          const operatorBulkExports = await listOperatorBulkExportDestinations(dependencies.readerPool, appIdentity);
           const metrics = await metricReport(dependencies.readerPool, appIdentity, parsed.query);
           const effectiveWatermark = parsed.query.watermarkAtMost
             ?? metrics.data.map((row) => row.input_received_at_watermark).sort().at(-1);
@@ -838,6 +921,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             sdkKeys,
             serverKeys,
             operatorWebhooks,
+            operatorBulkExports,
             canOperate: roleAllows(session.role, "operate"),
             canAdminister: roleAllows(session.role, "administer"),
             csrfToken: csrfToken(session.token),
@@ -1048,6 +1132,57 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
                 reasonCode: reason,
               });
               json(response, reason === "operator_webhook_destination_not_active" ? 409 : 400, { error: reason });
+            }
+          }
+          return;
+        }
+        if (route.handler === "admin_operator_bulk_exports_list"
+          || route.handler === "admin_operator_bulk_exports_register"
+          || route.handler === "admin_operator_bulk_exports_disable") {
+          const appId = adminAppId(target.pathname) ?? "";
+          try {
+            const appIdentity = await requireRegisteredApp(pool, identity, appId);
+            if (route.handler === "admin_operator_bulk_exports_list") {
+              json(response, 200, { data: await listOperatorBulkExportDestinations(pool, appIdentity) });
+              return;
+            }
+            if (route.handler === "admin_operator_bulk_exports_register") {
+              if (!dependencies.operatorBulkExports) throw new Error("operator_bulk_exports_not_configured");
+              const body = await jsonBody(request);
+              json(response, 201, await registerOperatorBulkExportDestination({
+                pool: dependencies.pool,
+                payloadStore: dependencies.payloadStore,
+                identity: appIdentity,
+                body,
+                destinationAllowlist: dependencies.operatorBulkExports.destinationAllowlist,
+                allowSyntheticLoopback: dependencies.operatorBulkExports.allowSyntheticLoopback,
+              }));
+              return;
+            }
+            const destinationId = operatorBulkExportDestinationId(target.pathname);
+            if (!destinationId) throw new Error("operator_bulk_destination_not_found");
+            json(response, 200, await disableOperatorBulkExportDestination({
+              pool: dependencies.pool,
+              payloadStore: dependencies.payloadStore,
+              identity: appIdentity,
+              destinationId,
+            }));
+          } catch (error) {
+            const reason = publicReason(error, "operator_bulk_lifecycle_failed");
+            if (error instanceof AppNotFoundError || reason === "operator_bulk_destination_not_found") {
+              json(response, 404, { error: "not_found" });
+            } else {
+              await recordDashboardAudit(dependencies.pool, {
+                tenantId: identity.tenantId,
+                appId,
+                actorRef: `admin_key:${identity.keyId}`,
+                action: "operator_bulk_export_lifecycle",
+                targetScope: "bulk_export_destination",
+                targetRef: operatorBulkExportDestinationId(target.pathname) ?? "bulk:new",
+                outcome: "failed",
+                reasonCode: reason,
+              });
+              json(response, reason === "operator_bulk_destination_not_active" ? 409 : 400, { error: reason });
             }
           }
           return;

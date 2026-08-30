@@ -97,6 +97,10 @@ const server = createServer(createRequestHandler({
     destinationAllowlist: (process.env.OPENMASU_OPERATOR_WEBHOOK_DESTINATION_ALLOWLIST ?? "")
       .split(",").map((value) => value.trim()).filter(Boolean),
   },
+  operatorBulkExports: {
+    destinationAllowlist: (process.env.OPENMASU_OPERATOR_BULK_EXPORT_DESTINATION_ALLOWLIST ?? "")
+      .split(",").map((value) => value.trim()).filter(Boolean),
+  },
   referrerMaximumEncodedCharacters: Number(process.env.OPENMASU_REFERRER_MAX_ENCODED_CHARS ?? "512"),
   applePostback: {
     pool,

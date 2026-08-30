@@ -47,6 +47,9 @@ const seedControlTruncate = new Set([
   "control.server_key_states",
   "control.operator_webhook_destinations",
   "control.operator_webhook_destination_states",
+  "control.operator_bulk_export_destinations",
+  "control.operator_bulk_export_destination_states",
+  "control.operator_bulk_export_checkpoints",
   "control.rule_bundle_revisions",
   "control.worker_job_schedules",
 ]);
@@ -78,6 +81,9 @@ const ephemeralExpected = new Map<string, Record<Role, Privilege[]>>([
   ["ephemeral.operator_webhook_deliveries", {
     openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: ["SELECT"], openmasu_seed: ["TRUNCATE"],
   }],
+  ["ephemeral.operator_bulk_export_batches", {
+    openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: ["SELECT"], openmasu_seed: ["TRUNCATE"],
+  }],
 ]);
 
 function expected(row: Row): Privilege[] {
@@ -95,6 +101,7 @@ function expected(row: Row): Privilege[] {
     if (qualified === "control.google_data_manager_destinations") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.commerce_backfill_checkpoints") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.worker_job_schedules") return ["SELECT", "INSERT", "UPDATE"];
+    if (qualified === "control.operator_bulk_export_checkpoints") return ["SELECT", "INSERT", "UPDATE"];
     return qualified === "control.public_postback_audits" ? ["INSERT"] : ["SELECT", "INSERT"];
   }
   if (row.role_name === "openmasu_reader") {

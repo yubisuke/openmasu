@@ -72,6 +72,11 @@ describe("declarative API route security", () => {
     assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/operator-webhooks/webhook%3Aone/disable")?.handler, "admin_operator_webhooks_disable");
     assert.equal(matchRoute("POST", "/dashboard/apps/app-a/operator-webhooks")?.handler, "dashboard_operator_webhooks_register");
     assert.equal(matchRoute("POST", "/dashboard/apps/app-a/operator-webhooks/webhook%3Aone/disable")?.handler, "dashboard_operator_webhooks_disable");
+    assert.equal(matchRoute("GET", "/v1/admin/apps/app-a/operator-bulk-exports")?.handler, "admin_operator_bulk_exports_list");
+    assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/operator-bulk-exports")?.handler, "admin_operator_bulk_exports_register");
+    assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/operator-bulk-exports/bulk%3Aone/disable")?.handler, "admin_operator_bulk_exports_disable");
+    assert.equal(matchRoute("POST", "/dashboard/apps/app-a/operator-bulk-exports")?.handler, "dashboard_operator_bulk_exports_register");
+    assert.equal(matchRoute("POST", "/dashboard/apps/app-a/operator-bulk-exports/bulk%3Aone/disable")?.handler, "dashboard_operator_bulk_exports_disable");
     for (const path of [
       "/dashboard/link-domain",
       "/dashboard/apps/app-a/link-identity",
@@ -92,6 +97,8 @@ describe("declarative API route security", () => {
       "dashboard_server_keys_issue", "dashboard_server_keys_retire",
       "admin_operator_webhooks_list", "admin_operator_webhooks_register", "admin_operator_webhooks_disable",
       "dashboard_operator_webhooks_register", "dashboard_operator_webhooks_disable",
+      "admin_operator_bulk_exports_list", "admin_operator_bulk_exports_register", "admin_operator_bulk_exports_disable",
+      "dashboard_operator_bulk_exports_register", "dashboard_operator_bulk_exports_disable",
       "dashboard_app_link_identity", "dashboard_apple_registration", "dashboard_conversion_schema",
       "dashboard_rule_bundle", "dashboard_google_data_manager",
     ]) assert.equal(routes.find((route) => route.handler === handler)?.capability, "administer", handler);

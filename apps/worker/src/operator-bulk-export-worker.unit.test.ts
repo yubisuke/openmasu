@@ -77,13 +77,13 @@ describe("operator bulk export files", () => {
     const lines = gunzipSync(first.body).toString("utf8").trimEnd().split("\n").map((line) => JSON.parse(line));
     assert.equal(lines[0].schema, "openmasu.operator_event_export_manifest.v1");
     assert.equal(lines[0].row_count, 2);
-    assert.equal(lines[1].record_kind, "event");
-    assert.deepEqual(lines[2], {
+    assert.deepEqual(lines[1], {
       schema: "openmasu.operator_event_export.v1",
       record_kind: "privacy_deletion",
       app_id: "app-a",
       subject_ref: "a".repeat(64),
       recognized_at: "2026-08-30T00:00:03.000Z",
     });
+    assert.equal(lines[2].record_kind, "event");
   });
 });
