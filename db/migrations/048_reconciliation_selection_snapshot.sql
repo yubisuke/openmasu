@@ -24,7 +24,8 @@ VOLATILE
 SET search_path = pg_catalog
 AS $$
   SELECT pg_advisory_xact_lock(hashtextextended(
-    'openmasu:reconciliation-selection:' || p_tenant_id || ':' || p_app_id,
+    'openmasu:reconciliation-selection:'
+      || length(p_tenant_id)::text || ':' || p_tenant_id || ':' || p_app_id,
     0
   ))
 $$;

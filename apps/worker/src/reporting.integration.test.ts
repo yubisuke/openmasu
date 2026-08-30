@@ -109,7 +109,7 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
   }
 
   async function waitForReconciliationLockWaiter(): Promise<void> {
-    const lockKey = "openmasu:reconciliation-selection:tenant-a:app-a";
+    const lockKey = "openmasu:reconciliation-selection:8:tenant-a:app-a";
     for (let attempt = 0; attempt < 80; attempt += 1) {
       const locks = await seedPool.query<{ waiting: number }>(
         `SELECT count(*) FILTER (WHERE NOT granted)::int AS waiting
