@@ -246,7 +246,8 @@ describe("authenticated server-to-server event ingestion", { concurrency: false 
     await processSdkInbox(pool, payloadStore, tenantId);
     const evidence = await withTenant(pool, tenantId, async (client) => ({
       rejection: (await client.query<{ reason_code: string; payload_disposition: string }>(
-        `SELECT rejection.reason_code, rejection.payload_disposition
+        `SELECT rejection.reason_code,
+                rejection.artifact->>'payload_disposition' AS payload_disposition
            FROM ledger.rejections AS rejection
            JOIN ledger.raw_records AS raw
              ON raw.tenant_id=rejection.tenant_id AND raw.app_id=rejection.app_id AND raw.record_id=rejection.record_id
