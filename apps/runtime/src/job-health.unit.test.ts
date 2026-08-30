@@ -15,7 +15,7 @@ describe("durable operator job health", () => {
   it("keeps the job, actor, and outcome vocabularies closed", async () => {
     assert.deepEqual(JOB_HEALTH_JOBS, [
       "mmp_import", "cost_import", "max_revenue_import", "google_conversion_delivery",
-      "operator_webhook_delivery", "metric_run",
+      "operator_webhook_delivery", "operator_bulk_export", "metric_run",
     ]);
     assert.deepEqual(JOB_HEALTH_OUTCOMES, ["succeeded", "failed"]);
     assert.deepEqual(JOB_HEALTH_ACTOR_REFS, {
@@ -24,6 +24,7 @@ describe("durable operator job health", () => {
       max_revenue_import: "job:max_revenue_import",
       google_conversion_delivery: "job:google_conversion_delivery",
       operator_webhook_delivery: "job:operator_webhook_delivery",
+      operator_bulk_export: "job:operator_bulk_export",
       metric_run: "job:metric_run",
     });
     await assert.rejects(recordJobOutcome({

@@ -52,6 +52,19 @@ export type DashboardOperatorWebhook = {
   readonly status_changed_at: string;
 };
 
+export type DashboardOperatorBulkExport = {
+  readonly destination_id: string;
+  readonly endpoint_url: string;
+  readonly bucket_name: string;
+  readonly object_prefix: string;
+  readonly region: string;
+  readonly events: readonly string[];
+  readonly start_at: string;
+  readonly status: "active" | "disabled";
+  readonly created_at: string;
+  readonly status_changed_at: string;
+};
+
 export type DashboardView = {
   readonly apps: readonly DashboardApp[];
   readonly selectedAppId?: string;
@@ -69,6 +82,7 @@ export type DashboardView = {
   readonly sdkKeys: readonly DashboardSdkKey[];
   readonly serverKeys: readonly DashboardServerKey[];
   readonly operatorWebhooks: readonly DashboardOperatorWebhook[];
+  readonly operatorBulkExports: readonly DashboardOperatorBulkExport[];
   readonly fraudRows: readonly FraudAuditRow[];
   readonly csrfToken: string;
   readonly canOperate: boolean;
@@ -106,6 +120,7 @@ export function buildDashboardView(input: {
   readonly sdkKeys?: readonly DashboardSdkKey[];
   readonly serverKeys?: readonly DashboardServerKey[];
   readonly operatorWebhooks?: readonly DashboardOperatorWebhook[];
+  readonly operatorBulkExports?: readonly DashboardOperatorBulkExport[];
   readonly fraudRows?: readonly FraudAuditRow[];
   readonly csrfToken: string;
   readonly canOperate?: boolean;
@@ -150,6 +165,9 @@ export function buildDashboardView(input: {
       right.created_at.localeCompare(left.created_at, "en")
       || left.server_key_id.localeCompare(right.server_key_id, "en")),
     operatorWebhooks: [...(input.operatorWebhooks ?? [])].sort((left, right) =>
+      right.created_at.localeCompare(left.created_at, "en")
+      || left.destination_id.localeCompare(right.destination_id, "en")),
+    operatorBulkExports: [...(input.operatorBulkExports ?? [])].sort((left, right) =>
       right.created_at.localeCompare(left.created_at, "en")
       || left.destination_id.localeCompare(right.destination_id, "en")),
     fraudRows: [...(input.fraudRows ?? [])],

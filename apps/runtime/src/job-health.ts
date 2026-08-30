@@ -4,7 +4,7 @@ import { uuidV7, withTenant } from "./index.js";
 
 export const JOB_HEALTH_JOBS = [
   "mmp_import", "cost_import", "max_revenue_import", "google_conversion_delivery",
-  "operator_webhook_delivery", "metric_run",
+  "operator_webhook_delivery", "operator_bulk_export", "metric_run",
 ] as const;
 export const JOB_HEALTH_OUTCOMES = ["succeeded", "failed"] as const;
 
@@ -17,6 +17,7 @@ export const JOB_HEALTH_ACTOR_REFS: Readonly<Record<JobHealthJob, string>> = {
   max_revenue_import: "job:max_revenue_import",
   google_conversion_delivery: "job:google_conversion_delivery",
   operator_webhook_delivery: "job:operator_webhook_delivery",
+  operator_bulk_export: "job:operator_bulk_export",
   metric_run: "job:metric_run",
 };
 

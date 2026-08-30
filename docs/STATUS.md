@@ -43,6 +43,7 @@ MMP.
 | Shadow ledger and imports | Implemented for raw events, manual/bounded provider cost, and advertising or verified-commerce revenue | Authorized real export compatibility, account permissions, completeness, latency, and reconciliation |
 | Server-to-server events | Implemented for selected first-party backend events with app-scoped rotatable HMAC keys, durable inbox admission, contract rejection, replay controls, and deletion-race enforcement | Production TLS, secret custody, sustained load, backend integration, and operator acceptance |
 | Operator event webhooks | Implemented as a default-off, app-scoped export of selected accepted events with exact-origin egress policy, destination-scoped references, exact-body HMAC, durable retry, and deletion-race enforcement | Production receiver, DNS/TLS, capacity, alerting, secret custody, downstream retention/deletion, and operator acceptance |
+| Operator bulk event exports | Implemented as a default-off, app-scoped deterministic gzip NDJSON export to allowlisted S3-compatible operator storage, with SigV4, conditional create, digest-verified replay, durable keyset cursors, and destination-scoped deletion rows | Live Amazon S3/Cloudflare R2 account, IAM policy, DNS/TLS, lifecycle/replication, throughput, cost, alerting, downstream deletion, and operator acceptance |
 | Attribution and difference audit | Implemented for supported deterministic and aggregate evidence families | Same-cohort comparison with an existing MMP under frozen definitions |
 | Cohort metrics and exports | Implemented for versioned revenue, cost, FX, retention, ROAS, LTV, JSON, CSV, and dashboard output | Real currency/time-zone coverage, source-dashboard reconciliation, and operator acceptance |
 | Android, iOS, and Unity SDKs | Implemented with JVM, emulator, Swift, simulator, packaging, and bridge gates | Physical devices, Unity exports, store delivery, and live provider signals |
@@ -66,14 +67,16 @@ not score a provider, certify its product, or recommend migration.
 
 The rc.4 release-coherence milestone is complete. Provider-neutral backend
 event submission and outbound operator event webhooks are implemented in the
-current source tree with synthetic evidence. Current work remains integration
+current source tree with synthetic evidence. Deterministic operator-owned bulk
+event exports are implemented in the current source milestone; live object
+storage remains an operator gate. Current work remains integration
 hardening rather than another broad provider claim:
 
 1. preserve the rc.4 notes, SDK identities, SBOMs, bundle paths, tag, and
    evidence manifest as one immutable release record;
-2. preserve the server-event and operator-webhook key, replay, egress, privacy,
-   and durable-queue invariants while auditing other high-impact compatibility
-   gaps;
+2. preserve the server-event, operator-webhook, and bulk-export key, replay,
+   egress, privacy, and durable-queue invariants while auditing other
+   high-impact compatibility gaps;
 3. continue bounded concurrency and shared queue-vector hardening when existing
    runtime or SDK surfaces change;
 4. preserve the current synthetic/operator evidence distinction.

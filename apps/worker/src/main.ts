@@ -21,6 +21,10 @@ import {
   processOperatorWebhookDeliveries,
 } from "./operator-webhook-worker.js";
 import {
+  discoverOperatorBulkExports,
+  processOperatorBulkExports,
+} from "./operator-bulk-export-worker.js";
+import {
   createAppleCommerceReadbackClient,
   createGoogleCommerceReadbackClient,
   processCommerceReadbacks,
@@ -241,6 +245,22 @@ const tick = async (): Promise<void> => {
               .split(",").map((value) => value.trim()).filter(Boolean),
             timeoutMilliseconds: Number(process.env.OPENMASU_OPERATOR_WEBHOOK_TIMEOUT_MS ?? "5000"),
             maximumAttempts: Number(process.env.OPENMASU_OPERATOR_WEBHOOK_MAX_ATTEMPTS ?? "8"),
+          });
+        }
+      });
+      await runWorkerJob(tenantId, "operator_bulk_export", async () => {
+        if (process.env.OPENMASU_OPERATOR_BULK_EXPORTS_ENABLED === "on") {
+          await discoverOperatorBulkExports(pool, payloadStore, tenantId, {
+            maximumRows: Number(process.env.OPENMASU_OPERATOR_BULK_EXPORT_MAX_ROWS ?? "500"),
+            maximumObjectBytes: Number(process.env.OPENMASU_OPERATOR_BULK_EXPORT_MAX_OBJECT_BYTES ?? "10485760"),
+          });
+          await processOperatorBulkExports(pool, payloadStore, tenantId, {
+            enabled: true,
+            destinationAllowlist: (process.env.OPENMASU_OPERATOR_BULK_EXPORT_DESTINATION_ALLOWLIST ?? "")
+              .split(",").map((value) => value.trim()).filter(Boolean),
+            timeoutMilliseconds: Number(process.env.OPENMASU_OPERATOR_BULK_EXPORT_TIMEOUT_MS ?? "5000"),
+            maximumAttempts: Number(process.env.OPENMASU_OPERATOR_BULK_EXPORT_MAX_ATTEMPTS ?? "8"),
+            maximumObjectBytes: Number(process.env.OPENMASU_OPERATOR_BULK_EXPORT_MAX_OBJECT_BYTES ?? "10485760"),
           });
         }
       });

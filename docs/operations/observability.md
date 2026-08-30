@@ -14,6 +14,10 @@ system.
 - The `operator_webhooks` backlog and `operator_webhook_delivery` job metrics
   expose pending work and terminal scheduler health without destination,
   tenant, app, event, or subject labels.
+- The `operator_bulk_exports` backlog and `operator_bulk_export` job metrics
+  expose queued/retry work and scheduler health with the same fixed-label
+  boundary. Object keys, endpoints, buckets, destinations, tenant/app values,
+  event names, subject references, and credentials never become metric labels.
 - The `sdk_batches` ingest backlog includes both batches waiting for base
   ingestion and batches whose base ledger records are complete but whose
   server-side AdServices, platform-integrity, or Google Play verification work

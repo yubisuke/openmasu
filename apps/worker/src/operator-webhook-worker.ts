@@ -58,18 +58,20 @@ type DeliveryRow = {
   tombstoned: boolean;
 };
 
+export type OperatorEvent = Readonly<{
+  name: OperatorWebhookEventName;
+  event_ref: string;
+  occurred_at: string;
+  subject_ref?: string;
+  details: JsonObject;
+}>;
+
 export type OperatorWebhookEnvelope = Readonly<{
   schema: "openmasu.operator_event.v1";
   delivery_id: string;
   emitted_at: string;
   app_id: string;
-  event: Readonly<{
-    name: OperatorWebhookEventName;
-    event_ref: string;
-    occurred_at: string;
-    subject_ref?: string;
-    details: JsonObject;
-  }>;
+  event: OperatorEvent;
 }>;
 
 export type PreparedOperatorWebhook = Readonly<{
@@ -133,28 +135,31 @@ function details(candidate: OperatorWebhookCandidate, secret: Buffer): JsonObjec
   };
 }
 
+export function buildOperatorEvent(candidate: OperatorWebhookCandidate, secret: Buffer): OperatorEvent {
+  if (secret.length < 32) throw new Error("operator_webhook_secret_invalid");
+  return {
+    name: candidate.event_name,
+    event_ref: operatorWebhookReference(secret, "event_ref", candidate.logical_event_id),
+    occurred_at: candidate.occurred_at,
+    ...(candidate.installation_id
+      ? { subject_ref: operatorWebhookReference(secret, "subject_ref", candidate.installation_id) }
+      : {}),
+    details: details(candidate, secret),
+  };
+}
+
 export function buildOperatorWebhookRequest(input: Readonly<{
   candidate: OperatorWebhookCandidate;
   deliveryId: string;
   emittedAt: string;
   secret: Buffer;
 }>): PreparedOperatorWebhook {
-  if (input.secret.length < 32) throw new Error("operator_webhook_secret_invalid");
-  const event = {
-    name: input.candidate.event_name,
-    event_ref: operatorWebhookReference(input.secret, "event_ref", input.candidate.logical_event_id),
-    occurred_at: input.candidate.occurred_at,
-    ...(input.candidate.installation_id
-      ? { subject_ref: operatorWebhookReference(input.secret, "subject_ref", input.candidate.installation_id) }
-      : {}),
-    details: details(input.candidate, input.secret),
-  } as const;
   const envelope: OperatorWebhookEnvelope = {
     schema: "openmasu.operator_event.v1",
     delivery_id: input.deliveryId,
     emitted_at: input.emittedAt,
     app_id: input.candidate.app_id,
-    event,
+    event: buildOperatorEvent(input.candidate, input.secret),
   };
   const body = Buffer.from(JSON.stringify(envelope), "utf8");
   return {

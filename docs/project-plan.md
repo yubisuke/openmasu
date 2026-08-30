@@ -49,6 +49,7 @@ versions were reached. They do not override current sources of truth.
 | CI efficiency | Complete: cancel superseded PR runs and gate expensive steps by changed scope | Classifier unit matrix plus GitHub pull-request proof with every required context present |
 | Authenticated backend events | Complete: selected first-party server events use dedicated rotatable keys and the ordinary durable evaluator path | Signing and authority unit tests plus PostgreSQL key-lifecycle, replay, rejection, idempotency, projection, and deletion tests |
 | Operator event webhooks | Complete: selected accepted events use immutable app destinations, destination-scoped references, an encrypted durable outbox, and exact-body signing | Destination/DNS unit tests plus PostgreSQL lifecycle, retry, identifier-exclusion, disablement, and deletion-ordering tests |
+| Operator bulk event exports | Complete: the webhook event object is reused in deterministic gzip NDJSON objects delivered to immutable S3-compatible app destinations through encrypted durable batches and keyset checkpoints | Official SigV4 vectors plus PostgreSQL registration, retry-byte identity, checkpoint, privacy-deletion, disablement, grant, metrics, and credential-exclusion tests |
 
 ## Change acceptance
 

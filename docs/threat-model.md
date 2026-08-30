@@ -151,6 +151,16 @@ one-time encrypted destination secrets, exact-body HMAC, stable delivery IDs,
 a closed minimal envelope, encrypted durable retries, and one shared record
 lock for dispatch and deletion recognition.
 
+<!-- threat-component:operator-bulk-exports -->
+**Operator bulk event exports:** credential theft, SSRF and DNS rebinding,
+overwrite or retry divergence, cursor skips, cross-destination correlation,
+deletion races, and identifier leakage. Controls include default-off
+enablement, exact HTTPS-origin allowlists, public-address DNS validation and
+connection pinning, no redirects, encrypted least-privilege credentials,
+SigV4, conditional object creation, digest-verified identical replay, durable
+keyset cursors, a closed destination-scoped row type, deletion-first selection,
+and destination locks shared with deletion recognition and disablement.
+
 <!-- threat-component:production-control-plane -->
 **Control plane:** key misuse, stale rule activation, scheduler overlap, and
 unaudited configuration. Controls include minimum RBAC, encrypted secrets,
@@ -206,6 +216,10 @@ validation, and immutable reviewed goldens.
 - A slow operator-webhook receiver holds the bounded per-record dispatch lock
   until that attempt finishes. The timeout limits the interval but does not
   eliminate database contention or serial worker delay.
+- Synthetic object-store vectors do not prove live S3/R2 IAM policy, DNS/TLS,
+  retention, replication, throughput, cost, alerting, or downstream deletion.
+  A storage operator can retain or copy an object after receipt, and a deletion
+  row is an auditable instruction rather than remote erasure proof.
 - Self-hosting operators remain responsible for TLS, secret custody, host
   security, backup media, alert routing, and incident response.
 

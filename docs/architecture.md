@@ -150,6 +150,16 @@ and privacy lifecycle under a per-record lock, pins an allowlisted public DNS
 address, signs the exact body with the destination secret, and appends bounded
 delivery results. Redirects are rejected and receiver bodies are discarded.
 
+<!-- m1-component:operator-bulk-exports -->
+**Operator bulk event exports.** Reuse the webhook event object as a closed row
+type, prepend a versioned manifest row, and write deterministic gzip NDJSON to
+an app-scoped, operator-owned S3-compatible destination. Credentials and queued
+object bytes stay encrypted. The worker resolves an active destination under a
+transaction lock, selects accepted events with the durable
+`(received_at, record_id)` keyset cursor, emits destination-scoped deletion rows
+before later event rows, and advances both cursors only after a conditional
+object create or digest-verified replay succeeds.
+
 <!-- m1-component:production-control-plane -->
 **Production control plane.** Holds tenant/app configuration, RBAC, rule-bundle
 history, keys, durable schedules, and audited administrative changes.
@@ -229,6 +239,11 @@ are never merged implicitly.
   row lock through the bounded network request. This gives deletion a precise
   before-or-after boundary but means a slow receiver can temporarily increase
   database lock contention.
+- An operator bulk-export attempt holds the destination and batch state while
+  performing a bounded object-store request. Conditional create plus digest
+  verification makes an identical retry safe, but object-store latency can
+  delay that destination. Deletion rows communicate a downstream obligation;
+  they cannot recall objects already copied or processed by the operator.
 - Scheduler advisory leases use a dedicated one-connection pool. Job work uses
   a separate bounded pool, and lease completion or failure is committed on the
   held scheduler connection. A lease therefore cannot consume the connection

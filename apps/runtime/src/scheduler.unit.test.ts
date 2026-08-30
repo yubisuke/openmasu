@@ -33,6 +33,7 @@ describe("durable worker scheduler", () => {
       "max_inbox", "sdk_inbox", "adservices_lookup", "integrity_verification",
       "google_play_verification", "commerce_readback", "google_conversion_delivery",
       "operator_webhook_delivery",
+      "operator_bulk_export",
       "fraud_maintenance", "dashboard_session_sweep",
     ]);
     assert.doesNotThrow(() => validateSchedulePolicy(policy));

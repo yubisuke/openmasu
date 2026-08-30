@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 import { createHash } from "node:crypto";
 import { sha256 } from "@openmasu/attribution-core";
-import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
+import { operatorWebhookReference, uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 
 type Any = Record<string, any>;
@@ -301,6 +301,66 @@ export async function executePrivacyRequest(
             ORDER BY delivery_id FOR UPDATE`,
           [body.tenant_id, body.deletion_scope, body.app_id],
         );
+    const operatorBulkDestinations = await client.query<{
+      destination_id: string;
+      app_id: string;
+      reference_secret_ref: string;
+    }>(
+      `SELECT destination_id,app_id,reference_secret_ref
+         FROM control.operator_bulk_export_destinations_current
+        WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3) AND status='active'
+        ORDER BY app_id,destination_id`,
+      [body.tenant_id, body.deletion_scope, body.app_id],
+    );
+    const operatorBulkPayloads: Array<{
+      batch_id: string;
+      destination_id: string;
+      app_id: string;
+      object_ref: string;
+      object_key: string;
+      object_digest: string;
+      attempts: number;
+    }> = [];
+    for (const destination of operatorBulkDestinations.rows) {
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('openmasu:operator-bulk-destination:' || $1 || ':' || $2 || ':' || $3,0))",
+        [body.tenant_id, destination.app_id, destination.destination_id],
+      );
+      const secret = await payloadStore.read(destination.reference_secret_ref);
+      const subjectRef = operatorWebhookReference(secret, "subject_ref", body.deletion_subject_ref);
+      const deletionArtifact = {
+        destination_id: destination.destination_id,
+        tenant_id: body.tenant_id,
+        app_id: destination.app_id,
+        privacy_request_id: requestId,
+        subject_ref: subjectRef,
+        recognized_at: completedAt,
+      };
+      await client.query(
+        `INSERT INTO ledger.operator_bulk_export_deletions (
+           destination_id,tenant_id,app_id,privacy_request_id,subject_ref,recognized_at,artifact
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)
+         ON CONFLICT (tenant_id,app_id,destination_id,privacy_request_id) DO NOTHING`,
+        [destination.destination_id, body.tenant_id, destination.app_id, requestId,
+          subjectRef, completedAt, JSON.stringify(deletionArtifact)],
+      );
+      const pending = await client.query<{
+        batch_id: string;
+        destination_id: string;
+        app_id: string;
+        object_ref: string;
+        object_key: string;
+        object_digest: string;
+        attempts: number;
+      }>(
+        `SELECT batch_id::text,destination_id,app_id,object_ref,object_key,object_digest,attempts
+           FROM ephemeral.operator_bulk_export_batches
+          WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3 AND state IN ('queued','retry')
+          ORDER BY batch_id FOR UPDATE`,
+        [body.tenant_id, destination.app_id, destination.destination_id],
+      );
+      operatorBulkPayloads.push(...pending.rows);
+    }
     const commercePayloads = body.deletion_scope === "installation"
       ? await client.query<{ reference: string }>(
           `SELECT DISTINCT notification.evidence_ref AS reference
@@ -343,6 +403,7 @@ export async function executePrivacyRequest(
       ...googlePlayRtdnPayloads.rows.map((payload) => payload.evidence_ref),
       ...googleConversionPayloads.rows.map((payload) => payload.request_ref),
       ...operatorWebhookPayloads.rows.map((payload) => payload.request_ref),
+      ...operatorBulkPayloads.map((payload) => payload.object_ref),
       ...commercePayloads.rows.map((payload) => payload.reference),
     ])) await payloadStore.purge(reference);
     for (const delivery of operatorWebhookPayloads.rows) {
@@ -371,6 +432,35 @@ export async function executePrivacyRequest(
         [uuidV7(Date.parse(completedAt) + delivery.attempts), delivery.delivery_id,
           body.tenant_id, delivery.app_id, delivery.destination_id, delivery.attempts,
           completedAt, delivery.request_digest, JSON.stringify(deliveryArtifact)],
+      );
+    }
+    for (const batch of operatorBulkPayloads) {
+      await client.query(
+        `UPDATE ephemeral.operator_bulk_export_batches
+            SET state='suppressed',safe_reason='privacy_suppressed',updated_at=$4
+          WHERE tenant_id=$1 AND app_id=$2 AND batch_id=$3`,
+        [body.tenant_id, batch.app_id, batch.batch_id, completedAt],
+      );
+      const exportArtifact = {
+        batch_id: batch.batch_id,
+        destination_id: batch.destination_id,
+        tenant_id: body.tenant_id,
+        app_id: batch.app_id,
+        object_key: batch.object_key,
+        object_digest: batch.object_digest,
+        state: "suppressed",
+        attempt: batch.attempts,
+        occurred_at: completedAt,
+        reason_code: "privacy_suppressed",
+      };
+      await client.query(
+        `INSERT INTO ledger.operator_bulk_export_results (
+           export_result_id,batch_id,tenant_id,app_id,destination_id,object_key,object_digest,
+           state,attempt,occurred_at,reason_code,artifact
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,'suppressed',$8,$9,'privacy_suppressed',$10::jsonb)`,
+        [uuidV7(Date.parse(completedAt) + batch.attempts), batch.batch_id, body.tenant_id,
+          batch.app_id, batch.destination_id, batch.object_key, batch.object_digest,
+          batch.attempts, completedAt, JSON.stringify(exportArtifact)],
       );
     }
     if (body.deletion_scope === "installation") {
