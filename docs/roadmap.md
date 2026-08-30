@@ -52,7 +52,7 @@ Progress:
 | One disposable synthetic command is the canonical first run | Complete |
 | Current documentation excludes unexplained review, work-order, and decision references | Complete |
 | CI cancels superseded runs and routes expensive gates without hiding required contexts | Complete |
-| Release notes, SDK identity, tagged evidence, and source revision describe one exact candidate | Preparing v0.2.0; complete historically for v0.2.0-rc.4 |
+| Release notes, SDK identity, tagged evidence, and source revision describe one exact release | Complete for v0.2.0 at green commit `68b8c48`; complete historically for v0.2.0-rc.4 |
 | App backends can submit selected first-party events without SDK-key reuse or advertising identifiers | Complete with synthetic server-key lifecycle, ingestion, rejection, idempotency, and privacy tests |
 | Operators can receive a closed subset of accepted events without raw identifiers or provider-specific wire coupling | Complete with synthetic destination lifecycle, DNS/SSRF, signature, retry, privacy, and disablement tests |
 | Operators can receive delayed deterministic files without adopting a provider-specific export layout | Complete with synthetic SigV4 vectors, object replay, durable cursor, credential boundary, privacy-notice, and lifecycle tests |
@@ -66,11 +66,11 @@ Progress:
 | One active commerce read-back cannot race another worker or completed deletion | Complete with a per-row database-clock lease, token-fenced retry, transactional Google refund and Apple cursor completion, expired-claim recovery, stale-completion rejection, existing-binding cursor cleanup, and Google/Apple deletion-race evidence; App Store binding creation and provider-side exactly-once behavior remain unverified |
 
 Candidate v0.2.0-rc.4 satisfied the historical release-coherence exit gate at
-green `main` commit `2a2f6b5`. The v0.2.0 source candidate now consolidates the
+green `main` commit `2a2f6b5`. Published v0.2.0 now consolidates the
 authenticated backend event, operator webhook, bounded bulk export, durable
 daily metric, privacy, and queue-hardening work completed afterward. It becomes
-a release only after its own exact-commit platform gates, tag, evidence
-manifest, and GitHub Release agree. These are integration milestones rather
+an exact release record because its platform gates, tag, evidence manifest,
+and GitHub Release agree at `68b8c48`. These are integration milestones rather
 than provider or attribution claims. Subsequent repository work is selected
 from current-code audits of compatibility, failure recovery, reconciliation
 completeness, and operational correctness.

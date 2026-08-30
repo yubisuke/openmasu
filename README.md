@@ -64,14 +64,14 @@ guides, subsystem designs, operator procedures, tagged records, and historical
 material. For the shortest safe first run, go directly to the
 [synthetic getting started guide](docs/getting-started.md).
 
-The source and SDK are configured for candidate `v0.2.0`. It retains the
-independent Contract v0.4 wire and package identity, including the additive
-patch ledger through v0.4.10 with 57 reviewed fixtures and 741 goldens. This
-candidate is published only if the matching annotated tag and GitHub Release
-point to the same green commit. Until then, it is an untagged source candidate,
-not a published release. [`docs/STATUS.md`](docs/STATUS.md) defines the current
-source tree, and the [release index](docs/releases/README.md) separates the
-prepared record from immutable historical tags.
+`v0.2.0` is the current published source and SDK release. Its annotated tag and
+[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.2.0)
+point to green `main` commit `68b8c48`. It retains the independent Contract
+v0.4 wire and package identity, including the additive patch ledger through
+v0.4.10 with 57 reviewed fixtures and 741 goldens. Later `main` commits are not
+evidence for that release. [`docs/STATUS.md`](docs/STATUS.md) defines the
+current source tree, and the [release index](docs/releases/README.md) separates
+the exact published record from ongoing development and historical prereleases.
 
 ## Safe synthetic verification
 
@@ -176,7 +176,7 @@ Source and SDK releases require the platform AARs and SDK SBOMs before the repos
 packager can run. Follow the complete [release runbook](docs/operations/release.md)
 rather than invoking the final packaging command in a clean checkout.
 
-The configured candidate bundle path is
+The configured v0.2.0 bundle path is
 `build/sdk-release/openmasu-sdk-0.2.0`. It is release evidence only when
 built from the exact commit named by the matching `v0.2.0` annotated tag,
 after every full platform gate is green for that commit. An untagged bundle is

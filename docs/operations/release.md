@@ -4,12 +4,14 @@ OpenMasu publishes source tags and reproducible local SDK bundles. This runbook
 does not publish Maven, Swift, Unity, npm, container, or hosting artifacts to a
 public registry.
 
-The source and SDK are configured for candidate `v0.2.0`. A configured version
-is not publication by itself: a candidate must not be treated as published
-unless the matching annotated tag and GitHub Release point to the same green
-commit. A release must describe that exact tag target and must not reuse an
-older evidence manifest as proof for a newer commit. Version-bearing source,
-notes, manifest, SBOMs, and artifact paths move together. See
+The current published source and SDK release is `v0.2.0`. Its annotated tag and
+[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.2.0)
+point to green commit `68b8c48`. A configured version is not publication by
+itself: future candidates must not be treated as published unless their
+matching annotated tag and GitHub Release point to the same green commit. A
+release must describe that exact tag target and must not reuse an older
+evidence manifest as proof for a newer commit. Version-bearing source, notes,
+manifest, SBOMs, and artifact paths move together. See
 [Release records](../releases/README.md).
 
 ## 1. Freeze the candidate
@@ -145,7 +147,7 @@ python tools/build-sdk-release.py --verify-only build/sdk-release/openmasu-sdk-0
 This final check requires the annotated `v0.2.0` target, current checkout, and
 bundle manifest revision to be identical.
 
-Candidate `v0.2.0` uses
+Published `v0.2.0` uses
 [its own synthetic evidence manifest](../validation/v0.2.0-synthetic-evidence.md).
 The published rc.4 and preceding records remain immutable historical evidence.
 

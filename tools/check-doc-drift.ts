@@ -74,6 +74,22 @@ export function documentationDriftFailures(
     if (!condition) failures.push(label);
   };
   const bundlePath = `build/sdk-release/openmasu-sdk-${releaseVersion}`;
+  const readmeCandidate = normalizedIncludes(
+    documents.readme,
+    `source and SDK are configured for candidate \`v${releaseVersion}\``,
+  );
+  const readmePublished = normalizedIncludes(
+    documents.readme,
+    `\`v${releaseVersion}\` is the current published source and SDK release`,
+  );
+  const statusCandidate = normalizedIncludes(
+    documents.status,
+    `source and SDK are configured for candidate \`v${releaseVersion}\``,
+  );
+  const statusPublished = normalizedIncludes(
+    documents.status,
+    `\`v${releaseVersion}\` is the current published source and SDK release`,
+  );
 
   expect(
     documents.specification.includes(`The literal validation summary is: \`${validationSummary.trim()}\``),
@@ -93,21 +109,18 @@ export function documentationDriftFailures(
     ),
     "the current M0.4 roadmap gate differs from the measured inventory",
   );
+  expect(readmeCandidate || readmePublished, "README release identity differs from the SDK release version");
+  expect(statusCandidate || statusPublished, "STATUS release identity differs from the SDK release version");
   expect(
-    normalizedIncludes(documents.readme, `source and SDK are configured for candidate \`v${releaseVersion}\``),
-    "README configured candidate differs from the SDK release version",
-  );
-  expect(
-    normalizedIncludes(documents.status, `source and SDK are configured for candidate \`v${releaseVersion}\``),
-    "STATUS configured candidate differs from the SDK release version",
-  );
-  expect(
-    normalizedIncludes(documents.readme, "candidate is published only if the matching annotated tag") &&
+    ((readmeCandidate && normalizedIncludes(documents.readme, "candidate is published only if the matching annotated tag")) ||
+      (readmePublished &&
+        normalizedIncludes(documents.readme, "Later `main` commits are not evidence for that release") &&
+        documents.readme.includes(`/releases/tag/v${releaseVersion}`))) &&
       documents.readme.includes(`v${contractPatch}`),
-    "README does not separate the configured candidate from publication or identify the active contract patch",
+    "README does not bind release state, exact evidence scope, and the active contract patch",
   );
   expect(
-    normalizedIncludes(documents.status, "document describes the current `main` source tree") &&
+    documents.status.includes("current `main` source tree") &&
       documents.status.includes(`through v${contractPatch}`),
     "STATUS does not identify the active contract patch as current development source",
   );
@@ -116,7 +129,8 @@ export function documentationDriftFailures(
     "README does not prevent an untagged bundle from being treated as release evidence",
   );
   expect(
-    normalizedIncludes(documents.releaseRunbook, "must not be treated as published unless the matching annotated tag"),
+    normalizedIncludes(documents.releaseRunbook, "must not be treated as published unless") &&
+      normalizedIncludes(documents.releaseRunbook, "matching annotated tag and GitHub Release point to the same green commit"),
     "release runbook does not separate a configured candidate from a published release",
   );
   expect(documents.releaseRunbook.includes(bundlePath), "release runbook bundle path differs from the SDK release version");
