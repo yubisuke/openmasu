@@ -5,20 +5,45 @@ provider exports. It is the supported first experience for contributors.
 
 ## Requirements
 
-- Docker with Compose using the local Docker context
 - Node.js `22.18.0`
 - npm `11.6.2`
-- Python `3.13.5` for the independent evaluator
+- Docker with Compose using the local Docker context only for the disposable runtime pilot
+- Python `3.13.5` only for the independent evaluator
 
 The Node.js and npm versions must match exactly. `.npmrc` enables
 `engine-strict`; `.nvmrc` and `.python-version` record the expected runtimes.
 
-Install dependencies:
+Install the Node.js dependencies required by the offline demo:
 
 ```bash
 npm ci
+```
+
+Install the Python dependencies only when running the independent evaluator:
+
+```bash
 python -m pip install --require-hashes --requirement requirements-contract.txt
 ```
+
+## Offline Shadow comparison without Docker
+
+To see the core difference-explanation story before starting a database, run:
+
+```bash
+npm run --silent demo:shadow
+```
+
+The command evaluates existing reviewed fixtures and checks their selected
+artifacts against the committed goldens. It reports `window_mismatch` and
+`provider_modeled_conversion` as reconciliation reasons, and reports
+`crowd_anonymity_suppressed` separately as an attribution reason. It uses no
+real data, provider, credential, device, or production service.
+
+This is offline evaluator evidence. It deliberately reports runtime persistence
+and API evidence as `not_run`; there is no public attribution-report route for
+the crowd-anonymity row. Use the disposable pilot below for the existing
+PostgreSQL and runtime parity gates, but do not interpret that pilot as stored
+API proof for all three demo rows.
 
 ## Recommended first run
 
