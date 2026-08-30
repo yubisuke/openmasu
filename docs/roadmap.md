@@ -60,6 +60,7 @@ Progress:
 | Queue-only tenants are discoverable before tenant-scoped processing begins | Complete for integrity verification and commerce provider read-back, with SELECT-only owner discovery policies and drain-to-terminal integration evidence |
 | A slow tenant does not globally block independent tenant cycles | Synthetic source-level complete within one worker process with a bounded FIFO coordinator, same-tenant deduplication, unchanged per-tenant job order, bounded shutdown, and concurrent scheduler-lease evidence; full process shutdown and multi-replica tenant-wide ordering remain operational boundaries |
 | One SDK or MAX backlog does not create an unbounded tenant cycle | Complete with configurable 1-1000 row FIFO slices, default 100, and synthetic 2-then-1 drain evidence |
+| One active Google conversion claim cannot be concurrently finalized by another worker | Complete with a per-row database-clock lease, token-fenced transactional completion, expired-claim recovery, and stable transaction-ID evidence; provider-side exactly-once behavior remains unverified |
 
 Candidate v0.2.0-rc.4 satisfied the release-coherence exit gate at green `main`
 commit `2a2f6b5`. Authenticated backend events and operator event webhooks were

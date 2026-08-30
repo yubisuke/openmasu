@@ -54,6 +54,7 @@ versions were reached. They do not override current sources of truth.
 | Runtime tenant discovery | Complete: integrity verification and commerce provider read-back queues independently expose their tenant to the worker | FORCE-RLS owner-policy coverage plus isolated queue-only tenant discovery and drain-to-terminal integration tests |
 | Worker tenant fairness | Synthetic source-level complete: independent tenants use a bounded FIFO coordinator while each tenant retains its existing privacy-to-fraud job sequence within one worker process | Deterministic blocked-tenant progress, concurrency cap, deduplication, bounded shutdown, atomic environment reconciliation, failure isolation, and concurrent scheduler-lease evidence; full process SIGTERM and multi-replica tenant-wide ordering remain operational boundaries |
 | Worker inbox slicing | Complete for SDK and MAX durable inboxes with configurable FIFO row limits per tenant cycle | Three-row synthetic integration evidence proves a limit of two drains as 2 then 1; a slow individual row and sustained backlog remain operational boundaries |
+| Google conversion delivery fencing | Complete for the Google Data Manager delivery queue with per-row database-clock claims and token-fenced completion | Two concurrent synthetic processors prove one active provider call, expired-claim recovery, stale-completion rejection, stable transaction-ID reuse, and no stale result append; provider-side exactly-once behavior remains an operator boundary |
 
 ## Change acceptance
 

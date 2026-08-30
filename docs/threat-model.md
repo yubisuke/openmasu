@@ -138,9 +138,14 @@ retry, authoritative read-back, per-target refund caps, and opaque public refs.
 
 <!-- threat-component:google-data-manager-delivery -->
 **Conversion delivery:** unauthorized export, replay, provider payload leakage,
-and ambiguous delivery status. Controls include explicit enablement, eligible
-event selection, service authentication, idempotent delivery records, bounded
-status vocabulary, and sanitized logs.
+ambiguous delivery status, concurrent provider sends, and a late worker
+overwriting a reclaimed delivery. Controls include explicit enablement,
+eligible event selection, service authentication, one database-clock claim per
+row, token-fenced transactional completion, expired-claim recovery, a stable
+digest-checked transaction ID, bounded status vocabulary, and sanitized logs.
+If a process loses the provider response or stops after provider acceptance but
+before local completion, an expired claim may resend the same transaction ID.
+Provider-side duplicate handling and exactly-once delivery remain unverified.
 
 <!-- threat-component:operator-event-webhooks -->
 **Operator event webhooks:** unauthorized disclosure, SSRF and DNS rebinding,

@@ -173,6 +173,13 @@ Design implications:
 - [Google Ads App Conversion Tracking API](https://developers.google.com/app-conversion-tracking/api)
 - [AppLovin MAX S2S Impression Revenue API](https://support.applovin.com/en/max/advanced-features/s2s-impression-level-api/)
 
+Google Data Manager conversion-delivery references confirmed on 2026-08-30:
+
+- [Send events](https://developers.google.com/data-manager/api/devguides/events/send-events) defines downstream transaction-ID deduplication scopes for Google Ads, Google Analytics, and Floodlight destinations.
+- [`events.ingest`](https://developers.google.com/data-manager/api/reference/rest/v1/events/ingest) defines the event transaction ID and describes the response request ID as auto-generated. OpenMasu therefore uses the transaction ID as the stable conversion identity and the request ID only for diagnostics.
+- [Diagnostics](https://developers.google.com/data-manager/api/devguides/diagnostics), [error handling](https://developers.google.com/data-manager/api/devguides/concepts/understand-errors), and [best practices](https://developers.google.com/data-manager/api/devguides/concepts/best-practices) define fast-fail ingestion, transient-error retry guidance, asynchronous request-status retrieval, and bounded concurrency.
+- [Google Cloud HTTP semantics](https://docs.cloud.google.com/apis/docs/http) classifies POST as non-idempotent. The Data Manager documentation does not promise deterministic duplicate handling for repeated or concurrent ingest POSTs with the same transaction ID. OpenMasu's durable claim and fencing prevent concurrent local ownership and stale local completion; they do not establish provider-side exactly-once delivery.
+
 General server-event capability reference confirmed on 2026-08-30:
 
 - [Adjust server-to-server events](https://dev.adjust.com/en/api/s2s-api/events/) documents authenticated HTTP submission of custom and revenue events from an app backend. OpenMasu uses this only as evidence that backend event submission is a common measurement capability. Its endpoint, HMAC format, identifiers, contract, and authority boundary are OpenMasu-specific; no Adjust wire compatibility, device-identifier requirement, partnership, or live integration is claimed.
