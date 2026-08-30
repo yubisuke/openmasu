@@ -17,8 +17,9 @@ It is intended for teams that need to answer questions such as:
 
 ## Supported workflow
 
-1. **Collect or import evidence.** Use first-party SDKs and links, supported
-   platform callbacks, or an explicitly authorized export.
+1. **Collect or import evidence.** Use first-party SDKs and links, selected
+   events from an authenticated app backend, supported platform callbacks, or
+   an explicitly authorized export.
 2. **Normalize it.** Convert the source into closed Contract v0.4 events and
    evidence artifacts.
 3. **Preserve provenance.** Store received evidence, delivery state, rules,
@@ -34,6 +35,9 @@ It is intended for teams that need to answer questions such as:
 
 - First-party click, install, session, custom event, purchase, refund, and ad
   revenue evidence from the OpenMasu SDK and redirector.
+- Selected session, custom-event, advertising, purchase, and refund evidence
+  from an app-scoped authenticated backend. This path does not accept install,
+  click, consent, platform-signature, or provider-authority claims.
 - Android Install Referrer and supported Meta Install Referrer evidence.
 - Apple Ads installation evidence and privacy-preserving SKAdNetwork or
   AdAttributionKit aggregate postbacks, including separately reported current

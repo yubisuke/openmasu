@@ -39,6 +39,16 @@ and synchronous partial writes. Controls include SDK and installation
 credentials, canonical HMAC, timestamp/nonce replay windows, limits, durable
 inbox admission, schema validation, and transactional per-record persistence.
 
+<!-- threat-component:server-event-ingestion -->
+**Server event ingest:** backend-key theft, forged or replayed bodies,
+cross-app scope, authority escalation, mixed-subject deletion, oversized input,
+and acceptance-to-processing withdrawal races. Controls include dedicated
+rotatable keys, exact raw-body HMAC, timestamp/nonce windows, server-assigned
+scope and purpose, a closed event allowlist, contract validation in the worker,
+per-key and per-app limits, single-subject batch enforcement, protected-claim
+rejection, durable inbox admission, and a second withdrawal check before
+projection.
+
 <!-- threat-component:import-worker -->
 **Import worker:** malicious mapping or CSV/JSON shape, invalid payload, partial
 ledger state, duplicate event ID, and accidental source disclosure. Controls
@@ -176,6 +186,10 @@ validation, and immutable reviewed goldens.
   delay the serial worker loop and remain an operational capacity risk.
 - Synthetic platform vectors do not prove production keys, projects, delivery,
   or provider behavior.
+- Synthetic server-event vectors do not prove backend integration, sustained
+  capacity, production TLS, or operator key custody. A stolen active server key
+  can submit plausible first-party events within its event allowlist until it
+  is retired.
 - Self-hosting operators remain responsible for TLS, secret custody, host
   security, backup media, alert routing, and incident response.
 

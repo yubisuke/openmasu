@@ -14,6 +14,7 @@ private provider material.
 | Make a change and select the right gates | [Development](development.md) and [Contributing](../CONTRIBUTING.md) |
 | Implement or review contract behavior | [Contract specification](../spec/event-metric-contract-v0.4.md), [Schema versioning](schema-versioning.md), and [Contract v0.4 migration ledger](contract-v0.4-migration.md) |
 | Integrate a platform or provider | [Provider capability matrix](integrations/provider-capability-matrix.md) and [Primary references](references.md) |
+| Send events from an app backend | [Server-to-server events](server-to-server-events.md) |
 | Operate or release a deployment | [Operator documentation](#operator-documentation) and [Release records](releases/README.md) |
 
 For a complete newcomer reading path, use this order:
@@ -33,6 +34,7 @@ For a complete newcomer reading path, use this order:
 ## Current product and engineering documents
 
 - [Import mapping DSL](import-mappings.md)
+- [Server-to-server events](server-to-server-events.md)
 - [Privacy and security](privacy-security.md)
 - [Threat model](threat-model.md)
 - [Schema versioning](schema-versioning.md)

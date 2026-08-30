@@ -70,6 +70,12 @@ treating this reference Compose file as a production template.
 `demo:metrics` labels PostgreSQL ledger counts separately from the contract
 fixture preview. The preview is not a database import or live-provider result.
 
+To submit a selected synthetic event from an app backend, issue a dedicated
+server key in the dashboard and follow the
+[server-to-server event guide](server-to-server-events.md). The server secret
+is displayed once. Do not put it in `.env.example`, shell history, source code,
+or logs.
+
 To remove only this repository's local Compose stack and its data:
 
 ```bash

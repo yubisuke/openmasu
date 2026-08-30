@@ -168,6 +168,10 @@ Design implications:
 - [Google Ads App Conversion Tracking API](https://developers.google.com/app-conversion-tracking/api)
 - [AppLovin MAX S2S Impression Revenue API](https://support.applovin.com/en/max/advanced-features/s2s-impression-level-api/)
 
+General server-event capability reference confirmed on 2026-08-30:
+
+- [Adjust server-to-server events](https://dev.adjust.com/en/api/s2s-api/events/) documents authenticated HTTP submission of custom and revenue events from an app backend. OpenMasu uses this only as evidence that backend event submission is a common measurement capability. Its endpoint, HMAC format, identifiers, contract, and authority boundary are OpenMasu-specific; no Adjust wire compatibility, device-identifier requirement, partnership, or live integration is claimed.
+
 Versioned adapter references confirmed on 2026-08-30:
 
 - [Google Ads API release notes](https://developers.google.com/google-ads/api/docs/release-notes) list v25 and the backward-compatible v25.1 update. The cost importer deliberately pins the v25 major endpoint and must be reviewed before a later major-version change.
