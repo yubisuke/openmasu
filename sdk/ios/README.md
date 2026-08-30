@@ -50,6 +50,13 @@ developer copies of re-engagement postbacks, configure the HTTPS
 `AttributionCopyEndpoint` and explicitly set
 `EligibleForAdAttributionKitReengagementPostbackCopies` to `true` in the host
 application. Without that Boolean opt-in, Apple does not deliver those copies.
+Set both `AttributionCopyEndpoint` and
+`NSAdvertisingAttributionReportEndpoint` to the deployment's HTTPS origin,
+without a path, query, or fragment. Apple derives the AdAttributionKit and
+SKAdNetwork well-known receiver paths from that origin; do not put `/aak` or
+`/skan` in the plist values. Apple documents that SKAdNetwork uses the
+registrable part of the configured domain and ignores subdomains, so that
+registrable domain must serve the well-known route.
 
 `EligibleForAdAttributionKitOverlappingConversions` remains `false` unless the
 application deliberately supports multiple simultaneous re-engagement

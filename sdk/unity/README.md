@@ -69,8 +69,8 @@ flags default to `false`:
 
 ```json
 {
-  "skanEndpoint": "https://measurement.synthetic.invalid/skan",
-  "attributionCopyEndpoint": "https://measurement.synthetic.invalid/aak",
+  "skanEndpoint": "https://measurement.invalid",
+  "attributionCopyEndpoint": "https://measurement.invalid",
   "collectionEnabledByDefault": false,
   "linkHosts": ["links.synthetic.invalid"],
   "linkSchemes": [],
@@ -78,6 +78,18 @@ flags default to `false`:
   "overlappingConversionsEnabled": false
 }
 ```
+
+Both endpoint values are HTTPS origins, not receiver paths. Apple derives
+`/.well-known/skadnetwork/report-attribution/` and
+`/.well-known/appattribution/report-attribution/` from those origins. The
+postprocessor rejects path, query, fragment, user-info, non-default port, and
+non-HTTPS values so the generated plist cannot silently disagree with the
+OpenMasu receivers.
+
+For SKAdNetwork, Apple documents that it uses the registrable part of the
+configured domain and ignores subdomains. The deployment must therefore serve
+the SKAdNetwork well-known route on that registrable domain; a convenient API
+subdomain in the plist is not sufficient by itself.
 
 The example preserves both safe defaults. Enable
 `reengagementPostbackCopiesEnabled` only when the deployment-private

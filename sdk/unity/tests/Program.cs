@@ -49,9 +49,11 @@ internal static class Program
         OpenMasuMaxUnityAdapter.Unsubscribe();
         var plist = OpenMasu.Unity.Editor.OpenMasuIosPlistSettings.Apply(
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict/></plist>",
-            "https://synthetic.example", "https://copy.synthetic.example");
+            "https://skan.example", "https://aak.example");
         Require(plist.Contains("NSAdvertisingAttributionReportEndpoint"), "SKAN endpoint was not written");
         Require(plist.Contains("AttributionCopyEndpoint"), "AdAttributionKit endpoint was not written");
+        Require(plist.Contains("<string>https://skan.example</string>"), "SKAN origin changed in generated plist");
+        Require(plist.Contains("<string>https://aak.example</string>"), "AdAttributionKit origin changed in generated plist");
         Require(plist.Contains("OpenMasuCollectionEnabledDefault"), "collection default was not written");
         Require(plist.Contains("OpenMasuLinkHosts"), "deep-link hosts were not written");
         Require(plist.Contains("OpenMasuLinkSchemes"), "deep-link schemes were not written");
@@ -60,12 +62,30 @@ internal static class Program
         Require(plist.Contains("<false"), "collection default must be disabled unless explicitly enabled");
         var optedInPlist = OpenMasu.Unity.Editor.OpenMasuIosPlistSettings.Apply(
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict/></plist>",
-            "https://synthetic.example", "https://copy.synthetic.example",
+            "https://skan.example", "https://aak.example",
             false, null, null, true, true);
         Require(optedInPlist.Contains("<key>EligibleForAdAttributionKitReengagementPostbackCopies</key><true"),
             "re-engagement copy opt-in was not enabled");
         Require(optedInPlist.Contains("<key>EligibleForAdAttributionKitOverlappingConversions</key><true"),
             "overlapping conversion opt-in was not enabled");
+        foreach (var invalidEndpoint in new[] {
+            "https://synthetic.example/skan",
+            "https://synthetic.example?copy=1",
+            "https://synthetic.example#copy",
+            "https://operator@synthetic.example",
+            "https://synthetic.example:8443",
+            "http://synthetic.example"
+        })
+        {
+            RequireArgumentFailure(() => OpenMasu.Unity.Editor.OpenMasuIosPlistSettings.Apply(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict/></plist>",
+                invalidEndpoint, "https://aak.example"),
+                "SKAN accepted a non-origin endpoint: " + invalidEndpoint);
+            RequireArgumentFailure(() => OpenMasu.Unity.Editor.OpenMasuIosPlistSettings.Apply(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict/></plist>",
+                "https://skan.example", invalidEndpoint),
+                "AdAttributionKit accepted a non-origin endpoint: " + invalidEndpoint);
+        }
         var entitlements = OpenMasu.Unity.Editor.OpenMasuAssociatedDomains.Apply(
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict/></plist>",
             new[] { "links.synthetic.invalid" });
@@ -147,6 +167,13 @@ internal static class Program
     private static void Require(bool value, string message)
     {
         if (!value) throw new InvalidOperationException(message);
+    }
+
+    private static void RequireArgumentFailure(Action action, string message)
+    {
+        try { action(); }
+        catch (ArgumentException error) when (error.Message.Contains("endpoint_must_be_https_origin")) { return; }
+        throw new InvalidOperationException(message);
     }
 
     private sealed class SyntheticPlatform : IOpenMasuPlatform
