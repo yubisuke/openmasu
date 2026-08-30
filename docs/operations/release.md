@@ -89,6 +89,7 @@ npm run sbom
 npm run build:sdk-release
 python tools/build-sdk-release.py --reproducibility-check
 npm run check:sdk-release
+npm run test:unity-upm
 ```
 
 The configured rc.4 bundle path is
@@ -103,7 +104,7 @@ packaging passes must be byte-identical.
 | Artifact | Repository output | Not provided |
 | --- | --- | --- |
 | Android | five local AAR/POM pairs | Maven registry publication and signing |
-| Unity | local UPM `.tgz` | OpenUPM publication and real Unity export proof |
+| Unity | self-contained local UPM `.tgz`, standalone Gradle gate, and synthetic Unity 6 Android export probe | OpenUPM publication, Unity 2022.3 proof, and physical-device proof |
 | iOS | deterministic Swift source ZIP | binary XCFramework, registry publication, and distribution signing |
 
 ## 5. Review the release boundary

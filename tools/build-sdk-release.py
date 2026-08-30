@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 MODULES = {
     "core": [
+        ("org.jetbrains.kotlin", "kotlin-stdlib", "2.3.0", "compile", False),
         ("androidx.room", "room-runtime", "2.8.4", "runtime", False),
         ("androidx.work", "work-runtime", "2.11.2", "runtime", False),
     ],
@@ -38,6 +39,7 @@ MODULES = {
         ("dev.openmasu", "max", "0.2.0-rc.4", "compile", False),
     ],
 }
+UPM_ANDROID_MODULES = ("core", "installreferrer", "metareferrer", "max")
 
 
 def read_text(path: Path) -> str:
@@ -99,14 +101,22 @@ def write_source_zip(destination: Path, files: list[Path], prefix: str) -> None:
             archive.writestr(info, source.read_bytes())
 
 
-def write_upm_archive(destination: Path, files: list[Path]) -> None:
+def write_upm_archive(
+    destination: Path,
+    files: list[Path],
+    additional_files: dict[str, Path] | None = None,
+) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     package_root = ROOT / "sdk/unity/com.openmasu.sdk"
+    entries = {
+        source.relative_to(package_root).as_posix(): source
+        for source in files
+    }
+    entries.update(additional_files or {})
     with destination.open("wb") as raw:
         with gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0, compresslevel=9) as compressed:
             with tarfile.open(fileobj=compressed, mode="w", format=tarfile.GNU_FORMAT) as archive:
-                for source in sorted(files):
-                    relative = source.relative_to(package_root).as_posix()
+                for relative, source in sorted(entries.items()):
                     info = tarfile.TarInfo(f"package/{relative}")
                     data = source.read_bytes()
                     info.size = len(data)
@@ -192,9 +202,16 @@ def build_bundle(output_root: Path) -> Path:
             pom_xml(artifact, version), encoding="utf-8", newline="\n"
         )
 
+    packaged_maven = {}
+    for artifact in UPM_ANDROID_MODULES:
+        artifact_root = output / "maven/dev/openmasu" / artifact / version
+        for source in sorted(artifact_root.iterdir()):
+            relative = source.relative_to(output / "maven").as_posix()
+            packaged_maven[f"Runtime/OpenMasu.androidlib/maven/{relative}"] = source
     write_upm_archive(
         output / f"com.openmasu.sdk-{version}.tgz",
         tracked_files("sdk/unity/com.openmasu.sdk"),
+        packaged_maven,
     )
     write_source_zip(
         output / f"OpenMasuIOS-{version}-source.zip",
@@ -230,6 +247,7 @@ def build_bundle(output_root: Path) -> Path:
             "npm run sbom",
             "./sdk/android/gradlew -p sdk/android :core:assembleRelease :installreferrer:assembleRelease :metareferrer:assembleRelease :max:assembleRelease :unitybridge:assembleRelease verifySdkSbom --no-daemon",
             "python tools/build-sdk-release.py --reproducibility-check",
+            "python tools/verify-unity-upm.py",
         ],
     }
     write_json(output / "release-manifest.json", manifest)
@@ -278,6 +296,29 @@ def verify_bundle(output: Path) -> None:
             raise RuntimeError("UPM archive is incomplete")
         if any("/build/" in name or name.endswith("/.env") for name in names):
             raise RuntimeError("UPM archive contains generated or secret material")
+        expected_packaged_maven = {
+            f"package/Runtime/OpenMasu.androidlib/maven/dev/openmasu/{name}/{version}/{name}-{version}.{suffix}"
+            for name in UPM_ANDROID_MODULES for suffix in ("aar", "pom")
+        }
+        if not expected_packaged_maven.issubset(names):
+            raise RuntimeError(
+                "UPM archive is missing packaged Android dependencies: "
+                + repr(sorted(expected_packaged_maven - names))
+            )
+        if any("/maven/dev/openmasu/unitybridge/" in name for name in names):
+            raise RuntimeError("UPM archive must not duplicate the Unity bridge AAR")
+        for name in UPM_ANDROID_MODULES:
+            for suffix in ("aar", "pom"):
+                archive_name = (
+                    f"package/Runtime/OpenMasu.androidlib/maven/dev/openmasu/{name}/{version}/"
+                    f"{name}-{version}.{suffix}"
+                )
+                member = archive.extractfile(archive_name)
+                if member is None:
+                    raise RuntimeError(f"UPM Android dependency is unreadable: {archive_name}")
+                outside = output / "maven/dev/openmasu" / name / version / f"{name}-{version}.{suffix}"
+                if hashlib.sha256(member.read()).digest() != hashlib.sha256(outside.read_bytes()).digest():
+                    raise RuntimeError(f"UPM Android dependency differs from Maven bundle: {archive_name}")
     with zipfile.ZipFile(output / f"OpenMasuIOS-{version}-source.zip") as archive:
         names = set(archive.namelist())
         if not any(name.endswith("/sdk/ios/Package.swift") for name in names):

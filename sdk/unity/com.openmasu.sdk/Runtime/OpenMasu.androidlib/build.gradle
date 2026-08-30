@@ -5,27 +5,32 @@ plugins {
 android {
     namespace 'dev.openmasu.unity'
     compileSdk 36
+    buildToolsVersion '36.0.0'
     defaultConfig {
         minSdk 24
     }
     testOptions { unitTests.includeAndroidResources = true }
 }
 
+def usesMonorepoProjects = findProject(':core') != null &&
+        findProject(':installreferrer') != null &&
+        findProject(':metareferrer') != null &&
+        findProject(':max') != null
+
 dependencies {
-    if (findProject(':core') != null && findProject(':installreferrer') != null &&
-            findProject(':metareferrer') != null && findProject(':max') != null) {
+    if (usesMonorepoProjects) {
         implementation project(':core')
         runtimeOnly project(':installreferrer')
         runtimeOnly project(':metareferrer')
         implementation project(':max')
+        testImplementation project(':installreferrer')
+        testImplementation project(':metareferrer')
     } else {
         implementation 'dev.openmasu:core:0.2.0-rc.4'
         runtimeOnly 'dev.openmasu:installreferrer:0.2.0-rc.4'
         runtimeOnly 'dev.openmasu:metareferrer:0.2.0-rc.4'
         implementation 'dev.openmasu:max:0.2.0-rc.4'
     }
-    testImplementation project(':installreferrer')
-    testImplementation project(':metareferrer')
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'androidx.test:core:1.7.0'
     testImplementation 'org.robolectric:robolectric:4.16.1'
