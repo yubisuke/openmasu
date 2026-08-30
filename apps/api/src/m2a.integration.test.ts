@@ -2302,4 +2302,120 @@ describe("M2a signed SDK ingestion", () => {
       [racedReference],
     )).rows[0].count)), 0, "the post-recognition batch must never enter the durable inbox");
   });
+
+  it("does not project an in-flight batch after privacy completion", async () => {
+    const racedInstallationId = `installation:privacy-projection-race-${run}`;
+    const enrollment = await signed("/v1/installations", { installation_id: racedInstallationId });
+    assert.equal(enrollment.status, 201);
+    const credential = await enrollment.json() as {
+      installation_key_id: string;
+      installation_secret: string;
+    };
+    const subjectDigest = installationIdDigest(authConfig, racedInstallationId);
+    const event = sourceEvent(`event:privacy-projection-race:${run}`, "install", {
+      installation_id: racedInstallationId,
+      install_type: "first_install",
+      referrer_status: "unavailable",
+      extensions: {
+        integrity_token_protected: `synthetic-privacy-race-token-${run}`,
+        integrity_provider: "play_integrity",
+        integrity_binding_mode: "challenge",
+        integrity_binding: randomBytes(32).toString("base64url"),
+      },
+    });
+    const accepted = await signed("/v1/events/batch", { records: [event] }, {
+      secret: credential.installation_secret,
+      installationKeyId: credential.installation_key_id,
+    });
+    assert.equal(accepted.status, 202, await accepted.text());
+    const batch = await withTenant(pool, tenantId, async (client) => (await client.query<{
+      ingest_batch_id: string;
+      body_ref: string;
+    }>(
+      `SELECT ingest_batch_id::text,body_ref FROM ledger.ingest_batches_current
+        WHERE tenant_id=$1 AND app_id=$2 AND installation_key_id=$3 AND status='pending'
+        ORDER BY inbox_seq DESC LIMIT 1`,
+      [tenantId, appId, credential.installation_key_id],
+    )).rows[0]);
+    assert.ok(batch);
+
+    let readStarted!: () => void;
+    let releaseRead!: () => void;
+    const started = new Promise<void>((resolve) => { readStarted = resolve; });
+    const released = new Promise<void>((resolve) => { releaseRead = resolve; });
+    const blockingStore: PayloadStore = {
+      write: (scope, plaintext) => payloadStore.write(scope, plaintext),
+      purge: (reference) => payloadStore.purge(reference),
+      scanFor: (value) => payloadStore.scanFor(value),
+      read: async (reference) => {
+        const plaintext = await payloadStore.read(reference);
+        if (reference === batch.body_ref) {
+          readStarted();
+          await released;
+        }
+        return plaintext;
+      },
+    };
+    const processing = processSdkInbox(pool, blockingStore, tenantId);
+    await started;
+    try {
+      const deletion = await executePrivacyRequest(pool, {
+        tenantId,
+        appId,
+        actorType: "sdk_installation",
+        actorRef: `sdk_installation:${credential.installation_key_id}`,
+        requesterAuthRef: "sdk_auth:synthetic-projection-race",
+        installationKeyId: credential.installation_key_id,
+        deletionSubjectDigest: subjectDigest,
+      }, {
+        tenant_id: tenantId,
+        app_id: appId,
+        requested_via: "on_device_sdk",
+        deletion_scope: "installation",
+        deletion_subject_ref: racedInstallationId,
+      }, payloadStore);
+      assert.equal(deletion.status, "completed");
+    } finally {
+      releaseRead();
+    }
+    assert.equal(await processing, 1);
+    await assert.rejects(payloadStore.read(batch.body_ref));
+
+    const evidence = await withTenant(pool, tenantId, async (client) => ({
+      batch: (await client.query<{ status: string; reason_code: string | null }>(
+        `SELECT status,reason_code FROM ledger.ingest_batches_current
+          WHERE tenant_id=$1 AND app_id=$2 AND ingest_batch_id=$3`,
+        [tenantId, appId, batch.ingest_batch_id],
+      )).rows[0],
+      rawRecords: Number((await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM ledger.raw_records
+          WHERE tenant_id=$1 AND app_id=$2 AND event_id=$3`,
+        [tenantId, appId, event.event_id],
+      )).rows[0].count),
+      availablePayloadStates: Number((await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM ledger.raw_payload_states AS state
+          JOIN ledger.raw_records AS raw USING (tenant_id,app_id,record_id)
+         WHERE raw.tenant_id=$1 AND raw.app_id=$2 AND raw.event_id=$3
+           AND state.lifecycle_status='available'`,
+        [tenantId, appId, event.event_id],
+      )).rows[0].count),
+      batchMembers: Number((await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM ledger.ingest_batch_records
+          WHERE tenant_id=$1 AND app_id=$2 AND ingest_batch_id=$3`,
+        [tenantId, appId, batch.ingest_batch_id],
+      )).rows[0].count),
+      integrityQueue: Number((await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM ephemeral.integrity_verifications
+          WHERE tenant_id=$1 AND app_id=$2 AND token_ref=$3`,
+        [tenantId, appId, batch.body_ref],
+      )).rows[0].count),
+    }));
+    assert.deepEqual(evidence, {
+      batch: { status: "processed", reason_code: "privacy_suppressed" },
+      rawRecords: 0,
+      availablePayloadStates: 0,
+      batchMembers: 0,
+      integrityQueue: 0,
+    });
+  });
 });

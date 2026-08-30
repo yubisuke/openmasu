@@ -35,9 +35,12 @@ classification, and no raw IP in durable artifacts.
 
 <!-- threat-component:sdk-ingestion -->
 **SDK ingest:** forged batches, replay, cross-install deletion, oversized input,
-and synchronous partial writes. Controls include SDK and installation
-credentials, canonical HMAC, timestamp/nonce replay windows, limits, durable
-inbox admission, schema validation, and transactional per-record persistence.
+in-flight projection after deletion, and synchronous partial writes. Controls
+include SDK and installation credentials, canonical HMAC, timestamp/nonce replay
+windows, limits, durable inbox admission, schema validation, a
+tenant/app/installation privacy fence held through projection and auxiliary
+queueing, deletion-state rechecks after payload decoding, and transactional
+per-record persistence.
 
 <!-- threat-component:server-event-ingestion -->
 **Server event ingest:** backend-key theft, forged or replayed bodies,

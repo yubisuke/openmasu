@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import { createHash, createHmac } from "node:crypto";
 import { sha256 } from "@openmasu/attribution-core";
 import {
+  acquirePrivacyDeletionXactFence,
   operatorWebhookReference,
   processPrivacyDeletionRequest,
   uuidV7,
@@ -138,12 +139,12 @@ export async function executePrivacyRequest(
   const subjectDigest = identity.deletionSubjectDigest;
   if (!/^[a-f0-9]{64}$/.test(subjectDigest)) throw new Error("privacy_subject_digest_invalid");
   const prepared = await withTenant(pool, body.tenant_id, async (client) => {
-    if (body.deletion_scope === "installation") {
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended('openmasu:privacy-subject:' || $1 || ':' || $2 || ':' || $3,0))",
-        [body.tenant_id, body.app_id, subjectDigest],
-      );
-    }
+    await acquirePrivacyDeletionXactFence(client, {
+      tenantId: body.tenant_id,
+      appId: body.app_id,
+      deletionScope: body.deletion_scope,
+      subjectDigest,
+    });
     const records = await affectedRecordIds(client, body);
     // Serialize deletion recognition with operator-webhook discovery and delivery.
     // If deletion takes the lock first, no pending request can cross the boundary;

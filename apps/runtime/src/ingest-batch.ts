@@ -2,6 +2,10 @@ import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { uuidV7, withTenant } from "./index.js";
 import type { PayloadStore } from "./payload-store.js";
+import {
+  acquirePrivacyProjectionXactFence,
+  privacyProjectionIsBlocked,
+} from "./privacy-fence.js";
 
 export type DurableBatchInput = {
   tenantId: string;
@@ -34,27 +38,16 @@ export async function appendDurableBatch(
   );
   try {
     await withTenant(pool, input.tenantId, async (client) => {
-      if (input.subjectDigest) {
-        await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('openmasu:privacy-subject:' || $1 || ':' || $2 || ':' || $3,0))",
-          [input.tenantId, input.appId, input.subjectDigest],
-        );
-        const deleted = await client.query(
-          `SELECT 1
-             FROM control.privacy_deletion_jobs AS job
-            WHERE job.tenant_id=$1 AND job.app_id=$2 AND job.status='processing'
-              AND job.artifact_template->>'deletion_scope'='installation'
-              AND job.artifact_template->>'deletion_subject_digest'=$3
-            UNION ALL
-           SELECT 1
-             FROM ledger.privacy_requests AS request
-            WHERE request.tenant_id=$1 AND request.app_id=$2 AND request.status='completed'
-              AND request.artifact->>'deletion_scope'='installation'
-              AND request.artifact->>'deletion_subject_digest'=$3
-            LIMIT 1`,
-          [input.tenantId, input.appId, input.subjectDigest],
-        );
-        if ((deleted.rowCount ?? 0) > 0) throw new Error("privacy_subject_inactive");
+      const privacyScope = {
+        entryId: ingestBatchId,
+        tenantId: input.tenantId,
+        appId: input.appId,
+        subjectDigest: input.subjectDigest,
+        receivedAt: input.receivedAt,
+      };
+      await acquirePrivacyProjectionXactFence(client, privacyScope);
+      if (await privacyProjectionIsBlocked(client, privacyScope)) {
+        throw new Error(input.subjectDigest ? "privacy_subject_inactive" : "privacy_scope_inactive");
       }
       if (input.installationKeyId && input.subjectDigest) {
         const credential = await client.query(
