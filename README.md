@@ -32,7 +32,9 @@ controls; direct deep links; Android deferred deep links; and an operator
 dashboard. A provider-neutral server-to-server endpoint accepts selected
 first-party backend events through app-scoped, rotatable HMAC keys. Optional
 operator event webhooks deliver a closed subset of accepted first-party events
-to an explicitly allowlisted, operator-owned HTTPS receiver.
+to an explicitly allowlisted, operator-owned HTTPS receiver. Optional operator
+bulk exports write the same closed event object as deterministic gzip NDJSON to
+allowlisted, operator-owned S3-compatible storage.
 
 ## What OpenMasu does not claim
 
@@ -106,6 +108,8 @@ Backend event producers should begin with the
 [server-to-server event guide](docs/server-to-server-events.md). Operators who
 need outbound callbacks should use the separate
 [operator event webhook guide](docs/operator-event-webhooks.md).
+Operators who need delayed files should use the separate
+[operator bulk export guide](docs/operator-bulk-exports.md).
 
 ## Validation
 

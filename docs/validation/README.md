@@ -42,6 +42,7 @@ counts must not be updated to match current `main`.
 - [Google Play subscription renewals](google-play-rtdn-renewal-checklist.md)
 - [Google Data Manager conversion delivery](google-data-manager-conversion-checklist.md)
 - [Operator event webhooks](operator-event-webhook-checklist.md)
+- [Operator bulk event exports](operator-bulk-export-checklist.md)
 
 ## Evidence rules
 

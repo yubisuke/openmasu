@@ -162,6 +162,11 @@ repository does not claim that its example durations are universally lawful.
   subject, and transaction references are HMAC-scoped to that destination and
   cannot be joined across destinations. Raw payloads and raw identifiers are
   never placed in the webhook body.
+- Operator bulk exports use separate, encrypted S3-compatible credentials and
+  the same closed event object. Every subject or transaction reference is
+  scoped to one destination. Credentials are returned neither by the API nor
+  the dashboard after registration, and they are never written into an export
+  object, audit artifact, metric, or log.
 - Platform callbacks use their documented signature or service authentication
   boundary before tenant resolution.
 - PostgreSQL uses forced tenant row-level security and separate app, reader,
@@ -184,6 +189,14 @@ suppression; dispatch first means the bounded network request completes before
 recognition. Withdrawal or deletion does not retroactively recall data already
 received by an external operator system. That receiver has its own lawful
 basis, retention, access, deletion, and incident-response obligations.
+
+Pending bulk-export objects are also encrypted. A recognized deletion purges
+or suppresses every pending object for the affected destination before adding a
+destination-scoped deletion row. The next successful object writes that row
+before later event rows and only then advances the deletion cursor. Objects
+already stored externally cannot be recalled; the operator must consume the
+deletion row, delete or transform downstream copies as required, and retain its
+own evidence of completion.
 
 ## Fraud capability boundary
 

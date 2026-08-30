@@ -177,6 +177,12 @@ Outbound event-webhook capability references confirmed on 2026-08-30:
 - [Branch webhooks](https://help.branch.io/marketer-hub/docs/webhooks) documents exporting install and downstream event activity to an operator system and filtering which events are exported. OpenMasu uses this only as evidence that outbound event notification is a common measurement capability. Its envelope, destination-scoped references, lifecycle, and signature are OpenMasu-specific; no Branch compatibility, partnership, or live integration is claimed.
 - [RFC 2104](https://www.rfc-editor.org/rfc/rfc2104) defines HMAC. OpenMasu signs the exact request-body bytes with HMAC-SHA-256 and requires the receiver to compare the signature before parsing. This does not define a third-party webhook wire format.
 
+Operator bulk-export capability references confirmed on 2026-08-30:
+
+- [AppsFlyer Data Locker](https://support.appsflyer.com/hc/en-us/articles/360000877538-Data-Locker-for-marketers), [Adjust cloud storage uploads](https://help.adjust.com/en/article/cloud-storage-uploads), and [Branch Daily Exports](https://help.branch.io/apidocs/daily-exports-api) document measurement-data delivery through object or file exports. OpenMasu uses them only as evidence that bulk operator exports are a common capability; it does not implement their wire formats, certify equivalence, or claim a provider relationship.
+- [Amazon S3 `PutObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html), [Signature Version 4](https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html), and the [official header-signature examples](https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html) define the signed conditional-write boundary and checked test vectors used by the reference client.
+- [Cloudflare R2 S3 compatibility](https://developers.cloudflare.com/r2/api/s3/api/) and [R2 API tokens](https://developers.cloudflare.com/r2/api/tokens/) describe the compatible API surface and operator credential model. Live R2 connectivity, permissions, retention, replication, capacity, cost, and deletion remain operator verification gates.
+
 Versioned adapter references confirmed on 2026-08-30:
 
 - [Google Ads API release notes](https://developers.google.com/google-ads/api/docs/release-notes) list v25 and the backward-compatible v25.1 update. The cost importer deliberately pins the v25 major endpoint and must be reviewed before a later major-version change.

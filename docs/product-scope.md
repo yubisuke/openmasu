@@ -44,6 +44,9 @@ It is intended for teams that need to answer questions such as:
 - Optional outbound operator webhooks for accepted session, custom-event,
   purchase, refund, and advertising-revenue events. This path is not an event
   ingress, an attribution claim, or a provider wire-compatibility promise.
+- Optional operator-owned S3-compatible bulk files for that same closed event
+  subset plus destination-scoped privacy deletion rows. This path is not a raw
+  export, another MMP's layout, or a live-storage support claim.
 - Android Install Referrer and supported Meta Install Referrer evidence.
 - Apple Ads installation evidence and privacy-preserving SKAdNetwork or
   AdAttributionKit aggregate postbacks, including separately reported current
@@ -97,7 +100,7 @@ must not inherit Apple's signature authority. See the
 - Claiming production readiness from synthetic CI.
 - Exporting raw payloads, installation or transaction identifiers, advertising
   identifiers, provider click identifiers, or platform-authority evidence
-  through operator event webhooks.
+  through operator event webhooks or bulk files.
 
 ## Public and private boundary
 

@@ -24,6 +24,7 @@ quota behavior, or production correctness.
 | Provider-neutral event, cost, and aggregate-revenue imports | Closed mapping DSL, no-write compatibility preview, atomic append-only import | Mapping-schema tests, rejection/idempotency tests, cost-to-ROAS and revenue parity | Authorized export shape, permission, completeness, latency, source-dashboard reconciliation |
 | Provider-neutral server-to-server events | Dedicated app-scoped keys for selected first-party backend events; raw-body HMAC, replay controls, durable evaluation, and ordinary contract rejection | Synthetic key rotation, signing, scope/authority, projection, rejection, idempotency, and deletion-race tests | Production TLS, backend integration, sustained load, secret custody, and operator acceptance |
 | Provider-neutral operator event webhooks | Default-off delivery of selected accepted events to an allowlisted operator-owned HTTPS receiver; destination-scoped references, exact-body HMAC, and durable retry | Synthetic lifecycle, DNS/SSRF, envelope privacy, signature, retry, disable, and deletion-race tests | Production receiver, DNS/TLS, capacity, alerting, secret custody, downstream retention/deletion, and operator acceptance |
+| Provider-neutral operator bulk event exports | Default-off deterministic gzip NDJSON to allowlisted operator-owned S3-compatible storage; destination-scoped references/deletion rows, SigV4, conditional create, digest replay, and durable cursors | Official SigV4 vectors plus synthetic PostgreSQL lifecycle, byte-identity retry, cursor, privacy, grant, and credential-exclusion tests | Live S3/R2 account, IAM, DNS/TLS, lifecycle/replication, throughput, cost, alerting, downstream deletion, and operator acceptance |
 
 ## Important separations
 
@@ -41,6 +42,7 @@ Implementation details and operator commands are in the
 [Import mapping DSL](../import-mappings.md),
 [Server-to-server events](../server-to-server-events.md),
 [Operator event webhooks](../operator-event-webhooks.md),
+[operator bulk event exports](../operator-bulk-exports.md),
 [Android SDK](../../sdk/android/README.md), [iOS SDK](../../sdk/ios/README.md),
 [Unity SDK](../../sdk/unity/README.md), and
 [validation checklists](../validation/README.md). Primary public sources and

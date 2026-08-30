@@ -84,6 +84,12 @@ empty allowlist and the default `off` flag both fail closed. See
 [Operator event webhooks](operator-event-webhooks.md) for the closed event
 vocabulary, exact-body signature, retry behavior, and deletion boundary.
 
+For larger asynchronous delivery, enable and allowlist an operator-owned
+S3-compatible origin, then register an app-scoped destination from the same
+dashboard. The [operator bulk export guide](operator-bulk-exports.md) describes
+the deterministic gzip NDJSON format, SigV4 credentials, immutable write and
+retry behavior, cursor semantics, and downstream deletion responsibility.
+
 To remove only this repository's local Compose stack and its data:
 
 ```bash
