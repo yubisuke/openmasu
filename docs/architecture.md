@@ -140,7 +140,13 @@ provider transaction identifiers publicly.
 
 <!-- m1-component:google-data-manager-delivery -->
 **Conversion delivery.** Produces a bounded, authenticated Google Data Manager
-delivery path from eligible stored evidence with idempotent delivery state.
+delivery path from eligible stored evidence. Each provider operation first
+claims one durable row with a database-clock lease. Completion updates the row
+and appends its result in one transaction only while the claim token is still
+current; an expired claim can be reclaimed and a stale worker cannot overwrite
+the newer result. The request retains one stable, digest-checked transaction
+ID across retries. This is a local concurrency and recovery boundary, not a
+claim that the provider's POST endpoint is exactly-once.
 
 <!-- m1-component:operator-event-webhooks -->
 **Operator event webhooks.** Select an app-scoped, closed event subset from

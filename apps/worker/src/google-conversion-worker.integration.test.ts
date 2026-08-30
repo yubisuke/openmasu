@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import { createAppPool, EncryptedFilePayloadStore, withTenant } from "@openmasu/runtime";
-import { discoverGoogleConversionDeliveries } from "./google-conversion-worker.js";
+import {
+  discoverGoogleConversionDeliveries,
+  processGoogleConversionDeliveries,
+} from "./google-conversion-worker.js";
 
 const suffix = randomBytes(5).toString("hex");
 const tenantId = `tenant-gdm-${suffix}`;
@@ -16,10 +19,16 @@ const root = mkdtempSync(join(tmpdir(), "openmasu-gdm-"));
 const payloadStore = new EncryptedFilePayloadStore(root, `synthetic-${randomBytes(32).toString("base64url")}`);
 const at = "2026-08-24T00:00:00.000Z";
 
+function deferred(): { readonly promise: Promise<void>; readonly resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
 after(async () => { await pool.end(); rmSync(root, { recursive: true, force: true }); });
 
 describe("Google Data Manager verified-conversion integration", () => {
-  it("discovers one eligible synthetic purchase, encrypts one minimal request, and is idempotent", async () => {
+  it("discovers one eligible conversion and fences concurrent and expired delivery claims", async () => {
     const clickRecord = `gdm-click-${suffix}`;
     const installRecord = `gdm-install-${suffix}`;
     const purchaseRecord = `gdm-purchase-${suffix}`;
@@ -87,5 +96,116 @@ describe("Google Data Manager verified-conversion integration", () => {
     const body = (await payloadStore.read(row.rows[0]!.request_ref)).toString("utf8");
     assert.match(body, /"gclid":"syntheticGclid_/);
     for (const forbidden of [tenantId, appId, installationId, purchaseRecord, "transaction:"]) assert.equal(body.includes(forbidden), false);
+
+    const started = deferred();
+    const release = deferred();
+    const transactionIds: string[] = [];
+    const first = processGoogleConversionDeliveries(pool, payloadStore, tenantId, {
+      enabled: true,
+      credentialsJson: "{}",
+      now: () => new Date(),
+      claimLeaseMs: 60_000,
+      dependencies: {
+        accessToken: async () => "synthetic-access-token",
+        sendEvent: async (event) => {
+          transactionIds.push(event.transactionId);
+          started.resolve();
+          await release.promise;
+          return { outcome: "retry", reason: "provider_unavailable", httpStatus: 503 } as const;
+        },
+      },
+    });
+    await started.promise;
+
+    let blockedProviderCalls = 0;
+    assert.deepEqual(await processGoogleConversionDeliveries(pool, payloadStore, tenantId, {
+      enabled: true,
+      credentialsJson: "{}",
+      now: () => new Date(),
+      claimLeaseMs: 60_000,
+      dependencies: {
+        accessToken: async () => "synthetic-access-token",
+        sendEvent: async () => {
+          blockedProviderCalls += 1;
+          return { outcome: "retry", reason: "provider_unavailable", httpStatus: 503 } as const;
+        },
+      },
+    }), { processed: 0 });
+    assert.equal(blockedProviderCalls, 0);
+    release.resolve();
+    assert.deepEqual(await first, { processed: 1 });
+
+    await withTenant(pool, tenantId, (client) => client.query(
+      `UPDATE ephemeral.google_conversion_deliveries
+          SET next_attempt_at=clock_timestamp() - interval '1 second'
+        WHERE tenant_id=$1 AND app_id=$2`,
+      [tenantId, appId],
+    ));
+
+    const staleStarted = deferred();
+    const releaseStale = deferred();
+    const stale = processGoogleConversionDeliveries(pool, payloadStore, tenantId, {
+      enabled: true,
+      credentialsJson: "{}",
+      now: () => new Date(),
+      claimLeaseMs: 60_000,
+      dependencies: {
+        accessToken: async () => "synthetic-access-token",
+        sendEvent: async (event) => {
+          transactionIds.push(event.transactionId);
+          staleStarted.resolve();
+          await releaseStale.promise;
+          return { outcome: "retry", reason: "provider_unavailable", httpStatus: 503 } as const;
+        },
+      },
+    });
+    await staleStarted.promise;
+    await withTenant(pool, tenantId, (client) => client.query(
+      `UPDATE ephemeral.google_conversion_deliveries
+          SET claimed_until=clock_timestamp() - interval '1 second'
+        WHERE tenant_id=$1 AND app_id=$2`,
+      [tenantId, appId],
+    ));
+    assert.deepEqual(await processGoogleConversionDeliveries(pool, payloadStore, tenantId, {
+      enabled: true,
+      credentialsJson: "{}",
+      now: () => new Date(),
+      claimLeaseMs: 60_000,
+      dependencies: {
+        accessToken: async () => "synthetic-access-token",
+        sendEvent: async (event) => {
+          transactionIds.push(event.transactionId);
+          return { outcome: "retry", reason: "provider_unavailable", httpStatus: 503 } as const;
+        },
+      },
+    }), { processed: 1 });
+    releaseStale.resolve();
+    assert.deepEqual(await stale, { processed: 0 });
+
+    const finalState = await withTenant(pool, tenantId, (client) => client.query<{
+      attempts: number;
+      claim_token: string | null;
+      claimed_until: string | null;
+      transaction_digest: string;
+      result_count: number;
+    }>(
+      `SELECT delivery.attempts,delivery.claim_token::text,delivery.claimed_until::text,
+              delivery.transaction_digest,
+              (SELECT count(*)::int FROM ledger.google_conversion_delivery_results result
+                WHERE result.tenant_id=delivery.tenant_id
+                  AND result.delivery_id=delivery.delivery_id) AS result_count
+         FROM ephemeral.google_conversion_deliveries delivery
+        WHERE delivery.tenant_id=$1 AND delivery.app_id=$2`,
+      [tenantId, appId],
+    ));
+    assert.deepEqual(finalState.rows.map(({ attempts, claim_token, claimed_until, result_count }) => ({
+      attempts, claim_token, claimed_until, result_count,
+    })), [{ attempts: 2, claim_token: null, claimed_until: null, result_count: 3 }]);
+    assert.equal(transactionIds.length, 3);
+    assert.equal(new Set(transactionIds).size, 1);
+    assert.equal(
+      createHash("sha256").update(transactionIds[0]!, "utf8").digest("hex"),
+      finalState.rows[0]!.transaction_digest,
+    );
   });
 });

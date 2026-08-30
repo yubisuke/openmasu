@@ -87,6 +87,16 @@ their existing FIFO order and remaining backlog resumes on a later poll. Alert
 on backlog count and oldest age: slicing prevents one cycle from being
 unbounded, but does not guarantee that arrival rate stays below drain rate.
 
+Google conversion delivery claims one row immediately before provider I/O with
+a five-minute database-clock lease. A second worker skips an active claim, an
+expired claim is eligible for recovery, and only the current token can update
+the delivery and append its result. Monitor queue due age, claim age, repeated
+expiry, retry count, and diagnostic deadline without putting transaction IDs,
+request IDs, tenants, apps, or provider values in metric labels. A crash or
+lost response after provider acceptance can still cause a same-transaction-ID
+resend after expiry; the local claim does not establish provider-side exactly-
+once delivery.
+
 Scheduled metric work uses a daily durable lease, but every artifact watermark
 is the current UTC midnight rather than the wall-clock time at which a worker
 obtains that lease. A schedule processes at most 31 pending dates per cycle.

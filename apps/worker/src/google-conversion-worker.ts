@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { recordJobOutcome, uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 import {
@@ -20,6 +20,34 @@ type DeliveryRow = {
   delivery_id: string; app_id: string; request_ref: string; request_digest: string;
   transaction_digest: string; state: string; attempts: number; provider_request_id: string | null;
   diagnostics_deadline_at: Date | string | null;
+  claim_token: string | null; claimed_until: Date | string | null;
+};
+
+type GoogleConversionWorkerDependencies = Readonly<{
+  accessToken: typeof googleServiceAccountAccessToken;
+  sendEvent: typeof sendGoogleDataManagerEvent;
+  retrieveStatus: typeof retrieveGoogleDataManagerRequestStatus;
+  claimToken: () => string;
+}>;
+
+type ProcessGoogleConversionOptions = {
+  readonly enabled: boolean;
+  readonly credentialsJson?: string;
+  readonly apiBaseUrl?: string;
+  readonly tokenUrl?: string;
+  readonly now?: () => Date;
+  readonly claimLeaseMs?: number;
+  readonly dependencies?: Partial<GoogleConversionWorkerDependencies>;
+};
+
+export const DEFAULT_GOOGLE_CONVERSION_CLAIM_LEASE_MS = 5 * 60_000;
+const MIN_GOOGLE_CONVERSION_CLAIM_LEASE_MS = 1_000;
+const MAX_GOOGLE_CONVERSION_CLAIM_LEASE_MS = 15 * 60_000;
+const DEFAULT_GOOGLE_CONVERSION_DEPENDENCIES: GoogleConversionWorkerDependencies = {
+  accessToken: googleServiceAccountAccessToken,
+  sendEvent: sendGoogleDataManagerEvent,
+  retrieveStatus: retrieveGoogleDataManagerRequestStatus,
+  claimToken: randomUUID,
 };
 
 const sha256 = (value: Buffer | string): string => createHash("sha256").update(value).digest("hex");
@@ -38,6 +66,91 @@ async function appendResult(client: PoolClient, tenantId: string, row: DeliveryR
     [uuidV7(Date.parse(now)), row.delivery_id, tenantId, row.app_id, state, row.attempts + 1,
       now, row.request_digest, providerRequestId ?? null, reason ?? null, JSON.stringify(artifact)],
   );
+}
+
+function claimLeaseMilliseconds(value: number | undefined): number {
+  const lease = value ?? DEFAULT_GOOGLE_CONVERSION_CLAIM_LEASE_MS;
+  if (!Number.isSafeInteger(lease)
+    || lease < MIN_GOOGLE_CONVERSION_CLAIM_LEASE_MS
+    || lease > MAX_GOOGLE_CONVERSION_CLAIM_LEASE_MS) {
+    throw new Error("google_conversion_claim_lease_invalid");
+  }
+  return lease;
+}
+
+async function claimGoogleConversionDeliveries(
+  pool: Pool,
+  tenantId: string,
+  now: Date,
+  claimToken: string,
+  leaseMs: number,
+): Promise<DeliveryRow | undefined> {
+  const rows = await withTenant(pool, tenantId, (client) => client.query<DeliveryRow>(
+    `WITH due AS (
+       SELECT delivery_id
+         FROM ephemeral.google_conversion_deliveries
+        WHERE tenant_id=$1
+          AND state IN ('queued','http_accepted','diagnostics_processing')
+          AND next_attempt_at <= clock_timestamp()
+          AND (claimed_until IS NULL OR claimed_until <= clock_timestamp())
+        ORDER BY next_attempt_at,delivery_id
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+     )
+     UPDATE ephemeral.google_conversion_deliveries AS delivery
+        SET claim_token=$3::uuid,
+            claimed_until=clock_timestamp() + ($4::integer * interval '1 millisecond'),
+            updated_at=$2
+       FROM due
+      WHERE delivery.tenant_id=$1 AND delivery.delivery_id=due.delivery_id
+     RETURNING delivery.delivery_id::text,delivery.app_id,delivery.request_ref,
+       delivery.request_digest,delivery.transaction_digest,delivery.state,delivery.attempts,
+       delivery.provider_request_id,delivery.diagnostics_deadline_at,
+       delivery.claim_token::text,delivery.claimed_until`,
+    [tenantId, now.toISOString(), claimToken, leaseMs],
+  ));
+  return rows.rows[0];
+}
+
+async function finalizeGoogleConversionDelivery(
+  pool: Pool,
+  tenantId: string,
+  row: DeliveryRow,
+  completedAt: Date,
+  state: string,
+  next: Date,
+  providerRequestId: string | undefined,
+  deadline: Date | undefined,
+  reason: string | undefined,
+): Promise<boolean> {
+  return withTenant(pool, tenantId, async (client) => {
+    if (!row.claim_token || !row.claimed_until) {
+      throw new Error("google_conversion_claim_missing");
+    }
+    const updated = await client.query(
+      `UPDATE ephemeral.google_conversion_deliveries
+          SET state=$4,attempts=attempts+1,next_attempt_at=$5,provider_request_id=$6,
+              diagnostics_deadline_at=$7,safe_reason=$8,updated_at=$3,
+              claim_token=NULL,claimed_until=NULL
+        WHERE tenant_id=$1 AND delivery_id=$2 AND claim_token=$9::uuid
+          AND claimed_until > clock_timestamp() AND state=$10
+      RETURNING delivery_id`,
+      [tenantId, row.delivery_id, completedAt.toISOString(), state, next.toISOString(),
+        providerRequestId ?? null, deadline?.toISOString() ?? null,
+        reason?.replace(/[^a-z0-9_]/g, "_").slice(0, 64) ?? null, row.claim_token, row.state],
+    );
+    if (updated.rowCount !== 1) return false;
+    await appendResult(
+      client,
+      tenantId,
+      row,
+      state,
+      completedAt.toISOString(),
+      reason,
+      providerRequestId,
+    );
+    return true;
+  });
 }
 
 export async function discoverGoogleConversionDeliveries(
@@ -128,6 +241,7 @@ export async function discoverGoogleConversionDeliveries(
           delivery_id: deliveryId, app_id: candidate.app_id, request_ref: requestRef,
           request_digest: sha256(prepared.body), transaction_digest: sha256(prepared.transactionId),
           state: "queued", attempts: -1, provider_request_id: null, diagnostics_deadline_at: null,
+          claim_token: null, claimed_until: null,
         }, "queued", now.toISOString());
         return result.rowCount === 1;
       });
@@ -138,21 +252,26 @@ export async function discoverGoogleConversionDeliveries(
 }
 
 export async function processGoogleConversionDeliveries(pool: Pool, payloadStore: PayloadStore, tenantId: string,
-  options: { enabled: boolean; credentialsJson?: string; apiBaseUrl?: string; tokenUrl?: string; now?: () => Date }
+  options: ProcessGoogleConversionOptions,
 ): Promise<{ processed: number }> {
   if (!options.enabled) return { processed: 0 };
   if (!options.credentialsJson) throw new Error("google_data_manager_credentials_missing");
-  const now = options.now?.() ?? new Date();
-  const rows = await withTenant(pool, tenantId, (client) => client.query<DeliveryRow>(
-    `SELECT delivery_id::text,app_id,request_ref,request_digest,transaction_digest,state,attempts,
-            provider_request_id,diagnostics_deadline_at
-       FROM ephemeral.google_conversion_deliveries WHERE tenant_id=$1
-        AND state IN ('queued','http_accepted','diagnostics_processing') AND next_attempt_at <= $2
-      ORDER BY next_attempt_at,delivery_id LIMIT 100 FOR UPDATE SKIP LOCKED`, [tenantId, now.toISOString()]));
-  if (rows.rowCount === 0) return { processed: 0 };
-  const accessToken = await googleServiceAccountAccessToken({ credentialsJson: options.credentialsJson,
-    scope: "https://www.googleapis.com/auth/datamanager", tokenUrl: options.tokenUrl });
-  for (const row of rows.rows) {
+  const dependencies = { ...DEFAULT_GOOGLE_CONVERSION_DEPENDENCIES, ...options.dependencies };
+  const leaseMs = claimLeaseMilliseconds(options.claimLeaseMs);
+  let accessToken: string | undefined;
+  let processed = 0;
+  for (let claimed = 0; claimed < 100; claimed += 1) {
+    const now = options.now?.() ?? new Date();
+    const row = await claimGoogleConversionDeliveries(
+      pool,
+      tenantId,
+      now,
+      dependencies.claimToken(),
+      leaseMs,
+    );
+    if (!row) break;
+    accessToken ??= await dependencies.accessToken({ credentialsJson: options.credentialsJson,
+      scope: "https://www.googleapis.com/auth/datamanager", tokenUrl: options.tokenUrl });
     let state = row.state; let reason: string | undefined; let providerRequestId = row.provider_request_id ?? undefined;
     let next = new Date(now.valueOf() + Math.min(900_000, 60_000 * (2 ** Math.min(row.attempts, 4))));
     let deadline = row.diagnostics_deadline_at ? new Date(row.diagnostics_deadline_at) : undefined;
@@ -160,7 +279,11 @@ export async function processGoogleConversionDeliveries(pool: Pool, payloadStore
       const body = await payloadStore.read(row.request_ref);
       if (sha256(body) !== row.request_digest) throw new Error("google_conversion_request_digest_mismatch");
       const request = JSON.parse(body.toString("utf8")) as any;
-      const result = await sendGoogleDataManagerEvent({ transactionId: String(request.events?.[0]?.transactionId), request, body },
+      const transactionId = String(request.events?.[0]?.transactionId);
+      if (sha256(transactionId) !== row.transaction_digest) {
+        throw new Error("google_conversion_transaction_digest_mismatch");
+      }
+      const result = await dependencies.sendEvent({ transactionId, request, body },
         { accessToken, baseUrl: options.apiBaseUrl });
       if (result.outcome === "accepted") {
         state = "http_accepted"; providerRequestId = result.requestId;
@@ -170,7 +293,7 @@ export async function processGoogleConversionDeliveries(pool: Pool, payloadStore
     } else if (providerRequestId && deadline) {
       if (now >= deadline) { state = "expired"; reason = "diagnostics_expired"; }
       else {
-        const result = await retrieveGoogleDataManagerRequestStatus(providerRequestId,
+        const result = await dependencies.retrieveStatus(providerRequestId,
           { accessToken, baseUrl: options.apiBaseUrl });
         if (result.outcome === "status") {
           if (result.status === "processing") {
@@ -184,16 +307,14 @@ export async function processGoogleConversionDeliveries(pool: Pool, payloadStore
         else reason = result.reason;
       }
     }
-    await withTenant(pool, tenantId, async (client) => {
-      await client.query(`UPDATE ephemeral.google_conversion_deliveries SET state=$4,attempts=attempts+1,
-        next_attempt_at=$5,provider_request_id=$6,diagnostics_deadline_at=$7,safe_reason=$8,updated_at=$3
-        WHERE tenant_id=$1 AND delivery_id=$2`, [tenantId, row.delivery_id, now.toISOString(), state,
-        next.toISOString(), providerRequestId ?? null, deadline?.toISOString() ?? null,
-        reason?.replace(/[^a-z0-9_]/g, "_").slice(0, 64) ?? null]);
-      await appendResult(client, tenantId, row, state, now.toISOString(), reason, providerRequestId);
-    });
+    const completedAt = options.now?.() ?? new Date();
+    const finalized = await finalizeGoogleConversionDelivery(
+      pool, tenantId, row, completedAt, state, next, providerRequestId, deadline, reason,
+    );
+    if (!finalized) continue;
+    processed += 1;
     if (["succeeded", "partial_success", "failed", "expired"].includes(state)) await payloadStore.purge(row.request_ref);
-    await recordJobOutcome({ pool, tenantId, appId: row.app_id, job: "google_conversion_delivery", outcome: "succeeded", now });
+    await recordJobOutcome({ pool, tenantId, appId: row.app_id, job: "google_conversion_delivery", outcome: "succeeded", now: completedAt });
   }
-  return { processed: rows.rowCount ?? 0 };
+  return { processed };
 }
