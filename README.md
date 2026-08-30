@@ -181,6 +181,10 @@ The configured candidate bundle path is
 built from the exact commit named by the matching `v0.2.0-rc.4` annotated tag,
 after every full platform gate is green for that commit. An untagged bundle is
 only a local candidate artifact. See the [release runbook](docs/operations/release.md).
+The generated Unity UPM archive contains its OpenMasu Android dependency
+artifacts and has standalone Gradle plus synthetic Unity 6 Android export
+gates; Unity 2022.3 and physical-device acceptance remain separate operator
+checks.
 
 OpenMasu is licensed under the [Apache License 2.0](LICENSE). Attribution is
 recorded in [NOTICE](NOTICE). A preliminary name clearance was completed on

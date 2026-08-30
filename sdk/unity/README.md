@@ -4,9 +4,9 @@ The package in `com.openmasu.sdk` targets Unity 2022.3 LTS (best effort) and Uni
 
 The standard source package includes the Android core, Google Play Install Referrer, Meta Install Referrer, and MAX modules. `OpenMasuOptions.EnablePlayReferrer` defaults to `true`; set it to `false` to make the bridge emit explicit unavailable Play evidence without reading the provider. Set `OpenMasuOptions.MetaAppId` to the deployment's non-secret Meta application ID to enable the Meta reader. A blank or invalid value disables that reader. Provider modules are discovered defensively so a deliberately reduced local package fails closed instead of crashing. No provider credential or campaign value belongs in the package.
 
-OpenMasu does not publish a Maven or UPM registry artifact. CI and local release tooling generate a versioned Maven-layout directory and `com.openmasu.sdk-<version>.tgz` from one source revision. Consumers may point Unity/Gradle at that operator-controlled directory or import the UPM archive without replacing placeholder coordinates by hand. See [the release runbook](../../docs/operations/release.md).
+OpenMasu does not publish a Maven or UPM registry artifact. CI and local release tooling generate a versioned Maven-layout directory and `com.openmasu.sdk-<version>.tgz` from one source revision. The generated UPM archive carries the four OpenMasu Android dependency AAR/POM pairs inside its `.androidlib`; its build postprocessor adds a `dev.openmasu`-only repository to generated Gradle settings. Third-party Android dependencies still resolve from the standard Google and Maven Central repositories. See [the release runbook](../../docs/operations/release.md).
 
-The `.androidlib` resolution path from a UPM package is not established by Unity's primary documentation. Actual exports on both supported Unity lines remain unverified and must be recorded in the operator checklist. If the package directory is not resolved, use the locally built AAR as the documented fallback; do not download or commit a third-party binary.
+The repository's standalone Gradle consumer gate rejects project-level repositories and compiles the generated UPM package with `RepositoriesMode.FAIL_ON_PROJECT_REPOS`. The local probe also imports that archive into a temporary Unity project, exports Android Gradle, validates generated App Links and repository wiring, and builds a synthetic APK. Unity 6.3.11f1 has synthetic package/export evidence; Unity 2022.3, physical-device execution, and live platform signals remain operator checks.
 
 Generate the local bundle after building the five release AARs and SDK SBOMs:
 
@@ -14,7 +14,21 @@ Generate the local bundle after building the five release AARs and SDK SBOMs:
 npm run sbom
 ./sdk/android/gradlew -p sdk/android :core:assembleRelease :installreferrer:assembleRelease :metareferrer:assembleRelease :max:assembleRelease :unitybridge:assembleRelease verifySdkSbom --no-daemon
 python tools/build-sdk-release.py --reproducibility-check
+python tools/verify-unity-upm.py
 ```
+
+Run the actual Unity 6 headless export probe on a machine with the Android
+module installed (replace the Editor path for that machine):
+
+```powershell
+npm run probe:unity-android-export -- --unity "C:\Program Files\Unity\Hub\Editor\6000.3.11f1\Editor\Unity.exe" --bundle build/sdk-release/openmasu-sdk-0.2.0-rc.4
+npm run probe:unity-android-export -- --unity "C:\Program Files\Unity\Hub\Editor\6000.3.11f1\Editor\Unity.exe" --bundle build/sdk-release/openmasu-sdk-0.2.0-rc.4 --without-settings
+```
+
+The second invocation proves that packaged Android dependency resolution does
+not depend on the optional App Links settings file. Both probes create and
+remove a temporary synthetic project. They do not use a
+device, account, credential, provider payload, or production identifier.
 
 For configured candidate `v0.2.0-rc.4`, the output under
 `build/sdk-release/openmasu-sdk-0.2.0-rc.4/` contains Maven AAR/POM pairs, the
@@ -140,11 +154,12 @@ platform update failure does not advance the local conversion signal set, so a
 retry evaluates the same successful history. The callback is marshalled to the
 Unity dispatcher and runs when the application calls `PumpCallbacks()`.
 
-These APIs have synthetic bridge and Apple-SDK compile evidence only. A real
-Unity export, device conversion window, App Store build, and Apple postback
+These APIs have synthetic bridge and Apple-SDK compile evidence only. The
+Android UPM package has a synthetic Unity 6 export/build gate, but a physical
+device conversion window, iOS Unity export, App Store build, and Apple postback
 delivery remain operator checks.
 
 Direct delivery is supported on Android and iOS. Deferred delivery is Android
-only through Google Play Install Referrer. Actual Unity exports and platform
-domain verification remain the operator procedures in
+only through Google Play Install Referrer. Unity 2022.3, physical-device
+exports, and platform domain verification remain the operator procedures in
 [`docs/validation/deeplink-device-checklist.md`](../../docs/validation/deeplink-device-checklist.md).

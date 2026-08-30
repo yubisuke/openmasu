@@ -66,6 +66,14 @@ const unityPackage = JSON.parse(readFileSync(join(process.cwd(), "sdk", "unity",
   name: string; version: string;
 };
 const unityRef = `pkg:upm/${unityPackage.name}@${unityPackage.version}`;
+const unityAndroidComponents = ["core", "installreferrer", "metareferrer", "max"].map((name) => {
+  const ref = `pkg:maven/dev.openmasu/${name}@${unityPackage.version}?type=aar`;
+  return {
+    type: "library", "bom-ref": ref, group: "dev.openmasu", name,
+    version: unityPackage.version, purl: ref,
+  };
+});
+const unityCoreRef = unityAndroidComponents.find((component) => component.name === "core")?.["bom-ref"];
 const unity = {
   bomFormat: "CycloneDX",
   specVersion: "1.5",
@@ -77,8 +85,14 @@ const unity = {
       version: unityPackage.version,
     },
   },
-  components: [],
-  dependencies: [{ ref: unityRef, dependsOn: [] }],
+  components: unityAndroidComponents,
+  dependencies: [
+    { ref: unityRef, dependsOn: unityAndroidComponents.map((component) => component["bom-ref"]) },
+    ...unityAndroidComponents.map((component) => ({
+      ref: component["bom-ref"],
+      dependsOn: component.name === "core" || !unityCoreRef ? [] : [unityCoreRef],
+    })),
+  ],
 };
 writeFileSync(join(root, "sdk-unity.cdx.json"), `${JSON.stringify(unity, null, 2)}\n`);
 JSON.parse(readFileSync(join(root, "sdk-unity.cdx.json"), "utf8"));

@@ -62,6 +62,9 @@ jobs:
       - name: Build and reproduce the local SDK release bundle
         if: steps.scope.outputs.run_android == 'true'
         run: python tools/build-sdk-release.py --reproducibility-check
+      - name: Resolve the generated Unity UPM package as a standalone Android consumer
+        if: steps.scope.outputs.run_android == 'true'
+        run: npm run test:unity-upm
       - name: Verify the pinned Gradle wrapper JAR
         if: steps.scope.outputs.run_android == 'true'
         shell: bash

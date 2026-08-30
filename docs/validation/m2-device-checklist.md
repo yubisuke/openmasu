@@ -53,13 +53,24 @@ Over a private observation window, classify installs into provider unavailable, 
 
 ## V-7 — Unity export
 
-1. Import the UPM package and its Android measurement sample into Unity 2022.3 LTS and Unity 6 LTS.
-2. Export an Android Gradle project from each.
-3. Confirm the `.androidlib` under the UPM package is resolved and that the operator-controlled local Maven coordinates are present.
-4. Build and run the sample, then confirm callbacks are marshalled to the Unity main thread.
-5. If `.androidlib` resolution fails, use a locally built OpenMasu AAR and record the exact fallback privately.
+The public synthetic gate is:
 
-UPM-package `.androidlib` resolution remains **unverified** until both exports are recorded.
+1. Build the release bundle and run `npm run test:unity-upm`.
+2. On an installed Unity 6 editor with Android support, run `npm run probe:unity-android-export -- --unity <Unity executable> --bundle <release bundle>`.
+3. Repeat the probe with `--without-settings` to prove that Android dependency resolution does not depend on optional App Links configuration.
+4. Confirm the configured probe reports two App Links filters, both probes report four packaged OpenMasu Android modules, and both produce a non-empty synthetic APK.
+
+The remaining operator procedure is:
+
+1. Import the UPM package and its Android measurement sample into Unity 2022.3 LTS.
+2. Export and build an Android Gradle project.
+3. Build and run the sample on a physical device, then confirm callbacks are marshalled to the Unity main thread.
+4. Repeat the physical-device check with the deployment's supported Unity 6 line.
+5. If `.androidlib` resolution fails, record the exact package, Unity, Gradle, and repository state privately; do not silently substitute an unverified binary.
+
+Unity 6.3.11f1 has synthetic UPM import, Gradle export, dependency resolution,
+and APK-build evidence. Unity 2022.3 and physical-device execution remain
+unverified.
 
 ## Completion record
 

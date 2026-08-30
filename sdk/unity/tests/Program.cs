@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Xml.Linq;
@@ -47,6 +48,8 @@ internal static class Program
         ExerciseRevenuePlatformCompatibility();
         ExerciseAppleConversionPlatformCompatibility();
         ExerciseAndroidManifestGeneration();
+        ExerciseAndroidGradleSettings();
+        ExerciseAndroidPostprocessorWithoutLinkSettings();
         Require(MaxRevenueSubscriptions.Formats.SequenceEqual(new[] { "Interstitial", "Rewarded", "Banner", "MRec" }), "MAX format subscription table is incomplete");
         ExerciseAndroidMaxFormatBridge();
         OpenMasuMaxUnityAdapter.Subscribe();
@@ -167,6 +170,18 @@ internal static class Program
             .Attribute(android + "value") == "a.synthetic.example,b.synthetic.example",
             "Android manifest host metadata did not match generated filters");
 
+        var gameActivityInput = input.Replace(
+            OpenMasu.Unity.Editor.OpenMasuAndroidManifestSettings.DefaultActivityName,
+            OpenMasu.Unity.Editor.OpenMasuAndroidManifestSettings.UnityGameActivityName);
+        var gameActivityOutput = OpenMasu.Unity.Editor.OpenMasuAndroidManifestSettings.Apply(
+            gameActivityInput,
+            new[] { "links.synthetic.example" });
+        Require(XDocument.Parse(gameActivityOutput).Descendants("activity")
+                .Single().Elements("intent-filter")
+                .Any(value => (string)value.Attribute(android + "label") ==
+                    OpenMasu.Unity.Editor.OpenMasuAndroidManifestSettings.LinkFilterLabel),
+            "Unity GameActivity did not receive the Android App Links filter");
+
         RequireArgumentFailureCode(
             () => OpenMasu.Unity.Editor.OpenMasuAndroidManifestSettings.Apply(
                 input, new[] { "links.synthetic.invalid" }),
@@ -176,6 +191,49 @@ internal static class Program
             () => OpenMasu.Unity.Editor.OpenMasuAndroidManifestSettings.Apply(input, Array.Empty<string>()),
             "link_hosts_required",
             "empty Android link-host settings generated an App Links filter");
+    }
+
+    private static void ExerciseAndroidGradleSettings()
+    {
+        const string input = "pluginManagement { repositories { google() } }\n" +
+            "include ':launcher'\ninclude ':unityLibrary'\ninclude 'unityLibrary:OpenMasu.androidlib'\n" +
+            "dependencyResolutionManagement {\n" +
+            "    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)\n" +
+            "    repositories {\n        google()\n        mavenCentral()\n    }\n}\n";
+        var generated = OpenMasu.Unity.Editor.OpenMasuAndroidGradleSettings.Apply(input);
+        Require(generated.Contains("exclusiveContent"),
+            "packaged OpenMasu Maven repository was not injected at settings scope");
+        Require(generated.Contains("includeGroup 'dev.openmasu'"),
+            "packaged OpenMasu Maven repository was not group-restricted");
+        Require(generated.Contains("unityLibrary/OpenMasu.androidlib/maven"),
+            "packaged OpenMasu Maven repository path changed");
+        Require(OpenMasu.Unity.Editor.OpenMasuAndroidGradleSettings.Apply(generated) == generated,
+            "packaged OpenMasu Maven repository injection was not idempotent");
+    }
+
+    private static void ExerciseAndroidPostprocessorWithoutLinkSettings()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "openmasu-unity-postprocessor-" + Guid.NewGuid().ToString("N"));
+        var previous = Directory.GetCurrentDirectory();
+        try
+        {
+            var unityLibrary = Path.Combine(root, "export", "unityLibrary");
+            Directory.CreateDirectory(Path.Combine(unityLibrary, "OpenMasu.androidlib", "maven"));
+            Directory.CreateDirectory(Path.Combine(root, "ProjectSettings"));
+            File.WriteAllText(Path.Combine(root, "export", "settings.gradle"),
+                "dependencyResolutionManagement {\n    repositories {\n        google()\n    }\n}\n");
+            Directory.SetCurrentDirectory(root);
+            new OpenMasu.Unity.Editor.OpenMasuAndroidPostprocessor()
+                .OnPostGenerateGradleAndroidProject(unityLibrary);
+            var generated = File.ReadAllText(Path.Combine(root, "export", "settings.gradle"));
+            Require(generated.Contains(OpenMasu.Unity.Editor.OpenMasuAndroidGradleSettings.BeginMarker),
+                "packaged Maven repository depends on optional App Links settings");
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(previous);
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
     }
 
     private static void ExerciseRevenuePlatformCompatibility()
