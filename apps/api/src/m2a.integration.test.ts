@@ -1942,7 +1942,7 @@ describe("M2a signed SDK ingestion", () => {
     assert.equal((await signed("/v1/events/batch", { records: [sourceEvent(`event:after-delete:${run}`, "session_start", { installation_id: installationId, session_id: `session:after-delete:${run}` })] }, { secret: installationSecret, installationKeyId })).status, 401);
   });
 
-  it("recovers idempotently when a payload purge succeeds before its queue acknowledgement", async () => {
+  it("recovers idempotently when purge succeeds but its verification read fails transiently", async () => {
     const crashInstallationId = `installation:privacy-crash-${run}`;
     const enrollment = await signed("/v1/installations", { installation_id: crashInstallationId });
     assert.equal(enrollment.status, 201);
@@ -1966,18 +1966,18 @@ describe("M2a signed SDK ingestion", () => {
       "SELECT secret_ref FROM control.installation_credentials WHERE installation_key_id=$1",
       [credential.installation_key_id],
     )).rows[0].secret_ref);
-    let injected = false;
-    const purgeThenThrow: PayloadStore = {
+    let injectedReadFailure = false;
+    const transientVerificationRead: PayloadStore = {
       write: (scope, plaintext) => payloadStore.write(scope, plaintext),
-      read: (reference) => payloadStore.read(reference),
-      scanFor: (value) => payloadStore.scanFor(value),
-      purge: async (reference) => {
-        await payloadStore.purge(reference);
-        if (!injected) {
-          injected = true;
-          throw new Error("synthetic_crash_after_payload_purge");
+      read: async (reference) => {
+        if (!injectedReadFailure) {
+          injectedReadFailure = true;
+          throw new Error("synthetic_transient_payload_read_failure");
         }
+        return payloadStore.read(reference);
       },
+      scanFor: (value) => payloadStore.scanFor(value),
+      purge: (reference) => payloadStore.purge(reference),
     };
     const processing = await executePrivacyRequest(pool, {
       tenantId,
@@ -1993,7 +1993,7 @@ describe("M2a signed SDK ingestion", () => {
       requested_via: "on_device_sdk",
       deletion_scope: "installation",
       deletion_subject_ref: crashInstallationId,
-    }, purgeThenThrow);
+    }, transientVerificationRead);
     assert.equal(processing.status, "processing");
     assert.equal(processing.deletion_subject_ref, crashInstallationId);
     assert.equal(processing.deletion_subject_digest, undefined);

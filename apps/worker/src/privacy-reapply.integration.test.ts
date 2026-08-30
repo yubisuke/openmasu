@@ -14,7 +14,7 @@ import {
   uuidV7,
   withTenant,
 } from "@openmasu/runtime";
-import { executePrivacyRequest } from "../../api/src/privacy.js";
+import { executePrivacyRequest, privacySubjectDigest } from "../../api/src/privacy.js";
 import { encodeMetricReport, metricReport } from "../../api/src/reporting.js";
 import { parseMetricQuery } from "../../api/src/report-query.js";
 import { ingestFixture } from "./ingestion.js";
@@ -79,7 +79,12 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
 
     const privacy = await executePrivacyRequest(
       appPool,
-      { keyId: "key:synthetic-m5", tenantId: "tenant-a", appId: "app-a", role: "admin" },
+      {
+        keyId: "key:synthetic-m5", tenantId: "tenant-a", appId: "app-a", role: "admin",
+        deletionSubjectDigest: privacySubjectDigest("synthetic-private-digest-key", {
+          tenant_id: "tenant-a", app_id: "app-a", deletion_scope: "app", deletion_subject_ref: "app-a",
+        }),
+      },
       {
         tenant_id: "tenant-a",
         app_id: "app-a",
