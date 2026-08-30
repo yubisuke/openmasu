@@ -386,10 +386,11 @@ export async function discoverOperatorWebhookDeliveries(
           `INSERT INTO ephemeral.operator_webhook_deliveries (
              delivery_id,tenant_id,app_id,destination_id,logical_event_id,record_id,event_name,
              request_ref,request_digest,state,attempts,next_attempt_at,created_at,updated_at
-           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'queued',0,$10,$10,$10)
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'queued',0,$10,$11,$12)
            ON CONFLICT (tenant_id,app_id,destination_id,logical_event_id) DO NOTHING`,
           [deliveryId, tenantId, candidate.app_id, candidate.destination_id, candidate.logical_event_id,
-            candidate.record_id, candidate.event_name, requestRef, prepared.requestDigest, now.toISOString()],
+            candidate.record_id, candidate.event_name, requestRef, prepared.requestDigest,
+            now.toISOString(), now.toISOString(), now.toISOString()],
         );
         return result.rowCount === 1;
       });
