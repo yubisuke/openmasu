@@ -505,9 +505,9 @@ export async function processCommerceReadbacks(
             if (updated.rowCount !== 1) throw new Error("commerce_readback_claim_lost_during_checkpoint");
             await client.query(
               `UPDATE control.commerce_backfill_checkpoints
-                  SET cursor_ref=$4,updated_at=$5
-                WHERE provider=$6 AND tenant_id=$1 AND app_id=$2 AND stream=$7`,
-              [row.tenant_id, row.app_id, row.readback_id, nextRef, now.toISOString(), row.provider, checkpointStream(row)],
+                  SET cursor_ref=$3,updated_at=$4
+                WHERE provider=$5 AND tenant_id=$1 AND app_id=$2 AND stream=$6`,
+              [row.tenant_id, row.app_id, nextRef, now.toISOString(), row.provider, checkpointStream(row)],
             );
             if (row.cursor_ref) await payloadStore.purge(row.cursor_ref);
             return true;
