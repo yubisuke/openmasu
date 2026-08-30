@@ -15,6 +15,7 @@ function generatedAppEnvironment(options: {
   readonly maxInboxBatchLimit?: string;
   readonly reconciledWorkerConcurrency?: string;
   readonly reconciledSdkInboxBatchLimit?: string;
+  readonly reconciledMaxInboxBatchLimit?: string;
 } = {}): string {
   const root = mkdtempSync(join(tmpdir(), "openmasu-bootstrap-"));
   const repositoryRoot = join(root, "repository");
@@ -49,7 +50,8 @@ function generatedAppEnvironment(options: {
     );
     assert.equal(result.status, 0, result.stderr);
     if (options.reconciledWorkerConcurrency !== undefined
-      || options.reconciledSdkInboxBatchLimit !== undefined) {
+      || options.reconciledSdkInboxBatchLimit !== undefined
+      || options.reconciledMaxInboxBatchLimit !== undefined) {
       const repositoryEnvironmentPath = join(repositoryRoot, ".env");
       let repositoryEnvironment = readFileSync(repositoryEnvironmentPath, "utf8");
       if (options.reconciledWorkerConcurrency !== undefined) {
@@ -62,6 +64,12 @@ function generatedAppEnvironment(options: {
         repositoryEnvironment = repositoryEnvironment.replace(
           /^OPENMASU_SDK_INBOX_BATCH_LIMIT=.*$/m,
           `OPENMASU_SDK_INBOX_BATCH_LIMIT=${options.reconciledSdkInboxBatchLimit}`,
+        );
+      }
+      if (options.reconciledMaxInboxBatchLimit !== undefined) {
+        repositoryEnvironment = repositoryEnvironment.replace(
+          /^OPENMASU_MAX_INBOX_BATCH_LIMIT=.*$/m,
+          `OPENMASU_MAX_INBOX_BATCH_LIMIT=${options.reconciledMaxInboxBatchLimit}`,
         );
       }
       writeFileSync(
@@ -171,6 +179,7 @@ describe("runtime bootstrap environment", () => {
       workerConcurrency: "7",
       reconciledWorkerConcurrency: "1",
       reconciledSdkInboxBatchLimit: "2",
+      reconciledMaxInboxBatchLimit: "3",
     });
     assert.match(appEnvironment, /^OPENMASU_WORKER_CONCURRENCY=1$/m);
     assert.doesNotMatch(appEnvironment, /^OPENMASU_WORKER_CONCURRENCY=7$/m);
@@ -178,5 +187,7 @@ describe("runtime bootstrap environment", () => {
     assert.equal(appEnvironment.match(/^OPENMASU_WORKER_CONCURRENCY=/gm)?.length, 1);
     assert.match(appEnvironment, /^OPENMASU_SDK_INBOX_BATCH_LIMIT=2$/m);
     assert.equal(appEnvironment.match(/^OPENMASU_SDK_INBOX_BATCH_LIMIT=/gm)?.length, 1);
+    assert.match(appEnvironment, /^OPENMASU_MAX_INBOX_BATCH_LIMIT=3$/m);
+    assert.equal(appEnvironment.match(/^OPENMASU_MAX_INBOX_BATCH_LIMIT=/gm)?.length, 1);
   });
 });

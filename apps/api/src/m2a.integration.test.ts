@@ -1197,20 +1197,34 @@ describe("M2a signed SDK ingestion", () => {
       batchIds.push((await response.json() as { ingest_batch_id: string }).ingest_batch_id);
     }
 
-    assert.equal(await processSdkInbox(pool, payloadStore, tenantId, { batchLimit: 2 }), 2);
-    const firstStates = await withTenant(pool, tenantId, (client) => client.query<{
-      status: string;
-      count: number;
+    const orderedBatches = await withTenant(pool, tenantId, (client) => client.query<{
+      ingest_batch_id: string;
     }>(
-      `SELECT status,count(*)::int AS count
+      `SELECT ingest_batch_id::text
          FROM ledger.ingest_batches_current
         WHERE tenant_id=$1 AND app_id=$2 AND ingest_batch_id=ANY($3::uuid[])
-        GROUP BY status ORDER BY status`,
+        ORDER BY received_at, inbox_seq`,
+      [tenantId, appId, batchIds],
+    ));
+    const orderedBatchIds = orderedBatches.rows.map((row) => row.ingest_batch_id);
+    assert.equal(orderedBatchIds.length, 3);
+    assert.deepEqual([...orderedBatchIds].sort(), [...batchIds].sort());
+
+    assert.equal(await processSdkInbox(pool, payloadStore, tenantId, { batchLimit: 2 }), 2);
+    const firstStates = await withTenant(pool, tenantId, (client) => client.query<{
+      ingest_batch_id: string;
+      status: string;
+    }>(
+      `SELECT ingest_batch_id::text,status
+         FROM ledger.ingest_batches_current
+        WHERE tenant_id=$1 AND app_id=$2 AND ingest_batch_id=ANY($3::uuid[])
+        ORDER BY received_at, inbox_seq`,
       [tenantId, appId, batchIds],
     ));
     assert.deepEqual(firstStates.rows, [
-      { status: "pending", count: 1 },
-      { status: "processed", count: 2 },
+      { ingest_batch_id: orderedBatchIds[0], status: "processed" },
+      { ingest_batch_id: orderedBatchIds[1], status: "processed" },
+      { ingest_batch_id: orderedBatchIds[2], status: "pending" },
     ]);
     assert.equal(await processSdkInbox(pool, payloadStore, tenantId, { batchLimit: 2 }), 1);
     assert.equal(await processSdkInbox(pool, payloadStore, tenantId, { batchLimit: 2 }), 0);
