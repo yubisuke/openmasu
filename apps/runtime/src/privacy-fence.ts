@@ -126,8 +126,9 @@ function asError(value: unknown): Error {
 }
 
 /**
- * Hold one tenant-scoped shared session lock from the post-decode state check
- * through every SDK ledger write, auxiliary enqueue, and terminal inbox state.
+ * Hold one tenant-scoped shared session lock from the pre-decode state check
+ * through the payload read, every SDK ledger write, auxiliary enqueue, and
+ * terminal inbox state.
  */
 export async function acquirePrivacyProjectionSessionFence(
   pool: Pool,

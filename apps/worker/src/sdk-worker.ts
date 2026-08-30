@@ -879,43 +879,44 @@ export async function processSdkInbox(
      LIMIT $3`,
     [tenantId, SDK_POST_PROCESSING_PENDING_REASON, batchLimit],
   ));
-  const workDecoded = await decodeRows(
-    work.rows,
-    payloadStore,
-    options.metaKeys ?? [],
-    async (row, error) => {
-      if (row.status !== "pending") throw error;
-      await appendState(
-        pool,
-        row,
-        "failed",
-        error instanceof Error ? error.message : "batch_invalid",
-      );
-    },
-  );
-  if (workDecoded.length === 0) return 0;
+  if (work.rows.length === 0) return 0;
   const projectionFence = await acquirePrivacyProjectionSessionFence(
     pool,
     tenantId,
-    workDecoded.map((entry) => ({
-      entryId: entry.row.ingest_batch_id,
-      tenantId: entry.row.tenant_id,
-      appId: entry.row.app_id,
-      subjectDigest: entry.row.subject_digest,
-      receivedAt: entry.row.received_at,
+    work.rows.map((row) => ({
+      entryId: row.ingest_batch_id,
+      tenantId: row.tenant_id,
+      appId: row.app_id,
+      subjectDigest: row.subject_digest,
+      receivedAt: row.received_at,
     })),
   );
   let processingError: unknown;
   try {
-    const blocked = workDecoded.filter((entry) =>
-      projectionFence.blockedEntryIds.has(entry.row.ingest_batch_id));
+    const blocked = work.rows.filter((row) =>
+      projectionFence.blockedEntryIds.has(row.ingest_batch_id));
     let suppressedPending = 0;
-    for (const entry of blocked) {
-      await appendState(pool, entry.row, "processed", "privacy_suppressed");
-      if (entry.row.status === "pending") suppressedPending += 1;
+    for (const row of blocked) {
+      await appendState(pool, row, "processed", "privacy_suppressed");
+      if (row.status === "pending") suppressedPending += 1;
     }
-    const activeDecoded = workDecoded.filter((entry) =>
-      !projectionFence.blockedEntryIds.has(entry.row.ingest_batch_id));
+    const activeRows = work.rows.filter((row) =>
+      !projectionFence.blockedEntryIds.has(row.ingest_batch_id));
+    if (activeRows.length === 0) return suppressedPending;
+    const activeDecoded = await decodeRows(
+      activeRows,
+      payloadStore,
+      options.metaKeys ?? [],
+      async (row, error) => {
+        if (row.status !== "pending") throw error;
+        await appendState(
+          pool,
+          row,
+          "failed",
+          error instanceof Error ? error.message : "batch_invalid",
+        );
+      },
+    );
     if (activeDecoded.length === 0) return suppressedPending;
 
     await assertWithdrawalProjectionReady(pool, tenantId, activeDecoded);
