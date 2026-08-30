@@ -41,6 +41,57 @@ function runPostgresTool(tool: "pg_dump" | "pg_restore", args: readonly string[]
   ], { stdio: "pipe" });
 }
 
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function databaseConnectionCount(admin: Client, databaseName: string): Promise<number> {
+  const result = await admin.query<{ count: string }>(
+    "SELECT count(*)::text AS count FROM pg_stat_activity WHERE datname=$1 AND pid<>pg_backend_pid()",
+    [databaseName],
+  );
+  return Number(result.rows[0]?.count ?? "0");
+}
+
+async function waitForDatabaseConnectionsToClose(
+  admin: Client,
+  databaseName: string,
+  timeoutMilliseconds = 5_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMilliseconds;
+  while (await databaseConnectionCount(admin, databaseName) > 0) {
+    if (Date.now() >= deadline) throw new Error("restored database connections did not close before removal");
+    await delay(50);
+  }
+}
+
+async function endRestoredPool(pool: Pool, admin: Client, databaseName: string): Promise<void> {
+  const ending = pool.end();
+  const result = await Promise.race([
+    ending.then(() => "closed" as const),
+    delay(5_000).then(() => "timeout" as const),
+  ]);
+  if (result === "timeout") {
+    const remaining = await databaseConnectionCount(admin, databaseName);
+    await admin.query(
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1 AND pid<>pg_backend_pid()",
+      [databaseName],
+    );
+    const settledAfterTermination = await Promise.race([
+      ending.then(() => true, () => true),
+      delay(5_000).then(() => false),
+    ]);
+    if (!settledAfterTermination) {
+      throw new Error("restored pool did not settle after terminating leaked database connections");
+    }
+    throw new Error(`restored pool shutdown exceeded 5000 ms with ${remaining} database connection(s)`);
+  }
+  assert.equal(pool.totalCount, 0, "restored pool must close every client before database removal");
+  assert.equal(pool.idleCount, 0, "restored pool must not retain idle clients");
+  assert.equal(pool.waitingCount, 0, "restored pool must not retain waiting requests");
+  await waitForDatabaseConnectionsToClose(admin, databaseName);
+}
+
 describe("M5 privacy reapply and deletion reporting", { concurrency: false }, () => {
   let appPool: Pool;
   let seedPool: Pool;
@@ -199,6 +250,8 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
     const admin = new Client({ connectionString: migrationUrl });
     await admin.connect();
     let restoredPool: Pool | undefined;
+    const restoredPoolErrors: Error[] = [];
+    let testError: unknown;
     try {
       runPostgresTool("pg_dump", ["--format=custom", "--no-owner", "--file", dumpPath, migrationUrl], dumpPath);
       const liveDrain = await processPrivacyDeletionJobs({
@@ -217,6 +270,9 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
       const restoredAppUrl = new URL(appUrl);
       restoredAppUrl.pathname = `/${databaseName}`;
       restoredPool = new Pool({ connectionString: restoredAppUrl.toString() });
+      restoredPool.on("error", (error) => {
+        restoredPoolErrors.push(error);
+      });
       const restoredPayloadStore = new EncryptedFilePayloadStore(
         restoredPayloadRoot,
         "synthetic-m5-privacy-master-key-000000000000000",
@@ -246,12 +302,45 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
       assert.equal(await withTenant(restoredPool, "tenant-a", async (client) => Number((await client.query<{ count: string }>(
         "SELECT count(*)::text AS count FROM control.privacy_deletion_jobs WHERE status='processing'",
       )).rows[0].count)), 0);
-    } finally {
-      await restoredPool?.end();
-      await admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`).catch(() => undefined);
-      await admin.end();
-      rmSync(restoredPayloadRoot, { recursive: true, force: true });
+    } catch (error) {
+      testError = error;
     }
+
+    const cleanupErrors: unknown[] = [];
+    if (restoredPool) {
+      try {
+        await endRestoredPool(restoredPool, admin, databaseName);
+      } catch (error) {
+        cleanupErrors.push(error);
+      }
+    }
+    if (restoredPoolErrors.length > 0) {
+      cleanupErrors.push(new AggregateError(restoredPoolErrors, "restored pool emitted background errors"));
+    }
+    try {
+      await admin.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
+    } catch (error) {
+      cleanupErrors.push(error);
+    }
+    try {
+      await admin.end();
+    } catch (error) {
+      cleanupErrors.push(error);
+    }
+    try {
+      rmSync(restoredPayloadRoot, { recursive: true, force: true });
+    } catch (error) {
+      cleanupErrors.push(error);
+    }
+
+    if (testError && cleanupErrors.length > 0) {
+      throw new AggregateError(
+        [testError, ...cleanupErrors],
+        "backup/restore verification and cleanup both failed",
+      );
+    }
+    if (testError) throw testError;
+    if (cleanupErrors.length > 0) throw new AggregateError(cleanupErrors, "backup/restore cleanup failed");
   });
 
   it("exports only the recalculated latest metric and never exposes redacted evidence", async () => {
