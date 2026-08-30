@@ -99,6 +99,8 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
   let snapshot: string;
   let payloadStore: EncryptedFilePayloadStore;
   let payloadReference: string;
+  let integrityEvidenceReference: string;
+  let integrityPendingReference: string;
   let privacyRequestId: string;
 
   before(async () => {
@@ -118,14 +120,48 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
       { tenantId: "tenant-a", appId: "app-a", objectId: "synthetic-restored-inbox" },
       Buffer.from("synthetic payload only", "utf8"),
     );
-    await withTenant(appPool, "tenant-a", (client) => client.query(
-      `INSERT INTO ledger.ingest_inbox (
-        inbox_id, tenant_id, app_id, producer, event_id, token_mode,
-        received_at, raw_query_ref, raw_query_digest, artifact
-      ) VALUES ($1,'tenant-a','app-a','import:synthetic-provider','event:install-33','all',
-        '2026-08-01T00:00:01.000Z',$2,$3,$4::jsonb)`,
-      [uuidV7(), payloadReference, sha256("synthetic payload only"), JSON.stringify({ synthetic: true })],
-    ));
+    integrityEvidenceReference = await payloadStore.write(
+      { tenantId: "tenant-a", appId: "app-a", objectId: "synthetic-restored-integrity-result" },
+      Buffer.from("synthetic integrity evidence only", "utf8"),
+    );
+    integrityPendingReference = await payloadStore.write(
+      { tenantId: "tenant-a", appId: "app-a", objectId: "synthetic-restored-integrity-token" },
+      Buffer.from("synthetic integrity pending token only", "utf8"),
+    );
+    await withTenant(appPool, "tenant-a", async (client) => {
+      await client.query(
+        `INSERT INTO ledger.ingest_inbox (
+          inbox_id, tenant_id, app_id, producer, event_id, token_mode,
+          received_at, raw_query_ref, raw_query_digest, artifact
+        ) VALUES ($1,'tenant-a','app-a','import:synthetic-provider','event:install-33','all',
+          '2026-08-01T00:00:01.000Z',$2,$3,$4::jsonb)`,
+        [uuidV7(), payloadReference, sha256("synthetic payload only"), JSON.stringify({ synthetic: true })],
+      );
+      const recordId = (await client.query<{ record_id: string }>(
+        `SELECT record_id FROM ledger.raw_records
+          WHERE tenant_id='tenant-a' AND app_id='app-a' AND event_id='event:install-33'`,
+      )).rows[0].record_id;
+      const resultId = uuidV7();
+      const resultDigest = sha256("synthetic restored integrity result binding");
+      await client.query(
+        `INSERT INTO ledger.integrity_verification_results (
+          verification_result_id,tenant_id,app_id,subject_record_id,provider,
+          verdict,evidence_ref,response_digest,binding_digest,decided_at,artifact
+        ) VALUES ($1,'tenant-a','app-a',$2,'play_integrity','verified',$3,$4,$5,
+          '2026-08-19T00:00:00.000Z',$6::jsonb)`,
+        [resultId, recordId, integrityEvidenceReference, sha256("synthetic integrity evidence only"),
+          resultDigest, JSON.stringify({ verification_result_id: resultId, synthetic: true })],
+      );
+      await client.query(
+        `INSERT INTO ephemeral.integrity_verifications (
+          verification_id,tenant_id,app_id,provider,token_ref,subject_record_id,
+          attempts,next_attempt_at,challenge_digest
+        ) VALUES ($1,'tenant-a','app-a','play_integrity',$2,$3,0,
+          '2026-08-19T00:00:00.000Z',$4)`,
+        [uuidV7(), integrityPendingReference, recordId,
+          sha256("synthetic restored integrity pending binding")],
+      );
+    });
     cpSync(root, join(snapshot, "payloads"), { recursive: true });
 
     const privacy = await executePrivacyRequest(
@@ -148,10 +184,31 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
     );
     privacyRequestId = privacy.privacy_request_id;
     await assert.rejects(payloadStore.read(payloadReference));
+    await assert.rejects(payloadStore.read(integrityEvidenceReference));
+    await assert.rejects(payloadStore.read(integrityPendingReference));
 
     // Simulate an object-store snapshot restored after the database already recorded deletion.
     cpSync(join(snapshot, "payloads"), root, { recursive: true, force: true });
     assert.equal((await payloadStore.read(payloadReference)).toString("utf8"), "synthetic payload only");
+    assert.equal((await payloadStore.read(integrityEvidenceReference)).toString("utf8"),
+      "synthetic integrity evidence only");
+    assert.equal((await payloadStore.read(integrityPendingReference)).toString("utf8"),
+      "synthetic integrity pending token only");
+    const restoredRecordId = await withTenant(appPool, "tenant-a", async (client) => (await client.query<{
+      record_id: string;
+    }>(
+      `SELECT record_id FROM ledger.raw_records
+        WHERE tenant_id='tenant-a' AND app_id='app-a' AND event_id='event:install-33'`,
+    )).rows[0].record_id);
+    await withTenant(appPool, "tenant-a", (client) => client.query(
+      `INSERT INTO ephemeral.integrity_verifications (
+        verification_id,tenant_id,app_id,provider,token_ref,subject_record_id,
+        attempts,next_attempt_at,challenge_digest
+      ) VALUES ($1,'tenant-a','app-a','play_integrity',$2,$3,0,
+        '2026-08-19T00:00:00.000Z',$4)`,
+      [uuidV7(), integrityPendingReference, restoredRecordId,
+        sha256("synthetic restored integrity replay binding")],
+    ));
   });
 
   after(async () => {
@@ -172,6 +229,14 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
     assert.equal(first.metrics_recalculated, 8);
     assert.equal(first.unsupported_metric_runs, 0);
     await assert.rejects(payloadStore.read(payloadReference));
+    await assert.rejects(payloadStore.read(integrityEvidenceReference));
+    await assert.rejects(payloadStore.read(integrityPendingReference));
+    assert.equal(await withTenant(appPool, "tenant-a", async (client) => Number((await client.query<{
+      count: string;
+    }>(
+      "SELECT count(*)::text AS count FROM ephemeral.integrity_verifications WHERE tenant_id=$1 AND app_id=$2",
+      ["tenant-a", "app-a"],
+    )).rows[0].count)), 0);
 
     const beforeSecond = await withTenant(appPool, "tenant-a", async (client) => ({
       metrics: Number((await client.query<{ count: string }>(

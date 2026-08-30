@@ -255,6 +255,19 @@ export async function executePrivacyRequest(
            ORDER BY token_ref`,
           [body.tenant_id, body.deletion_scope, body.app_id],
         );
+    const integrityResultPayloads = body.deletion_scope === "installation"
+      ? await client.query<{ evidence_ref: string }>(
+          `SELECT evidence_ref FROM ledger.integrity_verification_results
+           WHERE tenant_id=$1 AND app_id=$2 AND subject_record_id=ANY($3::text[])
+             AND evidence_ref IS NOT NULL ORDER BY evidence_ref`,
+          [body.tenant_id, body.app_id, records],
+        )
+      : await client.query<{ evidence_ref: string }>(
+          `SELECT evidence_ref FROM ledger.integrity_verification_results
+           WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3)
+             AND evidence_ref IS NOT NULL ORDER BY evidence_ref`,
+          [body.tenant_id, body.deletion_scope, body.app_id],
+        );
     const googlePlayResultPayloads = body.deletion_scope === "installation"
       ? await client.query<{ evidence_ref: string }>(
           `SELECT evidence_ref FROM ledger.google_play_purchase_verification_results
@@ -456,6 +469,7 @@ export async function executePrivacyRequest(
       ...adServicesPayloads.rows.map((payload) => payload.response_ref),
       ...pendingAdServicesPayloads.rows.map((payload) => payload.token_ref),
       ...pendingIntegrityPayloads.rows.map((payload) => payload.token_ref),
+      ...integrityResultPayloads.rows.map((payload) => payload.evidence_ref),
       ...googlePlayResultPayloads.rows.map((payload) => payload.evidence_ref),
       ...pendingGooglePlayPayloads.rows.map((payload) => payload.token_ref),
       ...googlePlayRtdnPayloads.rows.map((payload) => payload.evidence_ref),
