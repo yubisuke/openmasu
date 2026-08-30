@@ -22,6 +22,9 @@ export type RouteHandler =
   | "admin_server_keys_list"
   | "admin_server_keys_issue"
   | "admin_server_keys_retire"
+  | "admin_operator_webhooks_list"
+  | "admin_operator_webhooks_register"
+  | "admin_operator_webhooks_disable"
   | "admin_tracking_links_list"
   | "admin_tracking_links"
   | "admin_tracking_link_transition"
@@ -51,6 +54,8 @@ export type RouteHandler =
   | "dashboard_sdk_keys_retire"
   | "dashboard_server_keys_issue"
   | "dashboard_server_keys_retire"
+  | "dashboard_operator_webhooks_register"
+  | "dashboard_operator_webhooks_disable"
   | "dashboard_link_domain"
   | "dashboard_app_link_identity"
   | "dashboard_apple_registration"
@@ -93,6 +98,9 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "admin_server_keys_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/server-keys$/, auth: "admin_bearer", mutates: false, capability: "administer" },
   { handler: "admin_server_keys_issue", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/server-keys$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_server_keys_retire", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/server-keys\/[^/]+\/retire$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "admin_operator_webhooks_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-webhooks$/, auth: "admin_bearer", mutates: false, capability: "administer" },
+  { handler: "admin_operator_webhooks_register", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-webhooks$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "admin_operator_webhooks_disable", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-webhooks\/[^/]+\/disable$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_tracking_links_list", method: "GET", pattern: /^\/v1\/admin\/tracking-links$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_tracking_links", method: "POST", pattern: /^\/v1\/admin\/tracking-links$/, auth: "admin_bearer", mutates: true, capability: "operate" },
   { handler: "admin_tracking_link_transition", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/tracking-links\/[^/]+\/(?:pause|archive)$/, auth: "admin_bearer", mutates: true, capability: "operate" },
@@ -117,6 +125,8 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_sdk_keys_retire", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/sdk-keys\/[^/]+\/retire$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_server_keys_issue", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/server-keys$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_server_keys_retire", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/server-keys\/[^/]+\/retire$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_operator_webhooks_register", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/operator-webhooks$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_operator_webhooks_disable", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/operator-webhooks\/[^/]+\/disable$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_link_domain", method: "POST", pattern: /^\/dashboard\/link-domain$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_app_link_identity", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/link-identity$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_apple_registration", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/apple-registration$/, auth: "dashboard_session", mutates: true, capability: "administer" },

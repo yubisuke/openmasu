@@ -150,7 +150,7 @@ export type DashboardAuditInput = {
     readonly appId?: string;
     readonly actorRef: string;
     readonly action: string;
-    readonly targetScope: "tenant" | "app" | "session" | "tracking_link" | "sdk_key" | "rule_bundle" | "server_key";
+    readonly targetScope: "tenant" | "app" | "session" | "tracking_link" | "sdk_key" | "rule_bundle" | "server_key" | "webhook_destination";
     readonly targetRef: string;
     readonly outcome: "succeeded" | "failed";
     readonly reasonCode?: string;

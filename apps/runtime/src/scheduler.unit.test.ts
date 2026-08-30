@@ -32,6 +32,7 @@ describe("durable worker scheduler", () => {
     assert.deepEqual(SCHEDULED_WORKER_JOBS, [
       "max_inbox", "sdk_inbox", "adservices_lookup", "integrity_verification",
       "google_play_verification", "commerce_readback", "google_conversion_delivery",
+      "operator_webhook_delivery",
       "fraud_maintenance", "dashboard_session_sweep",
     ]);
     assert.doesNotThrow(() => validateSchedulePolicy(policy));

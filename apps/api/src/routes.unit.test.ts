@@ -67,6 +67,11 @@ describe("declarative API route security", () => {
     assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/server-keys/server-key%3Aone/retire")?.handler, "admin_server_keys_retire");
     assert.equal(matchRoute("POST", "/dashboard/apps/app-a/server-keys")?.handler, "dashboard_server_keys_issue");
     assert.equal(matchRoute("POST", "/dashboard/apps/app-a/server-keys/server-key%3Aone/retire")?.handler, "dashboard_server_keys_retire");
+    assert.equal(matchRoute("GET", "/v1/admin/apps/app-a/operator-webhooks")?.handler, "admin_operator_webhooks_list");
+    assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/operator-webhooks")?.handler, "admin_operator_webhooks_register");
+    assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/operator-webhooks/webhook%3Aone/disable")?.handler, "admin_operator_webhooks_disable");
+    assert.equal(matchRoute("POST", "/dashboard/apps/app-a/operator-webhooks")?.handler, "dashboard_operator_webhooks_register");
+    assert.equal(matchRoute("POST", "/dashboard/apps/app-a/operator-webhooks/webhook%3Aone/disable")?.handler, "dashboard_operator_webhooks_disable");
     for (const path of [
       "/dashboard/link-domain",
       "/dashboard/apps/app-a/link-identity",
@@ -85,6 +90,8 @@ describe("declarative API route security", () => {
       "dashboard_sdk_keys_issue", "dashboard_sdk_keys_retire", "dashboard_link_domain",
       "admin_server_keys_list", "admin_server_keys_issue", "admin_server_keys_retire",
       "dashboard_server_keys_issue", "dashboard_server_keys_retire",
+      "admin_operator_webhooks_list", "admin_operator_webhooks_register", "admin_operator_webhooks_disable",
+      "dashboard_operator_webhooks_register", "dashboard_operator_webhooks_disable",
       "dashboard_app_link_identity", "dashboard_apple_registration", "dashboard_conversion_schema",
       "dashboard_rule_bundle", "dashboard_google_data_manager",
     ]) assert.equal(routes.find((route) => route.handler === handler)?.capability, "administer", handler);

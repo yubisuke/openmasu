@@ -9,6 +9,7 @@ export const SCHEDULED_WORKER_JOBS = [
   "google_play_verification",
   "commerce_readback",
   "google_conversion_delivery",
+  "operator_webhook_delivery",
   "fraud_maintenance",
   "dashboard_session_sweep",
 ] as const;

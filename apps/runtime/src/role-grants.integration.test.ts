@@ -45,6 +45,8 @@ const seedControlTruncate = new Set([
   "control.public_postback_audits",
   "control.server_keys",
   "control.server_key_states",
+  "control.operator_webhook_destinations",
+  "control.operator_webhook_destination_states",
   "control.rule_bundle_revisions",
   "control.worker_job_schedules",
 ]);
@@ -71,6 +73,9 @@ const ephemeralExpected = new Map<string, Record<Role, Privilege[]>>([
     openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: [], openmasu_seed: ["TRUNCATE"],
   }],
   ["ephemeral.commerce_provider_readbacks", {
+    openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: [], openmasu_seed: ["TRUNCATE"],
+  }],
+  ["ephemeral.operator_webhook_deliveries", {
     openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: [], openmasu_seed: ["TRUNCATE"],
   }],
 ]);

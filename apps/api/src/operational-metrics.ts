@@ -111,6 +111,15 @@ export async function renderOperationalMetrics(
         WHERE tenant_id=$1`,
       [tenantId],
     );
+    const operatorWebhooks = await client.query<{ count: string; oldest: string }>(
+      `SELECT count(*)::text AS count,
+              COALESCE(GREATEST(EXTRACT(EPOCH FROM (
+                clock_timestamp()-min(control.canonical_timestamp_value(created_at))
+              )),0),0)::text AS oldest
+         FROM ephemeral.operator_webhook_deliveries
+        WHERE tenant_id=$1 AND state IN ('queued','retry')`,
+      [tenantId],
+    );
     const completedJobs = await client.query<{
       actor_ref: string;
       outcome: JobHealthOutcome;
@@ -129,7 +138,7 @@ export async function renderOperationalMetrics(
           AND policy_version='job-health-v1'
           AND actor_ref IN (
             'job:mmp_import', 'job:cost_import', 'job:max_revenue_import',
-            'job:google_conversion_delivery', 'job:metric_run'
+            'job:google_conversion_delivery', 'job:operator_webhook_delivery', 'job:metric_run'
           )
           AND outcome IN ('succeeded', 'failed')
           AND target_scope='app'
@@ -175,6 +184,7 @@ export async function renderOperationalMetrics(
       inbox: inbox.rows[0],
       batches: batches.rows[0],
       adservices: adservices.rows[0],
+      operatorWebhooks: operatorWebhooks.rows[0],
       jobs,
       scheduledJobs: new Map(scheduledJobs.rows.map((row) => [row.job_name, row])),
     };
@@ -186,11 +196,13 @@ export async function renderOperationalMetrics(
     `openmasu_ingest_backlog${labels({ queue: "max_inbox" })} ${durable.inbox.count}`,
     `openmasu_ingest_backlog${labels({ queue: "sdk_batches" })} ${durable.batches.count}`,
     `openmasu_ingest_backlog${labels({ queue: "adservices" })} ${durable.adservices.count}`,
+    `openmasu_ingest_backlog${labels({ queue: "operator_webhooks" })} ${durable.operatorWebhooks.count}`,
     "# HELP openmasu_ingest_oldest_pending_seconds Age of the oldest pending item in a bounded queue.",
     "# TYPE openmasu_ingest_oldest_pending_seconds gauge",
     `openmasu_ingest_oldest_pending_seconds${labels({ queue: "max_inbox" })} ${durable.inbox.oldest}`,
     `openmasu_ingest_oldest_pending_seconds${labels({ queue: "sdk_batches" })} ${durable.batches.oldest}`,
     `openmasu_ingest_oldest_pending_seconds${labels({ queue: "adservices" })} ${durable.adservices.oldest}`,
+    `openmasu_ingest_oldest_pending_seconds${labels({ queue: "operator_webhooks" })} ${durable.operatorWebhooks.oldest}`,
     "# HELP openmasu_job_runs_total Durable terminal operator job runs by fixed job and outcome.",
     "# TYPE openmasu_job_runs_total counter",
   );

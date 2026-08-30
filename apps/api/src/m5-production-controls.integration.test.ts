@@ -309,6 +309,8 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
     const body = await response.text();
     assert.match(body, /openmasu_http_requests_total/);
     assert.match(body, /openmasu_ingest_backlog\{queue="sdk_batches"\}/);
+    assert.match(body, /openmasu_ingest_backlog\{queue="operator_webhooks"\}/);
+    assert.match(body, /openmasu_ingest_oldest_pending_seconds\{queue="operator_webhooks"\}/);
     assert.match(body, /openmasu_scheduled_job_runs_total\{job="sdk_inbox",outcome="failed"\} 0/);
     assert.match(body, /openmasu_scheduled_job_consecutive_failures\{job="sdk_inbox"\} 0/);
     assert.match(body, /openmasu_scheduled_job_configured\{job="sdk_inbox"\} 0/);
@@ -330,17 +332,20 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
       "max_revenue_import:failed": "0",
       "google_conversion_delivery:succeeded": "0",
       "google_conversion_delivery:failed": "0",
+      "operator_webhook_delivery:succeeded": "0",
+      "operator_webhook_delivery:failed": "0",
       "metric_run:succeeded": "0",
       "metric_run:failed": "0",
     });
     const latest = values("openmasu_job_last_completion_timestamp_seconds");
-    assert.equal(Object.keys(latest).length, 10);
+    assert.equal(Object.keys(latest).length, 12);
     assert.equal(Number(latest["mmp_import:succeeded"]), Date.parse("2026-08-20T00:01:00.000Z") / 1000);
     assert.equal(Number(latest["cost_import:failed"]), Date.parse("2026-08-20T00:02:00.000Z") / 1000);
     for (const key of [
       "mmp_import:failed", "cost_import:succeeded", "max_revenue_import:succeeded",
       "max_revenue_import:failed", "google_conversion_delivery:succeeded",
-      "google_conversion_delivery:failed", "metric_run:succeeded", "metric_run:failed",
+      "google_conversion_delivery:failed", "operator_webhook_delivery:succeeded",
+      "operator_webhook_delivery:failed", "metric_run:succeeded", "metric_run:failed",
     ]) {
       assert.equal(latest[key], "0");
     }
@@ -359,7 +364,7 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
         WHERE action='job_completed' AND policy_version='job-health-v1'
           AND actor_ref IN (
             'job:mmp_import','job:cost_import','job:max_revenue_import',
-            'job:google_conversion_delivery','job:metric_run'
+            'job:google_conversion_delivery','job:operator_webhook_delivery','job:metric_run'
           )
           AND app_id=target_ref
           AND ((outcome='succeeded' AND reason_code IS NULL)

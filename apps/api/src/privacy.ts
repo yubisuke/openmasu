@@ -120,6 +120,15 @@ export async function executePrivacyRequest(
   const requestId = `privacy:${uuidV7(now?.valueOf())}`;
   return withTenant(pool, body.tenant_id, async (client) => {
     const records = await affectedRecordIds(client, body);
+    // Serialize deletion recognition with operator-webhook discovery and delivery.
+    // If deletion takes the lock first, no pending request can cross the boundary;
+    // if delivery already owns it, that request necessarily precedes recognition.
+    for (const recordId of records) {
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('openmasu:operator-webhook:' || $1,0))",
+        [recordId],
+      );
+    }
     const payloads = body.deletion_scope === "installation"
       ? await client.query<{ raw_query_ref: string }>(
           `SELECT DISTINCT inbox.raw_query_ref
@@ -261,6 +270,37 @@ export async function executePrivacyRequest(
            WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3) ORDER BY request_ref`,
           [body.tenant_id, body.deletion_scope, body.app_id],
         );
+    const operatorWebhookPayloads = body.deletion_scope === "installation"
+      ? await client.query<{
+          delivery_id: string;
+          destination_id: string;
+          app_id: string;
+          request_ref: string;
+          request_digest: string;
+          attempts: number;
+        }>(
+          `SELECT delivery_id::text,destination_id,app_id,request_ref,request_digest,attempts
+             FROM ephemeral.operator_webhook_deliveries
+            WHERE tenant_id=$1 AND app_id=$2 AND record_id=ANY($3::text[])
+              AND state IN ('queued','retry')
+            ORDER BY delivery_id FOR UPDATE`,
+          [body.tenant_id, body.app_id, records],
+        )
+      : await client.query<{
+          delivery_id: string;
+          destination_id: string;
+          app_id: string;
+          request_ref: string;
+          request_digest: string;
+          attempts: number;
+        }>(
+          `SELECT delivery_id::text,destination_id,app_id,request_ref,request_digest,attempts
+             FROM ephemeral.operator_webhook_deliveries
+            WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3)
+              AND state IN ('queued','retry')
+            ORDER BY delivery_id FOR UPDATE`,
+          [body.tenant_id, body.deletion_scope, body.app_id],
+        );
     const commercePayloads = body.deletion_scope === "installation"
       ? await client.query<{ reference: string }>(
           `SELECT DISTINCT notification.evidence_ref AS reference
@@ -302,8 +342,37 @@ export async function executePrivacyRequest(
       ...pendingGooglePlayPayloads.rows.map((payload) => payload.token_ref),
       ...googlePlayRtdnPayloads.rows.map((payload) => payload.evidence_ref),
       ...googleConversionPayloads.rows.map((payload) => payload.request_ref),
+      ...operatorWebhookPayloads.rows.map((payload) => payload.request_ref),
       ...commercePayloads.rows.map((payload) => payload.reference),
     ])) await payloadStore.purge(reference);
+    for (const delivery of operatorWebhookPayloads.rows) {
+      await client.query(
+        `UPDATE ephemeral.operator_webhook_deliveries
+            SET state='suppressed',safe_reason='privacy_suppressed',updated_at=$4
+          WHERE tenant_id=$1 AND app_id=$2 AND delivery_id=$3`,
+        [body.tenant_id, delivery.app_id, delivery.delivery_id, completedAt],
+      );
+      const deliveryArtifact = {
+        delivery_id: delivery.delivery_id,
+        destination_id: delivery.destination_id,
+        tenant_id: body.tenant_id,
+        app_id: delivery.app_id,
+        state: "suppressed",
+        attempt: delivery.attempts,
+        occurred_at: completedAt,
+        request_digest: delivery.request_digest,
+        reason_code: "privacy_suppressed",
+      };
+      await client.query(
+        `INSERT INTO ledger.operator_webhook_delivery_results (
+           delivery_result_id,delivery_id,tenant_id,app_id,destination_id,state,attempt,
+           occurred_at,request_digest,reason_code,artifact
+         ) VALUES ($1,$2,$3,$4,$5,'suppressed',$6,$7,$8,'privacy_suppressed',$9::jsonb)`,
+        [uuidV7(Date.parse(completedAt) + delivery.attempts), delivery.delivery_id,
+          body.tenant_id, delivery.app_id, delivery.destination_id, delivery.attempts,
+          completedAt, delivery.request_digest, JSON.stringify(deliveryArtifact)],
+      );
+    }
     if (body.deletion_scope === "installation") {
       await client.query(
         `DELETE FROM ephemeral.adservices_lookups
