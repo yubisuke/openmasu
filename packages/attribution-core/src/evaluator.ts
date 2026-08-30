@@ -362,7 +362,7 @@ function assertInstallationAnchors(all: Attempt[], decisions: Map<string, Any>):
   }
 }
 
-function assertScopedReferences(input: Any, all: Attempt[]): void {
+function assertScopedReferences(input: Any, all: readonly Attempt[]): void {
   const exists = (tenantId: string, appId: string, recordId: string) =>
     all.some((attempt) =>
       attempt.server.tenant_id === tenantId && attempt.server.app_id === appId &&
@@ -1626,7 +1626,10 @@ export function evaluate(
   const candidates = candidateProviderFactory(all);
   assertImportProviderContexts(all);
   assertRevenueAnchorSources(all);
-  assertScopedReferences(input, all);
+  // Runtime providers may supply bounded ledger-backed targets that are not
+  // current deliveries. Reference validation must see that scoped history,
+  // while emitted records and decisions remain limited to the input attempts.
+  assertScopedReferences(input, candidates.all());
   const decisionsList = all.map((attempt) => {
     try {
       return decide(attempt, candidates);

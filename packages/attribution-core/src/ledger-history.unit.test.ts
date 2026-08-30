@@ -14,6 +14,10 @@ const fixture = JSON.parse(readFileSync(
   new URL("../../../fixtures/v0.4/01-valid-install-referrer/input.json", import.meta.url),
   "utf8",
 )) as Any;
+const legacyRefundFixture = JSON.parse(readFileSync(
+  new URL("../../../fixtures/v0.4/16-correction-refund/input.json", import.meta.url),
+  "utf8",
+)) as Any;
 
 function runtimeInput(records: Any[]): Any {
   return {
@@ -82,5 +86,22 @@ describe("ledger-backed evaluator candidates", () => {
     assert.equal(output.attributions[0].subject_ref, historicalInstall.record.payload.installation_id);
     assert.equal(output.attributions[0].reason_code, "valid_install_referrer");
     assert.deepEqual(output.logical_events.map((event) => event.record_id), [lateClick.record_id]);
+  });
+
+  it("validates an explicit refund reference against scoped ledger history", () => {
+    const purchase = historyAttempt(legacyRefundFixture.records[0], true);
+    const refund = structuredClone(legacyRefundFixture.records[1]);
+    const output = evaluate(runtimeInput([refund]), (values) =>
+      new IndexedCandidateProvider([purchase, ...values]));
+    assert.deepEqual(output.corrections, [{
+      contract_version: "0.4.0",
+      tenant_id: refund.tenant_id,
+      app_id: refund.app_id,
+      correction_id: `correction:${refund.record_id}`,
+      corrects_record_id: purchase.record.record_id,
+      correction_type: "correction",
+      correction_reason: "refund",
+      effective_at: refund.occurred_at,
+    }]);
   });
 });
