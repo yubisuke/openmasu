@@ -81,7 +81,9 @@ hardening rather than another broad provider claim:
    runtime or SDK surfaces change;
 4. preserve durable scheduled-metric checkpoints and exact replay while
    hardening privacy deletion atomicity;
-5. preserve the current synthetic/operator evidence distinction.
+5. ensure every durable runtime queue can independently make its tenant
+   discoverable to the worker before a tenant RLS context exists;
+6. preserve the current synthetic/operator evidence distinction.
 
 Private real-data, real-device, and live-provider work is optional operator work
 and is not required to continue repository-only hardening.

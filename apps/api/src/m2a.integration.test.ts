@@ -19,13 +19,17 @@ import {
   withTenant,
 } from "@openmasu/runtime";
 import { listRuntimeWorkTenants, processSdkInbox } from "../../worker/src/sdk-worker.js";
-import { processIntegrityVerifications } from "../../worker/src/integrity-verifier.js";
+import {
+  processIntegrityVerifications,
+  queueIntegrityVerification,
+} from "../../worker/src/integrity-verifier.js";
 import {
   processGooglePlayProductVerifications,
   queueGooglePlayProductVerification,
 } from "../../worker/src/google-play-product-verifier.js";
 import { processCommerceReadbacks } from "../../worker/src/commerce-readback-worker.js";
 import { createRequestHandler } from "./router.js";
+import { recordCommerceNotification } from "./commerce-notifications.js";
 import { executePrivacyRequest } from "./privacy.js";
 import { KeyedTokenBucket } from "./rate-limit.js";
 import { parseMetricQuery } from "./report-query.js";
@@ -390,6 +394,114 @@ describe("M2a signed SDK ingestion", () => {
     assert.match(evidence.queued[0].token_ref, /^encrypted:/);
     assert.doesNotMatch(JSON.stringify(evidence.raw), new RegExp(rawToken));
     assert.equal(await payloadStore.scanFor(rawToken), false, "encrypted store leaked a plaintext integrity token");
+  });
+
+  it("discovers and drains tenants whose only work is integrity verification or commerce read-back", async () => {
+    const integrityTenantId = `tenant-integrity-only-${run}`;
+    const integrityAppId = `app-integrity-only-${run}`;
+    await ensureSdkKeys(pool, payloadStore, { tenantId: integrityTenantId, appId: integrityAppId }, [{
+      keyId: `sdk-key-integrity-only-${run}`,
+      secret: `sdk-secret-${randomBytes(32).toString("base64url")}`,
+    }]);
+    assert.equal((await listRuntimeWorkTenants(pool)).includes(integrityTenantId), false,
+      "an app and SDK key alone must not create runtime work");
+    const integrityRequestedAt = new Date(Date.now() - 60_000).toISOString();
+    const integrityTokenRef = await payloadStore.write({
+      tenantId: integrityTenantId,
+      appId: integrityAppId,
+      objectId: `integrity-only-${run}`,
+    }, Buffer.from(JSON.stringify({ synthetic: true })));
+    await queueIntegrityVerification(pool, {
+      tenantId: integrityTenantId,
+      appId: integrityAppId,
+      subjectRecordId: `record:integrity-only:${run}`,
+      provider: "play_integrity",
+      tokenRef: integrityTokenRef,
+      bindingDigest: randomBytes(32).toString("hex"),
+      requestedAt: integrityRequestedAt,
+    });
+
+    const commerceTenantId = `tenant-commerce-only-${run}`;
+    const commerceAppId = `app-commerce-only-${run}`;
+    await ensureSdkKeys(pool, payloadStore, { tenantId: commerceTenantId, appId: commerceAppId }, [{
+      keyId: `sdk-key-commerce-only-${run}`,
+      secret: `sdk-secret-${randomBytes(32).toString("base64url")}`,
+    }]);
+    assert.equal((await listRuntimeWorkTenants(pool)).includes(commerceTenantId), false,
+      "an app and SDK key alone must not create runtime work");
+    const commerceReceivedAt = new Date(Date.now() - 30_000);
+    const commercePayload = Buffer.from(JSON.stringify({
+      packageName: `dev.openmasu.synthetic.discovery.${run}`,
+      subscriptionNotification: { purchaseToken: `synthetic-discovery-token-${run}` },
+    }));
+    const commerceNotificationDigest = randomBytes(32).toString("hex");
+    assert.equal(await recordCommerceNotification({
+      pool,
+      payloadStore,
+      tenantId: commerceTenantId,
+      appId: commerceAppId,
+      payload: commercePayload,
+      notificationDigest: commerceNotificationDigest,
+      event: {
+        provider: "google_play",
+        eventKind: "subscription_renewed",
+        subscriptionState: "active",
+        financialEffect: "none",
+        externalEventDigest: randomBytes(32).toString("hex"),
+        effectiveAt: commerceReceivedAt.toISOString(),
+      },
+      receivedAt: commerceReceivedAt,
+      readbackOperation: "google_subscription",
+    }), true);
+
+    const discovered = await listRuntimeWorkTenants(pool);
+    assert.ok(discovered.includes(integrityTenantId),
+      "an integrity-verification-only tenant must be discoverable before a tenant RLS context exists");
+    assert.ok(discovered.includes(commerceTenantId),
+      "a commerce-readback-only tenant must be discoverable before a tenant RLS context exists");
+
+    assert.deepEqual(await processIntegrityVerifications(pool, payloadStore, integrityTenantId, {
+      providerMode: "play_integrity",
+      now: () => new Date(),
+    }), { completed: 1, unavailable: 1 });
+    assert.deepEqual(await processCommerceReadbacks(pool, payloadStore, commerceTenantId, {
+      now: new Date(),
+      googleClient: async () => ({
+        status: 200,
+        body: Buffer.from(JSON.stringify({ subscriptionState: "SUBSCRIPTION_STATE_ACTIVE" })),
+      }),
+    }), { processed: 1, deferred: 0, failed: 0 });
+
+    const drained = await Promise.all([
+      withTenant(pool, integrityTenantId, async (client) => ({
+        pending: Number((await client.query<{ count: string }>(
+          "SELECT count(*)::text AS count FROM ephemeral.integrity_verifications WHERE tenant_id=$1 AND app_id=$2",
+          [integrityTenantId, integrityAppId],
+        )).rows[0].count),
+        results: Number((await client.query<{ count: string }>(
+          "SELECT count(*)::text AS count FROM ledger.integrity_verification_results WHERE tenant_id=$1 AND app_id=$2",
+          [integrityTenantId, integrityAppId],
+        )).rows[0].count),
+      })),
+      withTenant(pool, commerceTenantId, async (client) => ({
+        pending: Number((await client.query<{ count: string }>(
+          "SELECT count(*)::text AS count FROM ephemeral.commerce_provider_readbacks WHERE tenant_id=$1 AND app_id=$2",
+          [commerceTenantId, commerceAppId],
+        )).rows[0].count),
+        verified: Number((await client.query<{ count: string }>(
+          `SELECT count(*)::text AS count FROM ledger.commerce_lifecycle_facts
+            WHERE tenant_id=$1 AND app_id=$2 AND event_kind='subscription_state_verified'`,
+          [commerceTenantId, commerceAppId],
+        )).rows[0].count),
+      })),
+    ]);
+    assert.deepEqual(drained, [
+      { pending: 0, results: 1 },
+      { pending: 0, verified: 1 },
+    ]);
+    const afterDrain = await listRuntimeWorkTenants(pool);
+    assert.equal(afterDrain.includes(integrityTenantId), false);
+    assert.equal(afterDrain.includes(commerceTenantId), false);
   });
 
   it("F-A-15 maps provider outages to unavailable without evidence or metric effects", async () => {

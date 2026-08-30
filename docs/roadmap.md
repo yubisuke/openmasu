@@ -57,6 +57,7 @@ Progress:
 | Operators can receive a closed subset of accepted events without raw identifiers or provider-specific wire coupling | Complete with synthetic destination lifecycle, DNS/SSRF, signature, retry, privacy, and disablement tests |
 | Operators can receive delayed deterministic files without adopting a provider-specific export layout | Complete with synthetic SigV4 vectors, object replay, durable cursor, credential boundary, privacy-notice, and lifecycle tests |
 | App metrics advance without an external cron wrapper | Complete with immutable app schedules, UTC lag/watermark policy, bounded catch-up, exact crash replay, and report/dashboard integration tests |
+| Queue-only tenants are discoverable before tenant-scoped processing begins | Complete for integrity verification and commerce provider read-back, with SELECT-only owner discovery policies and drain-to-terminal integration evidence |
 
 Candidate v0.2.0-rc.4 satisfied the release-coherence exit gate at green `main`
 commit `2a2f6b5`. Authenticated backend events and operator event webhooks were
