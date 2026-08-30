@@ -51,6 +51,7 @@ versions were reached. They do not override current sources of truth.
 | Operator event webhooks | Complete: selected accepted events use immutable app destinations, destination-scoped references, an encrypted durable outbox, and exact-body signing | Destination/DNS unit tests plus PostgreSQL lifecycle, retry, identifier-exclusion, disablement, and deletion-ordering tests |
 | Operator bulk event exports | Complete: the webhook event object is reused in deterministic gzip NDJSON objects delivered to immutable S3-compatible app destinations through encrypted durable batches and keyset checkpoints | Official SigV4 vectors plus PostgreSQL registration, retry-byte identity, checkpoint, privacy-deletion, disablement, grant, metrics, and credential-exclusion tests |
 | Scheduled metric execution | Complete: app-scoped immutable definitions advance daily UTC cohort or calendar dates through the durable worker | API validation, non-overlap enforcement, PostgreSQL checkpoint recovery, exact artifact replay, report/dashboard visibility, role grants, and scheduler health tests |
+| Runtime tenant discovery | Complete: integrity verification and commerce provider read-back queues independently expose their tenant to the worker | FORCE-RLS owner-policy coverage plus isolated queue-only tenant discovery and drain-to-terminal integration tests |
 
 ## Change acceptance
 
