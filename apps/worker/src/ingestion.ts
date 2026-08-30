@@ -1193,6 +1193,51 @@ async function resolveDeepLinkAttempts(pool: Pool, attempts: readonly CandidateA
   return resolved;
 }
 
+async function ineligibleHistoricalPurchaseTargetIds(
+  pool: Pool,
+  attempts: readonly CandidateAttempt[],
+): Promise<string[]> {
+  const purchases = attempts.filter((attempt) =>
+    attempt.record.event_name === "purchase"
+    && attempt.record.payload.financial_status === "settled"
+    && typeof attempt.record.payload.installation_id === "string");
+  if (purchases.length === 0) return [];
+  const first = purchases[0];
+  const rows = await withTenant(pool, first.server.tenant_id, (client) => client.query<{
+    record_id: string;
+    installation_id: string | null;
+    transaction_id: string;
+    original_transaction_id: string | null;
+    amount_unscaled: string;
+    amount_scale: number;
+    currency: string;
+    financial_status: string | null;
+    occurred_at_ts: string;
+  }>(
+    `SELECT record_id::text, installation_id, transaction_id, original_transaction_id,
+            amount_unscaled, amount_scale, currency, financial_status, occurred_at_ts::text
+       FROM ledger.purchase_facts
+      WHERE tenant_id=$1 AND app_id=$2 AND record_id::text = ANY($3::text[])`,
+    [first.server.tenant_id, first.server.app_id,
+      [...new Set(purchases.map((attempt) => attempt.record.record_id))]],
+  ));
+  const purchaseByRecord = new Map(purchases.map((attempt) => [attempt.record.record_id, attempt]));
+  const eligible = new Set(rows.rows.filter((row) => {
+    const purchase = purchaseByRecord.get(row.record_id);
+    if (!purchase) return false;
+    const payload = purchase.record.payload;
+    return row.financial_status === "settled"
+      && row.installation_id === payload.installation_id
+      && (row.original_transaction_id ?? row.transaction_id)
+        === (payload.original_transaction_id ?? payload.transaction_id)
+      && row.amount_unscaled === payload.amount_unscaled
+      && row.amount_scale === payload.amount_scale
+      && row.currency === payload.currency
+      && Date.parse(row.occurred_at_ts) === Date.parse(purchase.record.occurred_at);
+  }).map((row) => row.record_id));
+  return [...purchaseByRecord.keys()].filter((recordId) => !eligible.has(recordId)).sort();
+}
+
 const runtimeBulkChunkSize = 1_000;
 
 async function insertJsonRows(
@@ -1556,12 +1601,26 @@ export async function ingestRuntimeBatch(
   // They have already passed contract validation and must not require protected
   // payload access merely to process a new delivery.
   const currentAttempts = sortCandidateAttempts(await resolveDeepLinkAttempts(appPool, validAttempts));
-  const providerAttempts = sortCandidateAttempts([...boundHistory, ...currentAttempts]);
   // Non-SDK importers still supply fully decoded historical attempts. Keep
   // those in the evaluator input until their own ledger-backed projection is
   // introduced; SDK history is explicitly marked and remains provider-only.
   const decodedHistory = boundHistory.filter((attempt) => attempt.history_state === undefined);
-  const input = runtimeInput([...decodedHistory, ...currentAttempts]);
+  const ineligiblePurchaseTargets = await ineligibleHistoricalPurchaseTargetIds(appPool, decodedHistory);
+  const applyPurchaseEligibility = (attempt: CandidateAttempt): CandidateAttempt =>
+    ineligiblePurchaseTargets.length === 0 ? attempt : {
+      ...attempt,
+      server: {
+        ...attempt.server,
+        refund_target_ineligible_record_ids: ineligiblePurchaseTargets,
+      },
+    };
+  const evaluationHistory = boundHistory.map(applyPurchaseEligibility);
+  const evaluationCurrent = currentAttempts.map(applyPurchaseEligibility);
+  const providerAttempts = sortCandidateAttempts([...evaluationHistory, ...evaluationCurrent]);
+  const input = runtimeInput([
+    ...evaluationHistory.filter((attempt) => attempt.history_state === undefined),
+    ...evaluationCurrent,
+  ]);
   const output = evaluate(input, () => new IndexedCandidateProvider(providerAttempts));
   const recordIds = new Set(validAttempts.map((attempt) => attempt.record.record_id));
   const deliveryIds = new Set(validAttempts.map((attempt) => attempt.record.delivery_id));
