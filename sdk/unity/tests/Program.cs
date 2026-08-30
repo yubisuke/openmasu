@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading;
+using System.Xml.Linq;
 using OpenMasu.Unity;
 
 internal static class Program
@@ -45,6 +46,7 @@ internal static class Program
         Require(OpenMasuiOSPlatform.ActiveCallbackCount == 0, "iOS function-pointer callback leaked");
         ExerciseRevenuePlatformCompatibility();
         ExerciseAppleConversionPlatformCompatibility();
+        ExerciseAndroidManifestGeneration();
         Require(MaxRevenueSubscriptions.Formats.SequenceEqual(new[] { "Interstitial", "Rewarded", "Banner", "MRec" }), "MAX format subscription table is incomplete");
         OpenMasuMaxUnityAdapter.Subscribe();
         OpenMasuMaxUnityAdapter.Unsubscribe();
@@ -95,6 +97,63 @@ internal static class Program
         Require(!entitlements.Contains("?mode="), "development associated-domain mode reached generated output");
         Console.WriteLine("Unity bridge probe passed: Android/iOS callbacks, purchase/refund and Apple conversion platforms, validation, Apple plist keys, 4 MAX formats.");
         return 0;
+    }
+
+    private static void ExerciseAndroidManifestGeneration()
+    {
+        const string androidNamespace = "http://schemas.android.com/apk/res/android";
+        const string input = "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+            "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"><application>" +
+            "<activity android:name=\"com.unity3d.player.UnityPlayerActivity\" android:exported=\"true\">" +
+            "<intent-filter><action android:name=\"android.intent.action.VIEW\"/>" +
+            "<category android:name=\"android.intent.category.DEFAULT\"/>" +
+            "<category android:name=\"android.intent.category.BROWSABLE\"/>" +
+            "<data android:scheme=\"openmasu-synthetic\"/></intent-filter>" +
+            "</activity></application></manifest>";
+
+        var generated = OpenMasu.Unity.Editor.OpenMasuAndroidManifestSettings.Apply(
+            input,
+            new[] { " B.SYNTHETIC.EXAMPLE. ", "a.synthetic.example", "a.synthetic.example" });
+        generated = OpenMasu.Unity.Editor.OpenMasuAndroidManifestSettings.Apply(
+            generated,
+            new[] { "a.synthetic.example", "b.synthetic.example" });
+
+        var document = XDocument.Parse(generated);
+        XNamespace android = androidNamespace;
+        var application = document.Root.Element("application");
+        var activity = application.Elements("activity").Single();
+        var openMasuFilters = activity.Elements("intent-filter")
+            .Where(value => (string)value.Attribute(android + "label") ==
+                OpenMasu.Unity.Editor.OpenMasuAndroidManifestSettings.LinkFilterLabel)
+            .ToArray();
+        Require(openMasuFilters.Length == 2, "Android manifest did not contain one OpenMasu filter per host");
+        Require(openMasuFilters.Select(value => (string)value.Elements("data")
+                .Single(data => data.Attribute(android + "host") != null).Attribute(android + "host"))
+            .SequenceEqual(new[] { "a.synthetic.example", "b.synthetic.example" }),
+            "Android manifest link hosts were not normalized and sorted");
+        Require(openMasuFilters.All(value => value.Elements("data")
+                .Where(data => data.Attribute(android + "scheme") != null)
+                .Select(data => (string)data.Attribute(android + "scheme"))
+                .SequenceEqual(new[] { "http", "https" })),
+            "Android App Links schemes changed");
+        Require(activity.Elements("intent-filter").Any(value => value.Elements("data")
+                .Any(data => (string)data.Attribute(android + "scheme") == "openmasu-synthetic")),
+            "operator-owned custom-scheme filter was removed");
+        Require((string)application.Elements("meta-data").Single(value =>
+                (string)value.Attribute(android + "name") ==
+                OpenMasu.Unity.Editor.OpenMasuAndroidManifestSettings.LinkHostsMetadataName)
+            .Attribute(android + "value") == "a.synthetic.example,b.synthetic.example",
+            "Android manifest host metadata did not match generated filters");
+
+        RequireArgumentFailureCode(
+            () => OpenMasu.Unity.Editor.OpenMasuAndroidManifestSettings.Apply(
+                input, new[] { "links.synthetic.invalid" }),
+            "synthetic_link_host_forbidden",
+            "checked-in synthetic Android link host reached a generated manifest");
+        RequireArgumentFailureCode(
+            () => OpenMasu.Unity.Editor.OpenMasuAndroidManifestSettings.Apply(input, Array.Empty<string>()),
+            "link_hosts_required",
+            "empty Android link-host settings generated an App Links filter");
     }
 
     private static void ExerciseRevenuePlatformCompatibility()
@@ -237,6 +296,13 @@ internal static class Program
     {
         try { action(); }
         catch (ArgumentException error) when (error.Message.Contains("endpoint_must_be_https_origin")) { return; }
+        throw new InvalidOperationException(message);
+    }
+
+    private static void RequireArgumentFailureCode(Action action, string code, string message)
+    {
+        try { action(); }
+        catch (ArgumentException error) when (error.Message.Contains(code)) { return; }
         throw new InvalidOperationException(message);
     }
 

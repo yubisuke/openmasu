@@ -49,6 +49,19 @@ Foreground delivery uses a short in-process path; WorkManager provides the
 durable network-connected backstop. Backup exclusion and secure-delete settings
 reduce transfer and local recovery risk without claiming perfect device erasure.
 
+Unity Android App Links are build-time configuration, not a runtime-only SDK
+option. `ProjectSettings/OpenMasuAndroidSettings.json` generates one verified
+`http`/`https` intent filter per normalized host in the selected Unity activity.
+The generated manifest stores that host set as metadata, and SDK initialization
+requires it to match `OpenMasuOptions.DeepLinkHosts` exactly. An absent settings
+file generates no OpenMasu filter, and the checked-in library manifest contains
+no synthetic default host. Custom schemes remain operator-owned separate
+filters. This follows Android's guidance to declare App Link hosts in the
+manifest and publish matching domain association statements:
+
+- <https://developer.android.com/training/app-links/add-applinks> (accessed 2026-08-30)
+- <https://developer.android.com/training/app-links/configure-assetlinks> (accessed 2026-08-30)
+
 ## Supported adapters
 
 - Google Play Install Referrer;

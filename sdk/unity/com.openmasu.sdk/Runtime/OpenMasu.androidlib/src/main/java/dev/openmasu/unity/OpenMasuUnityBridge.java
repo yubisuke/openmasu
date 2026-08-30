@@ -3,6 +3,8 @@ package dev.openmasu.unity;
 import android.app.Activity;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import dev.openmasu.sdk.OpenMasuConfiguration;
 import dev.openmasu.sdk.MetaReferrerEvidence;
 import dev.openmasu.sdk.MetaReferrerReader;
@@ -14,6 +16,7 @@ import dev.openmasu.sdk.PlayReferrerReader;
 import dev.openmasu.sdk.max.OpenMasuMaxBridge;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.lang.reflect.Constructor;
 import java.net.URLEncoder;
@@ -24,6 +27,7 @@ import android.net.Uri;
 public final class OpenMasuUnityBridge {
   public interface StringCallback { void onResult(String value); }
   public interface BooleanCallback { void onResult(boolean value); }
+  static final String LINK_HOSTS_METADATA_NAME = "dev.openmasu.sdk.LINK_HOSTS";
   private static volatile OpenMasuSdk sdk;
   private static volatile StringCallback deepLinkCallback;
 
@@ -37,9 +41,11 @@ public final class OpenMasuUnityBridge {
   public static void initialize(Activity activity, String endpoint, String keyId, String secret, String wrapperVersion,
       String deepLinkHosts, String deepLinkSchemes, boolean enablePlayReferrer, String metaAppId) {
     Context context = activity.getApplicationContext();
+    Set<String> configuredLinkHosts = csvHostSet(deepLinkHosts);
+    requireLinkHostsMatch(configuredLinkHosts, manifestLinkHosts(context));
     OpenMasuConfiguration configuration = new OpenMasuConfiguration(
         endpoint, keyId, secret, "0.2.0-rc.4", wrapperVersion, 10_000,
-        csvSet(deepLinkHosts), csvSet(deepLinkSchemes), 604_800);
+        configuredLinkHosts, csvSet(deepLinkSchemes), 604_800);
     sdk = OpenMasuSdkFactory.create(
         context,
         configuration,
@@ -116,6 +122,32 @@ public final class OpenMasuUnityBridge {
     Set<String> result = new HashSet<>();
     for (String item : value.split(",")) if (!item.trim().isEmpty()) result.add(item.trim());
     return result;
+  }
+
+  static Set<String> csvHostSet(String value) {
+    if (value == null || value.trim().isEmpty()) return Collections.emptySet();
+    Set<String> result = new HashSet<>();
+    for (String item : value.split(",")) {
+      String normalized = item.trim().toLowerCase(Locale.ROOT);
+      while (normalized.endsWith(".")) normalized = normalized.substring(0, normalized.length() - 1);
+      if (!normalized.isEmpty()) result.add(normalized);
+    }
+    return result;
+  }
+
+  static void requireLinkHostsMatch(Set<String> configured, Set<String> manifest) {
+    if (!configured.equals(manifest)) throw new IllegalStateException("deep_link_hosts_manifest_mismatch");
+  }
+
+  static Set<String> manifestLinkHosts(Context context) {
+    try {
+      ApplicationInfo info = context.getPackageManager().getApplicationInfo(
+          context.getPackageName(), PackageManager.GET_META_DATA);
+      String value = info.metaData == null ? null : info.metaData.getString(LINK_HOSTS_METADATA_NAME);
+      return csvHostSet(value);
+    } catch (PackageManager.NameNotFoundException exception) {
+      throw new IllegalStateException("deep_link_manifest_unavailable", exception);
+    }
   }
 
   public static boolean trackMaxRevenue(double revenue, String precision, String networkName,

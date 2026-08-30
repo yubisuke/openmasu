@@ -57,4 +57,16 @@ for (const path of ["package.json", "packages/contracts/package.json", "packages
   assert.equal(json<{ version: string }>(path).version, "0.4.0", `${path} changed the Contract v0.4 package identity`);
 }
 
+const unityAndroidManifest = read(
+  "sdk/unity/com.openmasu.sdk/Runtime/OpenMasu.androidlib/src/main/AndroidManifest.xml",
+);
+assert.ok(!unityAndroidManifest.includes("OPENMASU_LINK_HOST"), "Unity Android manifest still carries a link-host placeholder");
+assert.ok(!unityAndroidManifest.includes("links.synthetic.invalid"), "Unity Android manifest still carries a synthetic route");
+assert.ok(
+  read("sdk/unity/com.openmasu.sdk/Editor/OpenMasuAndroidPostprocessor.cs").includes(
+    "IPostGenerateGradleAndroidProject",
+  ),
+  "Unity Android manifest generation hook is missing",
+);
+
 console.log(`Verified OpenMasu source/SDK release ${releaseVersion} with Contract v0.4 identity unchanged.`);

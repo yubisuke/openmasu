@@ -55,11 +55,27 @@ while running. The typed callback contains the validated destination, source,
 status, slug, and declared parameters; the host game remains responsible for
 validating the destination again and changing scenes or UI.
 
-For Android, replace `OPENMASU_LINK_HOST` in the generated manifest with the
-deployment's registered HTTPS link host. The App Link filter contains only
-`http` and `https`; any operator-defined custom scheme must use a separate
-intent filter. Teams with a custom Unity activity must forward its incoming URL
-to `OpenMasuClient.HandleDeepLink`. For iOS, put `linkHosts` in
+For Android, add `ProjectSettings/OpenMasuAndroidSettings.json` to the host
+project and use only hosts registered for the application. The postprocessor
+writes one verified App Link filter per
+host into the generated Unity activity and records the same normalized host set
+as non-identifying manifest metadata:
+
+```json
+{
+  "linkHosts": ["links-a.synthetic.example", "links-b.synthetic.example"],
+  "activityName": "com.unity3d.player.UnityPlayerActivity"
+}
+```
+
+Pass the same list to `OpenMasuOptions.DeepLinkHosts`. Android initialization
+fails closed with `deep_link_hosts_manifest_mismatch` when the runtime list and
+generated manifest differ. If the settings file is absent, the package adds no
+OpenMasu App Link filter; it never ships a synthetic default route. The App
+Link filters contain only `http` and `https`; any operator-defined custom scheme
+must use a separate intent filter. Teams with a custom Unity activity must name
+that activity in the settings file and forward its incoming URL to
+`OpenMasuClient.HandleDeepLink`. For iOS, put `linkHosts` in
 `ProjectSettings/OpenMasuIOSSettings.json`; the postprocessor writes both
 `OpenMasuLinkHosts` and `com.apple.developer.associated-domains` without a
 development-mode query.

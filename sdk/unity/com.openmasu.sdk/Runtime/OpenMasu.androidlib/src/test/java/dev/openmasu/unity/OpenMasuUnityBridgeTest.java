@@ -9,6 +9,7 @@ import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 @RunWith(RobolectricTestRunner.class)
 public final class OpenMasuUnityBridgeTest {
@@ -41,5 +42,23 @@ public final class OpenMasuUnityBridgeTest {
     MetaReferrerReader meta = OpenMasuUnityBridge.createMetaReferrerReader(
         context.getContentResolver(), "invalid/app/id");
     assertEquals("provider_unavailable", meta.read().getStatus());
+  }
+
+  @Test public void linkHostsAreNormalizedBeforeManifestComparison() {
+    assertEquals(
+        OpenMasuUnityBridge.csvHostSet("a.synthetic.example,b.synthetic.example"),
+        OpenMasuUnityBridge.csvHostSet(" B.SYNTHETIC.EXAMPLE., a.synthetic.example, a.synthetic.example "));
+  }
+
+  @Test public void runtimeAndManifestLinkHostsMustMatchExactly() {
+    OpenMasuUnityBridge.requireLinkHostsMatch(
+        OpenMasuUnityBridge.csvHostSet("a.synthetic.example,b.synthetic.example"),
+        OpenMasuUnityBridge.csvHostSet("b.synthetic.example,a.synthetic.example"));
+
+    IllegalStateException error = assertThrows(IllegalStateException.class, () ->
+        OpenMasuUnityBridge.requireLinkHostsMatch(
+            OpenMasuUnityBridge.csvHostSet("a.synthetic.example,b.synthetic.example"),
+            OpenMasuUnityBridge.csvHostSet("a.synthetic.example")));
+    assertEquals("deep_link_hosts_manifest_mismatch", error.getMessage());
   }
 }

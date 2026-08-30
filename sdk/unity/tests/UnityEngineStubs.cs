@@ -11,6 +11,11 @@ namespace AOT
 
 namespace UnityEngine
 {
+    public static class JsonUtility
+    {
+        public static T FromJson<T>(string json) => default(T);
+    }
+
     public class AndroidJavaObject : IDisposable
     {
         public void Dispose() { }
@@ -36,6 +41,23 @@ namespace UnityEngine
         public static string absoluteURL = string.Empty;
         public static event Action<string> deepLinkActivated;
         public static void RaiseDeepLink(string value) => deepLinkActivated?.Invoke(value);
+    }
+}
+
+namespace UnityEditor.Android
+{
+    public interface IPostGenerateGradleAndroidProject
+    {
+        int callbackOrder { get; }
+        void OnPostGenerateGradleAndroidProject(string projectPath);
+    }
+}
+
+namespace UnityEditor.Build
+{
+    public sealed class BuildFailedException : Exception
+    {
+        public BuildFailedException(string message) : base(message) { }
     }
 }
 

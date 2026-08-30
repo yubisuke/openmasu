@@ -5,10 +5,11 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <LangVersion>9.0</LangVersion>
-    <DefineConstants>$(DefineConstants);OPENMASU_APPLOVIN_MAX;UNITY_EDITOR</DefineConstants>
+    <DefineConstants>$(DefineConstants);OPENMASU_APPLOVIN_MAX;UNITY_EDITOR;UNITY_ANDROID</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\com.openmasu.sdk\Runtime\*.cs" Link="Runtime\%(Filename)%(Extension)" />
+    <Compile Include="..\com.openmasu.sdk\Editor\OpenMasuAndroidPostprocessor.cs" Link="Editor\OpenMasuAndroidPostprocessor.cs" />
     <Compile Include="..\com.openmasu.sdk\Editor\OpenMasuIOSPostprocessor.cs" Link="Editor\OpenMasuIOSPostprocessor.cs" />
   </ItemGroup>
 </Project>
