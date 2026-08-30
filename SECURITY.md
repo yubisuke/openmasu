@@ -22,6 +22,14 @@ gap, not authorization for public disclosure of sensitive material.
 
 Reports may cover contract defects that could cause cross-tenant access, identifier leakage, deletion failure, replay acceptance, signature bypass, or exposure of private fraud controls. Deployment-specific credentials, personal data, and operational evidence must never be attached to a public report.
 
+## CI credential boundary
+
+Every GitHub Actions workflow grants its `GITHUB_TOKEN` only `contents: read` at
+workflow scope. All unlisted token permissions are therefore disabled. Job-level
+permission overrides are prohibited, and `npm run validate` enforces this policy
+for every checked-in workflow. CI uses only repository-controlled synthetic
+credentials and must not receive production or provider credentials.
+
 ## Disclosure
 
 Coordinate disclosure with the maintainer after a fix and validation plan exist. This document does not promise a response-time SLA.
