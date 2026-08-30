@@ -73,8 +73,11 @@ async function seedEligibleConversion(label: string): Promise<SeededConversion> 
         processing_purpose_id,consent_evaluation_policy_version,consent_decision_reason_code,artifact
       ) VALUES ($1,$2,$3,'synthetic-gdm','1',$4,$5,$6,'0.4','${"a".repeat(64)}',$7,
         'server',$7,$8,'measurement','synthetic-consent-v1','consent_not_required',$9::jsonb)`,
-      [recordId, tenantId, appId, `event:${recordId}`, `delivery:${recordId}`, eventName, at,
-        `encrypted:synthetic-${recordId}`, JSON.stringify({ synthetic: true })]);
+        [recordId, tenantId, appId, `event:${recordId}`, `delivery:${recordId}`, eventName, at,
+          `encrypted:synthetic-${recordId}`, JSON.stringify({ synthetic: true })]);
+      await client.query(`INSERT INTO ledger.raw_payload_states (
+        tenant_id,app_id,record_id,lifecycle_status,changed_at
+      ) VALUES ($1,$2,$3,'available',$4)`, [tenantId, appId, recordId, at]);
     }
     for (const [logicalId, recordId, eventName] of [[clickLogical, clickRecord, "click"],
       [installLogical, installRecord, "install"], [purchaseLogical, purchaseRecord, "purchase"]]) {
