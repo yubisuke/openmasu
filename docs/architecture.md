@@ -264,8 +264,28 @@ only.
 
 ## Known architectural limits
 
-- The default worker runs job types serially; slow tenant or provider work can
-  delay later jobs until bounded concurrency is introduced.
+- The worker uses a FIFO tenant coordinator with four concurrent tenant cycles
+  by default. `OPENMASU_WORKER_CONCURRENCY` accepts 1 through 16; `1` restores
+  the former globally serial behavior. An active or queued tenant is not
+  submitted twice, while each tenant keeps the existing privacy, ingestion,
+  provider, metric, and fraud job order within one worker process. A slow tenant
+  therefore occupies one bounded slot instead of blocking every other tenant.
+- Work inside one tenant remains serial. A single-tenant deployment, an
+  unbounded SDK or MAX inbox batch, or enough slow tenants to fill every slot
+  can still delay later work and requires deployment-specific capacity
+  monitoring.
+- Scheduler leases are tenant/job scoped. Multiple worker replicas may
+  interleave different jobs for the same tenant, so the reference deployment
+  uses one worker replica. Tenant-wide distributed ordering is not claimed.
+- Graceful shutdown stops new submissions and gives discovered and active work
+  a bounded drain window. The default is 30000 milliseconds and
+  `OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS` accepts 1000 through 300000; expiry is a
+  failed forced exit rather than an indefinite process hang. It does not abort
+  the active operation cooperatively, and its durable scheduler lease remains
+  unavailable until the configured lease expiry.
+- The global MAX inbox and dashboard-session sweep are part of the configured
+  MAX tenant cycle. They can overlap independent tenant cycles and are not
+  global before/after barriers.
 - An operator-webhook attempt holds its per-record privacy lock and delivery
   row lock through the bounded network request. This gives deletion a precise
   before-or-after boundary but means a slow receiver can temporarily increase
@@ -275,10 +295,11 @@ only.
   verification makes an identical retry safe, but object-store latency can
   delay that destination. Deletion rows communicate a downstream obligation;
   they cannot recall objects already copied or processed by the operator.
-- Scheduler advisory leases use a dedicated one-connection pool. Job work uses
-  a separate bounded pool, and lease completion or failure is committed on the
-  held scheduler connection. A lease therefore cannot consume the connection
-  budget needed by nested tenant transactions.
+- Scheduler advisory leases use a dedicated pool sized to the tenant
+  concurrency limit. Job work uses a separate pool with twice that connection
+  budget because privacy purge can hold one record-lock connection while using
+  one tenant transaction. Lease completion or failure is committed on the held
+  scheduler connection, so leases cannot consume the job connection budget.
 - PostgreSQL is the only supported primary store. Additional analytical stores
   require measured evidence and a separate design.
 - Live provider credentials, alert routing, TLS termination, and production

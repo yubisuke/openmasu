@@ -205,12 +205,22 @@ validation, and immutable reviewed goldens.
   deliberately does not link identifier resets.
 - Bounded source/client classes can create aggregate facts about co-located
   traffic and may create false positives.
-- A slow provider or tenant job can delay later work in the current serial
-  worker loop.
-- Scheduler leases and job transactions have separate bounded connection
-  pools. Completion and failure reuse the held lease connection, preventing a
-  lease from starving nested tenant work. Slow database operations can still
-  delay the serial worker loop and remain an operational capacity risk.
+- Tenant cycles use a bounded FIFO coordinator, deduplicate active and queued
+  tenants, and retain serial job order within each tenant in one worker process.
+  A slow provider no longer blocks every independent tenant while a coordinator
+  slot is free.
+- Scheduler leases and job transactions have separate pools sized from the
+  same concurrency setting. Completion and failure reuse the held lease
+  connection, while the job pool reserves two connections per slot for nested
+  privacy work.
+- A slow tenant still consumes one slot. A single-tenant workload, unbounded
+  SDK or MAX inbox batch, or enough slow tenants to fill all slots can delay
+  later work and remains an operational capacity risk.
+- Tenant/job leases do not provide tenant-wide ordering across multiple worker
+  replicas. The reference deployment uses one replica; independently scaling
+  workers requires an explicit interleaving review. Shutdown drain is bounded,
+  and deadline expiry deliberately fails the process so the supervisor can
+  report and replace it.
 - Synthetic platform vectors do not prove production keys, projects, delivery,
   or provider behavior.
 - Synthetic server-event vectors do not prove backend integration, sustained
@@ -223,7 +233,7 @@ validation, and immutable reviewed goldens.
   already transmitted before deletion recognition cannot be recalled.
 - A slow operator-webhook receiver holds the bounded per-record dispatch lock
   until that attempt finishes. The timeout limits the interval but does not
-  eliminate database contention or serial worker delay.
+  eliminate database contention or delay within that tenant.
 - Synthetic object-store vectors do not prove live S3/R2 IAM policy, DNS/TLS,
   retention, replication, throughput, cost, alerting, or downstream deletion.
   A storage operator can retain or copy an object after receipt, and a deletion

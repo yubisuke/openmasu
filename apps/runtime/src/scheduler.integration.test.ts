@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Pool } from "pg";
 import { createAppPool, withTenant } from "./index.js";
-import { PostgresSchedulerStore } from "./scheduler.js";
+import { PostgresSchedulerStore, runScheduledJob } from "./scheduler.js";
 
 describe("durable worker scheduler PostgreSQL lease", () => {
   it("admits one worker, persists restart timing, and retries a sanitized failure", async () => {
@@ -91,6 +91,43 @@ describe("durable worker scheduler PostgreSQL lease", () => {
       outstanding = null;
     } finally {
       if (outstanding) await store.fail(outstanding, new Date("2026-08-26T01:00:03.000Z"));
+      await pool.end();
+    }
+  });
+
+  it("holds and finalizes independent tenant leases concurrently within the pool budget", { timeout: 5_000 }, async () => {
+    const connectionString = process.env.OPENMASU_APP_DATABASE_URL;
+    assert.ok(connectionString, "OPENMASU_APP_DATABASE_URL is required");
+    const pool = new Pool({ connectionString, max: 2, connectionTimeoutMillis: 1_000 });
+    const store = new PostgresSchedulerStore(pool);
+    const policy = { intervalMs: 1_000, retryMs: 1_000, leaseMs: 60_000 };
+    const suffix = Date.now();
+    let started = 0;
+    let resolveBothStarted!: () => void;
+    const bothStarted = new Promise<void>((resolve) => { resolveBothStarted = resolve; });
+    let releaseTasks!: () => void;
+    const taskRelease = new Promise<void>((resolve) => { releaseTasks = resolve; });
+    const run = (tenantId: string) => runScheduledJob({
+      store,
+      tenantId,
+      job: "sdk_inbox",
+      policy,
+      task: async () => {
+        started += 1;
+        if (started === 2) resolveBothStarted();
+        await taskRelease;
+      },
+    });
+    const runs = [
+      run(`tenant-scheduler-parallel-a-${suffix}`),
+      run(`tenant-scheduler-parallel-b-${suffix}`),
+    ];
+    try {
+      await bothStarted;
+      assert.equal(started, 2, "both tenant jobs must own independent scheduler leases");
+    } finally {
+      releaseTasks();
+      assert.deepEqual(await Promise.all(runs), ["succeeded", "succeeded"]);
       await pool.end();
     }
   });
