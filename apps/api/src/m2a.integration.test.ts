@@ -29,6 +29,7 @@ import { parseMetricQuery } from "./report-query.js";
 import { encodeMetricReport, metricReport } from "./reporting.js";
 import { ensureSdkKeys, signSdkRequest } from "./sdk-auth.js";
 import { createTrackingLink } from "./tracking-links.js";
+import { SDK_INSTALLATION_PRIVACY_PATH } from "./routes.js";
 import { verifyCompactJws } from "@openmasu/commerce-lifecycle";
 import { nonFraudBundleHash } from "@openmasu/contracts";
 
@@ -1797,7 +1798,18 @@ describe("M2a signed SDK ingestion", () => {
     const secondId = `installation:other-${run}`;
     const secondResponse = await signed("/v1/installations", { installation_id: secondId });
     assert.equal(secondResponse.status, 201);
-    assert.equal((await signed("/v1/privacy/on-device", { installation_id: secondId }, { secret: installationSecret, installationKeyId })).status, 403);
+    const secondCredential = await secondResponse.json() as {
+      installation_key_id: string;
+      installation_secret: string;
+    };
+    assert.equal((await signed(SDK_INSTALLATION_PRIVACY_PATH, { installation_id: secondId }, {
+      secret: installationSecret,
+      installationKeyId,
+    })).status, 403);
+    assert.equal((await signed("/v1/privacy/on-device", { installation_id: secondId }, {
+      secret: secondCredential.installation_secret,
+      installationKeyId: secondCredential.installation_key_id,
+    })).status, 201, "the legacy on-device alias must remain functional");
     const priorMetricId = `metric:before-delete:${run}`;
     const priorMetric = {
       metric_run_id: priorMetricId, metric_name: "d0_install_to_24h_ad_revenue_usd",
@@ -1861,7 +1873,7 @@ describe("M2a signed SDK ingestion", () => {
     const secretRef = await withTenant(pool, tenantId, async (client) => (await client.query<{ secret_ref: string }>(
       `SELECT secret_ref FROM control.installation_credentials WHERE installation_key_id=$1`, [installationKeyId],
     )).rows[0].secret_ref);
-    const response = await signed("/v1/privacy/on-device", { installation_id: installationId }, { secret: installationSecret, installationKeyId });
+    const response = await signed(SDK_INSTALLATION_PRIVACY_PATH, { installation_id: installationId }, { secret: installationSecret, installationKeyId });
     const responseText = await response.text();
     assert.equal(response.status, 201, responseText);
     const artifact = JSON.parse(responseText) as Record<string, unknown>;

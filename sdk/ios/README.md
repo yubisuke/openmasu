@@ -143,7 +143,9 @@ purges consent-required queued events, and re-applies the purge before admission
 or delivery after restart or installation reset. Only an explicit `granted` or
 `not_required` update removes that barrier; `unknown` does not.
 Installation reset sends the credential-bound deletion request before creating
-a new identifier and does not fetch AdServices again.
+a new identifier and does not fetch AdServices again. The SDK uses the canonical
+`POST /v1/privacy/installation` route; the server also retains the older
+`POST /v1/privacy/on-device` route as an authenticated compatibility alias.
 
 The bundled privacy manifest declares tracking disabled and documents the SDK's
 linked device identifier, product interaction, purchase history, and advertising

@@ -27,6 +27,11 @@ MAX integration must subscribe separately to Interstitial, Rewarded, Banner, and
 
 Import the `Android measurement sample` from Package Manager to obtain a small `MonoBehaviour` that initialises the bridge and exposes a synthetic custom-event button. Supply deployment credentials outside source control; the sample intentionally contains no endpoint, key, secret, campaign, or device identifier.
 
+`OpenMasuClient.ResetInstallationId` delegates to the native deletion-first
+reset flow. Android and iOS use `POST /v1/privacy/installation`; the server
+retains `POST /v1/privacy/on-device` only as an authenticated compatibility
+alias.
+
 ## Settled commerce events
 
 Use `OpenMasuClient.TrackPurchase(transactionId, amountUnscaled, amountScale,

@@ -78,6 +78,8 @@ export type RouteDefinition = {
   readonly capability?: RouteCapability;
 };
 
+export const SDK_INSTALLATION_PRIVACY_PATH = "/v1/privacy/installation";
+
 export const routes: readonly RouteDefinition[] = [
   { handler: "health", method: "GET", pattern: /^\/health$/, auth: "public", mutates: false },
   { handler: "operational_metrics", method: "GET", pattern: /^\/metrics$/, auth: "admin_bearer", mutates: false, capability: "read" },
@@ -89,6 +91,7 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "sdk_enrollment", method: "POST", pattern: /^\/v1\/installations$/, auth: "sdk_hmac", mutates: true },
   { handler: "sdk_batch", method: "POST", pattern: /^\/v1\/events\/batch$/, auth: "sdk_hmac", mutates: true },
   { handler: "server_batch", method: "POST", pattern: /^\/v1\/events\/server$/, auth: "server_hmac", mutates: true },
+  { handler: "device_privacy", method: "POST", pattern: new RegExp(`^${SDK_INSTALLATION_PRIVACY_PATH}$`), auth: "sdk_hmac", mutates: true },
   { handler: "device_privacy", method: "POST", pattern: /^\/v1\/privacy\/on-device$/, auth: "sdk_hmac", mutates: true },
   { handler: "device_dsar", method: "POST", pattern: /^\/v1\/privacy\/access$/, auth: "sdk_hmac", mutates: true },
   { handler: "apple_skan_postback", method: "POST", pattern: /^\/\.well-known\/skadnetwork\/report-attribution\/$/, auth: "public", mutates: true },

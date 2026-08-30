@@ -42,7 +42,9 @@ processing sequence already owned by another event, raises
 cases from `sdk/queue-semantics-vectors.json`. Collection disablement blocks new
 measurement. Withdrawal purges consent-required queued records. Installation
 reset sends the credential-bound deletion request before generating an
-unrelated replacement identity.
+unrelated replacement identity. The SDK uses the canonical
+`POST /v1/privacy/installation` route; the server also retains the older
+`POST /v1/privacy/on-device` route as an authenticated compatibility alias.
 
 SDK storage is excluded from backup and transfer where Android supports both
 the modern data-extraction rules and legacy backup attributes. SQLite
