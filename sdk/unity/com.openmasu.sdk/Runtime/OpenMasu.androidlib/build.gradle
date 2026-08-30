@@ -7,7 +7,6 @@ android {
     compileSdk 36
     defaultConfig {
         minSdk 24
-        manifestPlaceholders = [OPENMASU_LINK_HOST: 'links.synthetic.invalid']
     }
     testOptions { unitTests.includeAndroidResources = true }
 }
