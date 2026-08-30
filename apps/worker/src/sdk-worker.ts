@@ -30,6 +30,16 @@ type InboxRow = {
   inbox_seq: string;
 };
 
+type HistoryInboxRow = InboxRow & {
+  required_withdrawal_backfill: boolean;
+};
+
+type HistorySelection = {
+  rows: InboxRow[];
+  requiredWithdrawalBackfillBatchIds: Set<string>;
+  installationKeyIdsToMark: Array<{ tenantId: string; appId: string; installationKeyId: string }>;
+};
+
 type AuxiliaryQueueFunctions = {
   readonly adServices: typeof queueAdServicesLookup;
   readonly integrity: typeof queueIntegrityVerification;
@@ -290,6 +300,221 @@ async function recordsFor(
   return { records, adServicesLookups, integrityVerifications, googlePlayProductVerifications };
 }
 
+type HistorySelectors = {
+  recordIds: string[];
+  logicalScopes: Array<{ producer: string; event_id: string }>;
+  clickIds: string[];
+  remoteClickRefs: string[];
+  installationIds: string[];
+  transactionIds: string[];
+};
+
+function historySelectors(records: readonly Any[]): HistorySelectors {
+  const recordIds = new Set<string>();
+  const logicalScopes = new Map<string, { producer: string; event_id: string }>();
+  const clickIds = new Set<string>();
+  const remoteClickRefs = new Set<string>();
+  const installationIds = new Set<string>();
+  const transactionIds = new Set<string>();
+  const add = (set: Set<string>, value: unknown): void => {
+    if (typeof value === "string" && value.length > 0) set.add(value);
+  };
+  for (const record of records) {
+    add(recordIds, record.record_id);
+    if (typeof record.producer === "string" && typeof record.event_id === "string") {
+      logicalScopes.set(`${record.producer}\u0000${record.event_id}`, {
+        producer: record.producer,
+        event_id: record.event_id,
+      });
+    }
+    const payload = record.payload ?? {};
+    add(recordIds, payload.correction_target_record_id);
+    add(clickIds, payload.click_id);
+    add(remoteClickRefs, payload.remote_click_ref);
+    add(remoteClickRefs, payload.import_context?.provider_click_ref);
+    add(installationIds, payload.installation_id);
+    add(installationIds, payload.prior_installation_id);
+    add(transactionIds, payload.transaction_id);
+    add(transactionIds, payload.original_transaction_id);
+  }
+  return {
+    recordIds: [...recordIds].sort(),
+    logicalScopes: [...logicalScopes.values()].sort((left, right) =>
+      left.producer.localeCompare(right.producer) || left.event_id.localeCompare(right.event_id)),
+    clickIds: [...clickIds].sort(),
+    remoteClickRefs: [...remoteClickRefs].sort(),
+    installationIds: [...installationIds].sort(),
+    transactionIds: [...transactionIds].sort(),
+  };
+}
+
+async function relevantHistoryRows(
+  pool: Pool,
+  tenantId: string,
+  work: readonly DecodedInboxEntry[],
+): Promise<HistorySelection> {
+  const byApp = new Map<string, { records: Any[]; installationKeyIds: Set<string> }>();
+  for (const entry of work) {
+    const selection = byApp.get(entry.row.app_id) ?? { records: [], installationKeyIds: new Set<string>() };
+    selection.records.push(...entry.records);
+    if (entry.row.installation_key_id) selection.installationKeyIds.add(entry.row.installation_key_id);
+    byApp.set(entry.row.app_id, selection);
+  }
+  const selected = new Map<string, HistoryInboxRow>();
+  const installationKeyIdsToMark: HistorySelection["installationKeyIdsToMark"] = [];
+  for (const [appId, selection] of [...byApp.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+    const selectors = historySelectors(selection.records);
+    const installationKeyIds = [...selection.installationKeyIds].sort();
+    installationKeyIdsToMark.push(...installationKeyIds.map((installationKeyId) => ({
+      tenantId, appId, installationKeyId,
+    })));
+    const rows = await withTenant(pool, tenantId, (client) => client.query<HistoryInboxRow>(
+      `WITH logical_scopes AS (
+         SELECT producer, event_id
+           FROM jsonb_to_recordset($4::jsonb) AS scope(producer text, event_id text)
+       ), candidate_records AS (
+         SELECT raw.record_id
+           FROM ledger.raw_records AS raw
+          WHERE raw.tenant_id=$1 AND raw.app_id=$2
+            AND raw.record_id=ANY($3::text[])
+         UNION
+         SELECT logical.record_id
+           FROM ledger.logical_events AS logical
+           JOIN logical_scopes AS scope
+             ON scope.producer=logical.producer AND scope.event_id=logical.event_id
+          WHERE logical.tenant_id=$1 AND logical.app_id=$2
+         UNION
+         SELECT logical.record_id
+           FROM ledger.click_facts AS click
+           JOIN ledger.logical_events AS logical USING (logical_event_id, tenant_id, app_id)
+          WHERE click.tenant_id=$1 AND click.app_id=$2
+            AND (click.click_id=ANY($5::text[]) OR click.remote_click_ref=ANY($6::text[]))
+         UNION
+         SELECT logical.record_id
+           FROM ledger.install_facts AS install
+           JOIN ledger.logical_events AS logical USING (logical_event_id, tenant_id, app_id)
+          WHERE install.tenant_id=$1 AND install.app_id=$2
+            AND (install.installation_id=ANY($7::text[])
+              OR install.prior_installation_id=ANY($7::text[])
+              OR install.click_id=ANY($5::text[]))
+         UNION
+         SELECT purchase.record_id
+           FROM ledger.purchase_facts AS purchase
+          WHERE purchase.tenant_id=$1 AND purchase.app_id=$2
+            AND (purchase.installation_id=ANY($7::text[])
+              OR purchase.transaction_id=ANY($8::text[])
+              OR purchase.original_transaction_id=ANY($8::text[]))
+         UNION
+         SELECT logical.record_id
+           FROM ledger.refund_facts AS refund
+           JOIN ledger.logical_events AS logical USING (logical_event_id, tenant_id, app_id)
+          WHERE refund.tenant_id=$1 AND refund.app_id=$2
+            AND (refund.installation_id=ANY($7::text[])
+              OR refund.transaction_id=ANY($8::text[])
+              OR refund.original_transaction_id=ANY($8::text[])
+              OR refund.correction_target_record_id=ANY($3::text[]))
+       ), candidate_batches AS (
+         SELECT member.ingest_batch_id, false AS required_withdrawal_backfill
+           FROM candidate_records AS candidate
+           JOIN ledger.ingest_batch_records AS member
+             ON member.tenant_id=$1 AND member.app_id=$2 AND member.record_id=candidate.record_id
+         UNION ALL
+         SELECT member.ingest_batch_id, true AS required_withdrawal_backfill
+           FROM ledger.logical_events AS logical
+           JOIN ledger.ingest_batch_records AS member
+             ON member.tenant_id=logical.tenant_id AND member.app_id=logical.app_id
+            AND member.record_id=logical.record_id
+           JOIN ledger.ingest_batches_current AS source_batch
+             ON source_batch.ingest_batch_id=member.ingest_batch_id
+            AND source_batch.tenant_id=member.tenant_id AND source_batch.app_id=member.app_id
+          WHERE logical.tenant_id=$1 AND logical.app_id=$2
+            AND logical.event_name='consent_changed'
+            AND source_batch.status='processed'
+            AND source_batch.installation_key_id=ANY($10::text[])
+            AND NOT EXISTS (
+              SELECT 1
+                FROM control.installation_withdrawal_backfill_states AS backfill
+               WHERE backfill.tenant_id=$1 AND backfill.app_id=$2
+                 AND backfill.installation_key_id=source_batch.installation_key_id
+            )
+       ), selected_batches AS (
+         SELECT ingest_batch_id, bool_or(required_withdrawal_backfill) AS required_withdrawal_backfill
+           FROM candidate_batches
+          GROUP BY ingest_batch_id
+       )
+       SELECT DISTINCT batch.ingest_batch_id::text, batch.tenant_id, batch.app_id,
+              batch.producer, batch.received_at, batch.body_ref, batch.body_digest,
+              batch.status, batch.reason_code, batch.installation_key_id,
+              batch.inbox_seq::text, selected.required_withdrawal_backfill
+         FROM selected_batches AS selected
+         JOIN ledger.ingest_batches_current AS batch
+           ON batch.ingest_batch_id=selected.ingest_batch_id
+          AND batch.tenant_id=$1 AND batch.app_id=$2
+        WHERE batch.status='processed'
+          AND batch.reason_code IS DISTINCT FROM $9::text
+        ORDER BY batch.received_at, batch.inbox_seq`,
+      [tenantId, appId, selectors.recordIds, JSON.stringify(selectors.logicalScopes),
+        selectors.clickIds, selectors.remoteClickRefs, selectors.installationIds,
+        selectors.transactionIds, SDK_POST_PROCESSING_PENDING_REASON, installationKeyIds],
+    ));
+    for (const row of rows.rows) {
+      const prior = selected.get(row.ingest_batch_id);
+      selected.set(row.ingest_batch_id, {
+        ...row,
+        required_withdrawal_backfill: row.required_withdrawal_backfill
+          || prior?.required_withdrawal_backfill === true,
+      });
+    }
+  }
+  const values = [...selected.values()].sort((left, right) => {
+    const received = left.received_at.localeCompare(right.received_at);
+    if (received !== 0) return received;
+    const leftSequence = BigInt(left.inbox_seq);
+    const rightSequence = BigInt(right.inbox_seq);
+    return leftSequence < rightSequence ? -1 : leftSequence > rightSequence ? 1 : 0;
+  });
+  return {
+    rows: values,
+    requiredWithdrawalBackfillBatchIds: new Set(values
+      .filter((row) => row.required_withdrawal_backfill)
+      .map((row) => row.ingest_batch_id)),
+    installationKeyIdsToMark,
+  };
+}
+
+async function decodeRows(
+  rows: readonly InboxRow[],
+  payloadStore: PayloadStore,
+  metaKeys: readonly MetaKey[],
+  onInvalidPending: (row: InboxRow, error: unknown) => Promise<void>,
+): Promise<DecodedInboxEntry[]> {
+  const decoded: DecodedInboxEntry[] = [];
+  for (const row of rows) {
+    try {
+      decoded.push({ row, ...await recordsFor(row, payloadStore, metaKeys) });
+    } catch (error) {
+      await onInvalidPending(row, error);
+    }
+  }
+  return decoded;
+}
+
+async function markWithdrawalHistoryBackfilled(
+  pool: Pool,
+  values: HistorySelection["installationKeyIdsToMark"],
+): Promise<void> {
+  const completedAt = new Date().toISOString();
+  for (const value of values) {
+    await withTenant(pool, value.tenantId, (client) => client.query(
+      `INSERT INTO control.installation_withdrawal_backfill_states (
+         installation_key_id, tenant_id, app_id, completed_at
+       ) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (installation_key_id) DO NOTHING`,
+      [value.installationKeyId, value.tenantId, value.appId, completedAt],
+    ).then(() => undefined));
+  }
+}
+
 function decodedWithdrawalsFor(
   rows: readonly DecodedInboxEntry[],
   result: Map<string, Withdrawal[]> = new Map(),
@@ -427,30 +652,51 @@ export async function processSdkInbox(
   tenantId: string,
   options: ProcessSdkInboxOptions = {},
 ): Promise<number> {
-  const rows = await withTenant(pool, tenantId, (client) => client.query<InboxRow>(
+  const work = await withTenant(pool, tenantId, (client) => client.query<InboxRow>(
     `SELECT ingest_batch_id::text, tenant_id, app_id, producer, received_at,
             body_ref, body_digest, status, reason_code, installation_key_id, inbox_seq::text
      FROM ledger.ingest_batches_current
-     WHERE tenant_id=$1 AND status IN ('pending','processed')
+     WHERE tenant_id=$1
+       AND (status='pending' OR (status='processed' AND reason_code=$2))
      ORDER BY received_at, inbox_seq`,
-    [tenantId],
+    [tenantId, SDK_POST_PROCESSING_PENDING_REASON],
   ));
+  const workDecoded = await decodeRows(
+    work.rows,
+    payloadStore,
+    options.metaKeys ?? [],
+    async (row, error) => {
+      if (row.status !== "pending") throw error;
+      await appendState(
+        pool,
+        row,
+        "failed",
+        error instanceof Error ? error.message : "batch_invalid",
+      );
+    },
+  );
+  if (workDecoded.length === 0) return 0;
+  const history = await relevantHistoryRows(pool, tenantId, workDecoded);
+  const historyDecoded = await decodeRows(
+    history.rows,
+    payloadStore,
+    options.metaKeys ?? [],
+    async (row) => {
+      if (history.requiredWithdrawalBackfillBatchIds.has(row.ingest_batch_id)) {
+        throw new Error(`required withdrawal history unavailable for batch ${row.ingest_batch_id}`);
+      }
+    },
+  );
+  const decoded = [...historyDecoded, ...workDecoded];
   const historical: CandidateAttempt[] = [];
   const pending: CandidateAttempt[] = [];
   const workRows: InboxRow[] = [];
   const newlyPendingRows: InboxRow[] = [];
-  const decoded: DecodedInboxEntry[] = [];
-  for (const row of rows.rows) {
-    try {
-      decoded.push({ row, ...await recordsFor(row, payloadStore, options.metaKeys ?? []) });
-    } catch (error) {
-      if (row.status === "pending") await appendState(pool, row, "failed", error instanceof Error ? error.message : "batch_invalid");
-    }
-  }
   // Existing installations may predate the durable withdrawal projection. Backfill only
   // consent controls that already have an accepted canonical logical event; invalid or
   // rejected client payloads can never create server withdrawal state.
   await persistRecognizedWithdrawals(pool, decoded);
+  await markWithdrawalHistoryBackfilled(pool, history.installationKeyIdsToMark);
   const withdrawals = decodedWithdrawalsFor(
     decoded,
     await durableWithdrawalsFor(pool, tenantId, decoded),
@@ -480,8 +726,7 @@ export async function processSdkInbox(
     // Persist after the evaluator/ledger transaction. If this insert fails, the inbox row
     // remains retryable; a retry validates the already-written canonical logical event and
     // completes this projection before the batch is marked processed.
-    await persistRecognizedWithdrawals(pool, decoded.filter((entry) =>
-      workRows.some((row) => row.ingest_batch_id === entry.row.ingest_batch_id)));
+    await persistRecognizedWithdrawals(pool, workDecoded);
     const acceptedInstallIds = new Set(output.logical_events
       .filter((logical) => logical.event_name === "install")
       .map((logical) => logical.record_id));
