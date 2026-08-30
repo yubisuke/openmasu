@@ -3969,10 +3969,14 @@ describe("M2a signed SDK ingestion", () => {
         status: "processed",
         reason_code: "privacy_suppressed",
       });
-      assert.equal(beforeEvidence.rawRecords, 0);
-      assert.equal(beforeEvidence.deliveries, 0);
-      assert.equal(beforeEvidence.logicalEvents, 0);
-      assert.equal(beforeEvidence.installFacts, 0);
+      assert.equal(beforeEvidence.rawRecords, 1);
+      assert.equal(beforeEvidence.deliveries, 1);
+      assert.equal(beforeEvidence.logicalEvents, 1);
+      assert.equal(beforeEvidence.installFacts, 1);
+      assert.equal(beforeEvidence.availablePayloadStates, 0,
+        `${scope} deleted evidence must remain unavailable`);
+      assert.equal(beforeEvidence.batchMembers, 1);
+      assert.equal(beforeEvidence.integrityQueue, 0);
       const afterEvidence = await privacyFenceEvidence({
         ...before,
         eventId: afterEventId,
