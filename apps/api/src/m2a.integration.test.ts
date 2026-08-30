@@ -304,10 +304,9 @@ async function privacyFenceEvidence(batch: PrivacyFenceBatch) {
       [batch.tenantId, batch.appId, batch.eventId],
     )).rows[0].count),
     availablePayloadStates: Number((await client.query<{ count: string }>(
-      `SELECT count(*)::text AS count FROM ledger.raw_payload_states AS state
-        JOIN ledger.raw_records AS raw USING (tenant_id,app_id,record_id)
-       WHERE raw.tenant_id=$1 AND raw.app_id=$2 AND raw.event_id=$3
-         AND state.lifecycle_status='available'`,
+      `SELECT count(*)::text AS count FROM ledger.raw_records_current AS raw
+        WHERE raw.tenant_id=$1 AND raw.app_id=$2 AND raw.event_id=$3
+          AND raw.payload_lifecycle_status='available'`,
       [batch.tenantId, batch.appId, batch.eventId],
     )).rows[0].count),
     batchMembers: Number((await client.query<{ count: string }>(
