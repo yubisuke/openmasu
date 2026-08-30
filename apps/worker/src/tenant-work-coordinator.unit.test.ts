@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   DEFAULT_WORKER_CONCURRENCY,
+  DEFAULT_WORKER_INBOX_BATCH_LIMIT,
   DEFAULT_WORKER_SHUTDOWN_TIMEOUT_MS,
   MAX_WORKER_CONCURRENCY,
+  MAX_WORKER_INBOX_BATCH_LIMIT,
   MAX_WORKER_SHUTDOWN_TIMEOUT_MS,
   TenantWorkCoordinator,
   parseWorkerConcurrency,
+  parseWorkerInboxBatchLimit,
   parseWorkerShutdownTimeout,
   waitForWorkerDrain,
   workerPoolSizes,
@@ -36,6 +39,23 @@ describe("bounded tenant work coordinator", () => {
     );
     for (const value of ["999", "300001", "1.5", "NaN", ""]) {
       assert.throws(() => parseWorkerShutdownTimeout(value), /OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS/);
+    }
+    assert.equal(
+      parseWorkerInboxBatchLimit("OPENMASU_SDK_INBOX_BATCH_LIMIT", undefined),
+      DEFAULT_WORKER_INBOX_BATCH_LIMIT,
+    );
+    assert.equal(
+      parseWorkerInboxBatchLimit(
+        "OPENMASU_MAX_INBOX_BATCH_LIMIT",
+        String(MAX_WORKER_INBOX_BATCH_LIMIT),
+      ),
+      MAX_WORKER_INBOX_BATCH_LIMIT,
+    );
+    for (const value of ["0", "1001", "1.5", "NaN", ""]) {
+      assert.throws(
+        () => parseWorkerInboxBatchLimit("OPENMASU_SDK_INBOX_BATCH_LIMIT", value),
+        /OPENMASU_SDK_INBOX_BATCH_LIMIT/,
+      );
     }
   });
 

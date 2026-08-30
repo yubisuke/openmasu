@@ -44,11 +44,13 @@ function boundedIntegerSetting(
   return String(parsed);
 }
 
-function reconcileEnvSetting(path: string, name: string, value: string): void {
-  const current = readFileSync(path, "utf8").trimEnd();
-  const line = `${name}=${value}`;
-  const matcher = new RegExp(`^${name}=.*$`, "m");
-  const next = matcher.test(current) ? current.replace(matcher, line) : `${current}\n${line}`;
+function reconcileEnvSettings(path: string, settings: Readonly<Record<string, string>>): void {
+  let next = readFileSync(path, "utf8").trimEnd();
+  for (const [name, value] of Object.entries(settings)) {
+    const line = `${name}=${value}`;
+    const matcher = new RegExp(`^${name}=.*$`, "m");
+    next = matcher.test(next) ? next.replace(matcher, line) : `${next}\n${line}`;
+  }
   const temporaryPath = join(
     dirname(path),
     `.${basename(path)}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`,
@@ -109,15 +111,29 @@ const workerShutdownTimeout = boundedIntegerSetting(
   1_000,
   300_000,
 );
+const sdkInboxBatchLimit = boundedIntegerSetting(
+  "OPENMASU_SDK_INBOX_BATCH_LIMIT",
+  process.env.OPENMASU_SDK_INBOX_BATCH_LIMIT ?? existing.OPENMASU_SDK_INBOX_BATCH_LIMIT,
+  100,
+  1,
+  1_000,
+);
+const maxInboxBatchLimit = boundedIntegerSetting(
+  "OPENMASU_MAX_INBOX_BATCH_LIMIT",
+  process.env.OPENMASU_MAX_INBOX_BATCH_LIMIT ?? existing.OPENMASU_MAX_INBOX_BATCH_LIMIT,
+  100,
+  1,
+  1_000,
+);
 
 const runtimePaths = [migrationEnvPath, appEnvPath, seedEnvPath, postgresPasswordPath];
 if (runtimePaths.every(existsSync)) {
-  reconcileEnvSetting(appEnvPath, "OPENMASU_WORKER_CONCURRENCY", workerConcurrency);
-  reconcileEnvSetting(
-    appEnvPath,
-    "OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS",
-    workerShutdownTimeout,
-  );
+  reconcileEnvSettings(appEnvPath, {
+    OPENMASU_WORKER_CONCURRENCY: workerConcurrency,
+    OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS: workerShutdownTimeout,
+    OPENMASU_SDK_INBOX_BATCH_LIMIT: sdkInboxBatchLimit,
+    OPENMASU_MAX_INBOX_BATCH_LIMIT: maxInboxBatchLimit,
+  });
   console.log(`OpenMasu runtime secrets already exist: ${runtimeSecretRoot}`);
   process.exit(0);
 }
@@ -167,6 +183,8 @@ const appEntries: Record<string, string> = {
   OPENMASU_WORKER_POLL_MS: "5000",
   OPENMASU_WORKER_CONCURRENCY: workerConcurrency,
   OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS: workerShutdownTimeout,
+  OPENMASU_SDK_INBOX_BATCH_LIMIT: sdkInboxBatchLimit,
+  OPENMASU_MAX_INBOX_BATCH_LIMIT: maxInboxBatchLimit,
   OPENMASU_SYNTHETIC_MODE: "0",
   OPENMASU_MAX_TENANT_ID: defaultTenantId,
   OPENMASU_MAX_APP_ID: defaultAppId,

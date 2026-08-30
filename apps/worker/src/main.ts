@@ -35,6 +35,7 @@ import { appleLeafKeyFromChain, verifyCompactJws } from "@openmasu/commerce-life
 import {
   TenantWorkCoordinator,
   parseWorkerConcurrency,
+  parseWorkerInboxBatchLimit,
   parseWorkerShutdownTimeout,
   waitForWorkerDrain,
   workerPoolSizes,
@@ -46,6 +47,14 @@ if (!connectionString) throw new Error("OPENMASU_APP_DATABASE_URL is required");
 const workerConcurrency = parseWorkerConcurrency(process.env.OPENMASU_WORKER_CONCURRENCY);
 const workerShutdownTimeout = parseWorkerShutdownTimeout(
   process.env.OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS,
+);
+const sdkInboxBatchLimit = parseWorkerInboxBatchLimit(
+  "OPENMASU_SDK_INBOX_BATCH_LIMIT",
+  process.env.OPENMASU_SDK_INBOX_BATCH_LIMIT,
+);
+const maxInboxBatchLimit = parseWorkerInboxBatchLimit(
+  "OPENMASU_MAX_INBOX_BATCH_LIMIT",
+  process.env.OPENMASU_MAX_INBOX_BATCH_LIMIT,
 );
 const poolSizes = workerPoolSizes(workerConcurrency);
 const pool = new Pool({ connectionString, max: poolSizes.jobs });
@@ -185,7 +194,7 @@ async function runWorkerJob(
 async function processTenantCycle(tenantId: string): Promise<void> {
   if (tenantId === maxTenantId) {
     await runWorkerJob(maxTenantId, "max_inbox", async () => {
-      await processMaxInbox(pool, payloadStore, maxTenantId);
+      await processMaxInbox(pool, payloadStore, maxTenantId, maxInboxBatchLimit);
     });
   }
   const metaKeys = [
@@ -199,7 +208,10 @@ async function processTenantCycle(tenantId: string): Promise<void> {
     }
   });
   await runWorkerJob(tenantId, "sdk_inbox", async () => {
-    await processSdkInbox(pool, payloadStore, tenantId, { metaKeys });
+    await processSdkInbox(pool, payloadStore, tenantId, {
+      metaKeys,
+      batchLimit: sdkInboxBatchLimit,
+    });
   });
   await runWorkerJob(tenantId, "adservices_lookup", async () => {
     await processAdServicesLookups(pool, payloadStore, tenantId, {

@@ -3,6 +3,10 @@ import { sha256, type CandidateAttempt } from "@openmasu/attribution-core";
 import { decimalToUnscaled } from "./cost.js";
 import { ingestRuntimeBatch } from "../ingestion.js";
 import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
+import {
+  DEFAULT_WORKER_INBOX_BATCH_LIMIT,
+  parseWorkerInboxBatchLimit,
+} from "../tenant-work-coordinator.js";
 
 type Any = Record<string, any>;
 
@@ -66,12 +70,22 @@ function attemptFromInbox(inbox: Any, query: URLSearchParams): CandidateAttempt 
   };
 }
 
-export async function processMaxInbox(pool: Pool, payloadStore: PayloadStore, tenantId: string): Promise<number> {
+export async function processMaxInbox(
+  pool: Pool,
+  payloadStore: PayloadStore,
+  tenantId: string,
+  batchLimit = DEFAULT_WORKER_INBOX_BATCH_LIMIT,
+): Promise<number> {
+  const boundedBatchLimit = parseWorkerInboxBatchLimit(
+    "OPENMASU_MAX_INBOX_BATCH_LIMIT",
+    String(batchLimit),
+  );
   const pending = await withTenant(pool, tenantId, (client) => client.query<Any>(
     `SELECT * FROM ledger.ingest_inbox_current
      WHERE tenant_id=$1 AND status='pending'
-     ORDER BY received_at, inbox_id`,
-    [tenantId],
+     ORDER BY received_at, inbox_id
+     LIMIT $2`,
+    [tenantId, boundedBatchLimit],
   ));
   let processed = 0;
   for (const inbox of pending.rows) {

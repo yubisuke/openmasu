@@ -213,9 +213,10 @@ validation, and immutable reviewed goldens.
   same concurrency setting. Completion and failure reuse the held lease
   connection, while the job pool reserves two connections per slot for nested
   privacy work.
-- A slow tenant still consumes one slot. A single-tenant workload, unbounded
-  SDK or MAX inbox batch, or enough slow tenants to fill all slots can delay
-  later work and remains an operational capacity risk.
+- A slow tenant still consumes one slot. SDK and MAX inboxes use bounded FIFO
+  slices, but a slow row, backlog that spans many cycles, or enough slow tenants
+  to fill all slots can delay later work and remains an operational capacity
+  risk.
 - Tenant/job leases do not provide tenant-wide ordering across multiple worker
   replicas. The reference deployment uses one replica; independently scaling
   workers requires an explicit interleaving review. Shutdown drain is bounded,

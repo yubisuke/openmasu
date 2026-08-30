@@ -53,6 +53,7 @@ versions were reached. They do not override current sources of truth.
 | Scheduled metric execution | Complete: app-scoped immutable definitions advance daily UTC cohort or calendar dates through the durable worker | API validation, non-overlap enforcement, PostgreSQL checkpoint recovery, exact artifact replay, report/dashboard visibility, role grants, and scheduler health tests |
 | Runtime tenant discovery | Complete: integrity verification and commerce provider read-back queues independently expose their tenant to the worker | FORCE-RLS owner-policy coverage plus isolated queue-only tenant discovery and drain-to-terminal integration tests |
 | Worker tenant fairness | Synthetic source-level complete: independent tenants use a bounded FIFO coordinator while each tenant retains its existing privacy-to-fraud job sequence within one worker process | Deterministic blocked-tenant progress, concurrency cap, deduplication, bounded shutdown, atomic environment reconciliation, failure isolation, and concurrent scheduler-lease evidence; full process SIGTERM and multi-replica tenant-wide ordering remain operational boundaries |
+| Worker inbox slicing | Complete for SDK and MAX durable inboxes with configurable FIFO row limits per tenant cycle | Three-row synthetic integration evidence proves a limit of two drains as 2 then 1; a slow individual row and sustained backlog remain operational boundaries |
 
 ## Change acceptance
 

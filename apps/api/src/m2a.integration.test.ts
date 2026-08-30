@@ -1175,6 +1175,47 @@ describe("M2a signed SDK ingestion", () => {
     assert.equal(conflictCount.rows[0].count, 1);
   });
 
+  it("bounds each SDK inbox cycle and resumes the FIFO backlog on the next cycle", async () => {
+    await processSdkInbox(pool, payloadStore, tenantId);
+    const batchIds: string[] = [];
+    for (let index = 0; index < 3; index += 1) {
+      const event = sourceEvent(
+        `event:bounded-sdk:${run}:${index}`,
+        "custom_event",
+        {
+          installation_id: installationId,
+          event_key: "bounded_sdk_inbox",
+          attributes: { ordinal: String(index) },
+        },
+      );
+      const response = await signed(
+        "/v1/events/batch",
+        { records: [event] },
+        { secret: installationSecret, installationKeyId },
+      );
+      assert.equal(response.status, 202);
+      batchIds.push((await response.json() as { ingest_batch_id: string }).ingest_batch_id);
+    }
+
+    assert.equal(await processSdkInbox(pool, payloadStore, tenantId, { batchLimit: 2 }), 2);
+    const firstStates = await withTenant(pool, tenantId, (client) => client.query<{
+      status: string;
+      count: number;
+    }>(
+      `SELECT status,count(*)::int AS count
+         FROM ledger.ingest_batches_current
+        WHERE tenant_id=$1 AND app_id=$2 AND ingest_batch_id=ANY($3::uuid[])
+        GROUP BY status ORDER BY status`,
+      [tenantId, appId, batchIds],
+    ));
+    assert.deepEqual(firstStates.rows, [
+      { status: "pending", count: 1 },
+      { status: "processed", count: 2 },
+    ]);
+    assert.equal(await processSdkInbox(pool, payloadStore, tenantId, { batchLimit: 2 }), 1);
+    assert.equal(await processSdkInbox(pool, payloadStore, tenantId, { batchLimit: 2 }), 0);
+  });
+
   it("DL-A-15, DL-A-16, and DL-A-25 resolve signed deep-link opens only from tenant-scoped server state", async () => {
     const deepInstallationId = `installation:m7-${run}`;
     const enrollment = await signed("/v1/installations", { installation_id: deepInstallationId });

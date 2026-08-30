@@ -780,6 +780,17 @@ describe("MAX receiver integration", () => {
     }
   });
 
+  it("bounds each MAX inbox cycle and resumes the FIFO backlog on the next cycle", async () => {
+    assert.equal(await processMaxInbox(appPool, payloadStore, config.tenantId), 0);
+    for (let index = 0; index < 3; index += 1) {
+      const eventId = `abcdef0123456789abcdef0123456789abcde${index}89`;
+      assert.equal((await send(eventId)).status, 204);
+    }
+    assert.equal(await processMaxInbox(appPool, payloadStore, config.tenantId, 2), 2);
+    assert.equal(await processMaxInbox(appPool, payloadStore, config.tenantId, 2), 1);
+    assert.equal(await processMaxInbox(appPool, payloadStore, config.tenantId, 2), 0);
+  });
+
   it("A6 rejects a changed MAX payload that reuses an event ID", async () => {
     const eventId = "abcdef0123456789abcdef0123456789abcdef03";
     assert.equal((await send(eventId, "0.123456")).status, 204);

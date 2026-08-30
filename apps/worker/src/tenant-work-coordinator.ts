@@ -2,6 +2,8 @@ export const DEFAULT_WORKER_CONCURRENCY = 4;
 export const MAX_WORKER_CONCURRENCY = 16;
 export const DEFAULT_WORKER_SHUTDOWN_TIMEOUT_MS = 30_000;
 export const MAX_WORKER_SHUTDOWN_TIMEOUT_MS = 300_000;
+export const DEFAULT_WORKER_INBOX_BATCH_LIMIT = 100;
+export const MAX_WORKER_INBOX_BATCH_LIMIT = 1_000;
 
 export function parseWorkerConcurrency(value: string | undefined): number {
   const concurrency = Number(value ?? String(DEFAULT_WORKER_CONCURRENCY));
@@ -21,6 +23,14 @@ export function parseWorkerShutdownTimeout(value: string | undefined): number {
     );
   }
   return timeout;
+}
+
+export function parseWorkerInboxBatchLimit(name: string, value: string | undefined): number {
+  const limit = Number(value ?? String(DEFAULT_WORKER_INBOX_BATCH_LIMIT));
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_WORKER_INBOX_BATCH_LIMIT) {
+    throw new Error(`${name} must be an integer from 1 through ${MAX_WORKER_INBOX_BATCH_LIMIT}`);
+  }
+  return limit;
 }
 
 export function workerPoolSizes(concurrency: number): {
