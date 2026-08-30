@@ -442,7 +442,7 @@ async function relevantHistoryRows(
            FROM candidate_batches
           GROUP BY ingest_batch_id
        )
-       SELECT DISTINCT batch.ingest_batch_id::text, batch.tenant_id, batch.app_id,
+       SELECT batch.ingest_batch_id::text, batch.tenant_id, batch.app_id,
               batch.producer, batch.received_at, batch.body_ref, batch.body_digest,
               batch.status, batch.reason_code, batch.installation_key_id,
               batch.inbox_seq::text, selected.required_withdrawal_backfill
