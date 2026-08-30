@@ -3250,37 +3250,24 @@ describe("M2a signed SDK ingestion", () => {
         label: `${scope}-deletion-first`,
         receivedAt: "2026-08-30T01:00:00.000Z",
       });
-      let readStarted!: () => void;
-      let releaseRead!: () => void;
-      const started = new Promise<void>((resolve) => { readStarted = resolve; });
-      const released = new Promise<void>((resolve) => { releaseRead = resolve; });
-      const blockingStore: PayloadStore = {
+      const deletion = await deletePrivacyFenceScope(
+        scope,
+        batch,
+        "2026-08-30T02:00:00.000Z",
+      );
+      assert.equal(deletion.status, "completed");
+      let deletedBodyReads = 0;
+      const noReadStore: PayloadStore = {
         write: (payloadScope, plaintext) => payloadStore.write(payloadScope, plaintext),
         purge: (reference) => payloadStore.purge(reference),
         scanFor: (value) => payloadStore.scanFor(value),
-        read: async (reference) => {
-          const plaintext = await payloadStore.read(reference);
-          if (reference === batch.bodyRef) {
-            readStarted();
-            await released;
-          }
-          return plaintext;
+        read: (reference) => {
+          if (reference === batch.bodyRef) deletedBodyReads += 1;
+          return payloadStore.read(reference);
         },
       };
-      const processing = processSdkInbox(pool, blockingStore, batch.tenantId);
-      try {
-        await within(started, `${scope} deletion-first read barrier`);
-        const deletion = await deletePrivacyFenceScope(
-          scope,
-          batch,
-          "2026-08-30T02:00:00.000Z",
-        );
-        assert.equal(deletion.status, "completed");
-      } finally {
-        releaseRead();
-        await within(Promise.allSettled([processing]), `${scope} deletion-first cleanup`);
-      }
-      assert.equal(await within(processing, `${scope} deletion-first processing`), 1);
+      assert.equal(await processSdkInbox(pool, noReadStore, batch.tenantId), 1);
+      assert.equal(deletedBodyReads, 0, `${scope} blocked batch body must not be reopened`);
       assert.equal(await processSdkInbox(pool, payloadStore, batch.tenantId), 0,
         `${scope} suppression must be terminal and idempotent`);
       await assert.rejects(payloadStore.read(batch.bodyRef));
@@ -3917,7 +3904,7 @@ describe("M2a signed SDK ingestion", () => {
     });
   });
 
-  it("app and tenant deletion boundaries admit only post-recognition SDK batches", async () => {
+  it("privacy-purged post-processing batches terminate without starving later SDK work", async () => {
     for (const scope of ["app", "tenant"] as const) {
       const label = `${scope}-recognition-boundary`;
       const before = await appendPrivacyFenceBatch({
@@ -3925,21 +3912,21 @@ describe("M2a signed SDK ingestion", () => {
         label,
         receivedAt: "2026-08-30T05:00:00.000Z",
       });
-      const decodedBeforeDeletion = await payloadStore.read(before.bodyRef);
+      await assert.rejects(processSdkInbox(pool, payloadStore, before.tenantId, {
+        auxiliaryQueues: {
+          integrity: async () => { throw new Error("synthetic post-processing fault"); },
+        },
+      }), /synthetic post-processing fault/);
+      assert.deepEqual((await privacyFenceEvidence(before)).batch, {
+        status: "processed",
+        reason_code: "post_processing_pending",
+      });
       assert.equal((await deletePrivacyFenceScope(
         scope,
         before,
         "2026-08-30T06:00:00.000Z",
       )).status, "completed");
-      const decodedStore: PayloadStore = {
-        write: (payloadScope, plaintext) => payloadStore.write(payloadScope, plaintext),
-        purge: (reference) => payloadStore.purge(reference),
-        scanFor: (value) => payloadStore.scanFor(value),
-        read: (reference) => reference === before.bodyRef
-          ? Promise.resolve(decodedBeforeDeletion)
-          : payloadStore.read(reference),
-      };
-      assert.equal(await processSdkInbox(pool, decodedStore, before.tenantId), 1);
+      await assert.rejects(payloadStore.read(before.bodyRef));
 
       const afterEventId = `event:privacy-${label}-after:${run}`;
       const afterBody = Buffer.from(JSON.stringify({ records: [{
@@ -3982,10 +3969,14 @@ describe("M2a signed SDK ingestion", () => {
         status: "processed",
         reason_code: "privacy_suppressed",
       });
-      assert.equal(beforeEvidence.rawRecords, 0);
-      assert.equal(beforeEvidence.deliveries, 0);
-      assert.equal(beforeEvidence.logicalEvents, 0);
-      assert.equal(beforeEvidence.installFacts, 0);
+      assert.equal(beforeEvidence.rawRecords, 1);
+      assert.equal(beforeEvidence.deliveries, 1);
+      assert.equal(beforeEvidence.logicalEvents, 1);
+      assert.equal(beforeEvidence.installFacts, 1);
+      assert.equal(beforeEvidence.availablePayloadStates, 0,
+        `${scope} deleted evidence must remain unavailable`);
+      assert.equal(beforeEvidence.batchMembers, 1);
+      assert.equal(beforeEvidence.integrityQueue, 0);
       const afterEvidence = await privacyFenceEvidence({
         ...before,
         eventId: afterEventId,
@@ -3999,6 +3990,8 @@ describe("M2a signed SDK ingestion", () => {
       assert.equal(afterEvidence.installFacts, 0);
       assert.equal(afterEvidence.availablePayloadStates, 1);
       assert.equal(afterEvidence.batchMembers, 1);
+      assert.equal((await listRuntimeWorkTenants(pool)).includes(before.tenantId), false,
+        `${scope} tenant must leave discovery after both batches terminate`);
     }
   });
 });
