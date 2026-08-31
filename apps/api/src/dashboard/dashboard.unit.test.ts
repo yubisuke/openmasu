@@ -236,6 +236,56 @@ describe("M3 zero-JavaScript dashboard", () => {
     assert.doesNotMatch(html, /secret_ref|Server key <code>/);
   });
 
+  it("renders bounded Google delivery health without secret-bearing identifiers", () => {
+    const forbidden = [
+      "request_ref", "provider_request_id", "request_digest", "transaction_digest",
+      "encrypted:synthetic", "provider-request-synthetic", "a".repeat(64),
+    ];
+    const html = renderDashboard(buildDashboardView({
+      apps: [],
+      selectedAppId: "app-one",
+      csrfToken: "synthetic-csrf",
+      googleDeliveryHealth: {
+        destination: {
+          configured: true,
+          enabled: true,
+          next_request_at: "2026-08-31T10:00:00.000Z",
+        },
+        summary: {
+          total: 2,
+          due_now: 0,
+          scheduled: 1,
+          by_state: {
+            queued: 1,
+            http_accepted: 0,
+            diagnostics_processing: 0,
+            succeeded: 0,
+            partial_success: 0,
+            failed: 1,
+            expired: 0,
+          },
+        },
+        deliveries: [{
+          delivery_id: "00000000-0000-7000-8000-000000000127",
+          state: "queued",
+          attempts: 2,
+          next_attempt_at: "2026-08-31T10:01:00.000Z",
+          diagnostics_deadline_at: null,
+          safe_reason: "rate_limited",
+          created_at: "2026-08-31T09:00:00.000Z",
+          updated_at: "2026-08-31T09:59:00.000Z",
+        }],
+        maximum_rows: 50,
+      },
+    }));
+    assert.match(html, /Google Data Manager delivery health/);
+    assert.match(html, /rate_limited/);
+    assert.match(html, /2026-08-31T10:01:00.000Z/);
+    assert.match(html, /provider-side exactly-once proof/);
+    assert.equal(html.includes("<script"), false);
+    for (const value of forbidden) assert.equal(html.includes(value), false, value);
+  });
+
   it("reports signed purchase net revenue without exposing purchase identifiers", () => {
     const netRevenue = metric({
       metric_run_id: "metric:purchase-net-negative",

@@ -153,6 +153,53 @@ try {
     const actual = privileges.filter((privilege) => row[`${privilege.toLowerCase()}_privilege` as keyof Row] === true);
     assert.deepEqual(actual, expected(row), `${row.role_name} privilege drift on ${row.schema_name}.${row.table_name}`);
   }
+  const readerGoogleColumns = await pool.query<{
+    table_schema: string;
+    table_name: string;
+    column_name: string;
+    allowed: boolean;
+  }>(`
+    SELECT table_schema, table_name, column_name,
+           has_column_privilege(
+             'openmasu_reader',
+             format('%I.%I', table_schema, table_name),
+             column_name,
+             'SELECT'
+           ) AS allowed
+      FROM information_schema.columns
+     WHERE (table_schema, table_name) IN (
+       ('control', 'google_data_manager_destinations'),
+       ('ephemeral', 'google_conversion_deliveries')
+     )
+     ORDER BY table_schema, table_name, ordinal_position
+  `);
+  const expectedReaderGoogleColumns = new Set([
+    "control.google_data_manager_destinations.tenant_id",
+    "control.google_data_manager_destinations.app_id",
+    "control.google_data_manager_destinations.destination_id",
+    "control.google_data_manager_destinations.enabled",
+    "control.google_data_manager_destinations.next_request_at",
+    "ephemeral.google_conversion_deliveries.delivery_id",
+    "ephemeral.google_conversion_deliveries.tenant_id",
+    "ephemeral.google_conversion_deliveries.app_id",
+    "ephemeral.google_conversion_deliveries.destination_id",
+    "ephemeral.google_conversion_deliveries.state",
+    "ephemeral.google_conversion_deliveries.attempts",
+    "ephemeral.google_conversion_deliveries.next_attempt_at",
+    "ephemeral.google_conversion_deliveries.diagnostics_deadline_at",
+    "ephemeral.google_conversion_deliveries.safe_reason",
+    "ephemeral.google_conversion_deliveries.created_at",
+    "ephemeral.google_conversion_deliveries.updated_at",
+  ]);
+  for (const row of readerGoogleColumns.rows) {
+    const qualified = `${row.table_schema}.${row.table_name}.${row.column_name}`;
+    assert.equal(row.allowed, expectedReaderGoogleColumns.has(qualified), `openmasu_reader column privilege drift on ${qualified}`);
+  }
+  assert.equal(
+    readerGoogleColumns.rows.filter((row) => row.allowed).length,
+    expectedReaderGoogleColumns.size,
+    "Google delivery health reader column matrix is incomplete",
+  );
   const scheduleView = await pool.query<{ role_name: Role; allowed: boolean }>(`
     SELECT role_name,
            has_table_privilege(role_name, 'control.metric_schedules_current', 'SELECT') AS allowed

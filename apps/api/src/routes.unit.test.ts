@@ -56,6 +56,11 @@ describe("declarative API route security", () => {
     assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/apple-registration")?.handler, "admin_apple_registration");
     assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/conversion-schemas")?.handler, "admin_conversion_schema");
     assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/rule-bundles")?.handler, "admin_rule_bundle");
+    assert.equal(
+      matchRoute("GET", "/v1/admin/apps/app-a/google-data-manager/deliveries")?.handler,
+      "admin_google_delivery_health",
+    );
+    assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/google-data-manager/deliveries"), undefined);
     assert.equal(matchRoute("GET", "/metrics")?.handler, "operational_metrics");
     assert.equal(matchRoute("POST", "/v1/events/server")?.handler, "server_batch");
     assert.equal(matchRoute("GET", "/v1/events/server"), undefined);
