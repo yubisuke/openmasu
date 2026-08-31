@@ -106,9 +106,9 @@ async function claimGoogleConversionDeliveries(
   leaseMs: number,
   minimumRequestIntervalMs: number,
 ): Promise<DeliveryRow | undefined> {
-  const rows = await withTenant(pool, tenantId, (client) => client.query<DeliveryRow>(
-    `WITH due AS (
-       SELECT delivery.delivery_id,destination.destination_id
+  return withTenant(pool, tenantId, async (client) => {
+    const due = await client.query<{ delivery_id: string; destination_id: string }>(
+      `SELECT delivery.delivery_id::text,destination.destination_id::text
          FROM ephemeral.google_conversion_deliveries AS delivery
          JOIN control.google_data_manager_destinations AS destination
            ON destination.tenant_id=delivery.tenant_id
@@ -120,27 +120,31 @@ async function claimGoogleConversionDeliveries(
           AND destination.next_request_at <= clock_timestamp()
         ORDER BY delivery.next_attempt_at,delivery.delivery_id
         LIMIT 1
-        FOR UPDATE OF delivery,destination SKIP LOCKED
-     ), reserved AS (
-       UPDATE control.google_data_manager_destinations AS destination
-          SET next_request_at=clock_timestamp() + ($5::integer * interval '1 millisecond')
-         FROM due
-        WHERE destination.tenant_id=$1 AND destination.destination_id=due.destination_id
-       RETURNING due.delivery_id
-     )
-     UPDATE ephemeral.google_conversion_deliveries AS delivery
-        SET claim_token=$3::uuid,
-            claimed_until=clock_timestamp() + ($4::integer * interval '1 millisecond'),
-            updated_at=$2
-       FROM reserved
-      WHERE delivery.tenant_id=$1 AND delivery.delivery_id=reserved.delivery_id
-     RETURNING delivery.delivery_id::text,delivery.app_id,delivery.destination_id::text,delivery.request_ref,
-       delivery.request_digest,delivery.transaction_digest,delivery.state,delivery.attempts,
-       delivery.provider_request_id,delivery.diagnostics_deadline_at,
-       delivery.claim_token::text,delivery.claimed_until`,
-    [tenantId, now.toISOString(), claimToken, leaseMs, minimumRequestIntervalMs],
-  ));
-  return rows.rows[0];
+        FOR UPDATE OF delivery,destination SKIP LOCKED`,
+      [tenantId],
+    );
+    const candidate = due.rows[0];
+    if (!candidate) return undefined;
+    await client.query(
+      `UPDATE control.google_data_manager_destinations
+          SET next_request_at=clock_timestamp() + ($3::integer * interval '1 millisecond')
+        WHERE tenant_id=$1 AND destination_id=$2::uuid`,
+      [tenantId, candidate.destination_id, minimumRequestIntervalMs],
+    );
+    const claimed = await client.query<DeliveryRow>(
+      `UPDATE ephemeral.google_conversion_deliveries AS delivery
+          SET claim_token=$3::uuid,
+              claimed_until=clock_timestamp() + ($4::integer * interval '1 millisecond'),
+              updated_at=$2
+        WHERE delivery.tenant_id=$1 AND delivery.delivery_id=$5::uuid
+      RETURNING delivery.delivery_id::text,delivery.app_id,delivery.destination_id::text,delivery.request_ref,
+        delivery.request_digest,delivery.transaction_digest,delivery.state,delivery.attempts,
+        delivery.provider_request_id,delivery.diagnostics_deadline_at,
+        delivery.claim_token::text,delivery.claimed_until`,
+      [tenantId, now.toISOString(), claimToken, leaseMs, candidate.delivery_id],
+    );
+    return claimed.rows[0];
+  });
 }
 
 async function lockCurrentDelivery(
