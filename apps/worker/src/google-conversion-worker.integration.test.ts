@@ -202,7 +202,7 @@ describe("Google Data Manager verified-conversion integration", () => {
     await providerStartedBeforeCompletion(started.promise, first, "claimed Google request");
 
     let blockedProviderCalls = 0;
-    assert.deepEqual(await processGoogleConversionDeliveries(pool, payloadStore, tenantId, {
+    assert.deepEqual(await within(processGoogleConversionDeliveries(pool, payloadStore, tenantId, {
       enabled: true,
       credentialsJson: "{}",
       minimumRequestIntervalMs: 0,
@@ -215,10 +215,10 @@ describe("Google Data Manager verified-conversion integration", () => {
           return { outcome: "retry", reason: "provider_unavailable", httpStatus: 503 } as const;
         },
       },
-    }), { processed: 0 });
+    }), "concurrent Google claim"), { processed: 0 });
     assert.equal(blockedProviderCalls, 0);
     release.resolve();
-    assert.deepEqual(await first, { processed: 1 });
+    assert.deepEqual(await within(first, "first Google claim completion"), { processed: 1 });
 
     await withTenant(pool, tenantId, (client) => client.query(
       `UPDATE ephemeral.google_conversion_deliveries
@@ -245,14 +245,14 @@ describe("Google Data Manager verified-conversion integration", () => {
         },
       },
     });
-    await staleStarted.promise;
+    await providerStartedBeforeCompletion(staleStarted.promise, stale, "expired Google claim");
     await withTenant(pool, tenantId, (client) => client.query(
       `UPDATE ephemeral.google_conversion_deliveries
           SET claimed_until=clock_timestamp() - interval '1 second'
         WHERE tenant_id=$1 AND app_id=$2`,
       [tenantId, appId],
     ));
-    assert.deepEqual(await processGoogleConversionDeliveries(pool, payloadStore, tenantId, {
+    assert.deepEqual(await within(processGoogleConversionDeliveries(pool, payloadStore, tenantId, {
       enabled: true,
       credentialsJson: "{}",
       minimumRequestIntervalMs: 0,
@@ -265,9 +265,9 @@ describe("Google Data Manager verified-conversion integration", () => {
           return { outcome: "retry", reason: "provider_unavailable", httpStatus: 503 } as const;
         },
       },
-    }), { processed: 1 });
+    }), "replacement Google claim"), { processed: 1 });
     releaseStale.resolve();
-    assert.deepEqual(await stale, { processed: 0 });
+    assert.deepEqual(await within(stale, "stale Google claim completion"), { processed: 0 });
 
     const finalState = await withTenant(pool, tenantId, (client) => client.query<{
       attempts: number;
