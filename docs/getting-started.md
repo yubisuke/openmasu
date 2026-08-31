@@ -172,7 +172,7 @@ Use this sequence only on a disposable synthetic instance. Parity requires the
 database artifacts to match the committed JSON goldens byte for byte after RFC
 8785 canonicalization.
 
-## Preview an import without writing
+## Preview and confirm an import
 
 Use the provider-neutral compatibility report before running an import:
 
@@ -187,6 +187,33 @@ The report does not open a database connection. It evaluates mapping shape,
 field coverage, row selection, and exact-money compatibility. It does not
 certify a provider or compare against existing ledger state. See
 [Import mapping DSL](import-mappings.md).
+
+For an `mmp_raw` import, create a confirmation-bound session with the same
+mapping and source file that will be committed:
+
+```bash
+npm run import:session -- \
+  --source=examples/mappings/synthetic-provider-click.json \
+  --file=examples/synthetic/mmp-raw-events.json
+```
+
+The command prints aggregate preview results, SHA-256 digests, and a
+`confirmation_token` without opening a database pool. After reviewing the
+preview, repeat the exact command with that token:
+
+```bash
+npm run import:session -- \
+  --source=examples/mappings/synthetic-provider-click.json \
+  --file=examples/synthetic/mmp-raw-events.json \
+  --confirm=<confirmation_token>
+```
+
+The token binds the exact mapping and source bytes. A stale or invalid token is
+rejected before the database pool is created. An exact repeated confirmed
+import is recorded as skipped by the existing content-addressed import path.
+When `OPENMASU_PUBLIC_BASE_URL` is a valid HTTP(S) URL, the committed result
+also includes links to the app dashboard, stored differences, and aggregate
+CSV export.
 
 ## Dashboard and tracking links
 

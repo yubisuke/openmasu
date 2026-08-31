@@ -9,6 +9,7 @@
     "benchmark:import": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/import/benchmark.ts",
     "commerce:backfill": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/commerce-backfill.ts",
     "import": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/import/runner.ts",
+    "import:session": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/import/import-session-cli.ts",
     "import:preview": "cd ../.. && node --import tsx apps/worker/src/import/runner.ts --preview",
     "import:compatibility": "cd ../.. && node --import tsx apps/worker/src/import/compatibility-cli.ts",
     "import:cost": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/worker/src/import/cost-cli.ts",

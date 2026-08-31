@@ -17,6 +17,7 @@ import {
 } from "@openmasu/runtime";
 import { sha256 } from "@openmasu/attribution-core";
 import { runMmpImport, runMmpImportCommand } from "./runner.js";
+import { commitImportSession, prepareImportSession } from "./import-session.js";
 import { persistCostImport } from "./cost.js";
 import { runCostImportCommand, runCostImportFile } from "./cost-cli.js";
 import { runGoogleCostImport, runGoogleCostImportCommand } from "./google-cost-cli.js";
@@ -85,6 +86,59 @@ describe("M1a import integration", () => {
         { duplicate_resolution: "duplicate_delivery", count: 1 },
         { duplicate_resolution: "unique", count: 1 },
       ]);
+    });
+  });
+
+  it("Issue 123 commits exact confirmed bytes once and skips an identical repeat", async () => {
+    const mappingValue = JSON.parse(readFileSync(mappingPath, "utf8"));
+    mappingValue.source_id = "synthetic-confirmed-session-clicks";
+    mappingValue.provider = "synthetic-confirmed-session-provider";
+    const [sourceValue] = JSON.parse(source);
+    sourceValue.event_id = "synthetic-confirmed-session-event";
+    sourceValue.click_id = "synthetic-confirmed-session-click";
+    const prepared = prepareImportSession({
+      mappingBytes: Buffer.from(JSON.stringify(mappingValue)),
+      sourceBytes: Buffer.from(JSON.stringify([sourceValue])),
+      sourceLabel: "synthetic-confirmed-session.json",
+    });
+    const first = await commitImportSession({
+      prepared,
+      confirmationToken: prepared.output.confirmation_token,
+      poolFactory: createAppPool,
+      publicBaseUrl: "https://openmasu.invalid",
+      now: new Date("2026-08-19T10:03:00.000Z"),
+    });
+    const repeated = await commitImportSession({
+      prepared,
+      confirmationToken: prepared.output.confirmation_token,
+      poolFactory: createAppPool,
+      publicBaseUrl: "https://openmasu.invalid",
+      now: new Date("2026-08-19T10:04:00.000Z"),
+    });
+
+    assert.equal(first.summary.status, "completed");
+    assert.equal(repeated.summary.status, "skipped");
+    assert.equal(first.links?.dashboard, "https://openmasu.invalid/dashboard/apps/app-local");
+    await withTenant(appPool, "tenant-local", async (client) => {
+      const result = await client.query(`SELECT
+        (SELECT count(*) FROM control.import_runs WHERE source_id='synthetic-confirmed-session-clicks' AND status='completed')::int AS completed_runs,
+        (SELECT count(*) FROM control.import_runs WHERE source_id='synthetic-confirmed-session-clicks' AND status='skipped')::int AS skipped_runs,
+        (SELECT count(*) FROM control.import_files WHERE source_id='synthetic-confirmed-session-clicks')::int AS import_files,
+        (SELECT count(*) FROM control.import_attempts WHERE source_id='synthetic-confirmed-session-clicks')::int AS import_attempts,
+        (SELECT count(*) FROM ledger.logical_events WHERE producer='import:synthetic-confirmed-session-provider' AND event_id='synthetic-confirmed-session-event')::int AS logical_events,
+        (SELECT count(*) FROM ledger.event_deliveries AS delivery
+          JOIN ledger.logical_events AS event
+            ON event.tenant_id=delivery.tenant_id AND event.app_id=delivery.app_id AND event.record_id=delivery.record_id
+          WHERE event.producer='import:synthetic-confirmed-session-provider'
+            AND event.event_id='synthetic-confirmed-session-event')::int AS deliveries`);
+      assert.deepEqual(result.rows[0], {
+        completed_runs: 1,
+        skipped_runs: 1,
+        import_files: 1,
+        import_attempts: 1,
+        logical_events: 1,
+        deliveries: 1,
+      });
     });
   });
 

@@ -21,7 +21,7 @@ import {
   rowMatches,
   type ImportMapping,
 } from "./mapping.js";
-import { ImportLimitError, readRows, type ImportLimits } from "./source.js";
+import { ImportLimitError, readRowsFromSource, type ImportLimits } from "./source.js";
 import { declaredMappingTargetFields } from "./compatibility.js";
 
 type Any = Record<string, any>;
@@ -64,6 +64,15 @@ export type ImportPreviewAnalysis = {
   preview: ImportPreviewSummary;
   mapping: ImportMapping;
   observedFieldCounts: ReadonlyMap<string, number>;
+};
+
+type LoadedImportSource = ReturnType<typeof readRowsFromSource>;
+
+type PreparedMmpImport = {
+  mapping: ImportMapping;
+  loaded: LoadedImportSource;
+  fileDigest: string;
+  sourceLabel: string;
 };
 
 const importMetadataChunkSize = 1_000;
@@ -149,16 +158,12 @@ function toAttempt(mapping: ImportMapping, mapped: Any, fileDigest: string, rowO
   };
 }
 
-export function analyzeMmpImport(options: {
-  mappingPath: string;
-  filePath: string;
-  limits?: ImportLimits;
-  lintDirectory?: string;
-}): ImportPreviewAnalysis {
-  const mapping = loadMapping(options.mappingPath);
+function analyzePreparedMmpImport(
+  prepared: PreparedMmpImport,
+  mappingSet: readonly ImportMapping[],
+): ImportPreviewAnalysis {
+  const { mapping, loaded, fileDigest } = prepared;
   if (mapping.kind !== "mmp_raw") throw new Error("previewMmpImport requires an mmp_raw mapping");
-  const loaded = readRows(options.filePath, mapping, options.limits ?? limitsFromEnvironment());
-  const fileDigest = createHash("sha256").update(readFileSync(options.filePath)).digest("hex");
   const rejectionGroups = new Map<string, {
     reason_code: "mapping_validation_failed" | "timestamp_invalid" | "row_schema_invalid";
     count: number;
@@ -221,7 +226,7 @@ export function analyzeMmpImport(options: {
     }
   }
 
-  const warnings = lintMappings(mappingsForLint(options.mappingPath, options.lintDirectory))
+  const warnings = lintMappings(mappingSet)
     .map(({ code }) => ({ code }))
     .sort((left, right) => left.code.localeCompare(right.code));
   const rejections = [...rejectionGroups.values()]
@@ -251,6 +256,38 @@ export function analyzeMmpImport(options: {
       ],
     },
   };
+}
+
+export function analyzeMmpImportSource(options: {
+  mapping: ImportMapping;
+  sourceBytes: Uint8Array;
+  limits?: ImportLimits;
+  siblingMappings?: readonly ImportMapping[];
+  sourceLabel?: string;
+}): ImportPreviewAnalysis {
+  const prepared: PreparedMmpImport = {
+    mapping: options.mapping,
+    loaded: readRowsFromSource(options.sourceBytes, options.mapping, options.limits ?? limitsFromEnvironment()),
+    fileDigest: createHash("sha256").update(options.sourceBytes).digest("hex"),
+    sourceLabel: options.sourceLabel ?? "import-source",
+  };
+  return analyzePreparedMmpImport(prepared, options.siblingMappings ?? [options.mapping]);
+}
+
+export function analyzeMmpImport(options: {
+  mappingPath: string;
+  filePath: string;
+  limits?: ImportLimits;
+  lintDirectory?: string;
+}): ImportPreviewAnalysis {
+  const mapping = loadMapping(options.mappingPath);
+  return analyzeMmpImportSource({
+    mapping,
+    sourceBytes: readFileSync(options.filePath),
+    limits: options.limits,
+    siblingMappings: mappingsForLint(options.mappingPath, options.lintDirectory),
+    sourceLabel: basename(options.filePath),
+  });
 }
 
 export function previewMmpImport(options: Parameters<typeof analyzeMmpImport>[0]): ImportPreviewSummary {
@@ -284,18 +321,13 @@ async function historicalAttempts(
   });
 }
 
-export async function runMmpImport(options: {
+async function runPreparedMmpImport(options: {
   pool: Pool;
-  mappingPath: string;
-  filePath: string;
-  limits?: ImportLimits;
+  prepared: PreparedMmpImport;
   now?: Date;
 }): Promise<ImportSummary> {
-  const mapping = loadMapping(options.mappingPath);
+  const { mapping, loaded, fileDigest, sourceLabel } = options.prepared;
   if (mapping.kind !== "mmp_raw") throw new Error("runMmpImport requires an mmp_raw mapping");
-  const limits = options.limits ?? limitsFromEnvironment();
-  const loaded = readRows(options.filePath, mapping, limits);
-  const fileDigest = createHash("sha256").update(readFileSync(options.filePath)).digest("hex");
   const now = canonicalNow(options.now);
   await ensureApp(options.pool, mapping, now);
   const prior = await withTenant(options.pool, mapping.tenant_id, (client) => client.query(
@@ -403,7 +435,7 @@ export async function runMmpImport(options: {
         SELECT import_rejection_id,import_run_id,tenant_id,app_id,source_id,row_ordinal,reason_code,field_names,occurred_at
         FROM jsonb_populate_recordset(NULL::control.import_row_rejections,$1::jsonb)`);
     });
-    console.log(`Import ${basename(options.filePath)}: rows=${loaded.rows.length} accepted=${acceptedRows.length} rejected=${allFailures.length}`);
+    console.log(`Import ${sourceLabel}: rows=${loaded.rows.length} accepted=${acceptedRows.length} rejected=${allFailures.length}`);
     return {
       status: "completed", import_run_id: runId, rows: loaded.rows.length,
       accepted: acceptedRows.length, rejected: allFailures.length,
@@ -423,6 +455,45 @@ export async function runMmpImport(options: {
   }
 }
 
+export async function runMmpImportSource(options: {
+  pool: Pool;
+  mapping: ImportMapping;
+  sourceBytes: Uint8Array;
+  sourceLabel?: string;
+  limits?: ImportLimits;
+  now?: Date;
+}): Promise<ImportSummary> {
+  return runPreparedMmpImport({
+    pool: options.pool,
+    now: options.now,
+    prepared: {
+      mapping: options.mapping,
+      loaded: readRowsFromSource(options.sourceBytes, options.mapping, options.limits ?? limitsFromEnvironment()),
+      fileDigest: createHash("sha256").update(options.sourceBytes).digest("hex"),
+      sourceLabel: options.sourceLabel ?? "import-source",
+    },
+  });
+}
+
+export async function runMmpImport(options: {
+  pool: Pool;
+  mappingPath: string;
+  filePath: string;
+  limits?: ImportLimits;
+  now?: Date;
+}): Promise<ImportSummary> {
+  const mapping = loadMapping(options.mappingPath);
+  const sourceBytes = readFileSync(options.filePath);
+  return runMmpImportSource({
+    pool: options.pool,
+    mapping,
+    sourceBytes,
+    sourceLabel: basename(options.filePath),
+    limits: options.limits,
+    now: options.now,
+  });
+}
+
 export async function runMmpImportCommand(
   options: Parameters<typeof runMmpImport>[0] & { lintDirectory?: string },
 ): Promise<ImportSummary> {
@@ -437,6 +508,26 @@ export async function runMmpImportCommand(
       pool: options.pool,
       tenantId: scope.tenantId,
       appId: scope.appId,
+      job: "mmp_import",
+      outcome,
+    }),
+  );
+}
+
+export async function runMmpImportSourceCommand(
+  options: Parameters<typeof runMmpImportSource>[0] & { siblingMappings?: readonly ImportMapping[] },
+): Promise<ImportSummary> {
+  return runWithTerminalJobOutcome(
+    async () => {
+      for (const warning of lintMappings(options.siblingMappings ?? [options.mapping])) {
+        console.warn(JSON.stringify({ level: "warning", ...warning }));
+      }
+      return runMmpImportSource(options);
+    },
+    (outcome) => recordJobOutcome({
+      pool: options.pool,
+      tenantId: options.mapping.tenant_id,
+      appId: options.mapping.app_id,
       job: "mmp_import",
       outcome,
     }),
