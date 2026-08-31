@@ -52,6 +52,19 @@ async function within<T>(promise: Promise<T>, label: string): Promise<T> {
   }
 }
 
+async function providerStartedBeforeCompletion(
+  started: Promise<void>,
+  processing: Promise<{ processed: number }>,
+  label: string,
+): Promise<void> {
+  await within(Promise.race([
+    started,
+    processing.then((result) => {
+      throw new Error(`${label} completed before provider I/O: ${JSON.stringify(result)}`);
+    }),
+  ]), label);
+}
+
 async function seedEligibleConversion(
   label: string,
   existing?: Pick<SeededConversion, "tenantId" | "appId">,
@@ -184,7 +197,7 @@ describe("Google Data Manager verified-conversion integration", () => {
         },
       },
     });
-    await started.promise;
+    await providerStartedBeforeCompletion(started.promise, first, "claimed Google request");
 
     let blockedProviderCalls = 0;
     assert.deepEqual(await processGoogleConversionDeliveries(pool, payloadStore, tenantId, {
@@ -311,7 +324,7 @@ describe("Google Data Manager verified-conversion integration", () => {
         },
       },
     });
-    await within(requestStarted.promise, "paced Google request");
+    await providerStartedBeforeCompletion(requestStarted.promise, first, "paced Google request");
 
     assert.deepEqual(await processGoogleConversionDeliveries(
       pool, payloadStore, firstSeed.tenantId, {
