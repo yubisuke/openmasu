@@ -7,6 +7,7 @@ import type {
 } from "../reporting.js";
 import type { FraudAuditRow } from "../fraud-reporting.js";
 import type { GoogleDeliveryHealth } from "../google-delivery-health.js";
+import type { OperatorDeliveryHealth } from "../operator-delivery-health.js";
 
 export type DashboardApp = {
   readonly app_id: string;
@@ -86,6 +87,7 @@ export type DashboardView = {
   readonly operatorBulkExports: readonly DashboardOperatorBulkExport[];
   readonly fraudRows: readonly FraudAuditRow[];
   readonly googleDeliveryHealth?: GoogleDeliveryHealth;
+  readonly operatorDeliveryHealth?: OperatorDeliveryHealth;
   readonly csrfToken: string;
   readonly canOperate: boolean;
   readonly canAdminister: boolean;
@@ -129,6 +131,7 @@ export function buildDashboardView(input: {
   readonly operatorBulkExports?: readonly DashboardOperatorBulkExport[];
   readonly fraudRows?: readonly FraudAuditRow[];
   readonly googleDeliveryHealth?: GoogleDeliveryHealth;
+  readonly operatorDeliveryHealth?: OperatorDeliveryHealth;
   readonly csrfToken: string;
   readonly canOperate?: boolean;
   readonly canAdminister?: boolean;
@@ -179,6 +182,7 @@ export function buildDashboardView(input: {
       || left.destination_id.localeCompare(right.destination_id, "en")),
     fraudRows: [...(input.fraudRows ?? [])],
     ...(input.googleDeliveryHealth ? { googleDeliveryHealth: input.googleDeliveryHealth } : {}),
+    ...(input.operatorDeliveryHealth ? { operatorDeliveryHealth: input.operatorDeliveryHealth } : {}),
     csrfToken: input.csrfToken,
     canOperate: input.canOperate ?? false,
     canAdminister: input.canAdminister ?? false,

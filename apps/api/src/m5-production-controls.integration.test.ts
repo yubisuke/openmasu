@@ -113,6 +113,7 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
   it("allows every role to read and restricts operate/administer capabilities", async () => {
     for (const role of Object.keys(keys) as (keyof typeof keys)[]) {
       assert.equal((await request(role, "/v1/admin/apps")).status, 200);
+      assert.equal((await request(role, `/v1/admin/apps/${appId}/operator-delivery-health`)).status, 200);
     }
     assert.equal((await request("read_only", "/metrics")).status, 200);
 

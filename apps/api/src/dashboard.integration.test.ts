@@ -318,7 +318,33 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     assert.match(appHtml, new RegExp(`/dashboard/apps/${newAppId}/apple-registration`));
     assert.match(appHtml, /Google Data Manager delivery health/);
     assert.match(appHtml, /No Google conversion deliveries are recorded/);
+    assert.match(appHtml, /Operator delivery health/);
+    assert.match(appHtml, /No operator webhook deliveries are recorded/);
+    assert.match(appHtml, /No operator bulk-export batches are recorded/);
     assert.equal(appHtml.includes(issued.sdk_key), false);
+
+    const operatorHealth = await fetch(
+      `${baseUrl}/v1/admin/apps/${newAppId}/operator-delivery-health`,
+      { headers },
+    );
+    assert.equal(operatorHealth.status, 200);
+    assert.deepEqual(await operatorHealth.json(), {
+      webhooks: {
+        summary: {
+          total: 0, due_now: 0, scheduled: 0,
+          by_state: { queued: 0, retry: 0, succeeded: 0, failed: 0, suppressed: 0 },
+        },
+        deliveries: [],
+      },
+      bulk_exports: {
+        summary: {
+          total: 0, due_now: 0, scheduled: 0,
+          by_state: { queued: 0, retry: 0, succeeded: 0, failed: 0, suppressed: 0 },
+        },
+        batches: [],
+      },
+      maximum_rows_per_channel: 50,
+    });
 
     const deliveryHealth = await fetch(
       `${baseUrl}/v1/admin/apps/${newAppId}/google-data-manager/deliveries`,
@@ -355,6 +381,12 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     );
     assert.equal(missingHealth.status, 404);
     assert.deepEqual(await missingHealth.json(), { error: "app_not_found" });
+    const missingOperatorHealth = await fetch(
+      `${baseUrl}/v1/admin/apps/unknown-${suffix}/operator-delivery-health`,
+      { headers },
+    );
+    assert.equal(missingOperatorHealth.status, 404);
+    assert.deepEqual(await missingOperatorHealth.json(), { error: "app_not_found" });
 
     await withTenant(appPool, tenantId, async (client) => {
       const destinationId = randomUUID();

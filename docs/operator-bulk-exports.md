@@ -117,6 +117,22 @@ failures, digest conflicts, and malformed protected state fail closed. Pending
 objects stay encrypted and are purged after success, terminal failure,
 disablement, or privacy suppression.
 
+An authenticated read-only operator can inspect complete app-scoped state
+counts and at most 50 recently updated rows for both bulk-export batches and
+webhook deliveries at:
+
+```text
+GET /v1/admin/apps/<app-id>/operator-delivery-health
+```
+
+Bulk rows contain only the batch and destination IDs, row count, state,
+attempts, next activity, HTTP status, safe reason, and timestamps. Object keys,
+object references and digests, event record IDs, credentials, payloads, and
+stored artifacts are excluded. The same bounded state is shown on the
+server-rendered app dashboard. `succeeded` means that the configured storage
+endpoint accepted or digest-confirmed the object; it does not prove retention,
+replication, or downstream consumption.
+
 ## Privacy deletion rows
 
 At deletion recognition, OpenMasu suppresses every pending object for the
