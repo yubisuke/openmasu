@@ -78,8 +78,7 @@ function errorFields(errors: ErrorObject[] | null | undefined): string[] {
     .filter((value): value is string => typeof value === "string" && value.length > 0))].sort();
 }
 
-export function loadMapping(path: string): ImportMapping {
-  const value: unknown = JSON.parse(readFileSync(path, "utf8"));
+export function parseMapping(value: unknown): ImportMapping {
   if (!validate(value)) throw new MappingError("mapping schema validation failed", errorFields(validate.errors));
   const mapping = value as ImportMapping;
   if (mapping.kind === "mmp_raw" && !mapping.provider) {
@@ -107,6 +106,10 @@ export function loadMapping(path: string): ImportMapping {
   if (missingTargets.length > 0) throw new MappingError("mapping is missing required targets", missingTargets);
   for (const rule of mapping.rules) inspect(rule.expression, rule.target);
   return mapping;
+}
+
+export function loadMapping(path: string): ImportMapping {
+  return parseMapping(JSON.parse(readFileSync(path, "utf8")) as unknown);
 }
 
 function eventIdExpression(mapping: ImportMapping): MappingExpression | undefined {

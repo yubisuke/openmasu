@@ -21,6 +21,22 @@ The report contains aggregate row counts, closed check results, lint warning cod
 
 `persistence: "none"` means the command did not create a database pool or write import metadata, rejections, deliveries, logical events, or facts. Without `--lint-directory=<mapping-directory>`, cross-route `event_id` namespace safety is reported as `not_evaluated`; the command never guesses from one mapping. The report cannot detect conflicts with identities already persisted in a ledger and does not test live provider connectivity. It does not certify a provider or establish metric equivalence: time range, timezone, currency policy, attribution window, cohort definition, and watermark must match before totals can be compared. A successful report is therefore a safe compatibility check, not production-ingestion proof.
 
+## Confirmation-bound runtime import
+
+Use one command to preview the exact `mmp_raw` mapping and source bytes without a database connection:
+
+```bash
+npm run import:session -- --source=examples/mappings/synthetic-provider-click.json --file=examples/synthetic/mmp-raw-events.json
+```
+
+After reviewing the aggregate-only output, pass its token with the same inputs to use the existing runtime importer:
+
+```bash
+npm run import:session -- --source=examples/mappings/synthetic-provider-click.json --file=examples/synthetic/mmp-raw-events.json --confirm=<confirmation_token>
+```
+
+The SHA-256 confirmation token binds the exact mapping and source bytes; it is not a secret or an authentication credential. Changing whitespace or any other byte invalidates the prior token, and validation happens before a database pool is created. A confirmed run retains the existing contract validation, row-level rejection artifacts, producer-scoped event identity, and content-addressed idempotency. Repeating the same confirmed bytes records a skipped import instead of duplicating ledger state. Output remains aggregate-only. If `OPENMASU_PUBLIC_BASE_URL` is configured as an HTTP(S) origin, a committed result also returns dashboard, stored-difference, and aggregate-CSV links.
+
 For `manual_cost`, required compatibility fields are `network`, `date`, `as_of`, and the exact `money.amount_unscaled`, `money.amount_scale`, and `money.currency` representation. Country, campaign, and ad-group dimensions remain optional. The report validates calendar dates, canonical mapped timestamps, uppercase currency/country shapes, non-negative integer money, and duplicate retained dimensions before declaring `execution_ready=true`. It reports only target contract paths and never copies source column names or values.
 
 Provider-reported aggregate revenue uses a separate JSON entry point because it is not a mapping-DSL event or cost batch:

@@ -69,10 +69,14 @@ function parseJsonLines(source: string): Any[] {
   });
 }
 
-export function readRows(path: string, mapping: ImportMapping, limits: ImportLimits): { bytes: number; rows: Any[] } {
-  const bytes = statSync(path).size;
+export function readRowsFromSource(
+  sourceBytes: Uint8Array,
+  mapping: ImportMapping,
+  limits: ImportLimits,
+): { bytes: number; rows: Any[] } {
+  const bytes = sourceBytes.byteLength;
   if (bytes > limits.maxBytes) throw new ImportLimitError(`import file exceeds ${limits.maxBytes} bytes`);
-  const source = readFileSync(path, "utf8");
+  const source = Buffer.from(sourceBytes).toString("utf8");
   const rows = mapping.format === "csv" ? parseCsv(source) : mapping.format === "jsonl" ? parseJsonLines(source) : parseJson(source);
   if (rows.length > limits.maxRows) throw new ImportLimitError(`import file exceeds ${limits.maxRows} rows`);
   for (const [index, row] of rows.entries()) {
@@ -81,4 +85,10 @@ export function readRows(path: string, mapping: ImportMapping, limits: ImportLim
     }
   }
   return { bytes, rows };
+}
+
+export function readRows(path: string, mapping: ImportMapping, limits: ImportLimits): { bytes: number; rows: Any[] } {
+  const bytes = statSync(path).size;
+  if (bytes > limits.maxBytes) throw new ImportLimitError(`import file exceeds ${limits.maxBytes} bytes`);
+  return readRowsFromSource(readFileSync(path), mapping, limits);
 }

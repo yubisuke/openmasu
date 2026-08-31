@@ -127,6 +127,9 @@ campaigns, or provider data.
 For a persistent local development stack and operator commands, follow the
 [getting started guide](docs/getting-started.md). Do not run volume-reset or
 fixture-seed commands against a stack that contains data you need to keep.
+Use the [confirmation-bound import session](docs/import-mappings.md#confirmation-bound-runtime-import)
+to preview exact local input bytes before allowing an existing-MMP import to
+write to the ledger.
 Backend event producers should begin with the
 [server-to-server event guide](docs/server-to-server-events.md). Operators who
 need outbound callbacks should use the separate
