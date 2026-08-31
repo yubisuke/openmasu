@@ -226,6 +226,12 @@ describe("Google Data Manager verified-conversion integration", () => {
         WHERE tenant_id=$1 AND app_id=$2`,
       [tenantId, appId],
     ));
+    await withTenant(pool, tenantId, (client) => client.query(
+      `UPDATE control.google_data_manager_destinations
+          SET next_request_at=clock_timestamp() - interval '1 second'
+        WHERE tenant_id=$1 AND app_id=$2`,
+      [tenantId, appId],
+    ));
 
     const staleStarted = deferred();
     const releaseStale = deferred();
