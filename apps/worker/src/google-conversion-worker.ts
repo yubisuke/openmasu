@@ -24,7 +24,7 @@ type Candidate = {
   finality: "final" | "provisional"; network: string; remote_click_ref: string;
 };
 type DeliveryRow = {
-  delivery_id: string; app_id: string; request_ref: string; request_digest: string;
+  delivery_id: string; app_id: string; destination_id: string; request_ref: string; request_digest: string;
   transaction_digest: string; state: string; attempts: number; provider_request_id: string | null;
   diagnostics_deadline_at: Date | string | null;
   claim_token: string | null; claimed_until: Date | string | null;
@@ -44,12 +44,15 @@ type ProcessGoogleConversionOptions = {
   readonly tokenUrl?: string;
   readonly now?: () => Date;
   readonly claimLeaseMs?: number;
+  readonly minimumRequestIntervalMs?: number;
   readonly dependencies?: Partial<GoogleConversionWorkerDependencies>;
 };
 
 export const DEFAULT_GOOGLE_CONVERSION_CLAIM_LEASE_MS = 5 * 60_000;
+export const DEFAULT_GOOGLE_CONVERSION_MINIMUM_REQUEST_INTERVAL_MS = 1_000;
 const MIN_GOOGLE_CONVERSION_CLAIM_LEASE_MS = 1_000;
 const MAX_GOOGLE_CONVERSION_CLAIM_LEASE_MS = 15 * 60_000;
+const MAX_GOOGLE_CONVERSION_MINIMUM_REQUEST_INTERVAL_MS = 60_000;
 const DEFAULT_GOOGLE_CONVERSION_DEPENDENCIES: GoogleConversionWorkerDependencies = {
   accessToken: googleServiceAccountAccessToken,
   sendEvent: sendGoogleDataManagerEvent,
@@ -85,6 +88,16 @@ function claimLeaseMilliseconds(value: number | undefined): number {
   return lease;
 }
 
+function minimumRequestIntervalMilliseconds(value: number | undefined): number {
+  const interval = value ?? DEFAULT_GOOGLE_CONVERSION_MINIMUM_REQUEST_INTERVAL_MS;
+  if (!Number.isSafeInteger(interval)
+    || interval < 0
+    || interval > MAX_GOOGLE_CONVERSION_MINIMUM_REQUEST_INTERVAL_MS) {
+    throw new Error("google_conversion_minimum_request_interval_invalid");
+  }
+  return interval;
+}
+
 async function claimGoogleConversionDeliveries(
   pool: Pool,
   tenantId: string,
@@ -105,15 +118,15 @@ async function claimGoogleConversionDeliveries(
         FOR UPDATE SKIP LOCKED
      )
      UPDATE ephemeral.google_conversion_deliveries AS delivery
-        SET claim_token=$3::uuid,
-            claimed_until=clock_timestamp() + ($4::integer * interval '1 millisecond'),
-            updated_at=$2
+          SET claim_token=$3::uuid,
+              claimed_until=clock_timestamp() + ($4::integer * interval '1 millisecond'),
+              updated_at=$2
        FROM due
       WHERE delivery.tenant_id=$1 AND delivery.delivery_id=due.delivery_id
-     RETURNING delivery.delivery_id::text,delivery.app_id,delivery.request_ref,
-       delivery.request_digest,delivery.transaction_digest,delivery.state,delivery.attempts,
-       delivery.provider_request_id,delivery.diagnostics_deadline_at,
-       delivery.claim_token::text,delivery.claimed_until`,
+     RETURNING delivery.delivery_id::text,delivery.app_id,delivery.destination_id::text,delivery.request_ref,
+        delivery.request_digest,delivery.transaction_digest,delivery.state,delivery.attempts,
+        delivery.provider_request_id,delivery.diagnostics_deadline_at,
+        delivery.claim_token::text,delivery.claimed_until`,
     [tenantId, now.toISOString(), claimToken, leaseMs],
   ));
   return rows.rows[0];
@@ -186,13 +199,31 @@ async function beginProviderRequest<T>(
   pool: Pool,
   tenantId: string,
   row: DeliveryRow,
+  minimumRequestIntervalMs: number,
   operation: () => Promise<T>,
-): Promise<{ readonly response: Promise<T> } | undefined> {
-  return withCurrentDelivery(pool, tenantId, row, () => {
+): Promise<{ readonly outcome: "paced" } | { readonly outcome: "started"; readonly response: Promise<T> } | undefined> {
+  return withCurrentDelivery(pool, tenantId, row, async (client) => {
+    const reserved = await client.query(
+      `UPDATE control.google_data_manager_destinations
+          SET next_request_at=clock_timestamp() + ($3::integer * interval '1 millisecond')
+        WHERE tenant_id=$1 AND destination_id=$2::uuid AND enabled=true
+          AND next_request_at <= clock_timestamp()
+      RETURNING destination_id`,
+      [tenantId, row.destination_id, minimumRequestIntervalMs],
+    );
+    if (reserved.rowCount !== 1) {
+      await client.query(
+        `UPDATE ephemeral.google_conversion_deliveries
+            SET claim_token=NULL,claimed_until=NULL
+          WHERE tenant_id=$1 AND delivery_id=$2::uuid AND claim_token=$3::uuid`,
+        [tenantId, row.delivery_id, row.claim_token],
+      );
+      return { outcome: "paced" } as const;
+    }
     const response = operation();
     // The provider request starts before the shared privacy fence is released.
     void response.catch(() => undefined);
-    return { response };
+    return { outcome: "started", response } as const;
   });
 }
 
@@ -206,6 +237,7 @@ async function finalizeGoogleConversionDelivery(
   providerRequestId: string | undefined,
   deadline: Date | undefined,
   reason: string | undefined,
+  extendDestinationCooldown: boolean,
 ): Promise<boolean> {
   return withTenant(pool, tenantId, async (client) => {
     if (!row.claim_token || !row.claimed_until) {
@@ -226,6 +258,14 @@ async function finalizeGoogleConversionDelivery(
         reason?.replace(/[^a-z0-9_]/g, "_").slice(0, 64) ?? null, row.claim_token, row.state],
     );
     if (updated.rowCount !== 1) return false;
+    if (extendDestinationCooldown) {
+      await client.query(
+        `UPDATE control.google_data_manager_destinations
+            SET next_request_at=GREATEST(next_request_at,$3::timestamptz)
+          WHERE tenant_id=$1 AND destination_id=$2::uuid`,
+        [tenantId, row.destination_id, next.toISOString()],
+      );
+    }
     await appendResult(
       client,
       tenantId,
@@ -361,7 +401,7 @@ export async function discoverGoogleConversionDeliveries(
           delivery_id: deliveryId, app_id: candidate.app_id, request_ref: requestRef,
           request_digest: sha256(prepared.body), transaction_digest: sha256(prepared.transactionId),
           state: "queued", attempts: -1, provider_request_id: null, diagnostics_deadline_at: null,
-          claim_token: null, claimed_until: null,
+          destination_id: candidate.destination_id, claim_token: null, claimed_until: null,
         }, "queued", now.toISOString());
         return result.rowCount === 1;
       });
@@ -378,6 +418,7 @@ export async function processGoogleConversionDeliveries(pool: Pool, payloadStore
   if (!options.credentialsJson) throw new Error("google_data_manager_credentials_missing");
   const dependencies = { ...DEFAULT_GOOGLE_CONVERSION_DEPENDENCIES, ...options.dependencies };
   const leaseMs = claimLeaseMilliseconds(options.claimLeaseMs);
+  const minimumRequestIntervalMs = minimumRequestIntervalMilliseconds(options.minimumRequestIntervalMs);
   let accessToken: string | undefined;
   let processed = 0;
   for (let claimed = 0; claimed < 100; claimed += 1) {
@@ -397,6 +438,7 @@ export async function processGoogleConversionDeliveries(pool: Pool, payloadStore
     });
     accessToken = providerAccessToken;
     let state = row.state; let reason: string | undefined; let providerRequestId = row.provider_request_id ?? undefined;
+    let extendDestinationCooldown = false;
     let next = new Date(now.valueOf() + Math.min(900_000, 60_000 * (2 ** Math.min(row.attempts, 4))));
     let deadline = row.diagnostics_deadline_at ? new Date(row.diagnostics_deadline_at) : undefined;
     if (row.state === "queued") {
@@ -415,25 +457,33 @@ export async function processGoogleConversionDeliveries(pool: Pool, payloadStore
       if (sha256(transactionId) !== row.transaction_digest) {
         throw new Error("google_conversion_transaction_digest_mismatch");
       }
-      const started = await beginProviderRequest(pool, tenantId, row, () => dependencies.sendEvent(
+      const started = await beginProviderRequest(pool, tenantId, row, minimumRequestIntervalMs, () => dependencies.sendEvent(
         { transactionId, request, body },
-        { accessToken: providerAccessToken, baseUrl: options.apiBaseUrl },
+        { accessToken: providerAccessToken, baseUrl: options.apiBaseUrl, now: () => now },
       ));
       if (!started) continue;
+      if (started.outcome === "paced") break;
       const result = await started.response;
       if (result.outcome === "accepted") {
         state = "http_accepted"; providerRequestId = result.requestId;
         next = new Date(now.valueOf() + 30 * 60_000); deadline = new Date(now.valueOf() + 24 * 60 * 60_000);
       } else if (result.outcome === "terminal") { state = "failed"; reason = result.reason; }
-      else reason = result.reason;
+      else {
+        reason = result.reason;
+        extendDestinationCooldown = true;
+        if (result.retryAfterMilliseconds !== undefined) {
+          next = new Date(Math.max(next.valueOf(), now.valueOf() + result.retryAfterMilliseconds));
+        }
+      }
     } else if (providerRequestId && deadline) {
       const diagnosticRequestId = providerRequestId;
       if (now >= deadline) { state = "expired"; reason = "diagnostics_expired"; }
       else {
-        const started = await beginProviderRequest(pool, tenantId, row, () =>
+        const started = await beginProviderRequest(pool, tenantId, row, minimumRequestIntervalMs, () =>
           dependencies.retrieveStatus(diagnosticRequestId,
-            { accessToken: providerAccessToken, baseUrl: options.apiBaseUrl }));
+            { accessToken: providerAccessToken, baseUrl: options.apiBaseUrl, now: () => now }));
         if (!started) continue;
+        if (started.outcome === "paced") break;
         const result = await started.response;
         if (result.outcome === "status") {
           if (result.status === "processing") {
@@ -444,12 +494,19 @@ export async function processGoogleConversionDeliveries(pool: Pool, payloadStore
           } else state = result.status === "success" ? "succeeded" : result.status === "partial_success" ? "partial_success" : "failed";
           if (result.errors.length) reason = result.errors[0]!.reason.toLowerCase();
         } else if (result.outcome === "terminal") { state = "failed"; reason = result.reason; }
-        else reason = result.reason;
+        else {
+          reason = result.reason;
+          extendDestinationCooldown = true;
+          if (result.retryAfterMilliseconds !== undefined) {
+            next = new Date(Math.max(next.valueOf(), now.valueOf() + result.retryAfterMilliseconds));
+          }
+        }
       }
     }
     const completedAt = options.now?.() ?? new Date();
     const finalized = await finalizeGoogleConversionDelivery(
       pool, tenantId, row, completedAt, state, next, providerRequestId, deadline, reason,
+      extendDestinationCooldown,
     );
     if (!finalized) continue;
     processed += 1;

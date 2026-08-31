@@ -90,12 +90,19 @@ unbounded, but does not guarantee that arrival rate stays below drain rate.
 Google conversion delivery claims one row immediately before provider I/O with
 a five-minute database-clock lease. A second worker skips an active claim, an
 expired claim is eligible for recovery, and only the current token can update
-the delivery and append its result. Monitor queue due age, claim age, repeated
+the delivery and append its result. The claim transaction also reserves the
+destination's next database-backed request slot. The default one-second
+spacing is controlled by `OPENMASU_GOOGLE_DATA_MANAGER_MIN_REQUEST_INTERVAL_MS`
+(0 through 60000 milliseconds); a bounded provider `Retry-After` pause extends
+the shared slot for every worker replica. A locally paced row is not claimed,
+does not increment attempts, and does not append a provider result. Monitor
+queue due age, destination pause age, claim age, repeated
 expiry, retry count, and diagnostic deadline without putting transaction IDs,
 request IDs, tenants, apps, or provider values in metric labels. A crash or
 lost response after provider acceptance can still cause a same-transaction-ID
 resend after expiry; the local claim does not establish provider-side exactly-
-once delivery.
+once delivery. The configured spacing is a local safety control, not evidence
+of a live quota allocation.
 
 AdServices lookup uses the same local ownership boundary for one queue only.
 `OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS` bounds each network wait and must be

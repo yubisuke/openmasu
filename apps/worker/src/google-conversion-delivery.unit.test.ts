@@ -5,6 +5,7 @@ import {
   exactGoogleConversionValue,
   googleConversionTransactionId,
   googleDiagnosticPollPlan,
+  googleRetryAfterMilliseconds,
   normalizeGoogleConversionEligibility,
   parseGoogleDataManagerRequestStatus,
   retrieveGoogleDataManagerRequestStatus,
@@ -152,6 +153,29 @@ describe("Google Data Manager event transport", () => {
       fetch: async () => { throw new Error("https://secret.invalid/?token=secret"); },
     });
     assert.deepEqual(transportFailure, { outcome: "retry", reason: "transport_error" });
+  });
+
+  it("honors bounded Retry-After without retaining provider header text", async () => {
+    const now = new Date("2026-08-31T00:00:00.000Z");
+    assert.equal(googleRetryAfterMilliseconds("120", now), 120_000);
+    assert.equal(googleRetryAfterMilliseconds("999999999", now), 3_600_000);
+    assert.equal(googleRetryAfterMilliseconds("Sun, 31 Aug 2026 00:05:00 GMT", now), 300_000);
+    for (const invalid of [null, "-1", "1.5", "secret=300", "Sun, 31 Aug 2025 00:05:00 GMT"]) {
+      assert.equal(googleRetryAfterMilliseconds(invalid, now), undefined);
+    }
+    const prepared = buildGoogleDataManagerIngestRequest(eligible);
+    const result = await sendGoogleDataManagerEvent(prepared, {
+      accessToken: "synthetic", baseUrl: "http://localhost:8080", now: () => now,
+      fetch: async () => new Response("synthetic provider body", {
+        status: 429,
+        headers: { "retry-after": "120", "x-provider-secret": "do-not-retain" },
+      }),
+    });
+    assert.deepEqual(result, {
+      outcome: "retry", reason: "rate_limited", httpStatus: 429, retryAfterMilliseconds: 120_000,
+    });
+    assert.equal(JSON.stringify(result).includes("provider-secret"), false);
+    assert.equal(JSON.stringify(result).includes("do-not-retain"), false);
   });
 
   it("bounds accepted response bytes and retries malformed or missing request IDs", async () => {

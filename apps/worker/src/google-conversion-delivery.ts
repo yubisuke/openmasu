@@ -74,7 +74,12 @@ export type GoogleProviderFailureReason =
 
 export type GoogleDeliveryResult =
   | Readonly<{ outcome: "accepted"; requestId: string; httpStatus: number }>
-  | Readonly<{ outcome: "retry"; reason: GoogleProviderFailureReason; httpStatus?: number }>
+  | Readonly<{
+    outcome: "retry";
+    reason: GoogleProviderFailureReason;
+    httpStatus?: number;
+    retryAfterMilliseconds?: number;
+  }>
   | Readonly<{ outcome: "terminal"; reason: GoogleProviderFailureReason; httpStatus: number }>;
 
 export type SafeDiagnosticCount = Readonly<{ reason: string; recordCount: string }>;
@@ -86,7 +91,12 @@ export type GoogleRequestStatusResult =
     errors: readonly SafeDiagnosticCount[];
     warnings: readonly SafeDiagnosticCount[];
   }>
-  | Readonly<{ outcome: "retry"; reason: GoogleProviderFailureReason; httpStatus?: number }>
+  | Readonly<{
+    outcome: "retry";
+    reason: GoogleProviderFailureReason;
+    httpStatus?: number;
+    retryAfterMilliseconds?: number;
+  }>
   | Readonly<{ outcome: "terminal"; reason: GoogleProviderFailureReason; httpStatus: number }>;
 
 export type GoogleDataManagerTransport = Readonly<{
@@ -96,6 +106,7 @@ export type GoogleDataManagerTransport = Readonly<{
   maximumRequestBytes?: number;
   maximumResponseBytes?: number;
   timeoutMilliseconds?: number;
+  now?: () => Date;
 }>;
 
 function object(value: unknown, error: string): JsonObject {
@@ -302,10 +313,29 @@ function safeJson(body: Buffer): JsonObject | undefined {
   }
 }
 
-function httpFailure(status: number): GoogleDeliveryResult | undefined {
+const MAX_RETRY_AFTER_MILLISECONDS = 60 * 60 * 1_000;
+const HTTP_DATE = /^[A-Z][a-z]{2}, [0-9]{2} [A-Z][a-z]{2} [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} GMT$/;
+
+/** Parse only bounded delay-seconds or IMF-fixdate Retry-After values. */
+export function googleRetryAfterMilliseconds(value: string | null, now: Date): number | undefined {
+  if (value === null || !Number.isFinite(now.valueOf())) return undefined;
+  if (/^(0|[1-9][0-9]{0,8})$/.test(value)) {
+    return Math.min(MAX_RETRY_AFTER_MILLISECONDS, Number(value) * 1_000);
+  }
+  if (!HTTP_DATE.test(value)) return undefined;
+  const at = Date.parse(value);
+  if (!Number.isFinite(at) || at <= now.valueOf()) return undefined;
+  return Math.min(MAX_RETRY_AFTER_MILLISECONDS, at - now.valueOf());
+}
+
+function httpFailure(response: Response, now: Date): GoogleDeliveryResult | undefined {
+  const status = response.status;
   if (status >= 300 && status < 400) return { outcome: "terminal", reason: "redirect_rejected", httpStatus: status };
-  if (status === 429) return { outcome: "retry", reason: "rate_limited", httpStatus: status };
-  if (status >= 500) return { outcome: "retry", reason: "provider_unavailable", httpStatus: status };
+  const retryAfterMilliseconds = googleRetryAfterMilliseconds(response.headers.get("retry-after"), now);
+  if (status === 429) return { outcome: "retry", reason: "rate_limited", httpStatus: status,
+    ...(retryAfterMilliseconds === undefined ? {} : { retryAfterMilliseconds }) };
+  if (status >= 500) return { outcome: "retry", reason: "provider_unavailable", httpStatus: status,
+    ...(retryAfterMilliseconds === undefined ? {} : { retryAfterMilliseconds }) };
   if (status >= 400) return { outcome: "terminal", reason: "provider_rejected", httpStatus: status };
   return undefined;
 }
@@ -333,7 +363,7 @@ export async function sendGoogleDataManagerEvent(
   } catch {
     return { outcome: "retry", reason: "transport_error" };
   }
-  const failed = httpFailure(response.status);
+  const failed = httpFailure(response, config.now?.() ?? new Date());
   if (failed) return failed.outcome === "accepted"
     ? { outcome: "retry", reason: "response_invalid", httpStatus: response.status }
     : failed;
@@ -406,7 +436,7 @@ export async function retrieveGoogleDataManagerRequestStatus(
   } catch {
     return { outcome: "retry", reason: "transport_error" };
   }
-  const failed = httpFailure(response.status);
+  const failed = httpFailure(response, config.now?.() ?? new Date());
   if (failed) return failed.outcome === "accepted"
     ? { outcome: "retry", reason: "response_invalid", httpStatus: response.status }
     : failed;

@@ -264,6 +264,9 @@ async function processTenantCycle(tenantId: string): Promise<void> {
         credentialsJson: secrets.read("OPENMASU_GOOGLE_DATA_MANAGER_SERVICE_ACCOUNT_JSON"),
         apiBaseUrl: process.env.OPENMASU_GOOGLE_DATA_MANAGER_BASE_URL,
         tokenUrl: process.env.OPENMASU_GOOGLE_DATA_MANAGER_OAUTH_TOKEN_URL,
+        minimumRequestIntervalMs: Number(
+          process.env.OPENMASU_GOOGLE_DATA_MANAGER_MIN_REQUEST_INTERVAL_MS ?? "1000",
+        ),
       });
     }
   });
