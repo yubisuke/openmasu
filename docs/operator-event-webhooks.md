@@ -166,6 +166,22 @@ Authenticated `/metrics` output includes the fixed-label
 `operator_webhooks` backlog and the `operator_webhook_delivery` job status.
 Receiver response bodies are not retained or logged.
 
+An authenticated read-only operator can inspect complete app-scoped state
+counts and at most 50 recently updated rows for both webhook deliveries and
+bulk-export batches at:
+
+```text
+GET /v1/admin/apps/<app-id>/operator-delivery-health
+```
+
+The webhook rows contain only the delivery and destination IDs, event name,
+state, attempts, next activity, HTTP status, safe reason, and timestamps. They
+exclude logical-event and record IDs, request references and digests, signing
+secrets, payloads, and stored artifacts. The same bounded state is shown on the
+server-rendered app dashboard. `succeeded` means that the configured receiver
+returned a successful HTTP response; it is not proof of downstream processing
+or exactly-once effect.
+
 Repository tests use only a synthetic loopback receiver. Before a private
 deployment enables this feature, follow the
 [operator webhook checklist](validation/operator-event-webhook-checklist.md).

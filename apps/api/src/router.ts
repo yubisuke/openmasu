@@ -35,6 +35,7 @@ import {
 import { parseMetricQuery, ReportQueryError } from "./report-query.js";
 import { encodeFraudAudit, fraudAudit, FraudAuditQueryError, parseFraudAuditQuery } from "./fraud-reporting.js";
 import { googleDeliveryHealth } from "./google-delivery-health.js";
+import { operatorDeliveryHealth } from "./operator-delivery-health.js";
 import type { KeyedTokenBucket, TokenBucket } from "./rate-limit.js";
 import { matchRoute, type RouteDefinition } from "./routes.js";
 import { activateRuleBundle } from "./rule-bundles.js";
@@ -921,6 +922,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
           const operatorWebhooks = await listOperatorWebhookDestinations(dependencies.readerPool, appIdentity);
           const operatorBulkExports = await listOperatorBulkExportDestinations(dependencies.readerPool, appIdentity);
           const googleHealth = await googleDeliveryHealth(dependencies.readerPool, appIdentity);
+          const operatorHealth = await operatorDeliveryHealth(dependencies.readerPool, appIdentity);
           const metrics = await metricReport(dependencies.readerPool, appIdentity, parsed.query);
           const effectiveWatermark = parsed.query.watermarkAtMost
             ?? metrics.data.map((row) => row.input_received_at_watermark).sort().at(-1);
@@ -946,6 +948,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             operatorWebhooks,
             operatorBulkExports,
             googleDeliveryHealth: googleHealth,
+            operatorDeliveryHealth: operatorHealth,
             canOperate: roleAllows(session.role, "operate"),
             canAdminister: roleAllows(session.role, "administer"),
             csrfToken: csrfToken(session.token),
@@ -1001,6 +1004,16 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
           try {
             const appIdentity = await requireRegisteredApp(pool, identity, adminAppId(target.pathname) ?? "");
             json(response, 200, await googleDeliveryHealth(pool, appIdentity));
+          } catch (error) {
+            if (error instanceof AppNotFoundError) json(response, 404, { error: "app_not_found" });
+            else throw error;
+          }
+          return;
+        }
+        if (route.handler === "admin_operator_delivery_health") {
+          try {
+            const appIdentity = await requireRegisteredApp(pool, identity, adminAppId(target.pathname) ?? "");
+            json(response, 200, await operatorDeliveryHealth(pool, appIdentity));
           } catch (error) {
             if (error instanceof AppNotFoundError) json(response, 404, { error: "app_not_found" });
             else throw error;

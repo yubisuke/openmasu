@@ -45,8 +45,8 @@ MMP.
 | Contract and deterministic evaluator | Implemented and synthetically verified across 28 schemas, 8 registries, 57 fixtures, and 741 goldens | Real input representativeness and external implementation adoption |
 | Shadow ledger and imports | Implemented for raw events, manual/bounded provider cost, and advertising or verified-commerce revenue | Authorized real export compatibility, account permissions, completeness, latency, and reconciliation |
 | Server-to-server events | Implemented for selected first-party backend events with app-scoped rotatable HMAC keys, durable inbox admission, contract rejection, replay controls, and deletion-race enforcement | Production TLS, secret custody, sustained load, backend integration, and operator acceptance |
-| Operator event webhooks | Implemented as a default-off, app-scoped export of selected accepted events with exact-origin egress policy, destination-scoped references, exact-body HMAC, durable retry, and deletion-race enforcement | Production receiver, DNS/TLS, capacity, alerting, secret custody, downstream retention/deletion, and operator acceptance |
-| Operator bulk event exports | Implemented as a default-off, app-scoped deterministic gzip NDJSON export to allowlisted S3-compatible operator storage, with SigV4, conditional create, digest-verified replay, durable keyset cursors, and destination-scoped deletion rows | Live Amazon S3/Cloudflare R2 account, IAM policy, DNS/TLS, lifecycle/replication, throughput, cost, alerting, downstream deletion, and operator acceptance |
+| Operator event webhooks | Implemented as a default-off, app-scoped export of selected accepted events with exact-origin egress policy, destination-scoped references, exact-body HMAC, durable retry, deletion-race enforcement, and bounded reader-safe delivery health | Production receiver, DNS/TLS, capacity, alerting, secret custody, downstream retention/deletion, and operator acceptance |
+| Operator bulk event exports | Implemented as a default-off, app-scoped deterministic gzip NDJSON export to allowlisted S3-compatible operator storage, with SigV4, conditional create, digest-verified replay, durable keyset cursors, destination-scoped deletion rows, and bounded reader-safe batch health | Live Amazon S3/Cloudflare R2 account, IAM policy, DNS/TLS, lifecycle/replication, throughput, cost, alerting, downstream deletion, and operator acceptance |
 | Attribution and difference audit | Implemented for supported deterministic and aggregate evidence families | Same-cohort comparison with an existing MMP under frozen definitions |
 | Cohort metrics and exports | Implemented for versioned revenue, cost, FX, retention, ROAS, LTV, JSON, CSV, dashboard output, and app-scoped durable daily schedules with exact replay | Real currency/time-zone coverage, source-dashboard reconciliation, schedule/alert operation, and operator acceptance |
 | Android, iOS, and Unity SDKs | Implemented with JVM, emulator, Swift, simulator, reproducible packaging, standalone UPM dependency resolution, and a synthetic Unity 6 Android export/APK gate | Physical devices, Unity 2022.3, iOS Unity export, store delivery, and live provider signals |
@@ -97,7 +97,10 @@ destination-scoped database request slot across worker replicas and propagates
 bounded `Retry-After` pauses. Its read-only admin API and server-rendered
 dashboard expose complete app-scoped state counts plus a bounded recent-row
 view without exposing request references, provider IDs, digests, payloads, or
-artifacts. Lease expiry can still repeat a provider
+artifacts. Operator webhook and bulk-export queues expose the same bounded
+local-state pattern through one app-scoped API/dashboard section, while the
+reader role is limited to the exact metadata columns needed by destination
+lists, fixed-label metrics, and that health view. Lease expiry can still repeat a provider
 operation; live quota allocation and distributed pacing for other provider
 paths remain separate operational work.
 

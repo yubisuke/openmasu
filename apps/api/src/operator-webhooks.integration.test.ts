@@ -271,6 +271,19 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
     assert.equal(attempts[0]!.signature,
       `sha256=${createHmac("sha256", Buffer.from(webhookSigningSecret, "utf8"))
         .update(attempts[0]!.body).digest("hex")}`);
+
+    const healthResponse = await admin(`/v1/admin/apps/${appId}/operator-delivery-health`);
+    assert.equal(healthResponse.status, 200);
+    const healthText = await healthResponse.text();
+    const health = JSON.parse(healthText) as {
+      webhooks: { summary: { total: number; by_state: Record<string, number> }; deliveries: Array<{ state: string; event_name: string }> };
+    };
+    assert.ok(health.webhooks.summary.total >= 1);
+    assert.ok(health.webhooks.summary.by_state.succeeded >= 1);
+    assert.equal(health.webhooks.deliveries.some((row) => row.state === "succeeded" && row.event_name === "custom_event"), true);
+    for (const forbidden of [
+      installationId, eventId, "logical_event_id", "record_id", "request_ref", "request_digest", "artifact",
+    ]) assert.equal(healthText.includes(forbidden), false, forbidden);
   });
 
   it("serializes an in-flight request before deletion recognition without deadlock", async () => {

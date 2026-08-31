@@ -42,6 +42,7 @@ export type RouteHandler =
   | "admin_rule_bundle"
   | "admin_google_data_manager"
   | "admin_google_delivery_health"
+  | "admin_operator_delivery_health"
   | "apple_skan_postback"
   | "apple_aak_postback"
   | "google_play_rtdn"
@@ -137,6 +138,7 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "admin_rule_bundle", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/rule-bundles$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_google_data_manager", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/google-data-manager$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_google_delivery_health", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/google-data-manager\/deliveries$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "admin_operator_delivery_health", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-delivery-health$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "dashboard_root", method: "GET", pattern: /^\/dashboard\/?$/, auth: "public", mutates: false },
   { handler: "dashboard_css", method: "GET", pattern: /^\/dashboard\/app\.css$/, auth: "public", mutates: false },
   { handler: "dashboard_login", method: "POST", pattern: /^\/dashboard\/session$/, auth: "public", mutates: true },

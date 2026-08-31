@@ -206,9 +206,19 @@ export async function listOperatorBulkExportDestinations(
 ): Promise<readonly OperatorBulkExportDestination[]> {
   return withTenant(pool, identity.tenantId, async (client) => (await client.query<OperatorBulkExportDestination>(
     `SELECT destination_id,tenant_id,app_id,endpoint_url,bucket_name,object_prefix,region,
-            allowed_events AS events,start_at,status,created_at,status_changed_at
-       FROM control.operator_bulk_export_destinations_current
-      WHERE tenant_id=$1 AND app_id=$2
+            events,start_at,status,created_at,status_changed_at
+       FROM (
+         SELECT DISTINCT ON (base.destination_id)
+                base.destination_id,base.tenant_id,base.app_id,base.endpoint_url,
+                base.bucket_name,base.object_prefix,base.region,
+                base.allowed_events AS events,base.start_at,state.status,base.created_at,
+                state.changed_at AS status_changed_at
+           FROM control.operator_bulk_export_destinations AS base
+           JOIN control.operator_bulk_export_destination_states AS state
+             USING (destination_id,tenant_id,app_id)
+          WHERE base.tenant_id=$1 AND base.app_id=$2
+          ORDER BY base.destination_id,state.destination_state_seq DESC
+       ) AS current
       ORDER BY created_at DESC,destination_id COLLATE "C"`,
     [identity.tenantId, identity.appId],
   )).rows);

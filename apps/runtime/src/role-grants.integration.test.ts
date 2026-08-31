@@ -25,11 +25,21 @@ const readerNoTableSelect = new Set([
   "control.commerce_purchase_bindings",
   "control.commerce_backfill_checkpoints",
   "control.google_data_manager_destinations",
+  "control.operator_webhook_destinations",
+  "control.operator_webhook_destination_states",
+  "control.operator_bulk_export_destinations",
+  "control.operator_bulk_export_destination_states",
+  "control.operator_bulk_export_checkpoints",
   "control.metric_replay_manifests",
   "control.public_postback_audits",
   "control.privacy_deletion_jobs",
   "control.privacy_payload_purges",
   "ledger.adservices_lookup_results",
+  "ledger.operator_webhook_delivery_results",
+  "ledger.operator_bulk_export_deletions",
+  "ledger.operator_bulk_export_results",
+  "ephemeral.operator_webhook_deliveries",
+  "ephemeral.operator_bulk_export_batches",
 ]);
 const seedControlTruncate = new Set([
   "control.admin_keys",
@@ -86,10 +96,10 @@ const ephemeralExpected = new Map<string, Record<Role, Privilege[]>>([
     openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: [], openmasu_seed: ["TRUNCATE"],
   }],
   ["ephemeral.operator_webhook_deliveries", {
-    openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: ["SELECT"], openmasu_seed: ["TRUNCATE"],
+    openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: [], openmasu_seed: ["TRUNCATE"],
   }],
   ["ephemeral.operator_bulk_export_batches", {
-    openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: ["SELECT"], openmasu_seed: ["TRUNCATE"],
+    openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: [], openmasu_seed: ["TRUNCATE"],
   }],
 ]);
 
@@ -200,6 +210,103 @@ try {
     expectedReaderGoogleColumns.size,
     "Google delivery health reader column matrix is incomplete",
   );
+  const readerOperatorColumns = await pool.query<{
+    table_schema: string;
+    table_name: string;
+    column_name: string;
+    allowed: boolean;
+  }>(`
+    SELECT table_schema, table_name, column_name,
+           has_column_privilege(
+             'openmasu_reader',
+             format('%I.%I', table_schema, table_name),
+             column_name,
+             'SELECT'
+           ) AS allowed
+      FROM information_schema.columns
+     WHERE (table_schema, table_name) IN (
+       ('control', 'operator_webhook_destinations'),
+       ('control', 'operator_webhook_destination_states'),
+       ('ephemeral', 'operator_webhook_deliveries'),
+       ('control', 'operator_bulk_export_destinations'),
+       ('control', 'operator_bulk_export_destination_states'),
+       ('ephemeral', 'operator_bulk_export_batches')
+     )
+     ORDER BY table_schema, table_name, ordinal_position
+  `);
+  const expectedReaderOperatorColumns = new Set([
+    "control.operator_webhook_destinations.destination_id",
+    "control.operator_webhook_destinations.tenant_id",
+    "control.operator_webhook_destinations.app_id",
+    "control.operator_webhook_destinations.endpoint_url",
+    "control.operator_webhook_destinations.allowed_events",
+    "control.operator_webhook_destinations.created_at",
+    "control.operator_webhook_destination_states.destination_state_seq",
+    "control.operator_webhook_destination_states.destination_id",
+    "control.operator_webhook_destination_states.tenant_id",
+    "control.operator_webhook_destination_states.app_id",
+    "control.operator_webhook_destination_states.status",
+    "control.operator_webhook_destination_states.changed_at",
+    "ephemeral.operator_webhook_deliveries.delivery_id",
+    "ephemeral.operator_webhook_deliveries.tenant_id",
+    "ephemeral.operator_webhook_deliveries.app_id",
+    "ephemeral.operator_webhook_deliveries.destination_id",
+    "ephemeral.operator_webhook_deliveries.event_name",
+    "ephemeral.operator_webhook_deliveries.state",
+    "ephemeral.operator_webhook_deliveries.attempts",
+    "ephemeral.operator_webhook_deliveries.next_attempt_at",
+    "ephemeral.operator_webhook_deliveries.last_http_status",
+    "ephemeral.operator_webhook_deliveries.safe_reason",
+    "ephemeral.operator_webhook_deliveries.created_at",
+    "ephemeral.operator_webhook_deliveries.updated_at",
+    "control.operator_bulk_export_destinations.destination_id",
+    "control.operator_bulk_export_destinations.tenant_id",
+    "control.operator_bulk_export_destinations.app_id",
+    "control.operator_bulk_export_destinations.endpoint_url",
+    "control.operator_bulk_export_destinations.bucket_name",
+    "control.operator_bulk_export_destinations.object_prefix",
+    "control.operator_bulk_export_destinations.region",
+    "control.operator_bulk_export_destinations.allowed_events",
+    "control.operator_bulk_export_destinations.start_at",
+    "control.operator_bulk_export_destinations.created_at",
+    "control.operator_bulk_export_destination_states.destination_state_seq",
+    "control.operator_bulk_export_destination_states.destination_id",
+    "control.operator_bulk_export_destination_states.tenant_id",
+    "control.operator_bulk_export_destination_states.app_id",
+    "control.operator_bulk_export_destination_states.status",
+    "control.operator_bulk_export_destination_states.changed_at",
+    "ephemeral.operator_bulk_export_batches.batch_id",
+    "ephemeral.operator_bulk_export_batches.tenant_id",
+    "ephemeral.operator_bulk_export_batches.app_id",
+    "ephemeral.operator_bulk_export_batches.destination_id",
+    "ephemeral.operator_bulk_export_batches.row_count",
+    "ephemeral.operator_bulk_export_batches.state",
+    "ephemeral.operator_bulk_export_batches.attempts",
+    "ephemeral.operator_bulk_export_batches.next_attempt_at",
+    "ephemeral.operator_bulk_export_batches.last_http_status",
+    "ephemeral.operator_bulk_export_batches.safe_reason",
+    "ephemeral.operator_bulk_export_batches.created_at",
+    "ephemeral.operator_bulk_export_batches.updated_at",
+  ]);
+  for (const row of readerOperatorColumns.rows) {
+    const qualified = `${row.table_schema}.${row.table_name}.${row.column_name}`;
+    assert.equal(row.allowed, expectedReaderOperatorColumns.has(qualified), `openmasu_reader column privilege drift on ${qualified}`);
+  }
+  assert.equal(
+    readerOperatorColumns.rows.filter((row) => row.allowed).length,
+    expectedReaderOperatorColumns.size,
+    "operator delivery health reader column matrix is incomplete",
+  );
+  for (const view of [
+    "control.operator_webhook_destinations_current",
+    "control.operator_bulk_export_destinations_current",
+  ]) {
+    const allowed = await pool.query<{ allowed: boolean }>(
+      "SELECT has_table_privilege('openmasu_reader', $1, 'SELECT') AS allowed",
+      [view],
+    );
+    assert.equal(allowed.rows[0]?.allowed, false, `openmasu_reader retains broad access to ${view}`);
+  }
   const scheduleView = await pool.query<{ role_name: Role; allowed: boolean }>(`
     SELECT role_name,
            has_table_privilege(role_name, 'control.metric_schedules_current', 'SELECT') AS allowed

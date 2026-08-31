@@ -286,6 +286,62 @@ describe("M3 zero-JavaScript dashboard", () => {
     for (const value of forbidden) assert.equal(html.includes(value), false, value);
   });
 
+  it("renders bounded operator delivery health without secret-bearing identifiers", () => {
+    const html = renderDashboard(buildDashboardView({
+      apps: [],
+      selectedAppId: "app-one",
+      csrfToken: "synthetic-csrf",
+      operatorDeliveryHealth: {
+        webhooks: {
+          summary: {
+            total: 1, due_now: 1, scheduled: 0,
+            by_state: { queued: 0, retry: 1, succeeded: 0, failed: 0, suppressed: 0 },
+          },
+          deliveries: [{
+            delivery_id: "00000000-0000-7000-8000-000000000129",
+            destination_id: "webhook:synthetic",
+            event_name: "custom_event",
+            state: "retry",
+            attempts: 2,
+            next_attempt_at: "2026-08-31T11:00:00.000Z",
+            last_http_status: 503,
+            safe_reason: "transport_error",
+            created_at: "2026-08-31T10:00:00.000Z",
+            updated_at: "2026-08-31T10:30:00.000Z",
+          }],
+        },
+        bulk_exports: {
+          summary: {
+            total: 1, due_now: 0, scheduled: 0,
+            by_state: { queued: 0, retry: 0, succeeded: 1, failed: 0, suppressed: 0 },
+          },
+          batches: [{
+            batch_id: "00000000-0000-7000-8000-000000000130",
+            destination_id: "bulk:synthetic",
+            row_count: 25,
+            state: "succeeded",
+            attempts: 1,
+            next_attempt_at: "2026-08-31T11:00:00.000Z",
+            last_http_status: 200,
+            safe_reason: null,
+            created_at: "2026-08-31T10:00:00.000Z",
+            updated_at: "2026-08-31T10:31:00.000Z",
+          }],
+        },
+        maximum_rows_per_channel: 50,
+      },
+    }));
+    assert.match(html, /Operator delivery health/);
+    assert.match(html, /transport_error/);
+    assert.match(html, /custom_event/);
+    assert.match(html, />25</);
+    assert.equal(html.includes("<script"), false);
+    for (const forbidden of [
+      "request_ref", "request_digest", "record_id", "object_key", "object_ref", "object_digest",
+      "credential_ref", "secret_ref", "encrypted:synthetic", "artifact",
+    ]) assert.equal(html.includes(forbidden), false, forbidden);
+  });
+
   it("reports signed purchase net revenue without exposing purchase identifiers", () => {
     const netRevenue = metric({
       metric_run_id: "metric:purchase-net-negative",

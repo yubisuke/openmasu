@@ -228,6 +228,19 @@ describe("operator-owned S3-compatible bulk event exports", { concurrency: false
     )).rows[0]!);
     assert.ok(checkpoint.event_received_at);
     assert.ok(checkpoint.event_record_id);
+
+    const healthResponse = await admin(`/v1/admin/apps/${appId}/operator-delivery-health`);
+    assert.equal(healthResponse.status, 200);
+    const healthText = await healthResponse.text();
+    const health = JSON.parse(healthText) as {
+      bulk_exports: { summary: { total: number; by_state: Record<string, number> }; batches: Array<{ state: string; row_count: number }> };
+    };
+    assert.ok(health.bulk_exports.summary.total >= 1);
+    assert.ok(health.bulk_exports.summary.by_state.succeeded >= 1);
+    assert.equal(health.bulk_exports.batches.some((row) => row.state === "succeeded" && row.row_count >= 1), true);
+    for (const forbidden of [
+      eventId, installationId, "event_record_id", "object_key", "object_ref", "object_digest", "artifact",
+    ]) assert.equal(healthText.includes(forbidden), false, forbidden);
   });
 
   it("suppresses a pending object at privacy recognition and emits a destination-scoped deletion next", async () => {

@@ -139,10 +139,19 @@ export async function listOperatorWebhookDestinations(
     created_at: string;
     status_changed_at: string;
   }>(
-    `SELECT destination_id,tenant_id,app_id,endpoint_url,allowed_events AS events,
+    `SELECT destination_id,tenant_id,app_id,endpoint_url,events,
             status,created_at,status_changed_at
-       FROM control.operator_webhook_destinations_current
-      WHERE tenant_id=$1 AND app_id=$2
+       FROM (
+         SELECT DISTINCT ON (base.destination_id)
+                base.destination_id,base.tenant_id,base.app_id,base.endpoint_url,
+                base.allowed_events AS events,state.status,base.created_at,
+                state.changed_at AS status_changed_at
+           FROM control.operator_webhook_destinations AS base
+           JOIN control.operator_webhook_destination_states AS state
+             USING (destination_id,tenant_id,app_id)
+          WHERE base.tenant_id=$1 AND base.app_id=$2
+          ORDER BY base.destination_id,state.destination_state_seq DESC
+       ) AS current
       ORDER BY created_at DESC,destination_id COLLATE "C"`,
     [identity.tenantId, identity.appId],
   )).rows);

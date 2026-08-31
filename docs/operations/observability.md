@@ -36,6 +36,15 @@ system.
 - Labels must not contain tenant data, app IDs, event IDs, provider identifiers,
   payloads, or raw paths.
 
+For per-app investigation, authenticated read-only users can call
+`GET /v1/admin/apps/<app-id>/operator-delivery-health` or open the app
+dashboard. That surface returns complete local state counts and at most 50
+recent webhook rows plus 50 recent bulk-export rows. It exposes only bounded
+operational metadata; credentials, payload and object references, source
+record IDs, object paths, digests, and artifacts remain outside the reader
+role. `due_now` and `scheduled` describe OpenMasu's local queue, and a local
+`succeeded` state is not downstream exactly-once or business-effect proof.
+
 ## Scheduler behavior
 
 The worker stores next-run, retry, lease, completion, and failure state in
