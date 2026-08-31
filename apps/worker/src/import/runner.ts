@@ -265,6 +265,7 @@ export function analyzeMmpImportSource(options: {
   siblingMappings?: readonly ImportMapping[];
   sourceLabel?: string;
 }): ImportPreviewAnalysis {
+  if (options.mapping.kind !== "mmp_raw") throw new Error("previewMmpImport requires an mmp_raw mapping");
   const prepared: PreparedMmpImport = {
     mapping: options.mapping,
     loaded: readRowsFromSource(options.sourceBytes, options.mapping, options.limits ?? limitsFromEnvironment()),
@@ -463,6 +464,7 @@ export async function runMmpImportSource(options: {
   limits?: ImportLimits;
   now?: Date;
 }): Promise<ImportSummary> {
+  if (options.mapping.kind !== "mmp_raw") throw new Error("runMmpImport requires an mmp_raw mapping");
   return runPreparedMmpImport({
     pool: options.pool,
     now: options.now,

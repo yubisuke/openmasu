@@ -92,7 +92,6 @@ describe("M1a import integration", () => {
   it("Issue 123 commits exact confirmed bytes once and skips an identical repeat", async () => {
     const mappingValue = JSON.parse(readFileSync(mappingPath, "utf8"));
     mappingValue.source_id = "synthetic-confirmed-session-clicks";
-    mappingValue.provider = "synthetic-confirmed-session-provider";
     const [sourceValue] = JSON.parse(source);
     sourceValue.event_id = "synthetic-confirmed-session-event";
     sourceValue.click_id = "synthetic-confirmed-session-click";
@@ -125,11 +124,11 @@ describe("M1a import integration", () => {
         (SELECT count(*) FROM control.import_runs WHERE source_id='synthetic-confirmed-session-clicks' AND status='skipped')::int AS skipped_runs,
         (SELECT count(*) FROM control.import_files WHERE source_id='synthetic-confirmed-session-clicks')::int AS import_files,
         (SELECT count(*) FROM control.import_attempts WHERE source_id='synthetic-confirmed-session-clicks')::int AS import_attempts,
-        (SELECT count(*) FROM ledger.logical_events WHERE producer='import:synthetic-confirmed-session-provider' AND event_id='synthetic-confirmed-session-event')::int AS logical_events,
+        (SELECT count(*) FROM ledger.logical_events WHERE producer='import:synthetic-provider' AND event_id='synthetic-confirmed-session-event')::int AS logical_events,
         (SELECT count(*) FROM ledger.event_deliveries AS delivery
           JOIN ledger.logical_events AS event
             ON event.tenant_id=delivery.tenant_id AND event.app_id=delivery.app_id AND event.record_id=delivery.record_id
-          WHERE event.producer='import:synthetic-confirmed-session-provider'
+          WHERE event.producer='import:synthetic-provider'
             AND event.event_id='synthetic-confirmed-session-event')::int AS deliveries`);
       assert.deepEqual(result.rows[0], {
         completed_runs: 1,
