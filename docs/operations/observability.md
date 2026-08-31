@@ -104,6 +104,21 @@ resend after expiry; the local claim does not establish provider-side exactly-
 once delivery. The configured spacing is a local safety control, not evidence
 of a live quota allocation.
 
+An authenticated read-only operator can inspect the same app-scoped state at
+`GET /v1/admin/apps/<app-id>/google-data-manager/deliveries` and on the app
+dashboard. The response includes complete state counts and at most 50 recently
+updated rows with attempts, the next activity time, diagnostics deadline, and
+a safe reason code. It deliberately excludes request references, provider
+request IDs, verification or record IDs, digests, payloads, and artifacts.
+`due_now` and `scheduled` describe OpenMasu's local clock and queue; they are
+not Google acceptance counts. Google documents its request ID as a server-
+generated diagnostics correlation value and recommends delayed status polling,
+so the UI keeps provider correlation material out of the reader surface while
+retaining it in the protected worker path. See the Google Data Manager
+[ingest reference](https://developers.google.com/data-manager/api/reference/rest/v1/events/ingest)
+and [diagnostics guide](https://developers.google.com/data-manager/api/devguides/diagnostics)
+(confirmed 2026-08-31).
+
 AdServices lookup uses the same local ownership boundary for one queue only.
 `OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS` bounds each network wait and must be
 shorter than `OPENMASU_ADSERVICES_CLAIM_LEASE_MS`; the defaults are 30 seconds

@@ -94,7 +94,10 @@ Commerce read-back now applies the same local ownership boundary to Google
 lifecycle/refund and Apple history work, including transactional refund or
 cursor completion. Google Data Manager delivery additionally reserves a
 destination-scoped database request slot across worker replicas and propagates
-bounded `Retry-After` pauses. Lease expiry can still repeat a provider
+bounded `Retry-After` pauses. Its read-only admin API and server-rendered
+dashboard expose complete app-scoped state counts plus a bounded recent-row
+view without exposing request references, provider IDs, digests, payloads, or
+artifacts. Lease expiry can still repeat a provider
 operation; live quota allocation and distributed pacing for other provider
 paths remain separate operational work.
 
@@ -104,7 +107,8 @@ paths remain separate operational work.
 2. preserve the server-event, operator-webhook, and bulk-export key, replay,
    egress, privacy, and durable-queue invariants while auditing other
    high-impact compatibility gaps;
-3. preserve bounded tenant concurrency, Google conversion distributed pacing,
+3. preserve bounded tenant concurrency, Google conversion distributed pacing
+   and operator-visible delivery health,
    and the AdServices, integrity, Google Play, and commerce read-back claim-
    fencing slices while continuing provider-quota hardening for other paths;
 4. preserve durable scheduled-metric checkpoints and exact replay, the

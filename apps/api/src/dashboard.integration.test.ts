@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
@@ -315,7 +316,142 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     assert.match(appHtml, /Create a tracking link/);
     assert.match(appHtml, new RegExp(`/dashboard/apps/${newAppId}/sdk-keys`));
     assert.match(appHtml, new RegExp(`/dashboard/apps/${newAppId}/apple-registration`));
+    assert.match(appHtml, /Google Data Manager delivery health/);
+    assert.match(appHtml, /No Google conversion deliveries are recorded/);
     assert.equal(appHtml.includes(issued.sdk_key), false);
+
+    const deliveryHealth = await fetch(
+      `${baseUrl}/v1/admin/apps/${newAppId}/google-data-manager/deliveries`,
+      { headers },
+    );
+    assert.equal(deliveryHealth.status, 200);
+    const deliveryHealthText = await deliveryHealth.text();
+    assert.deepEqual(JSON.parse(deliveryHealthText), {
+      destination: { configured: false, enabled: false, next_request_at: null },
+      summary: {
+        total: 0,
+        due_now: 0,
+        scheduled: 0,
+        by_state: {
+          queued: 0,
+          http_accepted: 0,
+          diagnostics_processing: 0,
+          succeeded: 0,
+          partial_success: 0,
+          failed: 0,
+          expired: 0,
+        },
+      },
+      deliveries: [],
+      maximum_rows: 50,
+    });
+    for (const forbidden of [
+      "request_ref", "request_digest", "transaction_digest", "provider_request_id",
+      "verification_result_id", "verified_record_id", "artifact", "claim_token", "claimed_until",
+    ]) assert.equal(deliveryHealthText.includes(forbidden), false, forbidden);
+    const missingHealth = await fetch(
+      `${baseUrl}/v1/admin/apps/unknown-${suffix}/google-data-manager/deliveries`,
+      { headers },
+    );
+    assert.equal(missingHealth.status, 404);
+    assert.deepEqual(await missingHealth.json(), { error: "app_not_found" });
+
+    await withTenant(appPool, tenantId, async (client) => {
+      const destinationId = randomUUID();
+      await client.query(`INSERT INTO control.google_data_manager_destinations (
+        destination_id,tenant_id,app_id,operating_account_id,conversion_action_id,
+        app_audience,enabled,registered_at,artifact,next_request_at
+      ) VALUES ($1,$2,$3,'123456789','987654321','general',true,$4,$5::jsonb,$6)`, [
+        destinationId,
+        tenantId,
+        newAppId,
+        "2026-08-31T09:00:00.000Z",
+        JSON.stringify({ synthetic: true }),
+        "2026-08-31T10:00:00.000Z",
+      ]);
+      for (const [index, state, attempts, nextAttempt, deadline, reason] of [
+        [0, "queued", 2, "2099-08-31T10:01:00.000Z", null, "rate_limited"],
+        [1, "diagnostics_processing", 1, "2099-08-31T10:30:00.000Z", "2099-09-01T10:00:00.000Z", null],
+        [2, "failed", 3, "2026-08-31T10:00:00.000Z", null, "provider_rejected"],
+      ] as const) {
+        const verificationResultId = randomUUID();
+        const digest = randomUUID().replaceAll("-", "").repeat(2);
+        await client.query(`INSERT INTO ledger.google_play_purchase_verification_results (
+          verification_result_id,verification_id,tenant_id,app_id,subject_record_id,
+          verified_record_id,token_digest,verdict,provider_purchase_state,product_matched,
+          evidence_ref,response_digest,decided_at,artifact,purchase_kind
+        ) VALUES ($1,$2,$3,$4,$5,NULL,$6,'unavailable',NULL,false,NULL,NULL,$7,$8::jsonb,'one_time_product')`, [
+          verificationResultId,
+          randomUUID(),
+          tenantId,
+          newAppId,
+          `synthetic-record-${index}`,
+          digest,
+          "2026-08-31T09:00:00.000Z",
+          JSON.stringify({ synthetic: true }),
+        ]);
+        const providerRequestId = state === "diagnostics_processing" ? "provider-request-synthetic-secret" : null;
+        await client.query(`INSERT INTO ephemeral.google_conversion_deliveries (
+          delivery_id,tenant_id,app_id,destination_id,verification_result_id,verified_record_id,
+          request_ref,request_digest,transaction_digest,state,attempts,next_attempt_at,
+          provider_request_id,diagnostics_deadline_at,safe_reason,created_at,updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`, [
+          randomUUID(),
+          tenantId,
+          newAppId,
+          destinationId,
+          verificationResultId,
+          `synthetic-verified-record-${index}`,
+          `encrypted:synthetic-secret-${index}`,
+          digest,
+          digest,
+          state,
+          attempts,
+          nextAttempt,
+          providerRequestId,
+          deadline,
+          reason,
+          `2026-08-31T09:0${index}:00.000Z`,
+          `2026-08-31T09:1${index}:00.000Z`,
+        ]);
+      }
+    });
+    const populatedHealth = await fetch(
+      `${baseUrl}/v1/admin/apps/${newAppId}/google-data-manager/deliveries`,
+      { headers },
+    );
+    assert.equal(populatedHealth.status, 200);
+    const populatedText = await populatedHealth.text();
+    const populated = JSON.parse(populatedText) as {
+      destination: { configured: boolean; enabled: boolean; next_request_at: string };
+      summary: { total: number; scheduled: number; by_state: Record<string, number> };
+      deliveries: Array<{ state: string; safe_reason: string | null }>;
+    };
+    assert.deepEqual(populated.destination, {
+      configured: true,
+      enabled: true,
+      next_request_at: "2026-08-31T10:00:00.000Z",
+    });
+    assert.equal(populated.summary.total, 3);
+    assert.equal(populated.summary.scheduled, 2);
+    assert.equal(populated.summary.by_state.queued, 1);
+    assert.equal(populated.summary.by_state.diagnostics_processing, 1);
+    assert.equal(populated.summary.by_state.failed, 1);
+    assert.deepEqual(populated.deliveries.map((row) => row.state), [
+      "failed", "diagnostics_processing", "queued",
+    ]);
+    for (const forbidden of [
+      "provider-request-synthetic-secret", "encrypted:synthetic-secret", "synthetic-verified-record",
+      "request_ref", "request_digest", "transaction_digest", "provider_request_id",
+      "verification_result_id", "verified_record_id", "artifact", "claim_token", "claimed_until",
+    ]) assert.equal(populatedText.includes(forbidden), false, forbidden);
+    const populatedDashboard = await (await fetch(`${baseUrl}/dashboard/apps/${newAppId}`, {
+      headers: { cookie: dashboardCookie },
+    })).text();
+    assert.match(populatedDashboard, /diagnostics_processing/);
+    assert.match(populatedDashboard, /rate_limited/);
+    assert.match(populatedDashboard, /provider_rejected/);
+    assert.equal(populatedDashboard.includes("provider-request-synthetic-secret"), false);
 
     const rejectedRotation = await fetch(`${baseUrl}/dashboard/apps/${newAppId}/sdk-keys`, {
       method: "POST",
