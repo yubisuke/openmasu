@@ -15,7 +15,7 @@ import {
 } from "./adapters.js";
 import { normalizeMaxAggregateRevenue } from "./max-revenue.js";
 import { runGoogleCostImport } from "./google-cost-cli.js";
-import { mappingsForLint, previewMmpImport } from "./runner.js";
+import { mappingsForLint, previewMmpImport, runMmpImport } from "./runner.js";
 import {
   reportImportCompatibility,
   reportManualCostCompatibility,
@@ -203,6 +203,19 @@ describe("runtime import mapping", () => {
         "provider_connectivity_not_checked",
       ],
     });
+  });
+
+  it("rejects a wrong-kind mapping before reading source bytes", async () => {
+    const missing = join(tmpdir(), "openmasu-source-must-not-be-read.csv");
+    assert.throws(() => previewMmpImport({
+      mappingPath: "examples/mappings/synthetic-manual-cost.json",
+      filePath: missing,
+    }), /previewMmpImport requires an mmp_raw mapping/);
+    await assert.rejects(runMmpImport({
+      pool: {} as Pool,
+      mappingPath: "examples/mappings/synthetic-manual-cost.json",
+      filePath: missing,
+    }), /runMmpImport requires an mmp_raw mapping/);
   });
 
   it("reports provider-neutral contract compatibility without changing preview output", () => {

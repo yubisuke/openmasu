@@ -282,6 +282,7 @@ export function analyzeMmpImport(options: {
   lintDirectory?: string;
 }): ImportPreviewAnalysis {
   const mapping = loadMapping(options.mappingPath);
+  if (mapping.kind !== "mmp_raw") throw new Error("previewMmpImport requires an mmp_raw mapping");
   return analyzeMmpImportSource({
     mapping,
     sourceBytes: readFileSync(options.filePath),
@@ -485,6 +486,7 @@ export async function runMmpImport(options: {
   now?: Date;
 }): Promise<ImportSummary> {
   const mapping = loadMapping(options.mappingPath);
+  if (mapping.kind !== "mmp_raw") throw new Error("runMmpImport requires an mmp_raw mapping");
   const sourceBytes = readFileSync(options.filePath);
   return runMmpImportSource({
     pool: options.pool,
