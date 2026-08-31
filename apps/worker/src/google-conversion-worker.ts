@@ -104,47 +104,32 @@ async function claimGoogleConversionDeliveries(
   now: Date,
   claimToken: string,
   leaseMs: number,
-  minimumRequestIntervalMs: number,
 ): Promise<DeliveryRow | undefined> {
-  return withTenant(pool, tenantId, async (client) => {
-    const due = await client.query<{ delivery_id: string; destination_id: string }>(
-      `SELECT delivery.delivery_id::text,destination.destination_id::text
-         FROM ephemeral.google_conversion_deliveries AS delivery
-         JOIN control.google_data_manager_destinations AS destination
-           ON destination.tenant_id=delivery.tenant_id
-          AND destination.destination_id=delivery.destination_id
-        WHERE delivery.tenant_id=$1 AND destination.enabled=true
-          AND delivery.state IN ('queued','http_accepted','diagnostics_processing')
-          AND delivery.next_attempt_at <= clock_timestamp()
-          AND (delivery.claimed_until IS NULL OR delivery.claimed_until <= clock_timestamp())
-          AND destination.next_request_at <= clock_timestamp()
-        ORDER BY delivery.next_attempt_at,delivery.delivery_id
+  const rows = await withTenant(pool, tenantId, (client) => client.query<DeliveryRow>(
+    `WITH due AS (
+       SELECT delivery_id
+         FROM ephemeral.google_conversion_deliveries
+        WHERE tenant_id=$1
+          AND state IN ('queued','http_accepted','diagnostics_processing')
+          AND next_attempt_at <= clock_timestamp()
+          AND (claimed_until IS NULL OR claimed_until <= clock_timestamp())
+        ORDER BY next_attempt_at,delivery_id
         LIMIT 1
-        FOR UPDATE OF delivery,destination SKIP LOCKED`,
-      [tenantId],
-    );
-    const candidate = due.rows[0];
-    if (!candidate) return undefined;
-    await client.query(
-      `UPDATE control.google_data_manager_destinations
-          SET next_request_at=clock_timestamp() + ($3::integer * interval '1 millisecond')
-        WHERE tenant_id=$1 AND destination_id=$2::uuid`,
-      [tenantId, candidate.destination_id, minimumRequestIntervalMs],
-    );
-    const claimed = await client.query<DeliveryRow>(
-      `UPDATE ephemeral.google_conversion_deliveries AS delivery
+        FOR UPDATE SKIP LOCKED
+     )
+     UPDATE ephemeral.google_conversion_deliveries AS delivery
           SET claim_token=$3::uuid,
               claimed_until=clock_timestamp() + ($4::integer * interval '1 millisecond'),
               updated_at=$2
-        WHERE delivery.tenant_id=$1 AND delivery.delivery_id=$5::uuid
-      RETURNING delivery.delivery_id::text,delivery.app_id,delivery.destination_id::text,delivery.request_ref,
+       FROM due
+      WHERE delivery.tenant_id=$1 AND delivery.delivery_id=due.delivery_id
+     RETURNING delivery.delivery_id::text,delivery.app_id,delivery.destination_id::text,delivery.request_ref,
         delivery.request_digest,delivery.transaction_digest,delivery.state,delivery.attempts,
         delivery.provider_request_id,delivery.diagnostics_deadline_at,
         delivery.claim_token::text,delivery.claimed_until`,
-      [tenantId, now.toISOString(), claimToken, leaseMs, candidate.delivery_id],
-    );
-    return claimed.rows[0];
-  });
+    [tenantId, now.toISOString(), claimToken, leaseMs],
+  ));
+  return rows.rows[0];
 }
 
 async function lockCurrentDelivery(
@@ -214,13 +199,31 @@ async function beginProviderRequest<T>(
   pool: Pool,
   tenantId: string,
   row: DeliveryRow,
+  minimumRequestIntervalMs: number,
   operation: () => Promise<T>,
-): Promise<{ readonly response: Promise<T> } | undefined> {
-  return withCurrentDelivery(pool, tenantId, row, () => {
+): Promise<{ readonly outcome: "paced" } | { readonly outcome: "started"; readonly response: Promise<T> } | undefined> {
+  return withCurrentDelivery(pool, tenantId, row, async (client) => {
+    const reserved = await client.query(
+      `UPDATE control.google_data_manager_destinations
+          SET next_request_at=clock_timestamp() + ($3::integer * interval '1 millisecond')
+        WHERE tenant_id=$1 AND destination_id=$2::uuid AND enabled=true
+          AND next_request_at <= clock_timestamp()
+      RETURNING destination_id`,
+      [tenantId, row.destination_id, minimumRequestIntervalMs],
+    );
+    if (reserved.rowCount !== 1) {
+      await client.query(
+        `UPDATE ephemeral.google_conversion_deliveries
+            SET claim_token=NULL,claimed_until=NULL
+          WHERE tenant_id=$1 AND delivery_id=$2::uuid AND claim_token=$3::uuid`,
+        [tenantId, row.delivery_id, row.claim_token],
+      );
+      return { outcome: "paced" } as const;
+    }
     const response = operation();
     // The provider request starts before the shared privacy fence is released.
     void response.catch(() => undefined);
-    return { response };
+    return { outcome: "started", response } as const;
   });
 }
 
@@ -426,7 +429,6 @@ export async function processGoogleConversionDeliveries(pool: Pool, payloadStore
       now,
       dependencies.claimToken(),
       leaseMs,
-      minimumRequestIntervalMs,
     );
     if (!row) break;
     const providerAccessToken = accessToken ?? await dependencies.accessToken({
@@ -455,11 +457,12 @@ export async function processGoogleConversionDeliveries(pool: Pool, payloadStore
       if (sha256(transactionId) !== row.transaction_digest) {
         throw new Error("google_conversion_transaction_digest_mismatch");
       }
-      const started = await beginProviderRequest(pool, tenantId, row, () => dependencies.sendEvent(
+      const started = await beginProviderRequest(pool, tenantId, row, minimumRequestIntervalMs, () => dependencies.sendEvent(
         { transactionId, request, body },
         { accessToken: providerAccessToken, baseUrl: options.apiBaseUrl, now: () => now },
       ));
       if (!started) continue;
+      if (started.outcome === "paced") break;
       const result = await started.response;
       if (result.outcome === "accepted") {
         state = "http_accepted"; providerRequestId = result.requestId;
@@ -476,10 +479,11 @@ export async function processGoogleConversionDeliveries(pool: Pool, payloadStore
       const diagnosticRequestId = providerRequestId;
       if (now >= deadline) { state = "expired"; reason = "diagnostics_expired"; }
       else {
-        const started = await beginProviderRequest(pool, tenantId, row, () =>
+        const started = await beginProviderRequest(pool, tenantId, row, minimumRequestIntervalMs, () =>
           dependencies.retrieveStatus(diagnosticRequestId,
             { accessToken: providerAccessToken, baseUrl: options.apiBaseUrl, now: () => now }));
         if (!started) continue;
+        if (started.outcome === "paced") break;
         const result = await started.response;
         if (result.outcome === "status") {
           if (result.status === "processing") {

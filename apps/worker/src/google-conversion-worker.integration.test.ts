@@ -61,6 +61,8 @@ async function providerStartedBeforeCompletion(
     started,
     processing.then((result) => {
       throw new Error(`${label} completed before provider I/O: ${JSON.stringify(result)}`);
+    }, (error: unknown) => {
+      throw new Error(`${label} failed before provider I/O`, { cause: error });
     }),
   ]), label);
 }
