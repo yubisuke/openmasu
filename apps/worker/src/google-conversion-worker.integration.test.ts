@@ -52,10 +52,13 @@ async function within<T>(promise: Promise<T>, label: string): Promise<T> {
   }
 }
 
-async function seedEligibleConversion(label: string): Promise<SeededConversion> {
+async function seedEligibleConversion(
+  label: string,
+  existing?: Pick<SeededConversion, "tenantId" | "appId">,
+): Promise<SeededConversion> {
   const run = `${suffix}-${label}`;
-  const tenantId = `tenant-gdm-${run}`;
-  const appId = `app-gdm-${run}`;
+  const tenantId = existing?.tenantId ?? `tenant-gdm-${run}`;
+  const appId = existing?.appId ?? `app-gdm-${run}`;
   const installationId = `installation:gdm-${run}`;
   const clickRecord = `gdm-click-${run}`;
   const installRecord = `gdm-install-${run}`;
@@ -65,7 +68,9 @@ async function seedEligibleConversion(label: string): Promise<SeededConversion> 
   const purchaseLogical = `logical:${purchaseRecord}`;
   const verificationResultId = randomUUID();
   await withTenant(pool, tenantId, async (client) => {
-    await client.query("INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ($1,$2,$3)", [tenantId, appId, at]);
+    if (!existing) {
+      await client.query("INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ($1,$2,$3)", [tenantId, appId, at]);
+    }
     for (const [recordId, eventName] of [[clickRecord, "click"], [installRecord, "install"], [purchaseRecord, "purchase"]]) {
       await client.query(`INSERT INTO ledger.raw_records (
         record_id,tenant_id,app_id,producer,producer_version,event_id,delivery_id,event_name,
@@ -113,11 +118,13 @@ async function seedEligibleConversion(label: string): Promise<SeededConversion> 
     ) VALUES ($1,$2,$3,$4,$5,$5,$6,'verified','PURCHASED',true,$7,$8,$9,$10::jsonb,'one_time_product')`,
     [verificationResultId, randomUUID(), tenantId, appId, purchaseRecord, "b".repeat(64),
       `encrypted:synthetic-play-${run}`, "c".repeat(64), at, JSON.stringify({ synthetic: true })]);
-    await client.query(`INSERT INTO control.google_data_manager_destinations (
-      destination_id,tenant_id,app_id,operating_account_id,conversion_action_id,app_audience,
-      enabled,registered_at,artifact
-    ) VALUES ($1,$2,$3,'123456789','987654321','general',true,$4,$5::jsonb)`,
-    [randomUUID(), tenantId, appId, at, JSON.stringify({ synthetic: true })]);
+    if (!existing) {
+      await client.query(`INSERT INTO control.google_data_manager_destinations (
+        destination_id,tenant_id,app_id,operating_account_id,conversion_action_id,app_audience,
+        enabled,registered_at,artifact
+      ) VALUES ($1,$2,$3,'123456789','987654321','general',true,$4,$5::jsonb)`,
+      [randomUUID(), tenantId, appId, at, JSON.stringify({ synthetic: true })]);
+    }
   });
   return { tenantId, appId, installationId, clickRecord, purchaseRecord };
 }
@@ -164,6 +171,7 @@ describe("Google Data Manager verified-conversion integration", () => {
     const first = processGoogleConversionDeliveries(pool, payloadStore, tenantId, {
       enabled: true,
       credentialsJson: "{}",
+      minimumRequestIntervalMs: 0,
       now: () => new Date(),
       claimLeaseMs: 60_000,
       dependencies: {
@@ -182,6 +190,7 @@ describe("Google Data Manager verified-conversion integration", () => {
     assert.deepEqual(await processGoogleConversionDeliveries(pool, payloadStore, tenantId, {
       enabled: true,
       credentialsJson: "{}",
+      minimumRequestIntervalMs: 0,
       now: () => new Date(),
       claimLeaseMs: 60_000,
       dependencies: {
@@ -208,6 +217,7 @@ describe("Google Data Manager verified-conversion integration", () => {
     const stale = processGoogleConversionDeliveries(pool, payloadStore, tenantId, {
       enabled: true,
       credentialsJson: "{}",
+      minimumRequestIntervalMs: 0,
       now: () => new Date(),
       claimLeaseMs: 60_000,
       dependencies: {
@@ -230,6 +240,7 @@ describe("Google Data Manager verified-conversion integration", () => {
     assert.deepEqual(await processGoogleConversionDeliveries(pool, payloadStore, tenantId, {
       enabled: true,
       credentialsJson: "{}",
+      minimumRequestIntervalMs: 0,
       now: () => new Date(),
       claimLeaseMs: 60_000,
       dependencies: {
@@ -268,6 +279,106 @@ describe("Google Data Manager verified-conversion integration", () => {
       createHash("sha256").update(transactionIds[0]!, "utf8").digest("hex"),
       finalState.rows[0]!.transaction_digest,
     );
+  });
+
+  it("shares destination pacing and Retry-After across distinct delivery claims", async () => {
+    const firstSeed = await seedEligibleConversion("pacing-first");
+    await seedEligibleConversion("pacing-second", firstSeed);
+    assert.equal(await discoverGoogleConversionDeliveries(
+      pool, payloadStore, firstSeed.tenantId, new Date(at),
+    ), 2);
+
+    const requestStarted = deferred();
+    const releaseRequest = deferred();
+    const cycleNow = new Date();
+    let providerCalls = 0;
+    const first = processGoogleConversionDeliveries(pool, payloadStore, firstSeed.tenantId, {
+      enabled: true,
+      credentialsJson: "{}",
+      now: () => cycleNow,
+      claimLeaseMs: 60_000,
+      minimumRequestIntervalMs: 60_000,
+      dependencies: {
+        accessToken: async () => "synthetic-access-token",
+        sendEvent: async () => {
+          providerCalls += 1;
+          requestStarted.resolve();
+          await releaseRequest.promise;
+          return {
+            outcome: "retry", reason: "rate_limited", httpStatus: 429,
+            retryAfterMilliseconds: 120_000,
+          } as const;
+        },
+      },
+    });
+    await within(requestStarted.promise, "paced Google request");
+
+    assert.deepEqual(await processGoogleConversionDeliveries(
+      pool, payloadStore, firstSeed.tenantId, {
+        enabled: true,
+        credentialsJson: "{}",
+        now: () => cycleNow,
+        claimLeaseMs: 60_000,
+        minimumRequestIntervalMs: 60_000,
+        dependencies: {
+          accessToken: async () => "synthetic-access-token",
+          sendEvent: async () => {
+            providerCalls += 1;
+            return { outcome: "terminal", reason: "provider_rejected", httpStatus: 400 } as const;
+          },
+        },
+      },
+    ), { processed: 0 });
+    assert.equal(providerCalls, 1);
+
+    releaseRequest.resolve();
+    assert.deepEqual(await within(first, "rate-limited Google request"), { processed: 1 });
+    const paced = await withTenant(pool, firstSeed.tenantId, (client) => client.query<{
+      next_request_at: Date | string;
+      attempts: number[];
+      result_count: number;
+    }>(
+      `SELECT destination.next_request_at,
+              array_agg(delivery.attempts ORDER BY delivery.attempts) AS attempts,
+              (SELECT count(*)::int
+                 FROM ledger.google_conversion_delivery_results AS result
+                WHERE result.tenant_id=destination.tenant_id
+                  AND result.app_id=destination.app_id) AS result_count
+         FROM control.google_data_manager_destinations AS destination
+         JOIN ephemeral.google_conversion_deliveries AS delivery
+           ON delivery.tenant_id=destination.tenant_id
+          AND delivery.destination_id=destination.destination_id
+        WHERE destination.tenant_id=$1 AND destination.app_id=$2
+        GROUP BY destination.tenant_id,destination.app_id,destination.next_request_at`,
+      [firstSeed.tenantId, firstSeed.appId],
+    ));
+    assert.deepEqual(paced.rows[0]!.attempts, [0, 1]);
+    assert.equal(paced.rows[0]!.result_count, 3);
+    assert.ok(new Date(paced.rows[0]!.next_request_at).valueOf() >= cycleNow.valueOf() + 120_000);
+
+    await withTenant(pool, firstSeed.tenantId, (client) => client.query(
+      `UPDATE control.google_data_manager_destinations
+          SET next_request_at=clock_timestamp() - interval '1 second'
+        WHERE tenant_id=$1 AND app_id=$2`,
+      [firstSeed.tenantId, firstSeed.appId],
+    ));
+    assert.deepEqual(await processGoogleConversionDeliveries(
+      pool, payloadStore, firstSeed.tenantId, {
+        enabled: true,
+        credentialsJson: "{}",
+        now: () => new Date(cycleNow.valueOf() + 121_000),
+        claimLeaseMs: 60_000,
+        minimumRequestIntervalMs: 60_000,
+        dependencies: {
+          accessToken: async () => "synthetic-access-token",
+          sendEvent: async () => {
+            providerCalls += 1;
+            return { outcome: "terminal", reason: "provider_rejected", httpStatus: 400 } as const;
+          },
+        },
+      },
+    ), { processed: 1 });
+    assert.equal(providerCalls, 2);
   });
 
   it("does not enqueue discovery output after privacy wins the tenant fence", async () => {
@@ -319,6 +430,7 @@ describe("Google Data Manager verified-conversion integration", () => {
     const processing = processGoogleConversionDeliveries(pool, payloadStore, seeded.tenantId, {
       enabled: true,
       credentialsJson: "{}",
+      minimumRequestIntervalMs: 0,
       claimLeaseMs: 60_000,
       dependencies: {
         accessToken: async () => {
@@ -355,6 +467,7 @@ describe("Google Data Manager verified-conversion integration", () => {
     const processing = processGoogleConversionDeliveries(pool, payloadStore, seeded.tenantId, {
       enabled: true,
       credentialsJson: "{}",
+      minimumRequestIntervalMs: 0,
       claimLeaseMs: 60_000,
       dependencies: {
         accessToken: async () => "synthetic-access-token",
@@ -396,6 +509,7 @@ describe("Google Data Manager verified-conversion integration", () => {
     assert.deepEqual(await processGoogleConversionDeliveries(pool, payloadStore, seeded.tenantId, {
       enabled: true,
       credentialsJson: "{}",
+      minimumRequestIntervalMs: 0,
       now: () => acceptedAt,
       claimLeaseMs: 60_000,
       dependencies: {
@@ -419,6 +533,7 @@ describe("Google Data Manager verified-conversion integration", () => {
     const polling = processGoogleConversionDeliveries(pool, payloadStore, seeded.tenantId, {
       enabled: true,
       credentialsJson: "{}",
+      minimumRequestIntervalMs: 0,
       now: () => new Date(acceptedAt.valueOf() + 31 * 60_000),
       claimLeaseMs: 60_000,
       dependencies: {
