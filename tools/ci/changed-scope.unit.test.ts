@@ -4,7 +4,7 @@ import { classifyPaths } from "./changed-scope.mjs";
 
 describe("CI changed-scope classifier", () => {
   it("keeps offline comparison validation without native or database gates", () => {
-    assert.deepEqual(classifyPaths(["tools/compare-cohorts.ts", "tools/cohort-comparison-html.ts", "examples/synthetic/cohort-snapshot.json", "docs/cohort-comparison.md"]), {
+    assert.deepEqual(classifyPaths(["tools/compare-cohorts.ts", "tools/cohort-comparison-html.ts", "tools/report-to-snapshot.ts", "tools/report-to-snapshot.unit.test.ts", "examples/synthetic/cohort-snapshot.json", "docs/cohort-comparison.md"]), {
       contract: true, runtime: false, android: false, android_emulator: false, ios: false, offline_unit: true,
     });
   });

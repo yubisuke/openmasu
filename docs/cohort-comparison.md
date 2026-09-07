@@ -44,7 +44,36 @@ No causal explanation is inferred. Successful execution exits 0 even when
 values differ or conditions are incomparable; malformed input exits 1.
 
 This is an offline tooling format, not a new measurement contract artifact.
-Database persistence and dashboard integration are not implemented here.
+Direct database access and dashboard integration are not implemented here.
+
+## Convert a saved metric report
+
+`npm run --silent snapshot:report -- report.json template.json > snapshot.json`
+converts a saved JSON metric report (`data` array) into a comparison input.
+Use the snapshot format above for the template, but set `rows` to `[]` and
+`metric_definition` to the exact `metric_name@metric_definition_version`
+(for example, `revenue_d7@v1`). The source label and conditions are explicit.
+No provider request or database connection is made.
+
+This initial converter requires a complete single report: any `next_cursor`
+field is rejected. It does not fetch or merge pages. Rows must share the
+declared definition, watermark, time zone, and value type; each cohort date
+must lie within the half-open declared range and its attribution status must
+match `attribution_scope`. Rows without those dimensions are rejected rather
+than guessed. Only non-superseded, fully reproducible runs are accepted.
+The presence of all expected cohorts cannot be established from a saved file.
+Maturity and cumulative/on-day conventions remain operator declarations.
+
+Row keys are canonical JSON grouping objects. The other comparison input must
+use the same key convention. Money and ratio scales are retained; counts use
+scale zero. Undefined money without declared units is rejected, not assigned
+an invented currency. Duplicate runs/groupings are rejected, not aggregated.
+Inputs have the same 4 MiB / 10,000-row limits as the comparison tool.
+
+Converted inputs include optional `provenance`: a SHA-256 of the canonical
+report after sorting by run ID, and a row-key/run-ID/input-snapshot-ID mapping.
+Comparison hashes bind this metadata. Keep the report and template with the
+snapshot: hashes are reproducibility references, not authentication proofs.
 
 ## Human-readable report
 

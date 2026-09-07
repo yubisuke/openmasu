@@ -8,7 +8,8 @@ import { renderComparison } from "./cohort-comparison-html.js";
 const fields = ["date_from", "date_to", "time_zone", "maturity", "aggregation", "attribution_scope", "metric_definition", "source_cutoff"] as const;
 type Conditions = Record<typeof fields[number], string>;
 type Row = { key: string; currency: string; scale: number } & ({ state: "present"; value: string } | { state: "undefined"; reason: string });
-type Snapshot = { source: string; conditions: Conditions; rows: Row[] };
+type Provenance = { report_sha256: string; runs: { key: string; metric_run_id: string; input_snapshot_id: string }[] };
+type Snapshot = { source: string; conditions: Conditions; rows: Row[]; provenance?: Provenance };
 function object(v: unknown): asserts v is Record<string, unknown> {
   if (!v || typeof v !== "object" || Array.isArray(v)) throw Error("expected_object");
 }
@@ -22,7 +23,7 @@ function date(v: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || !Number.isFinite(Date.parse(v)) || new Date(v).toISOString().slice(0, 10) !== v) throw Error("invalid_date");
 }
 export function parseSnapshot(input: unknown): Snapshot {
-  object(input); keys(input, ["source", "conditions", "rows"]); text(input.source);
+  object(input); keys(input, ["source", "conditions", "rows", ...("provenance" in input ? ["provenance"] : [])]); text(input.source);
   object(input.conditions); keys(input.conditions, fields);
   for (const key of fields) text(input.conditions[key]);
   const c = input.conditions as Conditions;
@@ -44,7 +45,20 @@ export function parseSnapshot(input: unknown): Snapshot {
     } else if (r.state === "undefined") text(r.reason);
     else throw Error("invalid_state");
   }
-  return { source: input.source, conditions: { ...c }, rows: [...input.rows].sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0) } as Snapshot;
+  let provenance: Provenance | undefined;
+  if ("provenance" in input) {
+    const p = input.provenance; object(p); keys(p, ["report_sha256", "runs"]);
+    if (typeof p.report_sha256 !== "string" || !/^[a-f0-9]{64}$/.test(p.report_sha256) || !Array.isArray(p.runs) || p.runs.length !== input.rows.length) throw Error("invalid_provenance");
+    const refs = new Set<string>(), ids = new Set<string>();
+    for (const r of p.runs) {
+      object(r); keys(r, ["key", "metric_run_id", "input_snapshot_id"]);
+      text(r.key); text(r.metric_run_id);
+      if (!seen.has(r.key) || refs.has(r.key) || ids.has(r.metric_run_id) || typeof r.input_snapshot_id !== "string" || !/^[a-f0-9]{64}$/.test(r.input_snapshot_id)) throw Error("invalid_provenance");
+      refs.add(r.key); ids.add(r.metric_run_id);
+    }
+    provenance = { report_sha256: p.report_sha256, runs: [...p.runs].sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0) } as Provenance;
+  }
+  return { source: input.source, conditions: { ...c }, rows: [...input.rows].sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0), ...(provenance ? { provenance } : {}) } as Snapshot;
 }
 export function compareSnapshots(left: unknown, right: unknown) {
   const a = parseSnapshot(left), b = parseSnapshot(right);
