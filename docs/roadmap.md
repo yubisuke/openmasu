@@ -76,6 +76,15 @@ than provider or attribution claims. Subsequent repository work is selected
 from current-code audits of compatibility, failure recovery, reconciliation
 completeness, and operational correctness.
 
+## Next product sequence
+
+The [MMP landscape comparison](integrations/mmp-landscape.md) motivates three
+ordered slices: an offline same-cohort comparison with explicit definitions and
+exact values; integration with saved metric runs and report provenance; then
+durable cost refresh and historical corrections. These slices are planned, not
+implemented. Each has a synthetic acceptance gate and requires no live provider
+credentials. Numeric differences alone must never become inferred causal reasons.
+
 ## Optional operator evidence
 
 These gates remain useful but require separate authorization and private

@@ -60,6 +60,14 @@ versions were reached. They do not override current sources of truth.
 | Google Play verification completion fencing | Complete for the product, initial-subscription, and renewal verification queue with per-row database-clock claims, bounded provider reads, and privacy-fenced completion | Concurrent, lease-recovery, timeout, deletion-first, completion-first, and backup-reapply synthetic tests prove local ownership, derived-projection cleanup, and protected-evidence cleanup; provider-side exactly-once behavior remains an operator boundary |
 | Commerce read-back completion fencing | Complete for Google Play lifecycle/refund and App Store history queues with per-row database-clock claims and privacy-fenced completion | Concurrent, expired-claim recovery, stale-cursor rejection, existing-binding cursor cleanup, and Google/Apple deletion-race tests prove local ownership and no derived-state resurrection; App Store binding creation and provider-side exactly-once behavior remain operator boundaries |
 
+## Next product slices
+
+The next product slices are defined in the roadmap: offline same-cohort
+comparison, saved-run/report integration, and durable cost refresh, in that
+order. The [landscape comparison](integrations/mmp-landscape.md) records the
+evidence, intended behavior, and synthetic acceptance scope. They remain
+planned until their interfaces and tests are implemented.
+
 ## Change acceptance
 
 Every change must identify:
