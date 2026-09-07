@@ -64,3 +64,6 @@ jobs:
         run: npm run verify:contract-rename
       - if: steps.scope.outputs.run_contract == 'true'
         run: npm run validate
+      - name: Test offline tools without starting runtime or SDK stacks
+        if: steps.scope.outputs.run_offline_unit == 'true' && steps.scope.outputs.run_runtime != 'true'
+        run: npm test

@@ -4,6 +4,12 @@ import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 
 const ALL = Object.freeze({ contract: true, runtime: true, android: true, android_emulator: true, ios: true });
+// Explicit leaf tools only: shared code, dependencies, and unknown tools retain all gates.
+const OFFLINE_COMPARISON = new Set([
+  "tools/compare-cohorts.ts", "tools/compare-cohorts.unit.test.ts",
+  "tools/cohort-comparison-html.ts", "tools/cohort-comparison-html.unit.test.ts",
+  "examples/synthetic/cohort-snapshot.json",
+]);
 
 function normalized(path) {
   return path.replaceAll("\\", "/").replace(/^\.\//, "");
@@ -15,6 +21,11 @@ export function classifyPaths(inputPaths) {
   for (const rawPath of inputPaths) {
     const path = normalized(rawPath.trim());
     if (!path) continue;
+    if (OFFLINE_COMPARISON.has(path)) {
+      result.contract = true;
+      result.offline_unit = true;
+      continue;
+    }
     let matched = false;
     if (path === "README.md" || path === "CONTRIBUTING.md" || path === "SECURITY.md"
       || path === "NOTICE" || path === "LICENSE" || path === "AGENTS.md" || path.startsWith("docs/")) {
@@ -78,7 +89,7 @@ function detect() {
   try {
     const output = execFileSync(
       "git",
-      ["diff", "--name-only", "--diff-filter=ACMR", `${base}...${head}`],
+      ["diff", "--name-only", "--no-renames", `${base}...${head}`],
       { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
     const paths = output.split(/\r?\n/).filter(Boolean);

@@ -48,6 +48,7 @@ For a complete newcomer reading path, use this order:
 - [Provider capability matrix](integrations/provider-capability-matrix.md)
 - [Measurement comparison priorities](integrations/mmp-landscape.md)
 - [Offline cohort comparison CLI](cohort-comparison.md)
+- [CI scope and test cost](ci-scope.md)
 - [Roadmap](roadmap.md)
 - [Project plan](project-plan.md)
 
