@@ -8,6 +8,7 @@ const ALL = Object.freeze({ contract: true, runtime: true, android: true, androi
 const OFFLINE_COMPARISON = new Set([
   "tools/compare-cohorts.ts", "tools/compare-cohorts.unit.test.ts",
   "tools/cohort-comparison-html.ts", "tools/cohort-comparison-html.unit.test.ts",
+  "tools/report-to-snapshot.ts", "tools/report-to-snapshot.unit.test.ts",
   "examples/synthetic/cohort-snapshot.json",
 ]);
 

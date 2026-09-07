@@ -66,7 +66,8 @@ The product slices are defined in the roadmap: offline same-cohort
 comparison, saved-run/report integration, and durable cost refresh, in that
 order. The offline [comparison CLI](cohort-comparison.md) is implemented with synthetic tests; runtime integration remains next. The [comparison requirements](integrations/mmp-landscape.md) record the
 intended behavior and synthetic acceptance scope. The CLI also emits a static
-HTML report. Saved-run integration and durable cost refresh remain planned.
+HTML report and converts saved report JSON with run provenance. Direct
+database/dashboard integration and durable cost refresh remain planned.
 
 ## Change acceptance
 
