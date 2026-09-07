@@ -3,6 +3,19 @@ import { describe, it } from "node:test";
 import { classifyPaths } from "./changed-scope.mjs";
 
 describe("CI changed-scope classifier", () => {
+  it("keeps offline comparison validation without native or database gates", () => {
+    assert.deepEqual(classifyPaths(["tools/compare-cohorts.ts", "tools/cohort-comparison-html.ts", "examples/synthetic/cohort-snapshot.json", "docs/cohort-comparison.md"]), {
+      contract: true, runtime: false, android: false, android_emulator: false, ios: false, offline_unit: true,
+    });
+  });
+
+  it("does not let an offline tool suppress shared dependency or runtime changes", () => {
+    for (const path of ["package-lock.json", "tools/new-unknown-tool.ts", ".github/workflows/contract.yml"]) {
+      const scope = classifyPaths(["tools/compare-cohorts.ts", path]);
+      assert.equal(scope.runtime, true); assert.equal(scope.ios, true); assert.equal(scope.android_emulator, true);
+    }
+    assert.equal(classifyPaths(["tools/compare-cohorts.ts", "apps/api/src/reporting.ts"]).runtime, true);
+  });
   it("keeps documentation checks while skipping unrelated expensive gates", () => {
     assert.deepEqual(classifyPaths(["README.md", "docs/getting-started.md"]), {
       contract: true, runtime: false, android: false, android_emulator: false, ios: false,
