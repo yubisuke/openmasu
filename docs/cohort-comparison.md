@@ -45,3 +45,13 @@ values differ or conditions are incomparable; malformed input exits 1.
 
 This is an offline tooling format, not a new measurement contract artifact.
 Database persistence and dashboard integration are not implemented here.
+
+## Human-readable report
+
+Use `npm run --silent compare:cohorts -- --html left.json right.json > comparison.html`
+to create a standalone report. Open the file locally in a browser. The report
+uses no scripts, external assets, or network access and includes exact decimal
+values, comparison states, declared conditions, and input hashes. `--silent`
+keeps npm's command banner out of the HTML. On older shells that change output
+encoding, save stdout as UTF-8. Reports contain aggregate values: do not commit
+private reports to this public repository or share them unintentionally.
