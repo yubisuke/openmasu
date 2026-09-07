@@ -1,0 +1,11 @@
+{
+  "source": "synthetic-example",
+  "conditions": {
+    "date_from": "2026-01-01", "date_to": "2026-01-02",
+    "time_zone": "UTC", "maturity": "fully_elapsed_d7",
+    "aggregation": "cumulative", "attribution_scope": "organic",
+    "metric_definition": "revenue_d7_v1",
+    "source_cutoff": "2026-01-10T00:00:00.000Z"
+  },
+  "rows": [{ "key": "total", "currency": "USD", "scale": 2, "state": "present", "value": "100" }]
+}
