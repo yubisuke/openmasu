@@ -46,6 +46,7 @@ For a complete newcomer reading path, use this order:
 - [Schema versioning](schema-versioning.md)
 - [Primary external references](references.md)
 - [Provider capability matrix](integrations/provider-capability-matrix.md)
+- [MMP landscape and implementation priorities](integrations/mmp-landscape.md)
 - [Roadmap](roadmap.md)
 - [Project plan](project-plan.md)
 
