@@ -13,6 +13,7 @@
     "npm": "11.6.2"
   },
   "scripts": {
+    "compare:cohorts": "node --import tsx tools/compare-cohorts.ts",
     "benchmark:metric-floor": "npm run benchmark:metric-floor --workspace @openmasu/worker",
     "benchmark:import": "npm run benchmark:import --workspace @openmasu/worker",
     "benchmark:m5": "node --import tsx tools/m5-load.ts",

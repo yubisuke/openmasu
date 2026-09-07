@@ -62,9 +62,9 @@ versions were reached. They do not override current sources of truth.
 
 ## Next product slices
 
-The next product slices are defined in the roadmap: offline same-cohort
+The product slices are defined in the roadmap: offline same-cohort
 comparison, saved-run/report integration, and durable cost refresh, in that
-order. The [landscape comparison](integrations/mmp-landscape.md) records the
+order. The offline [comparison CLI](cohort-comparison.md) is implemented with synthetic tests; runtime integration remains next. The [comparison requirements](integrations/mmp-landscape.md) record the
 evidence, intended behavior, and synthetic acceptance scope. They remain
 planned until their interfaces and tests are implemented.
 

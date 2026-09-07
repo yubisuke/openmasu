@@ -78,8 +78,8 @@ completeness, and operational correctness.
 
 ## Next product sequence
 
-The [MMP landscape comparison](integrations/mmp-landscape.md) motivates three
-ordered slices: an offline same-cohort comparison with explicit definitions and
+The [measurement comparison requirements](integrations/mmp-landscape.md) motivate three
+ordered slices: an [offline same-cohort comparison](cohort-comparison.md) (implemented with synthetic tests) with explicit definitions and
 exact values; integration with saved metric runs and report provenance; then
 durable cost refresh and historical corrections. These slices are planned, not
 implemented. Each has a synthetic acceptance gate and requires no live provider
