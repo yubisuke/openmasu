@@ -81,8 +81,9 @@ completeness, and operational correctness.
 The [measurement comparison requirements](integrations/mmp-landscape.md) motivate three
 ordered slices: an [offline same-cohort comparison](cohort-comparison.md) (implemented with synthetic tests) with explicit definitions and
 exact values; integration with saved metric runs and report provenance; then
-durable cost refresh and historical corrections. These slices are planned, not
-implemented. Each has a synthetic acceptance gate and requires no live provider
+durable cost refresh and historical corrections. The offline CLI includes a
+static HTML report; saved-run integration and cost refresh remain planned.
+Each has a synthetic acceptance gate and requires no live provider
 credentials. Numeric differences alone must never become inferred causal reasons.
 
 ## Optional operator evidence

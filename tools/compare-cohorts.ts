@@ -3,6 +3,7 @@ import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { jcs } from "@openmasu/attribution-core";
+import { renderComparison } from "./cohort-comparison-html.js";
 
 const fields = ["date_from", "date_to", "time_zone", "maturity", "aggregation", "attribution_scope", "metric_definition", "source_cutoff"] as const;
 type Conditions = Record<typeof fields[number], string>;
@@ -65,12 +66,14 @@ export function compareSnapshots(left: unknown, right: unknown) {
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    const args = process.argv.slice(2);
+    const html = process.argv[2] === "--html";
+    const args = process.argv.slice(html ? 3 : 2);
     if (args.length !== 2) throw Error("usage: compare:cohorts -- left.json right.json");
     const inputs = args.map(path => {
       if (statSync(path).size > 4 * 1024 * 1024) throw Error("input_too_large");
       return JSON.parse(readFileSync(path, "utf8"));
     });
-    console.log(jcs(compareSnapshots(inputs[0], inputs[1])));
+    const comparison = compareSnapshots(inputs[0], inputs[1]);
+    process.stdout.write(html ? renderComparison(comparison) : `${jcs(comparison)}\n`);
   } catch { console.error("Comparison failed: check arguments and snapshot format; inputs were not printed."); process.exitCode = 1; }
 }
