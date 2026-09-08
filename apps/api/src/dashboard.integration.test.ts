@@ -186,7 +186,7 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
           'synthetic-private-value','synthetic','synthetic','{}')`, [record, tenantId, healthApp, "c".repeat(64), at]);
       await client.query(`INSERT INTO ledger.logical_events
         (logical_event_id,record_id,tenant_id,app_id,producer,event_id,event_name,timeliness,artifact)
-        VALUES ($1,$1,$2,$3,'android_sdk',$1,'install','on_time','{}')`, [record, tenantId, healthApp]);
+        VALUES ($1::text,$1::text::control.identifier,$2,$3,'android_sdk',$1::text::control.identifier,'install','on_time','{}')`, [record, tenantId, healthApp]);
     });
     assert.equal((await read()).events.logical_events, "1");
     assert.match(await page(), /data-measurement-state="not_computed"/);
