@@ -13,6 +13,7 @@ import { roleAllows } from "./authorization.js";
 import { dashboardCss } from "./dashboard/css.js";
 import { escapeHtml, renderDashboard } from "./dashboard/render.js";
 import { buildDashboardView } from "./dashboard/view.js";
+import { dashboardReportParams } from "./dashboard/report-controls.js";
 import { receiveMax, type MaxReceiverConfig } from "./max-receiver.js";
 import { OperationalMetrics, renderOperationalMetrics } from "./operational-metrics.js";
 import { boundedMethod, writeOperationalLog, type OperationalLogWriter } from "./observability.js";
@@ -881,7 +882,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             })));
             return;
           }
-          const params = new URLSearchParams(target.searchParams);
+          const params = dashboardReportParams(target.searchParams);
           if (route.handler === "dashboard_export") {
             params.set("format", "csv");
             params.set("export", "true");

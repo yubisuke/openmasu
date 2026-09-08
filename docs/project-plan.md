@@ -72,6 +72,11 @@ database/dashboard integration and durable cost refresh remain planned.
 
 ## Change acceptance
 
+The readable-analysis integration gate adds exact metric units, server-rendered
+filters and selection-preserving CSV links to existing reports. It does not add
+a metric engine or grant access to private replay manifests. Window/maturity
+remain explicitly unknown; see [Dashboard analysis](dashboard-analysis.md).
+
 Every change must identify:
 
 - the product or operational outcome;

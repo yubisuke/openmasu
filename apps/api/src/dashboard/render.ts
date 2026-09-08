@@ -1,6 +1,8 @@
 import { renderSparkline } from "./svg.js";
 import type { DashboardView } from "./view.js";
 import { measurementNotices } from "../measurement-health.js";
+import { metricValueLabel } from "./metric-value.js";
+import { reportFields, reportSelectionParams } from "./report-controls.js";
 
 export function escapeHtml(value: unknown): string {
   return String(value)
@@ -18,17 +20,7 @@ function grouping(value: Readonly<Record<string, string>>): string {
 
 function continuationHref(view: DashboardView, suffix: string, cursor: string): string | undefined {
   if (!view.selectedAppId || !view.query) return undefined;
-  const params = new URLSearchParams();
-  for (const metricName of view.query.metricNames ?? []) params.append("metric_name", metricName);
-  if (view.query.metricDefinitionVersion) params.set("metric_definition_version", view.query.metricDefinitionVersion);
-  for (const [dimension, value] of Object.entries(view.query.grouping ?? {})) {
-    params.set(`grouping_${dimension}`, value);
-  }
-  if (view.query.dateFrom) params.set("date_from", view.query.dateFrom);
-  if (view.query.dateTo) params.set("date_to", view.query.dateTo);
-  if (view.query.watermarkAtMost) params.set("watermark_at_most", view.query.watermarkAtMost);
-  if (view.query.differenceReasonCode) params.set("difference_reason_code", view.query.differenceReasonCode);
-  params.set("supersession", view.query.supersession);
+  const params = reportSelectionParams(view.query);
   params.set("limit", String(view.query.limit));
   params.set("after", cursor);
   return `/dashboard/apps/${encodeURIComponent(view.selectedAppId)}${suffix}?${params.toString()}`;
@@ -177,14 +169,21 @@ function metricTable(caption: string, rows: DashboardView["rows"]): string {
   return `<table><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">Metric</th><th scope="col">Grouping</th><th scope="col">Value</th><th scope="col">Freshness</th><th scope="col">Computed at</th><th scope="col">Rule bundle</th><th scope="col">Reproducibility</th></tr></thead><tbody>${rows.map((row) => {
     const value = row.value_state === "undefined"
       ? `<span class="undefined-value">—</span><small>${escapeHtml(row.undefined_reason)}</small>`
-      : `<span data-metric-run-id="${escapeHtml(row.metric_run_id)}" data-value-unscaled="${escapeHtml(row.value_unscaled)}">${escapeHtml(row.value_unscaled)}</span>`;
-    return `<tr><th scope="row">${escapeHtml(row.metric_name)}</th><td>${escapeHtml(grouping(row.grouping))}</td><td>${value}</td><td>${escapeHtml(row.data_freshness)}</td><td>${escapeHtml(row.computed_at)}</td><td>${escapeHtml(row.rule_bundle_id)} / ${escapeHtml(row.metric_definition_version)}</td><td>${escapeHtml(row.reproducibility_status)}${row.superseded ? " (superseded)" : ""}</td></tr>`;
+      : `<span data-metric-run-id="${escapeHtml(row.metric_run_id)}" data-value-unscaled="${escapeHtml(row.value_unscaled)}">${escapeHtml(metricValueLabel(row))}</span>`;
+    return `<tr><th scope="row">${escapeHtml(row.metric_name)}</th><td>${escapeHtml(grouping(row.grouping))}<small>Window: unknown. Cohort maturity: unknown.</small><small>Run watermark: ${escapeHtml(row.input_received_at_watermark)}</small></td><td>${value}</td><td>${escapeHtml(row.data_freshness)}</td><td>${escapeHtml(row.computed_at)}</td><td>${escapeHtml(row.rule_bundle_id)} / ${escapeHtml(row.metric_definition_version)}</td><td>${escapeHtml(row.reproducibility_status)}${row.superseded ? " (superseded)" : ""}</td></tr>`;
   }).join("")}</tbody></table>`;
 }
 
 function chartSection(label: string, charts: DashboardView["charts"]): string {
   if (charts.length === 0) return "";
-  return `<section aria-label="${escapeHtml(label)}">${charts.map((chart) => `<figure>${renderSparkline(chart.series, { label: `${chart.metric_name} trend` })}<figcaption>${escapeHtml(chart.metric_name)}</figcaption></figure>`).join("")}</section>`;
+  return `<section aria-label="${escapeHtml(label)}"><p>Trends use comparable rows only. Gaps include missing dates, undefined values and integers beyond safe chart precision; exact values remain in the table.</p>${charts.map((chart) => `<figure>${renderSparkline(chart.series, { label: chart.label })}<figcaption>${escapeHtml(chart.label)}</figcaption></figure>`).join("")}</section>`;
+}
+
+function reportControls(view: DashboardView): string {
+  if (!view.selectedAppId || !view.query) return "";
+  const params = reportSelectionParams(view.query);
+  const control = (name: string, label: string, value: string) => `<label>${escapeHtml(label)} <input name="${escapeHtml(name)}" value="${escapeHtml(value)}"></label>`;
+  return `<section><h3>Analyze metrics</h3><form method="get" action="/dashboard/apps/${encodeURIComponent(view.selectedAppId)}">${[...(view.query.metricNames ?? []), ""].map((name) => control("metric_name", "Metric name (blank means no additional filter)", name)).join("")}${reportFields.map(([name, label]) => control(name, label, params.get(name) ?? "")).join("")}<label>History <select name="supersession"><option value="latest"${view.query.supersession === "latest" ? " selected" : ""}>Latest runs</option><option value="all"${view.query.supersession === "all" ? " selected" : ""}>All runs including superseded</option></select></label><input type="hidden" name="limit" value="${view.query.limit}"><button type="submit">Apply filters</button></form><p>Blank fields clear filters. Dates select the metric date, or cohort date when no metric date exists. Copy the resulting URL to share the selection. Ratios are exact multipliers (1 × = 100%); no row totals or averages are inferred. Freshness is not cohort maturity; window and maturity are unknown unless independently established from the metric definition.</p></section>`;
 }
 
 export function renderDashboard(view: DashboardView): string {
@@ -192,7 +191,7 @@ export function renderDashboard(view: DashboardView): string {
   const appNavigation = view.apps.length
     ? `<nav aria-label="Applications"><ul>${view.apps.map((app) => `<li><a href="/dashboard/apps/${encodeURIComponent(app.app_id)}">${escapeHtml(app.app_id)}</a></li>`).join("")}</ul></nav>`
     : "<p>No applications are registered.</p>";
-  const empty = measurementHealthSection(view) + (selected && view.rows.length === 0 && view.records.length === 0 && view.differences.length === 0
+  const empty = reportControls(view) + measurementHealthSection(view) + (selected && view.rows.length === 0 && view.records.length === 0 && view.differences.length === 0
     ? "<p>No report data match this view.</p>"
     : "");
   const deterministicMetrics = metricTable("Deterministic cohort metrics", view.deterministicRows);
@@ -200,7 +199,9 @@ export function renderDashboard(view: DashboardView): string {
   const recordRows = view.records.length === 0 ? "" : `<table><caption>Aggregate record counts at the fixed watermark</caption><thead><tr><th scope="col">Metric</th><th scope="col">Grouping</th><th scope="col">Count</th></tr></thead><tbody>${view.records.map((row) => `<tr><th scope="row">${escapeHtml(row.metric_name)}</th><td>${escapeHtml(grouping(row.grouping))}</td><td>${escapeHtml(row.count)}</td></tr>`).join("")}</tbody></table>${continuation(view, "/records", view.recordNextCursor, "Next aggregate-record page")}`;
   const deterministicCharts = chartSection("Deterministic metric charts", view.deterministicCharts);
   const appleAggregateCharts = chartSection("Apple aggregate postback charts", view.appleAggregateCharts);
-  const exportLink = selected ? `<p><a href="/dashboard/apps/${encodeURIComponent(selected)}/cohorts.csv${view.query?.watermarkAtMost ? `?watermark_at_most=${encodeURIComponent(view.query.watermarkAtMost)}&export=true` : "?export=true"}">Export aggregate CSV</a></p>` : "";
+  const exportParams = view.query ? reportSelectionParams(view.query) : new URLSearchParams();
+  exportParams.set("export", "true");
+  const exportLink = selected ? `<p><a href="/dashboard/apps/${encodeURIComponent(selected)}/cohorts.csv?${escapeHtml(exportParams.toString())}">Export aggregate CSV</a></p>` : "";
   const reportNavigation = selected
     ? `<nav aria-label="Report views"><a href="/dashboard/apps/${encodeURIComponent(selected)}">Cohorts and activity</a> <a href="/dashboard/apps/${encodeURIComponent(selected)}/records">Aggregate record counts</a> <a href="/dashboard/apps/${encodeURIComponent(selected)}/differences">Stored difference audit</a> <a href="/dashboard/apps/${encodeURIComponent(selected)}/fraud">Fraud audit</a> <a href="/dashboard/apps/${encodeURIComponent(selected)}/tracking-links">Measurement links</a></nav>`
     : "";

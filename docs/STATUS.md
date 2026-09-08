@@ -68,6 +68,12 @@ not score a provider, certify its product, or recommend migration.
 
 ## Current engineering focus
 
+Current source also includes [readable dashboard analysis](dashboard-analysis.md):
+exact money/ratio/count labels, shareable server-rendered filters, selection-preserving
+CSV exports and separated chart groups. Audited API/CSV integers are unchanged.
+Window/maturity remain explicitly unknown rather than inferred from freshness or
+metric names. This work is outside the frozen v0.2.0 release evidence.
+
 Current `main` adds [measurement health](measurement-health.md): an app-scoped,
 reader-only view of SDK/backend batches, file imports, safe rejection counts,
 and metric-run/schedule observations. It distinguishes absent observations,

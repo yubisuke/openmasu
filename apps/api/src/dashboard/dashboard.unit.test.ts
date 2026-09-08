@@ -5,6 +5,10 @@ import { encodeMetricReport, metricColumns, type MetricReportPage, type MetricRe
 import { renderDashboard } from "./render.js";
 import { renderSparkline } from "./svg.js";
 import { buildDashboardView } from "./view.js";
+import { exactDecimal, metricValueLabel } from "./metric-value.js";
+import { dashboardReportParams, reportSelectionParams } from "./report-controls.js";
+import { parseMetricQuery } from "../report-query.js";
+import { metricCharts } from "./metric-charts.js";
 
 function metric(overrides: Partial<MetricReportRow> = {}): MetricReportRow {
   return {
@@ -53,6 +57,55 @@ function xmlWellFormed(xml: string): boolean {
 }
 
 describe("M3 zero-JavaScript dashboard", () => {
+  it("keeps SSR filter selection and CSV export scope identical without weakening API validation", () => {
+    const input = new URLSearchParams("metric_name=d7_roas&metric_name=&grouping_campaign_id=campaign-synthetic&grouping_country=JP&grouping_attribution_status=organic&date_from=2026-08-01&date_to=2026-08-20&watermark_at_most=2026-08-21T00%3A00%3A00.000Z&supersession=all&grouping_network=");
+    const parse = (searchParams: URLSearchParams) => parseMetricQuery({ tenantId: "tenant-a", appId: "app-a", searchParams });
+    assert.throws(() => parse(input));
+    const { query } = parse(dashboardReportParams(input));
+    assert.deepEqual(parse(reportSelectionParams(query)).query, query);
+    assert.throws(() => parse(dashboardReportParams(new URLSearchParams("unknown="))), /unknown_filter/);
+    assert.throws(() => parse(dashboardReportParams(new URLSearchParams("date_from=invalid"))));
+    const html = renderDashboard(buildDashboardView({ apps: [], selectedAppId: "app-a", query, metrics: { data: [metric()] }, csrfToken: "synthetic" }));
+    const href = /href="([^"]+cohorts\.csv\?[^"]+)"/.exec(html)![1].replaceAll("&amp;", "&");
+    const exported = new URL(href, "https://synthetic.example").searchParams;
+    assert.equal(exported.get("export"), "true");
+    exported.delete("export");
+    assert.deepEqual(parse(exported).query, query);
+    assert.match(html, /form method="get"/);
+    assert.match(html, /Cohort maturity: unknown/);
+  });
+
+  it("separates chart dimensions, currencies, history and ambiguous snapshots with honest gaps", () => {
+    const rows = [metric(), metric({ metric_run_id: "next", grouping: { cohort_date: "2026-08-21", attribution_status: "non_organic" } })];
+    assert.deepEqual(metricCharts(rows)[0].series, [1250000, undefined, 1250000]);
+    assert.equal(metricCharts([...rows, metric({ grouping: { cohort_date: "2026-08-19", attribution_status: "organic" } })]).length, 2);
+    assert.equal(metricCharts([metric(), metric({ superseded: true })]).length, 2);
+    assert.equal(metricCharts([metric(), metric({ metric_run_id: "another-snapshot" })]).length, 2);
+    assert.equal(metricCharts([metric({ currency: "USD" }), metric({ currency: "JPY" })]).length, 2);
+    assert.deepEqual(metricCharts([metric({ value_unscaled: "9007199254740993" })])[0].series, [undefined]);
+  });
+  it("formats money, ratios and counts exactly without inferring units from metric names", () => {
+    assert.equal(metricValueLabel(metric()), "1.25 ×");
+    assert.equal(metricValueLabel(metric({ metric_name: "retention_d1" })), "1.25 ×");
+    assert.equal(metricValueLabel(metric({ value_type: "money", currency: "USD", amount_scale: 6 })), "USD 1.25");
+    assert.equal(metricValueLabel(metric({ value_type: "money", currency: "JPY", amount_scale: 0, value_unscaled: "-900719925474099312345" })), "JPY -900719925474099312345");
+    assert.equal(metricValueLabel(metric({ value_type: "count", value_unscaled: "0" })), "0 count");
+    assert.equal(metricValueLabel(metric({ value_unscaled: "1", ratio_scale: 18 })), "0.000000000000000001 ×");
+    assert.equal(exactDecimal("-0", 6), "0");
+    assert.throws(() => exactDecimal("1.25", 6), /invalid_metric_decimal/);
+    assert.throws(() => exactDecimal("1", 19), /invalid_metric_decimal/);
+    assert.match(metricValueLabel(metric({ value_state: "undefined", value_unscaled: undefined, undefined_reason: "empty_cohort" })), /—.*empty_cohort/);
+  });
+
+  it("changes only the visible metric label while preserving audit attributes and CSV", () => {
+    const row = metric();
+    const page = { data: [row] };
+    const before = encodeMetricReport(page, "csv").body;
+    const html = renderDashboard(buildDashboardView({ apps: [], metrics: page, csrfToken: "synthetic" }));
+    assert.match(html, /data-metric-run-id="metric:one" data-value-unscaled="1250000">1\.25 ×<\/span>/);
+    assert.equal(encodeMetricReport(page, "csv").body, before);
+    assert.equal(row.value_unscaled, "1250000");
+  });
   it("C17 renders semantic HTML under the exact CSP without executable markup", () => {
     const view = buildDashboardView({
       apps: [{ app_id: "app-one", created_at: "2026-08-20T00:00:00.000Z" }],
