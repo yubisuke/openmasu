@@ -7,7 +7,7 @@ import { createAppPool, createReaderPool, createSeedPool } from "@openmasu/runti
 import { buildDashboardView } from "./dashboard/view.js";
 import { renderDashboard } from "./dashboard/render.js";
 import { parseMetricQuery } from "./report-query.js";
-import { metricReport, recordCounts, type MetricReportRow, type RecordCountRow } from "./reporting.js";
+import { encodeMetricReport, metricReport, recordCounts, type MetricReportRow, type RecordCountRow } from "./reporting.js";
 import { ingestFixture } from "../../worker/src/ingestion.js";
 import { computeSqlMetricRuns } from "../../worker/src/metrics/cohort.js";
 
@@ -123,6 +123,12 @@ describe("M3 four-surface consistency", { concurrency: false }, () => {
       assert.deepEqual(normalizedMetrics(view.rows), expected);
       assert.deepEqual(normalizedRecords(view.records), expected);
       const rendered = htmlValues(renderDashboard(view));
+      const exportHref = /href="([^"]+cohorts\.csv\?[^"]+)"/.exec(renderDashboard(view))![1].replaceAll("&amp;", "&");
+      const exportParams = new URL(exportHref, "https://synthetic.example").searchParams;
+      exportParams.set("format", "csv");
+      const exportQuery = parseMetricQuery({ tenantId: identity.tenantId, appId: identity.appId, searchParams: exportParams }).query;
+      const exported = await metricReport(readerPool, identity, exportQuery);
+      assert.equal(encodeMetricReport(exported, "csv").body, encodeMetricReport(api, "csv").body);
       assert.deepEqual(
         [...rendered.values()].sort(),
         api.data.map((row) => row.value_unscaled ?? "undefined").sort(),

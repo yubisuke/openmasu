@@ -407,6 +407,12 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     const dashboardCookie = cookie(await login(adminKeyA));
     const appPage = await fetch(`${baseUrl}/dashboard/apps/${newAppId}`, { headers: { cookie: dashboardCookie } });
     const appHtml = await appPage.text();
+    const blankFilterPage = await fetch(`${baseUrl}/dashboard/apps/${newAppId}?metric_name=&date_from=&date_to=&grouping_country=&supersession=latest`, { headers: { cookie: dashboardCookie } });
+    assert.equal(blankFilterPage.status, 200);
+    assert.match(await blankFilterPage.text(), /Analyze metrics/);
+    const unknownFilterPage = await fetch(`${baseUrl}/dashboard/apps/${newAppId}?unknown=`, { headers: { cookie: dashboardCookie } });
+    assert.equal(unknownFilterPage.status, 400);
+    assert.match(await unknownFilterPage.text(), /unknown_filter/);
     const csrf = /name="csrf_token" value="([^"]+)"/.exec(appHtml)?.[1];
     assert.ok(csrf);
     assert.match(appHtml, /Create a tracking link/);

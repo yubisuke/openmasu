@@ -9,6 +9,7 @@ import type { FraudAuditRow } from "../fraud-reporting.js";
 import type { GoogleDeliveryHealth } from "../google-delivery-health.js";
 import type { OperatorDeliveryHealth } from "../operator-delivery-health.js";
 import type { MeasurementHealth } from "../measurement-health.js";
+import { metricCharts } from "./metric-charts.js";
 
 export type DashboardApp = {
   readonly app_id: string;
@@ -17,6 +18,7 @@ export type DashboardApp = {
 
 export type DashboardChart = {
   readonly metric_name: string;
+  readonly label: string;
   readonly series: readonly (number | undefined)[];
 };
 
@@ -146,15 +148,7 @@ export function buildDashboardView(input: {
   ]);
   const deterministicRows = rows.filter((row) => !aggregateNames.has(row.metric_name));
   const appleAggregateRows = rows.filter((row) => aggregateNames.has(row.metric_name));
-  const byMetric = new Map<string, (number | undefined)[]>();
-  for (const row of rows) {
-    const series = byMetric.get(row.metric_name) ?? [];
-    series.push(row.value_state === "present" && row.value_unscaled !== undefined
-      ? Number(row.value_unscaled)
-      : undefined);
-    byMetric.set(row.metric_name, series);
-  }
-  const charts = [...byMetric].map(([metric_name, series]) => ({ metric_name, series }));
+  const charts = metricCharts(rows);
   return {
     apps: [...input.apps].sort((left, right) => left.app_id.localeCompare(right.app_id, "en")),
     ...(input.selectedAppId ? { selectedAppId: input.selectedAppId } : {}),
