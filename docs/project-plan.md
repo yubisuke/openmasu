@@ -41,6 +41,7 @@ versions were reached. They do not override current sources of truth.
 
 | Workstream | Deliverable | Required evidence |
 | --- | --- | --- |
+| Measurement visibility | Reader-only app health connects existing ingestion, rejection and metric metadata to operator next steps | Synthetic API/role isolation and read-only DB checks plus state/rendering unit tests; no live completeness claim |
 | Worker database safety | Complete: separate scheduler/job pools and short transaction phases | Scheduler and MAX inbox integration tests at a one-connection pool limit |
 | SDK queue parity | Complete: one duplicate/conflict policy across Android and iOS | Shared semantic vectors plus each platform's native gate |
 | Apple current-spec compatibility | Complete: accept and separately report aggregate AdAttributionKit re-engagement while preserving install and device-level boundaries | Signed synthetic receiver test, reviewed fixture parity, SQL/reference parity, and macOS SDK gate |

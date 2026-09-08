@@ -27,6 +27,11 @@ and unsafe mutation. Controls include tenant-scoped keys, RBAC, route-declared
 auth, explicit app validation, opaque sessions, Origin/CSRF checks, rate limits,
 and immutable audit records.
 
+App measurement health uses reader-only repeatable-read queries with explicit
+tenant/app scope and statement timeouts. It returns aggregate metadata only;
+unknown rejection reasons are collapsed before leaving SQL. Retained failure
+history and observed results are not claims of current failure or completeness.
+
 <!-- threat-component:redirector -->
 **Redirector:** open redirect, destination override, slug enumeration, click
 flooding, and raw IP retention. Controls include stored destinations, HTTPS

@@ -1,5 +1,6 @@
 import { renderSparkline } from "./svg.js";
 import type { DashboardView } from "./view.js";
+import { measurementNotices } from "../measurement-health.js";
 
 export function escapeHtml(value: unknown): string {
   return String(value)
@@ -150,6 +151,27 @@ function operatorDeliveryHealthSection(view: DashboardView): string {
   return `<section><h2>Operator delivery health</h2><p>Operational state is bounded to the most recent ${escapeHtml(health.maximum_rows_per_channel)} rows per channel. Credentials, payload references, object paths, record identifiers, digests, and stored payload details are never displayed.</p>${summary("Event webhooks", health.webhooks.summary)}${webhookRows}${summary("Bulk event exports", health.bulk_exports.summary)}${bulkRows}</section>`;
 }
 
+function measurementHealthSection(view: DashboardView): string {
+  const health = view.measurementHealth;
+  if (!health) return "";
+  const value = (input: string | null) => escapeHtml(input ?? "Not observed");
+  const notices = measurementNotices(health).map((notice) =>
+    `<li data-measurement-state="${escapeHtml(notice.state)}"><strong>${escapeHtml(notice.message)}</strong> ${escapeHtml(notice.next)}</li>`).join("");
+  const reasons = health.rejections.map((row) =>
+    `<tr><th scope="row">${escapeHtml(row.source)}</th><td>${escapeHtml(row.reason)}</td><td>${escapeHtml(row.count)}</td></tr>`).join("");
+  return `<section aria-label="Measurement health"><h2>Measurement health</h2>
+    <p>Observed at ${value(health.observed_at)}. Counts cover retained history for this app, not the report filter. Each row has a different unit; these are not funnel conversion rates. Configuration and processing observations do not prove live delivery or completeness.</p>
+    <ul>${notices}</ul>
+    <table><caption>Ingestion and calculation observations</caption><thead><tr><th scope="col">Channel / unit</th><th scope="col">Recorded</th><th scope="col">Waiting</th><th scope="col">Failed</th><th scope="col">Latest observation</th></tr></thead><tbody>
+    <tr><th scope="row">SDK/backend batches</th><td>${value(health.sdk.batches)}</td><td>${value(health.sdk.pending)}</td><td>${value(health.sdk.failed)}</td><td>${value(health.sdk.latest_received_at)}</td></tr>
+    <tr><th scope="row">File import runs</th><td>${value(health.imports.runs)}</td><td>${value(health.imports.running)}</td><td>${value(health.imports.failed)}</td><td>${value(health.imports.latest_started_at)}</td></tr>
+    <tr><th scope="row">Logical events</th><td>${value(health.events.logical_events)}</td><td>Not applicable</td><td>Not applicable</td><td>${value(health.events.latest_received_at)} (raw receipt)</td></tr>
+    <tr><th scope="row">Metric runs (including history)</th><td>${value(health.metrics.runs)}</td><td>${value(health.metrics.pending_schedules)} pending schedules</td><td>Not assessed</td><td>${value(health.metrics.latest_computed_at)}</td></tr>
+    </tbody></table><dl><dt>Active SDK keys</dt><dd>${value(health.sdk.active_keys)}</dd><dt>Oldest pending batch receipt</dt><dd>${value(health.sdk.oldest_pending_at)}</dd><dt>Latest completed import</dt><dd>${value(health.imports.latest_completed_at)}</dd><dt>Active metric schedules</dt><dd>${value(health.metrics.active_schedules)}</dd><dt>Latest computed run source watermark</dt><dd>${value(health.metrics.latest_watermark)}</dd></dl>
+    <p>Latest computed run cohort date: ${value(health.metrics.latest_cohort_date)}. File mapping configuration is local to the importer and is not observable here. Use import:preview to check it. Use metrics:run with an explicit date/definition/watermark, or app metric schedule settings. The latest run does not cover every cohort.</p>
+    ${reasons ? `<table><caption>Retained rejection artifacts (not unique events)</caption><thead><tr><th scope="col">Source</th><th scope="col">Safe reason</th><th scope="col">Count</th></tr></thead><tbody>${reasons}</tbody></table>` : "<p>No retained rejection artifacts are recorded.</p>"}</section>`;
+}
+
 function metricTable(caption: string, rows: DashboardView["rows"]): string {
   if (rows.length === 0) return "";
   return `<table><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">Metric</th><th scope="col">Grouping</th><th scope="col">Value</th><th scope="col">Freshness</th><th scope="col">Computed at</th><th scope="col">Rule bundle</th><th scope="col">Reproducibility</th></tr></thead><tbody>${rows.map((row) => {
@@ -170,9 +192,9 @@ export function renderDashboard(view: DashboardView): string {
   const appNavigation = view.apps.length
     ? `<nav aria-label="Applications"><ul>${view.apps.map((app) => `<li><a href="/dashboard/apps/${encodeURIComponent(app.app_id)}">${escapeHtml(app.app_id)}</a></li>`).join("")}</ul></nav>`
     : "<p>No applications are registered.</p>";
-  const empty = selected && view.rows.length === 0 && view.records.length === 0 && view.differences.length === 0
+  const empty = measurementHealthSection(view) + (selected && view.rows.length === 0 && view.records.length === 0 && view.differences.length === 0
     ? "<p>No report data match this view.</p>"
-    : "";
+    : "");
   const deterministicMetrics = metricTable("Deterministic cohort metrics", view.deterministicRows);
   const appleAggregateMetrics = metricTable("Apple aggregate postback metrics", view.appleAggregateRows);
   const recordRows = view.records.length === 0 ? "" : `<table><caption>Aggregate record counts at the fixed watermark</caption><thead><tr><th scope="col">Metric</th><th scope="col">Grouping</th><th scope="col">Count</th></tr></thead><tbody>${view.records.map((row) => `<tr><th scope="row">${escapeHtml(row.metric_name)}</th><td>${escapeHtml(grouping(row.grouping))}</td><td>${escapeHtml(row.count)}</td></tr>`).join("")}</tbody></table>${continuation(view, "/records", view.recordNextCursor, "Next aggregate-record page")}`;

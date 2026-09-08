@@ -41,6 +41,7 @@ For a complete newcomer reading path, use this order:
 - [Operator event webhooks](operator-event-webhooks.md)
 - [Operator bulk event exports](operator-bulk-exports.md)
 - [Scheduled metric runs](scheduled-metrics.md)
+- [Measurement health and missing results](measurement-health.md)
 - [Privacy and security](privacy-security.md)
 - [Threat model](threat-model.md)
 - [Schema versioning](schema-versioning.md)
