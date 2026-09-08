@@ -47,6 +47,7 @@ Progress:
 
 | Integration gate | State |
 | --- | --- |
+| App ingestion and calculation observations are understandable without raw payload access | Implemented: reader-only measurement health for batches, imports, rejections and metric runs; synthetic API/role and state-rendering gates |
 | Scheduler leases cannot consume the job pool; MAX processing works with a one-connection job pool | Complete |
 | Android and iOS queues share duplicate and event-ID conflict vectors | Complete |
 | One disposable synthetic command is the canonical first run | Complete |

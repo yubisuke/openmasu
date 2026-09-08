@@ -68,6 +68,12 @@ not score a provider, certify its product, or recommend migration.
 
 ## Current engineering focus
 
+Current `main` adds [measurement health](measurement-health.md): an app-scoped,
+reader-only view of SDK/backend batches, file imports, safe rejection counts,
+and metric-run/schedule observations. It distinguishes absent observations,
+waiting work and recorded results without inferring live delivery or complete
+measurement. This addition is not part of the frozen v0.2.0 release evidence.
+
 The published v0.2.0 release consolidates the release-coherence work completed
 after rc.4. Provider-neutral backend event submission, outbound operator event
 webhooks, deterministic operator-owned bulk event exports, durable scheduled

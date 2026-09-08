@@ -108,6 +108,102 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     if (payloadRoot) rmSync(payloadRoot, { recursive: true, force: true });
   });
 
+  it("shows app-scoped measurement health from retained synthetic ingestion and metric metadata", async () => {
+    const healthApp = `app-health-${suffix}`;
+    const otherApp = `app-health-other-${suffix}`;
+    const foreignTenant = `tenant-health-other-${suffix}`;
+    const at = "2026-09-08T00:00:00.000Z";
+    await withTenant(appPool, tenantId, (client) => client.query(
+      "INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ($1,$2,$3)", [tenantId, healthApp, at],
+    ));
+    await withTenant(appPool, foreignTenant, async (client) => {
+      await client.query("INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ($1,$2,$3)", [foreignTenant, otherApp, at]);
+    });
+    const endpoint = `${baseUrl}/v1/admin/apps/${healthApp}/measurement-health`;
+    const headers = { authorization: `Bearer ${adminKeyA}` };
+    assert.equal((await fetch(endpoint)).status, 401);
+    assert.equal((await fetch(`${baseUrl}/v1/admin/apps/${otherApp}/measurement-health`, { headers })).status, 404);
+    const read = async () => {
+      const response = await fetch(endpoint, { headers });
+      assert.equal(response.status, 200);
+      const text = await response.text();
+      for (const forbidden of ["synthetic-private-value", "body_ref", "artifact", "secret_ref", "record_id", "installation_id", "source_id"])
+        assert.equal(text.includes(forbidden), false, forbidden);
+      return JSON.parse(text);
+    };
+    const initial = await read();
+    assert.equal(initial.sdk.active_keys, "0");
+    assert.equal(initial.sdk.batches, "0");
+    assert.equal(initial.sdk.latest_received_at, null);
+    const sessionCookie = cookie(await login(adminKeyA));
+    const page = async () => (await fetch(`${baseUrl}/dashboard/apps/${healthApp}`, { headers: { cookie: sessionCookie } })).text();
+    assert.match(await page(), /data-measurement-state="no_observations"/);
+
+    await withTenant(appPool, tenantId, async (client) => {
+      const batch = randomUUID();
+      await client.query(`INSERT INTO ledger.ingest_batches
+        (ingest_batch_id,tenant_id,app_id,producer,received_at,body_ref,body_digest,event_count,artifact)
+        VALUES ($1,$2,$3,'android_sdk',$4,'synthetic-private-value',$5,1,'{}')`, [batch, tenantId, healthApp, at, "a".repeat(64)]);
+      await client.query(`INSERT INTO ledger.ingest_batch_states
+        (ingest_batch_id,tenant_id,app_id,status,changed_at,artifact) VALUES ($1,$2,$3,'pending',$4,'{}')`, [batch, tenantId, healthApp, at]);
+      await client.query(`INSERT INTO control.import_runs
+        (import_run_id,tenant_id,app_id,source_id,source_snapshot_digest,status,started_at)
+        VALUES ($1,$2,$3,'synthetic-private-value',$4,'running',$5)`, [randomUUID(), tenantId, healthApp, "b".repeat(64), at]);
+      for (const reason of ["payload_schema_invalid", "synthetic-private-value"]) {
+        await client.query(`INSERT INTO ledger.rejections
+          (tenant_id,app_id,delivery_id,record_id,reason_code,artifact) VALUES ($1,$2,$3,$3,$4,'{}')`, [tenantId, healthApp, `synthetic-${randomUUID()}`, reason]);
+      }
+    });
+    const pending = await read();
+    assert.equal(pending.sdk.pending, "1");
+    assert.equal(pending.sdk.oldest_pending_at, at);
+    assert.equal(pending.imports.running, "1");
+    assert.deepEqual(pending.rejections, [
+      { source: "event", reason: "other", count: "1" },
+      { source: "event", reason: "payload_schema_invalid", count: "1" },
+    ]);
+    const pendingHtml = await page();
+    assert.match(pendingHtml, /data-measurement-state="processing_wait"/);
+    assert.match(pendingHtml, /data-measurement-state="rejections_observed"/);
+    assert.doesNotMatch(pendingHtml, /synthetic-private-value/);
+    const beforeRead = await withTenant(appPool, tenantId, (client) => client.query(
+      "SELECT count(*)::text AS count FROM ledger.audit_logs WHERE tenant_id=$1 AND app_id=$2", [tenantId, healthApp],
+    ));
+    const again = await read();
+    assert.deepEqual({ ...again, observed_at: null }, { ...pending, observed_at: null });
+    const afterRead = await withTenant(appPool, tenantId, (client) => client.query(
+      "SELECT count(*)::text AS count FROM ledger.audit_logs WHERE tenant_id=$1 AND app_id=$2", [tenantId, healthApp],
+    ));
+    assert.deepEqual(afterRead.rows, beforeRead.rows);
+    // Metadata-only synthetic ledger rows: this tests observation, not evaluator correctness.
+    await withTenant(appPool, tenantId, async (client) => {
+      const record = `synthetic-health-${randomUUID()}`;
+      await client.query(`INSERT INTO ledger.raw_records
+        (record_id,tenant_id,app_id,producer,producer_version,event_id,delivery_id,event_name,schema_version,
+         payload_sha256,occurred_at,occurred_at_source,received_at,raw_payload_ref,
+         consent_evaluation_policy_version,consent_decision_reason_code,artifact)
+        VALUES ($1,$2,$3,'android_sdk','synthetic',$1,$1,'install','0.4.0',$4,$5,'server',$5,
+          'synthetic-private-value','synthetic','synthetic','{}')`, [record, tenantId, healthApp, "c".repeat(64), at]);
+      await client.query(`INSERT INTO ledger.logical_events
+        (logical_event_id,record_id,tenant_id,app_id,producer,event_id,event_name,timeliness,artifact)
+        VALUES ($1,$1,$2,$3,'android_sdk',$1,'install','on_time','{}')`, [record, tenantId, healthApp]);
+    });
+    assert.equal((await read()).events.logical_events, "1");
+    assert.match(await page(), /data-measurement-state="not_computed"/);
+    await withTenant(appPool, tenantId, (client) => client.query(`INSERT INTO ledger.metric_runs
+      (metric_run_id,tenant_id,app_id,metric_name,metric_definition_version,grouping,grouping_digest,input_snapshot_id,
+       input_received_at_watermark,input_ledger_position,computed_at,data_freshness,aggregation_time_zone,
+       rule_bundle_id,rule_bundle_version,rule_bundle_hash,rounding_mode,reproducibility_status,value_type,value_unscaled,artifact)
+      VALUES ($1,$2,$3,'synthetic_metric','synthetic','{"dimensions":{"cohort_date":"2026-09-07"}}',$4,$4,
+       $5,'synthetic',$5,'complete','UTC','synthetic','synthetic',$4,'half_even','fully_reproducible','count','1','{}')`,
+    [`synthetic-metric-${randomUUID()}`, tenantId, healthApp, "d".repeat(64), at]));
+    const computed = await read();
+    assert.equal(computed.metrics.runs, "1");
+    assert.equal(computed.metrics.latest_computed_at, at);
+    assert.equal(computed.metrics.latest_watermark, at);
+    assert.equal(computed.metrics.latest_cohort_date, "2026-09-07");
+  });
+
   it("C01 authenticates both overlap keys and keeps invalid responses byte-identical", async () => {
     for (const key of [adminKeyA, adminKeyB]) {
       const response = await login(key);
