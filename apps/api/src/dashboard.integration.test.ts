@@ -193,9 +193,9 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     await withTenant(appPool, tenantId, (client) => client.query(`INSERT INTO ledger.metric_runs
       (metric_run_id,tenant_id,app_id,metric_name,metric_definition_version,grouping,grouping_digest,input_snapshot_id,
        input_received_at_watermark,input_ledger_position,computed_at,data_freshness,aggregation_time_zone,
-       rule_bundle_id,rule_bundle_version,rule_bundle_hash,rounding_mode,reproducibility_status,value_type,value_unscaled,artifact)
+       rule_bundle_id,rule_bundle_version,rule_bundle_hash,rounding_mode,reproducibility_status,value_type,value_unscaled,value_state,artifact)
       VALUES ($1,$2,$3,'synthetic_metric','synthetic','{"dimensions":{"cohort_date":"2026-09-07"}}',$4,$4,
-       $5,'synthetic',$5,'complete','UTC','synthetic','synthetic',$4,'half_even','fully_reproducible','count','1','{}')`,
+       $5,'synthetic',$5,'complete','UTC','synthetic','synthetic',$4,'half_even','fully_reproducible','count','1','present','{}')`,
     [`synthetic-metric-${randomUUID()}`, tenantId, healthApp, "d".repeat(64), at]));
     const computed = await read();
     assert.equal(computed.metrics.runs, "1");
