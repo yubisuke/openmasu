@@ -4536,6 +4536,9 @@ CREATE TRIGGER cost_schedules_append_only BEFORE UPDATE OR DELETE ON control.cos
 CREATE TRIGGER cost_schedule_states_append_only BEFORE UPDATE OR DELETE ON control.cost_schedule_states
   FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
 REVOKE ALL ON control.cost_schedules,control.cost_schedule_states,control.cost_schedule_checkpoints FROM PUBLIC;
+-- New control tables inherit reader SELECT from the owner's default grants.
+-- Remove that broad grant before exposing only the aggregate health columns.
+REVOKE ALL ON control.cost_schedules FROM openmasu_reader;
 GRANT SELECT,INSERT ON control.cost_schedules,control.cost_schedule_states TO openmasu_app;
 GRANT SELECT,INSERT,UPDATE ON control.cost_schedule_checkpoints TO openmasu_app;
 GRANT SELECT (cost_schedule_id,tenant_id,app_id,definition_digest,created_at) ON control.cost_schedules TO openmasu_reader;
