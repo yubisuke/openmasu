@@ -21,7 +21,7 @@ export function renderComparison(result: Comparison): string {
   const mismatches = result.mismatches.map(key => `<li>${escape(key)}</li>`).join("");
   const assurance = (["left", "right"] as const).map(side => {
     const a = result.assurance[side];
-    return `<h3>${escape(side)}: ${escape(a.meaning)}</h3><dl>${Object.entries(a.conditions).map(([key, value]) => `<dt>${escape(key)} (${escape(value.state)})</dt><dd>${escape(value.value ?? "Unknown")}</dd>`).join("")}</dl>${a.missing.length ? `<p>Unknown: ${escape(a.missing.join(", "))}</p>` : ""}<p>Internal execution references (not semantic equality keys): ${escape(JSON.stringify(a.execution))}</p>`;
+    return `<h3>${escape(side)}: ${escape(a.meaning)}</h3><p>Query acquisition: ${escape(a.acquisition.state)}; ${a.acquisition.row_count} rows. Upstream completeness: unknown. Missing dates are not zero.</p><dl>${Object.entries(a.conditions).map(([key, value]) => `<dt>${escape(key)} (${escape(value.state)})</dt><dd>${escape(value.value ?? "Unknown")}</dd>`).join("")}</dl>${a.missing.length ? `<p>Unknown: ${escape(a.missing.join(", "))}</p>` : ""}<p>Internal execution references (not semantic equality keys): ${escape(JSON.stringify(a.execution))}</p>`;
   }).join("");
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">

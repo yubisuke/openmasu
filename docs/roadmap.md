@@ -49,7 +49,7 @@ Progress:
 | --- | --- |
 | A saved ROAS result can be explained from its original operands | Implemented for elapsed-window ad-revenue ROAS: atomic aggregate evidence, reader-only JSON/HTML detail, exact rounding and history tests; legacy/unsupported/removed evidence remains explicit |
 | Comparison is bound to saved calculation meaning, not metric names | Implemented: atomic aggregate-only definition/FX context, supported semantic equivalence and conservative maturity; unknown/legacy inputs produce no ordinary deltas, declaration-only compatibility is explicit |
-| Dashboard selections can be saved for offline comparison | Implemented for one complete bounded selection through existing session/reader access and the shared pure converter; missing conditions and incomplete results are refused; fixed cross-page acquisition remains next |
+| Dashboard selections can be saved for offline comparison | Implemented through existing session/reader access and the shared pure converter, with fixed all-page read-only acquisition, scope/selection receipts, bounds and privacy refusal; upstream completeness remains unknown |
 | Metric units and analysis selections are readable without changing audited values | Implemented: exact decimal display, SSR filters and scope-preserving CSV links; chart groups stay separate; window/maturity remain explicitly unknown without readable definition evidence |
 | App ingestion and calculation observations are understandable without raw payload access | Implemented: reader-only measurement health for batches, imports, rejections and metric runs; synthetic API/role and state-rendering gates |
 | Scheduler leases cannot consume the job pool; MAX processing works with a one-connection job pool | Complete |
@@ -89,7 +89,7 @@ exact values; integration with saved metric runs and report provenance; then
 durable cost refresh and historical corrections. The offline CLI includes a
 static HTML report and conversion from saved report JSON with input provenance.
 Saved-run semantics and a bounded dashboard download are implemented. Next:
-fixed-selection cross-page acquisition, a neutral aggregate CSV converter,
+the neutral aggregate CSV converter and the integrated first-use journey,
 then durable cost refresh and historical corrections.
 Each has a synthetic acceptance gate and requires no live provider
 credentials. Numeric differences alone must never become inferred causal reasons.

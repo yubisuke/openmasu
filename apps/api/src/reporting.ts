@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { withTenant } from "@openmasu/runtime";
 import type { MetricComparisonContext } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
@@ -163,12 +163,17 @@ export async function metricReport(
   identity: AppAdminIdentity,
   query: MetricQuery,
 ): Promise<MetricReportPage> {
-  const statement = buildMetricQuery(query);
-  return withTenant(pool, identity.tenantId, async (client) => {
-    const result = await client.query<{ artifact: Any; grouping_digest: string; superseded: boolean; comparison_context: MetricComparisonContext | null }>(
+  return withTenant(pool, identity.tenantId, client => metricReportOnClient(client, query));
+}
+
+/** Reuse the ordinary keyset projection inside a caller-owned consistent read. */
+export async function metricReportOnClient(client: PoolClient, query: MetricQuery, checkEvidence = false): Promise<MetricReportPage> {
+    const statement = buildMetricQuery(query, checkEvidence);
+    const result = await client.query<{ artifact: Any; grouping_digest: string; superseded: boolean; comparison_context: MetricComparisonContext | null; evidence_unavailable?: boolean }>(
       statement.text,
       [...statement.values],
     );
+    if (checkEvidence && result.rows.some(row => row.evidence_unavailable)) throw new ReportQueryError("comparison_evidence_unavailable");
     const hasNext = result.rows.length > query.limit;
     const rows = result.rows.slice(0, query.limit).map((row) => metricRow(
       row.artifact,
@@ -187,7 +192,6 @@ export async function metricReport(
         }),
       } : {}),
     };
-  });
 }
 
 export async function differenceAudit(

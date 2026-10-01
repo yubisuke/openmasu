@@ -1,6 +1,6 @@
 # Project Status
 
-Status date: 2026-08-31.
+Status date: 2026-10-02.
 
 `v0.2.0` is the current published source and SDK release. Its annotated tag,
 [GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.2.0),
@@ -82,11 +82,14 @@ compatibility requires an explicit flag and is never labeled definition-backed.
 Temporal window maturity is conservative and does not prove upstream
 completeness. This addition is outside the frozen v0.2.0 release evidence.
 
-The dashboard can save one complete bounded metric selection as comparison
+The dashboard can save a bounded all-page metric selection as comparison
 JSON through the existing session and reader role. The Web path and offline
-CLI share a pure converter; partial pages and missing/mismatched conditions
-are refused. Unknown meaning is retained, not made comparable by downloading.
-Fixed-selection cross-page acquisition remains next. This is later-source work,
+CLI share a pure converter. A repeatable-read transaction fixes scope and runs
+across pages; a receipt records selected count/digests and acquisition completion.
+Bounds, interruption, privacy/retention and missing/mismatched conditions are
+refused without a partial file. Unknown meaning and upstream completeness are
+retained, not approved by downloading. Neutral aggregate CSV conversion and
+the integrated first-use journey remain next. This is later-source work,
 not evidence for the frozen v0.2.0 release.
 
 Current source also includes [readable dashboard analysis](dashboard-analysis.md):

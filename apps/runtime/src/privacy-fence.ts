@@ -36,6 +36,18 @@ function tenantLockKey(tenantId: string): string {
   return `openmasu:privacy-tenant:${tenantId}`;
 }
 
+/** Acquire before a repeatable-read snapshot so a waited-for deletion is visible. */
+export async function acquirePrivacyTenantSessionReadFence(client: PoolClient, tenantId: string): Promise<() => Promise<void>> {
+  assertIdentifier("privacy fence tenant identifier", tenantId);
+  await client.query("SELECT pg_advisory_lock_shared(hashtextextended($1,0))", [tenantLockKey(tenantId)]);
+  let released = false;
+  return async () => {
+    if (released) return;
+    released = true;
+    await client.query("SELECT pg_advisory_unlock_shared(hashtextextended($1,0))", [tenantLockKey(tenantId)]);
+  };
+}
+
 export async function acquirePrivacyTenantXactFence(
   client: PoolClient,
   tenantId: string,

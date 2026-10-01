@@ -2,13 +2,20 @@ import { createHash } from "node:crypto";
 import { jcs } from "@openmasu/attribution-core";
 import { validateMetricDefinition } from "@openmasu/contracts";
 import { comparisonMeaning, comparisonMaturity, type MetricComparisonContext } from "@openmasu/runtime";
+import { groupingDimensionAllowlist, type GroupingDimension } from "./report-query.js";
 
 const fields = ["date_from", "date_to", "time_zone", "maturity", "aggregation", "attribution_scope", "metric_definition", "source_cutoff"] as const;
 type Conditions = Record<typeof fields[number], string>;
 type Row = { key: string; currency: string; scale: number } & ({ state: "present"; value: string } | { state: "undefined"; reason: string });
 type Provenance = { report_sha256: string; runs: { key: string; metric_run_id: string; input_snapshot_id: string }[] };
 type ContextRow = { key: string; context: MetricComparisonContext };
-type Snapshot = { source: string; conditions: Conditions; rows: Row[]; provenance?: Provenance; comparison_contexts?: ContextRow[] };
+export type ComparisonAcquisition = {
+  version: 1; state: "complete"; method: "postgres_repeatable_read";
+  scope: { tenant_id: string; app_id: string };
+  filters: { metric_definition_version: string | null; grouping: Partial<Record<GroupingDimension, string>> };
+  row_count: number; selection_sha256: string; query_sha256: string; upstream_completeness: "unknown";
+};
+type Snapshot = { source: string; conditions: Conditions; rows: Row[]; provenance?: Provenance; comparison_contexts?: ContextRow[]; acquisition?: ComparisonAcquisition };
 export const comparisonDigest = (value: unknown) => createHash("sha256").update(jcs(value)).digest("hex");
 function object(v: unknown): asserts v is Record<string, unknown> {
   if (!v || typeof v !== "object" || Array.isArray(v)) throw Error("expected_object");
@@ -52,7 +59,7 @@ export function parseComparisonContext(value: unknown): MetricComparisonContext 
   return structuredClone(value) as MetricComparisonContext;
 }
 export function parseSnapshot(input: unknown): Snapshot {
-  object(input); keys(input, ["source", "conditions", "rows", ...("provenance" in input ? ["provenance"] : []), ...("comparison_contexts" in input ? ["comparison_contexts"] : [])]); text(input.source);
+  object(input); keys(input, ["source", "conditions", "rows", ...("provenance" in input ? ["provenance"] : []), ...("comparison_contexts" in input ? ["comparison_contexts"] : []), ...("acquisition" in input ? ["acquisition"] : [])]); text(input.source);
   object(input.conditions); keys(input.conditions, fields);
   for (const key of fields) text(input.conditions[key]);
   const c = { ...input.conditions } as Conditions;
@@ -103,9 +110,33 @@ export function parseSnapshot(input: unknown): Snapshot {
       return { key: item.key, context };
     }).sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
   }
-  return { source: input.source, conditions: { ...c }, rows: [...input.rows].sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0), ...(provenance ? { provenance } : {}), ...(contexts ? { comparison_contexts: contexts } : {}) } as Snapshot;
+  let acquisition: ComparisonAcquisition | undefined;
+  if ("acquisition" in input) {
+    const a = input.acquisition; object(a);
+    keys(a, ["version", "state", "method", "scope", "filters", "row_count", "selection_sha256", "query_sha256", "upstream_completeness"]);
+    if (!provenance || a.version !== 1 || a.state !== "complete" || a.method !== "postgres_repeatable_read"
+        || a.upstream_completeness !== "unknown" || a.row_count !== input.rows.length) throw Error("invalid_acquisition");
+    object(a.scope); keys(a.scope, ["tenant_id", "app_id"]);
+    for (const v of Object.values(a.scope)) if (typeof v !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(v)) throw Error("invalid_acquisition_scope");
+    object(a.filters); keys(a.filters, ["metric_definition_version", "grouping"]); object(a.filters.grouping);
+    if (a.filters.metric_definition_version !== null) {
+      text(a.filters.metric_definition_version);
+      if (a.filters.metric_definition_version.length > 64) throw Error("invalid_acquisition_filter");
+    }
+    for (const [k, v] of Object.entries(a.filters.grouping)) {
+      if (!Object.hasOwn(groupingDimensionAllowlist, k) || typeof v !== "string" || !v || v.length > 128) throw Error("invalid_acquisition_filter");
+      for (const row of input.rows as Row[]) {
+        let group: unknown; try { group = JSON.parse(row.key); } catch { throw Error("invalid_acquisition_grouping"); }
+        object(group); if (group[k] !== v) throw Error("acquisition_grouping_mismatch");
+      }
+    }
+    if (a.selection_sha256 !== comparisonDigest(provenance.runs)
+        || a.query_sha256 !== comparisonDigest({ scope: a.scope, filters: a.filters, conditions: c })) throw Error("acquisition_digest_mismatch");
+    acquisition = structuredClone(a) as ComparisonAcquisition;
+  }
+  return { source: input.source, conditions: { ...c }, rows: [...input.rows].sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0), ...(provenance ? { provenance } : {}), ...(contexts ? { comparison_contexts: contexts } : {}), ...(acquisition ? { acquisition } : {}) } as Snapshot;
 }
-type Assurance = { conditions: Record<string, { state: "declared" | "definition_backed" | "unknown"; value: string | null }>;
+type Assurance = { acquisition: { state: "complete" | "not_recorded"; row_count: number; upstream_completeness: "unknown" }; conditions: Record<string, { state: "declared" | "definition_backed" | "unknown"; value: string | null }>;
   meaning: "definition_backed" | "unknown"; missing: string[]; execution: { definition_digest: string; rule_bundle_id: string; rule_bundle_version: string; rule_bundle_hash: string; fx_policy_version: string; fx_digest: string; metric_run_id: string; input_snapshot_id: string }[] };
 export function snapshotAssurance(snapshot: Snapshot) {
   const contexts = snapshot.comparison_contexts ?? [];
@@ -135,7 +166,7 @@ export function snapshotAssurance(snapshot: Snapshot) {
     conditions.aggregation = { state: "definition_backed", value: meaning.aggregation };
   }
   conditions.maturity = { state: maturity && maturity !== "unknown" ? "definition_backed" : "unknown", value: maturity ?? null };
-  const assurance: Assurance = { conditions, meaning: missing.length ? "unknown" : "definition_backed", missing: [...new Set(missing)].sort(),
+  const assurance: Assurance = { acquisition: { state: snapshot.acquisition ? "complete" : "not_recorded", row_count: snapshot.rows.length, upstream_completeness: "unknown" }, conditions, meaning: missing.length ? "unknown" : "definition_backed", missing: [...new Set(missing)].sort(),
     execution: contexts.map(({ context: c }) => ({ metric_run_id: c.metric_run_id, input_snapshot_id: c.input_snapshot_id,
       definition_digest: c.definition_digest, rule_bundle_id: c.definition.rule_bundle_id,
       rule_bundle_version: c.definition.rule_bundle_version, rule_bundle_hash: c.definition.rule_bundle_hash,
