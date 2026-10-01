@@ -82,6 +82,13 @@ compatibility requires an explicit flag and is never labeled definition-backed.
 Temporal window maturity is conservative and does not prove upstream
 completeness. This addition is outside the frozen v0.2.0 release evidence.
 
+The dashboard can save one complete bounded metric selection as comparison
+JSON through the existing session and reader role. The Web path and offline
+CLI share a pure converter; partial pages and missing/mismatched conditions
+are refused. Unknown meaning is retained, not made comparable by downloading.
+Fixed-selection cross-page acquisition remains next. This is later-source work,
+not evidence for the frozen v0.2.0 release.
+
 Current source also includes [readable dashboard analysis](dashboard-analysis.md):
 exact money/ratio/count labels, shareable server-rendered filters, selection-preserving
 CSV exports and separated chart groups. Audited API/CSV integers are unchanged.

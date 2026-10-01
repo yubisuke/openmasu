@@ -66,7 +66,7 @@ describe("M3 typed reporting query", () => {
     rejects("app_id=other-app", "app_scope_mismatch");
     rejects("app_id=app-query&grouping_country=japan", "grouping_value_invalid");
     rejects("app_id=app-query&date_from=2026-08-21&date_to=2026-08-21", "date_range_invalid");
-    rejects("app_id=app-query&watermark_at_most=2026-08-21T00:00:00Z", "watermark_invalid");
+    rejects("app_id=app-query&watermark_at_most=2026-08-21T00:00:00.0000001Z", "watermark_invalid");
     rejects("app_id=app-query&limit=1001", "limit_invalid");
     rejects("app_id=app-query&after=not-base64-json", "cursor_invalid");
     rejects("app_id=app-query&metric_name=skan_attributed_installs&grouping_attribution_status=non_organic", "metric_series_mismatch");
@@ -74,6 +74,16 @@ describe("M3 typed reporting query", () => {
     rejects("app_id=app-query&metric_name=aak_attributed_reengagements&grouping_country=JP", "metric_series_mismatch");
     rejects("app_id=app-query&metric_name=skan_attributed_installs&grouping_apple_conversion_bucket=fine%3A21", "metric_series_mismatch");
     rejects("app_id=app-query&metric_name=daily_install_count&grouping_apple_conversion_bucket=fine%3A21", "metric_series_mismatch");
+  });
+
+  it("preserves contract timestamp precision and filters instants rather than spelling", () => {
+    for (const cutoff of ["2026-08-21T00:00:00Z", "2026-08-21T00:00:00.000Z", "2026-08-21T00:00:00.123456Z"]) {
+      const query = parse(`watermark_at_most=${cutoff}`).query;
+      assert.equal(query.watermarkAtMost, cutoff);
+      assert.match(buildMetricQuery(query).text, /canonical_timestamp_value\(mr\.input_received_at_watermark\) <= control\.canonical_timestamp_value\(\$\d+\)/);
+    }
+    rejects("watermark_at_most=2026-02-30T00:00:00Z", "watermark_invalid");
+    rejects("watermark_at_most=2026-08-21T00:00:00+00:00", "watermark_invalid");
   });
 
   it("accepts the separated AdAttributionKit re-engagement aggregate series", () => {

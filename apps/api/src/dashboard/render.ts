@@ -3,6 +3,7 @@ import type { DashboardView } from "./view.js";
 import { measurementNotices } from "../measurement-health.js";
 import { metricValueLabel } from "./metric-value.js";
 import { reportFields, reportSelectionParams } from "./report-controls.js";
+import { renderComparisonExport } from "./comparison-export.js";
 
 export function escapeHtml(value: unknown): string {
   return String(value)
@@ -202,7 +203,7 @@ export function renderDashboard(view: DashboardView): string {
   const appleAggregateCharts = chartSection("Apple aggregate postback charts", view.appleAggregateCharts);
   const exportParams = view.query ? reportSelectionParams(view.query) : new URLSearchParams();
   exportParams.set("export", "true");
-  const exportLink = selected ? `<p><a href="/dashboard/apps/${encodeURIComponent(selected)}/cohorts.csv?${escapeHtml(exportParams.toString())}">Export aggregate CSV</a></p>` : "";
+  const exportLink = selected ? `<p><a href="/dashboard/apps/${encodeURIComponent(selected)}/cohorts.csv?${escapeHtml(exportParams.toString())}">Export aggregate CSV</a></p>${renderComparisonExport(view)}` : "";
   const reportNavigation = selected
     ? `<nav aria-label="Report views"><a href="/dashboard/apps/${encodeURIComponent(selected)}">Cohorts and activity</a> <a href="/dashboard/apps/${encodeURIComponent(selected)}/records">Aggregate record counts</a> <a href="/dashboard/apps/${encodeURIComponent(selected)}/differences">Stored difference audit</a> <a href="/dashboard/apps/${encodeURIComponent(selected)}/fraud">Fraud audit</a> <a href="/dashboard/apps/${encodeURIComponent(selected)}/tracking-links">Measurement links</a></nav>`
     : "";

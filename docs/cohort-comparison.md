@@ -52,8 +52,9 @@ No causal explanation is inferred. Successful execution exits 0 even when
 values differ or conditions are incomparable; malformed input exits 1.
 
 This is an offline tooling format, not a new measurement contract artifact.
-The CLI has no direct database or provider access. Dashboard comparison is a
-separate integration; the same common comparison result is intended for it.
+The CLI has no direct database or provider access. Dashboard downloads and the
+CLI share the same pure report transformation and comparison implementation.
+No command-line entry point runs inside the Web request.
 
 ## Calculation meaning and comparison basis
 
@@ -145,6 +146,33 @@ snapshot: hashes are reproducibility references, not authentication proofs.
 `comparison_contexts` bind each available context to its row and provenance.
 Legacy snapshots without that optional field still parse; their meaning does
 not become definition-backed just because declarations or hashes match.
+
+## Save from the dashboard
+
+Sign in, open an application, and select one metric in **Analyze metrics**.
+Set a start date and exclusive end date, an attribution-status filter when the
+saved grouping includes that dimension, and **Watermark at most** equal to the
+saved runs' watermark. Select **Latest runs** and a row limit large enough for
+the entire selection. Then choose **Save comparison JSON**. The GET form keeps
+the filters and watermark; it uses the existing dashboard session and reader
+role, not the API bearer key. No raw events or private replay manifests enter
+the file. Save it outside this public repository.
+
+Only a complete single bounded result can be saved. A cursor, another page,
+mixed definitions/watermarks, affected evidence, empty selection, or missing
+conditions is refused instead of downloaded as a valid comparison input.
+The watermark search compares UTC instants and accepts the contract's zero to
+six fractional digits; equivalent spellings do not exclude a matching run.
+The watermark is still an upper-bound filter, so every selected run must also
+match the chosen cutoff exactly. Do not pick a later time merely to admit rows.
+
+Supported aggregation and maturity come from the saved definition. For legacy
+or unsupported definitions, explicitly select an aggregation declaration in
+the save form; calculation meaning and maturity remain unknown. Download
+success does not establish comparability, population completeness, or upstream
+delivery. Cross-page fixed-selection acquisition is a separate capability.
+Two saved files can be used directly by the existing comparison CLI/HTML
+commands below; no network request is needed after saving them.
 
 ## Human-readable report
 
