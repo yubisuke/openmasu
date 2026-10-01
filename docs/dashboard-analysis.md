@@ -48,8 +48,11 @@ configured limit is rejected. This is a fresh read of matching persisted runs,
 not a frozen cross-request snapshot; later supersessions may change the selection.
 
 **Save comparison JSON** preserves the current filters and explicit watermark
-and uses the same pure converter as the offline CLI. It accepts one metric and
-one complete bounded latest-run selection, not an unfinished page. Supported
+and uses the same pure converter as the offline CLI. It reads all matching
+keyset pages in one fixed read-only transaction, bounded to 10,000 rows, 4 MiB
+and 30 seconds; the screen limit is the batch size. A completion receipt binds
+scope, filters, row count and selection digests. Partial or unavailable evidence
+is not downloaded. It accepts one metric and a complete latest-run selection. Supported
 meaning/maturity are taken from the saved definition; legacy or unsupported
 meaning stays unknown. See [Cohort comparison](cohort-comparison.md#save-from-the-dashboard)
 for required conditions and refusal behavior. A download is not proof of

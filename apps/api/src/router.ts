@@ -14,7 +14,8 @@ import { dashboardCss } from "./dashboard/css.js";
 import { escapeHtml, renderDashboard } from "./dashboard/render.js";
 import { buildDashboardView } from "./dashboard/view.js";
 import { metricExplanation } from "./metric-explanation.js";
-import { comparisonExport, ComparisonExportError } from "./comparison-export.js";
+import { ComparisonExportError } from "./comparison-export.js";
+import { fixedComparisonDownload } from "./fixed-comparison.js";
 import { renderMetricExplanation } from "./dashboard/metric-explanation.js";
 import { dashboardReportParams } from "./dashboard/report-controls.js";
 import { receiveMax, type MaxReceiverConfig } from "./max-receiver.js";
@@ -935,8 +936,14 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             return;
           }
           if (route.handler === "dashboard_comparison_export") {
-            const page = await metricReport(dependencies.readerPool, appIdentity, parsed.query);
-            const body = comparisonExport(page, parsed.query, declaredAggregation);
+            const abort = new AbortController();
+            const disconnected = () => abort.abort();
+            response.once("close", disconnected);
+            let body: string;
+            try {
+              body = await fixedComparisonDownload(dependencies.readerPool, appIdentity, parsed.query,
+                { declaredAggregation, signal: abort.signal });
+            } finally { response.off("close", disconnected); }
             response.writeHead(200, { ...dashboardHeaders, "content-type": "application/json; charset=utf-8",
               "content-disposition": 'attachment; filename="openmasu-comparison.json"',
               "content-length": Buffer.byteLength(body, "utf8") });

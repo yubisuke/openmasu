@@ -137,6 +137,8 @@ function parseMetricCursor(encoded: string): MetricCursor {
   };
 }
 
+export { parseMetricCursor as decodeMetricCursor };
+
 function parseDifferenceCursor(encoded: string): DifferenceCursor {
   const parsed = decodedCursor(encoded);
   const keys = Object.keys(parsed).sort().join(",");
@@ -333,7 +335,7 @@ function runDateExpression(alias: string): string {
   return `COALESCE(NULLIF(${alias}.grouping->>'metric_date',''), NULLIF(${alias}.grouping->>'cohort_date',''))`;
 }
 
-export function buildMetricQuery(query: MetricQuery): ParameterizedQuery {
+export function buildMetricQuery(query: MetricQuery, checkEvidence = false): ParameterizedQuery {
   const values: unknown[] = [query.tenantId, query.appId];
   const predicates = ["mr.tenant_id=$1", "mr.app_id=$2"];
   if (query.metricNames) predicates.push(`mr.metric_name=ANY(${push(values, query.metricNames)}::text[])`);
@@ -361,6 +363,15 @@ export function buildMetricQuery(query: MetricQuery): ParameterizedQuery {
   const limit = push(values, query.limit + 1);
   return {
     text: `SELECT mr.artifact, mr.grouping_digest, mr.comparison_context,
+      ${checkEvidence ? `EXISTS (
+        SELECT 1 FROM jsonb_array_elements(coalesce(mr.artifact->'evidence_refs', '[]'::jsonb)) AS ref
+        LEFT JOIN ledger.raw_records_current AS raw
+          ON raw.tenant_id=mr.tenant_id AND raw.app_id=mr.app_id AND raw.record_id=ref->>'ref'
+        LEFT JOIN ledger.cost_records AS cost
+          ON cost.tenant_id=mr.tenant_id AND cost.app_id=mr.app_id AND cost.cost_record_id=ref->>'ref'
+        WHERE (raw.record_id IS NOT NULL AND raw.payload_lifecycle_status <> 'available')
+          OR (raw.record_id IS NULL AND cost.cost_record_id IS NULL)
+      ) AS evidence_unavailable,` : ""}
       EXISTS (
         SELECT 1 FROM ledger.metric_runs AS replacement
         WHERE replacement.tenant_id=mr.tenant_id AND replacement.app_id=mr.app_id

@@ -152,15 +152,22 @@ not become definition-backed just because declarations or hashes match.
 Sign in, open an application, and select one metric in **Analyze metrics**.
 Set a start date and exclusive end date, an attribution-status filter when the
 saved grouping includes that dimension, and **Watermark at most** equal to the
-saved runs' watermark. Select **Latest runs** and a row limit large enough for
-the entire selection. Then choose **Save comparison JSON**. The GET form keeps
+saved runs' watermark. Select **Latest runs** and choose **Save comparison JSON**.
+The ordinary screen limit becomes the acquisition batch size (up to 1,000), not
+the total exported row limit. The GET form keeps
 the filters and watermark; it uses the existing dashboard session and reader
 role, not the API bearer key. No raw events or private replay manifests enter
 the file. Save it outside this public repository.
 
-Only a complete single bounded result can be saved. A cursor, another page,
-mixed definitions/watermarks, affected evidence, empty selection, or missing
-conditions is refused instead of downloaded as a valid comparison input.
+The download reads all matching keyset pages in a single PostgreSQL
+`REPEATABLE READ READ ONLY` transaction. New runs or supersessions committed
+between pages do not change that selection. Ordinary paged reports and CSV
+exports remain fresh reads; they are not replaced with this acquisition mode.
+Incoming page cursors, mixed definitions/watermarks, affected evidence, empty
+selection, or missing conditions are refused instead of downloaded as a valid
+comparison input. Bounds are 10,000 rows, 4 MiB and 30 seconds including
+acquisition/validation. The response is buffered: overflow, cancellation,
+timeout or database failure produces no successful partial file.
 The watermark search compares UTC instants and accepts the contract's zero to
 six fractional digits; equivalent spellings do not exclude a matching run.
 The watermark is still an upper-bound filter, so every selected run must also
@@ -170,9 +177,30 @@ Supported aggregation and maturity come from the saved definition. For legacy
 or unsupported definitions, explicitly select an aggregation declaration in
 the save form; calculation meaning and maturity remain unknown. Download
 success does not establish comparability, population completeness, or upstream
-delivery. Cross-page fixed-selection acquisition is a separate capability.
+delivery. Missing dates are not synthesized as zero.
 Two saved files can be used directly by the existing comparison CLI/HTML
 commands below; no network request is needed after saving them.
+
+Downloaded inputs add an `acquisition` receipt: `state=complete`, the consistent
+read method, tenant/app scope, definition/grouping filters, selected row count,
+selection and query SHA-256 values, and `upstream_completeness=unknown`. It is
+bound to the normalized conditions and row-key/run/snapshot provenance. Page
+batch size and wall-clock read time do not enter the digest. The parser rejects
+incomplete or count/digest-mismatched receipts, and the JSON/HTML comparison
+shows acquisition separately from calculation meaning. Older saved inputs
+without a receipt show `not_recorded`, not complete acquisition.
+
+The existing tenant privacy fence is held before establishing the read
+snapshot. A pending tenant deletion pauses acquisition conservatively using
+the existing safe backlog function; reader access to private deletion jobs is
+not expanded. Deleted, purged or missing source references stop the export.
+Only lifecycle metadata is read; no payload is decrypted or reconstructed.
+Privacy changes completed before the read are visible. Like any private export,
+an already saved file cannot be revoked automatically after a later deletion;
+operators remain responsible for downstream custody and deletion.
+No persistent export snapshot, temporary server file, database or service is
+added. Keep the downloaded file to reproduce its exact original selection;
+a later fresh download can legitimately differ after a committed revision.
 
 ## Human-readable report
 
