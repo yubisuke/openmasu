@@ -352,7 +352,9 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
       assert.equal(jcs(repeated?.calculation), jcs(before?.calculation));
       assert.equal(repeated?.run.value_unscaled, prior.value_unscaled);
       assert.notEqual(after?.run.value_unscaled, prior.value_unscaled);
-      const legacy = { ...prior, metric_run_id: "explanation-legacy-no-operands" };
+      // A historical definition is a distinct run identity, not a duplicate of
+      // the already-saved modern definition on the exact same input snapshot.
+      const legacy = { ...prior, metric_run_id: "explanation-legacy-no-operands", metric_definition_version: "synthetic-legacy" };
       await withTenant(appPool, identity.tenantId, (client) => persistMetricRun(client, { tenant_id: identity.tenantId, app_id: identity.appId }, legacy));
       const absent = await metricExplanation(reader, identity, legacy.metric_run_id);
       assert.equal(absent?.evidence_state, "not_recorded");
