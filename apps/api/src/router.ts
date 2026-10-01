@@ -13,6 +13,8 @@ import { roleAllows } from "./authorization.js";
 import { dashboardCss } from "./dashboard/css.js";
 import { escapeHtml, renderDashboard } from "./dashboard/render.js";
 import { buildDashboardView } from "./dashboard/view.js";
+import { metricExplanation } from "./metric-explanation.js";
+import { renderMetricExplanation } from "./dashboard/metric-explanation.js";
 import { dashboardReportParams } from "./dashboard/report-controls.js";
 import { receiveMax, type MaxReceiverConfig } from "./max-receiver.js";
 import { OperationalMetrics, renderOperationalMetrics } from "./operational-metrics.js";
@@ -493,7 +495,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
       }
 
       if ([
-        "dashboard_app", "dashboard_export", "dashboard_records", "dashboard_differences", "dashboard_fraud",
+        "dashboard_app", "dashboard_metric_explanation", "dashboard_export", "dashboard_records", "dashboard_differences", "dashboard_fraud",
         "dashboard_tracking_links_list", "dashboard_tracking_links_create", "dashboard_tracking_link_transition",
         "dashboard_sdk_keys_issue", "dashboard_sdk_keys_retire",
         "dashboard_server_keys_issue", "dashboard_server_keys_retire", "dashboard_link_domain",
@@ -562,6 +564,13 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
         const appId = dashboardAppId(target.pathname) ?? "";
         try {
           const appIdentity = await requireRegisteredApp(dependencies.readerPool, sessionIdentity, appId);
+          if (route.handler === "dashboard_metric_explanation") {
+            const runId = decodedPathPart(target.pathname, /\/metrics\/([^/]+)\/explanation$/) ?? "";
+            const explanation = await metricExplanation(dependencies.readerPool, appIdentity, runId);
+            dashboardHtml(response, explanation ? 200 : 404, explanation ? renderMetricExplanation(appId, explanation)
+              : '<!doctype html><html lang="en"><body><h1>Metric run not found</h1></body></html>');
+            return;
+          }
           if (route.handler === "dashboard_tracking_link_transition") {
             const body = await formBody(request);
             const action = trackingLinkAction(target.pathname);
@@ -1018,6 +1027,17 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
           try {
             const appIdentity = await requireRegisteredApp(pool, identity, adminAppId(target.pathname) ?? "");
             json(response, 200, await measurementHealth(pool, appIdentity));
+          } catch (error) {
+            if (error instanceof AppNotFoundError) json(response, 404, { error: "app_not_found" });
+            else throw error;
+          }
+          return;
+        }
+        if (route.handler === "admin_metric_explanation") {
+          try {
+            const appIdentity = await requireRegisteredApp(pool, identity, adminAppId(target.pathname) ?? "");
+            const explanation = await metricExplanation(pool, appIdentity, decodedPathPart(target.pathname, /\/metrics\/([^/]+)\/explanation$/) ?? "");
+            json(response, explanation ? 200 : 404, explanation ?? { error: "metric_run_not_found" });
           } catch (error) {
             if (error instanceof AppNotFoundError) json(response, 404, { error: "app_not_found" });
             else throw error;

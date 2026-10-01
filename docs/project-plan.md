@@ -42,6 +42,7 @@ versions were reached. They do not override current sources of truth.
 | Workstream | Deliverable | Required evidence |
 | --- | --- | --- |
 | Measurement visibility | Reader-only app health connects existing ingestion, rejection and metric metadata to operator next steps | Synthetic API/role isolation and read-only DB checks plus state/rendering unit tests; no live completeness claim |
+| Saved ROAS explanation | Elapsed-window ad-revenue ROAS records its operands with the original run and exposes aggregate details | SQL parity, exact operands/rounding, duplicate delivery, selected cost history, missing/redacted evidence and reader scope; no historical reconstruction |
 | Worker database safety | Complete: separate scheduler/job pools and short transaction phases | Scheduler and MAX inbox integration tests at a one-connection pool limit |
 | SDK queue parity | Complete: one duplicate/conflict policy across Android and iOS | Shared semantic vectors plus each platform's native gate |
 | Apple current-spec compatibility | Complete: accept and separately report aggregate AdAttributionKit re-engagement while preserving install and device-level boundaries | Signed synthetic receiver test, reviewed fixture parity, SQL/reference parity, and macOS SDK gate |
@@ -75,7 +76,9 @@ database/dashboard integration and durable cost refresh remain planned.
 The readable-analysis integration gate adds exact metric units, server-rendered
 filters and selection-preserving CSV links to existing reports. It does not add
 a metric engine or grant access to private replay manifests. Window/maturity
-remain explicitly unknown; see [Dashboard analysis](dashboard-analysis.md).
+remain unknown in the main table; saved ad-revenue ROAS details expose recorded
+operands and window boundaries. See [Dashboard analysis](dashboard-analysis.md)
+and [Metric explanations](metric-explanations.md).
 
 Every change must identify:
 

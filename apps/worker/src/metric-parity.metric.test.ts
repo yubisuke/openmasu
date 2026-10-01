@@ -3,10 +3,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { evaluate, jcs, roundHalfEven, sha256 } from "@openmasu/attribution-core";
-import { createAppPool, createSeedPool, requireEnvironment, withTenant } from "@openmasu/runtime";
+import { createAppPool, createReaderPool, createSeedPool, requireEnvironment, withTenant } from "@openmasu/runtime";
 import { Client, type Pool } from "pg";
 import { ingestFixture, ingestRuntimeBatch } from "./ingestion.js";
-import { computeSqlMetricRuns, computeSqlMetricRunsWithClient } from "./metrics/cohort.js";
+import { computeSqlMetricRuns, computeSqlMetricRunsWithClient, persistMetricRun } from "./metrics/cohort.js";
+import { metricExplanation } from "../../api/src/metric-explanation.js";
+import { renderMetricExplanation } from "../../api/src/dashboard/metric-explanation.js";
 
 type Any = Record<string, any>;
 const fixtureName = "33-stage-b-cohort-metrics";
@@ -94,6 +96,40 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
     assert.deepEqual(actual, vectors.map(({ numerator, denominator }) =>
       roundHalfEven(numerator, denominator).toString()));
     assert.deepEqual(actual.slice(0, 3), ["0", "2", "2"]);
+  });
+
+  it("explains SQL ROAS with saved exact operands, selected cost and closed reader-safe evidence", async () => {
+    const reader = createReaderPool();
+    const identity = { keyId: "synthetic", role: "read_only" as const, tenantId: input.server_context.tenant_id, appId: input.server_context.app_id };
+    try {
+      const detail = await metricExplanation(reader, identity, "run-33:d7_roas");
+      assert.equal(detail?.evidence_state, "available");
+      assert.equal(detail?.window_state, "elapsed");
+      const evidence = detail!.calculation!;
+      assert.deepEqual(evidence.operands, { revenue_unscaled: "150000000", cost_unscaled: "100000000",
+        revenue_event_count: "3", cost_row_count: "1", cohort_size: "1", last_window_end: "2026-08-09T00:00:00.000000Z", window_elapsed: true });
+      assert.equal(roundHalfEven(BigInt(evidence.operands.revenue_unscaled) * 10n ** BigInt(evidence.ratio_scale), BigInt(evidence.operands.cost_unscaled)).toString(), detail!.run.value_unscaled);
+      assert.equal(evidence.input_snapshot_id, detail!.run.input_snapshot_id);
+      assert.equal(evidence.fx_snapshot_id, sha256(input.fx_policy.rates));
+      assert.equal(evidence.definition_digest, sha256(input.metric_definitions.find((definition: Any) => definition.metric_name === "d7_roas")));
+      assert.equal(jcs(await metricExplanation(reader, identity, "run-33:d7_roas")), jcs(detail));
+      const html = renderMetricExplanation(identity.appId, detail!);
+      assert.match(html, /USD 150/);
+      assert.match(html, /USD 100/);
+      assert.match(html, /1\.5 ×/);
+      for (const forbidden of ["installation_id", "evidence_refs", "record_id", "input_ledger_position", "provider-click-33", "revenue-33-a", "cost-33-old"]) {
+        assert.equal(JSON.stringify(detail).includes(forbidden), false, forbidden);
+        assert.equal(html.includes(forbidden), false, forbidden);
+      }
+      assert.equal(await metricExplanation(reader, { ...identity, tenantId: "tenant-other" }, "run-33:d7_roas"), undefined);
+      assert.equal(await metricExplanation(reader, { ...identity, appId: "app-other" }, "run-33:d7_roas"), undefined);
+      const organic = await metricExplanation(reader, identity, "run-33-organic:d1_roas");
+      assert.equal(organic?.run.value_state, "undefined");
+      assert.equal(organic?.run.undefined_reason, "no_attributed_cost");
+      assert.equal(organic?.calculation?.operands.cost_unscaled, "0");
+      assert.equal(organic?.run.value_unscaled, undefined);
+      assert.equal((await metricExplanation(reader, identity, "run-33:retention_d1"))?.evidence_state, "not_recorded");
+    } finally { await reader.end(); }
   });
 
   it("B3 half-up mutation fails SQL/evaluator parity and rolls back", async () => {
@@ -282,6 +318,71 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
     const secondSnapshot = (await computeSqlMetricRuns(appPool, mutation, false))[0].input_snapshot_id;
     assert.notEqual(firstSequence, secondSequence, "fixture reload must exercise different ledger sequence values");
     assert.equal(secondSnapshot, firstSnapshot, "ledger_seq must not participate in snapshot identity");
+  });
+
+  it("preserves historical ROAS operands across cost revision and reports missing or removed evidence honestly", async () => {
+    const mutation = structuredClone(input);
+    const duplicate = structuredClone(mutation.records.find((record: Any) => record.record_id === "revenue-33-a"));
+    Object.assign(duplicate, { record_id: "duplicate-revenue-33-a", delivery_id: "delivery:duplicate-revenue-33-a",
+      received_at: "2026-08-05T00:00:00.000Z", processing_sequence: 11 });
+    mutation.records.push(duplicate);
+    const base = { ...mutation.metric_evaluations[0], metric_names: ["d7_roas"], privacy_state: "after" };
+    mutation.metric_evaluations = [
+      { ...base, metric_run_id_prefix: "explanation-cost-before", input_received_at_watermark: "2026-08-07T23:59:59.000Z" },
+      { ...base, metric_run_id_prefix: "explanation-cost-after", supersedes_metric_run_id_prefix: "explanation-cost-before" },
+    ];
+    await ingestFixture(fixtureName, mutation, appPool, seedPool);
+    const reader = createReaderPool();
+    const identity = { keyId: "synthetic", role: "read_only" as const, tenantId: input.server_context.tenant_id, appId: input.server_context.app_id };
+    try {
+      const firstInput = { ...mutation, metric_evaluations: [mutation.metric_evaluations[0]] };
+      const [prior] = await computeSqlMetricRuns(appPool, firstInput, true);
+      const before = await metricExplanation(reader, identity, prior.metric_run_id);
+      assert.equal(before?.calculation?.operands.cost_unscaled, "90000000");
+      assert.equal(before?.window_state, "open");
+      assert.equal(before?.calculation?.operands.revenue_unscaled, "150000000");
+      assert.equal(before?.calculation?.operands.revenue_event_count, "3", "duplicate delivery must not create another numerator input");
+      const [replacement] = await computeSqlMetricRuns(appPool, { ...mutation, metric_evaluations: [mutation.metric_evaluations[1]] }, true);
+      const after = await metricExplanation(reader, identity, replacement.metric_run_id);
+      assert.equal(after?.calculation?.operands.cost_unscaled, "100000000");
+      assert.equal(after?.window_state, "elapsed");
+      assert.notEqual(before?.calculation?.cost_selection_digest, after?.calculation?.cost_selection_digest);
+      const repeated = await metricExplanation(reader, identity, prior.metric_run_id);
+      assert.equal(repeated?.run.superseded, true);
+      assert.equal(jcs(repeated?.calculation), jcs(before?.calculation));
+      assert.equal(repeated?.run.value_unscaled, prior.value_unscaled);
+      assert.notEqual(after?.run.value_unscaled, prior.value_unscaled);
+      // A historical definition is a distinct run identity, not a duplicate of
+      // the already-saved modern definition on the exact same input snapshot.
+      const legacy = { ...prior, metric_run_id: "explanation-legacy-no-operands", metric_definition_version: "synthetic-legacy" };
+      await withTenant(appPool, identity.tenantId, (client) => persistMetricRun(client, { tenant_id: identity.tenantId, app_id: identity.appId }, legacy));
+      const absent = await metricExplanation(reader, identity, legacy.metric_run_id);
+      assert.equal(absent?.evidence_state, "not_recorded");
+      assert.equal(absent?.calculation, undefined);
+      assert.equal(absent?.run.value_unscaled, prior.value_unscaled);
+      await withTenant(appPool, identity.tenantId, (client) => client.query(
+        `INSERT INTO ledger.raw_payload_states (tenant_id, app_id, record_id, lifecycle_status, changed_at, privacy_request_id)
+         VALUES ($1,$2,'revenue-33-a','redacted','2026-08-10T00:00:00.000Z','privacy:synthetic-explanation')`,
+        [identity.tenantId, identity.appId],
+      ));
+      const removed = await metricExplanation(reader, identity, prior.metric_run_id);
+      assert.equal(removed?.evidence_state, "redaction_affected");
+      assert.equal(removed?.calculation, undefined);
+      assert.equal(removed?.run.value_unscaled, prior.value_unscaled);
+      assert.doesNotMatch(renderMetricExplanation(identity.appId, removed!), /Formula|150000000 ×/);
+      await ingestFixture(fixtureName, input, appPool, seedPool);
+      const retentionInput = { ...input, metric_evaluations: [{ ...base, metric_run_id_prefix: "explanation-retention" }] };
+      const [retainedRun] = await computeSqlMetricRuns(appPool, retentionInput, true);
+      await withTenant(appPool, identity.tenantId, (client) => client.query(
+        `INSERT INTO ledger.raw_payload_states (tenant_id, app_id, record_id, lifecycle_status, changed_at)
+         VALUES ($1,$2,'revenue-33-b','purged','2026-08-10T00:00:00.000Z')`,
+        [identity.tenantId, identity.appId],
+      ));
+      const purged = await metricExplanation(reader, identity, retainedRun.metric_run_id);
+      assert.equal(purged?.evidence_state, "retention_affected");
+      assert.equal(purged?.calculation, undefined);
+      assert.equal(purged?.run.value_unscaled, retainedRun.value_unscaled);
+    } finally { await reader.end(); }
   });
 
   it("B6 recalculates after privacy redaction and preserves the superseded run", async () => {

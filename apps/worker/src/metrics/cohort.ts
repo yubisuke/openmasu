@@ -6,9 +6,13 @@ import {
   nonFraudBundleHash,
 } from "@openmasu/contracts";
 import { jcs, sha256 } from "@openmasu/attribution-core";
+import type { RoasCalculationEvidence, RoasOperands } from "@openmasu/runtime";
 
 type Any = Record<string, any>;
 type Queryable = Pick<PoolClient, "query">;
+type MetricValue = ({ value_state: "present"; value_unscaled: string } | {
+  value_state: "undefined"; undefined_reason: "no_attributed_cost" | "empty_cohort";
+}) & { operands?: RoasOperands };
 
 export type MetricScope = { tenant_id: string; app_id: string };
 type Scope = MetricScope;
@@ -586,10 +590,7 @@ async function metricValue(
   definition: Any,
   fxPolicy: Any,
   privacyState: "before" | "after",
-): Promise<{ value_state: "present"; value_unscaled: string } | {
-  value_state: "undefined";
-  undefined_reason: "no_attributed_cost" | "empty_cohort";
-}> {
+): Promise<MetricValue> {
   const calculation = definition.definition.calculation;
   if (definition.definition.numerator === "total_net_revenue") {
     return totalNetRevenueValue(client, scope, watermark, grouping, definition, fxPolicy, privacyState);
@@ -609,6 +610,13 @@ async function metricValue(
     value_unscaled: string | null;
     missing_fx_count: string;
     mismatched_cost_currency_count: string;
+    revenue_value: string;
+    cost_value: string;
+    revenue_event_count: string;
+    cost_row_count: string;
+    cohort_size: string;
+    last_window_end: string | null;
+    window_elapsed: boolean | null;
   }>(
     `WITH
        rates AS (
@@ -667,7 +675,8 @@ async function metricValue(
            amount_unscaled::numeric * rate_unscaled * power(10::numeric, $13),
            power(10::numeric, amount_scale + rate_scale)
          )), 0::numeric) AS value,
-         count(*) FILTER (WHERE rate_unscaled IS NULL)::bigint AS missing_fx_count
+         count(*) FILTER (WHERE rate_unscaled IS NULL)::bigint AS missing_fx_count,
+         count(*)::bigint AS revenue_event_count
          FROM revenue_candidates
        ),
        activities AS (
@@ -707,7 +716,8 @@ async function metricValue(
              ELSE ledger.half_even_div(spend_unscaled::numeric, power(10::numeric, spend_scale - $13))
            END
          ), 0::numeric) AS value,
-         count(*) FILTER (WHERE currency <> $11)::bigint AS mismatched_currency_count
+         count(*) FILTER (WHERE currency <> $11)::bigint AS mismatched_currency_count,
+         count(*)::bigint AS cost_row_count
          FROM current_cost
        ),
        values AS (
@@ -715,6 +725,12 @@ async function metricValue(
                 (SELECT count(DISTINCT installation_id)::numeric FROM cohort) AS cohort_size,
                 activities.value AS active_count,
                 cost.value AS cost_value,
+                revenue.revenue_event_count,
+                cost.cost_row_count,
+                (SELECT to_char(max(installed_at + (($9 + 1) * interval '1 day')) AT TIME ZONE 'UTC',
+                   'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') FROM cohort) AS last_window_end,
+                (SELECT max(installed_at + (($9 + 1) * interval '1 day'))
+                   <= control.canonical_timestamp_value($3) FROM cohort) AS window_elapsed,
                 revenue.missing_fx_count,
                 cost.mismatched_currency_count
          FROM revenue, activities, cost
@@ -733,7 +749,10 @@ async function metricValue(
               WHEN 'cohort_size' THEN cohort_size
             END::text AS value_unscaled,
             missing_fx_count::text,
-            mismatched_currency_count::text AS mismatched_cost_currency_count
+            mismatched_currency_count::text AS mismatched_cost_currency_count,
+            trim_scale(revenue_value)::text AS revenue_value,
+            trim_scale(cost_value)::text AS cost_value, revenue_event_count::text,
+            cost_row_count::text, cohort_size::text, last_window_end, window_elapsed
      FROM values`,
     [
       scope.tenant_id,
@@ -760,10 +779,17 @@ async function metricValue(
   if (row.mismatched_cost_currency_count !== "0") {
     throw new Error(`cost currency mismatch for ${definition.metric_name}`);
   }
-  if (row.value_unscaled !== null) return { value_state: "present", value_unscaled: row.value_unscaled };
+  const operands: RoasOperands | undefined = calculation === "revenue_over_cost"
+    && definition.definition.numerator === "revenue" && definition.definition.window.type === "elapsed"
+    ? { revenue_unscaled: row.revenue_value, cost_unscaled: row.cost_value,
+      revenue_event_count: row.revenue_event_count, cost_row_count: row.cost_row_count,
+      cohort_size: row.cohort_size, last_window_end: row.last_window_end, window_elapsed: row.window_elapsed }
+    : undefined;
+  if (row.value_unscaled !== null) return { value_state: "present", value_unscaled: row.value_unscaled, ...(operands ? { operands } : {}) };
   return {
     value_state: "undefined",
     undefined_reason: calculation === "revenue_over_cost" ? "no_attributed_cost" : "empty_cohort",
+    ...(operands ? { operands } : {}),
   };
 }
 
@@ -960,6 +986,31 @@ export async function computeSqlMetricRunsWithClient(
       if (persist) {
         await persistMetricRun(client, scope, artifact);
         await persistMetricReplayManifest(client, scope, artifact, definition, evaluation, fxPolicy);
+        if (value.operands) {
+          const evidence: RoasCalculationEvidence = {
+            version: 1, calculation: "revenue_over_cost", numerator: "revenue", denominator: "cost",
+            metric_run_id: artifact.metric_run_id, input_snapshot_id: artifact.input_snapshot_id,
+            metric_definition_version: definition.metric_definition_version, definition_digest: sha256(definition),
+            anchor_event: definition.anchor_event,
+            window: { type: "elapsed", day: definition.definition.window.day, boundary: "half_open" },
+            aggregation_time_zone: definition.aggregation_time_zone,
+            fraud_policy: definition.fraud_policy ?? "gross", cost_basis: "cohort_acquisition_day_current_snapshot",
+            cost_selection_digest: sha256(costs), fx_policy_version: fxPolicy.policy_version,
+            fx_snapshot_id: sha256(fxPolicy.rates), target_currency: fxPolicy.target_currency,
+            target_scale: fxPolicy.target_scale,
+            rates: fxPolicy.rates.map((rate: Any) => ({ currency: rate.currency,
+              rate_unscaled: rate.rate_unscaled, rate_scale: rate.rate_scale })),
+            rounding_mode: "half_even", ratio_scale: definition.ratio_scale,
+            operands: value.operands,
+          };
+          await client.query(
+            `INSERT INTO ledger.metric_calculation_evidence
+               (metric_run_id, tenant_id, app_id, input_snapshot_id, created_at, artifact)
+             VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
+            [artifact.metric_run_id, scope.tenant_id, scope.app_id, artifact.input_snapshot_id,
+              artifact.computed_at, JSON.stringify(evidence)],
+          );
+        }
       }
       output.push(artifact);
     }

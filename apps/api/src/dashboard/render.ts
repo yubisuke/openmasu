@@ -164,13 +164,14 @@ function measurementHealthSection(view: DashboardView): string {
     ${reasons ? `<table><caption>Retained rejection artifacts (not unique events)</caption><thead><tr><th scope="col">Source</th><th scope="col">Safe reason</th><th scope="col">Count</th></tr></thead><tbody>${reasons}</tbody></table>` : "<p>No retained rejection artifacts are recorded.</p>"}</section>`;
 }
 
-function metricTable(caption: string, rows: DashboardView["rows"]): string {
+function metricTable(caption: string, rows: DashboardView["rows"], appId?: string): string {
   if (rows.length === 0) return "";
   return `<table><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">Metric</th><th scope="col">Grouping</th><th scope="col">Value</th><th scope="col">Freshness</th><th scope="col">Computed at</th><th scope="col">Rule bundle</th><th scope="col">Reproducibility</th></tr></thead><tbody>${rows.map((row) => {
+    const details = appId ? `<small><a href="/dashboard/apps/${encodeURIComponent(appId)}/metrics/${encodeURIComponent(row.metric_run_id)}/explanation">Saved run details</a></small>` : "";
     const value = row.value_state === "undefined"
       ? `<span class="undefined-value">—</span><small>${escapeHtml(row.undefined_reason)}</small>`
       : `<span data-metric-run-id="${escapeHtml(row.metric_run_id)}" data-value-unscaled="${escapeHtml(row.value_unscaled)}">${escapeHtml(metricValueLabel(row))}</span>`;
-    return `<tr><th scope="row">${escapeHtml(row.metric_name)}</th><td>${escapeHtml(grouping(row.grouping))}<small>Window: unknown. Cohort maturity: unknown.</small><small>Run watermark: ${escapeHtml(row.input_received_at_watermark)}</small></td><td>${value}</td><td>${escapeHtml(row.data_freshness)}</td><td>${escapeHtml(row.computed_at)}</td><td>${escapeHtml(row.rule_bundle_id)} / ${escapeHtml(row.metric_definition_version)}</td><td>${escapeHtml(row.reproducibility_status)}${row.superseded ? " (superseded)" : ""}</td></tr>`;
+    return `<tr><th scope="row">${escapeHtml(row.metric_name)}</th><td>${escapeHtml(grouping(row.grouping))}<small>Window: see saved run details. Cohort maturity: unknown.</small><small>Run watermark: ${escapeHtml(row.input_received_at_watermark)}</small></td><td>${value}${details}</td><td>${escapeHtml(row.data_freshness)}</td><td>${escapeHtml(row.computed_at)}</td><td>${escapeHtml(row.rule_bundle_id)} / ${escapeHtml(row.metric_definition_version)}</td><td>${escapeHtml(row.reproducibility_status)}${row.superseded ? " (superseded)" : ""}</td></tr>`;
   }).join("")}</tbody></table>`;
 }
 
@@ -194,8 +195,8 @@ export function renderDashboard(view: DashboardView): string {
   const empty = reportControls(view) + measurementHealthSection(view) + (selected && view.rows.length === 0 && view.records.length === 0 && view.differences.length === 0
     ? "<p>No report data match this view.</p>"
     : "");
-  const deterministicMetrics = metricTable("Deterministic cohort metrics", view.deterministicRows);
-  const appleAggregateMetrics = metricTable("Apple aggregate postback metrics", view.appleAggregateRows);
+  const deterministicMetrics = metricTable("Deterministic cohort metrics", view.deterministicRows, selected);
+  const appleAggregateMetrics = metricTable("Apple aggregate postback metrics", view.appleAggregateRows, selected);
   const recordRows = view.records.length === 0 ? "" : `<table><caption>Aggregate record counts at the fixed watermark</caption><thead><tr><th scope="col">Metric</th><th scope="col">Grouping</th><th scope="col">Count</th></tr></thead><tbody>${view.records.map((row) => `<tr><th scope="row">${escapeHtml(row.metric_name)}</th><td>${escapeHtml(grouping(row.grouping))}</td><td>${escapeHtml(row.count)}</td></tr>`).join("")}</tbody></table>${continuation(view, "/records", view.recordNextCursor, "Next aggregate-record page")}`;
   const deterministicCharts = chartSection("Deterministic metric charts", view.deterministicCharts);
   const appleAggregateCharts = chartSection("Apple aggregate postback charts", view.appleAggregateCharts);

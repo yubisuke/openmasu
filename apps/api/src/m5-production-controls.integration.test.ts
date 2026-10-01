@@ -115,6 +115,7 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
       assert.equal((await request(role, "/v1/admin/apps")).status, 200);
       assert.equal((await request(role, `/v1/admin/apps/${appId}/operator-delivery-health`)).status, 200);
       assert.equal((await request(role, `/v1/admin/apps/${appId}/measurement-health`)).status, 200);
+      assert.equal((await request(role, `/v1/admin/apps/${appId}/metrics/missing-synthetic-run/explanation`)).status, 404);
     }
     assert.equal((await request("read_only", "/metrics")).status, 200);
 
