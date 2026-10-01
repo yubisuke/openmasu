@@ -207,12 +207,12 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
     assert.ok(cookie);
     const filters = "metric_name=d1_roas&date_from=2026-08-01&date_to=2026-08-02&grouping_attribution_status=non_organic&watermark_at_most=2026-08-09T00%3A00%3A00Z";
     const endpoint = `${baseUrl}/dashboard/apps/app-a/comparison.json?${filters}`;
-    const counts = async () => (await seedPool.query(`SELECT
+    const counts = async () => withTenant(appPool, "tenant-a", async client => (await client.query(`SELECT
       (SELECT count(*) FROM ledger.audit_logs)::text AS audits,
       (SELECT count(*) FROM ledger.raw_records)::text AS raw,
       (SELECT count(*) FROM ledger.event_deliveries)::text AS deliveries,
       (SELECT count(*) FROM ledger.metric_runs)::text AS metrics,
-      (SELECT count(*) FROM ephemeral.dashboard_sessions)::text AS sessions`)).rows[0];
+      (SELECT count(*) FROM ephemeral.dashboard_sessions)::text AS sessions`)).rows[0]);
     const beforeCounts = await counts();
     const selected = await fetch(`${baseUrl}/dashboard/apps/app-a?${filters}`, { headers: { cookie } });
     assert.equal(selected.status, 200);
