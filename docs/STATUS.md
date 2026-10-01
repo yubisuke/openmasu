@@ -92,8 +92,12 @@ retained, not approved by downloading. Neutral aggregate CSV conversion now
 maps explicit columns/units/undefined states into canonical comparison keys
 offline with input/mapping digests and value-free error codes. It does not
 invent saved definitions or certify external calculation equivalence.
-The integrated first-use journey remains next. This is later-source work,
-not evidence for the frozen v0.2.0 release.
+The [integrated first-use journey](getting-started.md) now connects existing
+receipt observations, units, saved-run evidence and comparison. The same offline
+demo derives equal/corrected-cost/incompatible-window/unknown CSV and HTML cases;
+its declaration-only results remain separate from the existing runtime pilot.
+Durable cost refresh and historical correction workflows remain next. This is
+later-source work, not evidence for the frozen v0.2.0 release.
 
 Current source also includes [readable dashboard analysis](dashboard-analysis.md):
 exact money/ratio/count labels, shareable server-rendered filters, selection-preserving

@@ -110,6 +110,22 @@ against their existing goldens. It does not start PostgreSQL or claim that the
 rows were stored or served by a runtime API; `stored_runtime_claim` remains
 `not_run`.
 
+To generate exact-value comparison examples without editing JSON, use the same
+demo's optional output directory:
+
+```bash
+npm run --silent demo:shadow -- --comparison-dir=build/synthetic-comparison
+```
+
+Open `equal.html`, `different.html`, `incomparable.html` and `unknown.html` there.
+They reuse fixture-derived values, the aggregate CSV converter and the ordinary
+HTML renderer. Equal/different are explicitly declaration-only; unknown saved
+meaning is never promoted to a verified comparison. Existing output directories
+are refused. Follow the [single newcomer path](docs/getting-started.md) from
+receipt state to units, original-run evidence and bounded comparison download.
+These additions are later-source work, not evidence for the frozen `v0.2.0`
+release. [Next release scope](docs/releases/next.md) lists included and open work.
+
 Run the isolated end-to-end synthetic pilot from a clean worktree with no
 `.env` file or `.openmasu` directory:
 
