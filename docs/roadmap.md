@@ -52,6 +52,7 @@ Progress:
 | Dashboard selections can be saved for offline comparison | Implemented through existing session/reader access and the shared pure converter, with fixed all-page read-only acquisition, scope/selection receipts, bounds and privacy refusal; upstream completeness remains unknown |
 | External aggregate CSV can become an explicit comparison input | Implemented offline for one neutral CSV format: closed column/grouping/units/undefined mapping, strict exact-money reuse, canonical keys and input/mapping digests; declarations are not verified calculation meaning |
 | Newcomers can follow receipt → units → saved evidence → comparison | Implemented through one purpose-based guide and the existing demo/pilot/dashboard/SDK paths; fixture-derived CSV/JSON/HTML demonstrate equal/different/incomparable/unknown without hand-edited values or fabricated runtime evidence |
+| Existing provider cost can refresh without publishing partial acquisition | Implemented default-off for one bounded adapter: immutable app configuration, fixed lookback, token-fenced claims/retries/stop and atomic cost/checkpoint commit; empty is not zero and old cost history remains |
 | Metric units and analysis selections are readable without changing audited values | Implemented: exact decimal display, SSR filters and scope-preserving CSV links; chart groups stay separate; window/maturity remain explicitly unknown without readable definition evidence |
 | App ingestion and calculation observations are understandable without raw payload access | Implemented: reader-only measurement health for batches, imports, rejections and metric runs; synthetic API/role and state-rendering gates |
 | Scheduler leases cannot consume the job pool; MAX processing works with a one-connection job pool | Complete |
@@ -91,8 +92,8 @@ exact values; integration with saved metric runs and report provenance; then
 durable cost refresh and historical corrections. The offline CLI includes a
 static HTML report and conversion from saved report JSON with input provenance.
 Saved-run semantics, bounded dashboard download, neutral aggregate CSV conversion
-and the integrated first-use journey are implemented. Next: durable cost refresh
-and historical corrections.
+and the integrated first-use journey are implemented. Default-off bounded cost
+refresh is implemented; next is correction-driven historical recalculation.
 Each has a synthetic acceptance gate and requires no live provider
 credentials. Numeric differences alone must never become inferred causal reasons.
 

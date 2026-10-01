@@ -60,6 +60,7 @@ export function syntheticComposeEnvironment(ports: { api: number; postgres: numb
     OPENMASU_APP_STORE_API_PRIVATE_KEY_FILE: "",
     OPENMASU_APP_STORE_API_BASE_URL: "",
     OPENMASU_GOOGLE_DATA_MANAGER_ENABLED: "off",
+    OPENMASU_COST_REFRESH_ENABLED: "off",
     OPENMASU_GOOGLE_DATA_MANAGER_SERVICE_ACCOUNT_JSON_FILE: "",
   };
   return `${Object.entries(entries).map(([key, value]) => `${key}=${value}`).join("\n")}\n`;

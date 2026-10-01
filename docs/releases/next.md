@@ -21,6 +21,10 @@ Do not change the frozen tag or its records to include this later behavior.
 - One newcomer guide and the existing demo connect receipt, units, evidence and
   comparison. Synthetic corrected-cost and incompatible-window examples are
   derived by the reference evaluator, not hand-written expected business values.
+- Default-off bounded daily cost refresh reuses one existing adapter with
+  immutable app definitions, fixed lookback, database-clock fencing, bounded
+  retries/stop and atomic cost/checkpoint publication. Empty is not zero;
+  reader health excludes private account configuration and secret references.
 
 Contract wire/package identity remains `0.4.0`, with the additive patch ledger
 through v0.4.10. These additions do not change its 57 reviewed fixtures or 741
@@ -28,8 +32,8 @@ goldens. The SDK remains configured as `0.2.0` until a separate release change.
 
 ## Not included merely by this inventory
 
-Durable provider cost refresh and correction-driven historical recalculation
-are subsequent implementation work. SDK asset publication, upgrade procedures,
+Correction-driven historical recalculation is subsequent implementation work.
+SDK asset publication, upgrade procedures,
 deployment preflight, capacity visibility and the HTTP contract have separate
 acceptance scopes. Reassess this inventory after those changes merge.
 

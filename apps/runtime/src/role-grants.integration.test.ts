@@ -16,6 +16,7 @@ type Row = {
 
 const privileges: Privilege[] = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"];
 const readerNoTableSelect = new Set([
+  "control.cost_schedules",
   "control.admin_keys",
   "control.admin_key_states",
   "control.google_play_purchase_tokens",
@@ -42,6 +43,9 @@ const readerNoTableSelect = new Set([
   "ephemeral.operator_bulk_export_batches",
 ]);
 const seedControlTruncate = new Set([
+  "control.cost_schedules",
+  "control.cost_schedule_states",
+  "control.cost_schedule_checkpoints",
   "control.admin_keys",
   "control.admin_key_states",
   "control.google_play_purchase_tokens",
@@ -120,6 +124,7 @@ function expected(row: Row): Privilege[] {
     if (qualified === "control.worker_job_schedules") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.operator_bulk_export_checkpoints") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.metric_schedule_checkpoints") return ["SELECT", "INSERT", "UPDATE"];
+    if (qualified === "control.cost_schedule_checkpoints") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.privacy_deletion_jobs") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.privacy_payload_purges") return ["SELECT", "INSERT", "UPDATE"];
     return qualified === "control.public_postback_audits" ? ["INSERT"] : ["SELECT", "INSERT"];
@@ -307,6 +312,11 @@ try {
     );
     assert.equal(allowed.rows[0]?.allowed, false, `openmasu_reader retains broad access to ${view}`);
   }
+  const costColumns = await pool.query<{ column_name: string; allowed: boolean }>(`
+    SELECT column_name,has_column_privilege('openmasu_reader','control.cost_schedules',column_name,'SELECT') AS allowed
+    FROM information_schema.columns WHERE table_schema='control' AND table_name='cost_schedules'
+  `);
+  for (const row of costColumns.rows) assert.equal(row.allowed, row.column_name !== "definition", `cost refresh reader column drift: ${row.column_name}`);
   const scheduleView = await pool.query<{ role_name: Role; allowed: boolean }>(`
     SELECT role_name,
            has_table_privilege(role_name, 'control.metric_schedules_current', 'SELECT') AS allowed
