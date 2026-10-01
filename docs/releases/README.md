@@ -21,3 +21,6 @@ and full platform workflows identify green `main` commit `68b8c48`.
 record. Verify the tag, source commit, and full-gate results independently when
 consuming a release. See [Project status](../STATUS.md). An untagged bundle is
 only a local candidate artifact.
+
+[Next release scope](next.md) is a living development inventory, not a tagged
+release note or evidence manifest. It does not change an existing release.

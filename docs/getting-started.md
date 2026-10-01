@@ -3,6 +3,18 @@
 This guide runs OpenMasu without real credentials, devices, campaigns, or
 provider exports. It is the supported first experience for contributors.
 
+Choose one path; provider settings are not a prerequisite:
+
+| Your goal | Follow this path | What it establishes |
+| --- | --- | --- |
+| Understand values and comparison without Docker | [Offline comparison](#offline-shadow-comparison-without-docker) | Reference-evaluator results and explicit comparison states, not stored runtime evidence |
+| Verify the full synthetic runtime and clean up automatically | [Recommended first run](#recommended-first-run) | Isolated PostgreSQL parity and HTTP smoke evidence; no persistent dashboard |
+| Explore receipt, metrics and evidence in a local dashboard | [Persistent local stack](#persistent-local-stack), then [receipt to comparison](#from-receipt-to-comparison) | A disposable local instance; never seed a stack containing data you need |
+
+These instructions describe current source. The published `v0.2.0` tag does not
+contain later measurement-health, explanation, comparison-download or aggregate
+CSV additions. Read [next release scope](releases/next.md) for that distinction.
+
 ## Requirements
 
 - Node.js `22.18.0`
@@ -44,6 +56,47 @@ and API evidence as `not_run`; there is no public attribution-report route for
 the crowd-anonymity row. Use the disposable pilot below for the existing
 PostgreSQL and runtime parity gates, but do not interpret that pilot as stored
 API proof for all three demo rows.
+
+For a complete offline value-to-comparison walkthrough, extend the **same** demo:
+
+```bash
+npm run --silent demo:shadow -- --comparison-dir=build/synthetic-comparison
+```
+
+It creates a fresh directory (including its parent) and refuses to overwrite an
+existing one. Choose another directory for a second run. All outputs are synthetic:
+four aggregate CSVs, their explicit mappings and snapshots, plus JSON/HTML reports.
+No JSON editing, provider account or second setup tool is required.
+
+Open these generated files locally:
+
+| File | Result | Why |
+| --- | --- | --- |
+| `equal.html` | `equal`, declared comparison | The same fixture-derived D7 ROAS of 1.5 × on both sides |
+| `different.html` | `different`, declared comparison | The evaluator recalculates after synthetic selected cost doubles: 1.5 × → 0.75 ×; right-minus-left is -0.75 × |
+| `incomparable.html` | No numeric delta | The other evaluation uses a shorter window and its explicit declaration differs |
+| `unknown.html` | No numeric delta | Ordinary comparison refuses the same inputs because saved implementation meaning is not established |
+
+The baseline evaluator output is checked against fixture 33's reviewed golden.
+The altered cost/window cases are derived at runtime without changing any golden.
+All snapshots remain `operator_declared`; no database receipt or captured SQL
+context is fabricated. The first two reports use explicit `--declared` mode,
+not a claim of external calculation equivalence. The demo still reports
+`stored_runtime_claim=not_run`. Missing, undefined and zero remain distinct.
+
+To reproduce one generated report through the normal tools:
+
+```bash
+npm run --silent compare:cohorts -- --html --declared \
+  build/synthetic-comparison/baseline.json \
+  build/synthetic-comparison/different.json
+```
+
+This prints the same HTML as `different.html`. The corresponding CSV and mapping
+can also be passed to `snapshot:report -- --csv` as described in
+[cohort comparison](cohort-comparison.md#convert-an-aggregate-csv-offline).
+Generated files under `build/` are ignored; do not commit tabular files or private
+reports. A numeric difference by itself never proves its cause.
 
 ## Recommended first run
 
@@ -109,6 +162,53 @@ rerunning `npm run bootstrap`.
 
 `demo:metrics` labels PostgreSQL ledger counts separately from the contract
 fixture preview. The preview is not a database import or live-provider result.
+
+## From receipt to comparison
+
+For a dashboard walkthrough, use a **synthetic-only** persistent stack. Follow
+[seed and parity](#seed-and-parity) first if you want reviewed sample values;
+seeding resets that ledger, and normal writers must be stopped. Do not create
+keys or send events just to see seeded results.
+
+1. Sign in at `/dashboard` with the bootstrap admin key, select the seeded app,
+   and open **Measurement health**. Its counts cover retained history, not the
+   report filter. Check received batches/imports, rejections, logical events and
+   metric runs. A configured key or HTTP 202 alone is not a calculated result.
+2. Use **Analyze metrics** to select the date, metric, attribution status and
+   cutoff. Read ratios as multipliers (1.5 × = 150%), money with currency/scale,
+   and counts as exact integers. Undefined is not zero. See
+   [units and filters](dashboard-analysis.md).
+3. Follow **Saved run details** for the selected run. Newly computed supported
+   ROAS runs show original numerator, denominator, FX and window evidence;
+   legacy seeded runs can legitimately show `not_recorded`. Do not copy today's
+   definition into an old run. See [calculation evidence](metric-explanations.md).
+4. For one supported latest metric, an explicit cutoff and complete selection,
+   use **Save comparison JSON**. The server downloads all pages within its fixed
+   read-only bounds or refuses the file. Use the same declared scope for the
+   second input and the [comparison tools](cohort-comparison.md). An old seeded
+   run or neutral aggregate CSV can remain incomparable: do not remove unknown
+   context or use `--declared` to bypass captured runtime evidence.
+
+To observe a new synthetic input rather than seeded data, register a separate app
+on the dashboard; **Register app and issue SDK key** displays the SDK secret once.
+Use the existing [Android](../sdk/android/README.md), [iOS](../sdk/ios/README.md)
+or [Unity](../sdk/unity/README.md) synthetic sample with that app's endpoint/key.
+For a backend-only input, issue a server key in the app and follow the
+[backend guide](server-to-server-events.md); do not reuse an SDK secret.
+For file input, use [preview and confirm](#preview-and-confirm-an-import) instead:
+an SDK key is not required. Keep all secrets out of source, logs and shell history.
+
+| Observed state | Safe next operation |
+| --- | --- |
+| Configuration exists, no receipt | Check the selected app/endpoint and producer configuration; do not call it successful delivery |
+| Batch pending | Check worker progress; repeated sends do not force calculation |
+| Rejections recorded | Correct the explicit validation failure before retrying; do not upload private payloads for diagnosis |
+| Logical events but no metric runs | Run the existing `metrics:run` with date/definition/cutoff or inspect the app's [metric schedule](scheduled-metrics.md) |
+| Run exists but no comparable input | Check units, saved meaning, temporal maturity and complete selection; unknown is a valid result |
+
+[Measurement health](measurement-health.md) describes what each observation can
+and cannot establish. Metric scheduling exists; automatic cost refresh and
+correction-driven recalculation are separate work, not first-run requirements.
 
 To submit a selected synthetic event from an app backend, issue a dedicated
 server key in the dashboard and follow the

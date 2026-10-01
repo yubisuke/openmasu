@@ -46,6 +46,7 @@ versions were reached. They do not override current sources of truth.
 | Comparison semantics | New SQL runs save aggregate-only definition/FX context; the offline comparison distinguishes definition-backed meaning, declarations and unknowns | Original-run persistence/reader export, equivalent meaning across different IDs, gross/net/window/FX mismatches, legacy refusal and exact integer arithmetic; no provider authentication or completeness claim |
 | Dashboard comparison download | A bounded all-page fixed selection can be saved through the existing session/reader role and shared converter | Screen/download/CLI-HTML flow, one-connection repeatable-read paging, concurrent new/superseding runs, receipt digests, bounds/cancellation/privacy refusal and auth/no-write checks; no upstream-completeness claim |
 | Aggregate CSV comparison input | One explicit offline mapping reuses CSV and exact-money conversion; no raw-event ingestion | Synthetic CSV-to-snapshot-to-JSON/HTML, scales/large integers, missing/undefined/zero, duplicate/date/quote refusal, limits and redacted errors; no invented definition-backed meaning |
+| Integrated first use | One purpose-based newcomer path connects existing demo/pilot, app/key setup, receipt states, readable metrics, original-run evidence and comparison | Two narrow offline connection tests prove fixture-derived equal/corrected-cost/incompatible-window/unknown reports, ordinary CLI replay and refusal to overwrite; existing runtime/role/pilot gates remain authoritative |
 | Worker database safety | Complete: separate scheduler/job pools and short transaction phases | Scheduler and MAX inbox integration tests at a one-connection pool limit |
 | SDK queue parity | Complete: one duplicate/conflict policy across Android and iOS | Shared semantic vectors plus each platform's native gate |
 | Apple current-spec compatibility | Complete: accept and separately report aggregate AdAttributionKit re-engagement while preserving install and device-level boundaries | Signed synthetic receiver test, reviewed fixture parity, SQL/reference parity, and macOS SDK gate |
@@ -74,7 +75,8 @@ and bounded dashboard download are implemented with synthetic tests. The [compar
 intended behavior and synthetic acceptance scope. The CLI also emits a static
 HTML report and converts saved report JSON with run provenance. Fixed-selection
 cross-page downloads and neutral aggregate CSV conversion are also implemented.
-The integrated first-use journey and durable cost refresh remain next.
+The integrated first-use journey is implemented. Durable cost refresh and
+historical corrections remain next.
 
 ## Change acceptance
 

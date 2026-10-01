@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { evaluate, jcs } from "@openmasu/attribution-core";
+import { aggregateCsvToSnapshot } from "./report-to-snapshot.js";
+import { compareSnapshots } from "./compare-cohorts.js";
+import { renderComparison } from "./cohort-comparison-html.js";
 
 type JsonObject = Record<string, any>;
 
@@ -182,6 +185,91 @@ export function assertSyntheticShadowDemo(value: SyntheticShadowDemo): void {
   assert.equal(value.stored_runtime_claim, "not_run");
 }
 
+/** Reuse the reference evaluator and CSV/HTML tools; never claim stored runtime evidence. */
+export function buildSyntheticCohortWalkthrough(root = process.cwd()) {
+  const fixture = "33-stage-b-cohort-metrics";
+  const original = readJson(fixturePath(root, fixture, "input.json"));
+  const output = evaluate(original) as JsonObject;
+  assertGolden(output.metric_runs, readJson(fixturePath(root, fixture, "expected_metric_runs.json")), fixture);
+  const corrected = structuredClone(original);
+  const cost = corrected.cost_records.find((row: JsonObject) => row.cost_record_id === "cost-33");
+  assert.ok(cost, "synthetic current cost must exist");
+  cost.amount_unscaled = "200000000";
+  const shorter = structuredClone(original);
+  shorter.metric_definitions.find((definition: JsonObject) => definition.metric_name === "d7_roas").definition.window.day = 3;
+  const select = (input: JsonObject) => {
+    const runs = (evaluate(input) as JsonObject).metric_runs.filter((run: JsonObject) => run.metric_name === "d7_roas");
+    assert.equal(runs.length, 1); assert.equal(runs[0].value_type, "ratio");
+    return runs[0] as JsonObject;
+  };
+  const baseline = select(original);
+  const dimensions = Object.keys(baseline.grouping.dimensions).sort();
+  const quoted = (value: string) => `"${value.replaceAll('"', '""')}"`;
+  const sample = (name: string, input: JsonObject) => {
+    const run = select(input);
+    const definition = input.metric_definitions.find((value: JsonObject) => value.metric_name === run.metric_name);
+    const mapping = {
+      version: 1, source: `synthetic-evaluator-${name}`,
+      conditions: { date_from: run.grouping.dimensions.cohort_date, date_to: "2026-08-02", time_zone: run.aggregation_time_zone,
+        maturity: `synthetic_declared_elapsed_day_${definition.definition.window.day}`, aggregation: "cumulative",
+        attribution_scope: run.grouping.dimensions.attribution_status,
+        metric_definition: `${run.metric_name}@${run.metric_definition_version}`, source_cutoff: run.input_received_at_watermark },
+      grouping: Object.fromEntries(dimensions.map(key => [key, { column: key }])),
+      value: { column: "value_unscaled", input: "integer", scale: run.ratio_scale, currency: { constant: "none" } },
+    };
+    const csv = `${[...dimensions, "value_unscaled"].map(quoted).join(",")}\n${[...dimensions.map(key => run.grouping.dimensions[key]), run.value_unscaled].map(quoted).join(",")}\n`;
+    // Use the exact canonical file shape so the CLI and generated HTML share key order.
+    const snapshot: ReturnType<typeof aggregateCsvToSnapshot> = JSON.parse(jcs(aggregateCsvToSnapshot(Buffer.from(csv, "utf8"), mapping)));
+    return { csv, mapping, snapshot };
+  };
+  const samples = { baseline: sample("baseline", original), equal: sample("equal", original),
+    different: sample("cost-correction", corrected), incomparable: sample("shorter-window", shorter) };
+  const comparisons = {
+    equal: compareSnapshots(samples.baseline.snapshot, samples.equal.snapshot, { declaredOnly: true }),
+    different: compareSnapshots(samples.baseline.snapshot, samples.different.snapshot, { declaredOnly: true }),
+    incomparable: compareSnapshots(samples.baseline.snapshot, samples.incomparable.snapshot, { declaredOnly: true }),
+    unknown: compareSnapshots(samples.baseline.snapshot, samples.equal.snapshot),
+  };
+  assert.equal(comparisons.equal.rows[0].status, "equal");
+  assert.equal(comparisons.different.rows[0].delta_right_minus_left, "-750000");
+  assert.equal(comparisons.incomparable.status, "incomparable");
+  assert.equal(comparisons.unknown.status, "incomparable");
+  return { fixture, source: "synthetic_fixture_evaluator", baseline_golden_check: "passed",
+    runtime_boundary: "not_run", comparison_basis: "operator_declared", samples, comparisons } as const;
+}
+
+export function writeSyntheticCohortWalkthrough(directory: string, root = process.cwd()) {
+  // An explicit fresh directory only: never overwrite a user's saved report.
+  const walkthrough = buildSyntheticCohortWalkthrough(root);
+  const destination = resolve(directory);
+  mkdirSync(dirname(destination), { recursive: true });
+  mkdirSync(destination, { recursive: false });
+  const files: string[] = [];
+  const save = (name: string, value: string) => { writeFileSync(resolve(destination, name), value, { flag: "wx" }); files.push(name); };
+  for (const [name, sample] of Object.entries(walkthrough.samples)) {
+    save(`${name}.csv`, sample.csv); save(`${name}-mapping.json`, `${jcs(sample.mapping)}\n`);
+    save(`${name}.json`, `${jcs(sample.snapshot)}\n`);
+  }
+  for (const [name, comparison] of Object.entries(walkthrough.comparisons)) {
+    save(`${name}-comparison.json`, `${jcs(comparison)}\n`); save(`${name}.html`, renderComparison(comparison));
+  }
+  return { fixture: walkthrough.fixture, baseline_golden_check: walkthrough.baseline_golden_check,
+    runtime_boundary: walkthrough.runtime_boundary, comparison_basis: walkthrough.comparison_basis, files,
+    scenarios: Object.fromEntries(Object.entries(walkthrough.comparisons).map(([name, comparison]) => [name, {
+      status: comparison.status, row_status: comparison.rows[0]?.status ?? null, mismatches: comparison.mismatches,
+    }])) };
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  console.log(JSON.stringify(buildSyntheticShadowDemo(), null, 2));
+  try {
+    const args = process.argv.slice(2);
+    if (args.length > 1 || (args.length && !args[0].startsWith("--comparison-dir="))) throw Error("invalid_arguments");
+    const directory = args[0]?.slice("--comparison-dir=".length);
+    if (args.length && !directory) throw Error("invalid_directory");
+    const demo = buildSyntheticShadowDemo();
+    console.log(JSON.stringify(directory ? { ...demo, cohort_walkthrough: writeSyntheticCohortWalkthrough(directory) } : demo, null, 2));
+  } catch {
+    console.error("Synthetic demo failed: use a fresh comparison directory and valid arguments; no inputs or paths were printed.");
+    process.exitCode = 1;
+  }
 }
