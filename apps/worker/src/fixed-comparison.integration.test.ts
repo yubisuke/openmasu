@@ -6,6 +6,7 @@ import { createAppPool, createSeedPool, withTenant } from "@openmasu/runtime";
 import { sha256 } from "@openmasu/attribution-core";
 import { ingestFixture } from "./ingestion.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
+import { persistCostImport } from "./import/cost.js";
 import { fixedComparisonDownload, comparisonLimits } from "../../api/src/fixed-comparison.js";
 import { metricReport } from "../../api/src/reporting.js";
 import { parseSnapshot, compareSnapshots } from "../../api/src/cohort-comparison.js";
@@ -73,7 +74,18 @@ describe("fixed comparison acquisition", { concurrency: false }, () => {
       { ...structuredClone(oldEvaluation), metric_run_id_prefix: "synthetic-fixed-new",
         grouping: { ...oldEvaluation.grouping, country: "AU" } },
     ];
-    const observed = afterFirstPage(async () => { await computeSqlMetricRuns(appPool, mutation, true); });
+    const observed = afterFirstPage(async () => {
+      // A new run on an unchanged input is a duplicate, not a supersession.
+      // Commit a synthetic cost correction within the fixed receive cutoff.
+      const group = oldEvaluation.grouping;
+      await persistCostImport(appPool, "synthetic-fixed-correction", [{
+        tenant_id: identity.tenantId, app_id: identity.appId,
+        campaign_id: group.campaign_id, network: group.network, country: group.country,
+        date: group.cohort_date, amount_unscaled: "110000000", amount_scale: 6,
+        currency: "USD", source: "imported_reported", as_of: "2026-08-08T01:00:00.000Z",
+      }]);
+      await computeSqlMetricRuns(appPool, mutation, true);
+    });
     assert.equal(await fixedComparisonDownload(observed, identity, query), initial);
     const latest = await metricReport(readerPool, identity, { ...query, limit: 200 });
     assert.equal(latest.data.length, 4);
