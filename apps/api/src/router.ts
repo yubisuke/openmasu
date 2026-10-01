@@ -495,7 +495,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
       }
 
       if ([
-        "dashboard_app", "dashboard_export", "dashboard_records", "dashboard_differences", "dashboard_fraud",
+        "dashboard_app", "dashboard_metric_explanation", "dashboard_export", "dashboard_records", "dashboard_differences", "dashboard_fraud",
         "dashboard_tracking_links_list", "dashboard_tracking_links_create", "dashboard_tracking_link_transition",
         "dashboard_sdk_keys_issue", "dashboard_sdk_keys_retire",
         "dashboard_server_keys_issue", "dashboard_server_keys_retire", "dashboard_link_domain",
