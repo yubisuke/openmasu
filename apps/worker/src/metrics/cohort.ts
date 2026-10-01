@@ -7,6 +7,7 @@ import {
 } from "@openmasu/contracts";
 import { jcs, sha256 } from "@openmasu/attribution-core";
 import type { RoasCalculationEvidence, RoasOperands } from "@openmasu/runtime";
+import { captureMetricComparisonContext, type MetricComparisonContext } from "@openmasu/runtime";
 
 type Any = Record<string, any>;
 type Queryable = Pick<PoolClient, "query">;
@@ -793,7 +794,7 @@ async function metricValue(
   };
 }
 
-export async function persistMetricRun(client: Queryable, scope: Scope, artifact: Any): Promise<void> {
+export async function persistMetricRun(client: Queryable, scope: Scope, artifact: Any, comparisonContext?: MetricComparisonContext): Promise<void> {
   const grouping = artifact.grouping?.dimensions ?? {};
   const result = await client.query(
     `INSERT INTO ledger.metric_runs (
@@ -804,10 +805,10 @@ export async function persistMetricRun(client: Queryable, scope: Scope, artifact
       fx_rate_scale, fx_rate_source, fx_rate_as_of, fx_rate_snapshot_id,
       fx_policy_version, rounding_mode, reproducibility_status, value_type,
       value_state, undefined_reason, value_unscaled, amount_scale, currency,
-      supersedes_metric_run_id, artifact
+      supersedes_metric_run_id, artifact, comparison_context
     ) VALUES (
       $1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
-      $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32::jsonb
+      $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32::jsonb,$33::jsonb
     ) ON CONFLICT (metric_run_id) DO NOTHING
     RETURNING metric_run_id`,
     [
@@ -824,6 +825,7 @@ export async function persistMetricRun(client: Queryable, scope: Scope, artifact
       artifact.value_state ?? "present", artifact.undefined_reason ?? null,
       artifact.value_unscaled ?? null, artifact.amount_scale ?? null, artifact.currency ?? null,
       artifact.supersedes_metric_run_id ?? null, JSON.stringify(artifact),
+      comparisonContext ? JSON.stringify(comparisonContext) : null,
     ],
   );
   if (result.rowCount !== 1) {
@@ -984,7 +986,9 @@ export async function computeSqlMetricRunsWithClient(
         } : {}),
       };
       if (persist) {
-        await persistMetricRun(client, scope, artifact);
+        await persistMetricRun(client, scope, artifact, captureMetricComparisonContext(
+          artifact, definition as any, fxPolicy as any, evaluation.privacy_state, sha256,
+        ));
         await persistMetricReplayManifest(client, scope, artifact, definition, evaluation, fxPolicy);
         if (value.operands) {
           const evidence: RoasCalculationEvidence = {

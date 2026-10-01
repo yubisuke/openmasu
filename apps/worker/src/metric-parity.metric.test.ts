@@ -9,6 +9,9 @@ import { ingestFixture, ingestRuntimeBatch } from "./ingestion.js";
 import { computeSqlMetricRuns, computeSqlMetricRunsWithClient, persistMetricRun } from "./metrics/cohort.js";
 import { metricExplanation } from "../../api/src/metric-explanation.js";
 import { renderMetricExplanation } from "../../api/src/dashboard/metric-explanation.js";
+import { metricReport } from "../../api/src/reporting.js";
+import { reportToSnapshot } from "../../../tools/report-to-snapshot.js";
+import { compareSnapshots } from "../../../tools/compare-cohorts.js";
 
 type Any = Record<string, any>;
 const fixtureName = "33-stage-b-cohort-metrics";
@@ -96,6 +99,31 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
     assert.deepEqual(actual, vectors.map(({ numerator, denominator }) =>
       roundHalfEven(numerator, denominator).toString()));
     assert.deepEqual(actual.slice(0, 3), ["0", "2", "2"]);
+  });
+
+  it("captures actual SQL definition/FX on the original run and exports reader-safe comparison evidence", async () => {
+    const reader = createReaderPool();
+    const identity = { keyId: "synthetic", role: "read_only" as const, tenantId: input.server_context.tenant_id, appId: input.server_context.app_id };
+    try {
+      const page = await metricReport(reader, identity, { tenantId: identity.tenantId, appId: identity.appId,
+        metricNames: ["d7_roas"], supersession: "latest", limit: 200 });
+      const row = page.data.find(r => r.metric_run_id === "run-33:d7_roas")!;
+      assert.ok(row.comparison_context);
+      assert.equal(row.comparison_context.definition_digest, sha256(input.metric_definitions.find((d: Any) => d.metric_name === "d7_roas")));
+      assert.equal(row.comparison_context.fx.policy_version, input.fx_policy.policy_version);
+      assert.equal(row.comparison_context.input_snapshot_id, row.input_snapshot_id);
+      const snapshot = reportToSnapshot({ data: [row] }, { source: "synthetic-sql", conditions: {
+        date_from: "2026-08-01", date_to: "2026-08-02", time_zone: "UTC", maturity: "operator-not-verified",
+        aggregation: "cumulative", attribution_scope: "non_organic", metric_definition: "d7_roas@0.3",
+        source_cutoff: row.input_received_at_watermark }, rows: [] });
+      const comparison = compareSnapshots(snapshot, snapshot);
+      assert.equal(comparison.status, "compared"); assert.equal(comparison.rows[0].status, "equal");
+      assert.equal(comparison.assurance.left.conditions.maturity.value, "window_elapsed");
+      assert.equal(jcs(compareSnapshots(snapshot, snapshot)), jcs(comparison));
+      assert.doesNotMatch(JSON.stringify(row.comparison_context), /installation_id|record_id|evidence_refs|raw_payload|protected:|provider-click/);
+      assert.deepEqual((await metricReport(reader, { ...identity, tenantId: "tenant-other" }, {
+        tenantId: "tenant-other", appId: identity.appId, metricNames: ["d7_roas"], supersession: "latest", limit: 200 })).data, []);
+    } finally { await reader.end(); }
   });
 
   it("explains SQL ROAS with saved exact operands, selected cost and closed reader-safe evidence", async () => {

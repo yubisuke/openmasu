@@ -360,7 +360,7 @@ export function buildMetricQuery(query: MetricQuery): ParameterizedQuery {
   }
   const limit = push(values, query.limit + 1);
   return {
-    text: `SELECT mr.artifact, mr.grouping_digest,
+    text: `SELECT mr.artifact, mr.grouping_digest, mr.comparison_context,
       EXISTS (
         SELECT 1 FROM ledger.metric_runs AS replacement
         WHERE replacement.tenant_id=mr.tenant_id AND replacement.app_id=mr.app_id

@@ -1,0 +1,109 @@
+import type { OpenMasuMetricDefinitionV04 as MetricDefinition } from "../../../packages/contracts/src/generated/contract-types.js";
+
+/** Aggregate-only metadata. Never store a replay manifest or evidence IDs here. */
+export type ComparisonFx = {
+  policy_version: string;
+  target_currency: string;
+  target_scale: number;
+  rounding_mode: "half_even";
+  rates: { currency: string; rate_unscaled: string; rate_scale: number; as_of: string }[];
+};
+export type MetricComparisonContext = {
+  version: 1;
+  profile: "openmasu-sql-metric-v1";
+  metric_run_id: string;
+  input_snapshot_id: string;
+  definition: MetricDefinition;
+  definition_digest: string;
+  fx: ComparisonFx;
+  fx_digest: string;
+  privacy_state: "before" | "after";
+};
+
+export function captureMetricComparisonContext(
+  run: { metric_run_id: string; input_snapshot_id: string },
+  definition: MetricDefinition,
+  fxPolicy: ComparisonFx,
+  privacyState: "before" | "after",
+  digest: (value: unknown) => string,
+): MetricComparisonContext {
+  // Closed projection even if a caller supplies an object with extra properties.
+  const savedDefinition: MetricDefinition = {
+    metric_name: definition.metric_name, metric_definition_version: definition.metric_definition_version,
+    anchor_event: definition.anchor_event, aggregation_time_zone: definition.aggregation_time_zone,
+    value_type: definition.value_type,
+    ...(definition.currency !== undefined ? { currency: definition.currency } : {}),
+    ...(definition.amount_scale !== undefined ? { amount_scale: definition.amount_scale } : {}),
+    ...(definition.ratio_scale !== undefined ? { ratio_scale: definition.ratio_scale } : {}),
+    definition: { calculation: definition.definition.calculation, numerator: definition.definition.numerator,
+      window: { type: definition.definition.window.type, day: definition.definition.window.day },
+      ...(definition.definition.denominator !== undefined ? { denominator: definition.definition.denominator } : {}),
+      ...(definition.definition.cost_basis !== undefined ? { cost_basis: definition.definition.cost_basis } : {}) },
+    ...(definition.activity_events ? { activity_events: [...definition.activity_events] } : {}),
+    ...(definition.event_names ? { event_names: [...definition.event_names] } : {}),
+    ...(definition.grouping_dimensions ? { grouping_dimensions: [...definition.grouping_dimensions] } : {}),
+    ...(definition.fraud_policy ? { fraud_policy: definition.fraud_policy } : {}),
+    rule_bundle_id: definition.rule_bundle_id, rule_bundle_version: definition.rule_bundle_version,
+    rule_bundle_hash: definition.rule_bundle_hash,
+  };
+  const fx: ComparisonFx = {
+    policy_version: fxPolicy.policy_version, target_currency: fxPolicy.target_currency,
+    target_scale: fxPolicy.target_scale, rounding_mode: fxPolicy.rounding_mode,
+    rates: fxPolicy.rates.map(rate => ({ currency: rate.currency, rate_unscaled: rate.rate_unscaled,
+      rate_scale: rate.rate_scale, as_of: rate.as_of })).sort((a, b) => a.currency.localeCompare(b.currency, "en")),
+  };
+  return { version: 1, profile: "openmasu-sql-metric-v1", metric_run_id: run.metric_run_id,
+    input_snapshot_id: run.input_snapshot_id, definition: savedDefinition,
+    definition_digest: digest(savedDefinition), fx, fx_digest: digest(fx), privacy_state: privacyState };
+}
+
+/** Explicit implemented profile, not a metric-name heuristic or bundle-ID match. */
+export function comparisonMeaning(context: MetricComparisonContext) {
+  const d = context.definition, calculation = d.definition.calculation, window = d.definition.window;
+  const revenue = ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(calculation);
+  const supported = d.anchor_event === (calculation === "event_count" ? "calendar_day" : "install")
+    && (revenue ? window.type === "elapsed" && ["revenue", "purchase_net_revenue", "total_net_revenue"].includes(d.definition.numerator)
+      : calculation === "active_installations_over_cohort" ? window.type === "activity_day" && d.definition.numerator === "active_installations"
+      : calculation === "event_count" ? window.type === "calendar_day" && window.day === 0 && d.definition.numerator === "events"
+      : calculation === "cohort_size" && d.definition.numerator === "cohort_size")
+    && (calculation !== "event_count" || (d.event_names?.length === 1 && ["click", "install", "deep_link_open"].includes(d.event_names[0])))
+    && (calculation !== "active_installations_over_cohort" || (d.activity_events ?? ["session_start"]).every(name => name === "session_start"))
+    && (calculation !== "revenue_over_cost" || (d.definition.denominator === "cost" && d.definition.cost_basis === "cohort_acquisition_day_current_snapshot"))
+    && (!["active_installations_over_cohort", "revenue_over_cohort"].includes(calculation) || d.definition.denominator === "cohort_size")
+    && (!revenue || context.fx.target_currency === (d.currency ?? context.fx.target_currency))
+    && (d.value_type !== "money" || d.amount_scale === context.fx.target_scale);
+  if (!supported) return undefined;
+  const aggregation = calculation === "event_count" || calculation === "active_installations_over_cohort" ? "on_day" : "cumulative";
+  return {
+    profile: context.profile,
+    anchor_event: d.anchor_event, time_zone: d.aggregation_time_zone,
+    calculation, numerator: d.definition.numerator, denominator: d.definition.denominator ?? null,
+    cost_basis: d.definition.cost_basis ?? null, aggregation,
+    window: { ...window, boundary: "half_open" },
+    population: calculation === "event_count" ? "accepted_logical_events" : "accepted_installation_cohort",
+    grouping_dimensions: [...(d.grouping_dimensions ?? [])].sort(),
+    activity_events: calculation === "active_installations_over_cohort" ? [...(d.activity_events ?? ["session_start"])].sort() : [],
+    event_names: calculation === "event_count" ? [...(d.event_names ?? [])].sort() : [],
+    fraud_policy: d.fraud_policy ?? "gross", privacy_state: context.privacy_state,
+    value_type: d.value_type, currency: d.currency ?? null,
+    amount_scale: d.amount_scale ?? null, ratio_scale: d.ratio_scale ?? null,
+    fx: revenue ? { target_currency: context.fx.target_currency, target_scale: context.fx.target_scale,
+      rounding_mode: context.fx.rounding_mode, conversion: "per_event_round_then_sum",
+      rates: context.fx.rates.map(({ currency, rate_unscaled, rate_scale, as_of }) => ({ currency, rate_unscaled, rate_scale, as_of })) } : null,
+  };
+}
+
+/** Conservative temporal maturity, not a promise of provider completeness. */
+export function comparisonMaturity(context: MetricComparisonContext, grouping: Record<string, string>, watermark: string) {
+  const d = context.definition, calculation = d.definition.calculation;
+  const day = calculation === "event_count" ? grouping.metric_date : grouping.cohort_date;
+  if (!comparisonMeaning(context) || !day || !/^\d{4}-\d{2}-\d{2}$/.test(day)
+      || new Date(day).toISOString().slice(0, 10) !== day) return { state: "unknown", closes_at: null } as const;
+  const offset = d.aggregation_time_zone === "Asia/Tokyo" ? 9 * 3_600_000 : 0;
+  // Installs may occur anywhere within the cohort date. Use its exclusive end,
+  // plus the complete elapsed/activity window, never an inferred install time.
+  const days = calculation === "event_count" || calculation === "cohort_size" ? 1 : d.definition.window.day + 2;
+  const closesAt = new Date(Date.parse(day) - offset + days * 86_400_000).toISOString();
+  return { state: Date.parse(watermark) >= Date.parse(closesAt) ? "window_elapsed" : "window_open",
+    closes_at: closesAt } as const;
+}

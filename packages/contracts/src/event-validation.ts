@@ -66,6 +66,15 @@ for (const name of readdirSync(`${schemaRoot}/events`).filter((value) => value.e
   validators.set(eventNameFromSchema(schema), validator);
 }
 
+const metricSchema = fixRefs(loadJson(`${schemaRoot}/metric-definition.schema.json`)) as JsonObject;
+ajv.addSchema(metricSchema);
+const metricValidator = ajv.getSchema(String(metricSchema.$id))!;
+
+/** Same frozen definition schema as the contract gate; no defaults are invented. */
+export function validateMetricDefinition(input: unknown): boolean {
+  return Boolean(metricValidator(input));
+}
+
 /**
  * Validate an event payload with the same closed schemas used by the contract gate.
  * Diagnostics contain schema paths only; input values are never returned or logged.

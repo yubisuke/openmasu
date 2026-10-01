@@ -5,7 +5,7 @@ The command reads two aggregate snapshots without database or network access.
 Inputs are limited to 4 MiB and 10,000 rows each. Keep private data outside this
 public repository; checked-in examples and tests must be synthetic.
 
-Minimal synthetic input (save two copies, then change a value to see a delta):
+Minimal declaration-only synthetic input:
 
 ```json
 {
@@ -25,10 +25,16 @@ Minimal synthetic input (save two copies, then change a value to see a delta):
 }
 ```
 
+This input has no captured definition. By default it produces `incomparable`
+with an unknown calculation basis and no numerical deltas. To intentionally
+compare only declarations, use
+`npm run compare:cohorts -- --declared left.json right.json`.
+That result is labeled `declared_comparison`, never `compared` or verified.
+All eight declarations must match in this compatibility mode. `--declared`
+cannot bypass a missing or incompatible context on a definition-backed input.
+
 Date ranges are half-open. Cutoffs use canonical UTC timestamps including
-milliseconds. All condition strings must match exactly: this tool checks
-declared agreement, not the truth of a producer's declarations. Coordinate
-metric-definition, maturity, attribution, and row-key conventions beforehand.
+milliseconds. Coordinate attribution and row-key conventions beforehand.
 Aggregation is `cumulative` or `on_day`. Currency is an uppercase three-letter
 code, or `none` for non-monetary metrics. Scale is 0 through 18.
 
@@ -37,14 +43,67 @@ For undefined values replace `value` with `reason` and set `state` to
 `undefined`. Missing rows, undefined values, zero, and currency mismatches are
 distinct. Duplicate keys and unknown fields are rejected.
 
-Output uses canonical JSON. Each input has a SHA-256 digest after row sorting;
+Output uses canonical JSON with format `cohort-comparison-v2`. Each input has a SHA-256 digest after row sorting;
 retain the original snapshots to reproduce a comparison. Deltas are right minus
 left at the larger input scale. Incompatible conditions produce no deltas.
 No causal explanation is inferred. Successful execution exits 0 even when
 values differ or conditions are incomparable; malformed input exits 1.
 
 This is an offline tooling format, not a new measurement contract artifact.
-Direct database access and dashboard integration are not implemented here.
+The CLI has no direct database or provider access. Dashboard comparison is a
+separate integration; the same common comparison result is intended for it.
+
+## Calculation meaning and comparison basis
+
+New SQL metric runs capture `comparison_context` in the same transaction as the
+result. It contains a closed, aggregate-only copy of the definition, the actual
+FX target, rate, timestamp and rounding policy, the privacy evaluation mode,
+definition/FX digests, and run/snapshot references. It has no installation/event
+IDs, raw payload, private replay manifest or free-text FX source. Reader JSON
+and CSV append this field without changing the contract artifact or existing
+CSV column positions. Migration 053 is additive; existing runs remain `NULL`.
+Never recover an older run's missing context from today's configuration.
+
+The explicit `openmasu-sql-metric-v1` equivalence projection compares:
+
+- anchor, time zone, half-open window type/day and cumulative/on-day behavior;
+- calculation, numerator, denominator, cost selection basis and population;
+- declared grouping dimensions, activity/event sets, gross/net fraud policy
+  (absent means the implemented default `gross`) and privacy mode;
+- value type, currency, output precision, actual FX rate/as-of/target precision,
+  half-even rounding, and per-event rounding before summation.
+
+Definition names/versions, bundle IDs/versions/hashes and FX policy version IDs
+remain **execution provenance**, not semantic equality keys. Distinct internal
+references can compare only when every supported projected meaning agrees.
+Changing a rate, output precision, window or gross/net policy is not equivalent
+merely because the metric name stayed the same. No equivalence is inferred from
+names, numeric values or an arbitrary `verified` flag.
+
+The profile supports elapsed install-cohort revenue/ROAS/LTV, activity-day
+retention, cohort size and ordinary daily click/install/deep-link counts.
+Calendar-revenue and platform aggregate-postback semantics do not have a
+confirmed projection here: they remain `unknown`, not silently approved.
+An empty report, missing contexts, unsupported definitions, mixed meanings,
+or unestablished window maturity also produces `incomparable` without deltas.
+Future implementation changes to these semantics must change the profile,
+not reinterpret stored contexts.
+
+JSON `assurance` and HTML distinguish `definition_backed`, `declared` and
+`unknown`. Definition-backed means consistency with the saved implementation
+profile, **not** producer authentication, provider validation, a complete
+population, or proof that all late events have arrived. Operator-selected date
+bounds, attribution scope and source cutoff remain explicit declarations;
+the report converter checks every included row against them but cannot prove
+that missing cohorts should have existed.
+
+Temporal maturity is conservative: for a cohort date, use its exclusive end
+in the definition's time zone plus the complete elapsed/activity window. This
+allows an install anywhere within that date and never guesses an install time.
+Daily count/cohort-size maturity uses the date's exclusive end. Compare that
+bound with the saved receive watermark to report `window_elapsed` or
+`window_open`. It is not inferred from `data_freshness`, nor does an elapsed
+window imply complete upstream delivery. Mixed/open-ended maturity is unknown.
 
 ## Convert a saved metric report
 
@@ -55,25 +114,33 @@ Use the snapshot format above for the template, but set `rows` to `[]` and
 (for example, `revenue_d7@v1`). The source label and conditions are explicit.
 No provider request or database connection is made.
 
-This initial converter requires a complete single report: any `next_cursor`
+The converter requires a complete single report: any `next_cursor`
 field is rejected. It does not fetch or merge pages. Rows must share the
-declared definition, watermark, time zone, and value type; each cohort date
-must lie within the half-open declared range and its attribution status must
-match `attribution_scope`. Rows without those dimensions are rejected rather
-than guessed. Only non-superseded, fully reproducible runs are accepted.
-The presence of all expected cohorts cannot be established from a saved file.
-Maturity and cumulative/on-day conventions remain operator declarations.
+declared definition, watermark, time zone, and value type; each cohort/metric
+date must lie within the half-open declared range and its attribution status
+must match `attribution_scope`. When no status dimension exists, the template
+must explicitly select `all`; no organic/non-organic classification is guessed.
+Rows without a date are rejected. Only non-superseded, fully reproducible runs
+are accepted.
+It validates captured definition/FX digests, run/snapshot binding, units and the
+reported bundle/FX policy references. Supported aggregation and maturity are
+derived from the captured context, overriding unverified template labels.
+Without it, aggregation remains declared and maturity/meaning remain unknown.
 
 Row keys are canonical JSON grouping objects. The other comparison input must
 use the same key convention. Money and ratio scales are retained; counts use
 scale zero. Undefined money without declared units is rejected, not assigned
-an invented currency. Duplicate runs/groupings are rejected, not aggregated.
+an invented currency; captured definition units may supply undefined money's
+otherwise absent units. Duplicate runs/groupings are rejected, not aggregated.
 Inputs have the same 4 MiB / 10,000-row limits as the comparison tool.
 
 Converted inputs include optional `provenance`: a SHA-256 of the canonical
 report after sorting by run ID, and a row-key/run-ID/input-snapshot-ID mapping.
 Comparison hashes bind this metadata. Keep the report and template with the
 snapshot: hashes are reproducibility references, not authentication proofs.
+`comparison_contexts` bind each available context to its row and provenance.
+Legacy snapshots without that optional field still parse; their meaning does
+not become definition-backed just because declarations or hashes match.
 
 ## Human-readable report
 
@@ -84,3 +151,5 @@ values, comparison states, declared conditions, and input hashes. `--silent`
 keeps npm's command banner out of the HTML. On older shells that change output
 encoding, save stdout as UTF-8. Reports contain aggregate values: do not commit
 private reports to this public repository or share them unintentionally.
+Use `--html --declared` only for an intentionally declaration-only report; the
+warning and unknown basis are retained in the HTML.
