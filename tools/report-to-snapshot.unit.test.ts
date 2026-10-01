@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { encodeMetricReport, type MetricReportRow } from "../apps/api/src/reporting.js";
-import { reportToSnapshot } from "./report-to-snapshot.js";
+import { reportToSnapshot, aggregateCsvToSnapshot, AggregateCsvError } from "./report-to-snapshot.js";
 import { compareSnapshots, parseSnapshot } from "./compare-cohorts.js";
 import { captureMetricComparisonContext } from "@openmasu/runtime";
 import { sha256 } from "@openmasu/attribution-core";
@@ -38,6 +38,103 @@ it("checks saved execution policy and displays definition-backed, declared and u
     { policy_versions: ["rule_bundle:other"] }, { metric_run_id: "other" }]) {
     assert.throws(() => reportToSnapshot({ data: [{ ...r, ...patch }] }, template()), /execution_policy_mismatch/);
   }
+});
+
+const aggregateMapping = () => ({ version: 1, source: 'synthetic-aggregate <&"label>', conditions: template().conditions,
+  grouping: { cohort_date: { column: "day" }, attribution_status: { constant: "organic" }, country: { column: "country" } },
+  value: { column: "amount", input: "decimal", scale: 2, currency: { constant: "USD" },
+    undefined: { marker: "", reason: { constant: "empty_cohort" } } } });
+const csvBytes = (value: string) => Buffer.from(value, "utf8");
+const safeCsvFailure = (csv: string, mapping: unknown, code: string, row: number | null) => {
+  assert.throws(() => aggregateCsvToSnapshot(csvBytes(csv), mapping), error => error instanceof AggregateCsvError
+    && error.code === code && error.row_number === row && error.message === code);
+};
+it("maps aggregate CSV into canonical comparison keys without guessing money, undefined or completeness", () => {
+  const csv = 'day,country,amount,note\r\n2026-01-01,JP,1.23,"comma, quote "" and\nnewline"\r\n2026-01-01,GB,,unused\r\n2026-01-01,US,0,unused\r\n';
+  const output = aggregateCsvToSnapshot(csvBytes(csv), aggregateMapping());
+  const jp = output.rows.find(row => JSON.parse(row.key).country === "JP")!;
+  assert.equal(jp.state === "present" && jp.value, "123");
+  assert.equal(output.rows.find(row => JSON.parse(row.key).country === "GB")!.state, "undefined");
+  assert.equal(output.rows.find(row => JSON.parse(row.key).country === "US")!.state, "present");
+  assert.equal(output.mapping_provenance?.interpretation, "operator_declared");
+  assert.equal(output.mapping_provenance?.row_count, 3);
+  assert.equal(output.acquisition, undefined); assert.equal(output.comparison_contexts, undefined);
+  assert.deepEqual(parseSnapshot(output), output);
+  assert.equal(compareSnapshots(output, output).status, "incomparable");
+  const comparison = compareSnapshots(output, output, { declaredOnly: true });
+  assert.equal(comparison.status, "declared_comparison"); assert.equal(comparison.rows.filter(row => row.status === "equal").length, 2);
+  const html = renderComparison(comparison);
+  assert.match(html, /DECLARED ONLY/); assert.match(html, /1\.23 USD/); assert.match(html, /&lt;&amp;&quot;label&gt;/);
+  assert.doesNotMatch(html, /<script|newline/);
+  const missing = aggregateCsvToSnapshot(csvBytes("day,country,amount\n2026-01-01,JP,1.23\n"), aggregateMapping());
+  assert.ok(compareSnapshots(output, missing, { declaredOnly: true }).rows.some(row => row.status === "missing_right"));
+  const forged = structuredClone(output); forged.mapping_provenance!.row_count += 1;
+  assert.throws(() => parseSnapshot(forged), /invalid_mapping_provenance/);
+});
+it("aligns explicit CSV scales, preserves huge and signed integers, and binds the mapping digest", () => {
+  const left = aggregateCsvToSnapshot(csvBytes("day,country,amount\n2026-01-01,JP,1.23\n"), aggregateMapping());
+  const mapping = { ...aggregateMapping(), value: { ...aggregateMapping().value, input: "integer", scale: 3 } };
+  const right = aggregateCsvToSnapshot(csvBytes("day,country,amount\n2026-01-01,JP,1230\n"), mapping);
+  assert.equal(compareSnapshots(left, right, { declaredOnly: true }).rows[0].status, "equal");
+  assert.notEqual(left.mapping_provenance!.mapping_sha256, right.mapping_provenance!.mapping_sha256);
+  for (const value of ["900719925474099301", "-900719925474099301"]) {
+    const result = aggregateCsvToSnapshot(csvBytes(`day,country,amount\n2026-01-01,JP,${value}\n`), mapping);
+    assert.equal(result.rows[0].state === "present" && result.rows[0].value, value);
+  }
+  const changed = aggregateCsvToSnapshot(csvBytes("day,country,amount\n2026-01-01,JP,1240\n"), mapping);
+  assert.equal(compareSnapshots(left, changed, { declaredOnly: true }).rows[0].delta_right_minus_left, "10");
+  const reordered = aggregateCsvToSnapshot(csvBytes("amount,day,country\n1.23,2026-01-01,JP\n"), aggregateMapping());
+  assert.deepEqual(left.rows, reordered.rows);
+  assert.equal(left.mapping_provenance!.mapping_sha256, reordered.mapping_provenance!.mapping_sha256);
+  const withoutBlankMarker = structuredClone(mapping); delete (withoutBlankMarker.value as any).undefined;
+  safeCsvFailure("day,country,amount\n2026-01-01,JP,\n", withoutBlankMarker, "number_invalid", 2);
+  safeCsvFailure("day,country,amount\n2026-01-01,JP,1.234\n", aggregateMapping(), "precision_exceeded", 2);
+  safeCsvFailure("day,country,amount\n2026-01-01,JP,1e3\n", aggregateMapping(), "number_invalid", 2);
+});
+it("rejects duplicate groupings, mismatched dates/status and malformed CSV with safe record numbers", () => {
+  const mapping = aggregateMapping();
+  safeCsvFailure("day,country,amount\n2026-01-01,JP,1\n2026-01-01,JP,2\n", mapping, "duplicate_grouping", 3);
+  safeCsvFailure("day,country,amount\n2026-01-02,JP,1\n", mapping, "date_outside_range", 2);
+  safeCsvFailure("day,country,amount\n2026-02-30,JP,1\n", mapping, "grouping_invalid", 2);
+  safeCsvFailure("day,country,amount\n2026-01-01,JP\n", mapping, "csv_width_invalid", 2);
+  safeCsvFailure('day,country,amount\n2026-01-01,JP,"1"garbage\n', mapping, "csv_quotes_invalid", 2);
+  safeCsvFailure('day,country,amount\n2026-01-01,JP,"unterminated\n', mapping, "csv_quotes_invalid", 2);
+  safeCsvFailure("day,country,country\n", mapping, "csv_header_invalid", 1);
+  safeCsvFailure("day,country,private-column\n2026-01-01,JP,private-value\n", mapping, "column_missing", 2);
+  safeCsvFailure("day,country,amount\n", mapping, "csv_empty", null);
+  safeCsvFailure("day,country,amount\n2026-01-01,JP,1\n", { ...mapping, grouping: { ...mapping.grouping, attribution_status: { constant: "unattributed" } } }, "attribution_scope_mismatch", 2);
+});
+it("bounds CSV acquisition and requires an explicit closed non-identifying mapping", () => {
+  const mapping = aggregateMapping();
+  assert.throws(() => aggregateCsvToSnapshot(new Uint8Array(4 * 1024 * 1024 + 1), mapping), /input_byte_limit/);
+  safeCsvFailure(`day,country,amount\n${"2026-01-01,JP,1\n".repeat(10001)}`, mapping, "input_row_limit", null);
+  safeCsvFailure(`day,country,amount\n2026-01-01,JP,${"9".repeat(101)}\n`, mapping, "integer_too_large", 2);
+  for (const altered of [{ ...mapping, inferred: true }, { ...mapping, version: 2 },
+    { ...mapping, grouping: { ...mapping.grouping, installation_id: { column: "id" } } },
+    { ...mapping, grouping: { ...mapping.grouping, cohort_date: { column: "day", omit_if_empty: true } } },
+    { ...mapping, value: { ...mapping.value, scale: 19 } }]) {
+    assert.throws(() => aggregateCsvToSnapshot(csvBytes("day,country,amount\n2026-01-01,JP,1\n"), altered), AggregateCsvError);
+  }
+});
+it("runs the CSV converter and existing JSON/HTML comparison CLI without DB, raw import or value-bearing errors", () => {
+  const directory = mkdtempSync(join(tmpdir(), "openmasu-synthetic-aggregate-"));
+  try {
+    const csv = join(directory, "synthetic.csv"), map = join(directory, "mapping.json"), snapshot = join(directory, "snapshot.json");
+    writeFileSync(csv, "day,country,amount\n2026-01-01,JP,1.23\n"); writeFileSync(map, JSON.stringify(aggregateMapping()));
+    const convert = () => spawnSync(process.execPath, ["--import", "tsx", "tools/report-to-snapshot.ts", "--csv", csv, map], { encoding: "utf8" });
+    const converted = convert(); assert.equal(converted.status, 0, converted.stderr);
+    assert.equal(JSON.parse(converted.stdout).rows[0].value, "123"); writeFileSync(snapshot, converted.stdout);
+    for (const format of [[], ["--html"]]) {
+      const comparison = spawnSync(process.execPath, ["--import", "tsx", "tools/compare-cohorts.ts", "--declared", ...format, snapshot, snapshot], { encoding: "utf8" });
+      assert.equal(comparison.status, 0, comparison.stderr);
+      if (format.length) assert.match(comparison.stdout, /DECLARED ONLY/);
+      else assert.equal(JSON.parse(comparison.stdout).rows[0].status, "equal");
+    }
+    writeFileSync(csv, "day,country,amount\n2026-01-01,JP,private-value\n");
+    const bad = convert(); assert.equal(bad.status, 1); assert.equal(bad.stdout, "");
+    assert.deepEqual(JSON.parse(bad.stderr), { error: { code: "number_invalid", row_number: 2 } });
+    assert.doesNotMatch(bad.stderr, /private-value|country|amount|synthetic\.csv/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 it("takes undefined money units only from a captured definition, not a guessed metric name", () => {
   const r: Record<string, any> = backedRow(); delete r.value_unscaled;

@@ -1,18 +1,147 @@
 import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import { jcs } from "@openmasu/attribution-core";
 import { reportToSnapshot } from "../apps/api/src/report-snapshot.js";
+import { parseSnapshot, comparisonDigest } from "../apps/api/src/cohort-comparison.js";
+import { groupingDimensionAllowlist, validateGrouping, type GroupingDimension } from "../apps/api/src/report-query.js";
+import { parseCsv, CsvFormatError } from "../apps/worker/src/import/source.js";
+import { decimalToUnscaled } from "../apps/worker/src/import/cost.js";
 export { reportToSnapshot } from "../apps/api/src/report-snapshot.js";
+
+type Binding = { column: string; omit_if_empty?: true } | { constant: string };
+type CsvMapping = { version: 1; source: string; conditions: ReturnType<typeof parseSnapshot>["conditions"];
+  grouping: Partial<Record<GroupingDimension, Binding>>;
+  value: { column: string; input: "integer" | "decimal"; scale: number; currency: Binding;
+    undefined?: { marker: string; reason: Binding } } };
+export class AggregateCsvError extends Error {
+  constructor(readonly code: string, readonly row_number: number | null = null) { super(code); }
+}
+const csvLimits = { bytes: 4 * 1024 * 1024, rows: 10000 };
+function object(value: unknown): asserts value is Record<string, any> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new AggregateCsvError("mapping_invalid");
+}
+function closed(value: Record<string, any>, fields: readonly string[]) {
+  if (Object.keys(value).length !== fields.length || Object.keys(value).some(key => !fields.includes(key))) throw new AggregateCsvError("mapping_invalid");
+}
+function text(value: unknown): asserts value is string {
+  if (typeof value !== "string" || !value.trim() || value.length > 256 || /[\u0000-\u001f]/.test(value)) throw new AggregateCsvError("mapping_invalid");
+}
+function binding(value: unknown, allowOmit = false): Binding {
+  object(value);
+  const column = Object.hasOwn(value, "column");
+  closed(value, [column ? "column" : "constant", ...(Object.hasOwn(value, "omit_if_empty") ? ["omit_if_empty"] : [])]);
+  text(value[column ? "column" : "constant"]);
+  if (Object.hasOwn(value, "omit_if_empty") && (!column || !allowOmit || value.omit_if_empty !== true)) throw new AggregateCsvError("mapping_invalid");
+  return structuredClone(value) as Binding;
+}
+function parseCsvMapping(input: unknown): CsvMapping {
+  object(input); closed(input, ["version", "source", "conditions", "grouping", "value"]);
+  if (input.version !== 1) throw new AggregateCsvError("mapping_invalid");
+  let base: ReturnType<typeof parseSnapshot>;
+  try { base = parseSnapshot({ source: input.source, conditions: input.conditions, rows: [] }); }
+  catch { throw new AggregateCsvError("mapping_conditions_invalid"); }
+  object(input.grouping); const grouping: CsvMapping["grouping"] = {};
+  for (const [key, value] of Object.entries(input.grouping)) {
+    if (!Object.hasOwn(groupingDimensionAllowlist, key)) throw new AggregateCsvError("mapping_grouping_invalid");
+    grouping[key as GroupingDimension] = binding(value, !["cohort_date", "metric_date", "attribution_status"].includes(key));
+  }
+  if (Boolean(grouping.cohort_date) === Boolean(grouping.metric_date)
+      || (base.conditions.attribution_scope !== "all" && !grouping.attribution_status)) throw new AggregateCsvError("mapping_grouping_invalid");
+  object(input.value); const value = input.value;
+  closed(value, ["column", "input", "scale", "currency", ...(Object.hasOwn(value, "undefined") ? ["undefined"] : [])]);
+  text(value.column);
+  if (!["integer", "decimal"].includes(value.input) || !Number.isInteger(value.scale) || value.scale < 0 || value.scale > 18) throw new AggregateCsvError("mapping_units_invalid");
+  const currency = binding(value.currency);
+  let undefinedValue: CsvMapping["value"]["undefined"];
+  if (Object.hasOwn(value, "undefined")) {
+    object(value.undefined); closed(value.undefined, ["marker", "reason"]);
+    if (typeof value.undefined.marker !== "string" || value.undefined.marker.length > 256) throw new AggregateCsvError("mapping_invalid");
+    undefinedValue = { marker: value.undefined.marker, reason: binding(value.undefined.reason) };
+  }
+  return { version: 1, source: base.source, conditions: base.conditions, grouping,
+    value: { column: value.column, input: value.input, scale: value.scale, currency, ...(undefinedValue ? { undefined: undefinedValue } : {}) } };
+}
+function boundValue(row: Record<string, any>, value: Binding, rowNumber: number): string | undefined {
+  if ("constant" in value) return value.constant;
+  if (!Object.hasOwn(row, value.column)) throw new AggregateCsvError("column_missing", rowNumber);
+  const result: string = row[value.column];
+  return !result && value.omit_if_empty ? undefined : result;
+}
+/** Aggregate-only offline conversion. Declarations never become captured runtime evidence. */
+export function aggregateCsvToSnapshot(bytes: Uint8Array, inputMapping: unknown) {
+  if (bytes.byteLength > csvLimits.bytes) throw new AggregateCsvError("input_byte_limit");
+  const mapping = parseCsvMapping(inputMapping);
+  let sourceRows: Record<string, any>[];
+  try { sourceRows = parseCsv(new TextDecoder("utf-8", { fatal: true }).decode(bytes), true); }
+  catch (error) {
+    throw new AggregateCsvError(error instanceof CsvFormatError ? error.code : "csv_invalid", error instanceof CsvFormatError ? error.rowNumber : null);
+  }
+  if (!sourceRows.length) throw new AggregateCsvError("csv_empty");
+  if (sourceRows.length > csvLimits.rows) throw new AggregateCsvError("input_row_limit");
+  const seen = new Set<string>();
+  const rows = sourceRows.map((row, index) => {
+    const number = index + 2, grouping: Record<string, string> = {};
+    for (const [key, expression] of Object.entries(mapping.grouping)) {
+      const value = boundValue(row, expression!, number); if (value === undefined) continue;
+      try { validateGrouping(key as GroupingDimension, value); } catch { throw new AggregateCsvError("grouping_invalid", number); }
+      grouping[key] = value;
+    }
+    const day = grouping.cohort_date ?? grouping.metric_date;
+    if (day < mapping.conditions.date_from || day >= mapping.conditions.date_to) throw new AggregateCsvError("date_outside_range", number);
+    if ((grouping.attribution_status ?? "all") !== mapping.conditions.attribution_scope) throw new AggregateCsvError("attribution_scope_mismatch", number);
+    const key = jcs(grouping);
+    if (seen.has(key)) throw new AggregateCsvError("duplicate_grouping", number); seen.add(key);
+    const currency = boundValue(row, mapping.value.currency, number)!;
+    if (!/^(?:[A-Z]{3}|none)$/.test(currency)) throw new AggregateCsvError("currency_invalid", number);
+    if (!Object.hasOwn(row, mapping.value.column)) throw new AggregateCsvError("column_missing", number);
+    const raw: string = row[mapping.value.column];
+    if (mapping.value.undefined && raw === mapping.value.undefined.marker) {
+      const reason = boundValue(row, mapping.value.undefined.reason, number)!;
+      if (!reason.trim() || reason.length > 256 || /[\u0000-\u001f]/.test(reason)) throw new AggregateCsvError("undefined_reason_missing", number);
+      return { key, currency, scale: mapping.value.scale, state: "undefined" as const, reason };
+    }
+    const amount = raw.trim(); let value: string;
+    if (mapping.value.input === "integer") {
+      if (!/^-?[0-9]+$/.test(amount)) throw new AggregateCsvError("number_invalid", number);
+      value = BigInt(amount).toString();
+    } else {
+      if (!/^-?[0-9]+(?:\.[0-9]+)?$/.test(amount)) throw new AggregateCsvError("number_invalid", number);
+      try { value = BigInt(`${amount.startsWith("-") ? "-" : ""}${decimalToUnscaled(amount.replace(/^-/, ""), mapping.value.scale)}`).toString(); }
+      catch { throw new AggregateCsvError("precision_exceeded", number); }
+    }
+    if (value.replace(/^-/, "").length > 100) throw new AggregateCsvError("integer_too_large", number);
+    return { key, currency, scale: mapping.value.scale, state: "present" as const, value };
+  });
+  let output: ReturnType<typeof parseSnapshot>;
+  try { output = parseSnapshot({ source: mapping.source, conditions: mapping.conditions, rows,
+    mapping_provenance: { version: 1, format: "csv", interpretation: "operator_declared", row_count: rows.length,
+      input_sha256: createHash("sha256").update(bytes).digest("hex"), mapping_sha256: comparisonDigest(mapping) } }); }
+  catch { throw new AggregateCsvError("snapshot_invalid"); }
+  if (Buffer.byteLength(jcs(output), "utf8") > csvLimits.bytes) throw new AggregateCsvError("output_byte_limit");
+  return output;
+}
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    const args = process.argv.slice(2);
+    const rawArgs = process.argv.slice(2), csv = rawArgs.includes("--csv"), args = rawArgs.filter(arg => arg !== "--csv");
     if (args.length !== 2) throw Error("expected_report_and_template");
-    const [report, template] = args.map(path => {
-      if (statSync(path).size > 4 * 1024 * 1024) throw Error("input_too_large");
-      return JSON.parse(readFileSync(path, "utf8"));
-    });
-    process.stdout.write(`${jcs(reportToSnapshot(report, template))}\n`);
-  } catch { console.error("Snapshot conversion failed: check complete report and explicit template; inputs were not printed."); process.exitCode = 1; }
+    if (csv) {
+      if (args.some(path => statSync(path).size > csvLimits.bytes)) throw new AggregateCsvError("input_byte_limit");
+      let mapping: unknown; try { mapping = JSON.parse(readFileSync(args[1], "utf8")); } catch { throw new AggregateCsvError("mapping_invalid"); }
+      process.stdout.write(`${jcs(aggregateCsvToSnapshot(readFileSync(args[0]), mapping))}\n`);
+    } else {
+      const [report, template] = args.map(path => {
+        if (statSync(path).size > 4 * 1024 * 1024) throw Error("input_too_large");
+        return JSON.parse(readFileSync(path, "utf8"));
+      });
+      process.stdout.write(`${jcs(reportToSnapshot(report, template))}\n`);
+    }
+  } catch (error) {
+    if (process.argv.includes("--csv")) console.error(JSON.stringify({ error: error instanceof AggregateCsvError
+      ? { code: error.code, row_number: error.row_number } : { code: "conversion_failed", row_number: null } }));
+    else console.error("Snapshot conversion failed: check complete report and explicit template; inputs were not printed.");
+    process.exitCode = 1;
+  }
 }
