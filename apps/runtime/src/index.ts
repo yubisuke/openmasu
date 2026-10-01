@@ -9,6 +9,7 @@ export * from "./privacy-purge.js";
 export * from "./privacy-fence.js";
 export * from "./webhook-security.js";
 export type { RoasOperands, RoasCalculationEvidence } from "./metric-evidence.js";
+export * from "./metric-comparison.js";
 export * from "./s3-object-storage.js";
 
 const identifierPattern = /^[A-Za-z0-9._:-]{1,128}$/;

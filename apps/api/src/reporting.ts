@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import { withTenant } from "@openmasu/runtime";
+import type { MetricComparisonContext } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import {
   buildDifferenceQuery,
@@ -22,7 +23,7 @@ export const metricColumns = [
   "currency", "amount_scale", "ratio_scale", "grouping",
   "rule_bundle_id", "rule_bundle_hash", "aggregation_time_zone", "computed_at",
   "reproducibility_status", "supersedes_metric_run_id", "input_ledger_position",
-  "grouping_digest", "superseded",
+  "grouping_digest", "superseded", "comparison_context",
 ] as const;
 
 export const differenceColumns = [
@@ -57,6 +58,7 @@ export type MetricReportRow = {
   readonly input_ledger_position: string;
   readonly grouping_digest: string;
   readonly superseded: boolean;
+  readonly comparison_context?: MetricComparisonContext | null;
 };
 
 export type MetricReportPage = {
@@ -102,7 +104,7 @@ export function supportsRecordCounts(query: MetricQuery): boolean {
     || query.metricNames.every((name) => recordCountMetricNames.has(name));
 }
 
-function metricRow(artifact: Any, groupingDigest: string, superseded: boolean): MetricReportRow {
+function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, comparisonContext: MetricComparisonContext | null): MetricReportRow {
   const valueState = artifact.value_state ?? "present";
   if (valueState === "present" && typeof artifact.value_unscaled !== "string") {
     throw new Error(`metric run ${artifact.metric_run_id} has no present value`);
@@ -138,6 +140,7 @@ function metricRow(artifact: Any, groupingDigest: string, superseded: boolean): 
     input_ledger_position: artifact.input_ledger_position,
     grouping_digest: groupingDigest,
     superseded,
+    comparison_context: comparisonContext,
   };
 }
 
@@ -162,7 +165,7 @@ export async function metricReport(
 ): Promise<MetricReportPage> {
   const statement = buildMetricQuery(query);
   return withTenant(pool, identity.tenantId, async (client) => {
-    const result = await client.query<{ artifact: Any; grouping_digest: string; superseded: boolean }>(
+    const result = await client.query<{ artifact: Any; grouping_digest: string; superseded: boolean; comparison_context: MetricComparisonContext | null }>(
       statement.text,
       [...statement.values],
     );
@@ -171,6 +174,7 @@ export async function metricReport(
       row.artifact,
       row.grouping_digest,
       row.superseded,
+      row.comparison_context,
     ));
     const last = rows.at(-1);
     return {

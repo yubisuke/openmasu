@@ -74,6 +74,14 @@ retain historical cost selection and withhold operands when source evidence is
 redacted or purged. Older and unsupported runs show unavailable evidence explicitly.
 This addition is outside the frozen v0.2.0 release evidence.
 
+New SQL runs also capture [comparison meaning](cohort-comparison.md) from their
+actual definition and FX policy. Supported equivalence is separate from
+internal execution IDs; gross/net, window and conversion differences stop
+ordinary deltas. Old or unsupported runs remain unknown. Declaration-only
+compatibility requires an explicit flag and is never labeled definition-backed.
+Temporal window maturity is conservative and does not prove upstream
+completeness. This addition is outside the frozen v0.2.0 release evidence.
+
 Current source also includes [readable dashboard analysis](dashboard-analysis.md):
 exact money/ratio/count labels, shareable server-rendered filters, selection-preserving
 CSV exports and separated chart groups. Audited API/CSV integers are unchanged.
