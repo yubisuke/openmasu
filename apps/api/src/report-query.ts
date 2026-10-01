@@ -343,7 +343,7 @@ export function buildMetricQuery(query: MetricQuery): ParameterizedQuery {
   }
   if (query.dateFrom) predicates.push(`${runDateExpression("mr")} >= ${push(values, query.dateFrom)}`);
   if (query.dateTo) predicates.push(`${runDateExpression("mr")} < ${push(values, query.dateTo)}`);
-  if (query.watermarkAtMost) predicates.push(`control.canonical_timestamp_value(mr.input_received_at_watermark) <= control.canonical_timestamp_value(${push(values, query.watermarkAtMost)})`);
+  if (query.watermarkAtMost) predicates.push(`control.canonical_timestamp_value(mr.input_received_at_watermark) <= ${push(values, query.watermarkAtMost)}::timestamptz`);
   if (query.supersession === "latest") {
     predicates.push(`NOT EXISTS (
       SELECT 1 FROM ledger.metric_runs AS replacement

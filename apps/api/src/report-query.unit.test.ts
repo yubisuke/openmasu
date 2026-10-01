@@ -80,7 +80,7 @@ describe("M3 typed reporting query", () => {
     for (const cutoff of ["2026-08-21T00:00:00Z", "2026-08-21T00:00:00.000Z", "2026-08-21T00:00:00.123456Z"]) {
       const query = parse(`watermark_at_most=${cutoff}`).query;
       assert.equal(query.watermarkAtMost, cutoff);
-      assert.match(buildMetricQuery(query).text, /canonical_timestamp_value\(mr\.input_received_at_watermark\) <= control\.canonical_timestamp_value\(\$\d+\)/);
+      assert.match(buildMetricQuery(query).text, /canonical_timestamp_value\(mr\.input_received_at_watermark\) <= \$\d+::timestamptz/);
     }
     rejects("watermark_at_most=2026-02-30T00:00:00Z", "watermark_invalid");
     rejects("watermark_at_most=2026-08-21T00:00:00+00:00", "watermark_invalid");
