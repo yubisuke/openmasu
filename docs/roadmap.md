@@ -47,6 +47,7 @@ Progress:
 
 | Integration gate | State |
 | --- | --- |
+| A saved ROAS result can be explained from its original operands | Implemented for elapsed-window ad-revenue ROAS: atomic aggregate evidence, reader-only JSON/HTML detail, exact rounding and history tests; legacy/unsupported/removed evidence remains explicit |
 | Metric units and analysis selections are readable without changing audited values | Implemented: exact decimal display, SSR filters and scope-preserving CSV links; chart groups stay separate; window/maturity remain explicitly unknown without readable definition evidence |
 | App ingestion and calculation observations are understandable without raw payload access | Implemented: reader-only measurement health for batches, imports, rejections and metric runs; synthetic API/role and state-rendering gates |
 | Scheduler leases cannot consume the job pool; MAX processing works with a one-connection job pool | Complete |

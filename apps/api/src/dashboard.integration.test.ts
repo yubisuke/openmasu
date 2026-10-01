@@ -416,6 +416,12 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     const csrf = /name="csrf_token" value="([^"]+)"/.exec(appHtml)?.[1];
     assert.ok(csrf);
     assert.match(appHtml, /Create a tracking link/);
+    const missingMetricPath = `/v1/admin/apps/${newAppId}/metrics/missing-synthetic-run/explanation`;
+    assert.equal((await fetch(`${baseUrl}${missingMetricPath}`, { headers: { cookie: dashboardCookie } })).status, 401);
+    assert.equal((await fetch(`${baseUrl}${missingMetricPath}`, { headers })).status, 404);
+    const missingDashboardMetric = await fetch(`${baseUrl}/dashboard/apps/${newAppId}/metrics/missing-synthetic-run/explanation`, { headers: { cookie: dashboardCookie } });
+    assert.equal(missingDashboardMetric.status, 404);
+    assert.match(await missingDashboardMetric.text(), /Metric run not found/);
     assert.match(appHtml, new RegExp(`/dashboard/apps/${newAppId}/sdk-keys`));
     assert.match(appHtml, new RegExp(`/dashboard/apps/${newAppId}/apple-registration`));
     assert.match(appHtml, /Google Data Manager delivery health/);

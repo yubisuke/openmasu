@@ -24,11 +24,12 @@ Choose **Latest runs** or **All runs including superseded** explicitly.
 - Each row retains grouping, run watermark, definition version, freshness and
   supersession evidence. Freshness does not prove cohort maturity.
 
-Window and maturity are explicitly **unknown** in this view: metric-run rows do
-not carry the complete evaluation window, and the reader role deliberately cannot
-read private replay manifests. This change does not broaden that privilege or guess
-windows from names such as `d7`. Consult the metric definition before comparing
-mature cohorts; fuller definition explanations are a separate integration task.
+The main table does not infer maturity from metric names or freshness.
+Follow **Saved run details** for [recorded ROAS operands and windows](metric-explanations.md).
+New elapsed-window ad-revenue ROAS runs record their window boundary and whether
+the watermark reached it. Legacy and unsupported runs show unavailable evidence;
+private replay manifests remain outside reader access. An elapsed window still
+does not establish complete arrival of delayed inputs.
 
 ## Charts and exports
 

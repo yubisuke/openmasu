@@ -43,6 +43,7 @@ For a complete newcomer reading path, use this order:
 - [Scheduled metric runs](scheduled-metrics.md)
 - [Measurement health and missing results](measurement-health.md)
 - [Reading and filtering dashboard metrics](dashboard-analysis.md)
+- [Explaining a saved ROAS result](metric-explanations.md)
 - [Privacy and security](privacy-security.md)
 - [Threat model](threat-model.md)
 - [Schema versioning](schema-versioning.md)

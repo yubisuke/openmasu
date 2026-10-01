@@ -32,6 +32,13 @@ tenant/app scope and statement timeouts. It returns aggregate metadata only;
 unknown rejection reasons are collapsed before leaving SQL. Retained failure
 history and observed results are not claims of current failure or completeness.
 
+Metric explanations expose only stored aggregates through tenant/app-scoped
+reader queries. Calculation evidence binds to the immutable run and snapshot;
+source lifecycle checks withhold operands after redaction or retention loss.
+Closed JSON/HTML projections exclude protected evidence references and raw IDs.
+Legacy or unsupported evidence is unavailable rather than reconstructed from
+the current ledger. Private replay-manifest grants are unchanged.
+
 <!-- threat-component:redirector -->
 **Redirector:** open redirect, destination override, slug enumeration, click
 flooding, and raw IP retention. Controls include stored destinations, HTTPS

@@ -44,6 +44,7 @@ export type RouteHandler =
   | "admin_google_delivery_health"
   | "admin_operator_delivery_health"
   | "admin_measurement_health"
+  | "admin_metric_explanation"
   | "apple_skan_postback"
   | "apple_aak_postback"
   | "google_play_rtdn"
@@ -53,6 +54,7 @@ export type RouteHandler =
   | "dashboard_login"
   | "dashboard_logout"
   | "dashboard_app"
+  | "dashboard_metric_explanation"
   | "dashboard_export"
   | "dashboard_records"
   | "dashboard_differences"
@@ -141,11 +143,13 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "admin_google_delivery_health", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/google-data-manager\/deliveries$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_operator_delivery_health", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-delivery-health$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_measurement_health", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/measurement-health$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "admin_metric_explanation", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/metrics\/[^/]+\/explanation$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "dashboard_root", method: "GET", pattern: /^\/dashboard\/?$/, auth: "public", mutates: false },
   { handler: "dashboard_css", method: "GET", pattern: /^\/dashboard\/app\.css$/, auth: "public", mutates: false },
   { handler: "dashboard_login", method: "POST", pattern: /^\/dashboard\/session$/, auth: "public", mutates: true },
   { handler: "dashboard_logout", method: "POST", pattern: /^\/dashboard\/session\/delete$/, auth: "dashboard_session", mutates: true, capability: "read" },
   { handler: "dashboard_export", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/cohorts\.csv$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_metric_explanation", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/metrics\/[^/]+\/explanation$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_records", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/records$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_differences", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/differences$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_fraud", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/fraud$/, auth: "dashboard_session", mutates: false, capability: "read" },
