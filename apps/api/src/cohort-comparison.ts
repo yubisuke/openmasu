@@ -9,13 +9,14 @@ type Conditions = Record<typeof fields[number], string>;
 type Row = { key: string; currency: string; scale: number } & ({ state: "present"; value: string } | { state: "undefined"; reason: string });
 type Provenance = { report_sha256: string; runs: { key: string; metric_run_id: string; input_snapshot_id: string }[] };
 type ContextRow = { key: string; context: MetricComparisonContext };
+type MappingProvenance = { version: 1; format: "csv"; interpretation: "operator_declared"; input_sha256: string; mapping_sha256: string; row_count: number };
 export type ComparisonAcquisition = {
   version: 1; state: "complete"; method: "postgres_repeatable_read";
   scope: { tenant_id: string; app_id: string };
   filters: { metric_definition_version: string | null; grouping: Partial<Record<GroupingDimension, string>> };
   row_count: number; selection_sha256: string; query_sha256: string; upstream_completeness: "unknown";
 };
-type Snapshot = { source: string; conditions: Conditions; rows: Row[]; provenance?: Provenance; comparison_contexts?: ContextRow[]; acquisition?: ComparisonAcquisition };
+type Snapshot = { source: string; conditions: Conditions; rows: Row[]; provenance?: Provenance; comparison_contexts?: ContextRow[]; acquisition?: ComparisonAcquisition; mapping_provenance?: MappingProvenance };
 export const comparisonDigest = (value: unknown) => createHash("sha256").update(jcs(value)).digest("hex");
 function object(v: unknown): asserts v is Record<string, unknown> {
   if (!v || typeof v !== "object" || Array.isArray(v)) throw Error("expected_object");
@@ -59,7 +60,7 @@ export function parseComparisonContext(value: unknown): MetricComparisonContext 
   return structuredClone(value) as MetricComparisonContext;
 }
 export function parseSnapshot(input: unknown): Snapshot {
-  object(input); keys(input, ["source", "conditions", "rows", ...("provenance" in input ? ["provenance"] : []), ...("comparison_contexts" in input ? ["comparison_contexts"] : []), ...("acquisition" in input ? ["acquisition"] : [])]); text(input.source);
+  object(input); keys(input, ["source", "conditions", "rows", ...("provenance" in input ? ["provenance"] : []), ...("comparison_contexts" in input ? ["comparison_contexts"] : []), ...("acquisition" in input ? ["acquisition"] : []), ...("mapping_provenance" in input ? ["mapping_provenance"] : [])]); text(input.source);
   object(input.conditions); keys(input.conditions, fields);
   for (const key of fields) text(input.conditions[key]);
   const c = { ...input.conditions } as Conditions;
@@ -134,7 +135,17 @@ export function parseSnapshot(input: unknown): Snapshot {
         || a.query_sha256 !== comparisonDigest({ scope: a.scope, filters: a.filters, conditions: c })) throw Error("acquisition_digest_mismatch");
     acquisition = structuredClone(a) as ComparisonAcquisition;
   }
-  return { source: input.source, conditions: { ...c }, rows: [...input.rows].sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0), ...(provenance ? { provenance } : {}), ...(contexts ? { comparison_contexts: contexts } : {}), ...(acquisition ? { acquisition } : {}) } as Snapshot;
+  let mappingProvenance: MappingProvenance | undefined;
+  if ("mapping_provenance" in input) {
+    const p = input.mapping_provenance; object(p);
+    keys(p, ["version", "format", "interpretation", "input_sha256", "mapping_sha256", "row_count"]);
+    if (p.version !== 1 || p.format !== "csv" || p.interpretation !== "operator_declared" || p.row_count !== input.rows.length
+        || typeof p.input_sha256 !== "string" || !/^[a-f0-9]{64}$/.test(p.input_sha256)
+        || typeof p.mapping_sha256 !== "string" || !/^[a-f0-9]{64}$/.test(p.mapping_sha256)
+        || provenance || contexts || acquisition) throw Error("invalid_mapping_provenance");
+    mappingProvenance = structuredClone(p) as MappingProvenance;
+  }
+  return { source: input.source, conditions: { ...c }, rows: [...input.rows].sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0), ...(provenance ? { provenance } : {}), ...(contexts ? { comparison_contexts: contexts } : {}), ...(acquisition ? { acquisition } : {}), ...(mappingProvenance ? { mapping_provenance: mappingProvenance } : {}) } as Snapshot;
 }
 type Assurance = { acquisition: { state: "complete" | "not_recorded"; row_count: number; upstream_completeness: "unknown" }; conditions: Record<string, { state: "declared" | "definition_backed" | "unknown"; value: string | null }>;
   meaning: "definition_backed" | "unknown"; missing: string[]; execution: { definition_digest: string; rule_bundle_id: string; rule_bundle_version: string; rule_bundle_hash: string; fx_policy_version: string; fx_digest: string; metric_run_id: string; input_snapshot_id: string }[] };

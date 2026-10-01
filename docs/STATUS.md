@@ -88,8 +88,11 @@ CLI share a pure converter. A repeatable-read transaction fixes scope and runs
 across pages; a receipt records selected count/digests and acquisition completion.
 Bounds, interruption, privacy/retention and missing/mismatched conditions are
 refused without a partial file. Unknown meaning and upstream completeness are
-retained, not approved by downloading. Neutral aggregate CSV conversion and
-the integrated first-use journey remain next. This is later-source work,
+retained, not approved by downloading. Neutral aggregate CSV conversion now
+maps explicit columns/units/undefined states into canonical comparison keys
+offline with input/mapping digests and value-free error codes. It does not
+invent saved definitions or certify external calculation equivalence.
+The integrated first-use journey remains next. This is later-source work,
 not evidence for the frozen v0.2.0 release.
 
 Current source also includes [readable dashboard analysis](dashboard-analysis.md):

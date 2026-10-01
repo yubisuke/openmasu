@@ -202,6 +202,87 @@ No persistent export snapshot, temporary server file, database or service is
 added. Keep the downloaded file to reproduce its exact original selection;
 a later fresh download can legitimately differ after a committed revision.
 
+## Convert an aggregate CSV offline
+
+`npm run --silent snapshot:report -- --csv aggregate.csv mapping.json > external.json`
+converts **one aggregate CSV format**, not raw events. It never opens a database,
+submits events, or calls a provider. Keep the CSV, mapping and result outside
+this public repository. The raw-event mapping DSL and importer serve a different
+purpose; do not use this command to insert ledger evidence.
+
+The explicit mapping has this shape (all values below are synthetic):
+
+```json
+{
+  "version": 1,
+  "source": "operator-declared-aggregate",
+  "conditions": {
+    "date_from": "2026-01-01", "date_to": "2026-01-02", "time_zone": "UTC",
+    "maturity": "operator-declared-window", "aggregation": "cumulative",
+    "attribution_scope": "organic", "metric_definition": "revenue_d7@v1",
+    "source_cutoff": "2026-01-10T00:00:00.000Z"
+  },
+  "grouping": {
+    "cohort_date": { "column": "day" },
+    "country": { "column": "country" },
+    "attribution_status": { "constant": "organic" }
+  },
+  "value": {
+    "column": "amount", "input": "decimal", "scale": 2,
+    "currency": { "constant": "USD" },
+    "undefined": { "marker": "", "reason": { "constant": "empty_cohort" } }
+  }
+}
+```
+
+For that mapping the columns are `day,country,amount`; a synthetic row is
+`2026-01-01,JP,1.23`. No column names or calculation semantics are inferred.
+Bindings use exactly one `column` or `constant`. Header names are trimmed and
+must be unique and nonempty. CSV quoting supports commas, doubled quotes and
+embedded newlines; malformed quotes and record widths are refused. Row numbers
+are logical CSV records, including the header as record 1, not physical lines.
+UTF-8 input must be valid. Unmapped columns are ignored and are never copied to
+output; do not put identifiers in the grouping.
+
+`grouping` uses the existing closed report dimensions. Choose exactly one of
+`cohort_date` and `metric_date`; all dates and attribution statuses must agree
+with the declared half-open conditions. Other optional dimensions can use
+`{"column":"optional_campaign","omit_if_empty":true}` to omit an empty cell.
+Dates and attribution status cannot use omission. A missing column is an error,
+not a missing row. Duplicate canonical groupings are rejected, never summed.
+
+`integer` means an already unscaled signed base-10 integer. `decimal` converts
+an exact signed base-10 decimal at the declared scale, reusing the strict money
+conversion; exponent notation and any fractional digits beyond the scale are
+rejected without rounding. Leading zeros and negative zero normalize to exact
+integers. Scale is 0-18 and unscaled values are at most 100 digits. Use an
+explicit uppercase currency for money, or `none` for ratios/counts (counts use
+scale 0). A currency may also come from an explicitly named column. Units are
+declarations, not inferred from a metric name. Raw-cost imports remain
+non-negative; this aggregate converter allows signed corrected aggregates.
+
+Only the exact configured `undefined.marker` produces an undefined row, whose
+reason may be a constant or column. Without that declaration, an empty amount
+is rejected. A literal zero remains a present zero. Absent groupings remain
+missing; the converter creates no calendar fillers or population totals.
+Limits are 4 MiB input/output and 10,000 rows. No partial snapshot is printed
+on failure. Error output is JSON containing only a constant `code` and
+`row_number` (or `null` for a file/mapping error), never source values, column
+names, file paths or an exception stack.
+
+The result uses the ordinary canonical JSON grouping keys and retains normalized
+conditions and values. `mapping_provenance` contains the exact input-byte hash,
+normalized mapping hash, row count and `interpretation=operator_declared`.
+Retain the original mapping and input to reproduce it. Neither those hashes nor
+successful conversion establish completeness or equivalent implementation.
+No database-acquisition receipt, saved-run provenance, or definition-backed
+context is invented. The ordinary comparison therefore remains `incomparable`
+against an input without established meaning. The existing `--declared` flag
+can compare two intentionally declaration-only snapshots and labels the JSON
+and HTML `declared_comparison`; it cannot bypass captured runtime contexts.
+An external aggregate does not become a verified comparison merely by sharing
+a definition label with OpenMasu.
+
 ## Human-readable report
 
 Use `npm run --silent compare:cohorts -- --html left.json right.json > comparison.html`

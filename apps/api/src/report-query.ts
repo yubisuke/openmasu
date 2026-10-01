@@ -195,7 +195,7 @@ export function encodeRecordCountCursor(cursor: RecordCountCursor): string {
   return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
 }
 
-function validateGrouping(dimension: GroupingDimension, value: string): void {
+export function validateGrouping(dimension: GroupingDimension, value: string): void {
   const valid = dimension === "country"
     ? /^[A-Z]{2}$/.test(value)
     : dimension === "cohort_date" || dimension === "metric_date"
