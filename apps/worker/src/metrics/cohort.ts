@@ -750,7 +750,8 @@ async function metricValue(
             END::text AS value_unscaled,
             missing_fx_count::text,
             mismatched_currency_count::text AS mismatched_cost_currency_count,
-            revenue_value::text, cost_value::text, revenue_event_count::text,
+            trim_scale(revenue_value)::text AS revenue_value,
+            trim_scale(cost_value)::text AS cost_value, revenue_event_count::text,
             cost_row_count::text, cohort_size::text, last_window_end, window_elapsed
      FROM values`,
     [
