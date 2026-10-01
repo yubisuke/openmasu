@@ -14,6 +14,7 @@ import { dashboardCss } from "./dashboard/css.js";
 import { escapeHtml, renderDashboard } from "./dashboard/render.js";
 import { buildDashboardView } from "./dashboard/view.js";
 import { metricExplanation } from "./metric-explanation.js";
+import { comparisonExport, ComparisonExportError } from "./comparison-export.js";
 import { renderMetricExplanation } from "./dashboard/metric-explanation.js";
 import { dashboardReportParams } from "./dashboard/report-controls.js";
 import { receiveMax, type MaxReceiverConfig } from "./max-receiver.js";
@@ -495,7 +496,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
       }
 
       if ([
-        "dashboard_app", "dashboard_metric_explanation", "dashboard_export", "dashboard_records", "dashboard_differences", "dashboard_fraud",
+        "dashboard_app", "dashboard_metric_explanation", "dashboard_export", "dashboard_comparison_export", "dashboard_records", "dashboard_differences", "dashboard_fraud",
         "dashboard_tracking_links_list", "dashboard_tracking_links_create", "dashboard_tracking_link_transition",
         "dashboard_sdk_keys_issue", "dashboard_sdk_keys_retire",
         "dashboard_server_keys_issue", "dashboard_server_keys_retire", "dashboard_link_domain",
@@ -892,6 +893,15 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             return;
           }
           const params = dashboardReportParams(target.searchParams);
+          let declaredAggregation: string | undefined;
+          if (route.handler === "dashboard_comparison_export") {
+            const declarations = params.getAll("comparison_aggregation");
+            if (declarations.length > 1 || (declarations.length === 1 && !["", "cumulative", "on_day"].includes(declarations[0]))) {
+              throw new ComparisonExportError("comparison_aggregation_invalid");
+            }
+            declaredAggregation = declarations[0] || undefined;
+            params.delete("comparison_aggregation");
+          }
           if (route.handler === "dashboard_export") {
             params.set("format", "csv");
             params.set("export", "true");
@@ -922,6 +932,15 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
               "x-content-type-options": "nosniff",
             });
             response.end(encoded.body);
+            return;
+          }
+          if (route.handler === "dashboard_comparison_export") {
+            const page = await metricReport(dependencies.readerPool, appIdentity, parsed.query);
+            const body = comparisonExport(page, parsed.query, declaredAggregation);
+            response.writeHead(200, { ...dashboardHeaders, "content-type": "application/json; charset=utf-8",
+              "content-disposition": 'attachment; filename="openmasu-comparison.json"',
+              "content-length": Buffer.byteLength(body, "utf8") });
+            response.end(body);
             return;
           }
 
@@ -969,7 +988,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
         } catch (error) {
           if (error instanceof AppNotFoundError) {
             dashboardHtml(response, 404, "<!doctype html><html lang=\"en\"><body><h1>App not found</h1></body></html>");
-          } else if (error instanceof ReportQueryError || (error instanceof Error && error.message === "watermark_required")) {
+          } else if (error instanceof ReportQueryError || error instanceof ComparisonExportError || (error instanceof Error && error.message === "watermark_required")) {
             dashboardHtml(response, 400, `<!doctype html><html lang="en"><body><h1>Invalid filter</h1><p>${escapeHtml(error.message)}</p></body></html>`);
           } else {
             throw error;

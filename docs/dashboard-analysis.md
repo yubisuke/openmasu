@@ -47,6 +47,14 @@ unscaled integers, scales and run IDs—not formatted labels. A result over the
 configured limit is rejected. This is a fresh read of matching persisted runs,
 not a frozen cross-request snapshot; later supersessions may change the selection.
 
+**Save comparison JSON** preserves the current filters and explicit watermark
+and uses the same pure converter as the offline CLI. It accepts one metric and
+one complete bounded latest-run selection, not an unfinished page. Supported
+meaning/maturity are taken from the saved definition; legacy or unsupported
+meaning stays unknown. See [Cohort comparison](cohort-comparison.md#save-from-the-dashboard)
+for required conditions and refusal behavior. A download is not proof of
+comparability or complete upstream arrival.
+
 The interface remains server-rendered HTML without JavaScript or new dependencies.
 Synthetic unit tests cover formatting, filter round trips and chart separation;
 the existing eight-case database consistency gate also compares selected CSV rows.

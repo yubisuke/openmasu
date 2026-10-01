@@ -71,7 +71,7 @@ export class ReportQueryError extends Error {
 const metricNamePattern = /^[a-z][a-z0-9_]{2,127}$/;
 const identifierPattern = /^[A-Za-z0-9._:-]{1,128}$/;
 const digestPattern = /^[0-9a-f]{64}$/;
-const canonicalTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const canonicalTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/;
 const differenceReasonPattern = /^[a-z][a-z0-9_]{2,127}$/;
 const selectionSequencePattern = /^(0|[1-9]\d{0,18})$/;
 const groupingKeyPrefix = "grouping_";
@@ -101,7 +101,7 @@ function canonicalDate(value: string): boolean {
 function canonicalTimestamp(value: string): boolean {
   return canonicalTimestampPattern.test(value)
     && !Number.isNaN(new Date(value).valueOf())
-    && new Date(value).toISOString() === value;
+    && new Date(value).toISOString().slice(0, 19) === value.slice(0, 19);
 }
 
 function one(params: URLSearchParams, key: string): string | undefined {
@@ -343,7 +343,7 @@ export function buildMetricQuery(query: MetricQuery): ParameterizedQuery {
   }
   if (query.dateFrom) predicates.push(`${runDateExpression("mr")} >= ${push(values, query.dateFrom)}`);
   if (query.dateTo) predicates.push(`${runDateExpression("mr")} < ${push(values, query.dateTo)}`);
-  if (query.watermarkAtMost) predicates.push(`mr.input_received_at_watermark <= ${push(values, query.watermarkAtMost)}`);
+  if (query.watermarkAtMost) predicates.push(`control.canonical_timestamp_value(mr.input_received_at_watermark) <= ${push(values, query.watermarkAtMost)}::timestamptz`);
   if (query.supersession === "latest") {
     predicates.push(`NOT EXISTS (
       SELECT 1 FROM ledger.metric_runs AS replacement

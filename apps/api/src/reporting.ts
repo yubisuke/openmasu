@@ -255,7 +255,7 @@ export async function recordCounts(
   const basePredicates = [
     "logical.tenant_id=$1",
     "logical.app_id=$2",
-    "raw.received_at <= $3",
+    "raw.received_at_ts <= $3::timestamptz",
     "raw.payload_lifecycle_status='available'",
   ];
   const eventPredicates: string[] = [];

@@ -13,6 +13,8 @@ import type { Pool } from "pg";
 import { ingestFixture } from "./ingestion.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
 import { sha256 } from "@openmasu/attribution-core";
+import { compareSnapshots, parseSnapshot } from "../../api/src/cohort-comparison.js";
+import { renderComparison } from "../../api/src/dashboard/comparison-report.js";
 
 type Any = Record<string, any>;
 const adminKey = "synthetic-report-admin-key-000000000000000000000001";
@@ -191,6 +193,54 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
         : typeof expected === "object" ? JSON.stringify(expected) : String(expected);
       assert.equal(csvSelected[column], expectedText, `CSV mismatch for ${column}`);
     }
+  });
+
+  it("saves a dashboard comparison through reader scope without GET writes or incomplete downloads", async () => {
+    await withTenant(appPool, "tenant-synthetic-other", async client => client.query(
+      "INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ('tenant-synthetic-other','app-synthetic-other','2026-08-01T00:00:00.000Z') ON CONFLICT DO NOTHING"));
+    const login = await fetch(`${baseUrl}/dashboard/session`, {
+      method: "POST", redirect: "manual", headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ admin_key: adminKey }),
+    });
+    assert.equal(login.status, 303);
+    const cookie = (login.headers.get("set-cookie") ?? "").split(";", 1)[0];
+    assert.ok(cookie);
+    const filters = "metric_name=d1_roas&date_from=2026-08-01&date_to=2026-08-02&grouping_attribution_status=non_organic&watermark_at_most=2026-08-09T00%3A00%3A00Z";
+    const endpoint = `${baseUrl}/dashboard/apps/app-a/comparison.json?${filters}`;
+    const counts = async () => withTenant(appPool, "tenant-a", async client => (await client.query(`SELECT
+      (SELECT count(*) FROM ledger.audit_logs)::text AS audits,
+      (SELECT count(*) FROM ledger.raw_records)::text AS raw,
+      (SELECT count(*) FROM ledger.event_deliveries)::text AS deliveries,
+      (SELECT count(*) FROM ledger.metric_runs)::text AS metrics,
+      (SELECT count(*) FROM ephemeral.dashboard_sessions)::text AS sessions`)).rows[0]);
+    const beforeCounts = await counts();
+    const selected = await fetch(`${baseUrl}/dashboard/apps/app-a?${filters}`, { headers: { cookie } });
+    assert.equal(selected.status, 200);
+    assert.match(await selected.text(), /Save comparison JSON/);
+    const saved = await fetch(endpoint, { headers: { cookie } });
+    assert.equal(saved.status, 200);
+    assert.equal(saved.headers.get("content-disposition"), 'attachment; filename="openmasu-comparison.json"');
+    assert.equal(saved.headers.get("cache-control"), "no-store");
+    const body = await saved.text(), snapshot = parseSnapshot(JSON.parse(body));
+    assert.equal(snapshot.rows.length, 1);
+    const compared = compareSnapshots(snapshot, snapshot);
+    assert.equal(compared.status, "compared"); assert.equal(compared.rows[0].status, "equal");
+    assert.match(renderComparison(compared), /definition_backed/);
+    const equivalentCutoff = await fetch(endpoint.replace("00Z", "00.000000Z"), { headers: { cookie } });
+    assert.equal(equivalentCutoff.status, 200); assert.equal(await equivalentCutoff.text(), body);
+    assert.equal((await fetch(endpoint)).status, 401);
+    assert.equal((await fetch(endpoint, { headers: { authorization: `Bearer ${adminKey}` } })).status, 401);
+    assert.equal((await fetch(`${baseUrl}/v1/reports/metrics?app_id=app-a`, { headers: { cookie } })).status, 401);
+    assert.equal((await fetch(endpoint.replace("/app-a/", "/unknown-app/"), { headers: { cookie } })).status, 404);
+    assert.equal((await fetch(endpoint.replace("/app-a/", "/app-synthetic-other/"), { headers: { cookie } })).status, 404);
+    for (const bad of ["", `${filters}&limit=1&metric_name=d3_roas`, `${filters}&comparison_aggregation=invalid`,
+      filters.replace("non_organic", "organic").replace("d1_roas", "missing_metric"),
+      filters.replace("grouping_attribution_status=non_organic&", "") + "&limit=1"]) {
+      const failure = await fetch(`${baseUrl}/dashboard/apps/app-a/comparison.json?${bad}`, { headers: { cookie } });
+      assert.equal(failure.status, 400, bad);
+      assert.equal(failure.headers.get("content-disposition"), null);
+    }
+    assert.deepEqual(await counts(), beforeCounts, "dashboard GET, including refusal, must not write any ledger or session state");
   });
 
   it("B8 exports undefined ROAS as absent value plus reason", async () => {

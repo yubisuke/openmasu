@@ -44,6 +44,7 @@ versions were reached. They do not override current sources of truth.
 | Measurement visibility | Reader-only app health connects existing ingestion, rejection and metric metadata to operator next steps | Synthetic API/role isolation and read-only DB checks plus state/rendering unit tests; no live completeness claim |
 | Saved ROAS explanation | Elapsed-window ad-revenue ROAS records its operands with the original run and exposes aggregate details | SQL parity, exact operands/rounding, duplicate delivery, selected cost history, missing/redacted evidence and reader scope; no historical reconstruction |
 | Comparison semantics | New SQL runs save aggregate-only definition/FX context; the offline comparison distinguishes definition-backed meaning, declarations and unknowns | Original-run persistence/reader export, equivalent meaning across different IDs, gross/net/window/FX mismatches, legacy refusal and exact integer arithmetic; no provider authentication or completeness claim |
+| Dashboard comparison download | A complete bounded current selection can be saved through the existing session and reader role using the shared pure converter | Synthetic screen/download/CLI-HTML flow, incomplete/condition refusal, cross-tenant/auth isolation and GET no-write checks; fixed cross-page acquisition remains next |
 | Worker database safety | Complete: separate scheduler/job pools and short transaction phases | Scheduler and MAX inbox integration tests at a one-connection pool limit |
 | SDK queue parity | Complete: one duplicate/conflict policy across Android and iOS | Shared semantic vectors plus each platform's native gate |
 | Apple current-spec compatibility | Complete: accept and separately report aggregate AdAttributionKit re-engagement while preserving install and device-level boundaries | Signed synthetic receiver test, reviewed fixture parity, SQL/reference parity, and macOS SDK gate |
@@ -67,10 +68,12 @@ versions were reached. They do not override current sources of truth.
 
 The product slices are defined in the roadmap: offline same-cohort
 comparison, saved-run/report integration, and durable cost refresh, in that
-order. The offline [comparison CLI](cohort-comparison.md) is implemented with synthetic tests; runtime integration remains next. The [comparison requirements](integrations/mmp-landscape.md) record the
+order. The offline [comparison CLI](cohort-comparison.md), saved-run meaning
+and bounded dashboard download are implemented with synthetic tests. The [comparison requirements](integrations/mmp-landscape.md) record the
 intended behavior and synthetic acceptance scope. The CLI also emits a static
 HTML report and converts saved report JSON with run provenance. Direct
-database/dashboard integration and durable cost refresh remain planned.
+fixed-selection cross-page acquisition, neutral aggregate CSV conversion and
+durable cost refresh remain planned.
 
 ## Change acceptance
 
