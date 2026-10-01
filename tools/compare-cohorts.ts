@@ -26,6 +26,12 @@ function text(v: unknown): asserts v is string {
 function date(v: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || !Number.isFinite(Date.parse(v)) || new Date(v).toISOString().slice(0, 10) !== v) throw Error("invalid_date");
 }
+/** Preserve contract microsecond precision while equating zero-fraction spellings. */
+export function canonicalComparisonCutoff(value: string): string {
+  const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?Z$/.exec(value);
+  if (!match || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 19) !== match[1]) throw Error("invalid_cutoff");
+  return `${match[1]}.${(match[2] ?? "").padEnd(6, "0")}Z`;
+}
 function scale(v: unknown): asserts v is number {
   if (!Number.isInteger(v) || Number(v) < 0 || Number(v) > 18) throw Error("invalid_scale");
 }
@@ -53,12 +59,12 @@ export function parseSnapshot(input: unknown): Snapshot {
   object(input); keys(input, ["source", "conditions", "rows", ...("provenance" in input ? ["provenance"] : []), ...("comparison_contexts" in input ? ["comparison_contexts"] : [])]); text(input.source);
   object(input.conditions); keys(input.conditions, fields);
   for (const key of fields) text(input.conditions[key]);
-  const c = input.conditions as Conditions;
+  const c = { ...input.conditions } as Conditions;
   date(c.date_from); date(c.date_to);
   if (c.date_from >= c.date_to) throw Error("invalid_range");
   new Intl.DateTimeFormat("en", { timeZone: c.time_zone });
   if (!["cumulative", "on_day"].includes(c.aggregation)) throw Error("invalid_aggregation");
-  if (!Number.isFinite(Date.parse(c.source_cutoff)) || new Date(c.source_cutoff).toISOString() !== c.source_cutoff) throw Error("invalid_cutoff");
+  c.source_cutoff = canonicalComparisonCutoff(c.source_cutoff);
   if (!Array.isArray(input.rows) || input.rows.length > 10000) throw Error("invalid_rows");
   const seen = new Set<string>();
   for (const r of input.rows) {

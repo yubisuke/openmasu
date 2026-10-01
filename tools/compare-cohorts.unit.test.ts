@@ -1,7 +1,7 @@
 import { it } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { compareSnapshots, parseSnapshot } from "./compare-cohorts.js";
+import { compareSnapshots, parseSnapshot, canonicalComparisonCutoff } from "./compare-cohorts.js";
 import { M1B_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { captureMetricComparisonContext } from "@openmasu/runtime";
 import { sha256, jcs } from "@openmasu/attribution-core";
@@ -69,6 +69,15 @@ it("never promotes declaration-only input to definition-backed comparison", () =
   assert.equal(result.assurance.left.meaning, "unknown");
   assert.equal(result.assurance.left.conditions.date_from.state, "declared");
   assert.equal(declared(snapshot(), snapshot()).status, "declared_comparison");
+});
+it("accepts contract timestamp spellings without truncating microseconds or mutating input", () => {
+  const a = snapshot(); a.conditions.source_cutoff = "2026-01-10T00:00:00Z";
+  assert.equal(declared(a, snapshot()).status, "declared_comparison");
+  assert.equal(a.conditions.source_cutoff, "2026-01-10T00:00:00Z");
+  assert.equal(canonicalComparisonCutoff("2026-01-10T00:00:00.000001Z"), "2026-01-10T00:00:00.000001Z");
+  const b = snapshot(); b.conditions.source_cutoff = "2026-01-10T00:00:00.000001Z";
+  assert.equal(declared(a, b).status, "incomparable");
+  assert.throws(() => canonicalComparisonCutoff("2026-02-30T00:00:00Z"));
 });
 it("detects same-name differences in gross/net, window, FX and rounding precision", () => {
   const a = backed();

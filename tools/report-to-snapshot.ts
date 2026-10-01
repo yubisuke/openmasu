@@ -3,7 +3,7 @@ import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { jcs } from "@openmasu/attribution-core";
-import { parseSnapshot, parseComparisonContext, snapshotAssurance } from "./compare-cohorts.js";
+import { parseSnapshot, parseComparisonContext, snapshotAssurance, canonicalComparisonCutoff } from "./compare-cohorts.js";
 import type { MetricComparisonContext } from "@openmasu/runtime";
 
 function object(v: unknown): asserts v is Record<string, unknown> {
@@ -23,7 +23,7 @@ export function reportToSnapshot(report: unknown, template: unknown) {
     if (typeof r.metric_run_id !== "string" || ids.has(r.metric_run_id)) throw Error("duplicate_or_invalid_run");
     ids.add(r.metric_run_id);
     if (typeof r.metric_name !== "string" || typeof r.metric_definition_version !== "string" || `${r.metric_name}@${r.metric_definition_version}` !== base.conditions.metric_definition) throw Error("definition_mismatch");
-    if (r.input_received_at_watermark !== base.conditions.source_cutoff || r.aggregation_time_zone !== base.conditions.time_zone) throw Error("time_boundary_mismatch");
+    if (typeof r.input_received_at_watermark !== "string" || canonicalComparisonCutoff(r.input_received_at_watermark) !== base.conditions.source_cutoff || r.aggregation_time_zone !== base.conditions.time_zone) throw Error("time_boundary_mismatch");
     if (r.superseded !== false || r.reproducibility_status !== "fully_reproducible") throw Error("historical_or_affected_run");
     const context = r.comparison_context == null ? undefined : parseComparisonContext(r.comparison_context);
     object(r.grouping);

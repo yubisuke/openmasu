@@ -106,15 +106,15 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
     const identity = { keyId: "synthetic", role: "read_only" as const, tenantId: input.server_context.tenant_id, appId: input.server_context.app_id };
     try {
       const page = await metricReport(reader, identity, { tenantId: identity.tenantId, appId: identity.appId,
-        metricNames: ["d7_roas"], supersession: "latest", limit: 200 });
-      const row = page.data.find(r => r.metric_run_id === "run-33:d7_roas")!;
+        metricNames: ["d1_roas"], supersession: "latest", limit: 200 });
+      const row = page.data.find(r => r.metric_run_id === "run-33:d1_roas")!;
       assert.ok(row.comparison_context);
-      assert.equal(row.comparison_context.definition_digest, sha256(input.metric_definitions.find((d: Any) => d.metric_name === "d7_roas")));
+      assert.equal(row.comparison_context.definition_digest, sha256(input.metric_definitions.find((d: Any) => d.metric_name === row.metric_name)));
       assert.equal(row.comparison_context.fx.policy_version, input.fx_policy.policy_version);
       assert.equal(row.comparison_context.input_snapshot_id, row.input_snapshot_id);
       const snapshot = reportToSnapshot({ data: [row] }, { source: "synthetic-sql", conditions: {
         date_from: "2026-08-01", date_to: "2026-08-02", time_zone: "UTC", maturity: "operator-not-verified",
-        aggregation: "cumulative", attribution_scope: "non_organic", metric_definition: "d7_roas@0.3",
+        aggregation: "cumulative", attribution_scope: "non_organic", metric_definition: `${row.metric_name}@${row.metric_definition_version}`,
         source_cutoff: row.input_received_at_watermark }, rows: [] });
       const comparison = compareSnapshots(snapshot, snapshot);
       assert.equal(comparison.status, "compared"); assert.equal(comparison.rows[0].status, "equal");
@@ -122,7 +122,7 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
       assert.equal(jcs(compareSnapshots(snapshot, snapshot)), jcs(comparison));
       assert.doesNotMatch(JSON.stringify(row.comparison_context), /installation_id|record_id|evidence_refs|raw_payload|protected:|provider-click/);
       assert.deepEqual((await metricReport(reader, { ...identity, tenantId: "tenant-other" }, {
-        tenantId: "tenant-other", appId: identity.appId, metricNames: ["d7_roas"], supersession: "latest", limit: 200 })).data, []);
+        tenantId: "tenant-other", appId: identity.appId, metricNames: ["d1_roas"], supersession: "latest", limit: 200 })).data, []);
     } finally { await reader.end(); }
   });
 

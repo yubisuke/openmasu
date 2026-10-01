@@ -33,8 +33,10 @@ That result is labeled `declared_comparison`, never `compared` or verified.
 All eight declarations must match in this compatibility mode. `--declared`
 cannot bypass a missing or incompatible context on a definition-backed input.
 
-Date ranges are half-open. Cutoffs use canonical UTC timestamps including
-milliseconds. Coordinate attribution and row-key conventions beforehand.
+Date ranges are half-open. Cutoffs use the contract's UTC timestamp syntax,
+with zero to six fractional digits. Comparison normalizes to six digits without
+truncating microseconds; equivalent zero-fraction spellings match. Coordinate
+attribution and row-key conventions beforehand.
 Aggregation is `cumulative` or `on_day`. Currency is an uppercase three-letter
 code, or `none` for non-monetary metrics. Scale is 0 through 18.
 
@@ -101,9 +103,11 @@ Temporal maturity is conservative: for a cohort date, use its exclusive end
 in the definition's time zone plus the complete elapsed/activity window. This
 allows an install anywhere within that date and never guesses an install time.
 Daily count/cohort-size maturity uses the date's exclusive end. Compare that
-bound with the saved receive watermark to report `window_elapsed` or
-`window_open`. It is not inferred from `data_freshness`, nor does an elapsed
-window imply complete upstream delivery. Mixed/open-ended maturity is unknown.
+bound with the saved receive watermark to establish `window_elapsed`. Before
+that bound, maturity is unknown: this does not prove the actual cohort remains
+open, because its observed installs may have occurred earlier. It is not
+inferred from `data_freshness`, nor does an elapsed window imply complete
+upstream delivery. Mixed/open-ended maturity is unknown.
 
 ## Convert a saved metric report
 
