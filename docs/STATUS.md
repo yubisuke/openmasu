@@ -20,9 +20,9 @@ they name.
 | `v0.2.0-rc.4` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Previously published prerelease and frozen exact-commit evidence |
 | `v0.2.0` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Published non-prerelease at green commit `68b8c48`; frozen exact-commit evidence |
 | `v0.3.0-rc.1` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Current published prerelease at green commit `90a0f5f`; eight SDK assets and exact-commit synthetic evidence |
-| Current development source | through v0.4.16 | 63 fixtures / 819 golden artifacts | Adds selected acquisition, safe cost denominators, commerce cohorts, explicit custom conversion and opt-in targeted refund cancellation; not included in the published SDK release |
+| Current development source | through v0.4.17 | 64 fixtures / 832 golden artifacts | Adds selected acquisition, safe cost denominators, commerce cohorts, explicit custom conversion and opt-in targeted refund cancellation; not included in the published SDK release |
 
-The Contract wire and package identity remains `0.4.0`; v0.4.16 is the latest
+The Contract wire and package identity remains `0.4.0`; v0.4.17 is the latest
 additive patch ledger entry. The published SDK version is `0.3.0-rc.1`.
 Its [distribution guide](sdk-distribution.md) separates compiled Android
 modules from source-distributed Swift and Unity. Publication has a matching
@@ -51,7 +51,7 @@ MMP.
 
 | Capability | Repository state | Open operational evidence |
 | --- | --- | --- |
-| Contract and deterministic evaluator | Implemented and synthetically verified across 28 schemas, 8 registries, 63 fixtures, and 819 goldens | Real input representativeness and external implementation adoption |
+| Contract and deterministic evaluator | Implemented and synthetically verified across 28 schemas, 8 registries, 64 fixtures, and 832 goldens | Real input representativeness and external implementation adoption |
 | Shadow ledger and imports | Implemented for raw events, manual/bounded provider cost, and advertising or verified-commerce revenue | Authorized real export compatibility, account permissions, completeness, latency, and reconciliation |
 | Server-to-server events | Implemented for selected first-party backend events with app-scoped rotatable HMAC keys, durable inbox admission, contract rejection, replay controls, and deletion-race enforcement | Production TLS, secret custody, sustained load, backend integration, and operator acceptance |
 | Operator event webhooks | Implemented as a default-off, app-scoped export of selected accepted events with exact-origin egress policy, destination-scoped references, exact-body HMAC, durable retry, deletion-race enforcement, and bounded reader-safe delivery health | Production receiver, DNS/TLS, capacity, alerting, secret custody, downstream retention/deletion, and operator acceptance |
@@ -240,7 +240,10 @@ calculation, creative cost input and an explicit CLI example. API/HTML/CSV
 filters, explicit schedules and bounded cost/late-input corrections preserve
 that grain and saved history; there is no automatic creative discovery or
 estimated allocation of parent cost. Separate re-engagement
-outcomes (#188) are still a follow-up. An additive contract and opt-in metric
+outcomes (#188) have an opt-in v0.4.17 latest-open 24h contract and reference/SQL
+calculation; the CLI, schedules and separate dashboard workflow remain in progress.
+The [policy guide](engagement-outcomes.md) records the device-reported trust
+boundary and lack of ROAS/purchase/cross-device claims. An additive contract and opt-in metric
 profile now link a cancellation to its previously admitted refund, preserving
 old definitions and saved runs. The verified App Store worker connects a
 uniquely identified prior refund to this profile and the existing late-correction
@@ -253,7 +256,7 @@ uniqueness, old evidence, exact replay and explicit-only supersession
 numerator now uses that metric's selected and fraud-filtered cohort, matching
 Python/SQL rather than counting a different population
 ([#202](https://github.com/yubisuke/openmasu/issues/202)). Neither fix rewrites
-old saved runs. Two scoped follow-up slices remain incomplete. Existing
+old saved runs. The re-engagement operational connection remains incomplete. Existing
 component evidence and the published v0.3.0-rc.1 record remain unchanged;
 neither proves these remaining connections.
 

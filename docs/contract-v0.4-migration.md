@@ -175,7 +175,38 @@ Runtime SQL additionally covers boundary, duplicate, late, privacy, native
 selected-campaign and gross/net inputs, and saves the key in replay/comparison
 context. Earlier tagged release evidence is not reissued by this source patch.
 
+## Separate first-party engagement outcomes (0.4.17)
+
+Optional metric-definition `engagement_credit_policy` and the new explicit
+`deep_link_open` anchor admit a closed two-metric profile. Existing install,
+calendar-day and aggregate definitions retain their meaning and identity.
+Wire/package version `0.4.0`, schema URNs, event vocabulary and DB tables stay
+unchanged. Selection is latest eligible same-scope open, timestamp/record-ID
+tie-broken before grouping and privacy filtering, with a fixed half-open 24h
+window. It supplies converter count and ad revenue, not ROAS or purchases.
+
+The full golden addition inventory is `64-first-party-engagement/input.json`
+and its 13 files: `expected_raw_records.json`, `expected_deliveries.json`,
+`expected_logical_events.json`, `expected_attributions.json`,
+`expected_metric_definitions.json`, `expected_metric_runs.json`,
+`expected_cost_records.json`, `expected_corrections.json`,
+`expected_privacy_requests.json`, `expected_privacy_tombstones.json`,
+`expected_fraud_decisions.json`, `expected_rejections.json`, and
+`expected_reconciliation.json`. There are **no changed prior inputs or goldens**.
+Compare `git diff --name-status 4078037 -- fixtures/v0.4/`: only the new
+numbered directory and shared README may differ. Record correspondences,
+explicit arithmetic and canonical snapshot/hash construction are documented
+in that README; neither evaluator supplied expected outputs. Golden files
+are committed separately from the implementation. The 13 shared mutations
+independently exercise boundaries, deduplication, latest-open filtering, removed
+anchors/outcomes, different installations and per-event half-even rounding in
+TypeScript, Python and SQL. Operational scheduling/reporting is a separate step.
+
 ## Explicit selected acquisition detail (0.4.16)
+
+The operator workflow for this profile is also implemented: explicit detail
+filters, CSV/HTML/API, schedules and bounded cost/late-input corrections preserve
+the selected grain. This does not introduce automatic creative discovery.
 
 The optional `acquisition_dimension_policy=selected_link_ad_group_creative`
 binds a new independent metric profile to explicit native selected-click
@@ -195,7 +226,7 @@ directory is 63. The README documents every artifact family's derivation,
 the three independent arithmetic rows and canonical snapshot inputs/digests.
 Expected files are committed separately from calculation/schema changes;
 validation remains read-only. The operational report/filter/schedule connection
-is a separate implementation step, not implied by this contract patch.
+was delivered separately; its availability is not inferred merely from schema acceptance.
 
 ## Explicit targeted refund cancellation (0.4.15)
 
