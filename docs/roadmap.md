@@ -36,7 +36,7 @@ in [Project plan](project-plan.md).
 | Operator-owned bulk event exports | Synthetic complete | Default-off S3-compatible destinations, deterministic gzip NDJSON, SigV4 conditional writes, durable keyset cursors, and destination-scoped deletion notices |
 
 The current contract gate preserves parity across 28 schemas, 8 registries,
-and 63 reviewed synthetic fixtures, including explicitly versioned native acquisition cohorts, safe cost selection, custom conversions and targeted refund cancellation.
+and 64 reviewed synthetic fixtures, including explicitly versioned native acquisition cohorts, safe cost selection, custom conversions and targeted refund cancellation.
 
 ## Completed milestone: integration and release coherence
 
@@ -133,7 +133,7 @@ comparison screens alone does not establish that end-to-end path.
 | Source implemented / [#186](https://github.com/yubisuke/openmasu/issues/186) | Verified App Store purchases reach installation cohorts | Public Swift preparation/submission, authenticated admission and history-to-financial projection connect with synthetic gates; live StoreKit delivery and Unity C# purchase helpers remain outside this connection / App Store purchase binding |
 | Source implemented / [#209](https://github.com/yubisuke/openmasu/issues/209) | Verified refund reversals cancel only their target deductions | Explicit targets, opt-in v0.4.15 metrics, verified App Store projection and late correction; ambiguous multi-part refunds remain unavailable / Refund reversal correction |
 | Source implemented / [#187](https://github.com/yubisuke/openmasu/issues/187) | Ad-group and creative outcomes share the cost grain | Explicit v0.4.16 contract, TS/Python/SQL, manual creative-cost CLI, API/HTML/CSV filters, explicit schedules and bounded cost/late-input corrections; no creative discovery or inferred allocation / Detailed acquisition grain |
-| Follow-up / [#188](https://github.com/yubisuke/openmasu/issues/188) | First-party re-engagement has separate outcome measures | One explicit conversion key and advertising revenue window, separate from acquisition and Apple aggregate evidence / Re-engagement outcomes |
+| In progress / [#188](https://github.com/yubisuke/openmasu/issues/188) | First-party re-engagement has separate outcome measures | Explicit v0.4.17 latest-open 24h conversion/ad-revenue contract and TS/Python/SQL; operational schedules and separated dashboard workflow remain / Re-engagement outcomes |
 
 #182 and #183 precede #191, then #184 and #185; #186 follows #184, #209 follows #186,
 and #187 follows #182/#183,

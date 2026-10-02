@@ -1,0 +1,561 @@
+{
+  "contract_version": "0.4.0",
+  "fx_policy": {
+    "policy_version": "fx-m7",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "1",
+        "rate_scale": 0,
+        "source": "synthetic-fixture-rate",
+        "as_of": "2026-08-21T06:00:00.000Z"
+      }
+    ]
+  },
+  "metric_definitions": [
+    {
+      "metric_definition_version": "0.4.17",
+      "anchor_event": "deep_link_open",
+      "aggregation_time_zone": "UTC",
+      "engagement_credit_policy": "latest_eligible_open_before_outcome",
+      "grouping_dimensions": [
+        "campaign_id",
+        "metric_date"
+      ],
+      "rule_bundle_id": "metric-first-party-engagement",
+      "rule_bundle_version": "0.4.17",
+      "rule_bundle_hash": "3477decc42d00df4b68cf85bd0281f6ef22b5966a0f1bbbfe254119fa9183730",
+      "metric_name": "engagement_custom_event_converters_24h",
+      "value_type": "count",
+      "conversion_event_key": "tutorial_complete",
+      "definition": {
+        "calculation": "converted_installations",
+        "numerator": "converted_installations",
+        "window": {
+          "type": "elapsed",
+          "day": 0
+        }
+      }
+    },
+    {
+      "metric_definition_version": "0.4.17",
+      "anchor_event": "deep_link_open",
+      "aggregation_time_zone": "UTC",
+      "engagement_credit_policy": "latest_eligible_open_before_outcome",
+      "grouping_dimensions": [
+        "campaign_id",
+        "metric_date"
+      ],
+      "rule_bundle_id": "metric-first-party-engagement",
+      "rule_bundle_version": "0.4.17",
+      "rule_bundle_hash": "3477decc42d00df4b68cf85bd0281f6ef22b5966a0f1bbbfe254119fa9183730",
+      "metric_name": "engagement_ad_revenue_24h_usd",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "revenue_sum",
+        "numerator": "revenue",
+        "window": {
+          "type": "elapsed",
+          "day": 0
+        }
+      }
+    }
+  ],
+  "metric_evaluations": [
+    {
+      "metric_run_id_prefix": "engagement64-a",
+      "input_received_at_watermark": "2026-08-23T00:00:00.000Z",
+      "computed_at": "2026-08-23T00:01:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "metric_names": [
+        "engagement_custom_event_converters_24h",
+        "engagement_ad_revenue_24h_usd"
+      ],
+      "grouping": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-a"
+      }
+    },
+    {
+      "metric_run_id_prefix": "engagement64-b",
+      "input_received_at_watermark": "2026-08-23T00:00:00.000Z",
+      "computed_at": "2026-08-23T00:01:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "metric_names": [
+        "engagement_custom_event_converters_24h",
+        "engagement_ad_revenue_24h_usd"
+      ],
+      "grouping": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-b"
+      }
+    },
+    {
+      "metric_run_id_prefix": "engagement64-c",
+      "input_received_at_watermark": "2026-08-23T00:00:00.000Z",
+      "computed_at": "2026-08-23T00:01:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "metric_names": [
+        "engagement_custom_event_converters_24h",
+        "engagement_ad_revenue_24h_usd"
+      ],
+      "grouping": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-c"
+      }
+    },
+    {
+      "metric_run_id_prefix": "engagement64-all",
+      "input_received_at_watermark": "2026-08-23T00:00:00.000Z",
+      "computed_at": "2026-08-23T00:01:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "metric_names": [
+        "engagement_custom_event_converters_24h",
+        "engagement_ad_revenue_24h_usd"
+      ],
+      "grouping": {
+        "metric_date": "2026-08-21"
+      }
+    },
+    {
+      "metric_run_id_prefix": "engagement64-empty",
+      "input_received_at_watermark": "2026-08-23T00:00:00.000Z",
+      "computed_at": "2026-08-23T00:01:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "metric_names": [
+        "engagement_custom_event_converters_24h",
+        "engagement_ad_revenue_24h_usd"
+      ],
+      "grouping": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-empty"
+      }
+    }
+  ],
+  "privacy_requests": [],
+  "batches": [
+    {
+      "batch_id": "batch:open64-a",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T10:00:01.000Z",
+        "policy_digest": "policy-m7",
+        "deep_link_resolution": {
+          "status": "active",
+          "tracking_link_id": "link-64-a",
+          "campaign_id": "synthetic-engagement-a"
+        },
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "open64-a",
+          "delivery_id": "delivery:open64-a",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:open64-a",
+          "event_name": "deep_link_open",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T10:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T10:00:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "event_name": "deep_link_open",
+            "installation_id": "installation-64-x",
+            "open_source": "android_app_link",
+            "link_slug": "synthetic64a",
+            "destination_status": "delivered"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "batch:open64-b",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T12:00:01.000Z",
+        "policy_digest": "policy-m7",
+        "deep_link_resolution": {
+          "status": "active",
+          "tracking_link_id": "link-64-b",
+          "campaign_id": "synthetic-engagement-b"
+        },
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "open64-b",
+          "delivery_id": "delivery:open64-b",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:open64-b",
+          "event_name": "deep_link_open",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T12:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T12:00:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "event_name": "deep_link_open",
+            "installation_id": "installation-64-x",
+            "open_source": "android_app_link",
+            "link_slug": "synthetic64b",
+            "destination_status": "delivered"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "batch:open64-c",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T11:00:01.000Z",
+        "policy_digest": "policy-m7",
+        "deep_link_resolution": {
+          "status": "active",
+          "tracking_link_id": "link-64-c",
+          "campaign_id": "synthetic-engagement-c"
+        },
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "open64-c",
+          "delivery_id": "delivery:open64-c",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:open64-c",
+          "event_name": "deep_link_open",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T11:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T11:00:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "event_name": "deep_link_open",
+            "installation_id": "installation-64-y",
+            "open_source": "android_app_link",
+            "link_slug": "synthetic64c",
+            "destination_status": "delivered"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "batch:conversion64-a",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T10:30:01.000Z",
+        "policy_digest": "policy-m7",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "conversion64-a",
+          "delivery_id": "delivery:conversion64-a",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:conversion64-a",
+          "event_name": "custom_event",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T10:30:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T10:30:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "installation_id": "installation-64-x",
+            "event_key": "tutorial_complete"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "batch:conversion64-b",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T12:30:01.000Z",
+        "policy_digest": "policy-m7",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "conversion64-b",
+          "delivery_id": "delivery:conversion64-b",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:conversion64-b",
+          "event_name": "custom_event",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T12:30:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T12:30:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "installation_id": "installation-64-x",
+            "event_key": "tutorial_complete"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "batch:revenue64-before",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T09:00:01.000Z",
+        "policy_digest": "policy-m7",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "revenue64-before",
+          "delivery_id": "delivery:revenue64-before",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:revenue64-before",
+          "event_name": "ad_revenue",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T09:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T09:00:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "subject_scope": "installation_level",
+            "installation_id": "installation-64-x",
+            "ad_network": "synthetic-ad-network",
+            "revenue_source": "client_estimated",
+            "amount_unscaled": "9000000",
+            "amount_scale": 6,
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "batch:revenue64-a",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T10:30:01.000Z",
+        "policy_digest": "policy-m7",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "revenue64-a",
+          "delivery_id": "delivery:revenue64-a",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:revenue64-a",
+          "event_name": "ad_revenue",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T10:30:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T10:30:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "subject_scope": "installation_level",
+            "installation_id": "installation-64-x",
+            "ad_network": "synthetic-ad-network",
+            "revenue_source": "client_estimated",
+            "amount_unscaled": "2000000",
+            "amount_scale": 6,
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "batch:revenue64-b",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T12:30:01.000Z",
+        "policy_digest": "policy-m7",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "revenue64-b",
+          "delivery_id": "delivery:revenue64-b",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:revenue64-b",
+          "event_name": "ad_revenue",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T12:30:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T12:30:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "subject_scope": "installation_level",
+            "installation_id": "installation-64-x",
+            "ad_network": "synthetic-ad-network",
+            "revenue_source": "client_estimated",
+            "amount_unscaled": "3000000",
+            "amount_scale": 6,
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "batch:revenue64-boundary",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-22T12:00:01.000Z",
+        "policy_digest": "policy-m7",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "revenue64-boundary",
+          "delivery_id": "delivery:revenue64-boundary",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:revenue64-boundary",
+          "event_name": "ad_revenue",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-22T12:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-22T12:00:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "subject_scope": "installation_level",
+            "installation_id": "installation-64-x",
+            "ad_network": "synthetic-ad-network",
+            "revenue_source": "client_estimated",
+            "amount_unscaled": "9000000",
+            "amount_scale": 6,
+            "currency": "USD"
+          }
+        }
+      ]
+    }
+  ]
+}

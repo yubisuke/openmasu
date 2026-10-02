@@ -48,6 +48,7 @@ export function captureMetricComparisonContext(
     ...(definition.conversion_event_key !== undefined ? { conversion_event_key: definition.conversion_event_key } : {}),
     ...(definition.cost_selection_policy ? { cost_selection_policy: definition.cost_selection_policy } : {}),
     ...(definition.refund_reversal_policy ? { refund_reversal_policy: definition.refund_reversal_policy } : {}),
+    ...(definition.engagement_credit_policy ? { engagement_credit_policy: definition.engagement_credit_policy } : {}),
     rule_bundle_id: definition.rule_bundle_id, rule_bundle_version: definition.rule_bundle_version,
     rule_bundle_hash: definition.rule_bundle_hash,
   };
@@ -67,6 +68,25 @@ export function comparisonMeaning(context: MetricComparisonContext) {
   const d = context.definition, calculation = d.definition.calculation, window = d.definition.window;
   const revenue = ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(calculation);
   const conversion = ["converted_installations", "converted_installations_over_cohort"].includes(calculation);
+  if (d.engagement_credit_policy) {
+    if (d.anchor_event !== "deep_link_open" || d.engagement_credit_policy !== "latest_eligible_open_before_outcome"
+        || d.aggregation_time_zone !== "UTC" || window.type !== "elapsed" || window.day !== 0
+        || !["converted_installations", "revenue_sum"].includes(calculation)
+        || (conversion && (!d.conversion_event_key || d.definition.numerator !== "converted_installations"))
+        || (revenue && (d.definition.numerator !== "revenue" || context.fx.target_currency !== d.currency || context.fx.target_scale !== d.amount_scale))) return undefined;
+    return {
+      profile: context.profile, anchor_event: d.anchor_event, time_zone: "UTC", calculation,
+      numerator: d.definition.numerator, denominator: null, cost_basis: null, aggregation: "cumulative",
+      window: { ...window, boundary: "half_open" }, population: "server_resolved_non_organic_engagement",
+      acquisition_basis: "server_resolved_deep_link", cost_selection_policy: "not_applicable", fraud_policy: "gross",
+      engagement_credit_policy: d.engagement_credit_policy, evidence_trust: "device_reported_forgeable",
+      ...(conversion ? { conversion_event_key: d.conversion_event_key } : {}),
+      grouping_dimensions: [...(d.grouping_dimensions ?? [])].sort(), privacy_state: context.privacy_state,
+      value_type: d.value_type, currency: d.currency ?? null, amount_scale: d.amount_scale ?? null, ratio_scale: null,
+      fx: revenue ? { target_currency: context.fx.target_currency, target_scale: context.fx.target_scale,
+        rounding_mode: context.fx.rounding_mode, conversion: "per_event_round_then_sum", rates: context.fx.rates } : null,
+    };
+  }
   const supported = d.anchor_event === (calculation === "event_count" ? "calendar_day" : "install")
     && (revenue ? window.type === "elapsed" && ["revenue", "purchase_net_revenue", "total_net_revenue"].includes(d.definition.numerator)
       : calculation === "active_installations_over_cohort" ? window.type === "activity_day" && d.definition.numerator === "active_installations"
@@ -110,7 +130,7 @@ export function comparisonMeaning(context: MetricComparisonContext) {
 /** Conservative temporal maturity, not a promise of provider completeness. */
 export function comparisonMaturity(context: MetricComparisonContext, grouping: Record<string, string>, watermark: string) {
   const d = context.definition, calculation = d.definition.calculation;
-  const day = calculation === "event_count" ? grouping.metric_date : grouping.cohort_date;
+  const day = calculation === "event_count" || d.engagement_credit_policy ? grouping.metric_date : grouping.cohort_date;
   if (!comparisonMeaning(context) || !day || !/^\d{4}-\d{2}-\d{2}$/.test(day)
       || new Date(day).toISOString().slice(0, 10) !== day) return { state: "unknown", closes_at: null } as const;
   const offset = d.aggregation_time_zone === "Asia/Tokyo" ? 9 * 3_600_000 : 0;

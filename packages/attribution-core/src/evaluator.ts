@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { selectDisjointCosts } from "./cost-selection.js";
+import { engagementInputs, engagementSnapshotRows, engagementValue } from "./engagement-metrics.js";
 export { selectDisjointCosts, type ScopedCost } from "./cost-selection.js";
 import { canonicalize } from "json-canonicalize";
 import {
@@ -1095,6 +1096,12 @@ function metricDefinitions(input: Any): MetricDefinition[] {
 }
 
 function validateMetricDefinitionSeries(definition: Any): void {
+  if (definition.engagement_credit_policy !== undefined || definition.anchor_event === "deep_link_open"
+      || ["engagement_custom_event_converters_24h", "engagement_ad_revenue_24h_usd"].includes(definition.metric_name)
+      || definition.rule_bundle_id === "metric-first-party-engagement") {
+    if (!validateMetricDefinition(definition)) throw new Error(`invalid engagement metric profile: ${definition.metric_name}`);
+    return;
+  }
   if (definition.acquisition_dimension_policy !== undefined || definition.rule_bundle_id === "metric-acquisition-detail") {
     if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`);
     validateMetricDefinitionSeries(acquisitionDetailBase(definition as MetricDefinition));
@@ -1322,6 +1329,7 @@ function metricRuns(
       attempt.server.policy_digest,
     ]);
     const visible = included.filter((attempt) => evaluation.privacy_state !== "after" || !lifecycle.has(attemptEvidenceKey(attempt)));
+    const engagement = engagementInputs(included, attributions, evaluation.input_received_at_watermark);
     const acquisitionAttributions = selectedAcquisitionAttributions(attributions, included, evaluation.input_received_at_watermark);
     const acquisitionStatuses = new Map<string, Attribution["status"]>(included
       .filter((attempt) => attempt.record.event_name === "install")
@@ -1368,6 +1376,7 @@ function metricRuns(
       const selectedInstalls = definition.acquisition_basis ? acquisitionInstalls : installs;
     const cohortScopes = new Set(selectedInstalls.map((install) => compositeKey([install.server.tenant_id, install.server.app_id])));
     const groupedCosts = cost_records.filter((cost) => {
+      if (definition.engagement_credit_policy) return false;
       const grouping = evaluation.grouping;
       if (cost.creative_id !== undefined && !definition.acquisition_dimension_policy) return false;
       if (grouping?.attribution_status !== undefined && grouping.attribution_status !== "non_organic") return false;
@@ -1403,7 +1412,7 @@ function metricRuns(
       const eligibleInstalls = definition.fraud_policy === "net"
         ? selectedInstalls.filter((candidate) => !excludedInstallationIds.has(candidate.record.payload.installation_id))
         : selectedInstalls;
-      const revenueValue = definition.conversion_event_key !== undefined ? 0n : revenue.reduce((sum, item) => {
+      const revenueValue = definition.engagement_credit_policy || definition.conversion_event_key !== undefined ? 0n : revenue.reduce((sum, item) => {
         const installation = eligibleInstalls.find((candidate) =>
           candidate.server.tenant_id === item.server.tenant_id && candidate.server.app_id === item.server.app_id &&
           candidate.record.payload.installation_id === item.record.payload.installation_id,
@@ -1448,7 +1457,15 @@ function metricRuns(
       const cohortSize = BigInt(new Set(eligibleInstalls.map((install) => install.record.payload.installation_id)).size);
       let value: bigint | undefined;
       let undefined_reason: "no_attributed_cost" | "no_activity_events" | "empty_cohort" | "overlapping_cost_grains" | undefined;
-      if (definition.definition.calculation === "revenue_sum") {
+      if (definition.engagement_credit_policy) {
+        if (definition.value_type === "money" && (fxPolicy.target_currency !== definition.currency || fxPolicy.target_scale !== definition.amount_scale)) {
+          throw new Error("engagement_metric_fx_target_mismatch");
+        }
+        value = engagementValue({ opens: engagement, visible, definition, grouping: evaluation.grouping,
+          available: attempt => evaluation.privacy_state !== "after" || !lifecycle.has(attemptEvidenceKey(attempt as Attempt)),
+          money: payload => convertMoney(payload, fxPolicy) });
+        if (value === undefined) undefined_reason = "empty_cohort";
+      } else if (definition.definition.calculation === "revenue_sum") {
         value = selectedRevenueValue;
       } else if (definition.definition.calculation === "revenue_over_cost") {
         const cost = currentCosts.reduce((sum, item) => {
@@ -1574,7 +1591,7 @@ function metricRuns(
       } else {
         throw new Error(`unsupported metric calculation: ${definition.definition.calculation}`);
       }
-      if (definition.definition.calculation !== "event_count" && evaluation.grouping?.metric_date !== undefined) {
+      if (!definition.engagement_credit_policy && definition.definition.calculation !== "event_count" && evaluation.grouping?.metric_date !== undefined) {
         throw new Error(`metric_date grouping is reserved for event_count: ${metricName}`);
       }
       const grouping = evaluation.grouping ? {
@@ -1595,7 +1612,9 @@ function metricRuns(
         metric_run_id: `${evaluation.metric_run_id_prefix}:${metricName}`,
         metric_name: metricName,
         metric_definition_version: definition.metric_definition_version,
-        input_snapshot_id: definition.acquisition_basis ? sha256({
+        input_snapshot_id: definition.engagement_credit_policy ? sha256({
+          record_snapshot_id: sha256(snapshotRows), engagement_inputs: engagementSnapshotRows(engagement, sha256),
+        }) : definition.acquisition_basis ? sha256({
           record_and_cost_snapshot_id: sha256(snapshotRows),
           acquisition_attributions: acquisitionAttributionRows([...acquisitionAttributions.values()]),
         }) : sha256(snapshotRows),

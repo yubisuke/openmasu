@@ -329,9 +329,9 @@ Production signals, IP or User-Agent values, live thresholds, model weights, wat
 
 ## Reviewed fixture and validation gate
 
-The validation gate compiles 28 schemas and validates 8 registries. The 63 fixture directories contain synthetic input plus 13 committed golden output classes: raw records, deliveries, logical events, corrections, privacy requests, privacy tombstones, attributions, metric definitions, metric runs, cost records, public fraud decisions, rejections, and reconciliation. Fixture 10 demonstrates both paid reinstall attribution and no-referrer redownload attribution. Fixtures 28 through 32 exercise imported attribution, automatically derived reconciliation, every registered producer form, and stale-evidence rejection. Fixture 33 exercises reporting dimensions, advertiser-side ad views, installation and aggregate revenue, default-currency provenance, append-only cost revisions, per-event half-even FX, attribution-status-separated ROAS, retention, and cohort LTV/count. Fixture 34 exercises the supported platform method/model rows, both Apple aggregate event names, their versioned reasons, synthetic postback producers, and typed Meta evidence. Fixture 35 exercises authenticated tenant-admin and on-device privacy-request provenance plus same-installation scope enforcement. Fixture 36 exercises the child-directed audience boundary without adding an advertising identifier to the canonical event vocabulary. Fixture 37 proves that an organic cohort without attributed cost emits an undefined ROAS rather than zero or infinity. Fixture 38 classifies a modeled external row without an internal candidate as `provider_modeled_conversion`. Fixture 39 classifies a foreign third-party referrer. Fixture 40 validates the closed custom-event envelope plus wrapper provenance. Fixture 41 derives the public click-injection category from server CTIT. Fixture 42 exercises the v0.3.1 `metric_date` dimension with deterministic daily click and organic-install event counts. Fixture 43 exercises the v0.3.2 iOS first-launch, platform-referrer, AdServices outcome, AAK signing-environment, and SKAN minor-version vocabulary. Fixture 44 exercises the v0.3.3 qualified SKAN/AAK postback counts and fine/coarse SKAN conversion buckets. Fixture 45 exercises the v0.3.4 iOS conversion-schema provenance pair and the opt-in conversion-value lifecycle event. Fixture 46 reserves server-assigned Play Integrity and App Attest evidence without making it an attribution or metric input. Fixture 47 exercises the non-identifying payload-schema rejection boundary without storing the rejected payload. Fixtures 48 through 52 exercise deterministic fraud controls and protected integrity-provider normalization. Fixture 53 exercises the negative-CTIT clock diagnostic and day-wide provisional guard. Fixture 54 exercises deep-link opens, engagement-scope attribution, double-count prevention, and separated daily metrics. Fixture 55 exercises settled purchase/refund net revenue, canonical refund targeting, refund-time windows, per-target caps, and unchanged ad revenue. Fixture 56 exercises D30/D90 purchase-net, total-net revenue, ROAS, and LTV with exact D31/D91 boundaries. Fixture 57 accepts current AdAttributionKit re-engagement postbacks and proves they remain aggregate while reporting separately from install postbacks. Fixtures 25, 33, and 34 collectively exercise every registered processing purpose. Validation also exercises invalid calendar timestamps, reconciliation reasons, attribution supersession, replay suspicion, retention expiry, impression-to-revenue evidence, reorder invariance, install-type evidence dominance, record-ID collision, click ambiguity, millisecond normalization boundaries, scoped-reference mutations, child-directed advertising-identifier rejection, CTIT boundaries, custom-event bounds, platform-integrity closure, Apple aggregate qualification and receipt-date authority, refund-target ambiguity/temporal stability/caps, business-transaction conflicts, and unknown-purpose rejection; golden files remain committed human-reviewed artifacts.
+The validation gate compiles 28 schemas and validates 8 registries. The 64 fixture directories contain synthetic input plus 13 committed golden output classes: raw records, deliveries, logical events, corrections, privacy requests, privacy tombstones, attributions, metric definitions, metric runs, cost records, public fraud decisions, rejections, and reconciliation. Fixture 10 demonstrates both paid reinstall attribution and no-referrer redownload attribution. Fixtures 28 through 32 exercise imported attribution, automatically derived reconciliation, every registered producer form, and stale-evidence rejection. Fixture 33 exercises reporting dimensions, advertiser-side ad views, installation and aggregate revenue, default-currency provenance, append-only cost revisions, per-event half-even FX, attribution-status-separated ROAS, retention, and cohort LTV/count. Fixture 34 exercises the supported platform method/model rows, both Apple aggregate event names, their versioned reasons, synthetic postback producers, and typed Meta evidence. Fixture 35 exercises authenticated tenant-admin and on-device privacy-request provenance plus same-installation scope enforcement. Fixture 36 exercises the child-directed audience boundary without adding an advertising identifier to the canonical event vocabulary. Fixture 37 proves that an organic cohort without attributed cost emits an undefined ROAS rather than zero or infinity. Fixture 38 classifies a modeled external row without an internal candidate as `provider_modeled_conversion`. Fixture 39 classifies a foreign third-party referrer. Fixture 40 validates the closed custom-event envelope plus wrapper provenance. Fixture 41 derives the public click-injection category from server CTIT. Fixture 42 exercises the v0.3.1 `metric_date` dimension with deterministic daily click and organic-install event counts. Fixture 43 exercises the v0.3.2 iOS first-launch, platform-referrer, AdServices outcome, AAK signing-environment, and SKAN minor-version vocabulary. Fixture 44 exercises the v0.3.3 qualified SKAN/AAK postback counts and fine/coarse SKAN conversion buckets. Fixture 45 exercises the v0.3.4 iOS conversion-schema provenance pair and the opt-in conversion-value lifecycle event. Fixture 46 reserves server-assigned Play Integrity and App Attest evidence without making it an attribution or metric input. Fixture 47 exercises the non-identifying payload-schema rejection boundary without storing the rejected payload. Fixtures 48 through 52 exercise deterministic fraud controls and protected integrity-provider normalization. Fixture 53 exercises the negative-CTIT clock diagnostic and day-wide provisional guard. Fixture 54 exercises deep-link opens, engagement-scope attribution, double-count prevention, and separated daily metrics. Fixture 55 exercises settled purchase/refund net revenue, canonical refund targeting, refund-time windows, per-target caps, and unchanged ad revenue. Fixture 56 exercises D30/D90 purchase-net, total-net revenue, ROAS, and LTV with exact D31/D91 boundaries. Fixture 57 accepts current AdAttributionKit re-engagement postbacks and proves they remain aggregate while reporting separately from install postbacks. Fixtures 25, 33, and 34 collectively exercise every registered processing purpose. Validation also exercises invalid calendar timestamps, reconciliation reasons, attribution supersession, replay suspicion, retention expiry, impression-to-revenue evidence, reorder invariance, install-type evidence dominance, record-ID collision, click ambiguity, millisecond normalization boundaries, scoped-reference mutations, child-directed advertising-identifier rejection, CTIT boundaries, custom-event bounds, platform-integrity closure, Apple aggregate qualification and receipt-date authority, refund-target ambiguity/temporal stability/caps, business-transaction conflicts, and unknown-purpose rejection; golden files remain committed human-reviewed artifacts.
 
-The literal validation summary is: `Validated 28 schemas, 8 registries, 63 reviewed fixtures, 819 golden output artifacts, 63 scenario assertions, 27 acceptance criteria, deterministic TypeScript, independent Python, and RFC 8785 conformance.`
+The literal validation summary is: `Validated 28 schemas, 8 registries, 64 reviewed fixtures, 832 golden output artifacts, 64 scenario assertions, 27 acceptance criteria, deterministic TypeScript, independent Python, and RFC 8785 conformance.`
 
 The validation command never writes fixture files. `npm run validate`:
 
@@ -339,8 +339,8 @@ The validation command never writes fixture files. `npm run validate`:
 2. compiles every Draft 2020-12 schema;
 3. validates registry shape, uniqueness, and cross-references;
 4. validates every input event through its event schema;
-5. validates all 819 golden output artifacts;
-6. runs named assertions for all 63 scenarios and 27 acceptance criteria (AC01-AC27);
+5. validates all 832 golden output artifacts;
+6. runs named assertions for all 64 scenarios and 27 acceptance criteria (AC01-AC27);
 7. runs deliberate negative mutations;
 8. runs the TypeScript evaluator twice;
 9. runs the independently implemented Python evaluator;
@@ -349,6 +349,55 @@ The validation command never writes fixture files. `npm run validate`:
 Environment setup is `npm ci` and `python -m pip install --require-hashes --requirement requirements-contract.txt`.
 
 ## Version history
+
+### v0.4.17 patch release: first-party engagement outcomes
+
+Optional `engagement_credit_policy=latest_eligible_open_before_outcome` selects
+the closed `metric-first-party-engagement` profile, definition/bundle version
+`0.4.17`, hash `3477decc42d00df4b68cf85bd0281f6ef22b5966a0f1bbbfe254119fa9183730`.
+It requires `anchor_event=deep_link_open`, UTC, elapsed day 0 (exactly 24 hours),
+and declared dimensions `[campaign_id, metric_date]`. The two supported metrics
+are `engagement_custom_event_converters_24h` (count, one explicit
+`conversion_event_key`) and `engagement_ad_revenue_24h_usd` (money, USD scale 6).
+They do not accept install acquisition policy, fraud filtering, costs, refunds,
+purchases, rates, retention, or additional grouping dimensions.
+
+Eligible anchors are accepted unique deep-link opens with an active server link
+resolution, a nonempty server-resolved campaign, and a saved same-scope
+non-organic `deep_link` engagement attribution at the input receipt watermark.
+The existing unknown/inactive/install-click-reuse attribution rules still apply.
+The event remains device-reported and forgeable; server resolution is not proof
+that a person clicked or returned. A removed selected anchor cannot transfer
+credit to an older anchor.
+
+For each accepted unique same-tenant/app/installation outcome, choose the latest
+eligible open at or before its canonical `occurred_at`; ties use ascending
+`record_id`. Choose before campaign/date and privacy-availability filtering.
+Count only outcomes in `[open, open + 24 hours)`. Both open and outcome must be
+received by the fixed watermark. `metric_date` is the open's UTC date, not the
+outcome date. A selected privacy-removed open or outcome contributes nothing
+after removal; it never falls back to an older campaign. Invalid/unknown opens
+do not displace eligible opens. A conversion counts distinct installations for
+the one explicit event key in each requested grouping. Per-campaign converter
+counts therefore are not additive unique-user totals across campaigns. Each
+installation-level ad-revenue event is credited at most once and converted with
+the existing per-event integer half-even FX rule before summing. Aggregate ad
+revenue is excluded; the FX target must match the definition's USD scale 6.
+
+A grouping with eligible, available anchors and no outcomes emits present zero.
+A grouping without any such anchors emits `undefined/empty_cohort`. Snapshot
+identity is SHA-256(JCS({record_snapshot_id, engagement_inputs})); the first member
+hashes the existing receipt/record/lifecycle/policy tuples without costs. The
+second is the scoped-record-ordered list of `[tenant_id, app_id, record_id,
+tracking_link_id-or-null, campaign_id, attribution_id, SHA-256(JCS(attribution))]`
+for eligible pre-redaction anchors. Saved comparison context retains the credit
+policy, population and device-reported trust boundary. Conservative temporal
+maturity is the exclusive end of the anchor date plus 24 hours, not completeness.
+
+These are separate outcome measures. They neither rewrite installation
+attribution nor join/sum Apple aggregate re-engagement. Existing definitions,
+schema URNs, wire/package versions and 63 prior fixtures remain unchanged.
+Fixture 64 supplies independently derived outcomes and all 13 artifact classes.
 
 ### v0.4.16 patch release: explicit selected acquisition detail
 

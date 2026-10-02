@@ -10,6 +10,7 @@ export {
   ACQUISITION_DETAIL_METRIC_DEFINITIONS,
   acquisitionDetailBase,
   customConversionMetricDefinitions,
+  engagementMetricDefinitions,
   REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
 } from "./m1b-metric-definitions.js";
 export { M3_METRIC_DEFINITIONS } from "./m3-metric-definitions.js";

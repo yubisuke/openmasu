@@ -320,3 +320,22 @@ export function customConversionMetricDefinitions(eventKey: string): OpenMasuMet
         denominator: "cohort_size", window: { type: "elapsed", day: 7 } } },
   ];
 }
+
+/** Device-reported first-party engagement, never install or Apple aggregate credit. */
+export function engagementMetricDefinitions(eventKey: string): OpenMasuMetricDefinitionV04[] {
+  if (!/^[a-z][a-z0-9_]{0,63}$/.test(eventKey)) throw new Error("conversion_event_key_invalid");
+  const common = {
+    metric_definition_version: "0.4.17", anchor_event: "deep_link_open" as const,
+    aggregation_time_zone: "UTC" as const,
+    engagement_credit_policy: "latest_eligible_open_before_outcome" as const,
+    grouping_dimensions: ["campaign_id", "metric_date"] as ["campaign_id", "metric_date"],
+    rule_bundle_id: "metric-first-party-engagement", rule_bundle_version: "0.4.17",
+    rule_bundle_hash: nonFraudBundleHash("metric-first-party-engagement"),
+  };
+  return [
+    { ...common, metric_name: "engagement_custom_event_converters_24h", value_type: "count", conversion_event_key: eventKey,
+      definition: { calculation: "converted_installations", numerator: "converted_installations", window: { type: "elapsed", day: 0 } } },
+    { ...common, metric_name: "engagement_ad_revenue_24h_usd", value_type: "money", currency: "USD", amount_scale: 6,
+      definition: { calculation: "revenue_sum", numerator: "revenue", window: { type: "elapsed", day: 0 } } },
+  ];
+}
