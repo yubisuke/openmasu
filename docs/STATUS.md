@@ -205,10 +205,13 @@ The [external calculation declaration bridge](cohort-comparison.md#compare-a-sav
 now compares saved ad-revenue ROAS with an explicitly declared external CSV
 calculation (#173). Matching conditions plus opt-in produce exact deltas while
 retaining `external_declared` evidence; this is not provider verification.
-The other seven comparison, analysis and workflow
-slices (#174-#180) remain planned after that core work. App Store purchase
+The [bounded dashboard comparison flow](cohort-comparison.md#compare-through-the-dashboard)
+connects saved JSON and external CSV/mapping to condition review and identical
+CLI/Web JSON and HTML downloads without persisting inputs or history (#174).
+The other six analysis and workflow slices (#175-#180) remain planned after
+that core work. App Store purchase
 binding, finer advertising grain and separate re-engagement outcomes
-(#186-#188) are scoped follow-ups. Ten slices remain planned. Existing
+(#186-#188) are scoped follow-ups. Nine slices remain planned. Existing
 component evidence and the published v0.3.0-rc.1 record remain unchanged;
 neither proves these remaining connections.
 

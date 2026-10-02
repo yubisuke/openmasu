@@ -62,6 +62,8 @@ export type RouteHandler =
   | "dashboard_metric_explanation"
   | "dashboard_export"
   | "dashboard_comparison_export"
+  | "dashboard_comparison_form"
+  | "dashboard_comparison_submit"
   | "dashboard_records"
   | "dashboard_differences"
   | "dashboard_fraud"
@@ -161,6 +163,8 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_logout", method: "POST", pattern: /^\/dashboard\/session\/delete$/, auth: "dashboard_session", mutates: true, capability: "read" },
   { handler: "dashboard_export", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/cohorts\.csv$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_comparison_export", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/comparison\.json$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_comparison_form", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/comparison$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_comparison_submit", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/comparison$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_metric_explanation", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/metrics\/[^/]+\/explanation$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_records", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/records$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_differences", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/differences$/, auth: "dashboard_session", mutates: false, capability: "read" },

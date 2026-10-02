@@ -16,6 +16,11 @@ import { buildDashboardView } from "./dashboard/view.js";
 import { metricExplanation } from "./metric-explanation.js";
 import { ComparisonExportError } from "./comparison-export.js";
 import { fixedComparisonDownload } from "./fixed-comparison.js";
+import { compareSnapshots } from "./cohort-comparison.js";
+import { jcs } from "@openmasu/attribution-core";
+import { ComparisonWorkflowError, comparisonWorkflowLimits, readComparisonSubmission, boundedComparisonOutput } from "./dashboard-comparison.js";
+import { renderComparisonWorkflow } from "./dashboard/comparison-workflow.js";
+import { renderComparison } from "./dashboard/comparison-report.js";
 import { renderMetricExplanation } from "./dashboard/metric-explanation.js";
 import { dashboardReportParams } from "./dashboard/report-controls.js";
 import { receiveMax, type MaxReceiverConfig } from "./max-receiver.js";
@@ -500,6 +505,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
 
       if ([
         "dashboard_app", "dashboard_metric_explanation", "dashboard_export", "dashboard_comparison_export", "dashboard_records", "dashboard_differences", "dashboard_fraud",
+        "dashboard_comparison_form", "dashboard_comparison_submit",
         "dashboard_tracking_links_list", "dashboard_tracking_links_create", "dashboard_tracking_link_transition",
         "dashboard_sdk_keys_issue", "dashboard_sdk_keys_retire",
         "dashboard_server_keys_issue", "dashboard_server_keys_retire", "dashboard_link_domain",
@@ -568,6 +574,35 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
         const appId = dashboardAppId(target.pathname) ?? "";
         try {
           const appIdentity = await requireRegisteredApp(dependencies.readerPool, sessionIdentity, appId);
+          if (route.handler === "dashboard_comparison_form" || route.handler === "dashboard_comparison_submit") {
+            const deadline = startedAt + comparisonWorkflowLimits.milliseconds;
+            try {
+              if ([...target.searchParams].length) throw new ComparisonWorkflowError("comparison_query_not_allowed");
+              if (route.handler === "dashboard_comparison_form") {
+                dashboardHtml(response, 200, boundedComparisonOutput(renderComparisonWorkflow(appId, csrfToken(session.token)), deadline));
+                return;
+              }
+              if (!csrfOriginAccepted(request, dependencies.dashboard.publicBaseUrl)) throw new ComparisonWorkflowError("csrf_rejected", 403);
+              const submission = await readComparisonSubmission(request, appIdentity, token => verifyCsrfToken(session.token, token), deadline);
+              if (submission.action === "review") {
+                dashboardHtml(response, 200, boundedComparisonOutput(renderComparisonWorkflow(appId, csrfToken(session.token), submission), deadline));
+                return;
+              }
+              const result = compareSnapshots(submission.left, submission.right, { allowExternalDeclaration: submission.allowExternalDeclaration });
+              if (submission.action === "result") {
+                dashboardHtml(response, 200, boundedComparisonOutput(renderComparisonWorkflow(appId, csrfToken(session.token), submission, result, submission.allowExternalDeclaration), deadline));
+              } else {
+                const html = submission.action === "html";
+                const body = boundedComparisonOutput(html ? renderComparison(result) : `${jcs(result)}\n`, deadline);
+                response.writeHead(200, { ...dashboardHeaders, "content-type": html ? "text/html; charset=utf-8" : "application/json; charset=utf-8",
+                  "content-disposition": `attachment; filename="openmasu-comparison.${html ? "html" : "json"}"` }).end(body);
+              }
+            } catch (error) {
+              const safe = error instanceof ComparisonWorkflowError ? error : new ComparisonWorkflowError("comparison_invalid_input");
+              if (!response.destroyed) dashboardHtml(response, safe.statusCode, `<!doctype html><html lang="en"><body><h1>Comparison not completed</h1><p>${escapeHtml(safe.code)}</p><p>No result file was saved. Return to the comparison form and check the inputs.</p></body></html>`);
+            }
+            return;
+          }
           if (route.handler === "dashboard_metric_explanation") {
             const runId = decodedPathPart(target.pathname, /\/metrics\/([^/]+)\/explanation$/) ?? "";
             const explanation = await metricExplanation(dependencies.readerPool, appIdentity, runId);

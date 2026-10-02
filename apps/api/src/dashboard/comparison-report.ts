@@ -11,7 +11,7 @@ export function decimal(value: string, scale: number): string {
   return `${negative ? "-" : ""}${scale ? `${digits.slice(0, -scale)}.${digits.slice(-scale)}` : digits}`;
 }
 
-export function renderComparison(result: Comparison): string {
+export function renderComparisonContent(result: Comparison): string {
   // Saved canonical JSON and in-process results must render the same bytes.
   result = JSON.parse(jcs(result)) as Comparison;
   const cell = (value: unknown) => `<td>${escape(value)}</td>`;
@@ -30,12 +30,7 @@ export function renderComparison(result: Comparison): string {
     const a = result.assurance[side];
     return `<h3>${escape(side)}: ${escape(a.meaning)}</h3><p>Query acquisition: ${escape(a.acquisition.state)}; ${a.acquisition.row_count} rows. Upstream completeness: unknown. Missing dates are not zero.</p><dl>${Object.entries(a.conditions).map(([key, value]) => `<dt>${escape(key)} (${escape(value.state)})</dt><dd>${escape(value.value ?? "Unknown")}</dd>`).join("")}</dl>${a.missing.length ? `<p>Unknown: ${escape(a.missing.join(", "))}</p>` : ""}<p>Internal execution references (not semantic equality keys): ${escape(JSON.stringify(a.execution))}</p>`;
   }).join("");
-  return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'">
-<meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenMasu cohort comparison</title></head><body>
-<h1>OpenMasu cohort comparison</h1>
+  return `<h1>OpenMasu cohort comparison</h1>
 <p>Status: ${escape(result.status)}</p>
 <p>Differences are right minus left. A numerical difference does not establish its cause.</p>
 ${result.status === "external_declared_comparison" ? "<p>EXTERNAL DECLARED COMPARISON: the saved calculation matches the operator's explicit claim. The external implementation and completeness remain unverified.</p>" : ""}
@@ -46,5 +41,14 @@ ${result.status === "incomparable" ? `<h2>Incompatible or unknown conditions</h2
 <dt>Right source</dt><dd>${escape(result.provenance.right.source)}</dd><dt>Right normalized SHA-256</dt><dd>${escape(result.provenance.right.sha256)}</dd></dl>
 ${provenanceDetails}
 <p>Retain the input snapshots to reproduce this report. Definition-backed means agreement under the saved implementation profile, not authentication of the producer or independent verification of completeness. Declared conditions are not independently verified. This file contains aggregate input values; share it only with intended recipients.</p>
-</body></html>\n`;
+`;
+}
+
+export function renderComparison(result: Comparison): string {
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenMasu cohort comparison</title></head><body>
+${renderComparisonContent(result)}</body></html>\n`;
 }

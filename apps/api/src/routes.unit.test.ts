@@ -31,7 +31,8 @@ describe("declarative API route security", () => {
   });
 
   it("C03 declares every read-only route without mutation authority", () => {
-    assert.equal(routes.filter((route) => !route.mutates).every((route) => route.method === "GET"), true);
+    assert.equal(routes.filter((route) => !route.mutates).every((route) => route.method === "GET"
+      || (route.handler === "dashboard_comparison_submit" && route.method === "POST" && route.capability === "read" && route.auth === "dashboard_session")), true);
     assert.equal(routes.find((route) => route.handler === "max_ingest")?.mutates, true);
   });
 

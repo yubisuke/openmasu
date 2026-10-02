@@ -105,7 +105,8 @@ Explicit commerce definitions connect that selected source to purchase/refund
 and total-net cohorts, exercised by fixture 60. Bounded explicit late-input
 requests now connect revenue and commerce arrivals to saved-run corrections.
 Daily schedules discover bounded frozen campaign targets. The external ad-ROAS
-declaration bridge is also source implemented; ten slices remain planned.
+declaration bridge and bounded dashboard comparison flow are also source
+implemented; nine slices remain planned.
 
 The first priority is a connected measurement path: tracking link, SDK install,
 selected acquisition source, campaign revenue and cost, daily ROAS, late-input
@@ -133,14 +134,14 @@ by the initial #188 conversion/revenue slice.
 The workflow batch addresses comparison between a captured OpenMasu calculation and an
 external aggregate. The CSV converter and pure comparator now support explicit
 external calculation declarations for one elapsed ad-revenue ROAS family,
-retaining the different evidence levels and requiring opt-in. The next slice
-connects this path to the dashboard. Unknown or incompatible conditions remain blocked.
+retaining the different evidence levels and requiring opt-in. A bounded SSR
+flow connects this path to the dashboard. Unknown or incompatible conditions remain blocked.
 It does not make an external calculation authenticated or independently verified.
 
 | Order | Planned slice | User outcome / exit gate | Project-plan crosswalk |
 | --- | --- | --- | --- |
 | Source implemented | [External calculation declarations #173](https://github.com/yubisuke/openmasu/issues/173) | A saved elapsed ad-revenue ROAS and a fully declared external calculation produce exact deltas with explicit mixed evidence; unknown/mismatched conditions cannot | External comparison meaning |
-| 2 | [Dashboard comparison #174](https://github.com/yubisuke/openmasu/issues/174) | Select saved JSON and external CSV/mapping, inspect conditions, compare and save results through SSR using the same pure functions as the CLI | Comparison workflow |
+| Source implemented | [Dashboard comparison #174](https://github.com/yubisuke/openmasu/issues/174) | Bounded SSR input, condition review and JSON/HTML download reuse CLI pure functions, preserve evidence levels and perform no server-side persistence | Comparison workflow |
 | 3 | [Attribution reason counts #175](https://github.com/yubisuke/openmasu/issues/175) | Read fixed-watermark install attribution counts by recorded status, method and reason without raw identifiers or inferred causes | Attribution analysis |
 | 4 | [Metric schedule controls #176](https://github.com/yubisuke/openmasu/issues/176) | Register, inspect and disable the existing daily schedules through the dashboard | Daily calculation controls |
 | 5 | [Custom-event conversion #177](https://github.com/yubisuke/openmasu/issues/177) | Measure distinct cohort members reaching one explicit event key and their conversion rate, with contract/evaluator/SQL parity | Cohort outcomes |
