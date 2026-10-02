@@ -211,10 +211,13 @@ CLI/Web JSON and HTML downloads without persisting inputs or history (#174).
 [Recorded attribution analysis](attribution-reasons.md) now reads one eligible
 stored acquisition decision per retained install at an explicit cohort period
 and cutoff, with current privacy and no inferred causes (#175).
-The other five workflow slices (#176-#180) remain planned after
+[Daily schedule controls](scheduled-metrics.md#manage-schedules-through-the-dashboard)
+now connect SSR registration, checkpoint inspection and disablement to the
+existing immutable schedule service and worker (#176), with admin-only access.
+The other four workflow slices (#177-#180) remain planned after
 that core work. App Store purchase
 binding, finer advertising grain and separate re-engagement outcomes
-(#186-#188) are scoped follow-ups. Eight slices remain planned. Existing
+(#186-#188) are scoped follow-ups. Seven slices remain planned. Existing
 component evidence and the published v0.3.0-rc.1 record remain unchanged;
 neither proves these remaining connections.
 

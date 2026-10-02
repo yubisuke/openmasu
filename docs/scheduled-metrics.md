@@ -9,7 +9,38 @@ Use the manual `npm run metrics:run` command for an operator-controlled one-off
 calculation or a deliberately selected historical backfill. Use a durable
 schedule when the worker should calculate a stable metric set every day.
 
-## Register a schedule
+## Manage schedules through the dashboard
+
+1. Sign in with an admin-role key, open the app, and select **Manage daily metric
+   schedules** under **App configuration**. The page is
+   `/dashboard/apps/<app-id>/metric-schedules`; like the API, even its list
+   requires the `administer` capability.
+2. Start from [the synthetic schedule JSON](../examples/synthetic/metric-schedule.json).
+   Paste the complete request into **Complete schedule request JSON**. Set
+   `lag_days`, an optional `start_date`, `fx_policy`, `evaluations`, and any
+   explicit `metric_definitions` there. This is the API request, not a second
+   metric designer. The synthetic fixed USD rate is an example, not a live feed.
+3. Select **Register daily calculation**. Registration uses the same validation
+   and metric-ownership rules as the API below, then returns to the list. It
+   does not calculate a run synchronously. The form is limited to 32 KiB after
+   URL encoding; it accepts no credentials or provider configuration.
+4. Refresh to inspect the immutable definition and its digest, status, lag,
+   start date, last completed target date, pending date, safe reason, and any
+   latest campaign-discovery receipt. Missing progress is not success;
+   `partial_unknown` is not a complete upstream report. Open the app's cohort
+   reports to read saved metric runs.
+5. Select **Disable** for an active schedule. There is no edit, resume, or
+   run-now action. Register a new schedule to change its immutable settings.
+   Prior definitions and metric runs remain; an already claimed date may finish.
+
+Page reads use the database reader role and do not write or schedule work.
+Forms require the authenticated app scope, session CSRF token and same-origin
+check. Read-only and operator roles cannot register or disable schedules.
+The dashboard uses cookies, never a bearer key; API calls use bearer keys,
+never the dashboard cookie. Validation errors return a reason without echoing
+the submitted definition. Return to the form and correct the request.
+
+## Register a schedule through the API
 
 The synthetic example calculates D7 ROAS and D7 retention. Its lag is eight
 days: at the current UTC midnight, the full seven-day elapsed window for the
