@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 59 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 60 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -263,6 +263,41 @@ does not enter their snapshot. Matching snapshots can still have different
 definition meanings, which are bound independently by version and bundle.
 Prior fixture inputs and goldens are unchanged. Candidate TS/Python outputs
 were compared before the manually constructed goldens were promoted.
+
+### Fixture 60: selected acquisition commerce
+
+The three native-acquisition records, one USD 10 cost observation, attribution,
+and scope/grouping from fixture 58 are unchanged. Two new accepted SDK commerce
+records belong to the same installation: USD 10 settled purchase at 02:00 and
+USD 4 settled refund at 03:00 on 2026-08-06. The refund's original transaction
+resolves uniquely to that purchase and is below its cap. Both use the existing
+revenue-measurement purpose with no required consent. All five receipts precede
+the fixed 2026-08-12 watermark. The new independent definition version is
+0.4.13, bundle `metric-selected-commerce`, hash
+`49554ad7fe9709e851f5cba7ac12215b539a9b209cc96ab66a085f0b1b46615d`.
+
+Hand-derived D30 values at scale 6: purchase net is `(10 - 4) * 10^6 = 6000000`;
+total net is `(20 + 10 - 4) * 10^6 = 26000000`; one-install LTV is `26000000`;
+ROAS is `(20 + 10 - 4) / 10 * 10^6 = 2600000`. USD FX is 1:1. The ROAS definition
+requires the disjoint-cost policy. Money definitions do not select a cost policy.
+The existing three default definitions plus four explicit definitions are emitted.
+
+The purchase/refund admission, raw and logical artifacts follow the reviewed
+fixture-55 record shapes with the new IDs, times and USD payloads. Purchase payload
+JCS hash is `4c1c9cff0fd384bed8d79ad5b7bad1d058856ee828111e3aba726ec1cb90fe20`;
+refund payload hash is `aff00ca518c9c12fb1b1ed5f5ea0ce1cac55075e0af3372fa657fc8cb97bc7b4`.
+There is one correction `correction:refund-60` targeting `purchase-60`, effective
+at the refund time. Other evidence families remain exactly those of fixture 58.
+
+Independently hash the five accepted record tuples ordered by received time and
+record ID, using the server's `policy-v0.1`, then append the unchanged cost tuple.
+Wrap that digest with the unchanged selected attribution digest as in fixture 58.
+All four runs have `input_snapshot_id=769aa065e07de652ca7fb7667e83736a83b811d384c8fbac727830fa765aa270`.
+The last input position remains `2026-08-12T00:00:00.000Z|revenue-native-acquisition`.
+Evidence adds only the two commerce records; grouping and FX provenance are
+unchanged. TS and independent Python candidate bytes matched, and all 13
+manually constructed expected families matched before promotion. Existing
+fixture inputs and goldens remain unchanged.
 
 ## Adding a fixture procedure
 

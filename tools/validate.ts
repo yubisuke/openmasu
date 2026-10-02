@@ -322,7 +322,8 @@ function validateRegistryReferences(output: Any, label: string): void {
       "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
       "aak_attributed_reengagements",
     ]);
-    const expectedVersion = definition.cost_selection_policy === "reject_overlapping_grains"
+    const expectedVersion = definition.rule_bundle_id === "metric-selected-commerce"
+      ? "0.4.13" : definition.cost_selection_policy === "reject_overlapping_grains"
       ? "0.4.12" : definition.acquisition_basis === "selected_first_party_click"
       ? "0.4.11"
       : definition.definition.numerator === "total_net_revenue" ||
@@ -573,8 +574,8 @@ if (!summaryOnly) {
         }
       });
     }
-    it("contains 59 fixture directories", () => {
-      check(fixtureDirs.length === 59, `expected 59 fixture directories, found ${fixtureDirs.length}`);
+    it("contains 60 fixture directories", () => {
+      check(fixtureDirs.length === 60, `expected 60 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -1003,12 +1004,22 @@ const scenarios: Array<[string, () => void]> = [
     check(values["cost59-w2-day7:d0_roas"] === "0" && values["cost59-w2-legacy:d0_legacy_roas"] === "95238",
       "scenario 59 isolates another acquisition date and preserves historical definitions");
   }],
+  ["60 selected acquisition commerce and total-net ROAS", () => {
+    const output = fixture("60-selected-commerce").output;
+    const values = Object.fromEntries(output.metric_runs.map((run: Any) => [run.metric_name, run.value_unscaled]));
+    check(output.deliveries.filter((delivery: Any) => delivery.ingestion_status === "accepted").length === 5,
+      "scenario 60 accepts click, install, ad revenue, purchase and capped refund");
+    check(values.cohort_purchase_net_revenue_d30_usd === "6000000"
+      && values.cohort_total_net_revenue_d30_usd === "26000000"
+      && values.cohort_total_net_ltv_d30_usd === "26000000" && values.d30_total_net_roas === "2600000",
+      "scenario 60 hand calculation: (20 + 10 - 4) / 10 = 2.6");
+  }],
 ];
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 59 scenario assertions", () => {
-      check(scenarios.length === 59, "scenario assertion inventory must contain 59 entries");
+    it("contains 60 scenario assertions", () => {
+      check(scenarios.length === 60, "scenario assertion inventory must contain 60 entries");
     });
   });
 
@@ -1577,7 +1588,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 59 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 60 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1617,7 +1628,7 @@ const acceptance: Array<[string, () => void]> = [
     for (const forbidden of ["threshold", "model_weight", "watchlist", "ip_address", "user_agent", "response_timing"]) check(!schemaText.includes(forbidden), `AC20 ${forbidden}`);
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
-  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 59 && outputArtifactCount === 59 * 13, "AC21")],
+  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 60 && outputArtifactCount === 60 * 13, "AC21")],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {
     for (const { output, python } of results.values()) check(equal(output, python), "AC22 evaluator mismatch");
     const vector = { numbers: [333333333.33333329, 1e30, 4.50, 2e-3, 1e-27, -0], string: "€$\u000f\nA'B\"\\\"/" };

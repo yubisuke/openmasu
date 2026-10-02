@@ -136,3 +136,19 @@ only fixture 59 and the shared README should differ. The README gives the
 seven hand-calculated runs and independent snapshot derivation. Runtime SQL
 uses the same selected costs for arithmetic, evidence and replay, while the
 independent Python implementation exercises the contract selection separately.
+
+## Selected acquisition commerce (0.4.13)
+
+The additional `metric-selected-commerce` independent definition version 0.4.13
+extends the already optional acquisition basis to existing purchase-net and
+total-net series. Its ROAS definitions require explicit disjoint-cost selection.
+This is a non-breaking supported-definition extension: no new event or output
+field, database migration, dependency, schema URN, or wire/package version.
+Historical definitions and previously stored runs retain their exact meaning.
+
+The complete new golden inventory is `60-selected-commerce/input.json` and its
+13 `expected_*.json` files. The shared fixture README records every artifact
+family's derivation, the four values and independently calculated snapshot hash.
+`git diff --name-status d985c7a -- fixtures/v0.4/` must show only fixture 60 and
+that README; no prior fixture or golden may change. Candidate TS/Python bytes
+were compared without writing either evaluator's output into golden files.
