@@ -39,7 +39,8 @@ describe("bounded campaign discovery in the existing daily worker", { concurrenc
     await withTenant(app, identity.tenantId, client => client.query(`INSERT INTO ledger.cost_records
       (cost_record_id,tenant_id,app_id,network,campaign_id,country,cost_date,spend_unscaled,spend_scale,currency,
        source,as_of,report_snapshot_digest,cost_key_digest,import_run_id,artifact)
-      SELECT $3,$1,$2,network,$4,country,$5::date,spend_unscaled,spend_scale,currency,source,$6,report_snapshot_digest,$7,import_run_id,$8::jsonb
+      SELECT $3::text,$1::text,$2::text,network,$4::text,country,$5::date,spend_unscaled,spend_scale,currency,
+        source,$6::text::control.canonical_timestamp,report_snapshot_digest,$7::text,import_run_id,$8::jsonb
       FROM ledger.cost_records WHERE tenant_id=$1 AND app_id=$2 AND cost_record_id='cost-native-acquisition'`,
     [identity.tenantId, identity.appId, artifact.cost_record_id, campaign, date, artifact.as_of, artifact.dimension_digest, JSON.stringify(artifact)]));
   }
