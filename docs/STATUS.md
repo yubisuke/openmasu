@@ -208,10 +208,13 @@ retaining `external_declared` evidence; this is not provider verification.
 The [bounded dashboard comparison flow](cohort-comparison.md#compare-through-the-dashboard)
 connects saved JSON and external CSV/mapping to condition review and identical
 CLI/Web JSON and HTML downloads without persisting inputs or history (#174).
-The other six analysis and workflow slices (#175-#180) remain planned after
+[Recorded attribution analysis](attribution-reasons.md) now reads one eligible
+stored acquisition decision per retained install at an explicit cohort period
+and cutoff, with current privacy and no inferred causes (#175).
+The other five workflow slices (#176-#180) remain planned after
 that core work. App Store purchase
 binding, finer advertising grain and separate re-engagement outcomes
-(#186-#188) are scoped follow-ups. Nine slices remain planned. Existing
+(#186-#188) are scoped follow-ups. Eight slices remain planned. Existing
 component evidence and the published v0.3.0-rc.1 record remain unchanged;
 neither proves these remaining connections.
 

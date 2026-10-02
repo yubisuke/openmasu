@@ -15,6 +15,8 @@ import { computeSqlMetricRuns } from "./metrics/cohort.js";
 import { sha256 } from "@openmasu/attribution-core";
 import { compareSnapshots, parseSnapshot } from "../../api/src/cohort-comparison.js";
 import { renderComparison } from "../../api/src/dashboard/comparison-report.js";
+import { renderAttributionReport } from "../../api/src/dashboard/attribution-report.js";
+import { issueDashboardSession } from "../../api/src/session.js";
 
 type Any = Record<string, any>;
 const adminKey = "synthetic-report-admin-key-000000000000000000000001";
@@ -710,5 +712,114 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
     assert.match(html, /data-metric-run-id="run-42-click:daily_click_count"/);
     assert.equal(html.includes("<script"), false);
 
+  });
+
+  it("counts stored acquisition reasons once as of the cutoff with reader API/SSR and current privacy", async () => {
+    const tenant = "tenant-attribution-report", app = "app-attribution-report";
+    const key = "synthetic-attribution-reader-key-0000000000000000000001";
+    const [keyId] = await ensureAdminKeys(appPool, { tenantId: tenant, appId: app }, [{ key, role: "read_only" }]);
+    const session = await issueDashboardSession(appPool, tenant, keyId, 3600);
+    const rowId = (name: string) => `synthetic-attribution-${name}`;
+    const installation = (name: string) => `installation:${rowId(name)}`;
+    const record = async (name: string, occurred = "2026-08-01T12:00:00.000Z", received = "2026-08-01T12:00:01.000Z", kind = "install", accepted = true,
+      scope = { tenant, app }) => withTenant(appPool, scope.tenant, async client => {
+      const id = rowId(name);
+      await client.query(`INSERT INTO control.apps(tenant_id,app_id,created_at) VALUES ($1::text,$2::text,$3::text) ON CONFLICT DO NOTHING`, [scope.tenant, scope.app, received]);
+      await client.query(`INSERT INTO ledger.raw_records
+        (record_id,tenant_id,app_id,producer,producer_version,event_id,delivery_id,event_name,schema_version,payload_sha256,
+         occurred_at,occurred_at_source,received_at,raw_payload_ref,consent_evaluation_policy_version,consent_decision_reason_code,artifact)
+        VALUES ($1::text,$2::text,$3::text,'sdk-android','synthetic','event:'||$1::text,'delivery:'||$1::text,$4::text,'0.4.0',$5::text,
+          $6::text,'device',$7::text,'synthetic-private-payload','synthetic','consent_not_required','{}')`,
+      [id, scope.tenant, scope.app, kind, "a".repeat(64), occurred, received]);
+      await client.query(`INSERT INTO ledger.raw_payload_states(tenant_id,app_id,record_id,lifecycle_status,changed_at) VALUES ($1,$2,$3,'available',$4)`,
+        [scope.tenant, scope.app, id, received]);
+      // A retained delivery without an accepted logical/fact row must never enter the denominator.
+      for (let attempt = 0; attempt < (name === "a" ? 2 : 1); attempt++) await client.query(`INSERT INTO ledger.event_deliveries
+        (delivery_attempt_id,delivery_id,record_id,tenant_id,app_id,received_at,ingestion_status,duplicate_resolution,timeliness,clock_skew_suspected,
+         payload_disposition,consent_evaluation_policy_version,consent_decision_reason_code,artifact)
+        VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6,'none','on_time',false,'retained','synthetic','consent_not_required','{}')`,
+      [`delivery:${id}`, id, scope.tenant, scope.app, received, attempt ? "duplicate_delivery" : accepted ? "accepted" : "rejected"]);
+      if (!accepted) return;
+      await client.query(`INSERT INTO ledger.logical_events(logical_event_id,record_id,tenant_id,app_id,producer,event_id,event_name,timeliness,artifact)
+        VALUES ($1::text,$1::text,$2::text,$3::text,'sdk-android','event:'||$1::text,$4::text,'on_time','{}')`, [id, scope.tenant, scope.app, kind]);
+      if (kind === "install") await client.query(`INSERT INTO ledger.install_facts(logical_event_id,tenant_id,app_id,installation_id,install_type,occurred_at,artifact)
+        VALUES ($1,$2,$3,$4,'first_install',$5,'{}')`, [id, scope.tenant, scope.app, installation(name), occurred]);
+    });
+    const decision = async (name: string, subject: string, status: string, method: string, reason: string, patch: Any = {}) => {
+      const artifact = { attribution_id: rowId(name), tenant_id: tenant, app_id: app, subject_scope: "installation_level", subject_ref: installation(subject),
+        effective_at: "2026-08-01T12:00:00.000Z", decided_at: "2026-08-02T00:00:00.000Z", input_cutoff_at: "2026-08-02T00:00:00.000Z",
+        status, method, reason_code: reason, model: "none", evidence_refs: [], ...patch };
+      await withTenant(appPool, tenant, client => client.query(`INSERT INTO ledger.attribution_results
+        (attribution_id,tenant_id,app_id,subject_scope,subject_ref,effective_at,decided_at,status,method,model,reason_code,artifact)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
+      [artifact.attribution_id, tenant, app, artifact.subject_scope, artifact.subject_ref, artifact.effective_at, artifact.decided_at,
+        artifact.status, artifact.method, artifact.model, artifact.reason_code, JSON.stringify(artifact)]));
+    };
+    for (const name of ["a", "b", "c", "d", "e", "future-decision", "late-evidence"]) await record(name);
+    await record("upper", "2026-08-02T00:00:00.000Z", "2026-08-02T00:00:01.000Z");
+    await record("tokyo-lower", "2026-07-31T15:00:00.000Z");
+    await record("before-tokyo", "2026-07-31T14:59:59.999Z");
+    await record("late-receive", undefined, "2026-08-04T00:00:00.000Z");
+    await record("evidence-click", undefined, "2026-08-04T00:00:00.000Z", "click");
+    await record("rejected", undefined, undefined, "install", false);
+    await record("other-app", undefined, undefined, "install", true, { tenant, app: "other-attribution-app" });
+    await record("other-tenant", undefined, undefined, "install", true, { tenant: "other-attribution-tenant", app: "foreign-attribution-app" });
+    await decision("a-old", "a", "organic", "none", "no_referrer");
+    await decision("a-new", "a", "non_organic", "install_referrer", "valid_install_referrer", {
+      decided_at: "2026-08-02T00:00:00.001Z", input_cutoff_at: "2026-08-02T00:00:00.001Z", supersedes_attribution_id: rowId("a-old") });
+    await decision("b-base", "b", "unattributed", "none", "unknown_click_id");
+    await decision("b-cutoff-future", "b", "unattributed", "none", "window_expired", { input_cutoff_at: "2026-08-04T00:00:00.000Z", supersedes_attribution_id: rowId("b-base") });
+    await decision("d-organic", "d", "organic", "none", "no_referrer");
+    await decision("e-window", "e", "unattributed", "none", "window_expired");
+    await decision("future", "future-decision", "organic", "none", "no_referrer", { decided_at: "2026-08-04T00:00:00.000Z" });
+    await decision("late", "late-evidence", "non_organic", "install_referrer", "valid_install_referrer", {
+      evidence_refs: [{ tenant_id: tenant, app_id: app, ref: rowId("evidence-click") }] });
+    for (const scope of ["aggregate", "engagement_level"]) await decision(`excluded-${scope}`, "a", "unattributed", "none", "synthetic-private-reason", {
+      subject_scope: scope, decided_at: "2026-08-02T01:00:00.000Z" });
+    const apiServer = createServer(createRequestHandler({ pool: appPool, readerPool, payloadStore: {} as PayloadStore,
+      maxConfig: { tenantId: tenant, appId: app, pathSecret: "synthetic", eventKey: "synthetic", tokenMode: "all", maxParameters: 40, maxQueryBytes: 8192 },
+      publicBaseUrl: "http://localhost:8080", redirectorBaseUrl: "http://localhost:8090",
+      dashboard: { enabled: true, publicBaseUrl: "http://localhost:8080", tenantId: tenant, sessionTtlSeconds: 3600 } }));
+    await new Promise<void>(resolve => apiServer.listen(0, "127.0.0.1", resolve));
+    const address = apiServer.address(); assert.ok(address && typeof address === "object");
+    const root = `http://127.0.0.1:${address.port}`, path = `/v1/admin/apps/${app}/attribution`, headers = { authorization: `Bearer ${key}` };
+    const query = { date_from: "2026-08-01", date_to: "2026-08-02", time_zone: "UTC", watermark_at_most: "2026-08-03T00:00:00.000Z" };
+    const read = async (patch: Record<string, string> = {}) => {
+      const response = await fetch(`${root}${path}?${new URLSearchParams({ ...query, ...patch })}`, { headers });
+      const text = await response.text(); assert.equal(response.status, 200, text);
+      assert.doesNotMatch(text, /installation_id|subject_ref|record_id|evidence_refs|artifact|synthetic-private|synthetic-attribution-/);
+      return JSON.parse(text);
+    };
+    const bucket = (result: Any, reason: string | null) => result.data.filter((row: Any) => row.reason_code === reason).reduce((sum: number, row: Any) => sum + Number(row.count), 0);
+    try {
+      assert.equal((await fetch(`${root}${path}`)).status, 401);
+      assert.equal((await fetch(`${root}/dashboard/apps/${app}/attribution`, { headers })).status, 401);
+      assert.equal((await fetch(`${root}/v1/admin/apps/foreign-attribution-app/attribution?${new URLSearchParams(query)}`, { headers })).status, 404);
+      const normal = await read(); assert.equal(normal.denominator, "7");
+      assert.deepEqual(normal.data.map((row: Any) => [row.recording_state, row.status, row.method, row.reason_code, row.count]), [
+        ["not_recorded", null, null, null, "3"], ["recorded", "non_organic", "install_referrer", "valid_install_referrer", "1"],
+        ["recorded", "organic", "none", "no_referrer", "1"], ["recorded", "unattributed", "none", "unknown_click_id", "1"],
+        ["recorded", "unattributed", "none", "window_expired", "1"]]);
+      assert.equal(normal.data.reduce((sum: number, row: Any) => sum + Number(row.count), 0), Number(normal.denominator));
+      const before = await read({ watermark_at_most: "2026-08-02T00:00:00Z" }); assert.equal(bucket(before, "no_referrer"), 2);
+      assert.deepEqual(await read({ watermark_at_most: "2026-08-02T00:00:00.000000Z" }), { ...before, selection: { ...before.selection, watermark_at_most: "2026-08-02T00:00:00.000000Z" } });
+      assert.equal(bucket(await read({ watermark_at_most: "2026-08-02T00:00:00.000999Z" }), "valid_install_referrer"), 0);
+      assert.equal(bucket(await read({ watermark_at_most: "2026-08-02T00:00:00.001000Z" }), "valid_install_referrer"), 1);
+      const later = await read({ watermark_at_most: "2026-08-05T00:00:00Z" }); assert.equal(later.denominator, "8");
+      assert.equal(bucket(later, "valid_install_referrer"), 2); assert.equal(bucket(later, "window_expired"), 2); assert.equal(bucket(later, null), 2);
+      assert.equal((await read({ time_zone: "Asia/Tokyo" })).denominator, "8");
+      assert.equal((await read({ date_from: "2026-09-01", date_to: "2026-09-02" })).denominator, "0");
+      const cookie = `openmasu_dashboard=${session.token}`;
+      const page = await fetch(`${root}/dashboard/apps/${app}/attribution?${new URLSearchParams(query)}`, { headers: { cookie } });
+      assert.equal(page.status, 200); assert.equal(page.headers.get("cache-control"), "no-store");
+      assert.equal(await page.text(), renderAttributionReport(app, normal));
+      for (const extra of ["&installation_id=private", "&date_from=2026-08-01"]) assert.equal((await fetch(`${root}${path}?${new URLSearchParams(query)}${extra}`, { headers })).status, 400);
+      await withTenant(appPool, tenant, async client => {
+        for (const [name, state] of [["d", "redacted"], ["e", "purged"]]) await client.query(`INSERT INTO ledger.raw_payload_states
+          (tenant_id,app_id,record_id,lifecycle_status,changed_at) VALUES ($1,$2,$3,$4,'2026-08-06T00:00:00.000Z')`, [tenant, app, rowId(name), state]);
+      });
+      const privacy = await read(); assert.equal(privacy.denominator, "5");
+      assert.equal(bucket(privacy, "no_referrer"), 0); assert.equal(bucket(privacy, "window_expired"), 0); assert.equal(bucket(privacy, null), 3);
+    } finally { await new Promise<void>((resolve, reject) => apiServer.close(error => error ? reject(error) : resolve())); }
   });
 });
