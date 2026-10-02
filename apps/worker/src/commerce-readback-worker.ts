@@ -518,7 +518,14 @@ export async function processCommerceReadbacks(
       }
       const createdReferences: string[] = [];
       const project = async (client: PoolClient) => {
-        for (const { signed, transaction } of transactions) {
+        for (const { transaction } of transactions) {
+          await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`apple-purchase:${sha256(transaction.transactionId)}`]);
+        }
+        // The provider requests ascending history, but do not rely on page row
+        // order: establish token-backed originals before tokenless renewals.
+        const bindingOrder = [...transactions].sort((a,b) => Number(b.transaction.appAccountToken !== undefined)
+          - Number(a.transaction.appAccountToken !== undefined));
+        for (const { signed, transaction } of bindingOrder) {
           const result = await projectAppleTransaction({ pool,client,store: payloadStore,tenantId: row.tenant_id,appId: row.app_id,
             transaction,signed,now,refundReversal,createdReferences });
           await appendLifecycleFact(client,row,{ eventKind: result, financialEffect: "none", environment,

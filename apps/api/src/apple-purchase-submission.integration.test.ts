@@ -96,7 +96,9 @@ async function harness(t: TestContext, cohort = false) {
       deletionSubjectDigest: privacySubjectDigest(config.installationDigestKey,body) },body,store);
   }
   const facts = () => query(`SELECT 'purchase' AS kind,record_id,transaction_id,amount_unscaled,amount_scale FROM ledger.purchase_facts WHERE tenant_id=$1 AND app_id=$2
-    UNION ALL SELECT 'refund',record_id,transaction_id,amount_unscaled,amount_scale FROM ledger.refund_facts WHERE tenant_id=$1 AND app_id=$2 ORDER BY kind,record_id`);
+    UNION ALL SELECT 'refund',logical.record_id,refund.transaction_id,refund.amount_unscaled,refund.amount_scale
+      FROM ledger.refund_facts AS refund JOIN ledger.logical_events AS logical USING (tenant_id,app_id,logical_event_id)
+      WHERE refund.tenant_id=$1 AND refund.app_id=$2 ORDER BY kind,record_id`);
   return { tenantId,appId,installationId,root,store,dependencies,base,intent,transaction,submit,notify,work,query,remove,facts,measurement,old };
 }
 
@@ -127,10 +129,10 @@ describe("installation-bound App Store monetary projection",{ concurrency: false
   });
 
   it("binds a verified renewal only through the original purchase and deduplicates history pages and notifications",async t => {
-    const h = await harness(t); assert.equal((await h.submit()).status,202); await h.work([h.transaction]);
+    const h = await harness(t); assert.equal((await h.submit()).status,202);
     const renewal = { ...h.transaction,transactionId: "synthetic-renewal",appAccountToken: undefined,purchaseDate: h.transaction.purchaseDate+86400000 };
     assert.equal((await h.notify(renewal)).status,200);
-    assert.deepEqual(await h.work([h.transaction,renewal]),{ processed: 1,deferred: 0,failed: 0 });
+    assert.deepEqual(await h.work([renewal,h.transaction]),{ processed: 2,deferred: 0,failed: 0 });
     assert.equal((await h.facts()).length,2);
     assert.equal((await h.notify(renewal)).status,200); await h.work([renewal,h.transaction]); assert.equal((await h.facts()).length,2);
     const refund = { ...renewal,revocationType: "REFUND_PRORATED",revocationPercentage: 40000,revocationDate: renewal.purchaseDate+1000 };
@@ -215,10 +217,13 @@ describe("installation-bound App Store monetary projection",{ concurrency: false
 
   it("purges submitted and projected evidence in all privacy scopes and after an object-only restore",async t => {
     for (const scope of ["installation","app","tenant"] as const) {
-      const h = await harness(t); await h.submit(); await h.work([h.transaction]);
+      const h = await harness(t); await h.submit();
+      assert.deepEqual(await h.work([h.transaction]),{ processed: 1,deferred: 0,failed: 0 });
+      assert.equal((await h.facts()).length,1);
       await h.submit({ ...h.transaction,signedDate: h.transaction.signedDate+1 });
       const refs = (await h.query(`SELECT evidence_ref AS reference FROM control.apple_purchase_evidence WHERE tenant_id=$1 AND app_id=$2
         UNION SELECT evidence_ref FROM control.commerce_provider_notifications WHERE tenant_id=$1 AND app_id=$2`)).map(row => row.reference);
+      assert.ok(refs.length >= 3,"submitted and projected evidence must exist before testing erasure");
       const backup = join(h.root,"backup"); cpSync(join(h.root,"payloads"),backup,{ recursive: true });
       assert.equal((await h.remove(scope)).status,"completed");
       for (const ref of refs) await assert.rejects(h.store.read(ref),PayloadNotFoundError);
