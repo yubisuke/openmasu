@@ -21,6 +21,7 @@ METRIC_DEFAULT_BUNDLE_HASH = "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac2
 METRIC_PURCHASE_NET_BUNDLE_HASH = "01b66078d11af8ace103a5d2cf594ffe79c19bd59a4dc1f20757339a8a7f4f5f"
 METRIC_PURCHASE_NET_LONG_BUNDLE_HASH = "709f6688c7bb8537b7af3aa3b5a3aa879036a866fe13a21b83244baec6389712"
 METRIC_TOTAL_NET_BUNDLE_HASH = "fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3"
+METRIC_SELECTED_ACQUISITION_BUNDLE_HASH = "6fd998246bb092f81d8539b8e2c04a1abe421a1916480b63dfd018d11c7bccc5"
 DAY_MS = 86_400_000
 
 
@@ -1124,6 +1125,16 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
     def fail() -> None:
         raise ValueError(f"metric_definition_series_mismatch:{metric_name}")
 
+    if "acquisition_basis" in definition or definition.get("rule_bundle_id") == "metric-selected-acquisition":
+        if (definition.get("acquisition_basis") != "selected_first_party_click"
+                or definition.get("anchor_event") != "install"
+                or definition.get("metric_definition_version") != "0.4.11"
+                or definition.get("rule_bundle_id") != "metric-selected-acquisition"
+                or definition.get("rule_bundle_version") != "0.4.11"
+                or definition.get("rule_bundle_hash") != METRIC_SELECTED_ACQUISITION_BUNDLE_HASH
+                or definition.get("definition", {}).get("numerator") not in ("revenue", "active_installations", "cohort_size")):
+            fail()
+
     if definition.get("definition", {}).get("numerator") == "purchase_net_revenue" or metric_name in purchase_net_days:
         expected_day = purchase_net_days.get(metric_name)
         expected_version = "0.4.9" if expected_day in {30, 90} else "0.4.8"
@@ -1231,13 +1242,15 @@ def matches_grouping(
     attempt: dict[str, Any],
     grouping: dict[str, Any] | None,
     attribution_statuses: dict[tuple[str, str, str], str],
+    acquisition: dict[str, Any] | None = None,
 ) -> bool:
     if not grouping:
         return True
     payload = attempt["record"]["payload"]
     context = payload.get("import_context", {})
-    campaign = payload.get("campaign_id", attempt["server"].get("deep_link_resolution", {}).get("campaign_id", context.get("provider_campaign_ref")))
-    network = payload.get("network", payload.get("ad_network", context.get("provider_network")))
+    acquisition = acquisition or {}
+    campaign = payload.get("campaign_id", attempt["server"].get("deep_link_resolution", {}).get("campaign_id", context.get("provider_campaign_ref", acquisition.get("campaign_id"))))
+    network = payload.get("network", payload.get("ad_network", context.get("provider_network", acquisition.get("network"))))
     if grouping.get("campaign_id") is not None and campaign != grouping["campaign_id"]:
         return False
     if grouping.get("network") is not None and network != grouping["network"]:
@@ -1269,6 +1282,47 @@ def eligible_revenue(definition: dict[str, Any], install: dict[str, Any], revenu
         return day(revenue["occurred_at"], definition["aggregation_time_zone"], "occurred_at") == day(anchor.isoformat(timespec="milliseconds").replace("+00:00", "Z"), definition["aggregation_time_zone"], "occurred_at")
     elapsed = timestamp(revenue["occurred_at"], "occurred_at") - timestamp(install["occurred_at"], "occurred_at")
     return timedelta(0) <= elapsed < timedelta(days=day_index + 1)
+
+
+def selected_acquisition_attributions(attributions, included, watermark):
+    records = {attempt_evidence_key(item) for item in included}
+    subjects = {(item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["payload"]["installation_id"])
+                for item in included if item["record"]["event_name"] == "install"}
+    eligible = [item for item in attributions
+                if item["subject_scope"] == "installation_level"
+                and (item["tenant_id"], item["app_id"], item["subject_ref"]) in subjects
+                and item["decided_at"] <= watermark and item["input_cutoff_at"] <= watermark
+                and all(ref["tenant_id"] == item["tenant_id"] and ref["app_id"] == item["app_id"]
+                        and (ref["tenant_id"], ref["app_id"], ref["ref"]) in records for ref in item["evidence_refs"])]
+    superseded = {(item["tenant_id"], item["app_id"], item["supersedes_attribution_id"])
+                  for item in eligible if item.get("supersedes_attribution_id")}
+    latest = {}
+    for item in sorted(eligible, key=lambda item: (utf16_key(item["decided_at"]), utf16_key(item["attribution_id"]))):
+        if (item["tenant_id"], item["app_id"], item["attribution_id"]) not in superseded:
+            latest[(item["tenant_id"], item["app_id"], item["subject_ref"])] = item
+    return latest
+
+
+def acquisition_attribution_rows(attributions):
+    return [[item["tenant_id"], item["app_id"], item["attribution_id"], digest(item)]
+            for item in sorted(attributions, key=lambda item: tuple(utf16_key(item[key])
+                               for key in ("tenant_id", "app_id", "attribution_id")))]
+
+
+def selected_acquisition_dimensions(install, visible, attributions):
+    if install["record"]["producer"].startswith("import:"):
+        return {}
+    tenant, app = install["server"]["tenant_id"], install["server"]["app_id"]
+    attribution = attributions.get((tenant, app, install["record"]["payload"]["installation_id"]), {})
+    if (attribution.get("status"), attribution.get("method"), attribution.get("reason_code")) != (
+            "non_organic", "install_referrer", "valid_install_referrer"):
+        return {}
+    refs = {(ref["tenant_id"], ref["app_id"], ref["ref"]) for ref in attribution["evidence_refs"]}
+    clicks = [item for item in visible if item["record"]["event_name"] == "click"
+              and item["server"]["tenant_id"] == tenant and item["server"]["app_id"] == app
+              and item["record"]["payload"].get("click_id") == install["record"]["payload"].get("click_id")
+              and (tenant, app, item["record"]["record_id"]) in refs]
+    return clicks[0]["record"]["payload"] if len(clicks) == 1 else {}
 
 
 def metric_runs(
@@ -1314,6 +1368,13 @@ def metric_runs(
             attempt for attempt in included
             if evaluation["privacy_state"] != "after" or attempt_evidence_key(attempt) not in lifecycle
         ]
+        acquisition_attributions = selected_acquisition_attributions(attributions, included, evaluation["input_received_at_watermark"])
+        acquisition_statuses = {(item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["payload"]["installation_id"]): "unattributed"
+                                for item in included if item["record"]["event_name"] == "install"}
+        acquisition_statuses.update({key: item["status"] for key, item in acquisition_attributions.items()})
+        acquisition_installs = [item for item in visible if item["record"]["event_name"] == "install"
+                               and matches_grouping(item, evaluation.get("grouping"), acquisition_statuses,
+                                   selected_acquisition_dimensions(item, visible, acquisition_attributions))]
         installs = [
             attempt for attempt in visible
             if attempt["record"]["event_name"] == "install"
@@ -1351,35 +1412,6 @@ def metric_runs(
             }
             for attempt in included
         ]
-        cohort_scopes = {
-            (install["server"]["tenant_id"], install["server"]["app_id"])
-            for install in installs
-        }
-        grouped_costs = [
-            cost for cost in costs
-            if cost["as_of"] <= evaluation["input_received_at_watermark"]
-            and evaluation.get("grouping", {}).get("attribution_status", "non_organic") == "non_organic"
-            and (not cohort_scopes or (cost["tenant_id"], cost["app_id"]) in cohort_scopes)
-            if all(evaluation.get("grouping", {}).get(field) is None or cost.get(field) == evaluation["grouping"][field] for field in ("campaign_id", "network", "country"))
-            and (evaluation.get("grouping", {}).get("cohort_date") is None or cost["date"] == evaluation["grouping"]["cohort_date"])
-        ]
-        current_by_digest: dict[tuple[str, str, str], dict[str, Any]] = {}
-        for cost in sorted(grouped_costs, key=lambda item: (utf16_key(item["as_of"]), utf16_key(item["cost_record_id"]))):
-            current_by_digest[(cost["tenant_id"], cost["app_id"], cost["dimension_digest"])] = cost
-        current_costs = list(current_by_digest.values())
-        cost_snapshot_rows = [
-            ["cost", cost["as_of"], cost["cost_record_id"], cost["report_snapshot_digest"], cost["dimension_digest"]]
-            for cost in sort_by_key(current_costs, lambda item: (item["as_of"], item["cost_record_id"]))
-        ]
-        snapshot_rows = record_snapshot_rows + cost_snapshot_rows
-        cost_evidence = [
-            {
-                "tenant_id": cost["tenant_id"], "app_id": cost["app_id"], "ref": cost["cost_record_id"],
-                "lifecycle_status": "available", "access_class": "protected",
-            }
-            for cost in current_costs
-        ]
-        evidence = sort_by_key(record_evidence + cost_evidence, lambda item: (item["ref"], item["tenant_id"], item["app_id"]))
         ledger = record_snapshot_rows[-1] if record_snapshot_rows else None
         if len(policy["rates"]) != 1:
             raise ValueError("v0.2 metric runs require exactly one structured FX rate")
@@ -1393,8 +1425,38 @@ def metric_runs(
             if metric_name not in definitions_by_name:
                 raise ValueError(f"unknown metric definition: {metric_name}")
             definition = definitions_by_name[metric_name]
+            selected_installs = acquisition_installs if definition.get("acquisition_basis") else installs
+            cohort_scopes = {
+                (install["server"]["tenant_id"], install["server"]["app_id"])
+                for install in selected_installs
+            }
+            grouped_costs = [
+                cost for cost in costs
+                if cost["as_of"] <= evaluation["input_received_at_watermark"]
+                and evaluation.get("grouping", {}).get("attribution_status", "non_organic") == "non_organic"
+                and (not cohort_scopes or (cost["tenant_id"], cost["app_id"]) in cohort_scopes)
+                if all(evaluation.get("grouping", {}).get(field) is None or cost.get(field) == evaluation["grouping"][field] for field in ("campaign_id", "network", "country"))
+                and (evaluation.get("grouping", {}).get("cohort_date") is None or cost["date"] == evaluation["grouping"]["cohort_date"])
+            ]
+            current_by_digest: dict[tuple[str, str, str], dict[str, Any]] = {}
+            for cost in sorted(grouped_costs, key=lambda item: (utf16_key(item["as_of"]), utf16_key(item["cost_record_id"]))):
+                current_by_digest[(cost["tenant_id"], cost["app_id"], cost["dimension_digest"])] = cost
+            current_costs = list(current_by_digest.values())
+            cost_snapshot_rows = [
+                ["cost", cost["as_of"], cost["cost_record_id"], cost["report_snapshot_digest"], cost["dimension_digest"]]
+                for cost in sort_by_key(current_costs, lambda item: (item["as_of"], item["cost_record_id"]))
+            ]
+            snapshot_rows = record_snapshot_rows + cost_snapshot_rows
+            cost_evidence = [
+                {
+                    "tenant_id": cost["tenant_id"], "app_id": cost["app_id"], "ref": cost["cost_record_id"],
+                    "lifecycle_status": "available", "access_class": "protected",
+                }
+                for cost in current_costs
+            ]
+            evidence = sort_by_key(record_evidence + cost_evidence, lambda item: (item["ref"], item["tenant_id"], item["app_id"]))
             eligible_installs = [
-                item for item in installs
+                item for item in selected_installs
                 if definition.get("fraud_policy") != "net"
                 or item["record"]["payload"]["installation_id"] not in excluded_installation_ids
             ]
@@ -1575,7 +1637,9 @@ def metric_runs(
                 "metric_run_id": f"{evaluation['metric_run_id_prefix']}:{metric_name}",
                 "metric_name": metric_name,
                 "metric_definition_version": definition["metric_definition_version"],
-                "input_snapshot_id": digest(snapshot_rows),
+                "input_snapshot_id": digest({"record_and_cost_snapshot_id": digest(snapshot_rows),
+                                             "acquisition_attributions": acquisition_attribution_rows(acquisition_attributions.values())})
+                                     if definition.get("acquisition_basis") else digest(snapshot_rows),
                 "input_received_at_watermark": evaluation["input_received_at_watermark"],
                 "input_ledger_position": f"{ledger[0]}|{ledger[1]}" if ledger else "empty",
                 "computed_at": evaluation["computed_at"],

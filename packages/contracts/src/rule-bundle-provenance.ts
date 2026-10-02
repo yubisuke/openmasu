@@ -6,6 +6,7 @@ export type NonFraudRuleBundleId =
   | "apple-postback-default"
   | "metric-default"
   | "metric-stage-b"
+  | "metric-selected-acquisition"
   | "metric-stage-m3"
   | "metric-purchase-net"
   | "metric-total-net";
@@ -43,6 +44,12 @@ export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonF
     id: "metric-stage-b", version: "0.3.0", kind: "metric",
     implementation: "reference-metric-v0.4",
     rules: ["cohort-roas", "cohort-retention", "cohort-ltv", "cohort-install-count"],
+  },
+  "metric-selected-acquisition": {
+    id: "metric-selected-acquisition", version: "0.4.11", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["cohort-roas", "cohort-retention", "cohort-ltv", "cohort-install-count",
+      "selected-first-party-click-dimensions", "attribution-and-evidence-as-of-watermark"],
   },
   "metric-stage-m3": {
     id: "metric-stage-m3", version: "0.3.1", kind: "metric",

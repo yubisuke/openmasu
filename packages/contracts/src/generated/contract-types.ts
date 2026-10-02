@@ -210,6 +210,7 @@ export type OpenMasuMetricDefinitionV04 = {
     | "apple_conversion_bucket"
   )[];
   fraud_policy?: "gross" | "net";
+  acquisition_basis?: "selected_first_party_click";
   rule_bundle_id: string;
   rule_bundle_version: string;
   rule_bundle_hash: string;

@@ -48,11 +48,32 @@
       "items": { "enum": ["campaign_id", "network", "country", "cohort_date", "metric_date", "attribution_status", "apple_conversion_bucket"] }
     },
     "fraud_policy": { "enum": ["gross", "net"], "default": "gross" },
+    "acquisition_basis": { "const": "selected_first_party_click" },
     "rule_bundle_id": { "$ref": "common.schema.json#/$defs/id" },
     "rule_bundle_version": { "type": "string" },
     "rule_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
   },
   "allOf": [
+    {
+      "if": { "properties": { "acquisition_basis": {} }, "required": ["acquisition_basis"] },
+      "then": {
+        "properties": {
+          "anchor_event": { "const": "install" },
+          "metric_definition_version": { "const": "0.4.11" },
+          "rule_bundle_id": { "const": "metric-selected-acquisition" },
+          "rule_bundle_version": { "const": "0.4.11" },
+          "rule_bundle_hash": { "const": "6fd998246bb092f81d8539b8e2c04a1abe421a1916480b63dfd018d11c7bccc5" },
+          "definition": {
+            "type": "object", "additionalProperties": true,
+            "properties": { "numerator": { "enum": ["revenue", "active_installations", "cohort_size"] } }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "rule_bundle_id": { "const": "metric-selected-acquisition" } }, "required": ["rule_bundle_id"] },
+      "then": { "properties": { "acquisition_basis": {} }, "required": ["acquisition_basis"] }
+    },
     {
       "if": {
         "properties": {

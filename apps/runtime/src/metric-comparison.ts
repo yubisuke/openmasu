@@ -43,6 +43,7 @@ export function captureMetricComparisonContext(
     ...(definition.event_names ? { event_names: [...definition.event_names] } : {}),
     ...(definition.grouping_dimensions ? { grouping_dimensions: [...definition.grouping_dimensions] } : {}),
     ...(definition.fraud_policy ? { fraud_policy: definition.fraud_policy } : {}),
+    ...(definition.acquisition_basis ? { acquisition_basis: definition.acquisition_basis } : {}),
     rule_bundle_id: definition.rule_bundle_id, rule_bundle_version: definition.rule_bundle_version,
     rule_bundle_hash: definition.rule_bundle_hash,
   };
@@ -81,6 +82,7 @@ export function comparisonMeaning(context: MetricComparisonContext) {
     cost_basis: d.definition.cost_basis ?? null, aggregation,
     window: { ...window, boundary: "half_open" },
     population: calculation === "event_count" ? "accepted_logical_events" : "accepted_installation_cohort",
+    acquisition_basis: d.acquisition_basis ?? "recorded_dimensions",
     grouping_dimensions: [...(d.grouping_dimensions ?? [])].sort(),
     activity_events: calculation === "active_installations_over_cohort" ? [...(d.activity_events ?? ["session_start"])].sort() : [],
     event_names: calculation === "event_count" ? [...(d.event_names ?? [])].sort() : [],

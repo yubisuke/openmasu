@@ -1103,6 +1103,12 @@ function validateMetricDefinitionSeries(definition: Any): void {
   const eventNames = definition.event_names ?? [];
   const grouping = definition.grouping_dimensions ?? [];
   const fail = () => { throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`); };
+  if (definition.acquisition_basis !== undefined || definition.rule_bundle_id === "metric-selected-acquisition") {
+    if (definition.acquisition_basis !== "selected_first_party_click" || definition.anchor_event !== "install"
+        || definition.metric_definition_version !== "0.4.11" || definition.rule_bundle_id !== "metric-selected-acquisition"
+        || definition.rule_bundle_version !== "0.4.11" || definition.rule_bundle_hash !== nonFraudBundleHash("metric-selected-acquisition")
+        || !["revenue", "active_installations", "cohort_size"].includes(definition.definition.numerator)) fail();
+  }
   if (definition.definition?.numerator === "purchase_net_revenue" || purchaseNetDays.has(definition.metric_name)) {
     const expectedDay = purchaseNetDays.get(definition.metric_name);
     const expectedVersion = expectedDay === 30 || expectedDay === 90 ? "0.4.9" : "0.4.8";
@@ -1182,6 +1188,49 @@ function convertMoney(payload: Any, fxPolicy: Any): bigint {
   return roundHalfEven(numerator, denominator);
 }
 
+function selectedAcquisitionAttributions(
+  attributions: Attribution[], included: Attempt[], watermark: string,
+): Map<string, Attribution> {
+  const records = new Set(included.map(attemptEvidenceKey));
+  const subjects = new Set(included.filter((attempt) => attempt.record.event_name === "install")
+    .map((attempt) => compositeKey([attempt.server.tenant_id, attempt.server.app_id, attempt.record.payload.installation_id])));
+  const eligible = attributions.filter((attribution) => attribution.subject_scope === "installation_level"
+    && subjects.has(compositeKey([attribution.tenant_id, attribution.app_id, attribution.subject_ref]))
+    && attribution.decided_at <= watermark && attribution.input_cutoff_at <= watermark
+    && attribution.evidence_refs.every((ref) => ref.tenant_id === attribution.tenant_id && ref.app_id === attribution.app_id
+      && records.has(evidenceKey(ref.tenant_id, ref.app_id, ref.ref))));
+  const superseded = new Set(eligible.filter((item) => item.supersedes_attribution_id)
+    .map((item) => compositeKey([item.tenant_id, item.app_id, item.supersedes_attribution_id])));
+  return new Map(sortByKey(eligible.filter((item) =>
+    !superseded.has(compositeKey([item.tenant_id, item.app_id, item.attribution_id]))),
+  (item) => [item.decided_at, item.attribution_id]).map((item) => [
+    compositeKey([item.tenant_id, item.app_id, item.subject_ref]), item,
+  ]));
+}
+
+function acquisitionAttributionRows(attributions: Attribution[]): string[][] {
+  return sortByKey(attributions, (item) => [item.tenant_id, item.app_id, item.attribution_id])
+    .map((item) => [item.tenant_id, item.app_id, item.attribution_id, sha256(item)]);
+}
+
+function selectedAcquisitionDimensions(
+  install: Attempt, visible: Attempt[], attributions: Map<string, Attribution>,
+): { campaign_id?: string; network?: string } {
+  if (install.record.producer.startsWith("import:")) return {};
+  const attribution = attributions.get(compositeKey([
+    install.server.tenant_id, install.server.app_id, install.record.payload.installation_id,
+  ]));
+  if (attribution?.status !== "non_organic" || attribution.method !== "install_referrer"
+      || attribution.reason_code !== "valid_install_referrer") return {};
+  const clicks = visible.filter((candidate) => candidate.record.event_name === "click"
+    && candidate.server.tenant_id === install.server.tenant_id && candidate.server.app_id === install.server.app_id
+    && candidate.record.payload.click_id === install.record.payload.click_id
+    && attribution.evidence_refs.some((ref) => ref.ref === candidate.record.record_id
+      && ref.tenant_id === candidate.server.tenant_id && ref.app_id === candidate.server.app_id));
+  if (clicks.length !== 1) return {};
+  return { campaign_id: clicks[0].record.payload.campaign_id, network: clicks[0].record.payload.network };
+}
+
 function metricRuns(
   input: Any,
   all: Attempt[],
@@ -1216,6 +1265,15 @@ function metricRuns(
       attempt.server.policy_digest,
     ]);
     const visible = included.filter((attempt) => evaluation.privacy_state !== "after" || !lifecycle.has(attemptEvidenceKey(attempt)));
+    const acquisitionAttributions = selectedAcquisitionAttributions(attributions, included, evaluation.input_received_at_watermark);
+    const acquisitionStatuses = new Map<string, Attribution["status"]>(included
+      .filter((attempt) => attempt.record.event_name === "install")
+      .map((attempt) => [compositeKey([attempt.server.tenant_id, attempt.server.app_id,
+        attempt.record.payload.installation_id]), "unattributed"]));
+    for (const [key, attribution] of acquisitionAttributions) acquisitionStatuses.set(key, attribution.status);
+    const acquisitionInstalls = visible.filter((attempt) => attempt.record.event_name === "install" &&
+      matchesGrouping(attempt, evaluation.grouping, acquisitionStatuses,
+        selectedAcquisitionDimensions(attempt, visible, acquisitionAttributions)));
     const installs = visible.filter((attempt) => attempt.record.event_name === "install" &&
       matchesGrouping(attempt, evaluation.grouping, attributionStatuses));
     const revenue = visible.filter((attempt) => attempt.record.event_name === "ad_revenue" &&
@@ -1239,7 +1297,16 @@ function metricRuns(
       lifecycle_status: evaluation.privacy_state === "after" ? (lifecycle.get(attemptEvidenceKey(attempt)) ?? "available") : "available",
       access_class: "protected",
     }));
-    const cohortScopes = new Set(installs.map((install) => compositeKey([install.server.tenant_id, install.server.app_id])));
+    if (fxPolicy.rates.length !== 1) throw new Error("v0.2 metric runs require exactly one structured FX rate");
+    const fxRate = fxPolicy.rates[0];
+    const selectedNames = evaluation.metric_names ?? [
+      "d0_install_to_24h_ad_revenue_usd", "d0_utc_install_calendar_ad_revenue_usd", "d0_jst_install_calendar_ad_revenue_usd",
+    ];
+    for (const metricName of selectedNames) {
+      const definition = definitionsByName.get(metricName);
+      if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
+      const selectedInstalls = definition.acquisition_basis ? acquisitionInstalls : installs;
+    const cohortScopes = new Set(selectedInstalls.map((install) => compositeKey([install.server.tenant_id, install.server.app_id])));
     const groupedCosts = cost_records.filter((cost) => {
       const grouping = evaluation.grouping;
       if (grouping?.attribution_status !== undefined && grouping.attribution_status !== "non_organic") return false;
@@ -1264,16 +1331,6 @@ function metricRuns(
       access_class: "protected",
     }));
     const evidence_refs = sortByKey([...recordEvidence, ...costEvidence], (evidence) => [evidence.ref, evidence.tenant_id, evidence.app_id]);
-    if (fxPolicy.rates.length !== 1) throw new Error("v0.2 metric runs require exactly one structured FX rate");
-    const fxRate = fxPolicy.rates[0];
-    const selectedNames = evaluation.metric_names ?? [
-      "d0_install_to_24h_ad_revenue_usd",
-      "d0_utc_install_calendar_ad_revenue_usd",
-      "d0_jst_install_calendar_ad_revenue_usd",
-    ];
-    for (const metricName of selectedNames) {
-      const definition = definitionsByName.get(metricName);
-      if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
       if (evaluation.grouping && definition.grouping_dimensions) {
         const groupingDimensions = new Set<string>(definition.grouping_dimensions);
         const unsupported = Object.keys(evaluation.grouping)
@@ -1281,8 +1338,8 @@ function metricRuns(
         if (unsupported.length) throw new Error(`unsupported grouping for ${metricName}: ${unsupported.join(",")}`);
       }
       const eligibleInstalls = definition.fraud_policy === "net"
-        ? installs.filter((candidate) => !excludedInstallationIds.has(candidate.record.payload.installation_id))
-        : installs;
+        ? selectedInstalls.filter((candidate) => !excludedInstallationIds.has(candidate.record.payload.installation_id))
+        : selectedInstalls;
       const revenueValue = revenue.reduce((sum, item) => {
         const installation = eligibleInstalls.find((candidate) =>
           candidate.server.tenant_id === item.server.tenant_id && candidate.server.app_id === item.server.app_id &&
@@ -1452,7 +1509,10 @@ function metricRuns(
         metric_run_id: `${evaluation.metric_run_id_prefix}:${metricName}`,
         metric_name: metricName,
         metric_definition_version: definition.metric_definition_version,
-        input_snapshot_id: sha256(snapshotRows),
+        input_snapshot_id: definition.acquisition_basis ? sha256({
+          record_and_cost_snapshot_id: sha256(snapshotRows),
+          acquisition_attributions: acquisitionAttributionRows([...acquisitionAttributions.values()]),
+        }) : sha256(snapshotRows),
         input_received_at_watermark: evaluation.input_received_at_watermark,
         input_ledger_position: ledger ? `${ledger[0]}|${ledger[1]}` : "empty",
         computed_at: evaluation.computed_at,
@@ -1536,11 +1596,12 @@ function matchesGrouping(
   attempt: Attempt,
   grouping: Any,
   attributionStatuses: Map<string, Attribution["status"]>,
+  acquisition?: { campaign_id?: string; network?: string },
 ): boolean {
   if (!grouping) return true;
   const payload = attempt.record.payload;
-  const campaign = payload.campaign_id ?? attempt.server.deep_link_resolution?.campaign_id ?? payload.import_context?.provider_campaign_ref;
-  const network = payload.network ?? payload.ad_network ?? payload.import_context?.provider_network;
+  const campaign = payload.campaign_id ?? attempt.server.deep_link_resolution?.campaign_id ?? payload.import_context?.provider_campaign_ref ?? acquisition?.campaign_id;
+  const network = payload.network ?? payload.ad_network ?? payload.import_context?.provider_network ?? acquisition?.network;
   const country = payload.country ?? payload.import_context?.provider_country;
   if (grouping.campaign_id !== undefined && campaign !== grouping.campaign_id) return false;
   if (grouping.network !== undefined && network !== grouping.network) return false;
