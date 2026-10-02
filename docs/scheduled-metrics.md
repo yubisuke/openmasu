@@ -157,6 +157,12 @@ Definitions are immutable. To change a lag, grouping, metric definition, or FX
 snapshot, disable the old schedule and register a new one. Existing metric runs
 remain reproducible under the old definition digest.
 
+Known limitation: re-registering a metric/version/grouping with the same saved
+input snapshot can currently fail the worker's run uniqueness constraint.
+It does not replace the old result. Do not delete prior runs to work around it;
+the [schedule re-registration fix](https://github.com/yubisuke/openmasu/issues/200)
+tracks safe identity and checkpoint recovery.
+
 ## Execution and recovery model
 
 For each active schedule, the worker:

@@ -107,7 +107,10 @@ requests now connect revenue and commerce arrivals to saved-run corrections.
 Daily schedules discover bounded frozen campaign targets. The external ad-ROAS
 declaration bridge and bounded dashboard comparison flow are also source
 implemented, followed by reader-only recorded attribution analysis and admin
-dashboard controls for the existing daily schedules; seven
+dashboard controls for the existing daily schedules. Synthetic acceptance also
+exposed a saved-run uniqueness collision after schedule disable/re-registration;
+[#200](https://github.com/yubisuke/openmasu/issues/200) must fix that before
+custom-event outcomes. Including that runtime fix, eight
 slices remain planned.
 
 The first priority is a connected measurement path: tracking link, SDK install,
@@ -146,6 +149,7 @@ It does not make an external calculation authenticated or independently verified
 | Source implemented | [Dashboard comparison #174](https://github.com/yubisuke/openmasu/issues/174) | Bounded SSR input, condition review and JSON/HTML download reuse CLI pure functions, preserve evidence levels and perform no server-side persistence | Comparison workflow |
 | Source implemented | [Attribution reason counts #175](https://github.com/yubisuke/openmasu/issues/175) | Bounded fixed-watermark API/SSR reads one eligible stored acquisition decision per retained install, with current privacy and no inferred causes | Attribution analysis |
 | Source implemented | [Metric schedule controls #176](https://github.com/yubisuke/openmasu/issues/176) | Admin-only SSR registration, saved definition/checkpoint inspection and disablement reuse the existing immutable schedule service and worker | Daily calculation controls |
+| Next | [Schedule re-registration recovery #200](https://github.com/yubisuke/openmasu/issues/200) | Re-register an already calculated selection without saved-run identity collision or rewriting its original evidence | Schedule recovery |
 | 5 | [Custom-event conversion #177](https://github.com/yubisuke/openmasu/issues/177) | Measure distinct cohort members reaching one explicit event key and their conversion rate, with contract/evaluator/SQL parity | Cohort outcomes |
 | 6 | [Total-net ROAS evidence #178](https://github.com/yubisuke/openmasu/issues/178) | Explain an existing D30 total-net ROAS from its saved advertising, purchase, refund and cost operands | Commerce calculation evidence |
 | 7 | [Correction controls #179](https://github.com/yubisuke/openmasu/issues/179) | Request a bounded cost-driven recalculation and follow its job and original/replacement run details through the dashboard | Correction workflow |
