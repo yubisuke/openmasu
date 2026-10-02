@@ -16,6 +16,7 @@ type Row = {
 
 const privileges: Privilege[] = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"];
 const readerNoTableSelect = new Set([
+  "control.apple_purchase_evidence",
   "control.apple_purchase_intents",
   "control.cost_schedules",
   "control.admin_keys",
@@ -44,6 +45,7 @@ const readerNoTableSelect = new Set([
   "ephemeral.operator_bulk_export_batches",
 ]);
 const seedControlTruncate = new Set([
+  "control.apple_purchase_evidence",
   "control.apple_purchase_intents",
   "control.metric_recalculation_jobs",
   "control.metric_recalculation_items",

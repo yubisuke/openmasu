@@ -23,10 +23,11 @@ amount.
 App Store Server Notifications V2 verifies both the outer notification and
 nested signed transaction or renewal payload. Revision-based history advances
 with an encrypted cursor and processes pages in ascending revision order.
-The current Apple history path records verified lifecycle evidence. It does not
-yet create installation-bound purchase/refund facts or cohort revenue. That
-projection is an explicit remaining implementation step, not implied by a
-successful history read-back.
+The Apple history path records verified lifecycle evidence and projects
+purchase/refund transaction-price bases only when an active, installation-bound
+purchase intent can be verified. A successful unbound history read-back is not
+cohort revenue. The public Swift preparation/submission API remains a separate
+unfinished connection; the server path is not yet an end-to-end SDK feature.
 
 ### Installation-bound purchase preparation
 
@@ -64,11 +65,54 @@ All three deletion scopes remove intents and enqueue anchor erasure in the
 existing durable purge mechanism. Restore reapplication covers both restored
 rows and previously recorded purge references (including object-only restores).
 
-Transaction submission, authoritative history-to-financial projection, and the
-public Swift preparation/submission API remain incomplete. Until they are
-connected, do not describe this prerequisite as verified iOS purchase revenue.
-Future submission must verify the signed token echo, product, bundle and
-environment without inferring ownership from time, amount or device signals.
+### Signed submission and authoritative projection
+
+Pass the prepared UUID through StoreKit's `appAccountToken` purchase option.
+Submit the returned signed transaction to `POST /v1/apple/purchases/submit`
+with the same installation's raw-body HMAC authentication. Its closed JSON body
+contains `intent_id`, `installation_id`, `signed_transaction`, and
+`revenue_measurement_consent: true`. Configure trusted Apple roots through
+`OPENMASU_APPLE_ROOT_SHA256`; missing roots or a disabled environment return
+`503`. Signature/bundle/environment failures return `400`; mismatched intent,
+installation, token or product returns `403`. No caller-supplied amount is used.
+
+`202 { intent_id, state: "pending" }` means durable admission, not a completed
+sale. The response never contains the transaction identifier or signed payload.
+Replaying the same signed evidence does not enqueue a duplicate. The existing
+Commerce worker reads authoritative transaction history, independently verifies
+every signed transaction, and checks the active intent, registration, credential
+and recognized revenue-consent withdrawal again. Server API credentials must be
+configured separately; API admission does not prove those credentials work.
+
+An echoed prepared token binds its exact product/bundle/environment. A renewal
+without a token may use a single previously verified original-transaction
+binding. An unknown token never falls back to a different binding. Product
+changes, ambiguous originals, account linking and token reassignment are not
+inferred. Unsupported/unbound rows remain non-monetary lifecycle outcomes.
+
+Purchase, refund correction, protected binding, encrypted signed evidence,
+lifecycle progress and page checkpoint commit in the same database transaction.
+Competing notifications serialize by provider transaction; invalid pages and
+storage failures leave no partial financial facts. Refund targets use an opaque
+identifier for one purchase, not the shared subscription-series identifier.
+The raw original identifier remains only in protected evidence; its digest is
+used for verified renewal binding. Previously admitted refund amounts are
+subtracted from the current signed refund basis so polling or a partial-to-full
+update does not duplicate a deduction. A smaller basis does not silently undo
+an old deduction: refund reversal remains the explicit follow-up below.
+
+The existing late-input recalculation API can incorporate these newly received
+facts into saved cohort revenue, total-net LTV and ROAS. Old metric runs remain
+immutable. It is an explicit recalculation request, not an automatic claim that
+all history has arrived. API, worker, metric and privacy integration tests use
+synthetic ES256 signatures and injected provider responses; they do not prove
+live certificate rotation, StoreKit delivery or platform approval.
+
+All three deletion scopes erase submitted evidence, transaction evidence and
+purchase anchors and cancel queued work. An installation deletion also covers
+SDK submissions before their first financial binding. The shared tenant fence
+prevents in-flight read-back from publishing after deletion, and restore
+reapplication includes recorded purge references after object-only restores.
 
 Primary references checked 2026-10-02:
 
@@ -80,9 +124,7 @@ Primary references checked 2026-10-02:
 
 ### Monetary projection boundary
 
-The signed-transaction normalizer is a prerequisite for the pending financial
-projection, not an installation binding or a running purchase-ingestion path.
-It calls the configured signature verifier before reading claims and requires
+The signed-transaction normalizer calls the configured signature verifier before reading claims and requires
 an exact registered bundle/environment match. Raw transaction identifiers and
 the echoed token are protected working data; never log or expose them in reports.
 
@@ -131,5 +173,6 @@ outcomes only.
 ## Residual boundary
 
 Live stores, credentials, delivery, quotas, root/key rotation, complete missed-
-notification recovery, Apple installation-level revenue binding, entitlement,
-tax, and payout remain unverified operator or product concerns.
+notification recovery, the public Swift preparation/submission connection,
+cross-product/account relinking, refund reversal, entitlement, tax and payout
+remain unfinished or unverified operator/product concerns.

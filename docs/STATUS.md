@@ -228,8 +228,12 @@ aligns only comparable saved cohorts and horizons on the current page (#180).
 App Store purchase binding (#186) is in progress: the opt-in
 [purchase-preparation API](design/verified-commerce-lifecycle.md#installation-bound-purchase-preparation)
 now issues protected installation-scoped tokens with retry and deletion safety.
-Transaction submission, verified financial projection and the public Swift API
-remain incomplete. Finer advertising grain and separate re-engagement outcomes
+The signed-submission and history worker now connect verified purchaser-owned
+transaction-price bases and explicit full/prorated refunds to cohort revenue,
+LTV and ROAS with duplicate/privacy and late-recalculation synthetic gates.
+The public Swift API remains incomplete; neither API admission nor this server
+connection proves StoreKit delivery, live roots or accounting proceeds.
+Finer advertising grain and separate re-engagement outcomes
 (#187-#188) remain scoped follow-ups. Verified refund reversals need an explicit
 link to their previously admitted refund and remain a separate follow-up
 ([#209](https://github.com/yubisuke/openmasu/issues/209)); an appended reversed

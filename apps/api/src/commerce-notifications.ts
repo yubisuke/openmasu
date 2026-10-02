@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 import { sha256, type CommerceLifecycleEvent } from "@openmasu/commerce-lifecycle";
 
@@ -13,21 +13,25 @@ export async function recordCommerceNotification(input: {
   readonly event: CommerceLifecycleEvent;
   readonly receivedAt: Date;
   readonly readbackOperation?: "google_subscription" | "google_order_refund" | "apple_transaction_history" | "apple_refund_history";
+  readonly installationIdDigest?: string;
+  readonly persistenceClient?: PoolClient;
+  readonly onEvidenceCreated?: (reference: string) => void;
 }): Promise<boolean> {
   const lifecycleFactId = uuidV7(input.receivedAt.getTime());
   const evidenceRef = await input.payloadStore.write(
     { tenantId: input.tenantId, appId: input.appId, objectId: `commerce-${input.event.provider}-${lifecycleFactId}` },
     input.payload,
   );
+  input.onEvidenceCreated?.(evidenceRef);
   try {
-    const inserted = await withTenant(input.pool, input.tenantId, async (client) => {
+    const persist = async (client: PoolClient) => {
       const notification = await client.query(
         `INSERT INTO control.commerce_provider_notifications (
            provider, notification_digest, tenant_id, app_id, event_kind, subject_digest,
-           evidence_ref, payload_digest, occurred_at, received_at
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT DO NOTHING`,
+           evidence_ref, payload_digest, occurred_at, received_at, installation_id_digest
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT DO NOTHING`,
         [input.event.provider, input.notificationDigest, input.tenantId, input.appId, input.event.eventKind,
-          input.subjectDigest ?? null, evidenceRef, sha256(input.payload), input.event.effectiveAt, input.receivedAt.toISOString()],
+          input.subjectDigest ?? null, evidenceRef, sha256(input.payload), input.event.effectiveAt, input.receivedAt.toISOString(), input.installationIdDigest ?? null],
       );
       if (notification.rowCount !== 1) return false;
       const artifact = {
@@ -68,7 +72,8 @@ export async function recordCommerceNotification(input: {
         );
       }
       return true;
-    });
+    };
+    const inserted = input.persistenceClient ? await persist(input.persistenceClient) : await withTenant(input.pool, input.tenantId, persist);
     if (!inserted) await input.payloadStore.purge(evidenceRef);
     return inserted;
   } catch (error) {

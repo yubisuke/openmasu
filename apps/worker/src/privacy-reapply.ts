@@ -220,13 +220,13 @@ async function encryptedReferences(
   const commerce = await client.query<{ reference: string }>(
     `SELECT DISTINCT notification.evidence_ref AS reference
        FROM control.commerce_provider_notifications AS notification
-      WHERE ${commerceScope} AND notification.evidence_ref LIKE 'encrypted:%'
+      WHERE ${commerceScope} AND notification.event_kind<>'sdk_transaction_submitted' AND notification.evidence_ref LIKE 'encrypted:%'
      UNION
      SELECT DISTINCT readback.cursor_ref AS reference
        FROM ephemeral.commerce_provider_readbacks AS readback
        JOIN control.commerce_provider_notifications AS notification
          ON notification.provider=readback.provider AND notification.notification_digest=readback.notification_digest
-      WHERE ${commerceScope} AND readback.cursor_ref LIKE 'encrypted:%'`,
+      WHERE ${commerceScope} AND notification.event_kind<>'sdk_transaction_submitted' AND readback.cursor_ref LIKE 'encrypted:%'`,
     values,
   );
   const webhookScope = scope === "tenant"
@@ -262,6 +262,22 @@ async function encryptedReferences(
           WHERE purge.tenant_id=$1 AND purge.privacy_request_id=$6 AND purge.payload_ref=intent.anchor_ref))`,
     [request.tenant_id, scope, request.app_id, request.artifact.deletion_subject_digest,
       request.artifact.requested_at, request.privacy_request_id]);
+  const appleFinancial = await client.query<{ reference: string }>(
+    `WITH protected AS (
+      SELECT evidence_ref AS reference,installation_id_digest,recorded_at AS received_at,tenant_id,app_id
+        FROM control.apple_purchase_evidence
+      UNION ALL
+      SELECT evidence_ref,installation_id_digest,received_at,tenant_id,app_id
+        FROM control.commerce_provider_notifications WHERE event_kind='sdk_transaction_submitted'
+      UNION ALL
+      SELECT readback.cursor_ref,notification.installation_id_digest,notification.received_at,notification.tenant_id,notification.app_id
+        FROM control.commerce_provider_notifications AS notification
+        JOIN ephemeral.commerce_provider_readbacks AS readback USING (provider,notification_digest)
+        WHERE notification.event_kind='sdk_transaction_submitted' AND readback.cursor_ref IS NOT NULL
+    ) SELECT reference FROM protected WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3)
+      AND (($2='installation' AND installation_id_digest=$4)
+        OR ($2 IN ('app','tenant') AND control.canonical_timestamp_value(received_at)<=control.canonical_timestamp_value($5::text)))`,
+    [request.tenant_id,scope,request.app_id,request.artifact.deletion_subject_digest,request.artifact.requested_at]);
   // An object-store restore can resurrect an anchor even after its DB row was deleted.
   const recordedPurges = await client.query<{ reference: string }>(
     `SELECT payload_ref AS reference FROM control.privacy_payload_purges
@@ -282,7 +298,7 @@ async function encryptedReferences(
     ...googleResults.rows, ...integrityResults.rows, ...integrityLookups.rows, ...googleLookups.rows,
     ...googleRtdn.rows,
     ...googleConversions.rows, ...commerce.rows,
-    ...webhooks.rows, ...bulk.rows, ...credentials.rows, ...appleIntents.rows, ...recordedPurges.rows,
+    ...webhooks.rows, ...bulk.rows, ...credentials.rows, ...appleIntents.rows, ...appleFinancial.rows, ...recordedPurges.rows,
   ].map((row) => row.reference))].sort();
 }
 
@@ -480,8 +496,10 @@ async function applyRecreatedDatabaseState(
       WHERE readback.provider=notification.provider
         AND readback.notification_digest=notification.notification_digest
         AND readback.tenant_id=$1
-        AND ($2='tenant' OR ($2='app' AND readback.app_id=$3)
-          OR ($2='installation' AND readback.app_id=$3 AND notification.subject_digest IN (
+        AND ((($2='tenant' OR ($2='app' AND readback.app_id=$3))
+              AND (notification.event_kind<>'sdk_transaction_submitted'
+                OR control.canonical_timestamp_value(notification.received_at)<=control.canonical_timestamp_value($6::text)))
+          OR ($2='installation' AND readback.app_id=$3 AND (notification.installation_id_digest=$5 OR notification.subject_digest IN (
             SELECT token.token_digest
               FROM control.google_play_purchase_tokens AS token
               JOIN ledger.google_play_purchase_verification_results AS result
@@ -491,8 +509,8 @@ async function applyRecreatedDatabaseState(
             UNION
             SELECT binding.transaction_digest FROM control.commerce_purchase_bindings AS binding
              WHERE binding.tenant_id=$1 AND binding.app_id=$3 AND binding.purchase_record_id=ANY($4::text[])
-          )))`,
-    [request.tenant_id, scope, request.app_id, records],
+          ))))`,
+    [request.tenant_id, scope, request.app_id, records, request.artifact.deletion_subject_digest, request.artifact.requested_at],
   );
   const metrics = await recalculateMetrics(client, request, new Set(records));
   const priorAudit = await client.query(

@@ -9,6 +9,7 @@ import { OperationalMetrics } from "./operational-metrics.js";
 import { writeOperationalLog } from "./observability.js";
 import { ensureSdkKeys } from "./sdk-auth.js";
 import { applePurchaseEnvironment } from "./apple-purchase-intents.js";
+import { appleLeafKeyFromChain, verifyCompactJws } from "@openmasu/commerce-lifecycle";
 
 const port = Number(process.env.OPENMASU_API_PORT ?? "8080");
 const baseUrl = process.env.OPENMASU_PUBLIC_BASE_URL ?? `http://localhost:${port}`;
@@ -27,6 +28,8 @@ const maxPathSecret = secrets.require("OPENMASU_MAX_PATH_SECRET");
 const maxEventKey = secrets.require("OPENMASU_MAX_EVENT_KEY");
 const pool = createAppPool();
 const readerPool = createReaderPool();
+const appleRootFingerprints = new Set((process.env.OPENMASU_APPLE_ROOT_SHA256 ?? "").split(",")
+  .map(value => value.replaceAll(":", "").trim().toLowerCase()).filter(value => /^[a-f0-9]{64}$/.test(value)));
 const payloadStore = new EncryptedFilePayloadStore(
   process.env.OPENMASU_PAYLOAD_STORE_DIR ?? ".openmasu/payloads",
   secrets.require("OPENMASU_PAYLOAD_MASTER_KEY"),
@@ -150,6 +153,8 @@ const server = createServer(createRequestHandler({
     pool,
     payloadStore,
     applePurchaseEnvironment: applePurchaseEnvironment(process.env.OPENMASU_APP_STORE_PURCHASE_ENVIRONMENT),
+    applePurchaseVerifier: appleRootFingerprints.size === 0 ? undefined
+      : compact => verifyCompactJws(compact, appleLeafKeyFromChain(compact, appleRootFingerprints, new Date())),
     config: {
       tenantId: maxConfig.tenantId,
       appId: maxConfig.appId,
