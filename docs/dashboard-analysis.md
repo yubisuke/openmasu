@@ -7,10 +7,13 @@ metric control; clear an existing name to remove it. The resulting GET URL is
 shareable with another authorized operator. App authorization is still required.
 
 Date ranges include the start and exclude the end. They filter `metric_date`,
-or `cohort_date` when no metric date exists. Campaign, country, attribution status,
+or `cohort_date` when no metric date exists. Campaign, ad group, creative, country, attribution status,
 network, definition version and watermark retain the API query semantics.
 Incompatible platform-aggregate filters are rejected rather than silently ignored.
 Choose **Latest runs** or **All runs including superseded** explicitly.
+Ad-group/creative filters require previously calculated
+[selected acquisition detail runs](acquisition-detail-metrics.md); they do not
+split campaign totals or extend the raw daily record-count projection.
 
 ## Values and provenance
 

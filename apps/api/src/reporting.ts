@@ -8,7 +8,6 @@ import {
   encodeDifferenceCursor,
   encodeMetricCursor,
   encodeRecordCountCursor,
-  groupingDimensionAllowlist,
   ReportQueryError,
   type GroupingDimension,
   type MetricQuery,
@@ -103,7 +102,7 @@ const recordCountMetricNames = new Set([
 ]);
 
 export function supportsRecordCounts(query: MetricQuery): boolean {
-  return Object.keys(query.grouping ?? {}).every(key => key in groupingDimensionAllowlist)
+  return Object.keys(query.grouping ?? {}).every(key => key in dimensionSql)
     && (query.metricNames === undefined || query.metricNames.every((name) => recordCountMetricNames.has(name)));
 }
 

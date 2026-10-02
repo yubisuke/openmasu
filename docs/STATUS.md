@@ -236,8 +236,10 @@ the same path, with synthetic HMAC, retry and consent/reset race tests.
 Neither API admission nor this server
 connection proves StoreKit delivery, live roots or accounting proceeds.
 Finer advertising grain (#187) now has an opt-in v0.4.16 contract, three-engine
-calculation, creative cost input and an explicit CLI example. Operational
-report/filter/schedule integration remains in progress; separate re-engagement
+calculation, creative cost input and an explicit CLI example. API/HTML/CSV
+filters, explicit schedules and bounded cost/late-input corrections preserve
+that grain and saved history; there is no automatic creative discovery or
+estimated allocation of parent cost. Separate re-engagement
 outcomes (#188) are still a follow-up. An additive contract and opt-in metric
 profile now link a cancellation to its previously admitted refund, preserving
 old definitions and saved runs. The verified App Store worker connects a

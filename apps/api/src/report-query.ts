@@ -4,8 +4,10 @@ import { revisedMetricCostPredicate } from "@openmasu/runtime";
 type MetricGrouping = NonNullable<OpenMasuMetricRunV04["grouping"]>["dimensions"];
 export type GroupingDimension = keyof MetricGrouping;
 
-export const groupingDimensionAllowlist: Readonly<Partial<Record<GroupingDimension, true>>> = {
+export const groupingDimensionAllowlist: Readonly<Record<GroupingDimension, true>> = {
   campaign_id: true,
+  ad_group_id: true,
+  creative_id: true,
   network: true,
   country: true,
   cohort_date: true,
@@ -262,7 +264,7 @@ export function parseMetricQuery(input: {
   const selectedAggregate = metricNames.filter((name) => aggregateMetricNames.has(name));
   const selectedDeterministic = metricNames.filter((name) => !aggregateMetricNames.has(name));
   const deterministicOnlyDimensions: GroupingDimension[] = [
-    "campaign_id", "network", "country", "cohort_date", "attribution_status",
+    "campaign_id", "ad_group_id", "creative_id", "network", "country", "cohort_date", "attribution_status",
   ];
   if (selectedAggregate.length > 0 && deterministicOnlyDimensions.some((dimension) => grouping[dimension] !== undefined)) {
     throw new ReportQueryError("metric_series_mismatch");

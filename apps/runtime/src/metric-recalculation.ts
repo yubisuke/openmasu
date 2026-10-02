@@ -56,6 +56,10 @@ export const revisedMetricCostPredicate = `
   AND cost.tenant_id=mr.tenant_id AND cost.app_id=mr.app_id
   AND cost.cost_date::text=mr.grouping->>'cohort_date'
   AND (mr.grouping->>'campaign_id' IS NULL OR cost.campaign_id=mr.grouping->>'campaign_id')
+  AND (mr.grouping->>'ad_group_id' IS NULL OR cost.ad_group_id=mr.grouping->>'ad_group_id')
+  AND (mr.grouping->>'creative_id' IS NULL OR cost.artifact->>'creative_id'=mr.grouping->>'creative_id')
+  AND (NOT (cost.artifact ? 'creative_id') OR
+    mr.comparison_context->'definition'->>'acquisition_dimension_policy'='selected_link_ad_group_creative')
   AND (mr.grouping->>'network' IS NULL OR cost.network=mr.grouping->>'network')
   AND (mr.grouping->>'country' IS NULL OR cost.country=mr.grouping->>'country')
   AND control.canonical_timestamp_value(cost.as_of)>control.canonical_timestamp_value(mr.input_received_at_watermark)`;

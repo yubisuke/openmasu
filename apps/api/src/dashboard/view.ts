@@ -29,6 +29,8 @@ export type DashboardTrackingLink = {
   readonly destination_url: string;
   readonly network?: string;
   readonly campaign_id?: string;
+  readonly ad_group_id?: string;
+  readonly creative_id?: string;
   readonly status: "active" | "paused" | "archived";
   readonly created_at: string;
 };

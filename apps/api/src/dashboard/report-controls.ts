@@ -3,6 +3,7 @@ import { groupingDimensionAllowlist, type MetricQuery } from "../report-query.js
 export const reportFields = [
   ["date_from", "Date from (inclusive)"], ["date_to", "Date to (exclusive)"],
   ["grouping_campaign_id", "Campaign ID"], ["grouping_country", "Country (two uppercase letters)"],
+  ["grouping_ad_group_id", "Ad group ID"], ["grouping_creative_id", "Creative ID"],
   ["grouping_attribution_status", "Attribution status (organic / non_organic / unattributed)"],
   ["grouping_cohort_date", "Cohort date"], ["grouping_metric_date", "Metric date"],
   ["grouping_network", "Network"], ["grouping_apple_conversion_bucket", "Apple conversion bucket"],

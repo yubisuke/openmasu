@@ -36,6 +36,39 @@ D30/D90 total-net revenue/LTV/ROAS. Commerce uses exact refund cancellation.
 Current custom-conversion and retention profiles remain separate; they do not
 silently acquire the new dimensions.
 
+## Read and operate the same grain
+
+In **Measurement links**, the existing create-link form accepts optional
+**Ad group ID** and **Creative ID**. The link list shows these values. They
+describe the link, not a guessed mapping of a provider's naming hierarchy.
+Use the same explicit values in the cost mapping and metric evaluation.
+
+In **Analyze metrics**, use the corresponding two filters. The API equivalents
+are `grouping_ad_group_id` and `grouping_creative_id` on
+`GET /v1/reports/metrics?app_id=<app>`. Filters select saved runs; they do not
+calculate a breakdown from a campaign-only result. The selection is retained
+in HTML navigation and CSV export, and the API and dashboard use the same CSV
+encoder. Existing raw daily record counts do not support these two dimensions
+and reject them with `raw_metric_unsupported`; use the explicitly calculated
+`cohort_install_count` for selected-acquisition populations.
+
+For [scheduled metrics](scheduled-metrics.md), supply the explicit v0.4.16
+`metric_definitions`, `fx_policy`, and `evaluations` from the example above.
+Each schedule evaluation has `date_dimension: "cohort_date"`; remove its
+static `cohort_date` from `grouping` and retain the desired ad-group/creative
+selection. Register through the existing application **Metric schedules** form
+or `POST /v1/admin/apps/<app>/metric-schedules`. A detail filter with a legacy
+definition is rejected, not silently promoted. Detail schedules require
+explicit selections; campaign discovery does not discover creative hierarchies.
+
+The existing bounded [recalculation workflow](metric-corrections.md) retains
+the saved detail policy. A corrected cost row selects only matching detail
+grains and their campaign aggregates. A late revenue or settled commerce input
+uses the installation's selected click to find the same grains. Unrelated
+creatives are not recalculated. Each replacement supersedes a saved run;
+original artifacts and definitions remain unchanged. This connection does not
+add automatic all-history recalculation or broaden the supported cost adapters.
+
 ## Meaning and limitations
 
 - Select explicit ad-group/creative values inside `evaluation.grouping`.
@@ -49,9 +82,9 @@ silently acquire the new dimensions.
 - Previously persisted click facts without detail remain unknown. Existing
   provider adapters do not promise creative-level cost or automatic metadata
   discovery. Only provider-neutral manual CSV gains creative input here.
-- This first implementation covers contract, TypeScript/Python, SQL calculation,
-  persistence and CLI input. Dashboard/report-filter and durable schedule/cost
-  correction exposure is not yet delivered by this stage.
+- Reporting, schedules and bounded cost/late-input correction use this same
+  explicit profile. An operator must still import the relevant cost grain and
+  choose the definitions; absence of detail is not a zero-valued creative.
 
 ## Evidence
 
@@ -60,4 +93,7 @@ silently acquire the new dimensions.
 state the independent values. `npm run validate` compares full TS/Python output;
 `npm run test:metric-parity` exercises SQL including manual CSV, unknown detail,
 overlap, revisions, duplicate deliveries, refund cancellation and deletion.
+The runtime integration suite's `selected acquisition detail operator workflow`
+connects link creation, API/HTML/CSV filtering, registration, scheduled SQL runs,
+cost correction and late revenue while checking immutable original results.
 These are synthetic code gates, not live-provider or production evidence.
