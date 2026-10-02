@@ -26,6 +26,8 @@ export function buildHttpApiContract(): Json {
     comparison_context: { type: ["object", "null"], description: "Saved aggregate-only meaning; null/unknown is not reconstructed." },
     cost_update_state: { type: "string", description: "Current persisted recalculation/input-revision state." },
     late_input_update_state: { type: "string", description: "Explicit late-input request state; not proof of upstream completeness." },
+    measurement_series: { enum: ["cohort_or_activity", "first_party_engagement", "apple_aggregate"], description: "Separate reporting populations; do not add across series." },
+    engagement_evidence_trust: { enum: ["device_reported_forgeable", null], description: "A first-party open is an SDK claim, not proof of human activity; null is not a verification claim for other series." },
   });
   for (const name of ["currency", "amount_scale", "ratio_scale", "undefined_reason", "supersedes_metric_run_id"]) metricProperties[name] = nullable(metricProperties[name]);
   const schemas: Json = {

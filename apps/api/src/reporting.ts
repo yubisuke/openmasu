@@ -2,6 +2,7 @@ import type { Pool, PoolClient } from "pg";
 import { withTenant } from "@openmasu/runtime";
 import type { MetricComparisonContext } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
+import { metricSeries } from "./metric-series.js";
 import {
   buildDifferenceQuery,
   buildMetricQuery,
@@ -24,6 +25,7 @@ export const metricColumns = [
   "rule_bundle_id", "rule_bundle_hash", "aggregation_time_zone", "computed_at",
   "reproducibility_status", "supersedes_metric_run_id", "input_ledger_position",
   "grouping_digest", "superseded", "comparison_context", "cost_update_state", "late_input_update_state",
+  "measurement_series", "engagement_evidence_trust",
 ] as const;
 
 export const differenceColumns = [
@@ -61,6 +63,8 @@ export type MetricReportRow = {
   readonly comparison_context?: MetricComparisonContext | null;
   readonly cost_update_state?: "recalculation_pending" | "input_revised" | "no_recorded_revision" | "unknown";
   readonly late_input_update_state?: "recalculation_pending" | "unavailable" | "completed" | "no_recorded_request";
+  readonly measurement_series?: ReturnType<typeof metricSeries>;
+  readonly engagement_evidence_trust?: "device_reported_forgeable" | null;
 };
 
 export type MetricReportPage = {
@@ -145,6 +149,8 @@ function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, c
     comparison_context: comparisonContext,
     cost_update_state: costUpdateState ?? "unknown",
     late_input_update_state: lateInputUpdateState ?? "no_recorded_request",
+    measurement_series: metricSeries(artifact.metric_name),
+    engagement_evidence_trust: metricSeries(artifact.metric_name) === "first_party_engagement" ? "device_reported_forgeable" : null,
   };
 }
 

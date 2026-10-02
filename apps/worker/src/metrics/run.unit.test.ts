@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { buildMetricDefinitionsInput } from "./run.js";
+import { engagementMetricDefinitions } from "@openmasu/contracts";
 
 const config = (grouping: Record<string, string> = {}) => ({
   tenant_id: "tenant-synthetic",
@@ -15,6 +16,21 @@ const config = (grouping: Record<string, string> = {}) => ({
 });
 
 describe("WO16 metric backfill CLI", () => {
+  it("uses the engagement open date and current privacy state without injecting an install cohort", () => {
+    const definitions = engagementMetricDefinitions("tutorial_complete");
+    const source = { ...config(), metric_definitions: definitions,
+      evaluations: [{ metric_names: definitions.map(d => d.metric_name), grouping: { campaign_id: "synthetic-engagement" } }] };
+    const first = buildMetricDefinitionsInput(source, "2026-08-21").metric_evaluations[0];
+    assert.deepEqual(first.grouping, { campaign_id: "synthetic-engagement", metric_date: "2026-08-21" });
+    assert.equal(first.privacy_state, "after");
+    assert.equal(first.input_received_at_watermark, "2026-08-23T00:00:00.000Z");
+    const declared = { ...source, evaluations: [{ ...source.evaluations[0], grouping: { metric_date: "2026-08-20" } }] };
+    const backfill = buildMetricDefinitionsInput(declared, "2026-08-21", "2026-08-25T00:00:00.000Z").metric_evaluations[0];
+    assert.equal(backfill.grouping.metric_date, "2026-08-20");
+    assert.equal(backfill.input_received_at_watermark, "2026-08-25T00:00:00.000Z");
+    assert.throws(() => buildMetricDefinitionsInput({ ...source, evaluations: [{ ...source.evaluations[0], grouping: { cohort_date: "2026-08-21" } }] }, "2026-08-21"), /separate_anchor_evaluation/);
+    assert.throws(() => buildMetricDefinitionsInput({ ...source, evaluations: [{ ...source.evaluations[0], metric_names: [...source.evaluations[0].metric_names, "d7_roas"] }] }, "2026-08-21"), /separate_anchor_evaluation/);
+  });
   it("keeps the legacy next-day watermark and date default", () => {
     const input = buildMetricDefinitionsInput(config(), "2026-08-01");
     assert.equal(input.metric_evaluations[0].input_received_at_watermark, "2026-08-02T00:00:00.000Z");

@@ -93,6 +93,11 @@ function validStringArray(value: unknown, allowed?: ReadonlySet<string>): boolea
 }
 
 function validMetricDefinition(value: JsonObject): boolean {
+  if (value.engagement_credit_policy !== undefined || value.anchor_event === "deep_link_open"
+      || value.rule_bundle_id === "metric-first-party-engagement"
+      || ["engagement_custom_event_converters_24h", "engagement_ad_revenue_24h_usd"].includes(String(value.metric_name))) {
+    return validateMetricDefinition(value);
+  }
   if (value.acquisition_dimension_policy !== undefined || value.rule_bundle_id === "metric-acquisition-detail"
       || (Array.isArray(value.grouping_dimensions) && value.grouping_dimensions.some(key => ["ad_group_id", "creative_id"].includes(String(key))))) {
     return validateMetricDefinition(value) && value.acquisition_dimension_policy === "selected_link_ad_group_creative"
@@ -267,6 +272,16 @@ export function normalizeMetricScheduleRequest(
     }
     const dateDimension: "cohort_date" | "metric_date" = evaluation.date_dimension;
     const grouping = normalizedGrouping(evaluation.grouping);
+    const engagement = evaluation.metric_names.some(name =>
+      suppliedDefinitions.find(definition => definition.metric_name === name)?.engagement_credit_policy
+      || ["engagement_custom_event_converters_24h", "engagement_ad_revenue_24h_usd"].includes(String(name)));
+    if (engagement && (dateDimension !== "metric_date" || lagDays < 2
+        || Object.keys(grouping).some(key => key !== "campaign_id")
+        || evaluation.campaign_discovery !== undefined
+        || evaluation.metric_names.some(name => !suppliedDefinitions.find(definition => definition.metric_name === name)?.engagement_credit_policy)
+        || fxPolicy.target_currency !== "USD" || fxPolicy.target_scale !== 6)) {
+      throw new Error("metric_schedule_engagement_profile_required");
+    }
     if ((grouping.ad_group_id !== undefined || grouping.creative_id !== undefined)
         && (dateDimension !== "cohort_date" || evaluation.metric_names.some(name => {
           const metric = suppliedDefinitions.find(value => value.metric_name === name);

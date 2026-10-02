@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { ACQUISITION_DETAIL_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS, SELECTED_COMMERCE_METRIC_DEFINITIONS, REFUND_REVERSAL_METRIC_DEFINITIONS, customConversionMetricDefinitions } from "@openmasu/contracts";
 import { metricScheduleTargetDate, normalizeMetricScheduleRequest } from "./metric-schedules.js";
+import { engagementMetricDefinitions } from "@openmasu/contracts";
 
 const body = {
   lag_days: 2,
@@ -25,6 +26,21 @@ const body = {
 };
 
 describe("scheduled metric configuration", () => {
+  it("requires explicit engagement definitions open-date grouping and a complete-window lag", () => {
+    const request = { ...body, metric_definitions: engagementMetricDefinitions("tutorial_complete"),
+      evaluations: [{ metric_names: ["engagement_custom_event_converters_24h", "engagement_ad_revenue_24h_usd"], date_dimension: "metric_date", grouping: {} }] };
+    const normalize = (value: any) => normalizeMetricScheduleRequest(value, new Date("2026-08-23T12:00:00.000Z"));
+    assert.deepEqual(normalize(request).definition.metric_definitions, request.metric_definitions);
+    assert.throws(() => normalize({ ...request, lag_days: 1 }), /engagement_profile_required/);
+    assert.throws(() => normalize({ ...request, metric_definitions: [] }), /engagement_profile_required/);
+    assert.throws(() => normalize({ ...request, fx_policy: { ...request.fx_policy, target_scale: 3 } }), /engagement_profile_required/);
+    for (const change of [{ date_dimension: "cohort_date" }, { grouping: { country: "JP" } },
+      { metric_names: ["engagement_ad_revenue_24h_usd", "d7_roas"] },
+      { campaign_discovery: { policy: "selected_acquisition_and_cost_v1", max_targets: 10 } }]) {
+      assert.throws(() => normalize({ ...request, evaluations: [{ ...request.evaluations[0], ...change }] }), /engagement_profile_required/);
+    }
+    assert.throws(() => normalize({ ...request, metric_definitions: request.metric_definitions.map(d => ({ ...d, engagement_credit_policy: undefined })) }), /definitions_invalid/);
+  });
   it("captures explicit detail definitions and groupings without implicit discovery or legacy upgrade", () => {
     const request = { ...body, metric_definitions: structuredClone(ACQUISITION_DETAIL_METRIC_DEFINITIONS),
       evaluations: [{ metric_names: ["d30_total_net_roas"], date_dimension: "cohort_date",
