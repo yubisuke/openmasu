@@ -246,9 +246,31 @@ describe("selected native acquisition SQL parity", { concurrency: false }, () =>
     const baseline = JSON.parse(readFileSync(join(process.cwd(), "fixtures/v0.4/61-custom-conversion/input.json"), "utf8"));
     for (const entry of syntheticConversionCases(baseline, fixture58())) {
       await ingestFixture(`conversion-${entry.name}`, entry.input, app, seed);
-      const runs = await computeSqlMetricRuns(app, entry.input, false);
+      const runs = await computeSqlMetricRuns(app, entry.input, entry.name === "three-of-ten");
       assert.deepEqual(runs.map(row => row.value_unscaled ?? row.undefined_reason), entry.expected, entry.name);
       assert.equal(jcs(runs), jcs(evaluate(entry.input).metric_runs), entry.name);
+      if (entry.name === "three-of-ten") {
+        const saved = await withTenant(app, "tenant-a", async client => (await client.query(
+          `SELECT run.artifact, run.comparison_context, manifest.artifact AS replay
+           FROM ledger.metric_runs run JOIN control.metric_replay_manifests manifest
+             ON manifest.tenant_id=run.tenant_id AND manifest.app_id=run.app_id
+             AND manifest.source_metric_run_id=run.metric_run_id
+           WHERE run.tenant_id=$1 AND run.app_id=$2 AND run.metric_run_id=ANY($3::text[])`,
+          ["tenant-a", "app-a", runs.map(run => run.metric_run_id)],
+        )).rows);
+        assert.equal(saved.length, 2);
+        for (const row of saved) {
+          const definition = entry.input.metric_definitions.find((d: Any) => d.metric_name === row.artifact.metric_name);
+          assert.equal(jcs(row.replay.metric_definition), jcs(definition));
+          assert.equal(row.comparison_context.definition.conversion_event_key, "tutorial_complete");
+          assert.equal(row.comparison_context.definition_digest, sha256(definition));
+          const replayed = await computeSqlMetricRuns(app, {
+            server_context: entry.input.server_context, metric_definitions: [row.replay.metric_definition],
+            metric_evaluations: [row.replay.evaluation], fx_policy: row.replay.fx_policy,
+          }, false);
+          assert.equal(jcs(replayed), jcs([row.artifact]));
+        }
+      }
     }
   });
 
