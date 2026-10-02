@@ -21,7 +21,7 @@ const opensSql = `
     FROM ledger.attribution_results AS candidate
     WHERE candidate.tenant_id=deep.tenant_id AND candidate.app_id=deep.app_id
       AND candidate.subject_scope='engagement_level' AND candidate.subject_ref='engagement:' || raw.record_id
-      AND candidate.decided_at <= $3 AND candidate.input_cutoff_at <= $3
+      AND candidate.decided_at <= $3 AND candidate.artifact->>'input_cutoff_at' <= $3
     ORDER BY candidate.decided_at DESC,candidate.attribution_id COLLATE "C" ASC LIMIT 1
   ) AS attribution ON true
   WHERE deep.tenant_id=$1 AND deep.app_id=$2 AND raw.received_at <= $3
