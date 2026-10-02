@@ -72,11 +72,14 @@ This path is a stopped-writer upgrade, not zero-downtime deployment.
 
 On failure leave traffic stopped. Continue the same checksummed forward migration,
 or restore the complete matched backup into a **new isolated PostgreSQL 17 target**.
-Provision roles and create the new database with `OWNER openmasu_owner` before
-`pg_restore --exit-on-error --no-owner --role=openmasu_owner`; this preserves the
-owner needed by subsequent forward migrations, including creation in the default
-`public` schema through PostgreSQL's database-owner privileges. A CREATE grant on
-the database alone does not permit creation in `public`. Never restore over the live DB.
+Provision roles and create the new database with `OWNER openmasu_owner`. Restore
+through the privileged bootstrap/admin connection using `pg_restore --exit-on-error`
+without `--no-owner` or `--role`: this retains the archive's original object owners
+for subsequent forward DDL, while COPY runs with the privilege needed for FORCE RLS
+tables. PostgreSQL custom-format dumps retain ownership metadata even when
+`pg_dump --no-owner` was supplied. The destination's database owner also permits
+creation in the default `public` schema; a database-level CREATE grant alone does
+not. Do not weaken RLS or grant BYPASSRLS to application roles. Never restore over the live DB.
 Drain/reapply recognized privacy state before reports or traffic. An earlier app
 may be used only if its schema compatibility is established; no automatic rollback,
 table deletion or resurrection of deleted payloads is provided.
@@ -92,3 +95,8 @@ to a restored encrypted payload snapshot. The unrelated historical metric/ledger
 remain byte-identical; new comparison context stays NULL. JSON output records elapsed
 time and the isolated absent-writer boundary. No real recovery time, production
 durability, zero downtime or backup schedule is established by this test.
+
+Ownership behavior checked against PostgreSQL 17 primary documentation on 2026-10-02:
+
+- https://www.postgresql.org/docs/17/app-pgdump.html
+- https://www.postgresql.org/docs/17/app-pgrestore.html

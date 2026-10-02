@@ -50,19 +50,21 @@ deployment.
 1. Provision the OpenMasu database roles in a new PostgreSQL 17 cluster. Create
    an empty destination database; do not point application traffic at it. The
    migration URL must use the privileged bootstrap/admin connection, not
-   `openmasu_app`, `openmasu_reader`, or `openmasu_seed`. Migrations transfer
-   restored object ownership to the NOLOGIN `openmasu_owner` role.
+   `openmasu_app`, `openmasu_reader`, or `openmasu_seed`. Preserve the original
+   NOLOGIN `openmasu_owner` object ownership for subsequent forward migrations.
 2. Restore the archive:
 
    ```bash
-   pg_restore --exit-on-error --no-owner --dbname "$OPENMASU_MIGRATION_DATABASE_URL" openmasu.dump
+   pg_restore --exit-on-error --dbname "$OPENMASU_MIGRATION_DATABASE_URL" openmasu.dump
    ```
 
    Before a forward version upgrade, create the isolated database with
-   `OWNER openmasu_owner` and restore as `--role=openmasu_owner`. A database-level
-   CREATE grant alone does not permit creation in the default public schema. A no-owner
-   restore as the bootstrap administrator alone does not transfer old table
-   ownership for later DDL. Follow [Safe upgrade](upgrade.md) for the complete path.
+   `OWNER openmasu_owner`. Restore as the privileged administrator without
+   `--no-owner` or `--role`; archive ownership metadata is retained even when
+   `pg_dump --no-owner` was supplied with custom format. This preserves table
+   ownership without running COPY as the FORCE-RLS owner. A database-level CREATE
+   grant alone does not permit creation in the default public schema. Follow
+   [Safe upgrade](upgrade.md) for the complete path. Do not weaken RLS for restore.
 
 3. Restore the matching encrypted object and wrapped-key snapshot. Configure
    the same out-of-band payload master key and application database role.
@@ -107,7 +109,8 @@ latest export excludes redacted evidence.
 The test does not prove storage durability, a recovery-time objective, or an
 operator's credentials and access controls.
 
-Primary references were checked on 2026-08-20:
+Primary references were checked on 2026-10-02:
 
 - https://www.postgresql.org/docs/17/backup-dump.html
 - https://www.postgresql.org/docs/17/app-pgrestore.html
+- https://www.postgresql.org/docs/17/app-pgdump.html

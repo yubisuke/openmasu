@@ -551,7 +551,9 @@ it("upgrades the frozen v0.2.0 backup, resumes a failed migration, retains ledge
       payload_snapshot_id: "synthetic:snapshot", master_key_ref: "synthetic:key", privacy_boundary_at: "2026-08-02T00:00:01.000Z" }, "v0.2.0");
     await verifyBackupFiles(backup, dumpPath, payloadArchive);
     await assert.rejects(verifyBackupFiles({ ...backup, payload_sha256: "b".repeat(64) }, dumpPath, payloadArchive), /upgrade_backup_checksum_mismatch/);
-    runPostgresTool("pg_restore", ["--exit-on-error", "--no-owner", "--role=openmasu_owner", "--dbname", target.toString(), dumpPath], dumpPath);
+    // Restore through the privileged connection while retaining archive ownership.
+    // COPY must not run as the FORCE-RLS owner, and later DDL needs its original owner.
+    runPostgresTool("pg_restore", ["--exit-on-error", "--dbname", target.toString(), dumpPath], dumpPath);
     targetClient = new Client({ connectionString: target.toString() }); await targetClient.connect();
     assert.equal((await upgradePreflight(targetClient, backup)).pending, current.length - 48);
     await assert.rejects(migrateDatabase(targetClient, current, (migration) => { if (migration.version === "050") throw new Error("synthetic_mid_migration_failure"); }), /synthetic_mid_migration_failure/);
