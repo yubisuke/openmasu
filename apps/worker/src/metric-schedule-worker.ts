@@ -1,8 +1,9 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { sha256Jcs } from "@openmasu/fraud-rules";
-import { recordJobOutcome, runWithTerminalJobOutcome, withTenant } from "@openmasu/runtime";
-import { computeSqlMetricRuns, type MetricScope } from "./metrics/cohort.js";
+import { acquirePrivacyTenantSessionReadFence, recordJobOutcome, runWithTerminalJobOutcome, withTenant } from "@openmasu/runtime";
+import { computeSqlMetricRuns, computeSqlMetricRunsWithClient, type MetricScope } from "./metrics/cohort.js";
 import { buildMetricDefinitionsInput } from "./metrics/run.js";
+import { freezeCampaignTargets, schedulePrivacyEpoch, type CampaignTargetSet } from "./metric-campaign-discovery.js";
 
 type Any = Record<string, any>;
 
@@ -20,6 +21,7 @@ type PendingRun = Readonly<{
   targetDate: string;
   watermark: string;
   definitionDigest: string;
+  targetSet?: CampaignTargetSet;
 }>;
 
 export type MetricScheduleCycle = Readonly<{
@@ -30,6 +32,35 @@ export type MetricScheduleCycle = Readonly<{
 }>;
 
 const maximumCatchupDates = 31;
+const discoversCampaigns = (schedule: MetricScheduleRow): boolean => schedule.definition.evaluations.some((row: Any) => row.campaign_discovery);
+
+async function discoveryTransaction<T>(pool: Pool, schedule: MetricScheduleRow, work: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  const key = JSON.stringify([schedule.tenant_id, schedule.app_id, schedule.metric_schedule_id]);
+  let releaseFence: (() => Promise<void>) | undefined, locked = false, begun = false, priorTimeout: string | undefined;
+  try {
+    priorTimeout = (await client.query("SELECT current_setting('statement_timeout') AS value")).rows[0].value;
+    await client.query("SELECT set_config('statement_timeout','60000',false)");
+    releaseFence = await acquirePrivacyTenantSessionReadFence(client, schedule.tenant_id);
+    await client.query("SELECT pg_advisory_lock(hashtextextended($1,0))", [key]); locked = true;
+    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ"); begun = true;
+    await client.query("SELECT set_config('openmasu.tenant_id',$1,true)", [schedule.tenant_id]);
+    const backlog = await client.query("SELECT pending_count FROM control.privacy_deletion_backlog()");
+    if (backlog.rows[0]?.pending_count !== "0") throw new Error("metric_schedule_privacy_pending");
+    const result = await work(client);
+    await client.query("COMMIT"); begun = false;
+    return result;
+  } finally {
+    let cleanupError: Error | undefined;
+    try {
+      if (begun) await client.query("ROLLBACK");
+      if (locked) await client.query("SELECT pg_advisory_unlock(hashtextextended($1,0))", [key]);
+      if (releaseFence) await releaseFence();
+      if (priorTimeout !== undefined) await client.query("SELECT set_config('statement_timeout',$1,false)", [priorTimeout]);
+    } catch { cleanupError = new Error("metric_schedule_cleanup_failed"); }
+    client.release(cleanupError);
+  }
+}
 
 function exactDate(value: string): string {
   if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)
@@ -70,12 +101,16 @@ export function buildScheduledMetricInput(
   if (!Array.isArray(evaluations) || evaluations.length < 1) {
     throw new Error("metric_schedule_evaluations_invalid");
   }
+  if (discoversCampaigns(schedule) && !pending.targetSet) throw new Error("metric_schedule_target_mismatch");
+  const selected = pending.targetSet?.targets.map(target => ({ ...evaluations[target.evaluation],
+    grouping: target.grouping, sourceIndex: target.evaluation })) ?? evaluations.map((evaluation: Any, index: number) => ({ ...evaluation, sourceIndex: index }));
+  if (pending.targetSet && sha256Jcs(pending.targetSet.targets) !== pending.targetSet.target_digest) throw new Error("metric_schedule_target_mismatch");
   const config = {
     tenant_id: schedule.tenant_id,
     app_id: schedule.app_id,
     fx_policy: schedule.definition.fx_policy,
     metric_definitions: schedule.definition.metric_definitions ?? [],
-    evaluations: evaluations.map((evaluation: Any) => {
+    evaluations: selected.map((evaluation: Any) => {
       if (evaluation.date_dimension !== "cohort_date" && evaluation.date_dimension !== "metric_date") {
         throw new Error("metric_schedule_date_dimension_invalid");
       }
@@ -88,7 +123,7 @@ export function buildScheduledMetricInput(
   const input = buildMetricDefinitionsInput(config, pending.targetDate, pending.watermark);
   input.metric_evaluations = input.metric_evaluations.map((evaluation: Any, index: number) => ({
     ...evaluation,
-    grouping: schedule.definition.evaluations[index].date_dimension === "metric_date"
+    grouping: selected[index].date_dimension === "metric_date"
       ? Object.fromEntries(Object.entries(evaluation.grouping).filter(([key]) => key !== "cohort_date"))
       : evaluation.grouping,
     metric_run_id_prefix: `scheduled:${sha256Jcs({
@@ -96,19 +131,20 @@ export function buildScheduledMetricInput(
       target_date: pending.targetDate,
       watermark: pending.watermark,
       definition_digest: pending.definitionDigest,
-      evaluation: index,
+      evaluation: selected[index].sourceIndex,
+      ...(pending.targetSet ? { target: selected[index].grouping, target_digest: pending.targetSet.target_digest } : {}),
     }).slice(0, 48)}`,
   }));
   return input;
 }
 
-async function claimNextDate(
+export async function claimNextScheduledDate(
   pool: Pool,
   schedule: MetricScheduleRow,
   now: Date,
 ): Promise<PendingRun | undefined> {
   const boundary = scheduledMetricBoundary(now, schedule.lag_days);
-  return withTenant(pool, schedule.tenant_id, async (client) => {
+  const claim = async (client: PoolClient): Promise<PendingRun | undefined> => {
     await client.query(
       "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
       [JSON.stringify([schedule.tenant_id, schedule.app_id, schedule.metric_schedule_id])],
@@ -135,11 +171,12 @@ async function claimNextDate(
       if (!checkpoint.pending_watermark || !checkpoint.pending_definition_digest) {
         throw new Error("metric_schedule_pending_state_invalid");
       }
-      return {
+      const pending = {
         targetDate: checkpoint.pending_target_date,
         watermark: checkpoint.pending_watermark,
         definitionDigest: checkpoint.pending_definition_digest,
       };
+      return discoversCampaigns(schedule) ? { ...pending, targetSet: await freezeCampaignTargets(client, schedule, pending) } : pending;
     }
     const targetDate = checkpoint.last_target_date ? nextDate(checkpoint.last_target_date) : exactDate(schedule.start_date);
     if (targetDate > boundary.targetDate) return undefined;
@@ -151,16 +188,17 @@ async function claimNextDate(
       [schedule.tenant_id, schedule.app_id, schedule.metric_schedule_id,
         targetDate, boundary.watermark, schedule.definition_digest],
     );
-    return { targetDate, watermark: boundary.watermark, definitionDigest: schedule.definition_digest };
-  });
+    const pending = { targetDate, watermark: boundary.watermark, definitionDigest: schedule.definition_digest };
+    return discoversCampaigns(schedule) ? { ...pending, targetSet: await freezeCampaignTargets(client, schedule, pending) } : pending;
+  };
+  return discoversCampaigns(schedule) ? discoveryTransaction(pool, schedule, claim) : withTenant(pool, schedule.tenant_id, claim);
 }
 
-async function finalizeDate(pool: Pool, schedule: MetricScheduleRow, pending: PendingRun): Promise<void> {
-  await withTenant(pool, schedule.tenant_id, async (client) => {
+async function finalizeDateWithClient(client: PoolClient, schedule: MetricScheduleRow, pending: PendingRun): Promise<void> {
     const updated = await client.query(
       `UPDATE control.metric_schedule_checkpoints
           SET last_target_date=$4::date,pending_target_date=NULL,pending_watermark=NULL,
-              pending_definition_digest=NULL,updated_at=$5::text::control.canonical_timestamp
+              pending_definition_digest=NULL,safe_reason=NULL,updated_at=$5::text::control.canonical_timestamp
         WHERE tenant_id=$1 AND app_id=$2 AND metric_schedule_id=$3
           AND pending_target_date=$4::date
           AND pending_watermark=$5::text::control.canonical_timestamp
@@ -169,7 +207,6 @@ async function finalizeDate(pool: Pool, schedule: MetricScheduleRow, pending: Pe
         pending.targetDate, pending.watermark, pending.definitionDigest],
     );
     if (updated.rowCount !== 1) throw new Error("metric_schedule_checkpoint_conflict");
-  });
 }
 
 async function runPendingDate(
@@ -177,11 +214,33 @@ async function runPendingDate(
   schedule: MetricScheduleRow,
   pending: PendingRun,
 ): Promise<"computed" | "replayed"> {
+  if (pending.targetSet) return discoveryTransaction(pool, schedule, async client => {
+    const checkpoint = (await client.query(`SELECT pending_target_date::text FROM control.metric_schedule_checkpoints
+      WHERE tenant_id=$1 AND app_id=$2 AND metric_schedule_id=$3 FOR UPDATE`,
+    [schedule.tenant_id, schedule.app_id, schedule.metric_schedule_id])).rows[0];
+    if (checkpoint?.pending_target_date !== pending.targetDate) return "replayed";
+    if (await schedulePrivacyEpoch(client, schedule.tenant_id, schedule.app_id) !== pending.targetSet!.privacy_epoch) {
+      throw new Error("metric_schedule_privacy_unavailable");
+    }
+    if (!pending.targetSet!.targets.length) {
+      await finalizeDateWithClient(client, schedule, pending);
+      return "computed";
+    }
+    const outcome = await evaluatePendingDate(pool, schedule, pending, client);
+    await finalizeDateWithClient(client, schedule, pending);
+    return outcome;
+  });
+  const outcome = await evaluatePendingDate(pool, schedule, pending);
+  await withTenant(pool, schedule.tenant_id, client => finalizeDateWithClient(client, schedule, pending));
+  return outcome;
+}
+
+async function evaluatePendingDate(pool: Pool, schedule: MetricScheduleRow, pending: PendingRun, transaction?: PoolClient): Promise<"computed" | "replayed"> {
   const input = buildScheduledMetricInput(schedule, pending);
   const expectedIds = input.metric_evaluations.flatMap((evaluation: Any) =>
     evaluation.metric_names.map((name: string) => `${evaluation.metric_run_id_prefix}:${name}`));
   const scope: MetricScope = { tenant_id: schedule.tenant_id, app_id: schedule.app_id };
-  const existing = await withTenant(pool, schedule.tenant_id, async (client) => (await client.query<{
+  const readExisting = async (client: PoolClient) => (await client.query<{
     metric_run_id: string;
     artifact: Any;
     manifest_count: number;
@@ -194,21 +253,22 @@ async function runPendingDate(
       WHERE run.tenant_id=$1 AND run.app_id=$2 AND run.metric_run_id=ANY($3::text[])
       ORDER BY run.metric_run_id COLLATE "C"`,
     [schedule.tenant_id, schedule.app_id, expectedIds],
-  )).rows);
+  )).rows;
+  const existing = transaction ? await readExisting(transaction) : await withTenant(pool, schedule.tenant_id, readExisting);
+  const calculate = (persist: boolean) => transaction ? computeSqlMetricRunsWithClient(transaction, input, persist, scope)
+    : computeSqlMetricRuns(pool, input, persist, scope);
   if (existing.length === 0) {
-    await computeSqlMetricRuns(pool, input, true, scope);
-    await finalizeDate(pool, schedule, pending);
+    await calculate(true);
     return "computed";
   }
   if (existing.length !== expectedIds.length || existing.some((row) => row.manifest_count !== 1)) {
     throw new Error("metric_schedule_partial_run");
   }
-  const expected = await computeSqlMetricRuns(pool, input, false, scope);
+  const expected = await calculate(false);
   const expectedById = new Map(expected.map((artifact: Any) => [artifact.metric_run_id, sha256Jcs(artifact)]));
   if (existing.some((row) => expectedById.get(row.metric_run_id) !== sha256Jcs(row.artifact))) {
     throw new Error("metric_schedule_replay_mismatch");
   }
-  await finalizeDate(pool, schedule, pending);
   return "replayed";
 }
 
@@ -234,7 +294,7 @@ export async function processMetricSchedules(
   let failedSchedules = 0;
   for (const schedule of schedules) {
     try {
-      const pending = await claimNextDate(pool, schedule, now);
+      const pending = await claimNextScheduledDate(pool, schedule, now);
       if (!pending) continue;
       await runWithTerminalJobOutcome(async () => {
         let current: PendingRun | undefined = pending;
@@ -242,7 +302,7 @@ export async function processMetricSchedules(
           const outcome = await runPendingDate(pool, schedule, current);
           completedDates += 1;
           if (outcome === "replayed") replayedDates += 1;
-          current = await claimNextDate(pool, schedule, now);
+          current = await claimNextScheduledDate(pool, schedule, now);
         }
         if (current) throw new Error("metric_schedule_catchup_remaining");
       }, (outcome) => recordJobOutcome({
@@ -253,7 +313,14 @@ export async function processMetricSchedules(
         outcome,
         now,
       }));
-    } catch {
+    } catch (error) {
+      if (discoversCampaigns(schedule)) {
+        const name = error instanceof Error ? error.message.replace(/^metric_schedule_/, "") : "";
+        const safeReason = ["target_limit", "privacy_unavailable", "privacy_pending", "target_mismatch"].includes(name) ? name : "calculation_unavailable";
+        await withTenant(pool, schedule.tenant_id, client => client.query(`UPDATE control.metric_schedule_checkpoints
+          SET safe_reason=$4 WHERE tenant_id=$1 AND app_id=$2 AND metric_schedule_id=$3`,
+        [schedule.tenant_id, schedule.app_id, schedule.metric_schedule_id, safeReason]));
+      }
       failedSchedules += 1;
     }
   }
