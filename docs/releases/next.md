@@ -74,6 +74,11 @@ one retained install per subject and current privacy filtering.
 add admin-only SSR registration, immutable definition/checkpoint inspection and
 disablement through the existing API service and worker. No extra scheduler,
 edit/resume/run-now action or provider credential form is added.
+The following schedule-recovery fix removes the overbroad input-snapshot tuple
+uniqueness constraint through forward migration `059_metric_run_identity.sql`.
+Distinct schedules, cutoffs and FX definitions can retain the same input evidence
+without colliding. Run-ID uniqueness, old artifact bytes and exact retries remain;
+re-registration does not implicitly supersede prior results.
 
 Supported-source upgrade procedures, single-host deployment preflight/restart,
 capacity visibility and the limited backend/report HTTP contract also have
@@ -81,10 +86,9 @@ merged acceptance scopes and are included in the publication. The integration
 batch is complete. The next product batch is selected in
 [plan #172](https://github.com/yubisuke/openmasu/issues/172), with the ordered
 [roadmap](../roadmap.md#next-product-sequence) as its canonical crosswalk.
-The other seven original slices remain planned, plus the saved-run identity
-collision after schedule re-registration
-([#200](https://github.com/yubisuke/openmasu/issues/200)), which precedes custom-event
-outcomes. No development slice is part of the
+The other seven original slices remain planned; the separately reproduced
+schedule identity collision (#200) now has source implementation.
+No development slice is part of the
 published baseline, and no next
 version or release scope is selected by that development plan.
 These synthetic scopes do not establish real recovery, hosting/TLS,

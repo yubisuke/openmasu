@@ -157,11 +157,22 @@ Definitions are immutable. To change a lag, grouping, metric definition, or FX
 snapshot, disable the old schedule and register a new one. Existing metric runs
 remain reproducible under the old definition digest.
 
-Known limitation: re-registering a metric/version/grouping with the same saved
-input snapshot can currently fail the worker's run uniqueness constraint.
-It does not replace the old result. Do not delete prior runs to work around it;
-the [schedule re-registration fix](https://github.com/yubisuke/openmasu/issues/200)
-tracks safe identity and checkpoint recovery.
+Re-registering the same selection creates a distinct schedule and distinct run
+identifiers, even when its input snapshot and numeric result are unchanged.
+An input snapshot describes the evidence, not the complete computation identity:
+different receipt cutoffs or full definitions may share it. Forward migration
+`059_metric_run_identity.sql` replaces the old snapshot-tuple uniqueness
+constraint with a lookup index. The run-ID primary key, immutable artifacts,
+scoped access, and exact replay checks remain in force; no old rows are rewritten.
+Apply normal database migrations before restarting the worker after an upgrade.
+
+Re-registration is not automatic supersession. Reports using `latest` retain
+all runs that no later run explicitly supersedes, so old and new runs may both
+appear for a cohort. Keyset pagination distinguishes them by run ID. Choose the
+intended saved runs for comparison: duplicate cohort keys are rejected, not
+silently added together or resolved by picking an arbitrary run. Use an explicit
+[correction request](metric-corrections.md) when a result should supersede a
+specific prior calculation. Never delete evidence to resolve a duplicate series.
 
 ## Execution and recovery model
 
@@ -211,3 +222,7 @@ The discovery cases add a new campaign on the next date, freeze a target set
 before new cost arrival, exercise crash replay, cost-only/organic/unknown
 inputs, scope isolation, empty dates, overflow and privacy changes. These cases
 extend the existing runtime integration suite; no live provider call is required.
+Re-registration cases also preserve old and new run bytes and replay manifests,
+recover a checkpoint interruption without inserting another run, distinguish
+cutoffs and FX definitions over identical inputs, enforce the run-ID key, and
+verify reader pagination, duplicate-comparison refusal and explicit supersession.

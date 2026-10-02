@@ -43,6 +43,22 @@ try {
   const unset = await appClient.query<{ count: string }>("SELECT count(*)::text AS count FROM ledger.raw_records");
   assert.equal(unset.rows[0].count, "0", "RLS must return zero rows without a tenant GUC");
 
+  const metricRunKeys = await migrationPool.query<{ contype: string; definition: string }>(`
+    SELECT contype,pg_get_constraintdef(oid) AS definition FROM pg_constraint
+     WHERE conrelid='ledger.metric_runs'::regclass AND contype IN ('p','u')`);
+  assert.ok(metricRunKeys.rows.some(row => row.contype === "p" && row.definition === "PRIMARY KEY (metric_run_id)"));
+  assert.ok(!metricRunKeys.rows.some(row => row.definition ===
+    "UNIQUE (tenant_id, app_id, metric_name, metric_definition_version, grouping_digest, input_snapshot_id)"),
+  "input evidence must not be mistaken for complete run identity");
+  const metricSnapshotIndex = await migrationPool.query<{ indisunique: boolean; indisvalid: boolean; definition: string }>(`
+    SELECT indisunique,indisvalid,pg_get_indexdef(indexrelid) AS definition FROM pg_index
+     WHERE indexrelid='ledger.metric_runs_snapshot_lookup_idx'::regclass`);
+  assert.equal(metricSnapshotIndex.rowCount, 1);
+  assert.equal(metricSnapshotIndex.rows[0].indisunique, false);
+  assert.equal(metricSnapshotIndex.rows[0].indisvalid, true);
+  assert.match(metricSnapshotIndex.rows[0].definition,
+    /\(tenant_id, app_id, metric_name, metric_definition_version, grouping_digest, input_snapshot_id\)/);
+
   const jobHealthIndex = await migrationPool.query<{ indexdef: string; predicate: string; valid: boolean }>(`
     SELECT pg_get_indexdef(i.indexrelid) AS indexdef,
            pg_get_expr(i.indpred, i.indrelid) AS predicate,
