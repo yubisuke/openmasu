@@ -1,0 +1,86 @@
+[
+  {
+    "attribution_id": "attr:engagement:open64-a",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "engagement_level",
+    "subject_ref": "engagement:open64-a",
+    "status": "non_organic",
+    "method": "deep_link",
+    "model": "last_click",
+    "reason_code": "deep_link_open_attributed",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-21T10:00:00.000Z",
+    "decided_at": "2026-08-21T10:00:01.000Z",
+    "input_cutoff_at": "2026-08-21T10:00:01.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50"
+  },
+  {
+    "attribution_id": "attr:engagement:open64-b",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "engagement_level",
+    "subject_ref": "engagement:open64-b",
+    "status": "non_organic",
+    "method": "deep_link",
+    "model": "last_click",
+    "reason_code": "deep_link_open_attributed",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-21T12:00:00.000Z",
+    "decided_at": "2026-08-21T12:00:01.000Z",
+    "input_cutoff_at": "2026-08-21T12:00:01.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50"
+  },
+  {
+    "attribution_id": "attr:engagement:open64-c",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "engagement_level",
+    "subject_ref": "engagement:open64-c",
+    "status": "non_organic",
+    "method": "deep_link",
+    "model": "last_click",
+    "reason_code": "deep_link_open_attributed",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-21T11:00:00.000Z",
+    "decided_at": "2026-08-21T11:00:01.000Z",
+    "input_cutoff_at": "2026-08-21T11:00:01.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50"
+  }
+]

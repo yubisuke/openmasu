@@ -1,0 +1,110 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:conversion64-a",
+    "record_id": "conversion64-a",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:conversion64-a",
+    "event_name": "custom_event",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:conversion64-b",
+    "record_id": "conversion64-b",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:conversion64-b",
+    "event_name": "custom_event",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:open64-a",
+    "record_id": "open64-a",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:open64-a",
+    "event_name": "deep_link_open",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:open64-b",
+    "record_id": "open64-b",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:open64-b",
+    "event_name": "deep_link_open",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:open64-c",
+    "record_id": "open64-c",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:open64-c",
+    "event_name": "deep_link_open",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:revenue64-a",
+    "record_id": "revenue64-a",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:revenue64-a",
+    "event_name": "ad_revenue",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:revenue64-b",
+    "record_id": "revenue64-b",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:revenue64-b",
+    "event_name": "ad_revenue",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:revenue64-before",
+    "record_id": "revenue64-before",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:revenue64-before",
+    "event_name": "ad_revenue",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:revenue64-boundary",
+    "record_id": "revenue64-boundary",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:revenue64-boundary",
+    "event_name": "ad_revenue",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  }
+]
