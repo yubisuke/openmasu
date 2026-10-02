@@ -55,6 +55,7 @@ versions were reached. They do not override current sources of truth.
 | Newcomer documentation | Complete: one current documentation map and safe synthetic first run | Link check, documentation drift check, threat-model coverage, full validation |
 | Release alignment | v0.2.0 published at green commit `68b8c48`; v0.2.0-rc.4 remains historical at `2a2f6b5` | Release-version check, reproducible bundle verification, tagged evidence manifest, and exact-commit platform CI |
 | SDK distribution | Configured v0.3.0-rc.1 uses one exact-commit CI bundle and downloadable Android/Unity/iOS assets | Existing bundle/consumer gates plus deterministic outer packaging, wrong-SHA refusal, checksums/SBOMs and exact-tag public download receipt |
+| Safe upgrades | Stopped-writer supported-source path with archive checksum, frozen migration and exact target preflight | Existing backup gate extended with frozen v0.2.0 DDL/data, actual dump/restore, transactional failure/resume, preserved artifacts and privacy reapplication; no production downtime claim |
 | CI efficiency | Complete: cancel superseded PR runs and gate expensive steps by changed scope | Classifier unit matrix plus GitHub pull-request proof with every required context present |
 | Authenticated backend events | Complete: selected first-party server events use dedicated rotatable keys and the ordinary durable evaluator path | Signing and authority unit tests plus PostgreSQL key-lifecycle, replay, rejection, idempotency, projection, and deletion tests |
 | Operator event webhooks | Complete: selected accepted events use immutable app destinations, destination-scoped references, an encrypted durable outbox, and exact-body signing | Destination/DNS unit tests plus PostgreSQL lifecycle, retry, identifier-exclusion, disablement, and deletion-ordering tests |
@@ -84,6 +85,8 @@ requests and saved definitions; no automatic all-history recomputation is added.
 The SDK distribution tool and consumer guide are implemented for v0.3.0-rc.1;
 the exact-tag public asset receipt, safe upgrades, deployment guidance, capacity
 visibility and documented HTTP surface are the remaining integration slices.
+Safe upgrades now have a read-only source/backup preflight and one frozen-release
+restore/resume case in the existing backup gate; production recovery remains unverified.
 
 ## Change acceptance
 
