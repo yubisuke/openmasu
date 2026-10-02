@@ -157,7 +157,7 @@ All three queries require `geographic_view.location_type = 'LOCATION_OF_PRESENCE
 
 The persisted source identifier contains only a one-way digest derived from the raw customer ID. The command neither persists nor logs the raw customer ID, and its output contains only row counts and import-run metadata.
 
-This is executable provider wiring with synthetic tests only. It is not live proof for a particular Google Ads account, token, developer-token access level, manager hierarchy, API version, date range, field combination, quota, or permission set. OAuth token refresh, automatic retries, and scheduling remain operator-owned and are outside this command.
+This is executable provider wiring with synthetic tests only. It is not live proof for a particular Google Ads account, token, developer-token access level, manager hierarchy, API version, date range, field combination, quota, or permission set. OAuth token refresh remains operator-owned. This one-shot command does not retry or schedule itself; the separate default-off [bounded daily cost refresh](cost-refresh.md) reuses the same adapter with durable range/configuration checkpoints and atomic publication.
 
 ## Producer-wide event IDs
 

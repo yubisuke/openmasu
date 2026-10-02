@@ -96,8 +96,14 @@ The [integrated first-use journey](getting-started.md) now connects existing
 receipt observations, units, saved-run evidence and comparison. The same offline
 demo derives equal/corrected-cost/incompatible-window/unknown CSV and HTML cases;
 its declaration-only results remain separate from the existing runtime pilot.
-Durable cost refresh and historical correction workflows remain next. This is
-later-source work, not evidence for the frozen v0.2.0 release.
+[Bounded cost refresh](cost-refresh.md) now joins one existing adapter to
+default-off immutable app schedules, fixed lookback/configuration checkpoints,
+database-clock claims, bounded retry and stop. Complete acquisition publishes
+costs and its checkpoint atomically; empty results never become a zero
+denominator. Aggregate reader health excludes private configuration and secret
+references. Correction-driven historical recalculation remains next. These are
+later-source additions, not evidence for the frozen v0.2.0 release; live account
+permissions, timezone, token validity and source completeness remain unverified.
 
 Current source also includes [readable dashboard analysis](dashboard-analysis.md):
 exact money/ratio/count labels, shareable server-rendered filters, selection-preserving

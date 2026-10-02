@@ -81,6 +81,7 @@ import {
   registerMetricSchedule,
 } from "./metric-schedules.js";
 import { handleServerBatch, type ServerRouteDependencies } from "./server-routes.js";
+import { disableCostSchedule, listCostSchedules, registerCostSchedule } from "./cost-schedules.js";
 import {
   receiveAppleStoreNotification,
   type AppleStoreNotificationDependencies,
@@ -1337,6 +1338,27 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
               json(response, ["metric_schedule_not_active", "metric_schedule_metric_overlap"].includes(reason)
                 ? 409 : 400, { error: reason });
             }
+          }
+          return;
+        }
+        if (route.handler === "admin_cost_schedules_list"
+          || route.handler === "admin_cost_schedules_register" || route.handler === "admin_cost_schedules_disable") {
+          try {
+            const appIdentity = await requireRegisteredApp(pool, identity, adminAppId(target.pathname) ?? "");
+            if (route.handler === "admin_cost_schedules_list") {
+              json(response, 200, { data: await listCostSchedules(pool, appIdentity) });
+            } else if (route.handler === "admin_cost_schedules_register") {
+              json(response, 201, await registerCostSchedule(dependencies.pool, appIdentity, await jsonBody(request)));
+            } else {
+              const id = decodedPathPart(target.pathname, /\/cost-schedules\/([^/]+)\/disable$/);
+              if (!id) throw new Error("cost_schedule_not_found");
+              json(response, 200, await disableCostSchedule(dependencies.pool, appIdentity, id));
+            }
+          } catch (error) {
+            const reason = publicReason(error, "cost_schedule_lifecycle_failed");
+            json(response, error instanceof AppNotFoundError || reason === "cost_schedule_not_found" ? 404
+              : ["cost_schedule_active_exists", "cost_schedule_not_active"].includes(reason) ? 409 : 400,
+            { error: error instanceof AppNotFoundError || reason === "cost_schedule_not_found" ? "not_found" : reason });
           }
           return;
         }

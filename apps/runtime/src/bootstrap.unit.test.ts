@@ -7,6 +7,8 @@ import { describe, it } from "node:test";
 
 function generatedAppEnvironment(options: {
   readonly allowlist?: string;
+  readonly costRefreshEnabled?: string;
+  readonly costRefreshSecretsFile?: string;
   readonly publicBaseUrl?: string;
   readonly redirectorBaseUrl?: string;
   readonly workerConcurrency?: string;
@@ -31,6 +33,10 @@ function generatedAppEnvironment(options: {
   };
   if (options.allowlist === undefined) delete environment.OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST;
   else environment.OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST = options.allowlist;
+  if (options.costRefreshEnabled === undefined) delete environment.OPENMASU_COST_REFRESH_ENABLED;
+  else environment.OPENMASU_COST_REFRESH_ENABLED = options.costRefreshEnabled;
+  if (options.costRefreshSecretsFile === undefined) delete environment.OPENMASU_COST_REFRESH_SECRETS_FILE;
+  else environment.OPENMASU_COST_REFRESH_SECRETS_FILE = options.costRefreshSecretsFile;
   if (options.publicBaseUrl === undefined) delete environment.OPENMASU_PUBLIC_BASE_URL;
   else environment.OPENMASU_PUBLIC_BASE_URL = options.publicBaseUrl;
   if (options.redirectorBaseUrl === undefined) delete environment.OPENMASU_REDIRECTOR_BASE_URL;
@@ -122,6 +128,12 @@ function generatedAppEnvironment(options: {
 }
 
 describe("runtime bootstrap environment", () => {
+  it("keeps cost refresh off unless explicitly configured and forwards only its registry path", () => {
+    assert.match(generatedAppEnvironment(), /^OPENMASU_COST_REFRESH_ENABLED=off$/m);
+    const configured = generatedAppEnvironment({ costRefreshEnabled: "on", costRefreshSecretsFile: "/run/private/synthetic-cost-registry.json" });
+    assert.match(configured, /^OPENMASU_COST_REFRESH_ENABLED=on$/m);
+    assert.match(configured, /^OPENMASU_COST_REFRESH_SECRETS_FILE=\/run\/private\/synthetic-cost-registry.json$/m);
+  });
   it("propagates the configured redirect destination allowlist into runtime secrets", () => {
     const appEnvironment = generatedAppEnvironment({
       allowlist: "https://links.synthetic.example,https://second.synthetic.example",

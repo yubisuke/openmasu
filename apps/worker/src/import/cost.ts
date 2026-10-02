@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { jcs, sha256 } from "@openmasu/attribution-core";
 import { uuidV7, withTenant } from "@openmasu/runtime";
 
@@ -74,13 +74,19 @@ export function costArtifact(row: CostInput, reportSnapshotDigest: string): Reco
 
 export async function persistCostImport(pool: Pool, sourceId: string, rows: readonly CostInput[]): Promise<CostImportResult> {
   if (rows.length === 0) throw new Error("cost import requires at least one row");
+  return withTenant(pool, rows[0].tenant_id, (client) => persistCostImportWithClient(client, sourceId, rows));
+}
+
+// Reused by scheduled refresh so publication and its durable checkpoint commit
+// together. Callers must already hold a tenant-scoped transaction.
+export async function persistCostImportWithClient(client: PoolClient, sourceId: string, rows: readonly CostInput[]): Promise<CostImportResult> {
+  if (rows.length === 0) throw new Error("cost import requires at least one row");
   const scope = rows[0];
   if (!rows.every((row) => row.tenant_id === scope.tenant_id && row.app_id === scope.app_id)) {
     throw new Error("a cost import cannot mix tenant or app scopes");
   }
   const reportDigest = sha256(rows);
   const runId = uuidV7(Date.parse(scope.as_of));
-  return withTenant(pool, scope.tenant_id, async (client) => {
     await client.query(
       `INSERT INTO control.apps (tenant_id, app_id, created_at)
        VALUES ($1,$2,$3) ON CONFLICT (tenant_id, app_id) DO NOTHING`,
@@ -121,5 +127,4 @@ export async function persistCostImport(pool: Pool, sourceId: string, rows: read
       [scope.tenant_id, scope.app_id],
     );
     return { inserted, current: current.rows[0].count, import_run_id: runId };
-  });
 }

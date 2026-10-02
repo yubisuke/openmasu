@@ -11,6 +11,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { costRefreshEnabled } from "./cost-refresh.js";
 
 function secret(bytes = 32): string {
   return randomBytes(bytes).toString("base64url");
@@ -146,6 +147,10 @@ if (Number(adServicesProviderTimeout) >= Number(adServicesClaimLease)) {
 }
 
 const runtimePaths = [migrationEnvPath, appEnvPath, seedEnvPath, postgresPasswordPath];
+const costRefreshMode = costRefreshEnabled(process.env.OPENMASU_COST_REFRESH_ENABLED
+  ?? existing.OPENMASU_COST_REFRESH_ENABLED) ? "on" : "off";
+const costRefreshSecretsFile = process.env.OPENMASU_COST_REFRESH_SECRETS_FILE
+  ?? existing.OPENMASU_COST_REFRESH_SECRETS_FILE ?? "";
 if (runtimePaths.every(existsSync)) {
   reconcileEnvSettings(appEnvPath, {
     OPENMASU_WORKER_CONCURRENCY: workerConcurrency,
@@ -154,6 +159,8 @@ if (runtimePaths.every(existsSync)) {
     OPENMASU_MAX_INBOX_BATCH_LIMIT: maxInboxBatchLimit,
     OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS: adServicesProviderTimeout,
     OPENMASU_ADSERVICES_CLAIM_LEASE_MS: adServicesClaimLease,
+    OPENMASU_COST_REFRESH_ENABLED: costRefreshMode,
+    OPENMASU_COST_REFRESH_SECRETS_FILE: costRefreshSecretsFile,
   });
   console.log(`OpenMasu runtime secrets already exist: ${runtimeSecretRoot}`);
   process.exit(0);
@@ -294,6 +301,8 @@ const appEntries: Record<string, string> = {
   OPENMASU_APP_STORE_API_PRIVATE_KEY_FILE: process.env.OPENMASU_APP_STORE_API_PRIVATE_KEY_FILE ?? "",
   OPENMASU_APP_STORE_API_BASE_URL: process.env.OPENMASU_APP_STORE_API_BASE_URL ?? "",
   OPENMASU_GOOGLE_DATA_MANAGER_ENABLED: process.env.OPENMASU_GOOGLE_DATA_MANAGER_ENABLED ?? "off",
+  OPENMASU_COST_REFRESH_ENABLED: costRefreshMode,
+  OPENMASU_COST_REFRESH_SECRETS_FILE: costRefreshSecretsFile,
   OPENMASU_GOOGLE_DATA_MANAGER_SERVICE_ACCOUNT_JSON_FILE:
     process.env.OPENMASU_GOOGLE_DATA_MANAGER_SERVICE_ACCOUNT_JSON_FILE ?? "",
   OPENMASU_GOOGLE_DATA_MANAGER_BASE_URL: "https://datamanager.googleapis.com",

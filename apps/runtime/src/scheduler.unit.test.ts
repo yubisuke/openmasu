@@ -36,6 +36,7 @@ describe("durable worker scheduler", () => {
       "operator_bulk_export",
       "privacy_purge",
       "metric_run",
+      "cost_refresh",
       "fraud_maintenance", "dashboard_session_sweep",
     ]);
     assert.doesNotThrow(() => validateSchedulePolicy(policy));

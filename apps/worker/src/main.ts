@@ -8,6 +8,8 @@ import {
   runScheduledJob,
   uuidV7,
   withTenant,
+  costRefreshEnabled,
+  loadCostRefreshSecrets,
   type ScheduledWorkerJob,
 } from "@openmasu/runtime";
 import { AdServicesLookupLimiter, processAdServicesLookups } from "./adservices-worker.js";
@@ -31,6 +33,7 @@ import {
   processCommerceReadbacks,
 } from "./commerce-readback-worker.js";
 import { processMetricSchedules } from "./metric-schedule-worker.js";
+import { processCostRefreshes } from "./cost-refresh-worker.js";
 import { appleLeafKeyFromChain, verifyCompactJws } from "@openmasu/commerce-lifecycle";
 import {
   TenantWorkCoordinator,
@@ -94,6 +97,9 @@ const payloadStore = new EncryptedFilePayloadStore(
   secrets.require("OPENMASU_PAYLOAD_MASTER_KEY"),
 );
 const fraudEnabled = process.env.OPENMASU_FRAUD_ENABLED !== "0";
+const costRefreshOn = costRefreshEnabled(process.env.OPENMASU_COST_REFRESH_ENABLED);
+const costRefreshSecrets = costRefreshOn && process.env.OPENMASU_COST_REFRESH_SECRETS_FILE
+  ? loadCostRefreshSecrets(process.env.OPENMASU_COST_REFRESH_SECRETS_FILE) : new EnvironmentSecretStore({});
 const appleRootFingerprints = new Set(
   (process.env.OPENMASU_APPLE_ROOT_SHA256 ?? "")
     .split(",").map((value) => value.replaceAll(":", "").trim().toLowerCase())
@@ -298,6 +304,14 @@ async function processTenantCycle(tenantId: string): Promise<void> {
       });
     }
   });
+  if (costRefreshOn) {
+    await runWorkerJob(tenantId, "cost_refresh", async () => {
+      const costs = await processCostRefreshes(pool, tenantId, { enabled: true, secrets: costRefreshSecrets });
+      if (costs.completed + costs.empty + costs.failed + costs.fenced > 0) {
+        process.stdout.write(`${JSON.stringify({ event: "cost_refresh_cycle", component: "worker", ...costs })}\n`);
+      }
+    });
+  }
   await runWorkerJob(tenantId, "metric_run", async () => {
     const metrics = await processMetricSchedules(pool, tenantId);
     if (metrics.completedDates > 0) {

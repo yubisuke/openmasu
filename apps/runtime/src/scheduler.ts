@@ -13,6 +13,7 @@ export const SCHEDULED_WORKER_JOBS = [
   "operator_bulk_export",
   "privacy_purge",
   "metric_run",
+  "cost_refresh",
   "fraud_maintenance",
   "dashboard_session_sweep",
 ] as const;
