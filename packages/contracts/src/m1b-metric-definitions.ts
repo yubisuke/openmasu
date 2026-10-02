@@ -254,3 +254,15 @@ export const DISJOINT_COST_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricDefin
   rule_bundle_id: "metric-disjoint-cost", rule_bundle_version: "0.4.12",
   rule_bundle_hash: nonFraudBundleHash("metric-disjoint-cost"),
 }));
+
+/** Native acquisition for existing commerce windows, without reinterpreting old runs. */
+export const SELECTED_COMMERCE_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricDefinitionV04> =
+  M1B_METRIC_DEFINITIONS.filter((definition) =>
+    ["purchase_net_revenue", "total_net_revenue"].includes(definition.definition.numerator))
+    .map((definition) => ({
+      ...definition, metric_definition_version: "0.4.13", acquisition_basis: "selected_first_party_click",
+      ...(definition.definition.calculation === "revenue_over_cost"
+        ? { cost_selection_policy: "reject_overlapping_grains" as const } : {}),
+      rule_bundle_id: "metric-selected-commerce", rule_bundle_version: "0.4.13",
+      rule_bundle_hash: nonFraudBundleHash("metric-selected-commerce"),
+    }));
