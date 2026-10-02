@@ -8,6 +8,7 @@ import {
   assertSeedOutput,
   parseSyntheticPilotArguments,
   plannedSyntheticPilotSteps,
+  reviewedRuntimeInventory,
   syntheticComposeEnvironment,
   syntheticProcessEnvironment,
 } from "./synthetic-runtime-pilot.js";
@@ -94,15 +95,24 @@ describe("disposable synthetic runtime pilot", () => {
     assert.throws(() => assertCleanDemo({ ...valid, ledger_counts: { ...valid.ledger_counts, raw_records: 1 } }));
   });
 
-  it("pins the database parity gate to the measured 57-fixture, 10-family, 558-artifact result", () => {
+  it("requires the reviewed runtime inventory rather than stale fixture counts or all contract artifact families", () => {
+    const expected = reviewedRuntimeInventory();
+    assert.ok(expected.fixtures > 0 && expected.artifacts > 0);
+    assert.equal(expected.families, 10);
     assert.doesNotThrow(() => assertSeedOutput(
-      "> openmasu-contract@0.4.0 seed\n> npm run seed --workspace @openmasu/worker\n\nSeeded 57 synthetic fixtures through PostgreSQL ingestion (558 parity artifacts).\n",
+      `> openmasu-contract@0.4.0 seed\n\nSeeded ${expected.fixtures} synthetic fixtures through PostgreSQL ingestion (${expected.artifacts} parity artifacts).\n`,
     ));
     assert.doesNotThrow(() => assertRuntimeParityOutput(
-      "> openmasu-contract@0.4.0 verify:parity\n\nRuntime parity passed: 57 fixtures, 10 artifact families, 558 JCS byte-identical artifacts.\n",
+      `> openmasu-contract@0.4.0 verify:parity\n\nRuntime parity passed: ${expected.fixtures} fixtures, 10 artifact families, ${expected.artifacts} JCS byte-identical artifacts.\n`,
     ));
     assert.throws(() => assertSeedOutput(
-      "Seeded 57 synthetic fixtures through PostgreSQL ingestion (741 parity artifacts).\n",
+      `Seeded ${expected.fixtures - 1} synthetic fixtures through PostgreSQL ingestion (${expected.artifacts} parity artifacts).\n`,
+    ));
+    assert.throws(() => assertRuntimeParityOutput(
+      `Runtime parity passed: ${expected.fixtures} fixtures, 13 artifact families, ${expected.artifacts} JCS byte-identical artifacts.\n`,
+    ));
+    assert.throws(() => assertRuntimeParityOutput(
+      `Runtime parity passed: ${expected.fixtures} fixtures, 10 artifact families, ${expected.artifacts + 1} JCS byte-identical artifacts.\n`,
     ));
   });
 });
