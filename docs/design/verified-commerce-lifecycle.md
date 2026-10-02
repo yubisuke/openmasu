@@ -26,8 +26,8 @@ with an encrypted cursor and processes pages in ascending revision order.
 The Apple history path records verified lifecycle evidence and projects
 purchase/refund transaction-price bases only when an active, installation-bound
 purchase intent can be verified. A successful unbound history read-back is not
-cohort revenue. The public Swift preparation/submission API remains a separate
-unfinished connection; the server path is not yet an end-to-end SDK feature.
+cohort revenue. The public Swift preparation/submission APIs connect the same
+authenticated installation to this path without emitting a second client purchase.
 
 ### Installation-bound purchase preparation
 
@@ -121,6 +121,36 @@ Primary references checked 2026-10-02:
 - [App Store Server API appAccountToken](https://developer.apple.com/documentation/appstoreserverapi/appaccounttoken):
   the service-provided UUID accompanies transaction information. Token reassignment
   and cross-installation account linking are not part of this implementation.
+- [StoreKit signed transaction representation](https://developer.apple.com/documentation/storekit/verificationresult/jwsrepresentation-21vgo):
+  the host submits the JWS, not a reconstructed transaction or a client amount.
+- [Finishing a transaction](https://developer.apple.com/documentation/storekit/transaction/finish()):
+  content delivery and finishing remain host responsibilities, independent of measurement.
+
+### Swift host integration
+
+After successful initialization, the public Swift SDK exposes
+`prepareAppStorePurchase(productId:requestId:revenueMeasurementConsent:)` and
+`submitAppStorePurchase(prepared:signedTransaction:revenueMeasurementConsent:)`.
+Both require affirmative measurement consent and current collection/installation
+state. In-flight responses are not adopted after a consent change, disable/re-enable
+cycle or reset. The server's privacy checks still govern requests already sent.
+
+Preparation is a typed server-issued UUID; submission returns only a matching
+pending intent, never recognized money. A failed response does not generate a
+fallback token, purchase or retry with a new request identity. The host owns
+protected retry persistence and the independent StoreKit payment/entitlement
+lifecycle. The SDK never stores signed transactions in the ordinary event queue.
+Do not combine this path with `trackSettledPurchase` for the same transaction.
+See the [iOS SDK guide](../../sdk/ios/README.md#verified-app-store-measurement)
+and its compiled StoreKit sample. Custom event transports remain compatible;
+the optional purchase transport capability fails explicitly if unavailable.
+Unity's vendored Swift is identical; the C# purchase helper surface remains
+outside this Swift connection.
+
+Synthetic URL-protocol tests exercise raw-body HMAC, strict response scope,
+same-request retries, pending-only admission and consent/reset races without
+network access. The macOS CI gate compiles the StoreKit sample and runs the
+package tests on macOS and an iOS Simulator. This is not real-store delivery proof.
 
 ### Monetary projection boundary
 
@@ -173,6 +203,6 @@ outcomes only.
 ## Residual boundary
 
 Live stores, credentials, delivery, quotas, root/key rotation, complete missed-
-notification recovery, the public Swift preparation/submission connection,
-cross-product/account relinking, refund reversal, entitlement, tax and payout
+notification recovery, Unity C# purchase helpers, cross-product/account relinking,
+refund reversal, entitlement, tax and payout
 remain unfinished or unverified operator/product concerns.

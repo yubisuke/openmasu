@@ -101,6 +101,65 @@ evidence for that source revision.
 
 ## Settled commerce events
 
+### Verified App Store measurement
+
+Use the separate preparation/submission APIs for installation-linked App Store
+measurement. They do not call StoreKit, grant content, finish a transaction, or
+create client-reported purchase events. Call `initialize()` successfully first;
+both APIs require the current installation credential, enabled collection, no
+consent barrier or reset, and explicit `revenueMeasurementConsent: true`.
+
+1. Persist a request UUID in the host application's protected retry state, then
+   call `prepareAppStorePurchase(productId:requestId:revenueMeasurementConsent:)`.
+   Reuse the same UUID after a timeout. The typed result contains a server-issued
+   `appAccountToken`, intent, product and server-selected environment. Preparation
+   is not a purchase; never generate a fallback token.
+2. Pass `prepared.appAccountToken` to StoreKit's
+   `.appAccountToken(...)` purchase option for that product. The host owns the
+   StoreKit result, entitlement verification, pending/cancelled purchases and
+   `Transaction.finish()` after delivering its content. A measurement failure
+   must not be confused with a failed payment or trigger another purchase.
+3. For the corresponding verified StoreKit result, call
+   `submitAppStorePurchase(prepared:signedTransaction:revenueMeasurementConsent:)`
+   with `result.jwsRepresentation`. The server independently verifies the signed
+   data, intent and scope before durable admission. Only an exact `202` response
+   with the matching intent and `state: pending` is accepted; it is not recognized
+   revenue. The existing history worker must complete the financial projection.
+
+`OpenMasuPreparedAppStorePurchase` is `Codable` for a caller-owned protected retry
+lifecycle. It includes the installation and credential ID, not a credential
+secret. Never log it, the token, or the signed transaction. The SDK does not
+persist these values, run a background purchase retry, or put them in its event
+queue. Persist and retry the same preparation and signed evidence privately when
+appropriate; do not also call `trackSettledPurchase` for the same App Store
+transaction. A timeout leaves server admission unknown, not unsuccessful.
+Reusing the same evidence is idempotent on the server. Discard host-owned retry
+state on withdrawal/deletion; a prepared value cannot be moved to a new
+installation after reset. The SDK discards a response if consent, collection or
+installation state changed while awaiting it, even if collection was re-enabled
+before the response arrived. This does not cancel an already-sent server request;
+server withdrawal/deletion and the worker's privacy fence remain authoritative.
+
+The opt-in server configuration and remaining unverified provider boundaries are
+documented in [verified commerce](../../docs/design/verified-commerce-lifecycle.md).
+No client token, price, account, or environment fallback is inferred when that
+configuration is unavailable. The host may continue its independent payment flow
+without this measurement binding. Existing custom `OpenMasuTransport`
+implementations remain compatible; purchase helpers require the optional
+`OpenMasuAppStoreTransport` capability and otherwise throw
+`purchaseTransportUnsupported`. Other failures preserve HTTP status without
+exposing response bodies. [The compiled sample](Sample/README.md) shows the
+StoreKit boundary. These public helpers are Swift APIs; Unity's vendored Swift
+is synchronized, but its C# bridge does not expose these purchase helpers.
+
+Primary Apple references checked 2026-10-02:
+
+- [appAccountToken purchase option](https://developer.apple.com/documentation/storekit/product/purchaseoption/appaccounttoken(_:)).
+- [Signed transaction representation](https://developer.apple.com/documentation/storekit/verificationresult/jwsrepresentation-21vgo).
+- [Finishing a transaction](https://developer.apple.com/documentation/storekit/transaction/finish()).
+
+### Explicit client-reported commerce
+
 `OpenMasuCore` exposes `trackSettledPurchase(transactionId:amountUnscaled:amountScale:currency:)`
 and the target-free
 `trackRefund(transactionId:originalTransactionId:amountUnscaled:amountScale:currency:)`.
@@ -110,6 +169,8 @@ event ID over every stable commerce field. New pending and reversed lifecycle
 evidence remains limited to canonical/import fixture surfaces. Refund
 target resolution is performed by the server from the installation, original
 transaction, and currency.
+These helpers are a different evidence path, not StoreKit verification. Do not
+send the same purchase through both client-reported and verified App Store paths.
 
 The deprecated `trackPurchase(..., financialStatus:)` and explicit-target
 `trackRefund(..., correctionTargetRecordId:, ...)` overloads retain their

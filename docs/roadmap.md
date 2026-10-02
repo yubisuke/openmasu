@@ -78,7 +78,7 @@ Progress:
 | Operator-owned outbound delivery state is visible without exposing protected references | Complete with one app-scoped API/dashboard view, complete webhook and bulk-export state counts, bounded recent rows, tenant RLS, and column-level reader grants; live receiver/storage effects and exactly-once behavior remain unverified |
 | One active platform-integrity verification cannot race another worker or completed deletion | Complete with a per-row database-clock lease, bounded provider wait, token-fenced transactional completion, source-lifecycle recheck, deletion-first and completion-first privacy evidence, and restored-evidence purge; provider-side exactly-once behavior remains unverified |
 | One active Google Play verification cannot race another worker or completed deletion | Complete with a per-row database-clock lease, bounded provider reads, token-fenced retry and completion, source-lifecycle recheck, deletion-first and completion-first privacy evidence, and restored-evidence purge; provider-side exactly-once behavior remains unverified |
-| One active commerce read-back cannot race another worker or completed deletion | Complete with a per-row database-clock lease, token-fenced retry, transactional Google refund and Apple cursor completion, expired-claim recovery, stale-completion rejection, existing-binding cursor cleanup, and Google/Apple deletion-race evidence; App Store binding creation and provider-side exactly-once behavior remain unverified |
+| One active commerce read-back cannot race another worker or completed deletion | Complete with a per-row database-clock lease, token-fenced retry, transactional Google refund and Apple financial/cursor completion, expired-claim recovery, stale-completion rejection, binding/cursor cleanup, and Google/Apple deletion-race evidence; live StoreKit delivery and provider-side exactly-once behavior remain unverified |
 
 Candidate v0.2.0-rc.4 satisfied the historical release-coherence exit gate at
 green `main` commit `2a2f6b5`. Published v0.2.0 now consolidates the
@@ -130,7 +130,7 @@ comparison screens alone does not establish that end-to-end path.
 | Source implemented / [#191](https://github.com/yubisuke/openmasu/issues/191) | Selected acquisition also reaches purchase and total-net cohorts | Explicit v0.4.13 definitions, fixture 60 and SQL tests reuse selected source and safe costs without reinterpreting old definitions / Commerce acquisition projection |
 | Source implemented / [#184](https://github.com/yubisuke/openmasu/issues/184) | Late advertising revenue, purchases and refunds can correct past runs | Explicit bounded receipt discovery or record selection, immutable replay through the existing worker, and visible pending/unavailable states / Late-input correction |
 | Source implemented / [#185](https://github.com/yubisuke/openmasu/issues/185) | New campaigns enter daily calculation without manual enumeration | Bounded opt-in discovery with a frozen per-job target set, exact retry and explicit unknown/empty/overflow states / Campaign discovery |
-| In progress / [#186](https://github.com/yubisuke/openmasu/issues/186) | Verified App Store purchases reach installation cohorts | Server preparation, signed submission and history-to-financial projection are source implemented with synthetic gates; the public Swift connection remains incomplete / App Store purchase binding |
+| Source implemented / [#186](https://github.com/yubisuke/openmasu/issues/186) | Verified App Store purchases reach installation cohorts | Public Swift preparation/submission, authenticated admission and history-to-financial projection connect with synthetic gates; live StoreKit delivery and Unity C# purchase helpers remain outside this connection / App Store purchase binding |
 | Follow-up / [#209](https://github.com/yubisuke/openmasu/issues/209) | Verified refund reversals cancel only their target deductions | Explicit append-only reversal linkage and versioned TS/Python/SQL parity, without inventing a purchase or changing old runs / Refund reversal correction |
 | Follow-up / [#187](https://github.com/yubisuke/openmasu/issues/187) | Ad-group and creative outcomes share the cost grain | Selected-source dimensions and matching cost definitions without allocating parent cost by guesswork / Detailed acquisition grain |
 | Follow-up / [#188](https://github.com/yubisuke/openmasu/issues/188) | First-party re-engagement has separate outcome measures | One explicit conversion key and advertising revenue window, separate from acquisition and Apple aggregate evidence / Re-engagement outcomes |
@@ -140,7 +140,8 @@ and #187 follows #182/#183,
 and #188 follows #182/#177. Complete the first five core slices before the
 workflow batch below. These extensions are scoped follow-ups, not prerequisites
 for the initial Android-first campaign workflow. App Store cohort-purchase
-coverage must not be claimed before #186; refund-reversal recovery remains open
+coverage is source implemented with synthetic evidence in #186, not live-store
+proof; refund-reversal recovery remains open
 until #209. Complete #209 before #187/#188. Re-engagement ROAS is not delivered
 by the initial #188 conversion/revenue slice.
 
