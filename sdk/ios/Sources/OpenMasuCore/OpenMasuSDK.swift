@@ -6,6 +6,8 @@ public actor OpenMasuSDK {
   private let transport: any OpenMasuTransport
   private let tokenProvider: any AdServicesTokenProviding
   private nonisolated let deepLinkRouter = DeepLinkRouter()
+  private var purchaseContextRevision: UInt64 = 0
+  private var purchaseResetInFlight = false
 
   public init(
     configuration: OpenMasuConfiguration,
@@ -105,6 +107,49 @@ public actor OpenMasuSDK {
       ])
     )
     try await flush()
+  }
+
+  /// Initialize first. Reuse requestId after a timeout; never make a fallback appAccountToken.
+  public func prepareAppStorePurchase(
+    productId: String, requestId: UUID, revenueMeasurementConsent: Bool
+  ) async throws -> OpenMasuPreparedAppStorePurchase {
+    try AppStorePurchaseValidation.product(productId)
+    let context = try appStorePurchaseContext(consent: revenueMeasurementConsent)
+    guard let purchases = transport as? any OpenMasuAppStoreTransport else {
+      throw OpenMasuError.purchaseTransportUnsupported
+    }
+    let prepared = try await purchases.prepareAppStorePurchase(
+      credential: context.credential, installationId: context.installationId,
+      productId: productId, requestId: requestId, revenueMeasurementConsent: true
+    )
+    try checkAppStorePurchaseContext(context)
+    guard prepared.installationId == context.installationId,
+          prepared.installationKeyId == context.credential.keyId,
+          prepared.productId == productId, prepared.requestId == requestId
+    else { throw OpenMasuError.responseInvalid }
+    return prepared
+  }
+
+  /// Pending means durable server admission, not recognized revenue. No analytics event is queued.
+  public func submitAppStorePurchase(
+    prepared: OpenMasuPreparedAppStorePurchase, signedTransaction: String,
+    revenueMeasurementConsent: Bool
+  ) async throws -> OpenMasuAppStoreSubmission {
+    try AppStorePurchaseValidation.signedTransaction(signedTransaction)
+    let context = try appStorePurchaseContext(consent: revenueMeasurementConsent)
+    guard prepared.installationId == context.installationId,
+          prepared.installationKeyId == context.credential.keyId
+    else { throw OpenMasuError.purchaseContextChanged }
+    guard let purchases = transport as? any OpenMasuAppStoreTransport else {
+      throw OpenMasuError.purchaseTransportUnsupported
+    }
+    let result = try await purchases.submitAppStorePurchase(
+      credential: context.credential, prepared: prepared,
+      signedTransaction: signedTransaction, revenueMeasurementConsent: true
+    )
+    try checkAppStorePurchaseContext(context)
+    guard result.intentId == prepared.intentId else { throw OpenMasuError.responseInvalid }
+    return result
   }
 
   @available(*, deprecated, message: "Use trackSettledPurchase for installation-anchored settled purchases.")
@@ -255,6 +300,7 @@ public actor OpenMasuSDK {
     guard ["granted", "denied", "withdrawn", "not_required", "unknown"].contains(state) else {
       throw OpenMasuError.invalidAttributes
     }
+    purchaseContextRevision &+= 1
     try storage.applyConsentState(state)
     try storage.purgeConsentRequiredQueueIfBlocked()
     try enqueue(eventName: "consent_changed", purpose: "fraud_prevention", payloadJson: EventFactory.json([
@@ -273,6 +319,7 @@ public actor OpenMasuSDK {
   }
 
   public func setCollectionEnabled(_ enabled: Bool) async throws {
+    purchaseContextRevision &+= 1
     try storage.setCollectionEnabled(enabled)
     if enabled { try await flush() }
   }
@@ -285,6 +332,10 @@ public actor OpenMasuSDK {
   }
 
   public func resetInstallationId() async throws {
+    guard !purchaseResetInFlight else { throw OpenMasuError.purchaseContextChanged }
+    purchaseContextRevision &+= 1
+    purchaseResetInFlight = true
+    defer { purchaseResetInFlight = false }
     if try storage.isResetPending() {
       try await completePendingReset(installationId: storage.installationId())
       return
@@ -343,6 +394,32 @@ public actor OpenMasuSDK {
     let credential = try await transport.enroll(installationId: storage.installationId())
     try storage.setCredential(credential)
     return credential
+  }
+
+  private struct AppStorePurchaseContext {
+    let revision: UInt64
+    let installationId: String
+    let credential: InstallationCredential
+  }
+
+  private func appStorePurchaseContext(consent: Bool) throws -> AppStorePurchaseContext {
+    guard consent else { throw OpenMasuError.purchaseConsentRequired }
+    guard try isCollectionEnabled() else { throw OpenMasuError.collectionDisabled }
+    guard try !storage.consentBarrierActive() else { throw OpenMasuError.purchaseConsentRequired }
+    guard !purchaseResetInFlight, try !storage.isResetPending() else { throw OpenMasuError.purchaseContextChanged }
+    guard try storage.isInstallRecorded(), let credential = try storage.credential() else {
+      throw OpenMasuError.resetRequiresEnrollment
+    }
+    return AppStorePurchaseContext(
+      revision: purchaseContextRevision, installationId: try storage.installationId(), credential: credential
+    )
+  }
+
+  private func checkAppStorePurchaseContext(_ before: AppStorePurchaseContext) throws {
+    guard before.revision == purchaseContextRevision else { throw OpenMasuError.purchaseContextChanged }
+    let current = try appStorePurchaseContext(consent: true)
+    guard before.installationId == current.installationId, before.credential == current.credential
+    else { throw OpenMasuError.purchaseContextChanged }
   }
 
   private func recordDeepLink(_ value: OpenMasuDeepLink) async throws {

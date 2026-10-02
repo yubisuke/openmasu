@@ -225,13 +225,15 @@ refund and cost operands from the saved calculation (#178). The dashboard connec
 bounded [cost-recalculation controls](metric-corrections.md) to existing jobs and
 original/replacement details (#179). A definition-backed [retention matrix](dashboard-analysis.md#saved-retention-matrix)
 aligns only comparable saved cohorts and horizons on the current page (#180).
-App Store purchase binding (#186) is in progress: the opt-in
+App Store purchase binding (#186) is source implemented: the opt-in
 [purchase-preparation API](design/verified-commerce-lifecycle.md#installation-bound-purchase-preparation)
 now issues protected installation-scoped tokens with retry and deletion safety.
 The signed-submission and history worker now connect verified purchaser-owned
 transaction-price bases and explicit full/prorated refunds to cohort revenue,
 LTV and ROAS with duplicate/privacy and late-recalculation synthetic gates.
-The public Swift API remains incomplete; neither API admission nor this server
+The public Swift preparation/submission APIs and compiled StoreKit sample connect
+the same path, with synthetic HMAC, retry and consent/reset race tests.
+Neither API admission nor this server
 connection proves StoreKit delivery, live roots or accounting proceeds.
 Finer advertising grain and separate re-engagement outcomes
 (#187-#188) remain scoped follow-ups. Verified refund reversals need an explicit

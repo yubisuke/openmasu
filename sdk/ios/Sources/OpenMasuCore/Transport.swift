@@ -6,7 +6,7 @@ public protocol OpenMasuTransport: Sendable {
   func deleteInstallation(credential: InstallationCredential, installationId: String) async throws
 }
 
-public final class HmacHttpTransport: OpenMasuTransport, @unchecked Sendable {
+public final class HmacHttpTransport: OpenMasuAppStoreTransport, @unchecked Sendable {
   private let configuration: OpenMasuConfiguration
   private let session: URLSession
 
@@ -42,7 +42,7 @@ public final class HmacHttpTransport: OpenMasuTransport, @unchecked Sendable {
     guard response.status == 201 else { throw OpenMasuError.transport(response.status) }
   }
 
-  private func request(
+  func request(
     path: String,
     body: Data,
     credential: InstallationCredential?

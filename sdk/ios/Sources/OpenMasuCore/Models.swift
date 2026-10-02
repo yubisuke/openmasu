@@ -187,6 +187,9 @@ public enum OpenMasuError: Error, Equatable {
   case transport(Int)
   case responseInvalid
   case resetRequiresEnrollment
+  case purchaseConsentRequired
+  case purchaseContextChanged
+  case purchaseTransportUnsupported
   case storage(String)
   case conversionSchema(String)
 }
