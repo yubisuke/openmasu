@@ -266,3 +266,23 @@ export const SELECTED_COMMERCE_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricD
       rule_bundle_id: "metric-selected-commerce", rule_bundle_version: "0.4.13",
       rule_bundle_hash: nonFraudBundleHash("metric-selected-commerce"),
     }));
+
+/** One explicitly selected outcome, not an event count or a cross-device person count. */
+export function customConversionMetricDefinitions(eventKey: string): OpenMasuMetricDefinitionV04[] {
+  if (!/^[a-z][a-z0-9_]{0,63}$/.test(eventKey)) throw new Error("conversion_event_key_invalid");
+  const common = {
+    metric_definition_version: "0.4.14", anchor_event: "install" as const,
+    aggregation_time_zone: "UTC" as const, conversion_event_key: eventKey,
+    acquisition_basis: "selected_first_party_click" as const,
+    grouping_dimensions: [...METRIC_GROUPING_DIMENSIONS],
+    rule_bundle_id: "metric-custom-conversion", rule_bundle_version: "0.4.14",
+    rule_bundle_hash: nonFraudBundleHash("metric-custom-conversion"),
+  };
+  return [
+    { ...common, metric_name: "cohort_custom_event_converters_d7", value_type: "count",
+      definition: { calculation: "converted_installations", numerator: "converted_installations", window: { type: "elapsed", day: 7 } } },
+    { ...common, metric_name: "cohort_custom_event_conversion_rate_d7", value_type: "ratio", ratio_scale: 6,
+      definition: { calculation: "converted_installations_over_cohort", numerator: "converted_installations",
+        denominator: "cohort_size", window: { type: "elapsed", day: 7 } } },
+  ];
+}

@@ -14,6 +14,7 @@ import { reportToSnapshot } from "../../../tools/report-to-snapshot.js";
 import { compareSnapshots } from "../../../tools/compare-cohorts.js";
 import { DISJOINT_COST_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { syntheticRetentionCases } from "../../../tools/synthetic-retention-cases.js";
+import { syntheticConversionCases } from "../../../tools/synthetic-conversion-cases.js";
 import { persistCostImport, type CostInput } from "./import/cost.js";
 
 type Any = Record<string, any>;
@@ -239,6 +240,16 @@ describe("selected native acquisition SQL parity", { concurrency: false }, () =>
     const later = await computeSqlMetricRuns(app, source, false);
     assert.equal(jcs(later), jcs(evaluate(source).metric_runs));
     assert.equal(later[0].value_unscaled, "1");
+  });
+
+  it("matches custom converter count and rate across duplicate boundary late privacy and gross/net cases", async () => {
+    const baseline = JSON.parse(readFileSync(join(process.cwd(), "fixtures/v0.4/61-custom-conversion/input.json"), "utf8"));
+    for (const entry of syntheticConversionCases(baseline, fixture58())) {
+      await ingestFixture(`conversion-${entry.name}`, entry.input, app, seed);
+      const runs = await computeSqlMetricRuns(app, entry.input, false);
+      assert.deepEqual(runs.map(row => row.value_unscaled ?? row.undefined_reason), entry.expected, entry.name);
+      assert.equal(jcs(runs), jcs(evaluate(entry.input).metric_runs), entry.name);
+    }
   });
 
   it("keeps redacted selected click semantics unavailable during SQL recomputation", async () => {

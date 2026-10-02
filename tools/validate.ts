@@ -6,6 +6,7 @@ import { validateEventPayload } from "@openmasu/contracts";
 import { Ajv2020Module, addFormatsModule, canonicalize } from "@openmasu/contracts/validation-tooling";
 import { evaluate, sha256, TimestampInvalidError } from "@openmasu/attribution-core";
 import { syntheticRetentionCases } from "./synthetic-retention-cases.js";
+import { syntheticConversionCases } from "./synthetic-conversion-cases.js";
 
 type Any = Record<string, any>;
 type Captured<T> = { ok: true; value: T } | { ok: false; error: unknown };
@@ -323,7 +324,7 @@ function validateRegistryReferences(output: Any, label: string): void {
       "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
       "aak_attributed_reengagements",
     ]);
-    const expectedVersion = definition.rule_bundle_id === "metric-selected-commerce"
+    const expectedVersion = definition.rule_bundle_id === "metric-custom-conversion" ? "0.4.14" : definition.rule_bundle_id === "metric-selected-commerce"
       ? "0.4.13" : definition.cost_selection_policy === "reject_overlapping_grains"
       ? "0.4.12" : definition.acquisition_basis === "selected_first_party_click"
       ? "0.4.11"
@@ -2078,6 +2079,33 @@ const validRevenue = {
 };
 if (!summaryOnly) {
   describe("semantic mutations", () => {
+    it("counts one selected custom outcome per eligible installation across windows privacy and fraud", () => {
+      const cases = syntheticConversionCases(fixture("61-custom-conversion").input, fixture("58-selected-native-acquisition").input);
+      const python = pythonOutputs(cases.map(entry => entry.input));
+      for (const [index, entry] of cases.entries()) {
+        const output = evaluate(entry.input);
+        check(output.rejections.length === 0, `${entry.name}: synthetic records rejected`);
+        check(equal(output.metric_runs.map(row => row.value_unscaled ?? row.undefined_reason), entry.expected), `${entry.name}: independent converter arithmetic`);
+        check(equal(output, python[index]), `${entry.name}: full TS/Python custom-conversion parity`);
+      }
+    });
+    it("rejects partial custom-conversion profiles rather than ignoring the event key", () => {
+      const baseline = fixture("61-custom-conversion").input;
+      const definition = baseline.metric_definitions[0];
+      for (const change of [
+        { conversion_event_key: "" }, { conversion_event_key: "openmasu.conversion_value_updated" },
+        { metric_definition_version: "0.3.0" }, { rule_bundle_hash: "0".repeat(64) }, { acquisition_basis: undefined },
+        { activity_events: ["custom_event"] }, { event_names: ["install"] }, { ratio_scale: 6 },
+        { definition: { ...definition.definition, window: { type: "activity_day", day: 7 } } },
+        { definition: { ...definition.definition, calculation: "cohort_size", numerator: "cohort_size" } },
+      ]) {
+        const mutated = JSON.parse(JSON.stringify({ ...definition, ...change }));
+        check(!validatorFor("urn:openmasu:schema:metric-definition:v0.4")(mutated), "schema accepted partial conversion profile");
+        const input = { ...baseline, metric_definitions: [mutated] };
+        check(!capture(() => evaluate(input)).ok, "TypeScript accepted partial conversion profile");
+        check(!capture(() => pythonOutputs([input])).ok, "Python accepted partial conversion profile");
+      }
+    });
     it("joins retention activity to the same selected and fraud-filtered cohort in TypeScript and Python", () => {
       const cases = syntheticRetentionCases(fixture("58-selected-native-acquisition").input);
       const python = pythonOutputs(cases.map(entry => entry.input));

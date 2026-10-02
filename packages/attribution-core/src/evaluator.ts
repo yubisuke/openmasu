@@ -16,6 +16,7 @@ import {
 import {
   REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
   nonFraudBundleHash,
+  validateMetricDefinition,
   type OpenMasuEvaluationOutputV04 as EvaluationOutput,
 } from "@openmasu/contracts";
 
@@ -1081,6 +1082,12 @@ function metricDefinitions(input: Any): MetricDefinition[] {
 }
 
 function validateMetricDefinitionSeries(definition: Any): void {
+  if (definition.conversion_event_key !== undefined || definition.rule_bundle_id === "metric-custom-conversion"
+      || definition.definition?.numerator === "converted_installations"
+      || ["converted_installations", "converted_installations_over_cohort"].includes(definition.definition?.calculation)) {
+    if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`);
+    return;
+  }
   const purchaseNetDays = new Map<string, number>([
     ["cohort_purchase_net_revenue_d0_usd", 0],
     ["cohort_purchase_net_revenue_d1_usd", 1],
@@ -1364,7 +1371,7 @@ function metricRuns(
       const eligibleInstalls = definition.fraud_policy === "net"
         ? selectedInstalls.filter((candidate) => !excludedInstallationIds.has(candidate.record.payload.installation_id))
         : selectedInstalls;
-      const revenueValue = revenue.reduce((sum, item) => {
+      const revenueValue = definition.conversion_event_key !== undefined ? 0n : revenue.reduce((sum, item) => {
         const installation = eligibleInstalls.find((candidate) =>
           candidate.server.tenant_id === item.server.tenant_id && candidate.server.app_id === item.server.app_id &&
           candidate.record.payload.installation_id === item.record.payload.installation_id,
@@ -1418,6 +1425,23 @@ function metricRuns(
           undefined_reason = "no_attributed_cost";
         } else {
           value = roundHalfEven(selectedRevenueValue * (10n ** BigInt(definition.ratio_scale ?? 6)), cost);
+        }
+      } else if (["converted_installations", "converted_installations_over_cohort"].includes(definition.definition.calculation)) {
+        if (cohortSize === 0n) {
+          undefined_reason = "empty_cohort";
+        } else {
+          const converted = new Set<string>();
+          for (const event of visible.filter((item) => item.record.event_name === "custom_event"
+              && item.record.payload.event_key === definition.conversion_event_key)) {
+            const installation = eligibleInstalls.find((candidate) => candidate.server.tenant_id === event.server.tenant_id
+              && candidate.server.app_id === event.server.app_id
+              && candidate.record.payload.installation_id === event.record.payload.installation_id);
+            if (installation && eligibleRevenue(definition, installation.record, event.record)) {
+              converted.add(installation.record.payload.installation_id);
+            }
+          }
+          value = definition.definition.calculation === "converted_installations" ? BigInt(converted.size)
+            : roundHalfEven(BigInt(converted.size) * 1_000_000n, cohortSize);
         }
       } else if (definition.definition.calculation === "active_installations_over_cohort") {
         if (cohortSize === 0n) {

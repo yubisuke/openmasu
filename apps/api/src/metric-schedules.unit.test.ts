@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { DISJOINT_COST_METRIC_DEFINITIONS, SELECTED_COMMERCE_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import { DISJOINT_COST_METRIC_DEFINITIONS, SELECTED_COMMERCE_METRIC_DEFINITIONS, customConversionMetricDefinitions } from "@openmasu/contracts";
 import { metricScheduleTargetDate, normalizeMetricScheduleRequest } from "./metric-schedules.js";
 
 const body = {
@@ -25,6 +25,22 @@ const body = {
 };
 
 describe("scheduled metric configuration", () => {
+  it("binds a custom outcome key to a complete scheduled definition and refuses partial profiles", () => {
+    const request = { ...body, metric_definitions: customConversionMetricDefinitions("tutorial_complete"),
+      evaluations: [{ metric_names: ["cohort_custom_event_conversion_rate_d7"], date_dimension: "cohort_date", grouping: {} }] };
+    const normalize = (value: any) => normalizeMetricScheduleRequest(value, new Date("2026-08-10T12:00:00.000Z"));
+    const original = normalize(request);
+    assert.deepEqual(original.definition.metric_definitions, request.metric_definitions);
+    assert.notEqual(original.definitionDigest, normalize({ ...request,
+      metric_definitions: customConversionMetricDefinitions("different_outcome") }).definitionDigest);
+    for (const change of [{ conversion_event_key: undefined }, { conversion_event_key: "" },
+      { rule_bundle_hash: "0".repeat(64) }, { acquisition_basis: undefined }, { activity_events: ["custom_event"] },
+      { definition: { calculation: "cohort_size", numerator: "cohort_size", window: { type: "elapsed", day: 0 } } }]) {
+      assert.throws(() => normalize({ ...request, metric_definitions: request.metric_definitions.map(definition => ({ ...definition, ...change })) }), /definitions_invalid/);
+    }
+    assert.throws(() => normalize({ ...request, metric_definitions: DISJOINT_COST_METRIC_DEFINITIONS.map(definition => ({
+      ...definition, conversion_event_key: "tutorial_complete" })) }), /definitions_invalid/);
+  });
   it("opts into bounded campaign discovery without changing manual schedule definitions", () => {
     const manual = normalizeMetricScheduleRequest(body, new Date("2026-08-10T12:00:00.000Z"));
     assert.equal(Object.hasOwn(manual.definition.evaluations[0], "campaign_discovery"), false);

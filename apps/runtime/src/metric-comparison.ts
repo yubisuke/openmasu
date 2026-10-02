@@ -44,6 +44,7 @@ export function captureMetricComparisonContext(
     ...(definition.grouping_dimensions ? { grouping_dimensions: [...definition.grouping_dimensions] } : {}),
     ...(definition.fraud_policy ? { fraud_policy: definition.fraud_policy } : {}),
     ...(definition.acquisition_basis ? { acquisition_basis: definition.acquisition_basis } : {}),
+    ...(definition.conversion_event_key !== undefined ? { conversion_event_key: definition.conversion_event_key } : {}),
     ...(definition.cost_selection_policy ? { cost_selection_policy: definition.cost_selection_policy } : {}),
     rule_bundle_id: definition.rule_bundle_id, rule_bundle_version: definition.rule_bundle_version,
     rule_bundle_hash: definition.rule_bundle_hash,
@@ -63,15 +64,19 @@ export function captureMetricComparisonContext(
 export function comparisonMeaning(context: MetricComparisonContext) {
   const d = context.definition, calculation = d.definition.calculation, window = d.definition.window;
   const revenue = ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(calculation);
+  const conversion = ["converted_installations", "converted_installations_over_cohort"].includes(calculation);
   const supported = d.anchor_event === (calculation === "event_count" ? "calendar_day" : "install")
     && (revenue ? window.type === "elapsed" && ["revenue", "purchase_net_revenue", "total_net_revenue"].includes(d.definition.numerator)
       : calculation === "active_installations_over_cohort" ? window.type === "activity_day" && d.definition.numerator === "active_installations"
       : calculation === "event_count" ? window.type === "calendar_day" && window.day === 0 && d.definition.numerator === "events"
+      : conversion ? window.type === "elapsed" && window.day === 7 && d.definition.numerator === "converted_installations"
+        && typeof d.conversion_event_key === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(d.conversion_event_key)
+        && d.acquisition_basis === "selected_first_party_click" && d.aggregation_time_zone === "UTC"
       : calculation === "cohort_size" && d.definition.numerator === "cohort_size")
     && (calculation !== "event_count" || (d.event_names?.length === 1 && ["click", "install", "deep_link_open"].includes(d.event_names[0])))
     && (calculation !== "active_installations_over_cohort" || (d.activity_events ?? ["session_start"]).every(name => name === "session_start"))
     && (calculation !== "revenue_over_cost" || (d.definition.denominator === "cost" && d.definition.cost_basis === "cohort_acquisition_day_current_snapshot"))
-    && (!["active_installations_over_cohort", "revenue_over_cohort"].includes(calculation) || d.definition.denominator === "cohort_size")
+    && (!["active_installations_over_cohort", "revenue_over_cohort", "converted_installations_over_cohort"].includes(calculation) || d.definition.denominator === "cohort_size")
     && (!revenue || context.fx.target_currency === (d.currency ?? context.fx.target_currency))
     && (d.value_type !== "money" || d.amount_scale === context.fx.target_scale);
   if (!supported) return undefined;
@@ -84,6 +89,7 @@ export function comparisonMeaning(context: MetricComparisonContext) {
     window: { ...window, boundary: "half_open" },
     population: calculation === "event_count" ? "accepted_logical_events" : "accepted_installation_cohort",
     acquisition_basis: d.acquisition_basis ?? "recorded_dimensions",
+    ...(conversion ? { conversion_event_key: d.conversion_event_key } : {}),
     cost_selection_policy: d.cost_selection_policy ?? "legacy_dimension_digest_latest",
     grouping_dimensions: [...(d.grouping_dimensions ?? [])].sort(),
     activity_events: calculation === "active_installations_over_cohort" ? [...(d.activity_events ?? ["session_start"])].sort() : [],
