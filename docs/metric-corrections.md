@@ -96,6 +96,9 @@ Use history (`supersession=all`) and saved run details to inspect both snapshots
 The comparison tool still refuses ordinary numeric deltas when privacy, FX,
 window, maturity, grouping or calculation meaning are incompatible or unknown.
 Before/after privacy semantics remain distinct even when no deletion is observed.
+Comparison acquisition also refuses superseded or redaction-affected runs before
+they can become an ordinary downloadable snapshot; correction does not bypass
+that existing privacy and reproducibility gate.
 
 ## Synthetic evidence and boundaries
 
@@ -107,7 +110,7 @@ The existing Runtime CI runs `bounded cost correction recalculation` tests for:
 - expired-claim recovery and fixed input revision;
 - transaction rollback after run insertion, followed by same-job recovery;
 - cross-tenant and premature-cutoff refusal plus replay-digest failure;
-- redacted/purged revenue exclusion and incompatible comparison semantics.
+- redacted/purged revenue exclusion and historical/affected snapshot refusal.
 
 Unit gates cover closed requests, range/work bounds and honest dashboard labels.
 The role matrix covers both new control tables. No contract, reviewed golden,
