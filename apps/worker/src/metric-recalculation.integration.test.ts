@@ -6,7 +6,7 @@ import { createAppPool, createReaderPool, createSeedPool, withTenant } from "@op
 import { sha256 } from "@openmasu/attribution-core";
 import { ingestFixture } from "./ingestion.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
-import { persistCostImport } from "./import/cost.js";
+import { costArtifact, persistCostImport } from "./import/cost.js";
 import { requestMetricRecalculation, listMetricRecalculations } from "../../api/src/metric-recalculations.js";
 import { metricReport } from "../../api/src/reporting.js";
 import { buildDashboardView } from "../../api/src/dashboard/view.js";
@@ -31,6 +31,9 @@ describe("bounded cost correction recalculation", { concurrency: false }, () => 
     tenantId = `tenant-correction-${randomBytes(6).toString("hex")}`;
     identity = { tenantId, appId: "app-a", keyId: "synthetic-correction", role: "admin" };
     input = JSON.parse(readFileSync("fixtures/v0.4/33-stage-b-cohort-metrics/input.json", "utf8").replaceAll('"tenant-a"', JSON.stringify(tenantId)));
+    // These are copied synthetic inputs, not changed goldens. A new tenant is
+    // part of the cost key; derive it rather than retaining the original key.
+    for (const cost of input.cost_records) cost.dimension_digest = costArtifact(cost, cost.report_snapshot_digest).dimension_digest;
     const base = input.metric_evaluations[0];
     input.metric_evaluations = ["JP", "GB"].map(country => ({ ...structuredClone(base),
       metric_names: ["d7_roas"], metric_run_id_prefix: `synthetic-correction-${country}`,
