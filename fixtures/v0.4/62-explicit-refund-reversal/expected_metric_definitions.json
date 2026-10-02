@@ -1,0 +1,181 @@
+[
+  {
+    "metric_name": "cohort_purchase_net_revenue_d30_usd",
+    "metric_definition_version": "0.4.15",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": {
+        "type": "elapsed",
+        "day": 30
+      },
+      "numerator": "purchase_net_revenue"
+    },
+    "rule_bundle_id": "metric-refund-reversal",
+    "rule_bundle_version": "0.4.15",
+    "rule_bundle_hash": "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "refund_reversal_policy": "cancel_target_refund_at_watermark"
+  },
+  {
+    "metric_name": "cohort_total_net_ltv_d30_usd",
+    "metric_definition_version": "0.4.15",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "elapsed",
+        "day": 30
+      },
+      "numerator": "total_net_revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-refund-reversal",
+    "rule_bundle_version": "0.4.15",
+    "rule_bundle_hash": "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "refund_reversal_policy": "cancel_target_refund_at_watermark"
+  },
+  {
+    "metric_name": "cohort_total_net_revenue_d30_usd",
+    "metric_definition_version": "0.4.15",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": {
+        "type": "elapsed",
+        "day": 30
+      },
+      "numerator": "total_net_revenue"
+    },
+    "rule_bundle_id": "metric-refund-reversal",
+    "rule_bundle_version": "0.4.15",
+    "rule_bundle_hash": "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "refund_reversal_policy": "cancel_target_refund_at_watermark"
+  },
+  {
+    "metric_name": "d0_install_to_24h_ad_revenue_usd",
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": {
+        "type": "elapsed",
+        "day": 0
+      },
+      "numerator": "revenue"
+    },
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
+  },
+  {
+    "metric_name": "d0_jst_install_calendar_ad_revenue_usd",
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue"
+    },
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
+  },
+  {
+    "metric_name": "d0_utc_install_calendar_ad_revenue_usd",
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue"
+    },
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
+  },
+  {
+    "metric_name": "d30_total_net_roas",
+    "metric_definition_version": "0.4.15",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "elapsed",
+        "day": 30
+      },
+      "numerator": "total_net_revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-refund-reversal",
+    "rule_bundle_version": "0.4.15",
+    "rule_bundle_hash": "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "refund_reversal_policy": "cancel_target_refund_at_watermark"
+  }
+]

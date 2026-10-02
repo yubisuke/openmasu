@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 61 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 62 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -332,6 +332,42 @@ matched before promotion. Earlier goldens are unchanged. Shared mutations
 exercise duplicate delivery, other keys, exact/pre-install/end boundaries,
 late receipt, empty/unreached cohorts, current privacy, native selected
 campaigns and gross/net fraud populations.
+
+### Fixture 62: explicit refund cancellation
+
+The click, install, USD20 advertising revenue, USD10 purchase and USD10 cost
+use the reviewed fixture-60 templates unchanged. The existing USD4 refund is
+received on August 13 instead of August 12. A new reversed refund at August 7
+04:00 is received on August 14; its explicit target is `refund-60`, and its
+USD4 amount, installation, original transaction and currency match exactly.
+At the three August 12/13/14 midnight cutoffs, purchase net is USD10/6/10;
+total net and one-install LTV are USD30/26/30; ROAS is 3/2.6/3. No rounding
+is required with 1:1 USD FX. There is still exactly one purchase.
+
+Six raw records, accepted deliveries and logical events follow the existing
+templates. The new cancellation raw digest is
+`fb9706e86a7c3adbe378774abbcf3f7572ffb8da3609c6d311700ab10356e3ad`.
+The single original refund correction, selected attribution and cost artifact
+remain unchanged; cancellation does not fabricate another purchase correction.
+Privacy, fraud, rejection and reconciliation arrays are empty. Seven definitions
+are emitted: three unchanged defaults plus four independent `0.4.15` definitions.
+Twelve runs use the existing output shapes, with their new bundle identity,
+watermark, evidence list, input position and hand-calculated value.
+
+Independently JCS-hash the available record tuples, sorted by receipt then ID,
+`[received_at,record_id,available,policy-v0.1]`, append the unchanged cost tuple,
+and apply the fixture-58 selected-attribution snapshot wrapper. The three
+snapshot digests are respectively:
+
+- `ccb3e45382b681204995e9a6e82da4b0eec7d81861d96e44dcddaeee7facca0b`
+- `8f5a2ab06c7820a368b8114f74cc1f14ef8f588e153771c0cdd3f58a835c9621`
+- `100f0194b5c26d5681d3eccec69b7b05bdba859ef5e22fe8fbbd8ea6d09bcefd`
+
+Last positions are the respective cutoff followed by `revenue-native-acquisition`,
+`refund-60` and `reversal-62`. Grouping and FX provenance remain unchanged.
+All 13 expected families were constructed from these templates and arithmetic,
+without copying evaluator output. Full independent TS/Python candidate bytes
+matched them before promotion. Earlier fixtures and goldens are unchanged.
 
 ## Adding a fixture procedure
 
