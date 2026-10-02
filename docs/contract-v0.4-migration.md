@@ -188,8 +188,9 @@ Optional metric-definition `refund_reversal_policy` is tied to independent
 `metric-refund-reversal` version `0.4.15`. Only explicitly selected definitions
 cancel their target refund's original contribution at the input watermark.
 Old definitions, saved runs, schema URNs and wire/package versions are unchanged.
-This is additive conditional behavior; no registry, dependency or database
-migration is introduced. The existing protected refund-fact artifact carries
+This is additive conditional behavior; no registry, dependency or table is
+introduced. Forward-only migration 063 admits calculation-evidence version 3
+without rewriting versions 1/2. The existing protected refund-fact artifact carries
 the optional link; normalized money and purchase-reference columns are unchanged.
 Saved explanation version 3 and comparison context retain the policy and the
 separate deduction/cancellation operands. Old evidence versions remain readable.

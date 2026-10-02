@@ -36,7 +36,9 @@ describe("explicit refund cancellation SQL parity", { concurrency: false }, () =
   const baseline = JSON.parse(readFileSync("fixtures/v0.4/62-explicit-refund-reversal/input.json", "utf8"));
   for (const entry of syntheticRefundReversalCases(baseline)) it(entry.name, async () => {
     await ingestFixture(`reversal-${entry.name}`, entry.input, app, seed);
-    const runs = await computeSqlMetricRuns(app, entry.input, false);
+    // The adversarial input can contain another tenant/app; an operational SQL
+    // evaluation still has one authenticated scope, never the input's union.
+    const runs = await computeSqlMetricRuns(app, entry.input, false, { tenant_id: "tenant-a", app_id: "app-a" });
     assert.equal(jcs(runs), jcs(evaluate(entry.input).metric_runs));
     assert.deepEqual(entry.input.metric_evaluations.map((ev: Any) => runs.find(run =>
       run.metric_run_id === `${ev.metric_run_id_prefix}:cohort_purchase_net_revenue_d30_usd`)?.value_unscaled), entry.expectedNet);
@@ -68,6 +70,18 @@ describe("explicit refund cancellation SQL parity", { concurrency: false }, () =
     const earlier = await metricExplanation(reader, { tenantId: "tenant-a", appId: "app-a", keyId: "synthetic-reader", role: "read_only" },
       "reversal62-refund:d30_total_net_roas");
     assert.equal(earlier?.calculation?.operands.revenue_unscaled, "26000000");
+    for (const field of ["refund_reversal_policy", "refund_reversal_unscaled", "refund_reversal_event_count"]) {
+      await assert.rejects(withTenant(app, "tenant-a", async client => {
+        const run: Any = { ...runs[0], metric_run_id: `invalid-evidence:${field}` };
+        await persistMetricRun(client, { tenant_id: "tenant-a", app_id: "app-a" }, run);
+        const invalid: Any = structuredClone(evidence);
+        invalid.metric_run_id = run.metric_run_id; invalid.input_snapshot_id = run.input_snapshot_id;
+        if (field === "refund_reversal_policy") delete invalid[field]; else delete invalid.operands[field];
+        await client.query(`INSERT INTO ledger.metric_calculation_evidence
+          (metric_run_id,tenant_id,app_id,input_snapshot_id,created_at,artifact) VALUES ($1,'tenant-a','app-a',$2,$3,$4::jsonb)`,
+        [run.metric_run_id,run.input_snapshot_id,run.computed_at,JSON.stringify(invalid)]);
+      }), /metric_calculation_evidence_artifact_check/);
+    }
   });
 });
 
