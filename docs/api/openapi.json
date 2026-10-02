@@ -1,0 +1,2435 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "OpenMasu backend events and read reports",
+    "version": "0.3.0-rc.1",
+    "description": "Limited HTTP surface, not all OpenMasu routes. No administration, SDK enrollment, privacy, dashboard, callback or outbound APIs. Contract wire 0.4.0 is independent. Admission is not calculation or exactly-once external delivery."
+  },
+  "servers": [
+    {
+      "url": "https://metrics.example.invalid",
+      "description": "Non-routable synthetic placeholder; operator supplies the real origin separately."
+    }
+  ],
+  "paths": {
+    "/v1/events/server": {
+      "post": {
+        "operationId": "submitBackendEvents",
+        "summary": "Admit first-party backend events to the durable inbox",
+        "security": [
+          {
+            "Server_app-id": [],
+            "Server_server-key-id": [],
+            "Server_timestamp-ms": [],
+            "Server_nonce": [],
+            "Server_signature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-openmasu-app-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CommonId"
+            }
+          },
+          {
+            "name": "x-openmasu-server-key-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CommonId"
+            }
+          },
+          {
+            "name": "x-openmasu-timestamp-ms",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            "description": "Unix milliseconds within configured skew; safe integer required."
+          },
+          {
+            "name": "x-openmasu-nonce",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{22,128}$"
+            }
+          },
+          {
+            "name": "x-openmasu-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        ],
+        "x-signature-source": "apps/api/src/server-auth.ts:serverCanonicalString/signServerRequest",
+        "x-body-limit": {
+          "default_bytes": 262144,
+          "environment": "OPENMASU_SERVER_INGEST_MAX_BYTES",
+          "default_events": 100,
+          "events_environment": "OPENMASU_SERVER_INGEST_MAX_EVENTS"
+        },
+        "description": "SHA256/HMAC covers exact bytes. Timestamp Unix milliseconds, nonce 22-128 base64url characters, signature 64 lowercase hex. Fresh nonce/timestamp/signature on retry; keep producer-scoped event_id and payload stable across types. Identical digest duplicates, differing digest conflicts. Timeout/500 may be result-unknown: inspect receipt state; no automatic client retry or end-to-end exactly-once promise.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServerBatch"
+              },
+              "example": {
+                "records": [
+                  {
+                    "producer_version": "synthetic-backend-1",
+                    "event_id": "event:synthetic-http",
+                    "event_name": "custom_event",
+                    "occurred_at": "2026-08-20T00:00:00.000Z",
+                    "processing_sequence": 1,
+                    "payload": {
+                      "event_name": "custom_event",
+                      "installation_id": "installation:synthetic-http",
+                      "event_key": "synthetic_http",
+                      "attributes": {}
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Durable inbox admission; status pending. Worker may still reject event payload. Scheduling/report calculation is separate.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptedBatch"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON, event count or envelope fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized: invalid HMAC, inactive key, timestamp or reused nonce.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden event/authority claim, mixed subject or inactive privacy scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body exceeds configured byte bound.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; back off before retry with a fresh signature/nonce.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Result may be unknown; do not manufacture a new event_id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reports/metrics": {
+      "get": {
+        "operationId": "readMetrics",
+        "summary": "Read persisted app-scoped aggregate results",
+        "security": [
+          {
+            "OperatorBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "query",
+            "required": true,
+            "description": "Registered app in the authenticated tenant; missing, unknown and cross-tenant apps return the same 404.",
+            "schema": {
+              "$ref": "#/components/schemas/CommonId"
+            }
+          },
+          {
+            "name": "metric_name",
+            "in": "query",
+            "required": false,
+            "description": "Repeated values deduplicate and sort.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{2,127}$"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "metric_definition_version",
+            "in": "query",
+            "required": false,
+            "description": "Exact saved definition version.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive lower calendar-date bound.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "description": "Exclusive upper calendar-date bound; from must precede to.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "watermark_at_most",
+            "in": "query",
+            "required": false,
+            "description": "UTC evidence cutoff, not a claim that every upstream event arrived. Required for records.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+            }
+          },
+          {
+            "name": "difference_reason_code",
+            "in": "query",
+            "required": false,
+            "description": "Difference audit only: filter stored reason, never infer a cause. An unknown well-formed reason can return no rows.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{2,127}$"
+            }
+          },
+          {
+            "name": "supersession",
+            "in": "query",
+            "required": false,
+            "description": "Exclude same-scope replaced runs, or include immutable history.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "latest",
+                "all"
+              ],
+              "default": "latest"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Normal default 200/max OPENMASU_REPORT_MAX_ROWS (1000); CSV export default/max OPENMASU_REPORT_EXPORT_MAX_ROWS (200000).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 200
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "Opaque endpoint-specific keyset next_cursor; retain app, selection and watermark. No OFFSET or atomic multi-page snapshot claim.",
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "description": "Common stored-row projection; CSV has an empty value cell for undefined.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json"
+            }
+          },
+          {
+            "name": "export",
+            "in": "query",
+            "required": false,
+            "description": "true requires CSV; rejects export_limit_exceeded rather than truncating.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "false",
+                "true"
+              ],
+              "default": "false"
+            }
+          },
+          {
+            "name": "grouping_campaign_id",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "$ref": "#/components/schemas/Common/$defs/id"
+            }
+          },
+          {
+            "name": "grouping_network",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "grouping_country",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z]{2}$"
+            }
+          },
+          {
+            "name": "grouping_cohort_date",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            }
+          },
+          {
+            "name": "grouping_metric_date",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            }
+          },
+          {
+            "name": "grouping_attribution_status",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "enum": [
+                "organic",
+                "non_organic",
+                "unattributed"
+              ]
+            }
+          },
+          {
+            "name": "grouping_apple_conversion_bucket",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "type": "string",
+              "pattern": "^(fine:([0-9]|[1-5][0-9]|6[0-3])|coarse:(low|medium|high))$"
+            }
+          }
+        ],
+        "x-unknown-query-keys": "rejected",
+        "x-query-keys": [
+          "app_id",
+          "metric_name",
+          "metric_definition_version",
+          "date_from",
+          "date_to",
+          "watermark_at_most",
+          "difference_reason_code",
+          "supersession",
+          "limit",
+          "after",
+          "format",
+          "export",
+          "grouping_campaign_id",
+          "grouping_network",
+          "grouping_country",
+          "grouping_cohort_date",
+          "grouping_metric_date",
+          "grouping_attribution_status",
+          "grouping_apple_conversion_bucket"
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored rows only; empty is not an inferred zero. No-store. CSV uses x-next-cursor; JSON uses next_cursor.",
+            "headers": {
+              "x-next-cursor": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Next page when present."
+              },
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MetricRow"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-columns": [
+                  "metric_run_id",
+                  "metric_name",
+                  "metric_definition_version",
+                  "policy_versions",
+                  "input_received_at_watermark",
+                  "input_snapshot_id",
+                  "data_freshness",
+                  "value_state",
+                  "undefined_reason",
+                  "value_unscaled",
+                  "value_type",
+                  "currency",
+                  "amount_scale",
+                  "ratio_scale",
+                  "grouping",
+                  "rule_bundle_id",
+                  "rule_bundle_hash",
+                  "aggregation_time_zone",
+                  "computed_at",
+                  "reproducibility_status",
+                  "supersedes_metric_run_id",
+                  "input_ledger_position",
+                  "grouping_digest",
+                  "superseded",
+                  "comparison_context",
+                  "cost_update_state"
+                ]
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid/unknown/duplicate filter, invalid cursor, unsupported series/export or missing records watermark.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid/missing bearer; cookies are not authentication for /v1.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing read capability.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App missing, unknown or outside the authenticated tenant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server failure; do not interpret as empty data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reports/records": {
+      "get": {
+        "operationId": "readRecordCounts",
+        "summary": "Read persisted app-scoped aggregate results",
+        "security": [
+          {
+            "OperatorBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "query",
+            "required": true,
+            "description": "Registered app in the authenticated tenant; missing, unknown and cross-tenant apps return the same 404.",
+            "schema": {
+              "$ref": "#/components/schemas/CommonId"
+            }
+          },
+          {
+            "name": "metric_name",
+            "in": "query",
+            "required": false,
+            "description": "Repeated values deduplicate and sort.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{2,127}$"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "metric_definition_version",
+            "in": "query",
+            "required": false,
+            "description": "Exact saved definition version.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive lower calendar-date bound.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "description": "Exclusive upper calendar-date bound; from must precede to.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "watermark_at_most",
+            "in": "query",
+            "required": true,
+            "description": "UTC evidence cutoff, not a claim that every upstream event arrived. Required for records.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+            }
+          },
+          {
+            "name": "difference_reason_code",
+            "in": "query",
+            "required": false,
+            "description": "Difference audit only: filter stored reason, never infer a cause. An unknown well-formed reason can return no rows.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{2,127}$"
+            }
+          },
+          {
+            "name": "supersession",
+            "in": "query",
+            "required": false,
+            "description": "Exclude same-scope replaced runs, or include immutable history.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "latest",
+                "all"
+              ],
+              "default": "latest"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Normal default 200/max OPENMASU_REPORT_MAX_ROWS (1000); CSV export default/max OPENMASU_REPORT_EXPORT_MAX_ROWS (200000).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 200
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "Opaque endpoint-specific keyset next_cursor; retain app, selection and watermark. No OFFSET or atomic multi-page snapshot claim.",
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "description": "Common stored-row projection; CSV has an empty value cell for undefined.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json"
+            }
+          },
+          {
+            "name": "export",
+            "in": "query",
+            "required": false,
+            "description": "true requires CSV; rejects export_limit_exceeded rather than truncating.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "false",
+                "true"
+              ],
+              "default": "false"
+            }
+          },
+          {
+            "name": "grouping_campaign_id",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "$ref": "#/components/schemas/Common/$defs/id"
+            }
+          },
+          {
+            "name": "grouping_network",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "grouping_country",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z]{2}$"
+            }
+          },
+          {
+            "name": "grouping_cohort_date",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            }
+          },
+          {
+            "name": "grouping_metric_date",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            }
+          },
+          {
+            "name": "grouping_attribution_status",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "enum": [
+                "organic",
+                "non_organic",
+                "unattributed"
+              ]
+            }
+          },
+          {
+            "name": "grouping_apple_conversion_bucket",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "type": "string",
+              "pattern": "^(fine:([0-9]|[1-5][0-9]|6[0-3])|coarse:(low|medium|high))$"
+            }
+          }
+        ],
+        "x-unknown-query-keys": "rejected",
+        "x-query-keys": [
+          "app_id",
+          "metric_name",
+          "metric_definition_version",
+          "date_from",
+          "date_to",
+          "watermark_at_most",
+          "difference_reason_code",
+          "supersession",
+          "limit",
+          "after",
+          "format",
+          "export",
+          "grouping_campaign_id",
+          "grouping_network",
+          "grouping_country",
+          "grouping_cohort_date",
+          "grouping_metric_date",
+          "grouping_attribution_status",
+          "grouping_apple_conversion_bucket"
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored rows only; empty is not an inferred zero. No-store. CSV uses x-next-cursor; JSON uses next_cursor.",
+            "headers": {
+              "x-next-cursor": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Next page when present."
+              },
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RecordCountRow"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-columns": [
+                  "metric_name",
+                  "grouping",
+                  "count"
+                ]
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid/unknown/duplicate filter, invalid cursor, unsupported series/export or missing records watermark.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid/missing bearer; cookies are not authentication for /v1.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing read capability.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App missing, unknown or outside the authenticated tenant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server failure; do not interpret as empty data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/audit/differences": {
+      "get": {
+        "operationId": "readDifferenceAudit",
+        "summary": "Read persisted app-scoped aggregate results",
+        "security": [
+          {
+            "OperatorBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "query",
+            "required": true,
+            "description": "Registered app in the authenticated tenant; missing, unknown and cross-tenant apps return the same 404.",
+            "schema": {
+              "$ref": "#/components/schemas/CommonId"
+            }
+          },
+          {
+            "name": "metric_name",
+            "in": "query",
+            "required": false,
+            "description": "Repeated values deduplicate and sort.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{2,127}$"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "metric_definition_version",
+            "in": "query",
+            "required": false,
+            "description": "Exact saved definition version.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive lower calendar-date bound.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "description": "Exclusive upper calendar-date bound; from must precede to.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "watermark_at_most",
+            "in": "query",
+            "required": false,
+            "description": "UTC evidence cutoff, not a claim that every upstream event arrived. Required for records.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+            }
+          },
+          {
+            "name": "difference_reason_code",
+            "in": "query",
+            "required": false,
+            "description": "Difference audit only: filter stored reason, never infer a cause. An unknown well-formed reason can return no rows.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{2,127}$"
+            }
+          },
+          {
+            "name": "supersession",
+            "in": "query",
+            "required": false,
+            "description": "Exclude same-scope replaced runs, or include immutable history.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "latest",
+                "all"
+              ],
+              "default": "latest"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Normal default 200/max OPENMASU_REPORT_MAX_ROWS (1000); CSV export default/max OPENMASU_REPORT_EXPORT_MAX_ROWS (200000).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 200
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "Opaque endpoint-specific keyset next_cursor; retain app, selection and watermark. No OFFSET or atomic multi-page snapshot claim.",
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "description": "Common stored-row projection; CSV has an empty value cell for undefined.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json"
+            }
+          },
+          {
+            "name": "export",
+            "in": "query",
+            "required": false,
+            "description": "true requires CSV; rejects export_limit_exceeded rather than truncating.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "false",
+                "true"
+              ],
+              "default": "false"
+            }
+          },
+          {
+            "name": "grouping_campaign_id",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "$ref": "#/components/schemas/Common/$defs/id"
+            }
+          },
+          {
+            "name": "grouping_network",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "grouping_country",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z]{2}$"
+            }
+          },
+          {
+            "name": "grouping_cohort_date",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            }
+          },
+          {
+            "name": "grouping_metric_date",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            }
+          },
+          {
+            "name": "grouping_attribution_status",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "enum": [
+                "organic",
+                "non_organic",
+                "unattributed"
+              ]
+            }
+          },
+          {
+            "name": "grouping_apple_conversion_bucket",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "type": "string",
+              "pattern": "^(fine:([0-9]|[1-5][0-9]|6[0-3])|coarse:(low|medium|high))$"
+            }
+          }
+        ],
+        "x-unknown-query-keys": "rejected",
+        "x-query-keys": [
+          "app_id",
+          "metric_name",
+          "metric_definition_version",
+          "date_from",
+          "date_to",
+          "watermark_at_most",
+          "difference_reason_code",
+          "supersession",
+          "limit",
+          "after",
+          "format",
+          "export",
+          "grouping_campaign_id",
+          "grouping_network",
+          "grouping_country",
+          "grouping_cohort_date",
+          "grouping_metric_date",
+          "grouping_attribution_status",
+          "grouping_apple_conversion_bucket"
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored rows only; empty is not an inferred zero. No-store. CSV uses x-next-cursor; JSON uses next_cursor.",
+            "headers": {
+              "x-next-cursor": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Next page when present."
+              },
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DifferenceRow"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-columns": [
+                  "reconciliation_id",
+                  "input_snapshot_id",
+                  "external_snapshot_id",
+                  "difference_reason_code",
+                  "difference_reason_version",
+                  "matching_keys",
+                  "candidates",
+                  "exclusions",
+                  "windows",
+                  "joins",
+                  "freshness",
+                  "supersedes_reconciliation_id",
+                  "superseded"
+                ]
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid/unknown/duplicate filter, invalid cursor, unsupported series/export or missing records watermark.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid/missing bearer; cookies are not authentication for /v1.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing read capability.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App missing, unknown or outside the authenticated tenant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server failure; do not interpret as empty data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "OperatorBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Operator key with read capability; never send the backend signing secret here."
+      },
+      "Server_app-id": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-openmasu-app-id",
+        "description": "Required together; raw-body HMAC, not five independent static API keys."
+      },
+      "Server_server-key-id": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-openmasu-server-key-id",
+        "description": "Required together; raw-body HMAC, not five independent static API keys."
+      },
+      "Server_timestamp-ms": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-openmasu-timestamp-ms",
+        "description": "Required together; raw-body HMAC, not five independent static API keys."
+      },
+      "Server_nonce": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-openmasu-nonce",
+        "description": "Required together; raw-body HMAC, not five independent static API keys."
+      },
+      "Server_signature": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-openmasu-signature",
+        "description": "Required together; raw-body HMAC, not five independent static API keys."
+      }
+    },
+    "schemas": {
+      "Common": {
+        "title": "OpenMasu Common Types v0.4",
+        "$defs": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+          },
+          "clickId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Common/$defs/id"
+              },
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{22,128}$"
+              }
+            ]
+          },
+          "dateTime": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+          },
+          "processingPurposeId": {
+            "enum": [
+              "attribution",
+              "fraud_prevention",
+              "analytics",
+              "revenue_measurement"
+            ]
+          },
+          "money": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "amount_unscaled",
+              "amount_scale",
+              "currency"
+            ],
+            "properties": {
+              "amount_unscaled": {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              "amount_scale": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 18
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              }
+            }
+          },
+          "evidenceRef": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tenant_id",
+              "app_id",
+              "ref",
+              "lifecycle_status",
+              "access_class"
+            ],
+            "properties": {
+              "tenant_id": {
+                "$ref": "#/components/schemas/Common/$defs/id"
+              },
+              "app_id": {
+                "$ref": "#/components/schemas/Common/$defs/id"
+              },
+              "ref": {
+                "type": "string"
+              },
+              "lifecycle_status": {
+                "enum": [
+                  "available",
+                  "redacted",
+                  "purged"
+                ]
+              },
+              "access_class": {
+                "enum": [
+                  "public",
+                  "protected",
+                  "private"
+                ]
+              }
+            }
+          },
+          "integrityVerdict": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Server-assigned platform-integrity evidence. It is evidence only and does not independently determine attribution, fraud, or metric eligibility.",
+            "required": [
+              "provider",
+              "verdict",
+              "evaluated_at",
+              "policy_version"
+            ],
+            "properties": {
+              "provider": {
+                "enum": [
+                  "play_integrity",
+                  "app_attest"
+                ]
+              },
+              "verdict": {
+                "enum": [
+                  "verified",
+                  "failed",
+                  "unavailable"
+                ]
+              },
+              "evaluated_at": {
+                "$ref": "#/components/schemas/Common/$defs/dateTime"
+              },
+              "policy_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "evidence_ref": {
+                "type": "string",
+                "pattern": "^protected:[A-Za-z0-9._:-]{1,256}$"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "verdict": {
+                      "enum": [
+                        "verified",
+                        "failed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "verdict"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "evidence_ref": {}
+                  },
+                  "required": [
+                    "evidence_ref"
+                  ]
+                },
+                "else": {
+                  "not": {
+                    "properties": {
+                      "evidence_ref": {}
+                    },
+                    "required": [
+                      "evidence_ref"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "aggregationTimeZone": {
+            "enum": [
+              "UTC",
+              "Asia/Tokyo"
+            ]
+          },
+          "importContext": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "provider",
+              "provider_attributed",
+              "provider_attribution_strategy"
+            ],
+            "properties": {
+              "provider": {
+                "type": "string",
+                "pattern": "^[a-z0-9-]{1,64}$"
+              },
+              "provider_attributed": {
+                "type": "boolean"
+              },
+              "provider_attribution_strategy": {
+                "enum": [
+                  "click_through",
+                  "view_through",
+                  "modeled",
+                  "self_attributed_network",
+                  "organic",
+                  "unattributed"
+                ]
+              },
+              "provider_install_ref": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "provider_click_ref": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "provider_campaign_ref": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "provider_adgroup_ref": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "provider_creative_ref": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "provider_network": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "provider_site_ref": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "provider_country": {
+                "type": "string",
+                "pattern": "^[A-Z]{2}$"
+              },
+              "provider_confirmed_at": {
+                "$ref": "#/components/schemas/Common/$defs/dateTime"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "provider_attributed": {
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "provider_attributed"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "provider_attribution_strategy": {
+                      "enum": [
+                        "click_through",
+                        "view_through",
+                        "modeled",
+                        "self_attributed_network"
+                      ]
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "provider_attribution_strategy": {
+                      "enum": [
+                        "organic",
+                        "unattributed"
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AcceptedBatch": {
+        "type": "object",
+        "required": [
+          "ingest_batch_id",
+          "status"
+        ],
+        "properties": {
+          "ingest_batch_id": {
+            "type": "string"
+          },
+          "status": {
+            "const": "pending"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MetricRow": {
+        "type": "object",
+        "required": [
+          "metric_run_id",
+          "metric_name",
+          "value_state"
+        ],
+        "properties": {
+          "metric_run_id": {
+            "$ref": "#/components/schemas/Common/$defs/id"
+          },
+          "metric_name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{2,127}$"
+          },
+          "metric_definition_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "policy_versions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "input_received_at_watermark": {
+            "$ref": "#/components/schemas/Common/$defs/dateTime"
+          },
+          "input_snapshot_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "data_freshness": {
+            "enum": [
+              "complete",
+              "late_excluded",
+              "recalculated"
+            ]
+          },
+          "value_state": {
+            "enum": [
+              "present",
+              "undefined"
+            ],
+            "default": "present",
+            "description": "Absence is semantically present for v0.2.0 compatibility."
+          },
+          "undefined_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "no_attributed_cost",
+                  "no_activity_events",
+                  "empty_cohort"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "value_unscaled": {
+            "type": "string",
+            "pattern": "^-?[0-9]+$"
+          },
+          "value_type": {
+            "enum": [
+              "money",
+              "ratio",
+              "count"
+            ]
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "amount_scale": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 18
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ratio_scale": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 18
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "grouping": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "campaign_id": {
+                "$ref": "#/components/schemas/Common/$defs/id"
+              },
+              "network": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "country": {
+                "type": "string",
+                "pattern": "^[A-Z]{2}$"
+              },
+              "cohort_date": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "metric_date": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "attribution_status": {
+                "enum": [
+                  "organic",
+                  "non_organic",
+                  "unattributed"
+                ]
+              },
+              "apple_conversion_bucket": {
+                "type": "string",
+                "pattern": "^(fine:([0-9]|[1-5][0-9]|6[0-3])|coarse:(low|medium|high))$"
+              }
+            }
+          },
+          "rule_bundle_id": {
+            "$ref": "#/components/schemas/Common/$defs/id"
+          },
+          "rule_bundle_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "aggregation_time_zone": {
+            "$ref": "#/components/schemas/Common/$defs/aggregationTimeZone"
+          },
+          "computed_at": {
+            "$ref": "#/components/schemas/Common/$defs/dateTime"
+          },
+          "reproducibility_status": {
+            "enum": [
+              "fully_reproducible",
+              "redaction_affected",
+              "retention_affected"
+            ]
+          },
+          "supersedes_metric_run_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Common/$defs/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "input_ledger_position": {
+            "type": "string",
+            "minLength": 1
+          },
+          "grouping_digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "superseded": {
+            "type": "boolean"
+          },
+          "comparison_context": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Saved aggregate-only meaning; null/unknown is not reconstructed."
+          },
+          "cost_update_state": {
+            "type": "string",
+            "description": "Current persisted recalculation/input-revision state."
+          }
+        },
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "value_state": {
+                  "const": "present"
+                }
+              },
+              "required": [
+                "value_state"
+              ]
+            },
+            "then": {
+              "required": [
+                "value_unscaled"
+              ]
+            },
+            "else": {
+              "required": [
+                "undefined_reason"
+              ],
+              "properties": {
+                "undefined_reason": {
+                  "enum": [
+                    "no_attributed_cost",
+                    "no_activity_events",
+                    "empty_cohort"
+                  ]
+                }
+              },
+              "not": {
+                "required": [
+                  "value_unscaled"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "DifferenceRow": {
+        "type": "object",
+        "properties": {
+          "reconciliation_id": {
+            "$ref": "#/components/schemas/Common/$defs/id"
+          },
+          "input_snapshot_id": {
+            "$ref": "#/components/schemas/Common/$defs/id"
+          },
+          "external_snapshot_id": {
+            "$ref": "#/components/schemas/Common/$defs/id"
+          },
+          "difference_reason_code": {
+            "enum": [
+              "matched",
+              "candidate_missing",
+              "candidate_excluded",
+              "window_mismatch",
+              "join_key_missing",
+              "join_key_ambiguous",
+              "freshness_mismatch",
+              "external_row_unmatched",
+              "redaction_caused_recalculation",
+              "currency_policy_mismatch",
+              "scope_mismatch",
+              "provider_modeled_conversion"
+            ]
+          },
+          "difference_reason_version": {
+            "enum": [
+              "0.4.0",
+              "0.4.0"
+            ]
+          },
+          "matching_keys": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "value",
+                "scope",
+                "normalization",
+                "cardinality",
+                "protected"
+              ],
+              "properties": {
+                "type": {
+                  "enum": [
+                    "external_row_id",
+                    "provider_install_id",
+                    "provider_click_id",
+                    "tracking_link_id",
+                    "campaign_id",
+                    "transaction_id",
+                    "impression_id",
+                    "tenant_app_composite"
+                  ]
+                },
+                "value": {
+                  "type": "string"
+                },
+                "scope": {
+                  "enum": [
+                    "tenant",
+                    "tenant_app"
+                  ]
+                },
+                "normalization": {
+                  "enum": [
+                    "identity",
+                    "lowercase_ascii",
+                    "trim"
+                  ]
+                },
+                "cardinality": {
+                  "enum": [
+                    "one_to_one",
+                    "one_to_many"
+                  ]
+                },
+                "protected": {
+                  "type": "boolean"
+                },
+                "value_encoding": {
+                  "enum": [
+                    "plain",
+                    "sha256"
+                  ]
+                },
+                "access_class": {
+                  "enum": [
+                    "public",
+                    "protected",
+                    "private"
+                  ]
+                }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "enum": [
+                          "provider_install_id",
+                          "provider_click_id"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ]
+                  },
+                  "then": {
+                    "required": [
+                      "value_encoding",
+                      "access_class"
+                    ],
+                    "properties": {
+                      "value": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "protected": {
+                        "const": true
+                      },
+                      "value_encoding": {
+                        "const": "sha256"
+                      },
+                      "access_class": {
+                        "const": "protected"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Common/$defs/id"
+            }
+          },
+          "exclusions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "windows": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "joins": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "freshness": {
+            "enum": [
+              "current",
+              "stale",
+              "recalculated"
+            ]
+          },
+          "supersedes_reconciliation_id": {
+            "$ref": "#/components/schemas/Common/$defs/id"
+          },
+          "superseded": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RecordCountRow": {
+        "type": "object",
+        "required": [
+          "metric_name",
+          "grouping",
+          "count"
+        ],
+        "properties": {
+          "metric_name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{2,127}$"
+          },
+          "grouping": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "campaign_id": {
+                "$ref": "#/components/schemas/Common/$defs/id"
+              },
+              "network": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "country": {
+                "type": "string",
+                "pattern": "^[A-Z]{2}$"
+              },
+              "cohort_date": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "metric_date": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "attribution_status": {
+                "enum": [
+                  "organic",
+                  "non_organic",
+                  "unattributed"
+                ]
+              },
+              "apple_conversion_bucket": {
+                "type": "string",
+                "pattern": "^(fine:([0-9]|[1-5][0-9]|6[0-3])|coarse:(low|medium|high))$"
+              }
+            }
+          },
+          "count": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ServerRecord": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "producer_version",
+              "event_id",
+              "event_name",
+              "occurred_at",
+              "processing_sequence",
+              "payload"
+            ],
+            "properties": {
+              "producer_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "producer_variant": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "wrapper_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "event_id": {
+                "$ref": "#/components/schemas/CommonId"
+              },
+              "event_name": {
+                "const": "session_start"
+              },
+              "occurred_at": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+              },
+              "processing_sequence": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "payload": {
+                "$ref": "../../schemas/events/session-start.schema.json",
+                "description": "Event-schema validation occurs asynchronously before ledger persistence; 202 is inbox admission, not validation completion."
+              }
+            },
+            "description": "Tenant/app/producer/receipt IDs and time are server-assigned. All records must share one installation anchor, or all omit it. Authority claims are forbidden."
+          },
+          {
+            "type": "object",
+            "required": [
+              "producer_version",
+              "event_id",
+              "event_name",
+              "occurred_at",
+              "processing_sequence",
+              "payload"
+            ],
+            "properties": {
+              "producer_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "producer_variant": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "wrapper_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "event_id": {
+                "$ref": "#/components/schemas/CommonId"
+              },
+              "event_name": {
+                "const": "custom_event"
+              },
+              "occurred_at": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+              },
+              "processing_sequence": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "payload": {
+                "$ref": "../../schemas/events/custom-event.schema.json",
+                "description": "Event-schema validation occurs asynchronously before ledger persistence; 202 is inbox admission, not validation completion."
+              }
+            },
+            "description": "Tenant/app/producer/receipt IDs and time are server-assigned. All records must share one installation anchor, or all omit it. Authority claims are forbidden."
+          },
+          {
+            "type": "object",
+            "required": [
+              "producer_version",
+              "event_id",
+              "event_name",
+              "occurred_at",
+              "processing_sequence",
+              "payload"
+            ],
+            "properties": {
+              "producer_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "producer_variant": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "wrapper_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "event_id": {
+                "$ref": "#/components/schemas/CommonId"
+              },
+              "event_name": {
+                "const": "ad_impression"
+              },
+              "occurred_at": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+              },
+              "processing_sequence": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "payload": {
+                "$ref": "../../schemas/events/ad-impression.schema.json",
+                "description": "Event-schema validation occurs asynchronously before ledger persistence; 202 is inbox admission, not validation completion."
+              }
+            },
+            "description": "Tenant/app/producer/receipt IDs and time are server-assigned. All records must share one installation anchor, or all omit it. Authority claims are forbidden."
+          },
+          {
+            "type": "object",
+            "required": [
+              "producer_version",
+              "event_id",
+              "event_name",
+              "occurred_at",
+              "processing_sequence",
+              "payload"
+            ],
+            "properties": {
+              "producer_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "producer_variant": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "wrapper_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "event_id": {
+                "$ref": "#/components/schemas/CommonId"
+              },
+              "event_name": {
+                "const": "ad_view"
+              },
+              "occurred_at": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+              },
+              "processing_sequence": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "payload": {
+                "$ref": "../../schemas/events/ad-view.schema.json",
+                "description": "Event-schema validation occurs asynchronously before ledger persistence; 202 is inbox admission, not validation completion."
+              }
+            },
+            "description": "Tenant/app/producer/receipt IDs and time are server-assigned. All records must share one installation anchor, or all omit it. Authority claims are forbidden."
+          },
+          {
+            "type": "object",
+            "required": [
+              "producer_version",
+              "event_id",
+              "event_name",
+              "occurred_at",
+              "processing_sequence",
+              "payload"
+            ],
+            "properties": {
+              "producer_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "producer_variant": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "wrapper_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "event_id": {
+                "$ref": "#/components/schemas/CommonId"
+              },
+              "event_name": {
+                "const": "ad_revenue"
+              },
+              "occurred_at": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+              },
+              "processing_sequence": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "payload": {
+                "$ref": "../../schemas/events/ad-revenue.schema.json",
+                "description": "Event-schema validation occurs asynchronously before ledger persistence; 202 is inbox admission, not validation completion."
+              }
+            },
+            "description": "Tenant/app/producer/receipt IDs and time are server-assigned. All records must share one installation anchor, or all omit it. Authority claims are forbidden."
+          },
+          {
+            "type": "object",
+            "required": [
+              "producer_version",
+              "event_id",
+              "event_name",
+              "occurred_at",
+              "processing_sequence",
+              "payload"
+            ],
+            "properties": {
+              "producer_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "producer_variant": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "wrapper_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "event_id": {
+                "$ref": "#/components/schemas/CommonId"
+              },
+              "event_name": {
+                "const": "purchase"
+              },
+              "occurred_at": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+              },
+              "processing_sequence": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "payload": {
+                "$ref": "../../schemas/events/purchase.schema.json",
+                "description": "Event-schema validation occurs asynchronously before ledger persistence; 202 is inbox admission, not validation completion."
+              }
+            },
+            "description": "Tenant/app/producer/receipt IDs and time are server-assigned. All records must share one installation anchor, or all omit it. Authority claims are forbidden."
+          },
+          {
+            "type": "object",
+            "required": [
+              "producer_version",
+              "event_id",
+              "event_name",
+              "occurred_at",
+              "processing_sequence",
+              "payload"
+            ],
+            "properties": {
+              "producer_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "producer_variant": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "wrapper_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "event_id": {
+                "$ref": "#/components/schemas/CommonId"
+              },
+              "event_name": {
+                "const": "refund"
+              },
+              "occurred_at": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+              },
+              "processing_sequence": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "payload": {
+                "$ref": "../../schemas/events/refund.schema.json",
+                "description": "Event-schema validation occurs asynchronously before ledger persistence; 202 is inbox admission, not validation completion."
+              }
+            },
+            "description": "Tenant/app/producer/receipt IDs and time are server-assigned. All records must share one installation anchor, or all omit it. Authority claims are forbidden."
+          }
+        ]
+      },
+      "CommonId": {
+        "$ref": "#/components/schemas/Common/$defs/id"
+      },
+      "ServerBatch": {
+        "type": "object",
+        "required": [
+          "records"
+        ],
+        "properties": {
+          "records": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/ServerRecord"
+            }
+          }
+        }
+      }
+    }
+  }
+}

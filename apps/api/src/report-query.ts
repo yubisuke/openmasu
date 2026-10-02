@@ -77,7 +77,7 @@ const differenceReasonPattern = /^[a-z][a-z0-9_]{2,127}$/;
 const selectionSequencePattern = /^(0|[1-9]\d{0,18})$/;
 const groupingKeyPrefix = "grouping_";
 
-const transportKeys = new Set([
+export const reportTransportKeys = new Set([
   "app_id",
   "metric_name",
   "metric_definition_version",
@@ -220,13 +220,13 @@ export function parseMetricQuery(input: {
   const maximumRows = input.maximumRows ?? 1000;
   const maximumExportRows = input.maximumExportRows ?? 200_000;
   for (const key of input.searchParams.keys()) {
-    if (key.startsWith(groupingKeyPrefix) && !transportKeys.has(key)) {
+    if (key.startsWith(groupingKeyPrefix) && !reportTransportKeys.has(key)) {
       const requested = key.slice(groupingKeyPrefix.length);
       if (["installation_id", "click_id", "record_id", "payload", "payload_ref"].includes(requested)) {
         throw new ReportQueryError("identifying_grouping");
       }
     }
-    if (!transportKeys.has(key)) throw new ReportQueryError("unknown_filter");
+    if (!reportTransportKeys.has(key)) throw new ReportQueryError("unknown_filter");
   }
 
   const requestedAppId = one(input.searchParams, "app_id");

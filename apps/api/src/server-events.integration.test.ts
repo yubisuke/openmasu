@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { once } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -13,6 +13,8 @@ import { ensureAdminKeys } from "./admin-auth.js";
 import { KeyedTokenBucket } from "./rate-limit.js";
 import { createRequestHandler } from "./router.js";
 import { signServerRequest } from "./server-auth.js";
+import { BackendHttpError, backendHttpClient } from "../../../examples/backend-http-client.js";
+import { computeSqlMetricRuns } from "../../worker/src/metrics/cohort.js";
 
 const run = randomBytes(6).toString("hex");
 const tenantId = `tenant-server-${run}`;
@@ -180,6 +182,33 @@ describe("authenticated server-to-server event ingestion", { concurrency: false 
     assert.deepEqual(await lastActive.json(), { error: "last_active_server_key" });
     activeKeyId = second.server_key_id;
     activeSecret = second.server_key;
+  });
+
+  it("the minimal backend client admits a synthetic event, distinguishes pending from calculation, refuses malformed/auth failures and follows real report pages", async () => {
+    const config = { origin: baseUrl, appId, serverKeyId: activeKeyId, serverSecret: activeSecret, reportBearer: adminKey };
+    const client = backendHttpClient(config);
+    const accepted = await client.sendEvents([event(`event:http-client:${run}`, `installation:http-client:${run}`)]);
+    assert.equal(accepted.status, "pending"); assert.ok(accepted.ingest_batch_id);
+    const query = new URLSearchParams("limit=1");
+    assert.deepEqual((await client.reportPage("/v1/reports/metrics", query)).data, []);
+    await assert.rejects(() => client.sendEvents([event(`event:http-malformed:${run}`, `installation:http-client:${run}`, { processing_sequence: -1 })]), (error: unknown) => error instanceof BackendHttpError && error.status === 400 && error.retry === "correct_input");
+    await assert.rejects(() => backendHttpClient({ ...config, serverSecret: "synthetic-wrong-secret" }).sendEvents([event(`event:http-unauthorized:${run}`, `installation:http-client:${run}`)]), (error: unknown) => error instanceof BackendHttpError && error.status === 401);
+    await processSdkInbox(pool, payloadStore, tenantId);
+    // Reuse the reviewed daily definitions and real SQL engine, without reseeding/resetting.
+    // These empty historical calendar counts are calculated, not inferred from inbox admission.
+    const input = JSON.parse(readFileSync("fixtures/v0.4/42-daily-metric-date/input.json", "utf8"));
+    input.server_context.tenant_id = tenantId; input.server_context.app_id = appId;
+    for (const record of input.records) { record.tenant_id = tenantId; record.app_id = appId; }
+    for (const evaluation of input.metric_evaluations) evaluation.metric_run_id_prefix += `-http-client-${run}`;
+    const calculated = await computeSqlMetricRuns(pool, input);
+    assert.equal(calculated.length, 2);
+    const first = await client.reportPage("/v1/reports/metrics", query);
+    assert.equal(first.data.length, 1); assert.ok(first.next_cursor);
+    const continuation = new URLSearchParams(query); continuation.set("after", first.next_cursor!);
+    const second = await client.reportPage("/v1/reports/metrics", continuation);
+    assert.equal(second.data.length, 1); assert.equal(second.next_cursor, undefined);
+    assert.notEqual(first.data[0].metric_run_id, second.data[0].metric_run_id);
+    await assert.rejects(() => client.reportPage("/v1/reports/metrics", new URLSearchParams("unknown=value")), (error: unknown) => error instanceof BackendHttpError && error.status === 400);
   });
 
   it("authenticates the raw body, rejects replay and authority escalation, and projects valid events", async () => {

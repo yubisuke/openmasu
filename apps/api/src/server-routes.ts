@@ -12,7 +12,7 @@ import {
 
 type Any = Record<string, any>;
 
-const allowedEventNames = new Set([
+export const serverEventNames = [
   "session_start",
   "custom_event",
   "ad_impression",
@@ -20,7 +20,8 @@ const allowedEventNames = new Set([
   "ad_revenue",
   "purchase",
   "refund",
-]);
+] as const;
+const allowedEventNames = new Set<string>(serverEventNames);
 const identifierPattern = /^[A-Za-z0-9._:-]{1,128}$/;
 const protectedExtensionPattern = /^(?:adservices|apple|google_play|import|integrity|meta|provider|store_verification)(?:$|_)/;
 

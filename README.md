@@ -158,7 +158,9 @@ Use the [confirmation-bound import session](docs/import-mappings.md#confirmation
 to preview exact local input bytes before allowing an existing-MMP import to
 write to the ledger.
 Backend event producers should begin with the
-[server-to-server event guide](docs/server-to-server-events.md). Operators who
+[server-to-server event guide](docs/server-to-server-events.md) and the limited
+[machine-readable HTTP contract and client example](docs/api/README.md).
+These cover backend receipt and read-only reports, not every API route. Operators who
 need outbound callbacks should use the separate
 [operator event webhook guide](docs/operator-event-webhooks.md).
 Operators who need delayed files should use the separate

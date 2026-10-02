@@ -58,6 +58,7 @@ versions were reached. They do not override current sources of truth.
 | Safe upgrades | Stopped-writer supported-source path with archive checksum, frozen migration and exact target preflight | Existing backup gate extended with frozen v0.2.0 DDL/data, actual dump/restore, transactional failure/resume, preserved artifacts and privacy reapplication; no production downtime claim |
 | Single-host deployment | One existing Compose stack, exact release, operator HTTPS proxy, private configuration and stable named volumes | Static preflight refusals and normal no-reseed restart in the existing isolated pilot; real domains/TLS, secret custody and host readiness remain operator gates |
 | Storage visibility | Private privileged read-only observation distinguishes allocation, row estimates, payload metadata and unavailable results | Small protected write/purge and catalog-allocation/reader-refusal tests in existing suites; no new benchmark, retention default or automatic cleanup |
+| HTTP usage contract | Limited machine-readable backend receipt and three report routes reference existing schema/enums, signing and paging rules | Two generated-description drift tests and one existing real-route client case cover pending, malformed input, authentication and cursor continuation; no new SDK/platform/UI |
 | CI efficiency | Complete: cancel superseded PR runs and gate expensive steps by changed scope | Classifier unit matrix plus GitHub pull-request proof with every required context present |
 | Authenticated backend events | Complete: selected first-party server events use dedicated rotatable keys and the ordinary durable evaluator path | Signing and authority unit tests plus PostgreSQL key-lifecycle, replay, rejection, idempotency, projection, and deletion tests |
 | Operator event webhooks | Complete: selected accepted events use immutable app destinations, destination-scoped references, an encrypted durable outbox, and exact-body signing | Destination/DNS unit tests plus PostgreSQL lifecycle, retry, identifier-exclusion, disablement, and deletion-ordering tests |
@@ -85,8 +86,9 @@ The integrated first-use journey and default-off bounded cost refresh are
 implemented. Selected correction-driven recalculation is implemented with bounded
 requests and saved definitions; no automatic all-history recomputation is added.
 The SDK distribution tool and consumer guide are implemented for v0.3.0-rc.1;
-the exact-tag public asset receipt, safe upgrades, deployment guidance, capacity
-visibility and documented HTTP surface are the remaining integration slices.
+the exact-tag public asset receipt remains an integration gate. Safe upgrades,
+deployment guidance, capacity visibility and the limited HTTP surface now have
+their own narrow implementation and synthetic acceptance scopes.
 Safe upgrades now have a read-only source/backup preflight and one frozen-release
 restore/resume case in the existing backup gate; production recovery remains unverified.
 The single-host deployment guide reuses Compose and keeps normal start/restart
