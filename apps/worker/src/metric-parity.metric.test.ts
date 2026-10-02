@@ -52,7 +52,8 @@ describe("first-party engagement SQL parity", { concurrency: false }, () => {
     )).rows);
     assert.equal(saved.length, 10);
     assert.ok(saved.every(row => row.comparison_context.definition.engagement_credit_policy === "latest_eligible_open_before_outcome"));
-    assert.equal(jcs(await computeSqlMetricRuns(app, baseline, true, { tenant_id: "tenant-a", app_id: "app-a" })), jcs(runs));
+    assert.equal(jcs(await computeSqlMetricRuns(app, baseline, false, { tenant_id: "tenant-a", app_id: "app-a" })), jcs(runs));
+    await assert.rejects(computeSqlMetricRuns(app, baseline, true, { tenant_id: "tenant-a", app_id: "app-a" }), /metric run already exists/);
   });
 });
 
