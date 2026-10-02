@@ -45,6 +45,68 @@ Multiple active schedules are allowed only when their metric-name sets are
 disjoint. This prevents duplicate report series while allowing cohort and
 calendar-day metrics to use different lags.
 
+## Discover campaign targets automatically
+
+Instead of a fixed campaign list, an evaluation may explicitly include:
+
+```json
+{
+  "metric_names": ["d0_roas"],
+  "date_dimension": "cohort_date",
+  "grouping": {},
+  "campaign_discovery": {
+    "policy": "selected_acquisition_and_cost_v1",
+    "max_targets": 100
+  }
+}
+```
+
+Supply the explicit selected-first-party definitions described in
+[selected acquisition metrics](selected-acquisition-metrics.md); ROAS additionally
+requires the [safe cost-selection policy](cost-selection.md). Discovery supports
+UTC install cohorts only. A fixed network, country, or attribution status may
+restrict an evaluation, but a fixed campaign or an aggregate Apple series may
+not be combined with discovery. Metric names must be disjoint across evaluations
+when discovery is enabled: do not include an overlapping manual total.
+Manual schedules without this field retain their definition digest and run IDs.
+
+For each target date, the worker unions adopted acquisition-source campaign/network
+pairs and current cost campaign/network pairs at the fixed receipt watermark.
+It uses the same selected evidence join as the metric engine, not an arbitrary
+click or a client campaign claim. Discovery includes a superset for gross and
+net metrics; each metric still applies its own fraud policy and calculation.
+The target set, definition digest and watermark commit before metric calculation.
+New campaigns can enter the next date without editing the schedule, but cannot
+join an already frozen date. Late corrections use the existing
+[bounded correction requests](metric-corrections.md), not another scheduler.
+
+| Observed input | Treatment |
+| --- | --- |
+| Known non-organic campaign and network | One explicit campaign/network/status target, deduplicated across acquisition and cost |
+| Cost-only known campaign | Included; a value of zero observed revenue is not proof that all installs were received |
+| Organic or unattributed | Separate status-only target; never combined with paid acquisition, with no invented campaign |
+| Non-organic campaign/network missing | No guessed target; `unknown_nonorganic` count and `partial_unknown` receipt |
+| Cost campaign/network missing | No all-campaign denominator; `unknown_cost` count and `partial_unknown` receipt |
+| No eligible or unknown inputs | `known_empty` receipt, no fabricated metric run |
+| Target overflow, unavailable privacy evidence or calculation failure | Checkpoint does not skip the affected date; explicit `safe_reason` |
+
+The limit is 1–100 targets per discovered evaluation and at most 1,000 expanded
+metric runs per date across the schedule. Discovery has a bounded statement
+timeout and fails rather than publishing a truncated set. The list endpoint
+returns `latest_discovery` (date, watermark, digests, counts, target count and
+selection state), `pending_target_date`, and `safe_reason`. `partial_unknown`
+means known targets were calculated but some input could not be assigned; it
+is not a complete acquisition report. `known_empty` is local evidence at that
+watermark, not a provider-completeness claim.
+
+Discovery and publication share the existing tenant privacy fence. An app's
+redaction/purge state changing after the target receipt prevents publication
+of that pending date (`privacy_unavailable`). This is deliberately conservative,
+including unrelated deletions in the same app. Missing historical evidence is
+not reinterpreted as an empty cohort. Resolve the privacy boundary and explicitly
+disable/re-register a schedule if its frozen date can no longer be reproduced;
+the worker does not rewrite the receipt or resurrect deleted evidence.
+
 ## Inspect or disable schedules
 
 ```bash
@@ -76,6 +138,14 @@ For each active schedule, the worker:
 5. advances the checkpoint only after all expected artifacts and replay
    manifests commit.
 
+For discovery schedules, metric artifacts and checkpoint advancement are one
+transaction under the schedule lock. An interrupted calculation retries the
+same immutable target receipt. Previously committed runs must still reproduce
+byte-for-byte before a replayed checkpoint advances; conflicting late/backdated
+input fails closed rather than replacing a saved result. A known-empty receipt
+advances without calling the metric engine. Disablement prevents new claims;
+an already frozen date may finish.
+
 Metric run identifiers are deterministic for the schedule, target date,
 watermark, definition digest, evaluation, and metric name. If the worker stops
 after a metric transaction commits but before checkpoint finalization, the next
@@ -100,3 +170,7 @@ and metric-date definitions, verifies report and dashboard visibility, simulates
 the post-commit crash window, and checks disablement. This is durable scheduling
 evidence for the repository implementation. It is not evidence of production
 capacity, provider freshness, currency coverage, or an operator's alerting.
+The discovery cases add a new campaign on the next date, freeze a target set
+before new cost arrival, exercise crash replay, cost-only/organic/unknown
+inputs, scope isolation, empty dates, overflow and privacy changes. These cases
+extend the existing runtime integration suite; no live provider call is required.

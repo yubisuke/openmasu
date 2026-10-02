@@ -57,6 +57,9 @@ Explicit bounded [late-input corrections](../metric-corrections.md) discover
 revenue/commerce arrivals in a requested receipt interval, fix affected saved
 runs and replay their definitions through the existing worker. Receipt discovery
 is not automatically triggered by ingestion, and no history-wide scan is added.
+Opt-in [daily campaign discovery](../scheduled-metrics.md) fixes campaign/network/status
+targets at each date's watermark, includes cost-only campaigns, exposes unknown
+inputs and reuses the same worker and cohort engine.
 
 Supported-source upgrade procedures, single-host deployment preflight/restart,
 capacity visibility and the limited backend/report HTTP contract also have
@@ -64,7 +67,7 @@ merged acceptance scopes and are included in the publication. The integration
 batch is complete. The next product batch is selected in
 [plan #172](https://github.com/yubisuke/openmasu/issues/172), with the ordered
 [roadmap](../roadmap.md#next-product-sequence) as its canonical crosswalk.
-The other twelve slices remain planned. No development slice is part of the
+The other eleven slices remain planned. No development slice is part of the
 published baseline, and no next
 version or release scope is selected by that development plan.
 These synthetic scopes do not establish real recovery, hosting/TLS,
@@ -72,8 +75,7 @@ representative capacity or live backend/provider interoperability.
 
 Begin with selected acquisition-source projection, overlapping cost-grain
 safety, purchase/total-net acquisition, late-input correction and campaign
-discovery (#182/#183/#191/#184/#185). The first four have source implementation;
-daily campaign discovery remains planned.
+discovery (#182/#183/#191/#184/#185). All five have source implementation.
 Then implement the original external comparison, attribution analysis,
 calculation controls, cohort outcomes and saved-evidence workflow batch
 (#173-#180). App Store binding, finer advertising grain and separate

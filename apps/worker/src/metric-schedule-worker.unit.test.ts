@@ -39,6 +39,21 @@ function schedule(dateDimension: "cohort_date" | "metric_date") {
 }
 
 describe("scheduled metric worker input", () => {
+  it("keeps discovered campaign identities stable under retry and distinct from manual totals", () => {
+    const value = schedule("cohort_date") as any;
+    value.definition.evaluations[0].campaign_discovery = { policy: "selected_acquisition_and_cost_v1", max_targets: 10 };
+    value.definition_digest = sha256Jcs(value.definition);
+    const targets = ["synthetic-a", "synthetic-b"].map(campaign_id => ({ evaluation: 0,
+      grouping: { campaign_id, network: "synthetic-network", attribution_status: "non_organic" } }));
+    const pending = { targetDate: "2026-08-01", watermark: "2026-08-10T00:00:00.000Z", definitionDigest: value.definition_digest,
+      targetSet: { targets, target_digest: sha256Jcs(targets), privacy_epoch: "0", counts: {}, selection_state: "ready" as const } };
+    const input = buildScheduledMetricInput(value, pending);
+    assert.equal(input.metric_evaluations.length, 2);
+    assert.notEqual(input.metric_evaluations[0].metric_run_id_prefix, input.metric_evaluations[1].metric_run_id_prefix);
+    assert.deepEqual(buildScheduledMetricInput(value, pending), input);
+    assert.throws(() => buildScheduledMetricInput(value, { ...pending, targetSet: undefined }), /target_mismatch/);
+    assert.throws(() => buildScheduledMetricInput(value, { ...pending, targetSet: { ...pending.targetSet, target_digest: "0".repeat(64) } }), /target_mismatch/);
+  });
   it("fixes the target date and watermark at the UTC daily boundary", () => {
     assert.deepEqual(scheduledMetricBoundary(new Date("2026-08-10T23:59:59.999Z"), 2), {
       targetDate: "2026-08-08",
