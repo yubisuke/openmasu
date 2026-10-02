@@ -1,0 +1,10 @@
+{
+  "format": "openmasu-single-host-v1",
+  "release_tag": "v0.3.0-rc.1",
+  "compose_project": "openmasu-service",
+  "api_origin": "https://metrics.example.invalid",
+  "redirector_origin": "https://links.example.invalid",
+  "destination_origins": ["https://app.example.invalid"],
+  "tls_termination": "operator_reverse_proxy",
+  "certificate_kind": "public_ca"
+}

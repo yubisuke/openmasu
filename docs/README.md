@@ -69,6 +69,7 @@ approval or work-order process.
 
 - [Backup and restore](operations/backup-restore.md)
 - [Safe version-to-version upgrade](operations/upgrade.md)
+- [Single-host deployment and normal restart](operations/single-host.md)
 - [Runtime observability](operations/observability.md)
 - [Release runbook](operations/release.md)
 - [Validation checklists](validation/README.md)
