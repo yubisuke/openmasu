@@ -60,6 +60,10 @@ is not automatically triggered by ingestion, and no history-wide scan is added.
 Opt-in [daily campaign discovery](../scheduled-metrics.md) fixes campaign/network/status
 targets at each date's watermark, includes cost-only campaigns, exposes unknown
 inputs and reuses the same worker and cohort engine.
+The [external calculation declaration bridge](../cohort-comparison.md#compare-a-saved-roas-with-explicit-external-calculation-conditions)
+connects saved ad-revenue ROAS to explicitly declared external CSV calculations.
+It requires opt-in and matching meaning, retains separate provenance, and never
+upgrades the external claim to verified execution or completeness.
 
 Supported-source upgrade procedures, single-host deployment preflight/restart,
 capacity visibility and the limited backend/report HTTP contract also have
@@ -67,7 +71,7 @@ merged acceptance scopes and are included in the publication. The integration
 batch is complete. The next product batch is selected in
 [plan #172](https://github.com/yubisuke/openmasu/issues/172), with the ordered
 [roadmap](../roadmap.md#next-product-sequence) as its canonical crosswalk.
-The other eleven slices remain planned. No development slice is part of the
+The other ten slices remain planned. No development slice is part of the
 published baseline, and no next
 version or release scope is selected by that development plan.
 These synthetic scopes do not establish real recovery, hosting/TLS,
@@ -76,9 +80,10 @@ representative capacity or live backend/provider interoperability.
 Begin with selected acquisition-source projection, overlapping cost-grain
 safety, purchase/total-net acquisition, late-input correction and campaign
 discovery (#182/#183/#191/#184/#185). All five have source implementation.
-Then implement the original external comparison, attribution analysis,
-calculation controls, cohort outcomes and saved-evidence workflow batch
-(#173-#180). App Store binding, finer advertising grain and separate
+The external declaration bridge (#173) also has source implementation. Next
+connect the dashboard comparison, attribution analysis, calculation controls,
+cohort outcomes and saved-evidence workflows (#174-#180).
+App Store binding, finer advertising grain and separate
 re-engagement outcomes (#186-#188) remain scoped follow-ups. These connections
 must not be inferred from existing component coverage. Each Issue reuses
 existing services and relevant synthetic

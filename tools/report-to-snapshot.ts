@@ -8,10 +8,11 @@ import { parseSnapshot, comparisonDigest } from "../apps/api/src/cohort-comparis
 import { groupingDimensionAllowlist, validateGrouping, type GroupingDimension } from "../apps/api/src/report-query.js";
 import { parseCsv, CsvFormatError } from "../apps/worker/src/import/source.js";
 import { decimalToUnscaled } from "../apps/worker/src/import/cost.js";
+import { parseExternalDeclaration, type ExternalRoasDeclaration } from "../apps/api/src/external-calculation-declaration.js";
 export { reportToSnapshot } from "../apps/api/src/report-snapshot.js";
 
 type Binding = { column: string; omit_if_empty?: true } | { constant: string };
-type CsvMapping = { version: 1; source: string; conditions: ReturnType<typeof parseSnapshot>["conditions"];
+type CsvMapping = { version: 1; source: string; conditions: ReturnType<typeof parseSnapshot>["conditions"]; external_calculation?: ExternalRoasDeclaration;
   grouping: Partial<Record<GroupingDimension, Binding>>;
   value: { column: string; input: "integer" | "decimal"; scale: number; currency: Binding;
     undefined?: { marker: string; reason: Binding } } };
@@ -37,7 +38,7 @@ function binding(value: unknown, allowOmit = false): Binding {
   return structuredClone(value) as Binding;
 }
 function parseCsvMapping(input: unknown): CsvMapping {
-  object(input); closed(input, ["version", "source", "conditions", "grouping", "value"]);
+  object(input); closed(input, ["version", "source", "conditions", "grouping", "value", ...(Object.hasOwn(input, "external_calculation") ? ["external_calculation"] : [])]);
   if (input.version !== 1) throw new AggregateCsvError("mapping_invalid");
   let base: ReturnType<typeof parseSnapshot>;
   try { base = parseSnapshot({ source: input.source, conditions: input.conditions, rows: [] }); }
@@ -60,7 +61,15 @@ function parseCsvMapping(input: unknown): CsvMapping {
     if (typeof value.undefined.marker !== "string" || value.undefined.marker.length > 256) throw new AggregateCsvError("mapping_invalid");
     undefinedValue = { marker: value.undefined.marker, reason: binding(value.undefined.reason) };
   }
-  return { version: 1, source: base.source, conditions: base.conditions, grouping,
+  let external: ExternalRoasDeclaration | undefined;
+  if (Object.hasOwn(input, "external_calculation")) {
+    try { external = parseExternalDeclaration(input.external_calculation); }
+    catch { throw new AggregateCsvError("mapping_calculation_invalid"); }
+    if (external.time_zone !== base.conditions.time_zone || external.aggregation !== base.conditions.aggregation
+        || external.ratio_scale !== value.scale || !grouping.cohort_date
+        || Object.keys(grouping).some(key => !external!.grouping_dimensions.includes(key as GroupingDimension))) throw new AggregateCsvError("mapping_calculation_mismatch");
+  }
+  return { version: 1, source: base.source, conditions: base.conditions, grouping, ...(external ? { external_calculation: external } : {}),
     value: { column: value.column, input: value.input, scale: value.scale, currency, ...(undefinedValue ? { undefined: undefinedValue } : {}) } };
 }
 function boundValue(row: Record<string, any>, value: Binding, rowNumber: number): string | undefined {
@@ -95,6 +104,7 @@ export function aggregateCsvToSnapshot(bytes: Uint8Array, inputMapping: unknown)
     if (seen.has(key)) throw new AggregateCsvError("duplicate_grouping", number); seen.add(key);
     const currency = boundValue(row, mapping.value.currency, number)!;
     if (!/^(?:[A-Z]{3}|none)$/.test(currency)) throw new AggregateCsvError("currency_invalid", number);
+    if (mapping.external_calculation && currency !== "none") throw new AggregateCsvError("external_units_mismatch", number);
     if (!Object.hasOwn(row, mapping.value.column)) throw new AggregateCsvError("column_missing", number);
     const raw: string = row[mapping.value.column];
     if (mapping.value.undefined && raw === mapping.value.undefined.marker) {
@@ -116,6 +126,7 @@ export function aggregateCsvToSnapshot(bytes: Uint8Array, inputMapping: unknown)
   });
   let output: ReturnType<typeof parseSnapshot>;
   try { output = parseSnapshot({ source: mapping.source, conditions: mapping.conditions, rows,
+    ...(mapping.external_calculation ? { external_calculation: { declaration: mapping.external_calculation, declaration_sha256: comparisonDigest(mapping.external_calculation) } } : {}),
     mapping_provenance: { version: 1, format: "csv", interpretation: "operator_declared", row_count: rows.length,
       input_sha256: createHash("sha256").update(bytes).digest("hex"), mapping_sha256: comparisonDigest(mapping) } }); }
   catch { throw new AggregateCsvError("snapshot_invalid"); }

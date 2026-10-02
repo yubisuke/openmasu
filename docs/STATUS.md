@@ -201,10 +201,14 @@ Input discovery is requested through the API; only accepted jobs execute automat
 Opt-in [daily campaign discovery](scheduled-metrics.md#discover-campaign-targets-automatically)
 also freezes bounded acquisition/cost target sets before calculation (#185).
 Unknown and cost-only inputs are explicit; a frozen date is not expanded on retry.
-The original eight comparison, analysis and workflow
-slices (#173-#180) remain planned after that core work. App Store purchase
+The [external calculation declaration bridge](cohort-comparison.md#compare-a-saved-roas-with-explicit-external-calculation-conditions)
+now compares saved ad-revenue ROAS with an explicitly declared external CSV
+calculation (#173). Matching conditions plus opt-in produce exact deltas while
+retaining `external_declared` evidence; this is not provider verification.
+The other seven comparison, analysis and workflow
+slices (#174-#180) remain planned after that core work. App Store purchase
 binding, finer advertising grain and separate re-engagement outcomes
-(#186-#188) are scoped follow-ups. Eleven slices remain planned. Existing
+(#186-#188) are scoped follow-ups. Ten slices remain planned. Existing
 component evidence and the published v0.3.0-rc.1 record remain unchanged;
 neither proves these remaining connections.
 
