@@ -58,7 +58,7 @@ MMP.
 | Operator bulk event exports | Implemented as a default-off, app-scoped deterministic gzip NDJSON export to allowlisted S3-compatible operator storage, with SigV4, conditional create, digest-verified replay, durable keyset cursors, destination-scoped deletion rows, and bounded reader-safe batch health | Live Amazon S3/Cloudflare R2 account, IAM policy, DNS/TLS, lifecycle/replication, throughput, cost, alerting, downstream deletion, and operator acceptance |
 | Attribution and difference audit | Implemented for supported deterministic and aggregate evidence families | Same-cohort comparison with an existing MMP under frozen definitions |
 | Cohort metrics and exports | Implemented for versioned revenue, cost, FX, retention, ROAS, LTV, JSON, CSV, dashboard output, and app-scoped durable daily schedules with exact replay | Real currency/time-zone coverage, source-dashboard reconciliation, schedule/alert operation, and operator acceptance |
-| Selected cost correction | Implemented through bounded app/import/date/watermark requests, saved-definition replay, input-revision/pending labels and atomic old/new run supersession | Live revision completeness, unavailable legacy meaning, production load and operator acceptance; value differences do not prove causes |
+| Selected cost correction | Implemented through bounded app/import/date/watermark requests, SSR condition review and reader-visible jobs, saved-definition replay, input-revision/pending labels and atomic old/new run supersession | Live revision completeness, unavailable legacy meaning, production load and operator acceptance; value differences do not prove causes |
 | Android, iOS, and Unity SDKs | Implemented with JVM, emulator, Swift, simulator, reproducible packaging, standalone UPM dependency resolution, and a synthetic Unity 6 Android export/APK gate | Physical devices, Unity 2022.3, iOS Unity export, store delivery, and live provider signals |
 | Dashboard and management API | Implemented with server-rendered HTML, RBAC, sessions, RLS, and shared report encoders | Production TLS, browser/operator acceptance, and deployment-specific identity integration |
 | External HTTP usage contract | Limited OpenAPI description covers backend HMAC admission and three read-only report routes; generated schema/query/column references and one real-loopback client case reuse existing gates | Full API coverage, third-party generator/validator compatibility, real backend/network operation; no new gateway or SDK |
@@ -220,8 +220,11 @@ Explicit [custom-event conversion](custom-conversion-metrics.md) now counts
 distinct D7 cohort converters and their rate for one saved event key (#177).
 Fixture 61 fixes 3/10; boundary, receipt, privacy and gross/net cases share
 independent reference and SQL arithmetic. No new service or event payload.
-The other three workflow slices (#178-#180) remain planned after
-that core work. App Store purchase
+[D30 total-net ROAS details](metric-explanations.md) retain advertising, purchase,
+refund and cost operands from the saved calculation (#178). The dashboard connects
+bounded [cost-recalculation controls](metric-corrections.md) to existing jobs and
+original/replacement details (#179). Retention presentation (#180) remains planned.
+App Store purchase
 binding, finer advertising grain and separate re-engagement outcomes
 (#186-#188) are scoped follow-ups. A forward-only runtime fix now permits
 schedule re-registration over identical inputs while preserving run-ID
@@ -230,7 +233,7 @@ uniqueness, old evidence, exact replay and explicit-only supersession
 numerator now uses that metric's selected and fraud-filtered cohort, matching
 Python/SQL rather than counting a different population
 ([#202](https://github.com/yubisuke/openmasu/issues/202)). Neither fix rewrites
-old saved runs. Seven slices remain planned. Existing
+old saved runs. Four slices remain planned. Existing
 component evidence and the published v0.3.0-rc.1 record remain unchanged;
 neither proves these remaining connections.
 

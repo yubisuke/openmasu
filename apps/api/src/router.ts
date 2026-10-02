@@ -91,6 +91,7 @@ import {
 import { handleServerBatch, type ServerRouteDependencies } from "./server-routes.js";
 import { disableCostSchedule, listCostSchedules, registerCostSchedule } from "./cost-schedules.js";
 import { listMetricRecalculations, requestMetricRecalculation } from "./metric-recalculations.js";
+import { metricRecalculationFormRequest, renderMetricRecalculations } from "./dashboard/metric-recalculations.js";
 import {
   receiveAppleStoreNotification,
   type AppleStoreNotificationDependencies,
@@ -511,6 +512,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
         "dashboard_comparison_form", "dashboard_comparison_submit",
         "dashboard_attribution_report",
         "dashboard_metric_schedules_list", "dashboard_metric_schedules_register", "dashboard_metric_schedules_disable",
+        "dashboard_metric_recalculations_list", "dashboard_metric_recalculations_preview", "dashboard_metric_recalculations_request",
         "dashboard_tracking_links_list", "dashboard_tracking_links_create", "dashboard_tracking_link_transition",
         "dashboard_sdk_keys_issue", "dashboard_sdk_keys_retire",
         "dashboard_server_keys_issue", "dashboard_server_keys_retire", "dashboard_link_domain",
@@ -579,6 +581,35 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
         const appId = dashboardAppId(target.pathname) ?? "";
         try {
           const appIdentity = await requireRegisteredApp(dependencies.readerPool, sessionIdentity, appId);
+          if (route.handler === "dashboard_metric_recalculations_list") {
+            dashboardHtml(response, 200, renderMetricRecalculations(appId,
+              await listMetricRecalculations(dependencies.readerPool, appIdentity), csrfToken(session.token), roleAllows(session.role, "operate")));
+            return;
+          }
+          if (route.handler === "dashboard_metric_recalculations_preview" || route.handler === "dashboard_metric_recalculations_request") {
+            const body = await formBody(request);
+            if (!csrfOriginAccepted(request, dependencies.dashboard.publicBaseUrl)
+              || !verifyCsrfToken(session.token, body.get("csrf_token") ?? undefined)) {
+              await rejectDashboardCsrf(dependencies, response, session, "dashboard_metric_recalculation", "app", appId);
+              return;
+            }
+            try {
+              const parsed = metricRecalculationFormRequest(body);
+              if (route.handler === "dashboard_metric_recalculations_preview") {
+                dashboardHtml(response, 200, renderMetricRecalculations(appId,
+                  await listMetricRecalculations(dependencies.readerPool, appIdentity), csrfToken(session.token), true, parsed));
+              } else {
+                const job = await requestMetricRecalculation(dependencies.pool, appIdentity, parsed);
+                response.writeHead(303, { ...dashboardHeaders,
+                  location: `/dashboard/apps/${encodeURIComponent(appId)}/metric-recalculations#${encodeURIComponent(job.recalculation_id)}` }).end();
+              }
+            } catch (error) {
+              const reason = publicReason(error, "metric_recalculation_failed");
+              dashboardHtml(response, reason === "cost_revision_not_found" ? 404 : 400,
+                `<!doctype html><html lang="en"><body><h1>Recalculation request rejected</h1><p>${escapeHtml(reason)}</p><p><a href="/dashboard/apps/${encodeURIComponent(appId)}/metric-recalculations">Return to recalculations</a></p></body></html>`);
+            }
+            return;
+          }
           if (route.handler === "dashboard_metric_schedules_list") {
             dashboardHtml(response, 200, renderMetricSchedules(appId,
               await listMetricSchedules(dependencies.readerPool, appIdentity), csrfToken(session.token)));

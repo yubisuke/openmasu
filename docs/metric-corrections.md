@@ -24,6 +24,29 @@ report watermark also bounds visible cost revisions and recalculation requests.
 
 ## Request a selected recalculation
 
+In the app dashboard, follow **Review input corrections and recalculation jobs**.
+All readers can inspect the latest 20 jobs and follow each original/replacement
+run's saved details. Users with the `operate` capability can enter a completed
+cost import receipt, inclusive cohort date range, fixed UTC watermark and an
+optional comma-separated metric list. Select **Review requested conditions**,
+check the normalized values, then **Request this recalculation**.
+
+The confirmation page is stateless and does not enqueue work or claim a target
+count. On confirmation, the same API service below validates the receipt,
+selects current eligible runs and applies the bounds atomically. Repeated
+normalized requests return the same job, including after it completes. Refresh
+the list to observe `queued`, processing/retry, `completed` or `unavailable`;
+missing selections or replacement links are not successful calculations.
+API-created late-input jobs are visible in the same list with their trigger
+type, but the initial dashboard form requests cost-driven jobs only.
+
+Reading the page uses the reader role and does not modify jobs or metric runs.
+Preview and submission require a dashboard session, `operate` capability and
+Origin/CSRF checks; bearer credentials are not read on dashboard routes.
+These controls reuse the existing service and worker, not a second scheduler.
+The saved-detail links preserve unavailable/redacted evidence and never infer
+that a numeric difference was caused by cost alone.
+
 Get the completed `last_import_run_id` and `last_snapshot_digest` from
 `GET /v1/admin/apps/:app/cost-schedules`, or use a completed manual-cost import
 receipt. Empty refreshes have no import receipt and cannot create recalculation

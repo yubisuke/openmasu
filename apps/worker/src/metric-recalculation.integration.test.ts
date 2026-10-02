@@ -117,6 +117,80 @@ describe("bounded cost correction recalculation", { concurrency: false }, () => 
     } finally { server.close(); await once(server, "close"); }
   });
 
+  it("connects dashboard condition review to a bounded job and original/replacement details without granting reader writes", async () => {
+    const key = "synthetic-correction-dashboard-operator-key-32-bytes";
+    const readKey = "synthetic-correction-dashboard-reader-key-32-bytes";
+    await ensureAdminKeys(app, identity, [{ key, role: "operator" }, { key: readKey, role: "read_only" }]);
+    const origin = "http://localhost:8080";
+    const server = createServer(createRequestHandler({ pool: app, readerPool: reader,
+      payloadStore: { write: async () => "encrypted:synthetic", read: async () => Buffer.alloc(32), purge: async () => {}, scanFor: async () => false },
+      maxConfig: { tenantId, appId: "app-a", pathSecret: "synthetic-path", eventKey: "synthetic-event", tokenMode: "all_with_event_fallback", maxParameters: 40, maxQueryBytes: 8192 },
+      publicBaseUrl: origin, redirectorBaseUrl: "http://localhost:8090",
+      dashboard: { enabled: true, publicBaseUrl: origin, tenantId, sessionTtlSeconds: 43_200 } }));
+    server.listen(0, "127.0.0.1"); await once(server, "listening");
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const path = "/dashboard/apps/app-a/metric-recalculations";
+    const login = async (adminKey: string) => {
+      const response = await fetch(`${base}/dashboard/session`, { method: "POST", redirect: "manual",
+        headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ admin_key: adminKey }) });
+      assert.equal(response.status, 303);
+      const cookie = response.headers.get("set-cookie")!.split(";", 1)[0];
+      const page = await fetch(`${base}${path}`, { headers: { cookie } });
+      assert.equal(page.status, 200);
+      return { cookie, html: await page.text() };
+    };
+    try {
+      const operator = await login(key), readonly = await login(readKey);
+      assert.match(operator.html, /Review requested conditions/);
+      assert.doesNotMatch(readonly.html, /<form/);
+      const token = /name="csrf_token" value="([^"]+)"/.exec(operator.html)![1];
+      const form = new URLSearchParams({ ...request, metric_names: request.metric_names.join(","), csrf_token: token });
+      const post = (suffix = "", body = form, cookie = operator.cookie, sentOrigin = origin) => fetch(`${base}${path}${suffix}`, {
+        method: "POST", redirect: "manual", headers: { cookie, origin: sentOrigin, "content-type": "application/x-www-form-urlencoded" }, body,
+      });
+      assert.equal((await listMetricRecalculations(reader, identity)).length, 0);
+      const original = sha256(await artifacts());
+      const preview = await post("/preview");
+      assert.equal(preview.status, 200); assert.match(await preview.text(), /Request this recalculation/);
+      assert.equal((await listMetricRecalculations(reader, identity)).length, 0);
+      assert.equal(sha256(await artifacts()), original);
+      assert.equal((await post("", form, readonly.cookie)).status, 403);
+      const csrfBad = new URLSearchParams(form); csrfBad.set("csrf_token", "wrong");
+      assert.equal((await post("", csrfBad)).status, 403);
+      assert.equal((await post("/preview", form, operator.cookie, "https://cross-origin.invalid")).status, 403);
+      assert.equal((await fetch(`${base}${path.replace("app-a", "app-other")}`, { headers: { cookie: operator.cookie } })).status, 404);
+      for (const [field, value, status] of [
+        ["cost_import_run_id", "01800000-0000-7000-8000-000000000000", 404],
+        ["watermark", "2026-08-09T00:00:00.000Z", 400],
+        ["date_to", "2026-09-01", 400],
+      ] as const) {
+        const invalid = new URLSearchParams(form); invalid.set(field, value);
+        assert.equal((await post("", invalid)).status, status);
+      }
+      assert.equal((await listMetricRecalculations(reader, identity)).length, 0);
+      const accepted = await post(); assert.equal(accepted.status, 303);
+      const redirect = accepted.headers.get("location")!;
+      assert.equal((await post()).headers.get("location"), redirect);
+      const queued = await fetch(`${base}${path}`, { headers: { cookie: readonly.cookie } });
+      assert.match(await queued.text(), /queued/);
+      assert.deepEqual(await processMetricRecalculations(app, tenantId), { completed: 1, skipped: 0, fenced: 0, failed: 0 });
+      const rows = await listMetricRecalculations(reader, identity);
+      assert.equal(rows.length, 1); assert.equal(rows[0].state, "completed");
+      const finished = await fetch(`${base}${path}`, { headers: { cookie: readonly.cookie } });
+      const html = await finished.text();
+      for (const id of [oldId, rows[0].replacement_metric_run_id]) {
+        const detailPath = `/dashboard/apps/app-a/metrics/${encodeURIComponent(id)}/explanation`;
+        assert.ok(html.includes(detailPath));
+        assert.equal((await fetch(`${base}${detailPath}`, { headers: { cookie: readonly.cookie } })).status, 200);
+      }
+      assert.equal((await post()).headers.get("location"), redirect);
+      assert.equal((await listMetricRecalculations(reader, identity)).length, 1);
+      const stored = await artifacts();
+      for (const prior of old) assert.equal(sha256(stored.find(row => row.metric_run_id === prior.metric_run_id)), sha256(prior));
+      assert.doesNotMatch(html, /replay_digest|evidence_refs|installation_id|record_id|fx_policy|lease_token/);
+    } finally { server.close(); await once(server, "close"); }
+  });
+
   it("recovers an expired claim but never follows a different source revision on retry", async () => {
     const job = await requestMetricRecalculation(app, identity, request);
     await withTenant(app, tenantId, client => client.query(`UPDATE control.metric_recalculation_items SET state='processing',attempts=1,
