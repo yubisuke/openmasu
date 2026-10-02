@@ -92,9 +92,9 @@ merged acceptance scopes and are included in the publication. The integration
 batch is complete. The next product batch is selected in
 [plan #172](https://github.com/yubisuke/openmasu/issues/172), with the ordered
 [roadmap](../roadmap.md#next-product-sequence) as its canonical crosswalk.
-The other four original slices remain planned; explicit custom-event outcomes
-(#177), D30 total-net ROAS evidence (#178) and correction controls (#179) now
-have source implementation. The separately reproduced
+All eight original workflow slices have source implementation, including explicit
+custom-event outcomes (#177), D30 total-net ROAS evidence (#178), correction controls
+(#179) and the saved-retention matrix (#180). The separately reproduced
 schedule identity collision (#200) and reference retention population mismatch
 (#202) now have source implementation.
 No development slice is part of the
@@ -118,8 +118,11 @@ ad-revenue evidence remains readable; older and unsupported runs are not
 backfilled. Apply migration 060 before the new worker. The dashboard now
 offers condition review and submission for existing bounded cost recalculation,
 plus reader-visible jobs and original/replacement details (#179). It does not
-add a selector or start work on GET/preview. Retention presentation (#180)
-remains next.
+add a selector or start work on GET/preview. [Saved-retention presentation](../dashboard-analysis.md#saved-retention-matrix)
+(#180) aligns compatible cohorts and activity-day horizons from the existing
+bounded report page, with exact values/details, separate duplicate snapshots,
+per-observation maturity and explicit unrequested pages. It adds no calculation,
+unbounded query or browser dependency.
 App Store binding, finer advertising grain and separate
 re-engagement outcomes (#186-#188) remain scoped follow-ups. These connections
 must not be inferred from existing component coverage. Each Issue reuses

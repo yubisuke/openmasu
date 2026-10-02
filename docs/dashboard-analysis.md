@@ -33,6 +33,33 @@ does not establish complete arrival of delayed inputs.
 
 ## Charts and exports
 
+### Saved retention matrix
+
+The same bounded report page also aligns definition-backed retention as cohort
+dates by activity-day horizons. Days come from the saved `activity_day` definition,
+not the metric name. Only exact-day active-installations/cohort-size ratios are
+eligible. Population, acquisition basis, activity, time zone, dimensions other
+than cohort date, fraud/privacy meaning, policy/bundle, definition version,
+freshness and exact input watermark must match; only the date and window day vary.
+Legacy, inconsistent, superseded or affected runs remain in the ordinary table.
+
+Each observation shows its exact stored multiplier and links to saved run details.
+Zero is a value; undefined retains its reason. Multiple snapshots in one cell
+remain separate and are never summed, averaged or silently selected. A missing
+cell means no saved run in the current filtered selection **only when that selection
+fits on this page**. When either a preceding or following keyset page exists,
+it means not fetched on this page. Only observed dates/horizons are displayed.
+The matrix never fetches additional pages or recalculates retention; its expansion
+is limited to 2,000 cells, after which the ordinary bounded table remains available.
+
+Maturity is separate from the value: the saved definition and watermark establish
+whether the conservative window end has been reached. Unknown maturity is explicit.
+The bound uses the exclusive end of the cohort date plus the complete activity-day
+window, because individual install times are not exposed here. Neither reaching
+that bound nor `complete` freshness proves all delayed inputs have arrived.
+
+### Trends and downloads
+
 Charts separate dimensions, currencies/scales, definitions, policies, rule bundles,
 time zones, freshness and historical runs. Duplicate snapshots for one date are
 not connected. Missing dates, undefined values and integers outside safe chart

@@ -10,6 +10,7 @@ import type { GoogleDeliveryHealth } from "../google-delivery-health.js";
 import type { OperatorDeliveryHealth } from "../operator-delivery-health.js";
 import type { MeasurementHealth } from "../measurement-health.js";
 import { metricCharts } from "./metric-charts.js";
+import { buildRetentionMatrices } from "./retention-matrix.js";
 
 export type DashboardApp = {
   readonly app_id: string;
@@ -81,6 +82,7 @@ export type DashboardView = {
   readonly differences: readonly Record<string, unknown>[];
   readonly undefinedCount: number;
   readonly charts: readonly DashboardChart[];
+  readonly retention: ReturnType<typeof buildRetentionMatrices>;
   readonly deterministicCharts: readonly DashboardChart[];
   readonly appleAggregateCharts: readonly DashboardChart[];
   readonly trackingLinks: readonly DashboardTrackingLink[];
@@ -160,6 +162,7 @@ export function buildDashboardView(input: {
     differences: input.differences?.data ?? [],
     undefinedCount: rows.filter((row) => row.value_state === "undefined").length,
     charts,
+    retention: buildRetentionMatrices(rows, Boolean(input.metrics?.next_cursor || input.query?.after)),
     deterministicCharts: charts.filter((chart) => !aggregateNames.has(chart.metric_name)),
     appleAggregateCharts: charts.filter((chart) => aggregateNames.has(chart.metric_name)),
     trackingLinks: [...(input.trackingLinks ?? [])].sort((left, right) =>

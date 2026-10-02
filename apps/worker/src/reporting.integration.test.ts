@@ -681,6 +681,58 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
     assert.equal(recordsHtml.includes("<script"), false);
   });
 
+  it("aligns saved retention cohorts through the reader dashboard with unchanged filters values scope and page boundaries", async () => {
+    const input = fixture("33-stage-b-cohort-metrics");
+    const base = input.metric_evaluations[0];
+    input.metric_evaluations = ["2026-08-01", "2026-08-02"].map(date => ({ ...structuredClone(base),
+      metric_names: ["retention_d1", "retention_d7"], metric_run_id_prefix: `retention-matrix-${date}`,
+      grouping: { ...base.grouping, cohort_date: date } }));
+    await registerAndIngest("synthetic-retention-matrix", input);
+    await computeSqlMetricRuns(appPool, input, true);
+    const readKey = "synthetic-retention-matrix-reader-key-000000000000001";
+    await ensureAdminKeys(appPool, { tenantId: "tenant-a", appId: "app-a" }, [{ key: readKey, role: "read_only" }]);
+    const login = await fetch(`${baseUrl}/dashboard/session`, { method: "POST", redirect: "manual",
+      headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ admin_key: readKey }) });
+    assert.equal(login.status, 303);
+    const cookie = login.headers.get("set-cookie")!.split(";", 1)[0];
+    const filters = "metric_name=retention_d1&metric_name=retention_d7&grouping_country=JP&grouping_attribution_status=non_organic&watermark_at_most=2026-08-09T00%3A00%3A00.000Z";
+    const apiResponse = await fetch(`${baseUrl}/v1/reports/metrics?app_id=app-a&${filters}`, { headers: { authorization: `Bearer ${readKey}` } });
+    assert.equal(apiResponse.status, 200);
+    const api = await apiResponse.json() as { data: Any[] };
+    assert.equal(api.data.length, 4);
+    const read = async (query = filters) => {
+      const response = await fetch(`${baseUrl}/dashboard/apps/app-a?${query}`, { headers: { cookie } });
+      assert.equal(response.status, 200); return response.text();
+    };
+    const html = await read();
+    assert.equal((html.match(/data-retention-matrix=/g) ?? []).length, 1);
+    for (const row of api.data) {
+      const day = row.comparison_context.definition.definition.window.day;
+      assert.ok(html.includes(`data-retention-cohort="${row.grouping.cohort_date}" data-retention-day="${day}"`));
+      assert.ok(html.includes(`data-retention-run-id="${row.metric_run_id}"`));
+      if (row.grouping.cohort_date === "2026-08-01") {
+        assert.equal(row.value_unscaled, "1000000");
+        assert.ok(html.includes(`data-retention-run-id="${row.metric_run_id}" data-retention-value-unscaled="1000000" data-ratio-scale="6">1 ×`));
+      } else { assert.equal(row.value_state, "undefined"); assert.equal(row.undefined_reason, "empty_cohort"); }
+      const detail = `/dashboard/apps/app-a/metrics/${encodeURIComponent(row.metric_run_id)}/explanation`;
+      assert.ok(html.includes(detail)); assert.equal((await fetch(`${baseUrl}${detail}`, { headers: { cookie } })).status, 200);
+    }
+    assert.match(html, /— \(empty_cohort\)/); assert.match(html, /Conservative window end not reached/);
+    const first = await read(`${filters}&limit=3`);
+    assert.match(first, /Not fetched on this page/);
+    const href = /href="([^"]+)"[^>]*>Next metric page/.exec(first)![1].replaceAll("&amp;", "&");
+    const nextParams = new URL(href, baseUrl).searchParams;
+    assert.equal(nextParams.get("grouping_country"), "JP"); assert.equal(nextParams.get("grouping_attribution_status"), "non_organic");
+    const last = await read(nextParams.toString());
+    assert.match(last, /Partial selection: preceding or following pages are not loaded/);
+    assert.doesNotMatch(last, />Next metric page</);
+    assert.doesNotMatch(await read(filters.replace("grouping_country=JP", "grouping_country=GB")), /data-retention-matrix=/);
+    assert.equal((await fetch(`${baseUrl}/dashboard/apps/app-a?${filters}`, { redirect: "manual" })).status, 401);
+    assert.equal((await fetch(`${baseUrl}/dashboard/apps/unknown-matrix-app?${filters}`, { headers: { cookie } })).status, 404);
+    const afterApi = await fetch(`${baseUrl}/v1/reports/metrics?app_id=app-a&${filters}`, { headers: { authorization: `Bearer ${readKey}` } });
+    assert.deepEqual(await afterApi.json(), api);
+  });
+
   it("C16 serves byte-identical aggregate CSV through bearer and dashboard-session paths", async () => {
     const input = fixture("42-daily-metric-date");
     await registerAndIngest("42-daily-metric-date-export", input);

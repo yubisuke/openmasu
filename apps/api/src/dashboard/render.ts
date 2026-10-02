@@ -189,6 +189,19 @@ function chartSection(label: string, charts: DashboardView["charts"]): string {
   return `<section aria-label="${escapeHtml(label)}"><p>Trends use comparable rows only. Gaps include missing dates, undefined values and integers beyond safe chart precision; exact values remain in the table.</p>${charts.map((chart) => `<figure>${renderSparkline(chart.series, { label: chart.label })}<figcaption>${escapeHtml(chart.label)}</figcaption></figure>`).join("")}</section>`;
 }
 
+function retentionSection(view: DashboardView): string {
+  const result = view.retention;
+  if (result.cellLimitReached) return `<section><h3>Retention by cohort and activity day</h3><p>The ${result.maximumCells}-cell display limit was exceeded. Narrow the filters; all fetched runs remain in the ordinary table.</p></section>`;
+  if (!result.matrices.length) return "";
+  const missing = result.partialPage ? "Not fetched on this page; other pages are not inspected."
+    : "No saved run in this filtered selection.";
+  const tables = result.matrices.map((matrix, index) => `<table data-retention-matrix="${index}"><caption>Retention: ${escapeHtml(grouping(matrix.dimensions))}; ${escapeHtml(matrix.meaning.acquisition_basis)}; ${escapeHtml(matrix.meaning.fraud_policy)}; ${escapeHtml(matrix.meaning.time_zone)}; watermark ${escapeHtml(matrix.watermark)}; ${escapeHtml(matrix.ruleBundle)}; ${escapeHtml(matrix.policyVersions.join(", "))}</caption><thead><tr><th scope="col">Cohort date</th>${matrix.days.map(day => `<th scope="col">D${day} (activity day)</th>`).join("")}</tr></thead><tbody>${matrix.cohorts.map(cohort => `<tr><th scope="row">${cohort.date}</th>${cohort.cells.map(cell => `<td data-retention-cohort="${cohort.date}" data-retention-day="${cell.day}">${cell.observations.length > 1 ? "<strong>Multiple saved snapshots; not combined.</strong>" : ""}${cell.observations.length ? cell.observations.map(({ row, maturity, closesAt }) => {
+    const details = view.selectedAppId ? `<a href="/dashboard/apps/${encodeURIComponent(view.selectedAppId)}/metrics/${encodeURIComponent(row.metric_run_id)}/explanation">Saved run details</a>` : escapeHtml(row.metric_run_id);
+    return `<div data-retention-run-id="${escapeHtml(row.metric_run_id)}"${row.value_state === "present" ? ` data-retention-value-unscaled="${escapeHtml(row.value_unscaled)}" data-ratio-scale="${row.ratio_scale}"` : ""}>${escapeHtml(metricValueLabel(row))}<small>${maturity === "window_elapsed" ? "Conservative window end reached" : maturity === "conservative_end_not_reached" ? "Conservative window end not reached" : "Maturity unknown"}${closesAt ? ` (${escapeHtml(closesAt)})` : ""}</small>${details}</div>`;
+  }).join("") : escapeHtml(missing)}</td>`).join("")}</tr>`).join("")}</tbody></table>`).join("");
+  return `<section aria-label="Retention matrix"><h3>Retention by cohort and activity day</h3><p>Only saved, definition-backed activity-day retention is aligned. Values are exact multipliers (1 × = 100%); no summing, averaging or recalculation. An elapsed window does not prove all inputs arrived.</p><p>${result.partialPage ? "Partial selection: preceding or following pages are not loaded." : "Current filtered selection fits on this page."} Only observed dates and horizons are shown. ${result.omittedRows} other fetched runs are not placed here (unsupported/unknown meaning, history or affected evidence); see the ordinary table.</p>${tables}</section>`;
+}
+
 function reportControls(view: DashboardView): string {
   if (!view.selectedAppId || !view.query) return "";
   const params = reportSelectionParams(view.query);
@@ -204,7 +217,7 @@ export function renderDashboard(view: DashboardView): string {
   const empty = reportControls(view) + measurementHealthSection(view) + (selected ? `<p><a href="/dashboard/apps/${encodeURIComponent(selected)}/attribution">Read attribution reason counts</a> · <a href="/dashboard/apps/${encodeURIComponent(selected)}/metric-recalculations">Review input corrections and recalculation jobs</a></p>` : "") + (selected && view.rows.length === 0 && view.records.length === 0 && view.differences.length === 0
     ? "<p>No report data match this view.</p>"
     : "");
-  const deterministicMetrics = metricTable("Deterministic cohort metrics", view.deterministicRows, selected);
+  const deterministicMetrics = retentionSection(view) + metricTable("Deterministic cohort metrics", view.deterministicRows, selected);
   const appleAggregateMetrics = metricTable("Apple aggregate postback metrics", view.appleAggregateRows, selected);
   const recordRows = view.records.length === 0 ? "" : `<table><caption>Aggregate record counts at the fixed watermark</caption><thead><tr><th scope="col">Metric</th><th scope="col">Grouping</th><th scope="col">Count</th></tr></thead><tbody>${view.records.map((row) => `<tr><th scope="row">${escapeHtml(row.metric_name)}</th><td>${escapeHtml(grouping(row.grouping))}</td><td>${escapeHtml(row.count)}</td></tr>`).join("")}</tbody></table>${continuation(view, "/records", view.recordNextCursor, "Next aggregate-record page")}`;
   const deterministicCharts = chartSection("Deterministic metric charts", view.deterministicCharts);

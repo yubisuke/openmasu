@@ -9,6 +9,10 @@ import { exactDecimal, metricValueLabel } from "./metric-value.js";
 import { dashboardReportParams, reportSelectionParams } from "./report-controls.js";
 import { parseMetricQuery } from "../report-query.js";
 import { metricCharts } from "./metric-charts.js";
+import { M1B_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import { captureMetricComparisonContext } from "@openmasu/runtime";
+import { comparisonDigest } from "../cohort-comparison.js";
+import { buildRetentionMatrices } from "./retention-matrix.js";
 
 function metric(overrides: Partial<MetricReportRow> = {}): MetricReportRow {
   return {
@@ -56,7 +60,85 @@ function xmlWellFormed(xml: string): boolean {
   return stack.length === 0;
 }
 
+function savedRetention(date: string, day: number, overrides: Partial<MetricReportRow> = {}): MetricReportRow {
+  const definition = structuredClone(M1B_METRIC_DEFINITIONS.find(d => d.metric_name === "retention_d1")!);
+  definition.metric_name = `saved_activity_${day}`; // Deliberately no retention-name heuristic.
+  definition.definition.window.day = day;
+  const row = metric({ metric_run_id: `saved:${date}:${day}`, metric_name: definition.metric_name,
+    metric_definition_version: definition.metric_definition_version, rule_bundle_id: definition.rule_bundle_id,
+    rule_bundle_hash: definition.rule_bundle_hash, policy_versions: [`rule_bundle:${definition.rule_bundle_version}`],
+    aggregation_time_zone: definition.aggregation_time_zone, ratio_scale: definition.ratio_scale!,
+    grouping: { cohort_date: date, country: "JP" }, ...overrides });
+  return { ...row, comparison_context: captureMetricComparisonContext(row, definition, { policy_version: "synthetic", target_currency: "USD",
+    target_scale: 6, rounding_mode: "half_even", rates: [{ currency: "EUR", rate_unscaled: "500000", rate_scale: 6, as_of: "2026-08-01T00:00:00.000Z" }] }, "before", comparisonDigest) };
+}
+
 describe("M3 zero-JavaScript dashboard", () => {
+  it("aligns saved retention horizons and cohorts without conflating zero undefined missing or unelapsed windows", () => {
+    const rows = [savedRetention("2026-08-02", 7, { value_state: "undefined", value_unscaled: undefined, undefined_reason: "empty_cohort" }),
+      savedRetention("2026-08-01", 7, { value_unscaled: "250000" }), savedRetention("2026-08-02", 1, { value_unscaled: "0" }),
+      savedRetention("2026-08-01", 1, { value_unscaled: "500000" }), savedRetention("2026-08-19", 1)];
+    const view = buildDashboardView({ apps: [], selectedAppId: "app-a", metrics: { data: rows }, csrfToken: "synthetic" });
+    assert.equal(view.retention.matrices.length, 1);
+    const matrix = view.retention.matrices[0];
+    assert.deepEqual(matrix.days, [1, 7]);
+    assert.deepEqual(matrix.cohorts.map(c => c.date), ["2026-08-01", "2026-08-02", "2026-08-19"]);
+    assert.deepEqual(matrix.cohorts[0].cells.map(c => c.observations[0].row.value_unscaled), ["500000", "250000"]);
+    assert.equal(matrix.cohorts[1].cells[0].observations[0].row.value_unscaled, "0");
+    assert.equal(matrix.cohorts[1].cells[1].observations[0].row.undefined_reason, "empty_cohort");
+    assert.equal(matrix.cohorts[0].cells[0].observations[0].maturity, "window_elapsed");
+    assert.equal(matrix.cohorts[2].cells[0].observations[0].maturity, "conservative_end_not_reached");
+    assert.equal(matrix.cohorts[2].cells[1].observations.length, 0);
+    const html = renderDashboard(view);
+    assert.match(html, /data-retention-cohort="2026-08-01" data-retention-day="1"/);
+    assert.match(html, /data-retention-value-unscaled="500000" data-ratio-scale="6">0\.5 ×/);
+    assert.match(html, /data-retention-value-unscaled="0" data-ratio-scale="6">0 ×/);
+    assert.match(html, /— \(empty_cohort\)/);
+    assert.match(html, /No saved run in this filtered selection/);
+    assert.match(html, /saved%3A2026-08-01%3A7\/explanation/);
+    assert.match(html, /Conservative window end not reached/);
+    assert.deepEqual(buildRetentionMatrices([...rows].reverse(), false), view.retention);
+  });
+
+  it("never merges retention snapshots or incompatible saved populations policies grouping and cutoffs", () => {
+    const original = savedRetention("2026-08-01", 1);
+    const duplicate = savedRetention("2026-08-01", 1, { metric_run_id: "another:snapshot", input_snapshot_id: "f".repeat(64) });
+    const changedPopulation = savedRetention("2026-08-01", 1);
+    changedPopulation.comparison_context!.definition.fraud_policy = "net";
+    changedPopulation.comparison_context!.definition_digest = comparisonDigest(changedPopulation.comparison_context!.definition);
+    const rows = [original, duplicate, changedPopulation,
+      savedRetention("2026-08-01", 1, { grouping: { cohort_date: "2026-08-01", country: "GB" } }),
+      savedRetention("2026-08-01", 1, { policy_versions: [...original.policy_versions, "synthetic:new-policy"] }),
+      savedRetention("2026-08-01", 1, { input_received_at_watermark: "2026-08-21T00:00:00.000Z" })];
+    const result = buildRetentionMatrices(rows, false);
+    assert.equal(result.matrices.length, 5);
+    assert.equal(result.matrices.flatMap(m => m.cohorts.flatMap(c => c.cells)).find(c => c.observations.length === 2)!.observations.length, 2);
+    assert.match(renderDashboard(buildDashboardView({ apps: [], metrics: { data: rows }, csrfToken: "synthetic" })), /Multiple saved snapshots; not combined/);
+    const legacy = savedRetention("2026-08-01", 1, { comparison_context: null });
+    const invalid = savedRetention("2026-08-01", 1); invalid.comparison_context!.definition_digest = "0".repeat(64);
+    const page = [ { ...legacy, comparison_context: null }, invalid, savedRetention("2026-08-01", 1, { superseded: true }), metric({ metric_name: "retention_d7" }) ];
+    const view = buildDashboardView({ apps: [], metrics: { data: page }, csrfToken: "synthetic" });
+    assert.equal(view.retention.matrices.length, 0); assert.equal(view.rows.length, page.length);
+    assert.match(renderDashboard(view), /retention_d7/);
+    assert.equal(buildRetentionMatrices([savedRetention("2026-08-01", 1, { input_received_at_watermark: "unknown" })], false).matrices[0].cohorts[0].cells[0].observations[0].maturity, "unknown");
+  });
+
+  it("keeps retention page gaps unknown even on the last keyset page and bounds the row-column expansion", () => {
+    const rows = [savedRetention("2026-08-01", 1), savedRetention("2026-08-02", 7)];
+    const query = parseMetricQuery({ tenantId: "tenant-a", appId: "app-a", searchParams: new URLSearchParams("grouping_country=JP&limit=2") }).query;
+    for (const view of [
+      buildDashboardView({ apps: [], selectedAppId: "app-a", query, metrics: { data: rows, next_cursor: "synthetic-next" }, csrfToken: "synthetic" }),
+      buildDashboardView({ apps: [], selectedAppId: "app-a", query: { ...query, after: { metricName: "retention_d1", groupingDigest: "a".repeat(64), metricRunId: "prior" } }, metrics: { data: rows }, csrfToken: "synthetic" }),
+    ]) {
+      assert.equal(view.retention.partialPage, true);
+      const html = renderDashboard(view);
+      assert.match(html, /Not fetched on this page/); assert.doesNotMatch(html, /No saved run in this filtered selection/);
+    }
+    const large = Array.from({ length: 46 }, (_, day) => savedRetention(new Date(Date.UTC(2026, 6, day + 1)).toISOString().slice(0, 10), day));
+    const bounded = buildDashboardView({ apps: [], metrics: { data: large }, csrfToken: "synthetic" });
+    assert.equal(bounded.retention.cellLimitReached, true); assert.equal(bounded.retention.matrices.length, 0);
+    assert.equal(bounded.rows.length, 46); assert.match(renderDashboard(bounded), /2000-cell display limit/);
+  });
   it("labels revised cost and pending recalculation without changing the saved value", () => {
     for (const state of ["input_revised", "recalculation_pending"] as const) {
       const row = metric({ cost_update_state: state });
