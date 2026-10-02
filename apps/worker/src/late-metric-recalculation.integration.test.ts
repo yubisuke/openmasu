@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { after, beforeEach, describe, it } from "node:test";
 import { randomBytes } from "node:crypto";
 import { DISJOINT_COST_METRIC_DEFINITIONS } from "@openmasu/contracts";
-import { jcs, type CandidateAttempt } from "@openmasu/attribution-core";
+import { jcs, sha256, type CandidateAttempt } from "@openmasu/attribution-core";
 import { createAppPool, createReaderPool, createSeedPool, withTenant } from "@openmasu/runtime";
 import { ingestFixture, ingestRuntimeBatch } from "./ingestion.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
@@ -144,8 +144,11 @@ describe("bounded late revenue and commerce recalculation", { concurrency: false
     await withTenant(app, identity.tenantId, async client => {
       const source = old.find(row => row.metric_name === "d0_roas")!;
       const { persistMetricRun } = await import("./metrics/cohort.js");
-      await persistMetricRun(client, { tenant_id: identity.tenantId, app_id: identity.appId }, { ...source, metric_run_id: "synthetic-no-replay" });
-      await persistMetricRun(client, { tenant_id: identity.tenantId, app_id: identity.appId }, { ...source, metric_run_id: "synthetic-unsupported" });
+      // Separate historical snapshots, not duplicate materializations of the original snapshot.
+      await persistMetricRun(client, { tenant_id: identity.tenantId, app_id: identity.appId }, { ...source,
+        metric_run_id: "synthetic-no-replay", input_snapshot_id: sha256({ synthetic_history: "no-replay" }) });
+      await persistMetricRun(client, { tenant_id: identity.tenantId, app_id: identity.appId }, { ...source,
+        metric_run_id: "synthetic-unsupported", input_snapshot_id: sha256({ synthetic_history: "unsupported" }) });
       const replay = { version: 1, source_metric_run_id: "synthetic-unsupported",
         metric_definition: input.metric_definitions.find((row: Any) => row.definition.numerator === "purchase_net_revenue"),
         evaluation: input.metric_evaluations[0], fx_policy: input.fx_policy };
@@ -160,7 +163,8 @@ describe("bounded late revenue and commerce recalculation", { concurrency: false
     await withTenant(app, identity.tenantId, async client => {
       const { persistMetricRun } = await import("./metrics/cohort.js");
       for (let index = 0; index < 101; index++) await persistMetricRun(client, { tenant_id: identity.tenantId, app_id: identity.appId },
-        { ...old[0], metric_run_id: `synthetic-overflow-${index}` });
+        { ...old[0], metric_run_id: `synthetic-overflow-${index}`,
+          input_snapshot_id: sha256({ synthetic_history: "overflow", index }) });
     });
     const before = jcs(await statuses());
     await assert.rejects(requestMetricRecalculation(app, identity, request([input.records[2].record_id], "2026-08-16T00:00:00.000Z")), /metric_recalculation_selection_limit/);
