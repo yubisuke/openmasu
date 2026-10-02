@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import {
   M1B_METRIC_DEFINITIONS,
   REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
+  acquisitionDetailBase,
   nonFraudBundleHash,
   validateMetricDefinition,
 } from "@openmasu/contracts";
@@ -154,7 +155,7 @@ async function currentCosts(
          tenant_id, app_id, cost_record_id, as_of,
          report_snapshot_digest, cost_key_digest
        FROM ledger.cost_records
-       WHERE tenant_id=$1 AND app_id=$2 AND as_of <= $3
+       WHERE tenant_id=$1 AND app_id=$2 AND as_of <= $3 AND NOT (artifact ? 'creative_id')
          AND ($4::text IS NULL OR campaign_id=$4)
          AND ($5::text IS NULL OR network=$5)
          AND ($6::text IS NULL OR country=$6)
@@ -177,21 +178,23 @@ async function currentCosts(
     || compareText(left.cost_record_id, right.cost_record_id));
 }
 
-async function disjointCosts(client: Queryable, scope: Scope, watermark: string, grouping: Any): Promise<CostSelection> {
+async function disjointCosts(client: Queryable, scope: Scope, watermark: string, grouping: Any, detail = false): Promise<CostSelection> {
   if (grouping?.attribution_status !== undefined && grouping.attribution_status !== "non_organic") return { rows: [], overlapping: false };
   const result = await client.query<DisjointCost>(
-    `SELECT DISTINCT ON (network, cost_date, campaign_id, ad_group_id, country)
+    `SELECT DISTINCT ON (network, cost_date, campaign_id, ad_group_id, country, (artifact->>'creative_id'))
        tenant_id, app_id, cost_record_id, as_of, report_snapshot_digest, cost_key_digest AS dimension_digest,
-       network, cost_date::text AS date, campaign_id, ad_group_id, country, currency, spend_unscaled, spend_scale
+       network, cost_date::text AS date, campaign_id, ad_group_id, artifact->>'creative_id' AS creative_id, country, currency, spend_unscaled, spend_scale
      FROM ledger.cost_records
      WHERE tenant_id=$1 AND app_id=$2 AND as_of <= $3
        AND ($4::text IS NULL OR campaign_id=$4) AND ($5::text IS NULL OR network=$5)
        AND ($6::text IS NULL OR country=$6) AND ($7::date IS NULL OR cost_date=$7::date)
-     ORDER BY network, cost_date, campaign_id, ad_group_id, country, as_of DESC, cost_record_id COLLATE "C" DESC`,
+       AND ($8::boolean OR NOT (artifact ? 'creative_id'))
+       AND ($9::text IS NULL OR ad_group_id=$9) AND ($10::text IS NULL OR artifact->>'creative_id'=$10)
+     ORDER BY network, cost_date, campaign_id, ad_group_id, country, (artifact->>'creative_id'), as_of DESC, cost_record_id COLLATE "C" DESC`,
     [scope.tenant_id, scope.app_id, watermark, grouping?.campaign_id ?? null, grouping?.network ?? null,
-      grouping?.country ?? null, grouping?.cohort_date ?? null],
+      grouping?.country ?? null, grouping?.cohort_date ?? null, detail, grouping?.ad_group_id ?? null, grouping?.creative_id ?? null],
   );
-  return selectDisjointCosts(result.rows);
+  return selectDisjointCosts(result.rows, detail);
 }
 
 async function eventCountValue(
@@ -433,6 +436,8 @@ async function purchaseNetRevenueValue(
            AND ($7::text IS NULL OR timezone($8, install.occurred_at_ts)::date::text=$7)
            AND ($13::text IS NULL OR (CASE WHEN $15 THEN coalesce(acquisition.status, 'unattributed') ELSE attribution.status END)=$13)
            AND ($14='gross' OR (CASE WHEN $15 THEN acquisition.reason_code ELSE attribution.reason_code END) IS DISTINCT FROM 'fraud_excluded')
+           AND ($17::text IS NULL OR acquisition_source.ad_group_id=$17)
+           AND ($18::text IS NULL OR acquisition_source.creative_id=$18)
        ),
        purchase_candidates AS (
          SELECT purchase.amount_unscaled, purchase.amount_scale,
@@ -548,6 +553,8 @@ async function purchaseNetRevenueValue(
       definition.fraud_policy ?? "gross",
       definition.acquisition_basis === "selected_first_party_click",
       definition.refund_reversal_policy === "cancel_target_refund_at_watermark",
+      grouping?.ad_group_id ?? null,
+      grouping?.creative_id ?? null,
     ],
   );
   const row = result.rows[0];
@@ -619,7 +626,7 @@ async function totalNetRevenueValue(
        SELECT * FROM (
          SELECT DISTINCT ON (cost_key_digest) spend_unscaled, spend_scale, currency
          FROM ledger.cost_records
-         WHERE $11::jsonb IS NULL AND tenant_id=$1 AND app_id=$2 AND as_of <= $3
+         WHERE $11::jsonb IS NULL AND tenant_id=$1 AND app_id=$2 AND as_of <= $3 AND NOT (artifact ? 'creative_id')
            AND ($8::text IS NULL OR $8='non_organic')
            AND ($4::text IS NULL OR campaign_id=$4)
            AND ($5::text IS NULL OR network=$5)
@@ -726,7 +733,7 @@ async function metricValue(
   if (["converted_installations", "converted_installations_over_cohort"].includes(calculation)) {
     return customConversionValue(client, scope, watermark, grouping, definition, privacyState);
   }
-  if (selectedCosts?.rows.some((cost) => cost.currency !== fxPolicy.target_currency)) {
+  if (calculation === "revenue_over_cost" && selectedCosts?.rows.some((cost) => cost.currency !== fxPolicy.target_currency)) {
     throw new Error(`cost currency mismatch for ${definition.metric_name}`);
   }
   if (calculation === "revenue_over_cost" && selectedCosts?.overlapping) {
@@ -794,6 +801,8 @@ async function metricValue(
            AND ($7::text IS NULL OR timezone($8, install.occurred_at_ts)::date::text=$7)
            AND ($16::text IS NULL OR (CASE WHEN $18 THEN coalesce(acquisition.status, 'unattributed') ELSE attribution.status END)=$16)
            AND ($17='gross' OR (CASE WHEN $18 THEN acquisition.reason_code ELSE attribution.reason_code END) IS DISTINCT FROM 'fraud_excluded')
+           AND ($20::text IS NULL OR acquisition_source.ad_group_id=$20)
+           AND ($21::text IS NULL OR acquisition_source.creative_id=$21)
        ),
        revenue_candidates AS (
          SELECT revenue.*, cohort.installed_at, rate.rate_unscaled, rate.rate_scale
@@ -841,7 +850,7 @@ async function metricValue(
          SELECT * FROM (
            SELECT DISTINCT ON (cost_key_digest) spend_unscaled, spend_scale, currency
            FROM ledger.cost_records
-           WHERE $19::jsonb IS NULL AND tenant_id=$1 AND app_id=$2 AND as_of <= $3
+           WHERE $19::jsonb IS NULL AND tenant_id=$1 AND app_id=$2 AND as_of <= $3 AND NOT (artifact ? 'creative_id')
              AND ($16::text IS NULL OR $16='non_organic')
              AND ($4::text IS NULL OR campaign_id=$4)
              AND ($5::text IS NULL OR network=$5)
@@ -919,6 +928,8 @@ async function metricValue(
       definition.fraud_policy ?? "gross",
       definition.acquisition_basis === "selected_first_party_click",
       selectedCosts ? JSON.stringify(selectedCosts.rows) : null,
+      grouping?.ad_group_id ?? null,
+      grouping?.creative_id ?? null,
     ],
   );
   const row = result.rows[0];
@@ -1049,6 +1060,8 @@ export async function computeSqlMetricRunsWithClient(
     const legacyCosts = await currentCosts(client, scope, evaluation.input_received_at_watermark, grouping);
     const needsDisjoint = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.cost_selection_policy);
     const safeCosts = needsDisjoint ? await disjointCosts(client, scope, evaluation.input_received_at_watermark, grouping) : undefined;
+    const needsDetail = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.acquisition_dimension_policy);
+    const detailCosts = needsDetail ? await disjointCosts(client, scope, evaluation.input_received_at_watermark, grouping, true) : undefined;
     const usesAcquisition = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.acquisition_basis);
     const acquisitionRows = usesAcquisition ? (await client.query<{ artifact: Any }>(
       selectedAcquisitionSql, [scope.tenant_id, scope.app_id, evaluation.input_received_at_watermark],
@@ -1074,7 +1087,10 @@ export async function computeSqlMetricRunsWithClient(
     for (const metricName of evaluation.metric_names ?? []) {
       const definition = definitions.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
-      const selectedCosts = definition.cost_selection_policy ? safeCosts : undefined;
+      if (!definition.acquisition_dimension_policy && (grouping?.ad_group_id !== undefined || grouping?.creative_id !== undefined)) {
+        throw new Error(`unsupported detail grouping for ${metricName}`);
+      }
+      const selectedCosts = definition.acquisition_dimension_policy ? detailCosts : definition.cost_selection_policy ? safeCosts : undefined;
       const costs = selectedCosts?.rows ?? legacyCosts;
       const inputSnapshotId = snapshot.finish(costs.map((cost) => [
         "cost", cost.as_of, cost.cost_record_id, cost.report_snapshot_digest, cost.dimension_digest,
@@ -1181,6 +1197,11 @@ export async function computeSqlMetricRunsWithClient(
 }
 
 function assertMetricDefinitionSeries(definition: Any): void {
+  if (definition.acquisition_dimension_policy !== undefined || definition.rule_bundle_id === "metric-acquisition-detail") {
+    if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`);
+    assertMetricDefinitionSeries(acquisitionDetailBase(definition as Parameters<typeof acquisitionDetailBase>[0]));
+    return;
+  }
   if (definition.refund_reversal_policy !== undefined || definition.rule_bundle_id === "metric-refund-reversal") {
     if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`);
     const base: Any = { ...definition, metric_definition_version: "0.4.13", rule_bundle_id: "metric-selected-commerce",

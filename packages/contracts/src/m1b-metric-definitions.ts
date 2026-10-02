@@ -276,6 +276,31 @@ export const REFUND_REVERSAL_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricDef
     rule_bundle_hash: nonFraudBundleHash("metric-refund-reversal"),
   }));
 
+/** Detail profiles use the existing calculations with explicit dimension semantics. */
+export const ACQUISITION_DETAIL_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricDefinitionV04> = [
+  ...SELECTED_ACQUISITION_METRIC_DEFINITIONS.filter(d => d.definition.numerator !== "active_installations"),
+  ...REFUND_REVERSAL_METRIC_DEFINITIONS,
+].map(definition => ({
+  ...definition, metric_definition_version: "0.4.16",
+  acquisition_dimension_policy: "selected_link_ad_group_creative",
+  grouping_dimensions: [...METRIC_GROUPING_DIMENSIONS, "ad_group_id", "creative_id"],
+  ...(definition.definition.calculation === "revenue_over_cost"
+    ? { cost_selection_policy: "reject_overlapping_grains" as const } : {}),
+  rule_bundle_id: "metric-acquisition-detail", rule_bundle_version: "0.4.16",
+  rule_bundle_hash: nonFraudBundleHash("metric-acquisition-detail"),
+}));
+
+/** Validate the opt-in envelope first, then reuse its established base series. */
+export function acquisitionDetailBase(definition: OpenMasuMetricDefinitionV04): OpenMasuMetricDefinitionV04 {
+  const commerce = ["purchase_net_revenue", "total_net_revenue"].includes(definition.definition.numerator);
+  const bundle = commerce ? "metric-refund-reversal" : definition.cost_selection_policy ? "metric-disjoint-cost" : "metric-selected-acquisition";
+  const version = commerce ? "0.4.15" : definition.cost_selection_policy ? "0.4.12" : "0.4.11";
+  const { acquisition_dimension_policy: _policy, ...base } = definition;
+  return { ...base, metric_definition_version: version, rule_bundle_id: bundle, rule_bundle_version: version,
+    rule_bundle_hash: nonFraudBundleHash(bundle),
+    grouping_dimensions: definition.grouping_dimensions?.filter(field => !["ad_group_id", "creative_id"].includes(field)) };
+}
+
 /** One explicitly selected outcome, not an event count or a cross-device person count. */
 export function customConversionMetricDefinitions(eventKey: string): OpenMasuMetricDefinitionV04[] {
   if (!/^[a-z][a-z0-9_]{0,63}$/.test(eventKey)) throw new Error("conversion_event_key_invalid");

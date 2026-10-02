@@ -15,6 +15,7 @@ import {
 } from "@openmasu/fraud-rules";
 import {
   REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
+  acquisitionDetailBase,
   nonFraudBundleHash,
   validateMetricDefinition,
   type OpenMasuEvaluationOutputV04 as EvaluationOutput,
@@ -1094,6 +1095,11 @@ function metricDefinitions(input: Any): MetricDefinition[] {
 }
 
 function validateMetricDefinitionSeries(definition: Any): void {
+  if (definition.acquisition_dimension_policy !== undefined || definition.rule_bundle_id === "metric-acquisition-detail") {
+    if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`);
+    validateMetricDefinitionSeries(acquisitionDetailBase(definition as MetricDefinition));
+    return;
+  }
   if (definition.refund_reversal_policy !== undefined || definition.rule_bundle_id === "metric-refund-reversal") {
     if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`);
     const base: Any = { ...definition, metric_definition_version: "0.4.13", rule_bundle_id: "metric-selected-commerce",
@@ -1218,7 +1224,7 @@ function validateMetricDefinitionSeries(definition: Any): void {
 function costRecords(input: Any): CostRecord[] {
   const records: CostRecord[] = (input.cost_records ?? []).map((record: Any) => {
     const dimensions = Object.fromEntries(
-      ["network", "campaign_id", "ad_group_id", "country"]
+      ["network", "campaign_id", "ad_group_id", "creative_id", "country"]
         .filter((field) => record[field] !== undefined)
         .map((field) => [field, record[field]]),
     );
@@ -1265,7 +1271,7 @@ function acquisitionAttributionRows(attributions: Attribution[]): string[][] {
 
 function selectedAcquisitionDimensions(
   install: Attempt, visible: Attempt[], attributions: Map<string, Attribution>,
-): { campaign_id?: string; network?: string } {
+): { campaign_id?: string; network?: string; ad_group_id?: string; creative_id?: string } {
   if (install.record.producer.startsWith("import:")) return {};
   const attribution = attributions.get(compositeKey([
     install.server.tenant_id, install.server.app_id, install.record.payload.installation_id,
@@ -1278,7 +1284,8 @@ function selectedAcquisitionDimensions(
     && attribution.evidence_refs.some((ref) => ref.ref === candidate.record.record_id
       && ref.tenant_id === candidate.server.tenant_id && ref.app_id === candidate.server.app_id));
   if (clicks.length !== 1) return {};
-  return { campaign_id: clicks[0].record.payload.campaign_id, network: clicks[0].record.payload.network };
+  const payload = clicks[0].record.payload;
+  return { campaign_id: payload.campaign_id, network: payload.network, ad_group_id: payload.ad_group_id, creative_id: payload.creative_id };
 }
 
 function metricRuns(
@@ -1355,18 +1362,23 @@ function metricRuns(
     for (const metricName of selectedNames) {
       const definition = definitionsByName.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
+      if (!definition.acquisition_dimension_policy && (evaluation.grouping?.ad_group_id !== undefined || evaluation.grouping?.creative_id !== undefined)) {
+        throw new Error(`unsupported detail grouping for ${metricName}`);
+      }
       const selectedInstalls = definition.acquisition_basis ? acquisitionInstalls : installs;
     const cohortScopes = new Set(selectedInstalls.map((install) => compositeKey([install.server.tenant_id, install.server.app_id])));
     const groupedCosts = cost_records.filter((cost) => {
       const grouping = evaluation.grouping;
+      if (cost.creative_id !== undefined && !definition.acquisition_dimension_policy) return false;
       if (grouping?.attribution_status !== undefined && grouping.attribution_status !== "non_organic") return false;
       if (compareText(cost.as_of, evaluation.input_received_at_watermark) > 0) return false;
       if (cohortScopes.size && !cohortScopes.has(compositeKey([cost.tenant_id, cost.app_id]))) return false;
       if (!grouping) return true;
-      return ["campaign_id", "network", "country"].every((field) => grouping[field] === undefined || cost[field] === grouping[field]) &&
+      return ["campaign_id", "ad_group_id", "creative_id", "network", "country"].every((field) => grouping[field] === undefined || cost[field] === grouping[field]) &&
         (grouping.cohort_date === undefined || cost.date === grouping.cohort_date);
     });
-    const disjoint = definition.cost_selection_policy ? selectDisjointCosts(groupedCosts) : undefined;
+    const disjoint = definition.cost_selection_policy || definition.acquisition_dimension_policy
+      ? selectDisjointCosts(groupedCosts, !!definition.acquisition_dimension_policy) : undefined;
     const currentCosts = disjoint?.rows ?? [...new Map(groupedCosts
       .sort((a, b) => compareText(a.as_of, b.as_of) || compareText(a.cost_record_id, b.cost_record_id))
       .map((cost) => [compositeKey([cost.tenant_id, cost.app_id, cost.dimension_digest]), cost])).values()];
@@ -1670,7 +1682,7 @@ function matchesGrouping(
   attempt: Attempt,
   grouping: Any,
   attributionStatuses: Map<string, Attribution["status"]>,
-  acquisition?: { campaign_id?: string; network?: string },
+  acquisition?: { campaign_id?: string; network?: string; ad_group_id?: string; creative_id?: string },
 ): boolean {
   if (!grouping) return true;
   const payload = attempt.record.payload;
@@ -1679,6 +1691,9 @@ function matchesGrouping(
   const country = payload.country ?? payload.import_context?.provider_country;
   if (grouping.campaign_id !== undefined && campaign !== grouping.campaign_id) return false;
   if (grouping.network !== undefined && network !== grouping.network) return false;
+  for (const field of ["ad_group_id", "creative_id"] as const) {
+    if (grouping[field] !== undefined && acquisition?.[field] !== grouping[field]) return false;
+  }
   if (grouping.country !== undefined && country !== grouping.country) return false;
   if (grouping.cohort_date !== undefined && attempt.record.event_name === "install" &&
       dateAt(attempt.record.occurred_at, "UTC", "occurred_at") !== grouping.cohort_date) return false;

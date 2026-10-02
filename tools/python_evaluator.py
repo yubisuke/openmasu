@@ -149,9 +149,9 @@ def sort_by_key(values: list[dict[str, Any]], key: SortKey) -> list[dict[str, An
     ))
 
 
-def select_disjoint_costs(costs: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], bool]:
+def select_disjoint_costs(costs: list[dict[str, Any]], include_creative: bool = False) -> tuple[list[dict[str, Any]], bool]:
     """Latest explicit dated grains; absent dimensions do not prove separation."""
-    dimensions = ("campaign_id", "ad_group_id", "country")
+    dimensions = ("campaign_id", "ad_group_id", "country") + (("creative_id",) if include_creative else ())
     revisions: dict[tuple[Any, ...], dict[str, Any]] = {}
     for row in sorted(costs, key=lambda value: (utf16_key(value["as_of"]), utf16_key(value["cost_record_id"]))):
         key = tuple(row.get(field) for field in ("tenant_id", "app_id", "network", "date", *dimensions))
@@ -1147,6 +1147,33 @@ def metric_definitions(value: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def validate_metric_definition_series(definition: dict[str, Any]) -> None:
+    if "acquisition_dimension_policy" in definition or definition.get("rule_bundle_id") == "metric-acquisition-detail":
+        operation = definition["definition"]
+        commerce = operation["numerator"] in ("purchase_net_revenue", "total_net_revenue")
+        cost = operation["calculation"] == "revenue_over_cost"
+        if (definition.get("acquisition_dimension_policy") != "selected_link_ad_group_creative"
+                or definition.get("rule_bundle_id") != "metric-acquisition-detail"
+                or definition.get("metric_definition_version") != "0.4.16"
+                or definition.get("rule_bundle_version") != "0.4.16"
+                or definition.get("rule_bundle_hash") != "e45e98822e4aeb727a39cc1164949d8b91c46050ce663bc22e934390e38d509c"
+                or definition.get("acquisition_basis") != "selected_first_party_click"
+                or definition.get("anchor_event") != "install" or definition.get("aggregation_time_zone") != "UTC"
+                or operation["numerator"] not in ("revenue", "purchase_net_revenue", "total_net_revenue", "cohort_size")
+                or operation["window"]["type"] != "elapsed" or not 0 <= operation["window"]["day"] <= 90
+                or not definition.get("grouping_dimensions")
+                or any(field not in ("campaign_id", "network", "country", "cohort_date", "attribution_status", "ad_group_id", "creative_id") for field in definition["grouping_dimensions"])
+                or definition.get("refund_reversal_policy") != ("cancel_target_refund_at_watermark" if commerce else None)
+                or definition.get("cost_selection_policy") != ("reject_overlapping_grains" if cost else None)):
+            raise ValueError(f"metric_definition_series_mismatch:{definition['metric_name']}")
+        bundle, version, hash_value = (("metric-refund-reversal", "0.4.15", "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc") if commerce else
+            ("metric-disjoint-cost", "0.4.12", METRIC_DISJOINT_COST_BUNDLE_HASH) if cost else
+            ("metric-selected-acquisition", "0.4.11", METRIC_SELECTED_ACQUISITION_BUNDLE_HASH))
+        base = {**definition, "rule_bundle_id": bundle, "rule_bundle_version": version,
+                "metric_definition_version": version, "rule_bundle_hash": hash_value,
+                "grouping_dimensions": [field for field in definition["grouping_dimensions"] if field not in ("ad_group_id", "creative_id")]}
+        del base["acquisition_dimension_policy"]
+        validate_metric_definition_series(base)
+        return
     if "refund_reversal_policy" in definition or definition.get("rule_bundle_id") == "metric-refund-reversal":
         if (definition.get("refund_reversal_policy") != "cancel_target_refund_at_watermark"
                 or definition.get("rule_bundle_id") != "metric-refund-reversal"
@@ -1331,7 +1358,7 @@ def cost_records(value: dict[str, Any]) -> list[dict[str, Any]]:
     for record in value.get("cost_records", []):
         dimensions = {
             field: record[field]
-            for field in ("network", "campaign_id", "ad_group_id", "country")
+            for field in ("network", "campaign_id", "ad_group_id", "creative_id", "country")
             if field in record
         }
         if record["dimension_digest"] != digest(dimensions):
@@ -1365,6 +1392,8 @@ def matches_grouping(
     if grouping.get("campaign_id") is not None and campaign != grouping["campaign_id"]:
         return False
     if grouping.get("network") is not None and network != grouping["network"]:
+        return False
+    if any(grouping.get(field) is not None and acquisition.get(field) != grouping[field] for field in ("ad_group_id", "creative_id")):
         return False
     if grouping.get("country") is not None and payload.get("country", context.get("provider_country")) != grouping["country"]:
         return False
@@ -1536,6 +1565,8 @@ def metric_runs(
             if metric_name not in definitions_by_name:
                 raise ValueError(f"unknown metric definition: {metric_name}")
             definition = definitions_by_name[metric_name]
+            if not definition.get("acquisition_dimension_policy") and any(field in evaluation.get("grouping", {}) for field in ("ad_group_id", "creative_id")):
+                raise ValueError(f"unsupported detail grouping for {metric_name}")
             selected_installs = acquisition_installs if definition.get("acquisition_basis") else installs
             cohort_scopes = {
                 (install["server"]["tenant_id"], install["server"]["app_id"])
@@ -1544,9 +1575,10 @@ def metric_runs(
             grouped_costs = [
                 cost for cost in costs
                 if cost["as_of"] <= evaluation["input_received_at_watermark"]
+                and ("creative_id" not in cost or definition.get("acquisition_dimension_policy"))
                 and evaluation.get("grouping", {}).get("attribution_status", "non_organic") == "non_organic"
                 and (not cohort_scopes or (cost["tenant_id"], cost["app_id"]) in cohort_scopes)
-                if all(evaluation.get("grouping", {}).get(field) is None or cost.get(field) == evaluation["grouping"][field] for field in ("campaign_id", "network", "country"))
+                if all(evaluation.get("grouping", {}).get(field) is None or cost.get(field) == evaluation["grouping"][field] for field in ("campaign_id", "ad_group_id", "creative_id", "network", "country"))
                 and (evaluation.get("grouping", {}).get("cohort_date") is None or cost["date"] == evaluation["grouping"]["cohort_date"])
             ]
             current_by_digest: dict[tuple[str, str, str], dict[str, Any]] = {}
@@ -1554,8 +1586,8 @@ def metric_runs(
                 current_by_digest[(cost["tenant_id"], cost["app_id"], cost["dimension_digest"])] = cost
             current_costs = list(current_by_digest.values())
             overlapping_costs = False
-            if definition.get("cost_selection_policy"):
-                current_costs, overlapping_costs = select_disjoint_costs(grouped_costs)
+            if definition.get("cost_selection_policy") or definition.get("acquisition_dimension_policy"):
+                current_costs, overlapping_costs = select_disjoint_costs(grouped_costs, bool(definition.get("acquisition_dimension_policy")))
             cost_snapshot_rows = [
                 ["cost", cost["as_of"], cost["cost_record_id"], cost["report_snapshot_digest"], cost["dimension_digest"]]
                 for cost in sort_by_key(current_costs, lambda item: (item["as_of"], item["cost_record_id"]))

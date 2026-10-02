@@ -4,7 +4,7 @@ import { revisedMetricCostPredicate } from "@openmasu/runtime";
 type MetricGrouping = NonNullable<OpenMasuMetricRunV04["grouping"]>["dimensions"];
 export type GroupingDimension = keyof MetricGrouping;
 
-export const groupingDimensionAllowlist: Readonly<Record<GroupingDimension, true>> = {
+export const groupingDimensionAllowlist: Readonly<Partial<Record<GroupingDimension, true>>> = {
   campaign_id: true,
   network: true,
   country: true,

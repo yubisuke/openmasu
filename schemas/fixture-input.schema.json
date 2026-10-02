@@ -92,6 +92,8 @@
             "minProperties": 1,
             "properties": {
               "campaign_id": { "$ref": "common.schema.json#/$defs/id" },
+              "ad_group_id": { "$ref": "common.schema.json#/$defs/id" },
+              "creative_id": { "$ref": "common.schema.json#/$defs/id" },
               "network": { "type": "string", "minLength": 1, "maxLength": 128 },
               "country": { "type": "string", "pattern": "^[A-Z]{2}$" },
               "cohort_date": { "type": "string", "format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
