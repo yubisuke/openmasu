@@ -40,18 +40,25 @@ goldens. The SDK is published as `0.3.0-rc.1`. Its eight downloadable assets
 reuse the existing packager and standalone consumer gates, with public
 re-download verification at the exact annotated tag.
 
-## Select subsequent work by user outcome
+## Planned product work
 
 Supported-source upgrade procedures, single-host deployment preflight/restart,
 capacity visibility and the limited backend/report HTTP contract also have
 merged acceptance scopes and are included in the publication. The integration
-batch is complete; no next version or feature batch is selected here.
+batch is complete. The next product batch is selected in
+[plan #172](https://github.com/yubisuke/openmasu/issues/172), with the ordered
+[roadmap](../roadmap.md#next-product-sequence) as its canonical crosswalk.
+All eight slices are planned, not part of the published baseline. No next
+version or release scope is selected by that development plan.
 These synthetic scopes do not establish real recovery, hosting/TLS,
 representative capacity or live backend/provider interoperability.
 
-Choose one concrete missing user operation, record its scope in an Issue and
-reuse existing services and relevant synthetic gates. New provider connections,
-services, databases, broad re-audits or heavier CI are not automatic next steps.
+Begin with explicit external calculation declarations and a dashboard comparison
+workflow. Later slices cover attribution reasons, daily calculation controls,
+custom-event cohort outcomes, total-net ROAS evidence, correction controls and a
+retention matrix. Each Issue reuses existing services and relevant synthetic
+gates. New provider connections, services, databases, broad re-audits or heavier
+CI are not automatic next steps.
 
 ## Unverified boundaries
 
