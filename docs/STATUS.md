@@ -217,10 +217,10 @@ existing immutable schedule service and worker (#176), with admin-only access.
 The other four workflow slices (#177-#180) remain planned after
 that core work. App Store purchase
 binding, finer advertising grain and separate re-engagement outcomes
-(#186-#188) are scoped follow-ups. The synthetic schedule test additionally
-exposed a run-uniqueness collision on disable/re-registration of the same
-selection; [#200](https://github.com/yubisuke/openmasu/issues/200) is next before
-custom-event outcomes. Including that runtime fix, eight slices remain planned. Existing
+(#186-#188) are scoped follow-ups. A forward-only runtime fix now permits
+schedule re-registration over identical inputs while preserving run-ID
+uniqueness, old evidence, exact replay and explicit-only supersession
+([#200](https://github.com/yubisuke/openmasu/issues/200)). Seven slices remain planned. Existing
 component evidence and the published v0.3.0-rc.1 record remain unchanged;
 neither proves these remaining connections.
 
