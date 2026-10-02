@@ -1,5 +1,8 @@
 # Server-to-Server Events
 
+For a machine-readable description of this receipt endpoint and the three
+read-only report endpoints, see [Limited HTTP contract](api/README.md).
+
 OpenMasu accepts selected first-party events from an app operator's trusted
 backend at `POST /v1/events/server`. This path is provider-neutral: it does not
 emulate another MMP's wire format, require an advertising identifier, or grant

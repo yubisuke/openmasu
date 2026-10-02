@@ -66,6 +66,7 @@ Progress:
 | An existing supported database can be upgraded without inventing legacy meaning or losing privacy state | Read-only frozen-source/backup preflight, unchanged forward migration transactions and one version-to-version restore/resume case in the existing backup gate; traffic restart remains manual |
 | A service can use one supported host layout without inheriting disposable-demo behavior | One existing Compose stack, exact annotated release, operator HTTPS proxy and private volume/secret custody; static preflight refuses unsuitable declarations, and the existing isolated pilot proves normal restart retention without reseeding; live TLS/deployment remains unverified |
 | Operators can see current storage layers without exposing cross-tenant capacity or triggering retention | Read-only privileged CLI reports allocated DB bytes, estimated rows and payload file metadata with explicit scope/time/unavailable states and bounds; no automatic purge, growth extrapolation or cost claim |
+| External backends and analysis tools can read the existing HTTP usage contract | Limited OpenAPI 3.1.1 covers backend HMAC admission and three aggregate report routes, derives existing schemas/allowlists/columns and reuses one real-route client acceptance case; no all-API, SDK generation or external-send claim |
 | App backends can submit selected first-party events without SDK-key reuse or advertising identifiers | Complete with synthetic server-key lifecycle, ingestion, rejection, idempotency, and privacy tests |
 | Operators can receive a closed subset of accepted events without raw identifiers or provider-specific wire coupling | Complete with synthetic destination lifecycle, DNS/SSRF, signature, retry, privacy, and disablement tests |
 | Operators can receive delayed deterministic files without adopting a provider-specific export layout | Complete with synthetic SigV4 vectors, object replay, durable cursor, credential boundary, privacy-notice, and lifecycle tests |
@@ -98,12 +99,13 @@ durable cost refresh and historical corrections. The offline CLI includes a
 static HTML report and conversion from saved report JSON with input provenance.
 Saved-run semantics, bounded dashboard download, neutral aggregate CSV conversion
 and the integrated first-use journey are implemented. Default-off bounded cost
-refresh and selected correction-driven recalculation are implemented. Next are
-exact-tag SDK asset publication, safe upgrades, deployment guidance, capacity
-visibility and the documented HTTP surface. The stopped-writer upgrade path now
-reuses the existing migration and backup gate; unknown source/backup combinations
-are refused before mutation. The distribution tool and
-[consumer guide](sdk-distribution.md) are implemented for v0.3.0-rc.1.
+refresh and selected correction-driven recalculation are implemented. Next is
+exact-tag SDK asset publication. Supported-source upgrades, one single-host
+configuration path, read-only capacity observation and the limited HTTP contract
+are implemented as integration slices. Unknown source/backup combinations are
+refused before mutation; real recovery, deployment and capacity remain operator
+gates. The distribution tool and [consumer guide](sdk-distribution.md) are
+implemented for v0.3.0-rc.1 and still require the public receipt at the exact tag.
 Each has a synthetic acceptance gate and requires no live provider
 credentials. Numeric differences alone must never become inferred causal reasons.
 

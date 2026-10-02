@@ -48,6 +48,7 @@
     "seed": "npm run seed --workspace @openmasu/worker",
     "sbom": "node --import tsx tools/sbom.ts",
     "check:api-runtime-sbom": "node --import tsx tools/check-api-runtime-sbom.ts",
+    "api:contract": "node --import tsx tools/http-api-contract.ts --write",
     "check:doc-drift": "node --import tsx tools/check-doc-drift.ts",
     "check:doc-links": "node --import tsx tools/check-doc-links.ts",
     "check:operational-logs": "node --import tsx tools/check-no-payload-logs.ts",

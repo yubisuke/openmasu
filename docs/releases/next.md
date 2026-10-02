@@ -39,9 +39,11 @@ downloadable assets reuse the existing packager and standalone consumer gates.
 
 ## Not included merely by this inventory
 
-Actual SDK asset publication requires its exact-tag receipt. Upgrade procedures,
-deployment preflight, capacity visibility and the HTTP contract have separate
-acceptance scopes. Reassess this inventory after those changes merge.
+Actual SDK asset publication requires its exact-tag receipt. Supported-source
+upgrade procedures, single-host deployment preflight/restart, capacity visibility
+and the limited backend/report HTTP contract have merged acceptance scopes and
+are included in the candidate. They do not establish real recovery, hosting/TLS,
+representative capacity or live backend/provider interoperability.
 
 ## Unverified boundaries
 
