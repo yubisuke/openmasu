@@ -54,7 +54,7 @@ versions were reached. They do not override current sources of truth.
 | Apple current-spec compatibility | Complete: accept and separately report aggregate AdAttributionKit re-engagement while preserving install and device-level boundaries | Signed synthetic receiver test, reviewed fixture parity, SQL/reference parity, and macOS SDK gate |
 | Newcomer documentation | Complete: one current documentation map and safe synthetic first run | Link check, documentation drift check, threat-model coverage, full validation |
 | Release alignment | v0.2.0 published at green commit `68b8c48`; v0.2.0-rc.4 remains historical at `2a2f6b5` | Release-version check, reproducible bundle verification, tagged evidence manifest, and exact-commit platform CI |
-| SDK distribution | Configured v0.3.0-rc.1 uses one exact-commit CI bundle and downloadable Android/Unity/iOS assets | Existing bundle/consumer gates plus deterministic outer packaging, wrong-SHA refusal, checksums/SBOMs and exact-tag public download receipt |
+| SDK distribution | Complete for published v0.3.0-rc.1 using one exact-commit CI bundle and eight downloadable Android/Unity/iOS assets | Existing bundle/consumer gates plus deterministic outer packaging, wrong-SHA refusal, checksums/SBOMs and verified exact-tag public re-download receipt |
 | Safe upgrades | Stopped-writer supported-source path with archive checksum, frozen migration and exact target preflight | Existing backup gate extended with frozen v0.2.0 DDL/data, actual dump/restore, transactional failure/resume, preserved artifacts and privacy reapplication; no production downtime claim |
 | Single-host deployment | One existing Compose stack, exact release, operator HTTPS proxy, private configuration and stable named volumes | Static preflight refusals and normal no-reseed restart in the existing isolated pilot; real domains/TLS, secret custody and host readiness remain operator gates |
 | Storage visibility | Private privileged read-only observation distinguishes allocation, row estimates, payload metadata and unavailable results | Small protected write/purge and catalog-allocation/reader-refusal tests in existing suites; no new benchmark, retention default or automatic cleanup |
@@ -86,7 +86,8 @@ The integrated first-use journey and default-off bounded cost refresh are
 implemented. Selected correction-driven recalculation is implemented with bounded
 requests and saved definitions; no automatic all-history recomputation is added.
 The SDK distribution tool and consumer guide are implemented for v0.3.0-rc.1;
-the exact-tag public asset receipt remains an integration gate. Safe upgrades,
+the [exact-tag public asset receipt](validation/v0.3.0-rc.1-publication.md)
+completes its publication gate. Safe upgrades,
 deployment guidance, capacity visibility and the limited HTTP surface now have
 their own narrow implementation and synthetic acceptance scopes.
 Safe upgrades now have a read-only source/backup preflight and one frozen-release

@@ -1,10 +1,12 @@
 # SDK Downloads and Installation
 
-The configured candidate is `v0.3.0-rc.1`. A candidate is downloadable release
-evidence only after its matching annotated tag and GitHub prerelease identify
-one green full-gate source revision. A prepared file or CI artifact alone is not
-publication. Until that gate is met, use source locally and do not invent a
-download receipt. Historical `v0.2.0` tags and records are not modified.
+The downloadable prerelease is
+[v0.3.0-rc.1](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.1).
+Its annotated tag, full platform CI and eight public assets identify source
+`90a0f5fe56b75e8fdefd2f759e33b3ae538b79c2`. The
+[publication receipt](validation/v0.3.0-rc.1-publication.md) records re-download,
+checksum, manifest and exact-CI-byte verification. A prepared file alone is not
+publication. Historical `v0.2.0` tags and records are not modified.
 
 ## Obtain and verify the exact assets
 
@@ -42,6 +44,10 @@ tag. The manifest inside the whole SDK ZIP must be byte-identical to the separat
 asset. Its internal `SHA256SUMS` verifies every contained file. Release notes
 link the full Contract, Runtime, Android JVM/emulator and iOS runs at that SHA.
 PR no-op checks and an unrelated successful run are not release evidence.
+
+The maintainer's `--verify-only --verify-tag` tool additionally requires a clean
+source checkout at the tag itself, not a later `main` commit. Consumer checksum
+and manifest comparison above does not require rebuilding the SDK.
 
 ## Android: consume the compiled Maven layout
 

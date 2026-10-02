@@ -1,12 +1,15 @@
 # Release Runbook
 
-OpenMasu publishes source tags and reproducible local SDK bundles. This runbook
+OpenMasu publishes source tags and downloadable reproducible SDK bundles. This runbook
 does not publish Maven, Swift, Unity, npm, container, or hosting artifacts to a
 public registry.
 
-The current published source and SDK release is `v0.2.0`. Its annotated tag and
-[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.2.0)
-point to green commit `68b8c48`. A configured version is not publication by
+The current published prerelease is `v0.3.0-rc.1`. Its annotated tag,
+[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.1)
+and eight public assets point to green commit `90a0f5f`; see the
+[publication receipt](../validation/v0.3.0-rc.1-publication.md). `v0.2.0`
+remains the latest non-prerelease source line and is unchanged.
+A configured version is not publication by
 itself: future candidates must not be treated as published unless their
 matching annotated tag and GitHub Release point to the same green commit. A
 release must describe that exact tag target and must not reuse an older
@@ -99,7 +102,7 @@ The packager regenerates the ignored SDK SBOM and Android binary inputs from a
 clean checkout before it creates the bundle. It does not trust existing
 `sbom/` or Gradle `build/` files as release inputs.
 
-The configured v0.3.0-rc.1 bundle path is
+The v0.3.0-rc.1 bundle path is
 `build/sdk-release/openmasu-sdk-0.3.0-rc.1/`. It is valid release evidence only
 at the exact source commit named by the matching annotated tag, after every
 required full platform gate is green for that commit.
@@ -138,7 +141,8 @@ Before any GitHub write, verify the authenticated account, exact repository,
 visibility, tag name, commit, and explicit authorization for that operation.
 Confirm every required workflow is green on the exact commit. Create an
 annotated or signed tag and release only after the release owner approves it.
-After creating the annotated tag and rebuilding the bundle at its target, run:
+After creating the annotated tag and acquiring the bundle from its exact
+target's full CI, run:
 
 ```bash
 python tools/build-sdk-release.py --verify-only build/sdk-release/openmasu-sdk-0.3.0-rc.1 --verify-tag
@@ -146,6 +150,9 @@ python tools/build-sdk-release.py --verify-only build/sdk-release/openmasu-sdk-0
 
 This final check requires the annotated `v0.3.0-rc.1` target, current checkout, and
 bundle manifest revision to be identical.
+Run the verifier from a clean source checkout at that tag. A later `main`
+checkout must fail this identity check; do not rebuild or replace the published
+bundle to accommodate later documentation or code changes.
 
 Download the `openmasu-sdk-release-bundle` artifact from the full Android workflow
 at that exact green `main` commit. Do not use a PR's merge-preview artifact or an

@@ -1,12 +1,14 @@
 # Next Release Scope
 
-This is a living inventory of source work after published `v0.2.0` at `68b8c48`,
-not a release note, published SDK artifact or evidence manifest. The configured
-next candidate is now `v0.3.0-rc.1`; its separate notes and evidence requirements
-become frozen only at the matching verified tag.
-Do not change the frozen tag or its records to include this later behavior.
+This is the living development inventory after published `v0.3.0-rc.1` at
+`90a0f5f`, not a release note or a new release promise. The
+[publication receipt](../validation/v0.3.0-rc.1-publication.md) binds its eight
+SDK assets and full platform CI to the exact annotated tag. Do not change that
+tag, assets, notes or frozen requirements to include later `main` work.
 
-## Source additions to include
+## Published integration baseline
+
+The following work is included in the published version, not a future task list.
 
 - Reader-only measurement health separates app/key configuration, receipt,
   processing, rejection, logical evidence and calculated runs.
@@ -34,16 +36,22 @@ Do not change the frozen tag or its records to include this later behavior.
 
 Contract wire/package identity remains `0.4.0`, with the additive patch ledger
 through v0.4.10. These additions do not change its 57 reviewed fixtures or 741
-goldens. The SDK is configured as `0.3.0-rc.1`. Its versioned bundle and
-downloadable assets reuse the existing packager and standalone consumer gates.
+goldens. The SDK is published as `0.3.0-rc.1`. Its eight downloadable assets
+reuse the existing packager and standalone consumer gates, with public
+re-download verification at the exact annotated tag.
 
-## Not included merely by this inventory
+## Select subsequent work by user outcome
 
-Actual SDK asset publication requires its exact-tag receipt. Supported-source
-upgrade procedures, single-host deployment preflight/restart, capacity visibility
-and the limited backend/report HTTP contract have merged acceptance scopes and
-are included in the candidate. They do not establish real recovery, hosting/TLS,
+Supported-source upgrade procedures, single-host deployment preflight/restart,
+capacity visibility and the limited backend/report HTTP contract also have
+merged acceptance scopes and are included in the publication. The integration
+batch is complete; no next version or feature batch is selected here.
+These synthetic scopes do not establish real recovery, hosting/TLS,
 representative capacity or live backend/provider interoperability.
+
+Choose one concrete missing user operation, record its scope in an Issue and
+reuse existing services and relevant synthetic gates. New provider connections,
+services, databases, broad re-audits or heavier CI are not automatic next steps.
 
 ## Unverified boundaries
 

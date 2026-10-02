@@ -64,21 +64,24 @@ guides, subsystem designs, operator procedures, tagged records, and historical
 material. For the shortest safe first run, go directly to the
 [synthetic getting started guide](docs/getting-started.md).
 
-`v0.2.0` is the current published source and SDK release. Its annotated tag and
-[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.2.0)
-point to green `main` commit `68b8c48`. It retains the independent Contract
+`v0.3.0-rc.1` is the current published source and SDK release (prerelease).
+Its annotated tag and
+[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.1)
+point to green `main` commit `90a0f5f`, with eight verified SDK download assets.
+It retains the independent Contract
 v0.4 wire and package identity, including the additive patch ledger through
 v0.4.10 with 57 reviewed fixtures and 741 goldens. Later `main` commits are not
 evidence for that release. [`docs/STATUS.md`](docs/STATUS.md) defines the
 current source tree, and the [release index](docs/releases/README.md) separates
 the exact published record from ongoing development and historical prereleases.
 
-The current source and SDK are configured for candidate `v0.3.0-rc.1`.
-This candidate is published only if the matching annotated tag and GitHub
-Release exist at the same fully verified commit. Contract v0.4 remains through
-v0.4.10; the SDK release number does not change the wire contract.
-See [SDK downloads and installation](docs/sdk-distribution.md) for the candidate
-asset names, checksum verification and minimal Android, Unity and Swift paths.
+See the [publication receipt](docs/validation/v0.3.0-rc.1-publication.md) for
+exact-commit CI and public download verification, and
+[SDK downloads and installation](docs/sdk-distribution.md) for checksum
+verification and minimal Android, Unity and Swift paths. `v0.2.0` remains the
+latest non-prerelease source release; its tag and historical records are unchanged.
+The SDK release number does not change the wire contract. Both release lines
+have synthetic evidence, not proof of production readiness.
 
 ## Safe synthetic verification
 

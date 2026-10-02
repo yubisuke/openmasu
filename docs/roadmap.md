@@ -61,8 +61,8 @@ Progress:
 | One disposable synthetic command is the canonical first run | Complete |
 | Current documentation excludes unexplained review, work-order, and decision references | Complete |
 | CI cancels superseded runs and routes expensive gates without hiding required contexts | Complete |
-| Release notes, SDK identity, tagged evidence, and source revision describe one exact release | Complete for v0.2.0 at green commit `68b8c48`; complete historically for v0.2.0-rc.4 |
-| SDK consumers can obtain verified archives without rebuilding the repository | Configured v0.3.0-rc.1 distribution path reuses the packager, same-SHA manifest/checksums/SBOMs and standalone UPM gate; public assets require the exact-tag publication receipt |
+| Release notes, SDK identity, tagged evidence, and source revision describe one exact release | Complete for published v0.3.0-rc.1 at green commit `90a0f5f`; earlier release records remain frozen |
+| SDK consumers can obtain verified archives without rebuilding the repository | Complete for v0.3.0-rc.1: eight public assets, exact-SHA manifest/checksums/SBOMs, standalone UPM consumer and public re-download verification |
 | An existing supported database can be upgraded without inventing legacy meaning or losing privacy state | Read-only frozen-source/backup preflight, unchanged forward migration transactions and one version-to-version restore/resume case in the existing backup gate; traffic restart remains manual |
 | A service can use one supported host layout without inheriting disposable-demo behavior | One existing Compose stack, exact annotated release, operator HTTPS proxy and private volume/secret custody; static preflight refuses unsuitable declarations, and the existing isolated pilot proves normal restart retention without reseeding; live TLS/deployment remains unverified |
 | Operators can see current storage layers without exposing cross-tenant capacity or triggering retention | Read-only privileged CLI reports allocated DB bytes, estimated rows and payload file metadata with explicit scope/time/unavailable states and bounds; no automatic purge, growth extrapolation or cost claim |
@@ -99,13 +99,14 @@ durable cost refresh and historical corrections. The offline CLI includes a
 static HTML report and conversion from saved report JSON with input provenance.
 Saved-run semantics, bounded dashboard download, neutral aggregate CSV conversion
 and the integrated first-use journey are implemented. Default-off bounded cost
-refresh and selected correction-driven recalculation are implemented. Next is
-exact-tag SDK asset publication. Supported-source upgrades, one single-host
+refresh and selected correction-driven recalculation are implemented.
+Exact-tag SDK publication is complete for v0.3.0-rc.1, with a
+[public receipt](validation/v0.3.0-rc.1-publication.md). Supported-source upgrades, one single-host
 configuration path, read-only capacity observation and the limited HTTP contract
 are implemented as integration slices. Unknown source/backup combinations are
 refused before mutation; real recovery, deployment and capacity remain operator
 gates. The distribution tool and [consumer guide](sdk-distribution.md) are
-implemented for v0.3.0-rc.1 and still require the public receipt at the exact tag.
+implemented and published for v0.3.0-rc.1 at the exact verified tag.
 Each has a synthetic acceptance gate and requires no live provider
 credentials. Numeric differences alone must never become inferred causal reasons.
 
