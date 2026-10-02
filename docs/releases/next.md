@@ -123,7 +123,10 @@ add a selector or start work on GET/preview. [Saved-retention presentation](../d
 bounded report page, with exact values/details, separate duplicate snapshots,
 per-observation maturity and explicit unrequested pages. It adds no calculation,
 unbounded query or browser dependency.
-App Store binding, finer advertising grain and separate
+App Store preparation now issues installation-scoped retry-stable tokens and
+erases their protected anchors through normal deletion and restore reapplication.
+It does not yet submit transactions, create verified financial facts or expose
+a Swift purchase API. Full App Store binding, finer advertising grain and separate
 re-engagement outcomes (#186-#188) remain scoped follow-ups. These connections
 must not be inferred from existing component coverage. Each Issue reuses
 existing services and relevant synthetic

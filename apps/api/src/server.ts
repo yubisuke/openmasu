@@ -8,6 +8,7 @@ import { KeyedTokenBucket, TokenBucket } from "./rate-limit.js";
 import { OperationalMetrics } from "./operational-metrics.js";
 import { writeOperationalLog } from "./observability.js";
 import { ensureSdkKeys } from "./sdk-auth.js";
+import { applePurchaseEnvironment } from "./apple-purchase-intents.js";
 
 const port = Number(process.env.OPENMASU_API_PORT ?? "8080");
 const baseUrl = process.env.OPENMASU_PUBLIC_BASE_URL ?? `http://localhost:${port}`;
@@ -148,6 +149,7 @@ const server = createServer(createRequestHandler({
   sdk: {
     pool,
     payloadStore,
+    applePurchaseEnvironment: applePurchaseEnvironment(process.env.OPENMASU_APP_STORE_PURCHASE_ENVIRONMENT),
     config: {
       tenantId: maxConfig.tenantId,
       appId: maxConfig.appId,

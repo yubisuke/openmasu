@@ -170,6 +170,13 @@ exactly-once behavior remains unverified. App Store installation deletion is
 limited to notifications with an existing explicit purchase binding; the
 current notification path does not create one, so unbound notifications require
 broader app- or tenant-scoped deletion.
+The separate purchase-preparation endpoint issues a random UUID only to an
+authenticated iOS installation, binds product/app/environment, and keeps its
+anchor encrypted and inaccessible to readers. Shared privacy fencing, active
+credential/withdrawal rechecks, scoped retry identity, and durable erasure plus
+restore reapplication prevent stale preparation from resurrecting a deleted
+anchor. Preparation is not financial evidence; signed transaction submission
+and installation-bound Apple financial projection remain unimplemented.
 
 <!-- threat-component:google-data-manager-delivery -->
 **Conversion delivery:** unauthorized export, replay, provider payload leakage,

@@ -454,6 +454,10 @@ export async function executePrivacyRequest(
             WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3) AND cursor_ref IS NOT NULL`,
           [body.tenant_id, body.deletion_scope, body.app_id],
         );
+    const appleIntentPayloads = await client.query<{ anchor_ref: string }>(
+      `DELETE FROM control.apple_purchase_intents WHERE tenant_id=$1
+        AND ($2='tenant' OR (app_id=$3 AND ($2='app' OR installation_id_digest=$4)))
+        RETURNING anchor_ref`, [body.tenant_id, body.deletion_scope, body.app_id, subjectDigest]);
     const credentialPayloads = body.deletion_scope === "installation"
       ? await client.query<{ installation_key_id: string; secret_ref: string }>(
           `SELECT installation_key_id,secret_ref
@@ -492,6 +496,7 @@ export async function executePrivacyRequest(
       ...operatorWebhookPayloads.rows.map((payload) => payload.request_ref),
       ...operatorBulkPayloads.map((payload) => payload.object_ref),
       ...commercePayloads.rows.map((payload) => payload.reference),
+      ...appleIntentPayloads.rows.map((payload) => payload.anchor_ref),
       ...credentialPayloads.rows.map((payload) => payload.secret_ref),
     ])].filter((reference) => reference.startsWith("encrypted:")).sort();
     for (const delivery of operatorWebhookPayloads.rows) {

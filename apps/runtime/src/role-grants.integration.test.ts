@@ -16,6 +16,7 @@ type Row = {
 
 const privileges: Privilege[] = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"];
 const readerNoTableSelect = new Set([
+  "control.apple_purchase_intents",
   "control.cost_schedules",
   "control.admin_keys",
   "control.admin_key_states",
@@ -43,6 +44,7 @@ const readerNoTableSelect = new Set([
   "ephemeral.operator_bulk_export_batches",
 ]);
 const seedControlTruncate = new Set([
+  "control.apple_purchase_intents",
   "control.metric_recalculation_jobs",
   "control.metric_recalculation_items",
   "control.cost_schedules",
@@ -121,6 +123,7 @@ function expected(row: Row): Privilege[] {
     return row.role_name === "openmasu_seed" ? ["SELECT", "INSERT", "UPDATE", "DELETE"] : [];
   }
   if (row.role_name === "openmasu_app") {
+    if (qualified === "control.apple_purchase_intents") return ["SELECT", "INSERT", "DELETE"];
     if (qualified === "control.google_play_order_digests") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.google_data_manager_destinations") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.commerce_backfill_checkpoints") return ["SELECT", "INSERT", "UPDATE"];

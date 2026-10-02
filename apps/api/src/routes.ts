@@ -11,6 +11,7 @@ export type RouteHandler =
   | "audit_fraud"
   | "sdk_enrollment"
   | "sdk_batch"
+  | "apple_purchase_prepare"
   | "server_batch"
   | "device_privacy"
   | "device_dsar"
@@ -121,6 +122,7 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "audit_fraud", method: "GET", pattern: /^\/v1\/audit\/fraud$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "sdk_enrollment", method: "POST", pattern: /^\/v1\/installations$/, auth: "sdk_hmac", mutates: true },
   { handler: "sdk_batch", method: "POST", pattern: /^\/v1\/events\/batch$/, auth: "sdk_hmac", mutates: true },
+  { handler: "apple_purchase_prepare", method: "POST", pattern: /^\/v1\/apple\/purchases\/prepare$/, auth: "sdk_hmac", mutates: true },
   { handler: "server_batch", method: "POST", pattern: /^\/v1\/events\/server$/, auth: "server_hmac", mutates: true },
   { handler: "device_privacy", method: "POST", pattern: exactPathPattern(SDK_INSTALLATION_PRIVACY_PATH), auth: "sdk_hmac", mutates: true },
   { handler: "device_privacy", method: "POST", pattern: /^\/v1\/privacy\/on-device$/, auth: "sdk_hmac", mutates: true },

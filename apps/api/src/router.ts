@@ -54,7 +54,7 @@ import type { KeyedTokenBucket, TokenBucket } from "./rate-limit.js";
 import { matchRoute, type RouteDefinition } from "./routes.js";
 import { activateRuleBundle } from "./rule-bundles.js";
 import type { SdkRouteDependencies } from "./sdk-routes.js";
-import { handleDeviceDsar, handleDevicePrivacy, handleSdkBatch, handleSdkEnrollment } from "./sdk-routes.js";
+import { handleApplePurchasePreparation, handleDeviceDsar, handleDevicePrivacy, handleSdkBatch, handleSdkEnrollment } from "./sdk-routes.js";
 import {
   assertDashboardBaseUrl,
   clearDashboardSessionCookie,
@@ -378,6 +378,10 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
       }
       if (route.handler === "sdk_enrollment" && dependencies.sdk) return handleSdkEnrollment(request, response, dependencies.sdk);
       if (route.handler === "sdk_batch" && dependencies.sdk) return handleSdkBatch(request, response, dependencies.sdk);
+      if (route.handler === "apple_purchase_prepare") {
+        if (!dependencies.sdk) return json(response, 503, { error: "app_store_purchase_preparation_unavailable" });
+        return handleApplePurchasePreparation(request, response, dependencies.sdk);
+      }
       if (route.handler === "server_batch") {
         if (!dependencies.server) {
           json(response, 503, { error: "server_ingest_unavailable" });
