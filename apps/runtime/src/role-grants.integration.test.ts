@@ -43,6 +43,8 @@ const readerNoTableSelect = new Set([
   "ephemeral.operator_bulk_export_batches",
 ]);
 const seedControlTruncate = new Set([
+  "control.metric_recalculation_jobs",
+  "control.metric_recalculation_items",
   "control.cost_schedules",
   "control.cost_schedule_states",
   "control.cost_schedule_checkpoints",
@@ -125,6 +127,7 @@ function expected(row: Row): Privilege[] {
     if (qualified === "control.operator_bulk_export_checkpoints") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.metric_schedule_checkpoints") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.cost_schedule_checkpoints") return ["SELECT", "INSERT", "UPDATE"];
+    if (qualified === "control.metric_recalculation_items") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.privacy_deletion_jobs") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.privacy_payload_purges") return ["SELECT", "INSERT", "UPDATE"];
     return qualified === "control.public_postback_audits" ? ["INSERT"] : ["SELECT", "INSERT"];

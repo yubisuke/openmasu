@@ -18,6 +18,7 @@ private provider material.
 | Deliver accepted events to an operator receiver | [Operator event webhooks](operator-event-webhooks.md) |
 | Deliver deterministic event files to operator storage | [Operator bulk event exports](operator-bulk-exports.md) |
 | Run daily cohort or calendar metrics | [Scheduled metric runs](scheduled-metrics.md) |
+| Refresh cost and recalculate selected affected cohorts | [Cost refresh](cost-refresh.md) and [Metric corrections](metric-corrections.md) |
 | Operate or release a deployment | [Operator documentation](#operator-documentation) and [Release records](releases/README.md) |
 
 For a complete newcomer reading path, use this order:
@@ -41,6 +42,8 @@ For a complete newcomer reading path, use this order:
 - [Operator event webhooks](operator-event-webhooks.md)
 - [Operator bulk event exports](operator-bulk-exports.md)
 - [Scheduled metric runs](scheduled-metrics.md)
+- [Bounded cost refresh](cost-refresh.md)
+- [Selected metric corrections](metric-corrections.md)
 - [Measurement health and missing results](measurement-health.md)
 - [Reading and filtering dashboard metrics](dashboard-analysis.md)
 - [Explaining a saved ROAS result](metric-explanations.md)

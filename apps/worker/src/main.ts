@@ -34,6 +34,7 @@ import {
 } from "./commerce-readback-worker.js";
 import { processMetricSchedules } from "./metric-schedule-worker.js";
 import { processCostRefreshes } from "./cost-refresh-worker.js";
+import { processMetricRecalculations } from "./metric-recalculation-worker.js";
 import { appleLeafKeyFromChain, verifyCompactJws } from "@openmasu/commerce-lifecycle";
 import {
   TenantWorkCoordinator,
@@ -311,6 +312,12 @@ async function processTenantCycle(tenantId: string): Promise<void> {
         process.stdout.write(`${JSON.stringify({ event: "cost_refresh_cycle", component: "worker", ...costs })}\n`);
       }
     });
+  }
+  // Explicit correction requests have their own durable row claims, not the
+  // daily metric scheduler's day-long lease. Check them each tenant cycle.
+  const recalculations = await processMetricRecalculations(pool, tenantId);
+  if (Object.values(recalculations).some(count => count > 0)) {
+    process.stdout.write(`${JSON.stringify({ event: "metric_recalculation_cycle", component: "worker", ...recalculations })}\n`);
   }
   await runWorkerJob(tenantId, "metric_run", async () => {
     const metrics = await processMetricSchedules(pool, tenantId);

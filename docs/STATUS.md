@@ -49,6 +49,7 @@ MMP.
 | Operator bulk event exports | Implemented as a default-off, app-scoped deterministic gzip NDJSON export to allowlisted S3-compatible operator storage, with SigV4, conditional create, digest-verified replay, durable keyset cursors, destination-scoped deletion rows, and bounded reader-safe batch health | Live Amazon S3/Cloudflare R2 account, IAM policy, DNS/TLS, lifecycle/replication, throughput, cost, alerting, downstream deletion, and operator acceptance |
 | Attribution and difference audit | Implemented for supported deterministic and aggregate evidence families | Same-cohort comparison with an existing MMP under frozen definitions |
 | Cohort metrics and exports | Implemented for versioned revenue, cost, FX, retention, ROAS, LTV, JSON, CSV, dashboard output, and app-scoped durable daily schedules with exact replay | Real currency/time-zone coverage, source-dashboard reconciliation, schedule/alert operation, and operator acceptance |
+| Selected cost correction | Implemented through bounded app/import/date/watermark requests, saved-definition replay, input-revision/pending labels and atomic old/new run supersession | Live revision completeness, unavailable legacy meaning, production load and operator acceptance; value differences do not prove causes |
 | Android, iOS, and Unity SDKs | Implemented with JVM, emulator, Swift, simulator, reproducible packaging, standalone UPM dependency resolution, and a synthetic Unity 6 Android export/APK gate | Physical devices, Unity 2022.3, iOS Unity export, store delivery, and live provider signals |
 | Dashboard and management API | Implemented with server-rendered HTML, RBAC, sessions, RLS, and shared report encoders | Production TLS, browser/operator acceptance, and deployment-specific identity integration |
 | Fraud and integrity evidence | Implemented with deterministic public rules, bundle provenance, aggregates, and synthetic provider normalization | Live integrity projects, threshold calibration, false-positive measurement, and device-farm coverage |
@@ -101,7 +102,9 @@ default-off immutable app schedules, fixed lookback/configuration checkpoints,
 database-clock claims, bounded retry and stop. Complete acquisition publishes
 costs and its checkpoint atomically; empty results never become a zero
 denominator. Aggregate reader health excludes private configuration and secret
-references. Correction-driven historical recalculation remains next. These are
+references. [Selected metric correction](metric-corrections.md) fixes an explicit
+app/import/period/watermark request and reuses saved definitions in the existing
+engine; pending inputs and immutable old/new runs remain visible. These are
 later-source additions, not evidence for the frozen v0.2.0 release; live account
 permissions, timezone, token validity and source completeness remain unverified.
 

@@ -47,7 +47,7 @@ export async function listCostSchedules(pool: Pool, identity: AppAdminIdentity) 
             checkpoint.pending_since::text,checkpoint.pending_until::text,
             checkpoint.next_run_at,checkpoint.next_attempt_at,checkpoint.attempts,
             checkpoint.last_success_at,checkpoint.last_since::text,checkpoint.last_until::text,
-            checkpoint.last_outcome,checkpoint.last_row_count,checkpoint.safe_reason
+            checkpoint.last_outcome,checkpoint.last_row_count,checkpoint.last_import_run_id,checkpoint.last_snapshot_digest,checkpoint.safe_reason
        FROM control.cost_schedules_current AS schedule
        JOIN control.cost_schedule_checkpoints AS checkpoint USING (tenant_id,app_id,cost_schedule_id)
       WHERE schedule.tenant_id=$1 AND schedule.app_id=$2

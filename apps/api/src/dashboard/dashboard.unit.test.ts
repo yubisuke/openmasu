@@ -57,6 +57,15 @@ function xmlWellFormed(xml: string): boolean {
 }
 
 describe("M3 zero-JavaScript dashboard", () => {
+  it("labels revised cost and pending recalculation without changing the saved value", () => {
+    for (const state of ["input_revised", "recalculation_pending"] as const) {
+      const row = metric({ cost_update_state: state });
+      const html = renderDashboard(buildDashboardView({ apps: [], metrics: { data: [row] }, csrfToken: "synthetic" }));
+      assert.match(html, /Cost input revised/);
+      assert.match(html, /data-value-unscaled="1250000"/);
+      assert.equal(row.data_freshness, "complete");
+    }
+  });
   it("keeps SSR filter selection and CSV export scope identical without weakening API validation", () => {
     const input = new URLSearchParams("metric_name=d7_roas&metric_name=&grouping_campaign_id=campaign-synthetic&grouping_country=JP&grouping_attribution_status=organic&date_from=2026-08-01&date_to=2026-08-20&watermark_at_most=2026-08-21T00%3A00%3A00.000Z&supersession=all&grouping_network=");
     const parse = (searchParams: URLSearchParams) => parseMetricQuery({ tenantId: "tenant-a", appId: "app-a", searchParams });

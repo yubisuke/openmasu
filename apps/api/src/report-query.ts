@@ -1,4 +1,5 @@
 import type { OpenMasuMetricRunV04 } from "../../../packages/contracts/src/generated/contract-types.js";
+import { revisedMetricCostPredicate } from "@openmasu/runtime";
 
 type MetricGrouping = NonNullable<OpenMasuMetricRunV04["grouping"]>["dimensions"];
 export type GroupingDimension = keyof MetricGrouping;
@@ -360,9 +361,21 @@ export function buildMetricQuery(query: MetricQuery, checkEvidence = false): Par
     predicates.push(`(mr.metric_name COLLATE "C", mr.grouping_digest COLLATE "C", mr.metric_run_id COLLATE "C")
       > (${metric} COLLATE "C", ${grouping} COLLATE "C", ${run} COLLATE "C")`);
   }
+  const revisionCutoff = query.watermarkAtMost ? push(values, query.watermarkAtMost) : undefined;
   const limit = push(values, query.limit + 1);
   return {
     text: `SELECT mr.artifact, mr.grouping_digest, mr.comparison_context,
+      CASE
+        WHEN EXISTS (SELECT 1 FROM control.metric_recalculation_items AS item
+          JOIN control.metric_recalculation_jobs AS job USING (tenant_id,app_id,recalculation_id)
+          WHERE item.tenant_id=mr.tenant_id AND item.app_id=mr.app_id AND item.source_metric_run_id=mr.metric_run_id
+            AND item.state IN ('queued','processing','retry')
+            ${revisionCutoff ? `AND control.canonical_timestamp_value(job.watermark)<=${revisionCutoff}::timestamptz` : ""}) THEN 'recalculation_pending'
+        WHEN EXISTS (SELECT 1 FROM ledger.cost_records AS cost WHERE ${revisedMetricCostPredicate}
+            ${revisionCutoff ? `AND control.canonical_timestamp_value(cost.as_of)<=${revisionCutoff}::timestamptz` : ""}) THEN 'input_revised'
+        WHEN mr.comparison_context IS NULL THEN 'unknown'
+        ELSE 'no_recorded_revision'
+      END AS cost_update_state,
       ${checkEvidence ? `EXISTS (
         SELECT 1 FROM jsonb_array_elements(coalesce(mr.artifact->'evidence_refs', '[]'::jsonb)) AS ref
         LEFT JOIN ledger.raw_records_current AS raw
