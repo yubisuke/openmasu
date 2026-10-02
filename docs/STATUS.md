@@ -60,6 +60,7 @@ MMP.
 | Deep links and re-engagement | Implemented for direct Android/iOS and deferred Android flows plus separate aggregate AdAttributionKit re-engagement postbacks | Real domains, association propagation, devices, stores, Apple delivery, and long-running observation |
 | Verified commerce lifecycle | Implemented with authenticated synthetic Google and Apple lifecycle/read-back paths plus per-row claims and privacy-fenced completion | Live credentials, quotas, delivery, key rotation, unmatched App Store installation linkage, entitlement, tax, payout, and provider-side duplicate behavior |
 | Operations and release | Implemented for bootstrap, migration, scheduler state, metrics, DB-first durable privacy purge and restore reapplication, SBOMs, and release packaging | Production hosting, alerts, real backup recovery, incident response, and measured capacity |
+| Storage visibility | Read-only privileged CLI reports scoped/timestamped DB allocation and row estimates plus encrypted-object/key file metadata, with safe unavailable states and bounded reads | Host free space, remote/backup copies, actual growth and representative capacity/cost; no automatic retention/purge policy |
 
 ## Product direction
 
