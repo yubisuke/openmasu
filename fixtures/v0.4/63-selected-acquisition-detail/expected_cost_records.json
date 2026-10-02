@@ -1,0 +1,38 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "cost_record_id": "cost-63-a",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "network": "synthetic-network",
+    "campaign_id": "campaign-a",
+    "date": "2026-08-06",
+    "amount_unscaled": "10000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "source": "imported_reported",
+    "as_of": "2026-08-12T00:00:00.000Z",
+    "report_snapshot_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+    "dimension_digest": "ff07ed1baffc483df63e0f0d9111eca700de92223d16f0e2151d7b697cc3ea7b",
+    "ad_group_id": "synthetic-group-a",
+    "creative_id": "synthetic-creative-a"
+  },
+  {
+    "contract_version": "0.4.0",
+    "cost_record_id": "cost-63-b",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "network": "synthetic-network",
+    "campaign_id": "campaign-a",
+    "date": "2026-08-06",
+    "amount_unscaled": "20000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "source": "imported_reported",
+    "as_of": "2026-08-12T00:00:00.000Z",
+    "report_snapshot_digest": "2222222222222222222222222222222222222222222222222222222222222222",
+    "dimension_digest": "f5284e693396c0ce64a3c0d19467c2b85cedeb5f1e28f9b70aacef5f8b0b264d",
+    "ad_group_id": "synthetic-group-b",
+    "creative_id": "synthetic-creative-b"
+  }
+]
