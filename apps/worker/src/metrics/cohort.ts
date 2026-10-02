@@ -981,8 +981,8 @@ export async function computeSqlMetricRunsWithClient(
           grouping: { dimensions: grouping, dimension_digest: sha256(grouping) },
         } : {}),
         evidence_refs: evidenceRefs,
-        ...(evaluation.supersedes_metric_run_id_prefix ? {
-          supersedes_metric_run_id: `${evaluation.supersedes_metric_run_id_prefix}:${metricName}`,
+        ...(evaluation.supersedes_metric_run_id || evaluation.supersedes_metric_run_id_prefix ? {
+          supersedes_metric_run_id: evaluation.supersedes_metric_run_id ?? `${evaluation.supersedes_metric_run_id_prefix}:${metricName}`,
         } : {}),
       };
       if (persist) {

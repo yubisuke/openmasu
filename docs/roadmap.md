@@ -53,6 +53,7 @@ Progress:
 | External aggregate CSV can become an explicit comparison input | Implemented offline for one neutral CSV format: closed column/grouping/units/undefined mapping, strict exact-money reuse, canonical keys and input/mapping digests; declarations are not verified calculation meaning |
 | Newcomers can follow receipt → units → saved evidence → comparison | Implemented through one purpose-based guide and the existing demo/pilot/dashboard/SDK paths; fixture-derived CSV/JSON/HTML demonstrate equal/different/incomparable/unknown without hand-edited values or fabricated runtime evidence |
 | Existing provider cost can refresh without publishing partial acquisition | Implemented default-off for one bounded adapter: immutable app configuration, fixed lookback, token-fenced claims/retries/stop and atomic cost/checkpoint commit; empty is not zero and old cost history remains |
+| Selected cost corrections can replace affected saved runs without rewriting history | Implemented bounded requests, saved-definition replay, input-revision/pending labels, atomic new-run completion and immutable supersession; no all-history automation or causal inference |
 | Metric units and analysis selections are readable without changing audited values | Implemented: exact decimal display, SSR filters and scope-preserving CSV links; chart groups stay separate; window/maturity remain explicitly unknown without readable definition evidence |
 | App ingestion and calculation observations are understandable without raw payload access | Implemented: reader-only measurement health for batches, imports, rejections and metric runs; synthetic API/role and state-rendering gates |
 | Scheduler leases cannot consume the job pool; MAX processing works with a one-connection job pool | Complete |
@@ -93,7 +94,9 @@ durable cost refresh and historical corrections. The offline CLI includes a
 static HTML report and conversion from saved report JSON with input provenance.
 Saved-run semantics, bounded dashboard download, neutral aggregate CSV conversion
 and the integrated first-use journey are implemented. Default-off bounded cost
-refresh is implemented; next is correction-driven historical recalculation.
+refresh and selected correction-driven recalculation are implemented. Next are
+SDK distribution, safe upgrades, deployment guidance, capacity visibility and the
+documented HTTP surface.
 Each has a synthetic acceptance gate and requires no live provider
 credentials. Numeric differences alone must never become inferred causal reasons.
 

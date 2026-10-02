@@ -23,7 +23,7 @@ export const metricColumns = [
   "currency", "amount_scale", "ratio_scale", "grouping",
   "rule_bundle_id", "rule_bundle_hash", "aggregation_time_zone", "computed_at",
   "reproducibility_status", "supersedes_metric_run_id", "input_ledger_position",
-  "grouping_digest", "superseded", "comparison_context",
+  "grouping_digest", "superseded", "comparison_context", "cost_update_state",
 ] as const;
 
 export const differenceColumns = [
@@ -59,6 +59,7 @@ export type MetricReportRow = {
   readonly grouping_digest: string;
   readonly superseded: boolean;
   readonly comparison_context?: MetricComparisonContext | null;
+  readonly cost_update_state?: "recalculation_pending" | "input_revised" | "no_recorded_revision" | "unknown";
 };
 
 export type MetricReportPage = {
@@ -104,7 +105,7 @@ export function supportsRecordCounts(query: MetricQuery): boolean {
     || query.metricNames.every((name) => recordCountMetricNames.has(name));
 }
 
-function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, comparisonContext: MetricComparisonContext | null): MetricReportRow {
+function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, comparisonContext: MetricComparisonContext | null, costUpdateState: MetricReportRow["cost_update_state"]): MetricReportRow {
   const valueState = artifact.value_state ?? "present";
   if (valueState === "present" && typeof artifact.value_unscaled !== "string") {
     throw new Error(`metric run ${artifact.metric_run_id} has no present value`);
@@ -141,6 +142,7 @@ function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, c
     grouping_digest: groupingDigest,
     superseded,
     comparison_context: comparisonContext,
+    cost_update_state: costUpdateState ?? "unknown",
   };
 }
 
@@ -169,7 +171,7 @@ export async function metricReport(
 /** Reuse the ordinary keyset projection inside a caller-owned consistent read. */
 export async function metricReportOnClient(client: PoolClient, query: MetricQuery, checkEvidence = false): Promise<MetricReportPage> {
     const statement = buildMetricQuery(query, checkEvidence);
-    const result = await client.query<{ artifact: Any; grouping_digest: string; superseded: boolean; comparison_context: MetricComparisonContext | null; evidence_unavailable?: boolean }>(
+    const result = await client.query<{ artifact: Any; grouping_digest: string; superseded: boolean; comparison_context: MetricComparisonContext | null; cost_update_state: MetricReportRow["cost_update_state"]; evidence_unavailable?: boolean }>(
       statement.text,
       [...statement.values],
     );
@@ -180,6 +182,7 @@ export async function metricReportOnClient(client: PoolClient, query: MetricQuer
       row.grouping_digest,
       row.superseded,
       row.comparison_context,
+      row.cost_update_state,
     ));
     const last = rows.at(-1);
     return {

@@ -25,6 +25,10 @@ Do not change the frozen tag or its records to include this later behavior.
   immutable app definitions, fixed lookback, database-clock fencing, bounded
   retries/stop and atomic cost/checkpoint publication. Empty is not zero;
   reader health excludes private account configuration and secret references.
+- Explicit bounded cost-correction requests select affected saved ROAS runs and
+  reuse their original definition/FX in the existing engine. Input-revision and
+  pending states, transactional retry and immutable old/new supersession remain
+  separate from unverified source completeness or inferred causes.
 
 Contract wire/package identity remains `0.4.0`, with the additive patch ledger
 through v0.4.10. These additions do not change its 57 reviewed fixtures or 741
@@ -32,7 +36,6 @@ goldens. The SDK remains configured as `0.2.0` until a separate release change.
 
 ## Not included merely by this inventory
 
-Correction-driven historical recalculation is subsequent implementation work.
 SDK asset publication, upgrade procedures,
 deployment preflight, capacity visibility and the HTTP contract have separate
 acceptance scopes. Reassess this inventory after those changes merge.

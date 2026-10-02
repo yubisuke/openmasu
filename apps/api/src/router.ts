@@ -82,6 +82,7 @@ import {
 } from "./metric-schedules.js";
 import { handleServerBatch, type ServerRouteDependencies } from "./server-routes.js";
 import { disableCostSchedule, listCostSchedules, registerCostSchedule } from "./cost-schedules.js";
+import { listMetricRecalculations, requestMetricRecalculation } from "./metric-recalculations.js";
 import {
   receiveAppleStoreNotification,
   type AppleStoreNotificationDependencies,
@@ -1359,6 +1360,21 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             json(response, error instanceof AppNotFoundError || reason === "cost_schedule_not_found" ? 404
               : ["cost_schedule_active_exists", "cost_schedule_not_active"].includes(reason) ? 409 : 400,
             { error: error instanceof AppNotFoundError || reason === "cost_schedule_not_found" ? "not_found" : reason });
+          }
+          return;
+        }
+        if (route.handler === "admin_metric_recalculations_list" || route.handler === "admin_metric_recalculations_request") {
+          try {
+            const appIdentity = await requireRegisteredApp(pool, identity, adminAppId(target.pathname) ?? "");
+            if (route.handler === "admin_metric_recalculations_list") {
+              json(response, 200, { data: await listMetricRecalculations(pool, appIdentity) });
+            } else {
+              json(response, 202, await requestMetricRecalculation(dependencies.pool, appIdentity, await jsonBody(request)));
+            }
+          } catch (error) {
+            const reason = publicReason(error, "metric_recalculation_failed");
+            json(response, error instanceof AppNotFoundError || reason === "cost_revision_not_found" ? 404 : 400,
+              { error: error instanceof AppNotFoundError || reason === "cost_revision_not_found" ? "not_found" : reason });
           }
           return;
         }
