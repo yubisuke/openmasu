@@ -58,6 +58,11 @@ deployment.
    pg_restore --exit-on-error --no-owner --dbname "$OPENMASU_MIGRATION_DATABASE_URL" openmasu.dump
    ```
 
+   Before a forward version upgrade, restore as `--role=openmasu_owner` after
+   provisioning its CREATE/CONNECT grants on the isolated target. A no-owner
+   restore as the bootstrap administrator alone does not transfer old table
+   ownership for later DDL. Follow [Safe upgrade](upgrade.md) for the complete path.
+
 3. Restore the matching encrypted object and wrapped-key snapshot. Configure
    the same out-of-band payload master key and application database role.
 4. For each tenant present in the restored database, first drain recognized

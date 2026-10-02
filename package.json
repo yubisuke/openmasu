@@ -22,6 +22,7 @@
     "bootstrap": "node --import tsx apps/runtime/src/bootstrap.ts",
     "commerce:backfill": "npm run commerce:backfill --workspace @openmasu/worker --",
     "db:migrate": "npm run db:migrate --workspace @openmasu/runtime",
+    "db:upgrade:preflight": "node --env-file-if-exists=.env --import tsx apps/runtime/src/upgrade-cli.ts",
     "db:reapply-privacy": "npm run db:reapply-privacy --workspace @openmasu/worker --",
     "db:drain-privacy-purge": "npm run db:drain-privacy-purge --workspace @openmasu/worker --",
     "db:schema:dump": "npm run db:schema:dump --workspace @openmasu/runtime",

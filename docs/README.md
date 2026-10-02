@@ -68,6 +68,7 @@ approval or work-order process.
 ## Operator documentation
 
 - [Backup and restore](operations/backup-restore.md)
+- [Safe version-to-version upgrade](operations/upgrade.md)
 - [Runtime observability](operations/observability.md)
 - [Release runbook](operations/release.md)
 - [Validation checklists](validation/README.md)

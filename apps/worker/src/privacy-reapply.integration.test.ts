@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -20,6 +21,8 @@ import { parseMetricQuery } from "../../api/src/report-query.js";
 import { ingestFixture } from "./ingestion.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
 import { reapplyCompletedPrivacyRequests } from "./privacy-reapply.js";
+import { migrateDatabase, readMigrations } from "../../runtime/src/migration-engine.js";
+import { fileDigest, migrationDigest, UPGRADE_SOURCE, upgradePreflight, validateUpgradeBackup, verifyBackupFiles } from "../../runtime/src/upgrade.js";
 
 type Any = Record<string, any>;
 const fixtureName = "33-stage-b-cohort-metrics";
@@ -485,4 +488,98 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
       assert.equal(body.includes("evidence_refs"), false);
     }
   });
+});
+
+it("upgrades the frozen v0.2.0 backup, resumes a failed migration, retains ledger and metrics, and reapplies privacy", {
+  skip: process.env.OPENMASU_M5_BACKUP_RESTORE !== "1", timeout: 120_000,
+}, async () => {
+  const migrationUrl = process.env.OPENMASU_MIGRATION_DATABASE_URL;
+  const appUrl = process.env.OPENMASU_APP_DATABASE_URL;
+  assert.ok(migrationUrl && appUrl);
+  const started = performance.now();
+  const admin = new Client({ connectionString: migrationUrl });
+  await admin.connect();
+  const names = [`openmasu_upgrade_source_${Date.now()}`, `openmasu_upgrade_target_${Date.now()}`];
+  const root = mkdtempSync(join(tmpdir(), "openmasu-upgrade-"));
+  const source = new URL(migrationUrl); source.pathname = `/${names[0]}`;
+  const target = new URL(migrationUrl); target.pathname = `/${names[1]}`;
+  let sourceClient: Client | undefined;
+  let targetClient: Client | undefined;
+  let targetPool: Pool | undefined;
+  try {
+    for (const name of names) {
+      await admin.query(`CREATE DATABASE "${name}"`);
+      await admin.query(`GRANT CONNECT,CREATE ON DATABASE "${name}" TO openmasu_owner`);
+    }
+    sourceClient = new Client({ connectionString: source.toString() }); await sourceClient.connect();
+    const current = readMigrations();
+    const frozen = current.slice(0, 48).map((migration) => ({ ...migration,
+      source: execFileSync("git", ["show", `${UPGRADE_SOURCE.revision}:db/migrations/${migration.name}`], { encoding: "utf8" }).replaceAll("\r\n", "\n"),
+    }));
+    assert.equal(migrationDigest(frozen), UPGRADE_SOURCE.migrationDigest);
+    for (const migration of frozen) assert.equal(createHash("sha256").update(migration.source).digest("hex"), migration.checksum);
+    assert.equal(await migrateDatabase(sourceClient, frozen), 48);
+    const payloadStore = new EncryptedFilePayloadStore(join(root, "payloads"), "synthetic-upgrade-master-key-0000000000000000");
+    const payloadRef = await payloadStore.write({ tenantId: "tenant-a", appId: "app-delete", objectId: "synthetic-upgrade-inbox" }, Buffer.from("synthetic upgrade evidence"));
+    const frozenArtifact = (name: string) => JSON.parse(execFileSync("git", ["show", `${UPGRADE_SOURCE.revision}:fixtures/v0.4/${fixtureName}/${name}`], { encoding: "utf8" }));
+    const metric = (frozenArtifact("expected_metric_runs.json") as Any[]).find((run) => run.metric_name === "d7_roas" && run.value_state === "present")!;
+    const raw = frozenArtifact("expected_raw_records.json")[0] as Any;
+    await sourceClient.query("BEGIN");
+    await sourceClient.query("SET LOCAL ROLE openmasu_owner");
+    await sourceClient.query("SELECT set_config('openmasu.tenant_id','tenant-a',true)");
+    await sourceClient.query("INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ('tenant-a','app-a','2026-08-01T00:00:00.000Z'),('tenant-a','app-delete','2026-08-01T00:00:00.000Z')");
+    // Insert only columns present in the frozen release, not today's ingestion code.
+    const rawKeys = ["record_id", "tenant_id", "app_id", "producer", "producer_version", "event_id", "delivery_id", "event_name", "schema_version", "payload_sha256", "occurred_at", "occurred_at_source", "received_at", "raw_payload_ref", "processing_purpose_id", "consent_evaluation_policy_version", "consent_decision_reason_code"];
+    await sourceClient.query(`INSERT INTO ledger.raw_records (${rawKeys.join(",")},artifact) VALUES (${rawKeys.map((_, index) => `$${index + 1}`).join(",")},$${rawKeys.length + 1}::jsonb)`, [...rawKeys.map((key) => raw[key]), JSON.stringify(raw)]);
+    const keys = ["metric_run_id", "metric_name", "metric_definition_version", "input_snapshot_id", "input_received_at_watermark", "input_ledger_position", "computed_at", "data_freshness", "aggregation_time_zone", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash", "rounding_mode", "reproducibility_status", "value_type", "value_state", "value_unscaled"];
+    await sourceClient.query(`INSERT INTO ledger.metric_runs (${keys.join(",")},tenant_id,app_id,grouping,grouping_digest,artifact) VALUES (${keys.map((_, index) => `$${index + 1}`).join(",")},'tenant-a','app-a',$${keys.length + 1}::jsonb,$${keys.length + 2},$${keys.length + 3}::jsonb)`, [...keys.map((key) => metric[key]), JSON.stringify(metric.grouping.dimensions), metric.grouping.dimension_digest, JSON.stringify(metric)]);
+    await sourceClient.query(`INSERT INTO ledger.ingest_inbox (inbox_id,tenant_id,app_id,producer,event_id,token_mode,received_at,raw_query_ref,raw_query_digest,artifact) VALUES ($1,'tenant-a','app-delete','import:synthetic-upgrade','event:upgrade','all','2026-08-01T00:00:00.000Z',$2,$3,'{}'::jsonb)`, [uuidV7(), payloadRef, sha256("synthetic upgrade evidence")]);
+    const privacy = { contract_version: "0.4.0", privacy_request_id: "privacy:synthetic-upgrade", tenant_id: "tenant-a", app_id: "app-delete", status: "completed", deletion_scope: "app", deletion_subject_digest: "a".repeat(64), affected_records: [], requested_via: "tenant_admin_api", requester_auth_ref: "admin:synthetic", requested_at: "2026-08-02T00:00:00.000Z", completed_at: "2026-08-02T00:00:01.000Z", reason_code: "privacy_deletion", policy_version: "privacy-v0.4" };
+    await sourceClient.query(`INSERT INTO ledger.privacy_requests (privacy_request_id,tenant_id,app_id,requested_at,completed_at,status,artifact) VALUES ($1,'tenant-a','app-delete','2026-08-02T00:00:00.000Z','2026-08-02T00:00:01.000Z','completed',$2::jsonb)`, [privacy.privacy_request_id, JSON.stringify(privacy)]);
+    await sourceClient.query("COMMIT");
+    const stoppedStarted = performance.now();
+    const dumpPath = join(root, "synthetic.dump");
+    runPostgresTool("pg_dump", ["--format=custom", "--no-owner", "--file", dumpPath, source.toString()], dumpPath);
+    const payloadArchive = join(root, "synthetic-payload.tar");
+    execFileSync("tar", ["-cf", payloadArchive, "-C", root, "payloads"], { stdio: "pipe" });
+    const restoredRoot = join(root, "restored"); mkdirSync(restoredRoot);
+    execFileSync("tar", ["-xf", payloadArchive, "-C", restoredRoot], { stdio: "pipe" });
+    const restoredPayloadStore = new EncryptedFilePayloadStore(join(restoredRoot, "payloads"), "synthetic-upgrade-master-key-0000000000000000");
+    const backup = validateUpgradeBackup({ format: "openmasu-upgrade-backup-v1", source_tag: "v0.2.0", source_revision: UPGRADE_SOURCE.revision,
+      postgres_major: 17, migration_digest: UPGRADE_SOURCE.migrationDigest, database_sha256: await fileDigest(dumpPath), payload_sha256: await fileDigest(payloadArchive),
+      payload_snapshot_id: "synthetic:snapshot", master_key_ref: "synthetic:key", privacy_boundary_at: "2026-08-02T00:00:01.000Z" }, "v0.2.0");
+    await verifyBackupFiles(backup, dumpPath, payloadArchive);
+    await assert.rejects(verifyBackupFiles({ ...backup, payload_sha256: "b".repeat(64) }, dumpPath, payloadArchive), /upgrade_backup_checksum_mismatch/);
+    runPostgresTool("pg_restore", ["--exit-on-error", "--no-owner", "--role=openmasu_owner", "--dbname", target.toString(), dumpPath], dumpPath);
+    targetClient = new Client({ connectionString: target.toString() }); await targetClient.connect();
+    assert.equal((await upgradePreflight(targetClient, backup)).pending, current.length - 48);
+    await assert.rejects(migrateDatabase(targetClient, current, (migration) => { if (migration.version === "050") throw new Error("synthetic_mid_migration_failure"); }), /synthetic_mid_migration_failure/);
+    assert.equal((await targetClient.query("SELECT count(*)::int AS count FROM public.schema_migrations")).rows[0].count, 49);
+    assert.equal((await targetClient.query("SELECT has_column_privilege('openmasu_reader','control.google_data_manager_destinations','enabled','SELECT') AS allowed")).rows[0].allowed, false, "failed migration grant rolls back too");
+    assert.equal((await upgradePreflight(targetClient, backup)).pending, current.length - 49);
+    assert.equal(await migrateDatabase(targetClient), current.length - 49);
+    assert.equal(await migrateDatabase(targetClient), 0);
+    assert.equal((await upgradePreflight(targetClient, backup)).pending, 0);
+    const targetAppUrl = new URL(appUrl); targetAppUrl.pathname = `/${names[1]}`;
+    targetPool = new Pool({ connectionString: targetAppUrl.toString() });
+    const before = await withTenant(targetPool, "tenant-a", (client) => client.query("SELECT artifact,comparison_context FROM ledger.metric_runs"));
+    assert.equal(sha256(before.rows[0].artifact), sha256(metric));
+    assert.equal(before.rows[0].comparison_context, null, "legacy meaning is not invented");
+    assert.equal(await withTenant(targetPool, "tenant-a", async (client) => (await client.query("SELECT count(*)::int AS count FROM ledger.raw_records")).rows[0].count), 1);
+    assert.equal((await restoredPayloadStore.read(payloadRef)).toString(), "synthetic upgrade evidence");
+    const result = await reapplyCompletedPrivacyRequests({ pool: targetPool, payloadStore: restoredPayloadStore, tenantId: "tenant-a" });
+    assert.equal(result.privacy_requests, 1); assert.equal(result.payloads_purged, 1); assert.equal(result.unsupported_metric_runs, 0);
+    await assert.rejects(restoredPayloadStore.read(payloadRef));
+    const after = await withTenant(targetPool, "tenant-a", (client) => client.query("SELECT artifact FROM ledger.metric_runs"));
+    assert.equal(sha256(after.rows[0].artifact), sha256(metric));
+    console.log(JSON.stringify({ upgrade: "v0.2.0_to_candidate", postgres_major: 17, postgres_version: (await targetClient.query("SHOW server_version")).rows[0].server_version,
+      platform: process.platform, node: process.version, synthetic: true, elapsed_ms: Math.round(performance.now() - started), stopped_boundary_ms: Math.round(performance.now() - stoppedStarted),
+      downtime_scope: "isolated test writers absent; not a production SLO", ledger_preserved: true, metric_preserved: true, privacy_reapplied: true, failed_migration_resumed: true }));
+  } finally {
+    if (sourceClient) await sourceClient.end();
+    if (targetClient) await targetClient.end();
+    if (targetPool) await endRestoredPool(targetPool, admin, names[1]);
+    for (const name of names) { await waitForDatabaseConnectionsToClose(admin, name); await admin.query(`DROP DATABASE IF EXISTS "${name}"`); }
+    await admin.end(); rmSync(root, { recursive: true, force: true });
+  }
 });
