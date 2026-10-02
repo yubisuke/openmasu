@@ -100,6 +100,10 @@ The example is entirely synthetic and does not establish live-store coverage.
 
 ## Synthetic evidence
 
+Optional [ad-group and creative definitions](acquisition-detail-metrics.md)
+extend native selected acquisition in an independent profile. They do not change
+the campaign-level definitions described above.
+
 Fixture 58 proves one selected installation, USD 20 advertising revenue, USD 10
 cost, USD 20 D0 LTV, and ROAS 2 with TypeScript/Python contract parity. Runtime
 tests exercise normalized ledger reads and the actual inbox/SDK worker before

@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { evaluate, jcs, roundHalfEven, sha256 } from "@openmasu/attribution-core";
@@ -16,7 +17,9 @@ import { DISJOINT_COST_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { syntheticRetentionCases } from "../../../tools/synthetic-retention-cases.js";
 import { syntheticConversionCases } from "../../../tools/synthetic-conversion-cases.js";
 import { syntheticRefundReversalCases } from "../../../tools/synthetic-refund-reversal-cases.js";
+import { syntheticAcquisitionDetailCases } from "../../../tools/synthetic-acquisition-detail-cases.js";
 import { persistCostImport, type CostInput } from "./import/cost.js";
+import { runCostImportFile } from "./import/cost-cli.js";
 
 type Any = Record<string, any>;
 const fixtureName = "33-stage-b-cohort-metrics";
@@ -26,6 +29,50 @@ const goldenPath = join(fixtureDirectory, "expected_metric_runs.json");
 const goldenBefore = readFileSync(goldenPath);
 const golden: Any[] = JSON.parse(goldenBefore.toString("utf8"));
 const oracle = evaluate(input).metric_runs;
+
+describe("selected acquisition detail SQL parity", { concurrency: false }, () => {
+  let app: Pool;
+  let seed: Pool;
+  before(() => { app = createAppPool(); seed = createSeedPool(); });
+  after(async () => { await app?.end(); await seed?.end(); });
+  const baseline = JSON.parse(readFileSync("fixtures/v0.4/63-selected-acquisition-detail/input.json", "utf8"));
+  for (const entry of syntheticAcquisitionDetailCases(baseline)) it(entry.name, async () => {
+    await ingestFixture(`detail-${entry.name}`, entry.input, app, seed);
+    const runs = await computeSqlMetricRuns(app, entry.input, false, { tenant_id: "tenant-a", app_id: "app-a" });
+    assert.equal(jcs(runs), jcs(evaluate(entry.input).metric_runs));
+    assert.deepEqual(runs.map(run => run.value_unscaled ?? run.undefined_reason), entry.expected);
+  });
+  it("persists exact detail meaning and independently derived goldens", async () => {
+    await ingestFixture("detail-saved-meaning", baseline, app, seed);
+    const runs = await computeSqlMetricRuns(app, baseline, true);
+    assert.equal(jcs(runs), jcs(JSON.parse(readFileSync("fixtures/v0.4/63-selected-acquisition-detail/expected_metric_runs.json", "utf8"))));
+    const contexts = await withTenant(app, "tenant-a", async client => (await client.query(
+      "SELECT comparison_context FROM ledger.metric_runs WHERE metric_run_id LIKE 'detail63-%'",
+    )).rows);
+    assert.equal(contexts.length, 15);
+    assert.ok(contexts.every(row => row.comparison_context.definition.acquisition_dimension_policy === "selected_link_ad_group_creative"));
+  });
+  it("imports a synthetic detail CSV idempotently into non-zero same-grain ROAS", async () => {
+    const value = { ...structuredClone(baseline), cost_records: [] };
+    await ingestFixture("detail-manual-csv", value, app, seed);
+    const temporary = mkdtempSync(join(tmpdir(), "openmasu-detail-cost-"));
+    try {
+      const filePath = join(temporary, "synthetic-cost.csv");
+      writeFileSync(filePath, ["network,campaign_id,ad_group_id,creative_id,date,cost_decimal,currency,as_of",
+        "synthetic-network,campaign-a,synthetic-group-a,synthetic-creative-a,2026-08-06,10.00,USD,2026-08-12T00:00:00.000Z",
+        "synthetic-network,campaign-a,synthetic-group-b,synthetic-creative-b,2026-08-06,20.00,USD,2026-08-12T00:00:00.000Z", ""].join("\n"));
+      const options = { pool: app, mappingPath: "examples/mappings/synthetic-creative-cost.json", filePath };
+      assert.equal((await runCostImportFile(options)).inserted, 2);
+      assert.equal((await runCostImportFile(options)).inserted, 0);
+    } finally { rmSync(temporary, { recursive: true, force: true }); }
+    const runs = await computeSqlMetricRuns(app, value, false);
+    assert.deepEqual(runs.map(run => run.value_unscaled ?? run.undefined_reason), syntheticAcquisitionDetailCases(baseline)[0].expected);
+    const rows = await withTenant(app, "tenant-a", async client => (await client.query(
+      "SELECT artifact->>'creative_id' AS creative FROM ledger.cost_records_current ORDER BY (artifact->>'creative_id') COLLATE \"C\"",
+    )).rows);
+    assert.deepEqual(rows.map(row => row.creative), ["synthetic-creative-a", "synthetic-creative-b"]);
+  });
+});
 
 describe("explicit refund cancellation SQL parity", { concurrency: false }, () => {
   let app: Pool;

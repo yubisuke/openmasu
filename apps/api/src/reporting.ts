@@ -8,6 +8,7 @@ import {
   encodeDifferenceCursor,
   encodeMetricCursor,
   encodeRecordCountCursor,
+  groupingDimensionAllowlist,
   ReportQueryError,
   type GroupingDimension,
   type MetricQuery,
@@ -102,8 +103,8 @@ const recordCountMetricNames = new Set([
 ]);
 
 export function supportsRecordCounts(query: MetricQuery): boolean {
-  return query.metricNames === undefined
-    || query.metricNames.every((name) => recordCountMetricNames.has(name));
+  return Object.keys(query.grouping ?? {}).every(key => key in groupingDimensionAllowlist)
+    && (query.metricNames === undefined || query.metricNames.every((name) => recordCountMetricNames.has(name)));
 }
 
 function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, comparisonContext: MetricComparisonContext | null, costUpdateState: MetricReportRow["cost_update_state"], lateInputUpdateState: MetricReportRow["late_input_update_state"]): MetricReportRow {
@@ -239,7 +240,7 @@ export async function differenceAudit(
   });
 }
 
-const dimensionSql: Readonly<Record<GroupingDimension, string>> = {
+const dimensionSql: Readonly<Partial<Record<GroupingDimension, string>>> = {
   campaign_id: "event.campaign_id",
   network: "event.network",
   country: "event.country",
@@ -288,7 +289,9 @@ export async function recordCounts(
   }
   const groupingPairs: string[] = [];
   for (const dimension of requestedDimensions) {
-    groupingPairs.push(`'${dimension}'`, dimensionSql[dimension]);
+    const expression = dimensionSql[dimension];
+    if (!expression) throw new ReportQueryError("raw_metric_unsupported");
+    groupingPairs.push(`'${dimension}'`, expression);
   }
   const groupingExpression = `jsonb_strip_nulls(jsonb_build_object(${groupingPairs.join(",")}))`;
   let pagePredicate: string | undefined;

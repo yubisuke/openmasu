@@ -77,6 +77,7 @@ export function normalizeCostInput(mapping: ReturnType<typeof loadMapping>, mapp
     network: requiredText(mapped.network, "network"),
     campaign_id: mapped.campaign_id === undefined ? null : requiredText(mapped.campaign_id, "campaign_id"),
     ad_group_id: mapped.ad_group_id === undefined ? null : requiredText(mapped.ad_group_id, "ad_group_id"),
+    ...(mapped.creative_id === undefined ? {} : { creative_id: requiredText(mapped.creative_id, "creative_id") }),
     country,
     date,
     amount_unscaled: amountUnscaled,

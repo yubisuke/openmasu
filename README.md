@@ -70,9 +70,11 @@ Its annotated tag and
 point to green `main` commit `90a0f5f`, with eight verified SDK download assets.
 The release retains Contract v0.4 identity with patches through v0.4.10
 (57 fixtures / 741 goldens). Current development retains that wire/package
-identity and adds patches through v0.4.15 (62 fixtures / 806 goldens), including
+identity and adds patches through v0.4.16 (63 fixtures / 819 goldens), including
 [explicit custom-event conversion](docs/custom-conversion-metrics.md) and an opt-in
 [targeted refund-cancellation profile](docs/design/verified-commerce-lifecycle.md#explicit-refund-cancellation-metrics).
+An explicit [ad-group/creative calculation profile](docs/acquisition-detail-metrics.md)
+adds same-grain CLI calculation; dashboard/schedule integration remains in progress.
 Later `main` commits are not
 evidence for that release. [`docs/STATUS.md`](docs/STATUS.md) defines the
 current source tree, and the [release index](docs/releases/README.md) separates
@@ -187,8 +189,8 @@ The main contract gate is:
 npm run validate
 ```
 
-It checks 28 schemas, 8 registries, 62 reviewed synthetic fixtures, 806 golden
-output artifacts, 62 scenario assertions, 27 acceptance criteria,
+It checks 28 schemas, 8 registries, 63 reviewed synthetic fixtures, 819 golden
+output artifacts, 63 scenario assertions, 27 acceptance criteria,
 deterministic TypeScript, the independent Python evaluator, release identity,
 documentation drift, fraud artifacts, and RFC 8785 canonicalization.
 

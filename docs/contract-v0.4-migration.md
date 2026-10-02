@@ -175,6 +175,28 @@ Runtime SQL additionally covers boundary, duplicate, late, privacy, native
 selected-campaign and gross/net inputs, and saves the key in replay/comparison
 context. Earlier tagged release evidence is not reissued by this source patch.
 
+## Explicit selected acquisition detail (0.4.16)
+
+The optional `acquisition_dimension_policy=selected_link_ad_group_creative`
+binds a new independent metric profile to explicit native selected-click
+`ad_group_id` / `creative_id` filters. These are optional grouping fields in
+fixture input and metric output. Cost artifacts gain optional `creative_id`.
+No existing $id, wire/package version, registry, dependency or schema-required
+field changes. Old profiles ignore new creative-grain costs and cannot silently
+adopt detail grouping. Existing saved definitions and runs are immutable.
+Click facts retain already-admitted optional detail in their artifact; older
+facts without it remain unknown and are not backfilled by inference.
+
+Complete golden change inventory: `63-selected-acquisition-detail/input.json`
+and all thirteen new `expected_*.json` files, plus the shared fixture README.
+No pre-existing input or golden changes. Verify with
+`git diff --name-status cda80f6 -- fixtures/v0.4/` and confirm the only numbered
+directory is 63. The README documents every artifact family's derivation,
+the three independent arithmetic rows and canonical snapshot inputs/digests.
+Expected files are committed separately from calculation/schema changes;
+validation remains read-only. The operational report/filter/schedule connection
+is a separate implementation step, not implied by this contract patch.
+
 ## Explicit targeted refund cancellation (0.4.15)
 
 Optional refund-event `reverses_refund_record_id` is valid only for an

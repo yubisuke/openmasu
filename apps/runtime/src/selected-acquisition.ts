@@ -49,7 +49,8 @@ export function selectedClickJoinSql(enabled: "$7" | "$15" | "$18", privacy: "$8
   return `
   LEFT JOIN acquisition ON acquisition.subject_ref=install.installation_id
   LEFT JOIN LATERAL (
-    SELECT min(click.campaign_id) AS campaign_id, min(click.network) AS network
+    SELECT min(click.campaign_id) AS campaign_id, min(click.network) AS network,
+      min(click.artifact->>'ad_group_id') AS ad_group_id, min(click.artifact->>'creative_id') AS creative_id
     FROM ledger.click_facts AS click
     JOIN ledger.logical_events AS click_event USING (logical_event_id)
     JOIN ledger.raw_records_current AS click_raw

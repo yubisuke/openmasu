@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 62 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 63 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -368,6 +368,47 @@ Last positions are the respective cutoff followed by `revenue-native-acquisition
 All 13 expected families were constructed from these templates and arithmetic,
 without copying evaluator output. Full independent TS/Python candidate bytes
 matched them before promotion. Earlier fixtures and goldens are unchanged.
+
+### Fixture 63: selected ad-group and creative acquisition
+
+Two installations use the fixture-60 click/install/ad/purchase/refund templates,
+with distinct synthetic record, event, transaction and installation IDs. Their
+uniquely selected clicks carry group/creative `a` and `b`. Installation `a` has
+USD20 advertising, USD10 purchase, USD4 refund and USD10 same-grain cost;
+installation `b` has exactly twice each amount. Both belong to the same campaign.
+No imported or unselected click is a source of detail dimensions.
+
+The independent expected arithmetic is:
+
+| Group | Installs | Ad D7 LTV | Purchase D30 net | Ad D7 ROAS | Total-net D30 ROAS |
+| --- | --- | --- | --- | --- | --- |
+| a | 1 | USD20 | USD6 | 20/10 = 2 | (20+10-4)/10 = 2.6 |
+| b | 1 | USD40 | USD12 | 40/20 = 2 | (40+20-8)/20 = 2.6 |
+| campaign | 2 | USD30 | USD18 | 60/30 = 2 | (60+30-12)/30 = 2.6 |
+
+Money and ratios use scale 6 and 1:1 USD FX. There are ten accepted raw rows,
+deliveries and logical events, two native attributions, two canonical refund
+corrections, two cost artifacts, fifteen runs, and eight definitions (five
+explicit detail definitions plus the unchanged three defaults). Fraud,
+rejection, reconciliation and both privacy families are empty. The two costs
+have separate creative-inclusive dimension digests; date is not a member of
+that contract dimension object. No previous fixture is changed.
+
+Each raw digest is SHA-256 of its input payload's JCS. For each grouping, hash
+the ten receipt/ID/available/policy tuples plus only the matching cost tuples,
+then wrap the result with the ordered scoped attribution IDs and their JCS
+digests. At the shared August 12 watermark, the last input position is
+`2026-08-12T00:00:00.000Z|revenue-63-b`. Snapshots for a, b and campaign are:
+
+- `c16dbbaeada1689224d16a5b94b025b980c76ddc009f40affaa355adbed7b54e`
+- `f2f52dec5cb2c2c11185ac64b82f74eb707863529bdff3a62cf2bfc08f4fa055`
+- `7176263fe8df32654e970d17be7d2444371be3f97d0095cb0307548d4941203c`
+
+All thirteen expected families were independently constructed from these
+record correspondences, canonical hash inputs and arithmetic, not from either
+evaluator's output. The shared mutation cases additionally exercise same-group
+creative siblings, unknown detail, parent-only/overlapping costs, revision
+watermarks, explicit refund cancellation, privacy removal and legacy profiles.
 
 ## Adding a fixture procedure
 

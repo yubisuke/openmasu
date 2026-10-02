@@ -151,6 +151,7 @@ export type OpenMasuCostRecordV04 = Money & {
   network: string;
   campaign_id: string;
   ad_group_id?: string;
+  creative_id?: string;
   country?: string;
   date: string;
   amount_unscaled: unknown;
@@ -210,6 +211,8 @@ export type OpenMasuMetricDefinitionV04 = {
    */
   grouping_dimensions?: (
     | "campaign_id"
+    | "ad_group_id"
+    | "creative_id"
     | "network"
     | "country"
     | "cohort_date"
@@ -219,6 +222,7 @@ export type OpenMasuMetricDefinitionV04 = {
   )[];
   fraud_policy?: "gross" | "net";
   acquisition_basis?: "selected_first_party_click";
+  acquisition_dimension_policy?: "selected_link_ad_group_creative";
   conversion_event_key?: string;
   cost_selection_policy?: "reject_overlapping_grains";
   refund_reversal_policy?: "cancel_target_refund_at_watermark";
@@ -263,6 +267,8 @@ export type OpenMasuMetricRunV04 = {
   grouping?: {
     dimensions: {
       campaign_id?: string;
+      ad_group_id?: string;
+      creative_id?: string;
       network?: string;
       country?: string;
       cohort_date?: string;
