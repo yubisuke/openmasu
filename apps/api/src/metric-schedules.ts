@@ -13,6 +13,7 @@ export type MetricScheduleDefinition = Readonly<{
     metric_names: readonly string[];
     date_dimension: "cohort_date" | "metric_date";
     grouping: JsonObject;
+    campaign_discovery?: Readonly<{ policy: "selected_acquisition_and_cost_v1"; max_targets: number }>;
   }>[];
 }>;
 
@@ -28,6 +29,9 @@ export type MetricScheduleRecord = Readonly<{
   created_at: string;
   status_changed_at: string;
   last_target_date: string | null;
+  pending_target_date?: string | null;
+  safe_reason?: string | null;
+  latest_discovery?: JsonObject | null;
 }>;
 
 const identifier = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -216,7 +220,7 @@ export function normalizeMetricScheduleRequest(
   }
   const evaluations = body.evaluations.map((value, index) => {
     const evaluation = object(value, `metric_schedule_evaluation_${index}_invalid`);
-    const evaluationAllowed = new Set(["metric_names", "date_dimension", "grouping"]);
+    const evaluationAllowed = new Set(["metric_names", "date_dimension", "grouping", "campaign_discovery"]);
     if (Object.keys(evaluation).some((key) => !evaluationAllowed.has(key))) {
       throw new Error("metric_schedule_evaluation_field_forbidden");
     }
@@ -230,12 +234,38 @@ export function normalizeMetricScheduleRequest(
       throw new Error("metric_schedule_date_dimension_invalid");
     }
     const dateDimension: "cohort_date" | "metric_date" = evaluation.date_dimension;
+    const grouping = normalizedGrouping(evaluation.grouping);
+    let discovery: { policy: "selected_acquisition_and_cost_v1"; max_targets: number } | undefined;
+    if (evaluation.campaign_discovery !== undefined) {
+      const candidate = object(evaluation.campaign_discovery, "metric_schedule_discovery_invalid");
+      if (Object.keys(candidate).some(key => !["policy", "max_targets"].includes(key))
+          || candidate.policy !== "selected_acquisition_and_cost_v1"
+          || !Number.isSafeInteger(candidate.max_targets) || Number(candidate.max_targets) < 1 || Number(candidate.max_targets) > 100
+          || dateDimension !== "cohort_date" || grouping.campaign_id !== undefined || grouping.apple_conversion_bucket !== undefined
+          || evaluation.metric_names.some(name => {
+            const metric = suppliedDefinitions.find(value => value.metric_name === name);
+            return !metric || metric.anchor_event !== "install" || metric.aggregation_time_zone !== "UTC"
+              || metric.acquisition_basis !== "selected_first_party_click"
+              || ((metric.definition as JsonObject).calculation === "revenue_over_cost"
+                && metric.cost_selection_policy !== "reject_overlapping_grains");
+          })) throw new Error("metric_schedule_discovery_invalid");
+      discovery = { policy: "selected_acquisition_and_cost_v1", max_targets: Number(candidate.max_targets) };
+    }
     return {
       metric_names: [...evaluation.metric_names].sort() as string[],
       date_dimension: dateDimension,
-      grouping: normalizedGrouping(evaluation.grouping),
+      grouping,
+      ...(discovery ? { campaign_discovery: discovery } : {}),
     };
   });
+  if (evaluations.some(evaluation => evaluation.campaign_discovery)) {
+    const names = evaluations.flatMap(evaluation => evaluation.metric_names);
+    // A discovered series must not also appear in a manual/all-campaign evaluation.
+    if (new Set(names).size !== names.length) throw new Error("metric_schedule_discovery_overlap");
+    const maximum = evaluations.reduce((sum, evaluation) => sum
+      + (evaluation.campaign_discovery?.max_targets ?? 1) * evaluation.metric_names.length, 0);
+    if (maximum > 1000) throw new Error("metric_schedule_discovery_limit");
+  }
   const definition: MetricScheduleDefinition = {
     fx_policy: fxPolicy,
     metric_definitions: suppliedDefinitions as JsonObject[],
@@ -329,10 +359,20 @@ export async function listMetricSchedules(
     `SELECT schedule.metric_schedule_id,schedule.tenant_id,schedule.app_id,schedule.lag_days,
             schedule.start_date::text,schedule.definition,schedule.definition_digest,
             schedule.status,schedule.created_at,
-            schedule.status_changed_at,checkpoint.last_target_date::text
+            schedule.status_changed_at,checkpoint.last_target_date::text,checkpoint.pending_target_date::text,
+            checkpoint.safe_reason,discovery.summary AS latest_discovery
        FROM control.metric_schedules_current AS schedule
        JOIN control.metric_schedule_checkpoints AS checkpoint
          USING (metric_schedule_id,tenant_id,app_id)
+       LEFT JOIN LATERAL (
+         SELECT jsonb_build_object('target_date',target.target_date::text,'watermark',target.watermark,
+           'definition_digest',target.definition_digest,'target_digest',target.target_digest,
+           'selection_state',target.selection_state,'counts',target.artifact->'counts',
+           'target_count',jsonb_array_length(target.artifact->'targets')) AS summary
+         FROM control.metric_schedule_targets AS target WHERE target.tenant_id=schedule.tenant_id
+           AND target.app_id=schedule.app_id AND target.metric_schedule_id=schedule.metric_schedule_id
+         ORDER BY target.target_date DESC LIMIT 1
+       ) AS discovery ON true
       WHERE schedule.tenant_id=$1 AND schedule.app_id=$2
       ORDER BY schedule.created_at DESC,schedule.metric_schedule_id COLLATE "C"`,
     [identity.tenantId, identity.appId],

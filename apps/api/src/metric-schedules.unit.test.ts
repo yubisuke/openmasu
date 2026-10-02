@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { SELECTED_COMMERCE_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import { DISJOINT_COST_METRIC_DEFINITIONS, SELECTED_COMMERCE_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { metricScheduleTargetDate, normalizeMetricScheduleRequest } from "./metric-schedules.js";
 
 const body = {
@@ -25,6 +25,22 @@ const body = {
 };
 
 describe("scheduled metric configuration", () => {
+  it("opts into bounded campaign discovery without changing manual schedule definitions", () => {
+    const manual = normalizeMetricScheduleRequest(body, new Date("2026-08-10T12:00:00.000Z"));
+    assert.equal(Object.hasOwn(manual.definition.evaluations[0], "campaign_discovery"), false);
+    const request = { ...body, metric_definitions: structuredClone(DISJOINT_COST_METRIC_DEFINITIONS),
+      evaluations: [{ metric_names: ["d0_roas"], date_dimension: "cohort_date", grouping: {},
+        campaign_discovery: { policy: "selected_acquisition_and_cost_v1", max_targets: 30 } }] };
+    const normalize = (value: any) => normalizeMetricScheduleRequest(value, new Date("2026-08-10T12:00:00.000Z"));
+    assert.deepEqual(normalize(request), normalize(structuredClone(request)));
+    for (const max_targets of [0, 101, 1.5]) assert.throws(() => normalize({ ...request, evaluations: [{
+      ...request.evaluations[0], campaign_discovery: { ...request.evaluations[0].campaign_discovery, max_targets } }] }), /discovery_invalid/);
+    for (const change of [{ grouping: { campaign_id: "synthetic-fixed" } }, { date_dimension: "metric_date" }, { metric_names: ["unknown_metric"] }]) {
+      assert.throws(() => normalize({ ...request, evaluations: [{ ...request.evaluations[0], ...change }] }), /discovery_invalid/);
+    }
+    assert.throws(() => normalize({ ...request, evaluations: [...request.evaluations, ...request.evaluations] }), /discovery_overlap/);
+    assert.throws(() => normalize({ ...request, metric_definitions: [] }), /discovery_invalid/);
+  });
   it("preserves selected commerce and its safe cost policy in scheduled definitions", () => {
     const request = { ...body, metric_definitions: structuredClone(SELECTED_COMMERCE_METRIC_DEFINITIONS),
       evaluations: [{ metric_names: ["d30_total_net_roas"], date_dimension: "cohort_date", grouping: {} }] };
