@@ -9,6 +9,7 @@ import {
 import {
   decodeCompactJwsPayloadUnverified,
   normalizeAppleNotification,
+  normalizeAppleTransaction,
   normalizeGoogleOrderRefunds,
   sha256,
   type AppleSignedDataVerifier,
@@ -18,6 +19,8 @@ import { ingestRuntimeBatch } from "./ingestion.js";
 import { googleServiceAccountAccessToken } from "./google-service-account.js";
 import { callAppleStoreApi, type AppleStoreApiCredentials } from "./apple-store-api.js";
 import type { CandidateAttempt } from "@openmasu/attribution-core";
+import { activeApplePurchaseAnchor, readApplePurchaseIntent } from "../../runtime/src/apple-purchase-binding.js";
+import { projectAppleTransaction } from "./apple-financial-projection.js";
 
 type JsonObject = Record<string, unknown>;
 type ReadbackRow = {
@@ -28,6 +31,7 @@ type ReadbackRow = {
   notification_digest: string;
   operation: "google_subscription" | "google_order_refund" | "apple_transaction_history" | "apple_refund_history";
   evidence_ref: string;
+  event_kind: string;
   cursor_ref: string | null;
   attempts: number;
   claim_token: string | null;
@@ -193,7 +197,7 @@ async function claimCommerceReadback(
         AND notification.provider=readback.provider
         AND notification.notification_digest=readback.notification_digest
      RETURNING readback.readback_id::text,readback.provider,readback.tenant_id,readback.app_id,
-       readback.notification_digest,readback.operation,notification.evidence_ref,
+       readback.notification_digest,readback.operation,notification.evidence_ref,notification.event_kind,
        readback.cursor_ref,readback.attempts,readback.claim_token::text,readback.claimed_until`,
     [tenantId, now.toISOString(), claimToken, leaseMs, excludedReadbackIds],
   ));
@@ -430,21 +434,44 @@ export async function processCommerceReadbacks(
         continue;
       }
       const envelope = parse(raw, "apple_envelope");
-      const compact = string(envelope.signedPayload, "apple_signed_payload");
-      const untrusted = decodeCompactJwsPayloadUnverified(compact);
-      const data = object(untrusted.data, "apple_data");
-      const bundleId = string(data.bundleId, "apple_bundle", 255);
-      const environment = data.environment as "Sandbox" | "Production";
-      const appAppleId = data.appAppleId === undefined ? undefined : Number(data.appAppleId);
+      let bundleId: string, environment: "Sandbox" | "Production", appAppleId: number | undefined, transactionId: string;
+      let refundReversal = false;
+      if (row.event_kind === "sdk_transaction_submitted") {
+        if (envelope.format !== "apple_sdk_transaction_v1") throw new Error("apple_sdk_evidence_invalid");
+        const source = await withCurrentClaim(pool,row,async client => {
+          const intent = await readApplePurchaseIntent(client,row.tenant_id,row.app_id,{ intentId: string(envelope.intent_id,"apple_intent",36) });
+          if (!intent) return undefined;
+          const anchor = await activeApplePurchaseAnchor(client,payloadStore,intent);
+          if (!anchor) return undefined;
+          const tx = normalizeAppleTransaction(string(envelope.signed_transaction,"apple_signed_transaction",256*1024),options.verifyAppleSignedData!,
+            { bundleId: intent.bundle_id, environment: intent.environment });
+          if (tx.appAccountToken !== anchor.appAccountToken || tx.productId !== intent.product_id) throw new Error("apple_sdk_evidence_scope_mismatch");
+          return { intent, tx };
+        });
+        if (!source) {
+          if (await failReadback(pool,payloadStore,row,now)) counts.failed += 1;
+          continue;
+        }
+        bundleId = source.intent.bundle_id; environment = source.intent.environment;
+        appAppleId = Number(source.intent.app_apple_id); transactionId = source.tx.originalTransactionId;
+      } else {
+        const compact = string(envelope.signedPayload, "apple_signed_payload");
+        const untrusted = decodeCompactJwsPayloadUnverified(compact);
+        const data = object(untrusted.data, "apple_data");
+        bundleId = string(data.bundleId, "apple_bundle", 255);
+        environment = data.environment as "Sandbox" | "Production";
+        appAppleId = data.appAppleId === undefined ? undefined : Number(data.appAppleId);
+        const normalized = normalizeAppleNotification(compact, options.verifyAppleSignedData, {
+          bundleId, environment, ...(appAppleId === undefined ? {} : { appAppleId }),
+        });
+        refundReversal = normalized.event.financialEffect === "refund_reversal";
+        transactionId = string(normalized.transaction?.originalTransactionId ?? normalized.transaction?.transactionId, "apple_transaction_id", 128);
+      }
       if (!new Set(["Sandbox", "Production"]).has(String(environment))
         || (environment === "Production" && (!Number.isSafeInteger(appAppleId) || Number(appAppleId) <= 0))
         || (appAppleId !== undefined && (!Number.isSafeInteger(appAppleId) || appAppleId <= 0))) {
         throw new Error("apple_history_scope_invalid");
       }
-      const normalized = normalizeAppleNotification(compact, options.verifyAppleSignedData, {
-        bundleId, environment, ...(appAppleId === undefined ? {} : { appAppleId }),
-      });
-      const transactionId = string(normalized.transaction?.originalTransactionId ?? normalized.transaction?.transactionId, "apple_transaction_id", 128);
       let revision: string | undefined;
       if (row.cursor_ref) {
         const cursor = parse(await payloadStore.read(row.cursor_ref), "apple_cursor");
@@ -467,34 +494,56 @@ export async function processCommerceReadbacks(
       const page = parse(response.body, "apple_history");
       if (!Array.isArray(page.signedTransactions)) throw new Error("apple_history_transactions_invalid");
       const lifecycle: LifecycleInput[] = [];
-      for (const signed of page.signedTransactions) {
-        const transaction = options.verifyAppleSignedData(string(signed, "apple_signed_transaction"));
-        if (transaction.bundleId !== bundleId || transaction.environment !== environment) throw new Error("apple_history_scope_mismatch");
-        const transactionDigest = sha256(string(transaction.transactionId, "apple_transaction_id", 128));
-        const originalDigest = sha256(string(transaction.originalTransactionId, "apple_original_transaction_id", 128));
-        const revoked = transaction.revocationDate !== undefined;
-        const financialEffect = normalized.event.financialEffect === "refund_reversal"
+      // Verify the complete page before any append or cursor advancement. Lock
+      // transactions in digest order so overlapping pages cannot deadlock.
+      const transactions = page.signedTransactions.map(value => {
+        const signed = string(value,"apple_signed_transaction",256*1024);
+        return { signed, transaction: normalizeAppleTransaction(signed,options.verifyAppleSignedData!,{ bundleId,environment }) };
+      }).sort((a,b) => sha256(a.transaction.transactionId).localeCompare(sha256(b.transaction.transactionId)));
+      for (const { transaction } of transactions) {
+        const transactionDigest = sha256(transaction.transactionId);
+        const originalDigest = sha256(transaction.originalTransactionId);
+        const revoked = transaction.revocationAt !== undefined;
+        const financialEffect = refundReversal
           ? "refund_reversal" as const
-          : revoked ? "refund" as const : "purchase" as const;
+          : transaction.refund ? "refund" as const : transaction.purchase ? "purchase" as const : "none" as const;
         lifecycle.push({
           eventKind: financialEffect === "refund_reversal" ? "refund_reversal_verified"
             : revoked ? "refund_history_verified" : "transaction_history_verified",
           providerEventDigest: transactionDigest,
           transactionDigest, originalTransactionDigest: originalDigest,
           financialEffect, environment,
-          effectiveAt: new Date(Number(revoked ? transaction.revocationDate : transaction.purchaseDate)).toISOString(), now,
+          effectiveAt: transaction.revocationAt ?? transaction.purchaseAt, now,
         });
       }
-      if (page.hasMore === true) {
-        const nextRevision = string(page.revision, "apple_revision", 4096);
-        let nextRef: string | undefined;
-        try {
-          const committed = await withCurrentClaim(pool, row, async (client) => {
+      const createdReferences: string[] = [];
+      const project = async (client: PoolClient) => {
+        for (const { transaction } of transactions) {
+          await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`apple-purchase:${sha256(transaction.transactionId)}`]);
+        }
+        // The provider requests ascending history, but do not rely on page row
+        // order: establish token-backed originals before tokenless renewals.
+        const bindingOrder = [...transactions].sort((a,b) => Number(b.transaction.appAccountToken !== undefined)
+          - Number(a.transaction.appAccountToken !== undefined));
+        for (const { signed, transaction } of bindingOrder) {
+          const result = await projectAppleTransaction({ pool,client,store: payloadStore,tenantId: row.tenant_id,appId: row.app_id,
+            transaction,signed,now,refundReversal,createdReferences });
+          await appendLifecycleFact(client,row,{ eventKind: result, financialEffect: "none", environment,
+            transactionDigest: sha256(transaction.transactionId), originalTransactionDigest: sha256(transaction.originalTransactionId),
+            providerEventDigest: sha256(`${sha256(signed)}\0${result}`), effectiveAt: now.toISOString(),now });
+        }
+      };
+      let nextRef: string | undefined;
+      try {
+        const nextRevision = page.hasMore === true ? string(page.revision,"apple_revision",4096) : undefined;
+        const committed = await withCurrentClaim(pool, row, async (client) => {
+          await project(client);
+          for (const fact of lifecycle) await appendLifecycleFact(client, row, fact);
+          if (nextRevision !== undefined) {
             nextRef = await payloadStore.write(
               { tenantId: row.tenant_id, appId: row.app_id, objectId: `apple-commerce-cursor-${row.readback_id}-${row.attempts}` },
               Buffer.from(JSON.stringify({ revision: nextRevision }), "utf8"),
             );
-            for (const fact of lifecycle) await appendLifecycleFact(client, row, fact);
             const updated = await client.query(
               `UPDATE ephemeral.commerce_provider_readbacks
                   SET cursor_ref=$4,attempts=0,next_attempt_at=$5,last_status=200,
@@ -509,24 +558,17 @@ export async function processCommerceReadbacks(
                 WHERE provider=$5 AND tenant_id=$1 AND app_id=$2 AND stream=$6`,
               [row.tenant_id, row.app_id, nextRef, now.toISOString(), row.provider, checkpointStream(row)],
             );
-            if (row.cursor_ref) await payloadStore.purge(row.cursor_ref);
-            return true;
-          });
-          if (!committed) {
-            continue;
+          } else {
+            await finish(client, row, true, now);
           }
-        } catch (error) {
-          if (nextRef) await payloadStore.purge(nextRef);
-          throw error;
-        }
-      } else {
-        const committed = await withCurrentClaim(pool, row, async (client) => {
-          for (const fact of lifecycle) await appendLifecycleFact(client, row, fact);
           if (row.cursor_ref) await payloadStore.purge(row.cursor_ref);
-          await finish(client, row, true, now);
           return true;
         });
         if (!committed) continue;
+      } catch (error) {
+        if (nextRef) await payloadStore.purge(nextRef);
+        for (const reference of createdReferences) await payloadStore.purge(reference);
+        throw error;
       }
       counts.processed += 1;
     } catch {

@@ -378,9 +378,9 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
       }
       if (route.handler === "sdk_enrollment" && dependencies.sdk) return handleSdkEnrollment(request, response, dependencies.sdk);
       if (route.handler === "sdk_batch" && dependencies.sdk) return handleSdkBatch(request, response, dependencies.sdk);
-      if (route.handler === "apple_purchase_prepare") {
+      if (route.handler === "apple_purchase_prepare" || route.handler === "apple_purchase_submit") {
         if (!dependencies.sdk) return json(response, 503, { error: "app_store_purchase_preparation_unavailable" });
-        return handleApplePurchasePreparation(request, response, dependencies.sdk);
+        return handleApplePurchasePreparation(request, response, dependencies.sdk, route.handler === "apple_purchase_submit");
       }
       if (route.handler === "server_batch") {
         if (!dependencies.server) {

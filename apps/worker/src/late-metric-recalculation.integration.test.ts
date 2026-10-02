@@ -149,8 +149,11 @@ describe("bounded late revenue and commerce recalculation", { concurrency: false
         metric_run_id: "synthetic-no-replay", input_snapshot_id: sha256({ synthetic_history: "no-replay" }) });
       await persistMetricRun(client, { tenant_id: identity.tenantId, app_id: identity.appId }, { ...source,
         metric_run_id: "synthetic-unsupported", input_snapshot_id: sha256({ synthetic_history: "unsupported" }) });
+      // Revenue/LTV is now supported; retention still requires a different input selector.
+      const retention = JSON.parse(readFileSync("fixtures/v0.4/33-stage-b-cohort-metrics/input.json", "utf8"))
+        .metric_definitions.find((row: Any) => row.definition.calculation === "active_installations_over_cohort");
       const replay = { version: 1, source_metric_run_id: "synthetic-unsupported",
-        metric_definition: input.metric_definitions.find((row: Any) => row.definition.numerator === "purchase_net_revenue"),
+        metric_definition: retention,
         evaluation: input.metric_evaluations[0], fx_policy: input.fx_policy };
       await client.query(`INSERT INTO control.metric_replay_manifests
         (metric_replay_manifest_id,tenant_id,app_id,source_metric_run_id,created_at,artifact)

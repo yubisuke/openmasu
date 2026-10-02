@@ -414,7 +414,7 @@ export async function executePrivacyRequest(
              SELECT notification.provider,notification.notification_digest,notification.evidence_ref
                FROM control.commerce_provider_notifications AS notification
               WHERE notification.tenant_id=$1 AND notification.app_id=$2
-                AND notification.subject_digest IN (
+                AND (notification.installation_id_digest=$5 OR notification.subject_digest IN (
                 SELECT token.token_digest
                   FROM control.google_play_purchase_tokens AS token
                   JOIN ledger.google_play_purchase_verification_results AS result
@@ -433,7 +433,7 @@ export async function executePrivacyRequest(
                   FROM control.commerce_purchase_bindings AS binding
                  WHERE binding.tenant_id=$1 AND binding.app_id=$2 AND binding.installation_digest=$4
                    AND binding.original_transaction_digest IS NOT NULL
-                )
+                ))
            )
            SELECT DISTINCT evidence_ref AS reference FROM protected_notifications
            UNION
@@ -444,7 +444,7 @@ export async function executePrivacyRequest(
               AND notification.notification_digest=readback.notification_digest
             WHERE readback.cursor_ref IS NOT NULL`,
           [body.tenant_id, body.app_id, body.deletion_subject_ref,
-            commerceInstallationDigest(body.tenant_id, body.app_id, body.deletion_subject_ref)],
+            commerceInstallationDigest(body.tenant_id, body.app_id, body.deletion_subject_ref),subjectDigest],
         )
       : await client.query<{ reference: string }>(
           `SELECT evidence_ref AS reference FROM control.commerce_provider_notifications
@@ -458,6 +458,10 @@ export async function executePrivacyRequest(
       `DELETE FROM control.apple_purchase_intents WHERE tenant_id=$1
         AND ($2='tenant' OR (app_id=$3 AND ($2='app' OR installation_id_digest=$4)))
         RETURNING anchor_ref`, [body.tenant_id, body.deletion_scope, body.app_id, subjectDigest]);
+    const appleFinancialPayloads = await client.query<{ evidence_ref: string }>(
+      `SELECT evidence_ref FROM control.apple_purchase_evidence WHERE tenant_id=$1
+        AND ($2='tenant' OR (app_id=$3 AND ($2='app' OR installation_id_digest=$4)))`,
+      [body.tenant_id,body.deletion_scope,body.app_id,subjectDigest]);
     const credentialPayloads = body.deletion_scope === "installation"
       ? await client.query<{ installation_key_id: string; secret_ref: string }>(
           `SELECT installation_key_id,secret_ref
@@ -497,6 +501,7 @@ export async function executePrivacyRequest(
       ...operatorBulkPayloads.map((payload) => payload.object_ref),
       ...commercePayloads.rows.map((payload) => payload.reference),
       ...appleIntentPayloads.rows.map((payload) => payload.anchor_ref),
+      ...appleFinancialPayloads.rows.map((payload) => payload.evidence_ref),
       ...credentialPayloads.rows.map((payload) => payload.secret_ref),
     ])].filter((reference) => reference.startsWith("encrypted:")).sort();
     for (const delivery of operatorWebhookPayloads.rows) {
@@ -615,7 +620,7 @@ export async function executePrivacyRequest(
           WHERE readback.provider=notification.provider
             AND readback.notification_digest=notification.notification_digest
             AND readback.tenant_id=$1 AND readback.app_id=$2
-            AND notification.subject_digest IN (
+            AND (notification.installation_id_digest=$5 OR notification.subject_digest IN (
               SELECT token.token_digest
                 FROM control.google_play_purchase_tokens AS token
                 JOIN ledger.google_play_purchase_verification_results AS result
@@ -632,9 +637,9 @@ export async function executePrivacyRequest(
               SELECT binding.original_transaction_digest FROM control.commerce_purchase_bindings AS binding
                WHERE binding.tenant_id=$1 AND binding.app_id=$2 AND binding.installation_digest=$4
                  AND binding.original_transaction_digest IS NOT NULL
-            )`,
+            ))`,
         [body.tenant_id, body.app_id, body.deletion_subject_ref,
-          commerceInstallationDigest(body.tenant_id, body.app_id, body.deletion_subject_ref)],
+          commerceInstallationDigest(body.tenant_id, body.app_id, body.deletion_subject_ref),subjectDigest],
       );
     } else {
       await client.query(

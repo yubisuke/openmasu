@@ -901,7 +901,8 @@ describe("M2a signed SDK ingestion", () => {
         const signed = appleCommerceJws({
           transactionId: `apple-history-${page}-${run}`, originalTransactionId: `apple-original-${run}`,
           bundleId: appleBundleId, environment: "Sandbox", purchaseDate: Date.now(),
-          ...(page === 2 ? { revocationDate: Date.now() + 1_000 } : {}),
+          productId: "synthetic.product", signedDate: Date.now(), inAppOwnershipType: "PURCHASED", price: 1990, currency: "USD",
+          ...(page === 2 ? { revocationDate: Date.now() + 1_000, revocationType: "REFUND_FULL" } : {}),
         });
         return { status: 200, body: Buffer.from(JSON.stringify({
           signedTransactions: [signed], hasMore: page === 1, ...(page === 1 ? { revision: "synthetic-revision-1" } : {}),
@@ -921,7 +922,9 @@ describe("M2a signed SDK ingestion", () => {
       )).rows[0].count),
     }));
     assert.equal(afterReadback.pending, 0);
-    assert.deepEqual(afterReadback.facts.map((value) => value.financial_effect).sort(), ["none", "purchase", "refund"]);
+    assert.deepEqual(afterReadback.facts.filter(value => value.event_kind !== "transaction_unbound")
+      .map((value) => value.financial_effect).sort(), ["none", "purchase", "refund"]);
+    assert.equal(afterReadback.facts.filter(value => value.event_kind === "transaction_unbound").length,2);
   });
 
   it("allows only one active Commerce read-back provider call across concurrent workers", async () => {
@@ -981,6 +984,7 @@ describe("M2a signed SDK ingestion", () => {
           body: Buffer.from(JSON.stringify({
             signedTransactions: [appleCommerceJws({
               transactionId: `apple-stale-${run}`,
+              productId: "synthetic.product", signedDate: Date.now(),
               originalTransactionId: `apple-original-expired-${run}`,
               bundleId: fixture.bundleId,
               environment: "Sandbox",
@@ -1008,6 +1012,7 @@ describe("M2a signed SDK ingestion", () => {
         body: Buffer.from(JSON.stringify({
           signedTransactions: [appleCommerceJws({
             transactionId: `apple-winner-${run}`,
+            productId: "synthetic.product", signedDate: Date.now(),
             originalTransactionId: `apple-original-expired-${run}`,
             bundleId: fixture.bundleId,
             environment: "Sandbox",
@@ -1082,6 +1087,7 @@ describe("M2a signed SDK ingestion", () => {
           body: Buffer.from(JSON.stringify({
             signedTransactions: [appleCommerceJws({
               transactionId: `apple-deleted-${run}`,
+              productId: "synthetic.product", signedDate: Date.now(),
               originalTransactionId: `apple-original-deleted-${run}`,
               bundleId: apple.bundleId,
               environment: "Sandbox",
@@ -1132,6 +1138,7 @@ describe("M2a signed SDK ingestion", () => {
         body: Buffer.from(JSON.stringify({
           signedTransactions: [appleCommerceJws({
             transactionId: `apple-cursor-${run}`,
+            productId: "synthetic.product", signedDate: Date.now(),
             originalTransactionId: `apple-original-cursor-${run}`,
             bundleId: fixture.bundleId,
             environment: "Sandbox",
@@ -1181,6 +1188,7 @@ describe("M2a signed SDK ingestion", () => {
         body: Buffer.from(JSON.stringify({
           signedTransactions: [appleCommerceJws({
             transactionId: `apple-terminal-page-${run}`,
+            productId: "synthetic.product", signedDate: Date.now(),
             originalTransactionId: `apple-original-terminal-${run}`,
             bundleId: fixture.bundleId,
             environment: "Sandbox",

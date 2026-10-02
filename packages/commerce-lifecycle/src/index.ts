@@ -1,5 +1,7 @@
 import { createHash, createPublicKey, verify, X509Certificate, type KeyObject } from "node:crypto";
 
+export { normalizeAppleTransaction, type AppleTransaction } from "./apple-transaction.js";
+
 type JsonObject = Record<string, unknown>;
 
 export type CommerceProvider = "google_play" | "app_store";

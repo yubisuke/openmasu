@@ -117,8 +117,9 @@ or `metric_recalculation_selection_limit`; no partial job is saved. Narrow the
 input interval, cohort range or metric list instead of silently truncating it.
 Selection has a 15-second SQL statement limit and no all-history option.
 
-Initial support is saved installation-anchored, elapsed-window advertising
-ROAS and total-net ROAS. Canonical accepted `ad_revenue`, settled `purchase`
+Support covers saved installation-anchored, elapsed-window revenue sums,
+revenue-per-cohort LTV and revenue-over-cost ROAS, using the saved advertising,
+purchase-net or total-net numerator. Canonical accepted `ad_revenue`, settled `purchase`
 and settled `refund` projections are considered. A refund must have the existing
 same-installation/currency settled purchase target. Unknown/unbound commerce,
 pending or reversed amounts, non-canonical deliveries and future receipts do
@@ -126,8 +127,9 @@ not trigger calculation. Receipt acceptance is not independent provider proof.
 
 Impact selection reuses selected first-party click evidence and the saved
 definition's cohort, attribution status, gross/net policy and half-open window.
-It does not infer a campaign from arbitrary clicks. Refunds affect total-net
-ROAS, not advertising-only ROAS. Legacy, selected-acquisition, disjoint-cost
+It does not infer a campaign from arbitrary clicks. Refunds affect purchase-net
+and total-net metrics, not advertising-only metrics. Advertising input does not select a
+purchase-only numerator. Legacy, selected-acquisition, disjoint-cost
 and selected-commerce profiles retain their original replay definitions and FX.
 
 The accepted job fixes its input receipt digest, candidate metadata, original

@@ -1200,6 +1200,7 @@ async function resolveDeepLinkAttempts(pool: Pool, attempts: readonly CandidateA
 async function ineligibleHistoricalPurchaseTargetIds(
   pool: Pool,
   attempts: readonly CandidateAttempt[],
+  persistenceClient?: PoolClient,
 ): Promise<string[]> {
   const purchases = attempts.filter((attempt) =>
     attempt.record.event_name === "purchase"
@@ -1207,7 +1208,7 @@ async function ineligibleHistoricalPurchaseTargetIds(
     && typeof attempt.record.payload.installation_id === "string");
   if (purchases.length === 0) return [];
   const first = purchases[0];
-  const rows = await withTenant(pool, first.server.tenant_id, (client) => client.query<{
+  const read = (client: PoolClient) => client.query<{
     record_id: string;
     installation_id: string | null;
     transaction_id: string;
@@ -1224,7 +1225,8 @@ async function ineligibleHistoricalPurchaseTargetIds(
       WHERE tenant_id=$1 AND app_id=$2 AND record_id::text = ANY($3::text[])`,
     [first.server.tenant_id, first.server.app_id,
       [...new Set(purchases.map((attempt) => attempt.record.record_id))]],
-  ));
+  );
+  const rows = persistenceClient ? await read(persistenceClient) : await withTenant(pool, first.server.tenant_id, read);
   const purchaseByRecord = new Map(purchases.map((attempt) => [attempt.record.record_id, attempt]));
   const eligible = new Set(rows.rows.filter((row) => {
     const purchase = purchaseByRecord.get(row.record_id);
@@ -1621,7 +1623,7 @@ export async function ingestRuntimeBatch(
   // those in the evaluator input until their own ledger-backed projection is
   // introduced; SDK history is explicitly marked and remains provider-only.
   const decodedHistory = boundHistory.filter((attempt) => attempt.history_state === undefined);
-  const ineligiblePurchaseTargets = await ineligibleHistoricalPurchaseTargetIds(appPool, decodedHistory);
+  const ineligiblePurchaseTargets = await ineligibleHistoricalPurchaseTargetIds(appPool, decodedHistory, options.persistenceClient);
   const applyPurchaseEligibility = (attempt: CandidateAttempt): CandidateAttempt =>
     ineligiblePurchaseTargets.length === 0 ? attempt : {
       ...attempt,
