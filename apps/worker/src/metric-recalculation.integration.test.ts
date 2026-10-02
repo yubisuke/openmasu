@@ -13,7 +13,6 @@ import { buildDashboardView } from "../../api/src/dashboard/view.js";
 import { renderDashboard } from "../../api/src/dashboard/render.js";
 import { processMetricRecalculations } from "./metric-recalculation-worker.js";
 import { reportToSnapshot } from "../../../tools/report-to-snapshot.js";
-import { compareSnapshots } from "../../../tools/compare-cohorts.js";
 import type { Pool } from "pg";
 import { once } from "node:events";
 import { createServer } from "node:http";
@@ -181,8 +180,10 @@ describe("bounded cost correction recalculation", { concurrency: false }, () => 
     const snapshot = (row: typeof replacement) => reportToSnapshot({ data: [row] }, { source: "synthetic-correction",
       conditions: { date_from: "2026-08-01", date_to: "2026-08-02", time_zone: "UTC", maturity: "unknown", aggregation: "cumulative",
         attribution_scope: "non_organic", metric_definition: "d7_roas@0.3.0", source_cutoff: row.input_received_at_watermark }, rows: [] });
-    const comparison = compareSnapshots(snapshot(history.find(row => row.metric_run_id === oldId)!), snapshot(replacement));
-    assert.equal(comparison.status, "incomparable");
+    // The acquisition gate is stricter than a numeric comparison: neither a
+    // superseded run nor a redaction-affected run can become an ordinary export.
+    assert.throws(() => snapshot(history.find(row => row.metric_run_id === oldId)!), /historical_or_affected_run/);
+    assert.throws(() => snapshot(replacement), /historical_or_affected_run/);
     assert.equal((await artifacts()).find(row => row.metric_run_id === oldId)?.value_unscaled, "1500000");
   });
 });
