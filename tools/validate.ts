@@ -576,8 +576,8 @@ if (!summaryOnly) {
         }
       });
     }
-    it("contains 60 fixture directories", () => {
-      check(fixtureDirs.length === 60, `expected 60 fixture directories, found ${fixtureDirs.length}`);
+    it("contains 61 fixture directories", () => {
+      check(fixtureDirs.length === 61, `expected 61 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -1016,12 +1016,19 @@ const scenarios: Array<[string, () => void]> = [
       && values.cohort_total_net_ltv_d30_usd === "26000000" && values.d30_total_net_roas === "2600000",
       "scenario 60 hand calculation: (20 + 10 - 4) / 10 = 2.6");
   }],
+  ["61 distinct custom-event conversion in a ten-install cohort", () => {
+    const output = fixture("61-custom-conversion").output;
+    check(output.logical_events.length === 16 && output.attributions.length === 10, "scenario 61 ten installs and six accepted outcome events");
+    check(equal(output.metric_runs.map((run: Any) => run.value_unscaled), ["300000", "3"]), "scenario 61 three distinct converters / ten installs = 0.3");
+    check(output.metric_definitions.filter((definition: Any) => definition.conversion_event_key === "tutorial_complete").length === 2,
+      "scenario 61 exercises both independent conversion calculations");
+  }],
 ];
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 60 scenario assertions", () => {
-      check(scenarios.length === 60, "scenario assertion inventory must contain 60 entries");
+    it("contains 61 scenario assertions", () => {
+      check(scenarios.length === 61, "scenario assertion inventory must contain 61 entries");
     });
   });
 
@@ -1590,7 +1597,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 60 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 61 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1630,7 +1637,7 @@ const acceptance: Array<[string, () => void]> = [
     for (const forbidden of ["threshold", "model_weight", "watchlist", "ip_address", "user_agent", "response_timing"]) check(!schemaText.includes(forbidden), `AC20 ${forbidden}`);
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
-  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 60 && outputArtifactCount === 60 * 13, "AC21")],
+  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 61 && outputArtifactCount === 61 * 13, "AC21")],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {
     for (const { output, python } of results.values()) check(equal(output, python), "AC22 evaluator mismatch");
     const vector = { numbers: [333333333.33333329, 1e30, 4.50, 2e-3, 1e-27, -0], string: "€$\u000f\nA'B\"\\\"/" };

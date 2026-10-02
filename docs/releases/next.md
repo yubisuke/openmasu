@@ -45,8 +45,9 @@ re-download verification at the exact annotated tag.
 Explicit selected-first-party acquisition definitions now connect native SDK
 installs to campaign/network advertising ROAS, LTV, retention and install count.
 The additive v0.4.11 patch adds fixture 58, v0.4.12 safe cost selection adds
-fixture 59, and v0.4.13 selected-commerce definitions add fixture 60
-(60 reviewed fixtures / 780 goldens in development), retaining
+fixture 59, v0.4.13 selected-commerce definitions add fixture 60, and explicit
+v0.4.14 custom-conversion definitions add fixture 61
+(61 reviewed fixtures / 793 goldens in development), retaining
 wire/package identity `0.4.0` and all earlier
 goldens. Native inbox, fixed-watermark, privacy and SQL parity cases extend the
 existing gates. See [selected acquisition metrics](../selected-acquisition-metrics.md).
@@ -91,7 +92,8 @@ merged acceptance scopes and are included in the publication. The integration
 batch is complete. The next product batch is selected in
 [plan #172](https://github.com/yubisuke/openmasu/issues/172), with the ordered
 [roadmap](../roadmap.md#next-product-sequence) as its canonical crosswalk.
-The other seven original slices remain planned; the separately reproduced
+The other six original slices remain planned; explicit custom-event outcomes
+(#177) now have source implementation. The separately reproduced
 schedule identity collision (#200) and reference retention population mismatch
 (#202) now have source implementation.
 No development slice is part of the
@@ -105,8 +107,11 @@ safety, purchase/total-net acquisition, late-input correction and campaign
 discovery (#182/#183/#191/#184/#185). All five have source implementation.
 The external declaration bridge (#173), dashboard comparison (#174) and
 attribution analysis (#175) and daily calculation controls (#176) also have
-source implementation. Next connect cohort outcomes and saved-evidence
-workflows (#177-#180).
+source implementation. [Custom-event outcomes](../custom-conversion-metrics.md)
+(#177) use a single saved key, distinct eligible converters and elapsed D7,
+with TS/Python/SQL parity and independent 3/10 arithmetic. Different keys are
+not comparable; zero and empty-cohort undefined remain distinct. Next connect
+saved-evidence workflows (#178-#180).
 App Store binding, finer advertising grain and separate
 re-engagement outcomes (#186-#188) remain scoped follow-ups. These connections
 must not be inferred from existing component coverage. Each Issue reuses

@@ -20,9 +20,9 @@ they name.
 | `v0.2.0-rc.4` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Previously published prerelease and frozen exact-commit evidence |
 | `v0.2.0` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Published non-prerelease at green commit `68b8c48`; frozen exact-commit evidence |
 | `v0.3.0-rc.1` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Current published prerelease at green commit `90a0f5f`; eight SDK assets and exact-commit synthetic evidence |
-| Current development source | through v0.4.13 | 60 fixtures / 780 golden artifacts | Adds selected acquisition, safe cost denominators and commerce cohorts; not included in the published SDK release |
+| Current development source | through v0.4.14 | 61 fixtures / 793 golden artifacts | Adds selected acquisition, safe cost denominators, commerce cohorts and explicit custom conversion; not included in the published SDK release |
 
-The Contract wire and package identity remains `0.4.0`; v0.4.13 is the latest
+The Contract wire and package identity remains `0.4.0`; v0.4.14 is the latest
 additive patch ledger entry. The published SDK version is `0.3.0-rc.1`.
 Its [distribution guide](sdk-distribution.md) separates compiled Android
 modules from source-distributed Swift and Unity. Publication has a matching
@@ -51,7 +51,7 @@ MMP.
 
 | Capability | Repository state | Open operational evidence |
 | --- | --- | --- |
-| Contract and deterministic evaluator | Implemented and synthetically verified across 28 schemas, 8 registries, 60 fixtures, and 780 goldens | Real input representativeness and external implementation adoption |
+| Contract and deterministic evaluator | Implemented and synthetically verified across 28 schemas, 8 registries, 61 fixtures, and 793 goldens | Real input representativeness and external implementation adoption |
 | Shadow ledger and imports | Implemented for raw events, manual/bounded provider cost, and advertising or verified-commerce revenue | Authorized real export compatibility, account permissions, completeness, latency, and reconciliation |
 | Server-to-server events | Implemented for selected first-party backend events with app-scoped rotatable HMAC keys, durable inbox admission, contract rejection, replay controls, and deletion-race enforcement | Production TLS, secret custody, sustained load, backend integration, and operator acceptance |
 | Operator event webhooks | Implemented as a default-off, app-scoped export of selected accepted events with exact-origin egress policy, destination-scoped references, exact-body HMAC, durable retry, deletion-race enforcement, and bounded reader-safe delivery health | Production receiver, DNS/TLS, capacity, alerting, secret custody, downstream retention/deletion, and operator acceptance |
@@ -214,7 +214,11 @@ and cutoff, with current privacy and no inferred causes (#175).
 [Daily schedule controls](scheduled-metrics.md#manage-schedules-through-the-dashboard)
 now connect SSR registration, checkpoint inspection and disablement to the
 existing immutable schedule service and worker (#176), with admin-only access.
-The other four workflow slices (#177-#180) remain planned after
+Explicit [custom-event conversion](custom-conversion-metrics.md) now counts
+distinct D7 cohort converters and their rate for one saved event key (#177).
+Fixture 61 fixes 3/10; boundary, receipt, privacy and gross/net cases share
+independent reference and SQL arithmetic. No new service or event payload.
+The other three workflow slices (#178-#180) remain planned after
 that core work. App Store purchase
 binding, finer advertising grain and separate re-engagement outcomes
 (#186-#188) are scoped follow-ups. A forward-only runtime fix now permits

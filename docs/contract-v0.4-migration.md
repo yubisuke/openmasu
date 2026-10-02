@@ -152,3 +152,25 @@ family's derivation, the four values and independently calculated snapshot hash.
 `git diff --name-status d985c7a -- fixtures/v0.4/` must show only fixture 60 and
 that README; no prior fixture or golden may change. Candidate TS/Python bytes
 were compared without writing either evaluator's output into golden files.
+
+## Explicit custom-event conversion (0.4.14)
+
+Optional `conversion_event_key`, the `converted_installations` numerator and
+the `converted_installations` / `converted_installations_over_cohort`
+calculations are tied to independent `metric-custom-conversion` version 0.4.14.
+The full new profile requires the key, selected acquisition, UTC and elapsed D7;
+existing profiles cannot silently ignore a key. This is additive optional
+vocabulary with conditional requirements only on new profiles. All existing
+schema URNs, artifact/package versions, definitions and saved runs are unchanged.
+No registry, database migration, dependency or SDK version changes.
+
+Complete golden inventory: new `61-custom-conversion/input.json` and thirteen
+new `expected_*.json` files. No existing input or golden is modified.
+`git diff --name-status b5231b9 -- fixtures/v0.4/` must list only the fixture-61
+files and shared README. The README records the independent 3/10 arithmetic,
+each artifact family's construction, grouping and input snapshot digests.
+Candidate TS/Python output was compared before the independently constructed
+expected files were promoted in a commit separate from behavior changes.
+Runtime SQL additionally covers boundary, duplicate, late, privacy, native
+selected-campaign and gross/net inputs, and saves the key in replay/comparison
+context. Earlier tagged release evidence is not reissued by this source patch.

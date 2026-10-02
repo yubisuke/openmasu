@@ -1,0 +1,478 @@
+{
+  "contract_version": "0.4.0",
+  "fx_policy": {
+    "policy_version": "fx-v0.1",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "100000000",
+        "rate_scale": 8,
+        "source": "synthetic-fixture-rate",
+        "as_of": "2026-08-15T00:00:00.000Z"
+      }
+    ]
+  },
+  "server_context": {
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-15T00:00:00.000Z",
+    "policy_digest": "policy-v0.1",
+    "processing_purposes": [
+      {
+        "processing_purpose_id": "analytics",
+        "consent_required": false,
+        "policy_version": "consent-v0.1"
+      }
+    ],
+    "withdrawals": [],
+    "alternative_legal_bases": []
+  },
+  "records": [
+    {
+      "contract_version": "0.4.0",
+      "record_id": "install-conversion-01",
+      "delivery_id": "delivery:install-conversion-01",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.14",
+      "event_id": "event:install-conversion-01",
+      "event_name": "install",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-06T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-15T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-conversion-01",
+        "install_type": "first_install",
+        "referrer_status": "none",
+        "install_begin_at_server_status": "missing",
+        "country": "US"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "install-conversion-02",
+      "delivery_id": "delivery:install-conversion-02",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.14",
+      "event_id": "event:install-conversion-02",
+      "event_name": "install",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-06T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-15T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-conversion-02",
+        "install_type": "first_install",
+        "referrer_status": "none",
+        "install_begin_at_server_status": "missing",
+        "country": "US"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "install-conversion-03",
+      "delivery_id": "delivery:install-conversion-03",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.14",
+      "event_id": "event:install-conversion-03",
+      "event_name": "install",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-06T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-15T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-conversion-03",
+        "install_type": "first_install",
+        "referrer_status": "none",
+        "install_begin_at_server_status": "missing",
+        "country": "US"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "install-conversion-04",
+      "delivery_id": "delivery:install-conversion-04",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.14",
+      "event_id": "event:install-conversion-04",
+      "event_name": "install",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-06T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-15T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-conversion-04",
+        "install_type": "first_install",
+        "referrer_status": "none",
+        "install_begin_at_server_status": "missing",
+        "country": "US"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "install-conversion-05",
+      "delivery_id": "delivery:install-conversion-05",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.14",
+      "event_id": "event:install-conversion-05",
+      "event_name": "install",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-06T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-15T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-conversion-05",
+        "install_type": "first_install",
+        "referrer_status": "none",
+        "install_begin_at_server_status": "missing",
+        "country": "US"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "install-conversion-06",
+      "delivery_id": "delivery:install-conversion-06",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.14",
+      "event_id": "event:install-conversion-06",
+      "event_name": "install",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-06T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-15T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-conversion-06",
+        "install_type": "first_install",
+        "referrer_status": "none",
+        "install_begin_at_server_status": "missing",
+        "country": "US"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "install-conversion-07",
+      "delivery_id": "delivery:install-conversion-07",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.14",
+      "event_id": "event:install-conversion-07",
+      "event_name": "install",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-06T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-15T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-conversion-07",
+        "install_type": "first_install",
+        "referrer_status": "none",
+        "install_begin_at_server_status": "missing",
+        "country": "US"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "install-conversion-08",
+      "delivery_id": "delivery:install-conversion-08",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.14",
+      "event_id": "event:install-conversion-08",
+      "event_name": "install",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-06T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-15T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-conversion-08",
+        "install_type": "first_install",
+        "referrer_status": "none",
+        "install_begin_at_server_status": "missing",
+        "country": "US"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "install-conversion-09",
+      "delivery_id": "delivery:install-conversion-09",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.14",
+      "event_id": "event:install-conversion-09",
+      "event_name": "install",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-06T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-15T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-conversion-09",
+        "install_type": "first_install",
+        "referrer_status": "none",
+        "install_begin_at_server_status": "missing",
+        "country": "US"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "install-conversion-10",
+      "delivery_id": "delivery:install-conversion-10",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.14",
+      "event_id": "event:install-conversion-10",
+      "event_name": "install",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-06T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-15T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-conversion-10",
+        "install_type": "first_install",
+        "referrer_status": "none",
+        "install_begin_at_server_status": "missing",
+        "country": "US"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "outcome-01-1",
+      "delivery_id": "delivery:outcome-01-1",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.14",
+      "event_id": "event:outcome-01-1",
+      "event_name": "custom_event",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-07T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-15T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-conversion-01",
+        "event_key": "tutorial_complete"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "outcome-01-2",
+      "delivery_id": "delivery:outcome-01-2",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.14",
+      "event_id": "event:outcome-01-2",
+      "event_name": "custom_event",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-08T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-15T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-conversion-01",
+        "event_key": "tutorial_complete"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "outcome-02-1",
+      "delivery_id": "delivery:outcome-02-1",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.14",
+      "event_id": "event:outcome-02-1",
+      "event_name": "custom_event",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-07T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-15T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-conversion-02",
+        "event_key": "tutorial_complete"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "outcome-02-2",
+      "delivery_id": "delivery:outcome-02-2",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.14",
+      "event_id": "event:outcome-02-2",
+      "event_name": "custom_event",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-08T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-15T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-conversion-02",
+        "event_key": "tutorial_complete"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "outcome-03-1",
+      "delivery_id": "delivery:outcome-03-1",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.14",
+      "event_id": "event:outcome-03-1",
+      "event_name": "custom_event",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-07T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-15T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-conversion-03",
+        "event_key": "tutorial_complete"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "outcome-03-2",
+      "delivery_id": "delivery:outcome-03-2",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.14",
+      "event_id": "event:outcome-03-2",
+      "event_name": "custom_event",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-08T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-15T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-conversion-03",
+        "event_key": "tutorial_complete"
+      }
+    }
+  ],
+  "metric_definitions": [
+    {
+      "metric_name": "cohort_custom_event_converters_d7",
+      "metric_definition_version": "0.4.14",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "value_type": "count",
+      "definition": {
+        "calculation": "converted_installations",
+        "window": {
+          "type": "elapsed",
+          "day": 7
+        },
+        "numerator": "converted_installations"
+      },
+      "conversion_event_key": "tutorial_complete",
+      "acquisition_basis": "selected_first_party_click",
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "rule_bundle_id": "metric-custom-conversion",
+      "rule_bundle_version": "0.4.14",
+      "rule_bundle_hash": "fb2a468a0d09624ab3cb0bfef07d83b7e8fc62dd036756dbef1a095cda2223ab"
+    },
+    {
+      "metric_name": "cohort_custom_event_conversion_rate_d7",
+      "metric_definition_version": "0.4.14",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "value_type": "ratio",
+      "ratio_scale": 6,
+      "definition": {
+        "calculation": "converted_installations_over_cohort",
+        "window": {
+          "type": "elapsed",
+          "day": 7
+        },
+        "numerator": "converted_installations",
+        "denominator": "cohort_size"
+      },
+      "conversion_event_key": "tutorial_complete",
+      "acquisition_basis": "selected_first_party_click",
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "rule_bundle_id": "metric-custom-conversion",
+      "rule_bundle_version": "0.4.14",
+      "rule_bundle_hash": "fb2a468a0d09624ab3cb0bfef07d83b7e8fc62dd036756dbef1a095cda2223ab"
+    }
+  ],
+  "metric_evaluations": [
+    {
+      "metric_run_id_prefix": "custom-conversion",
+      "input_received_at_watermark": "2026-08-15T00:00:00.000Z",
+      "computed_at": "2026-08-15T00:00:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "metric_names": [
+        "cohort_custom_event_converters_d7",
+        "cohort_custom_event_conversion_rate_d7"
+      ],
+      "grouping": {
+        "cohort_date": "2026-08-06",
+        "attribution_status": "organic"
+      }
+    }
+  ],
+  "privacy_requests": [],
+  "reconciliation_inputs": []
+}
