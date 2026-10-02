@@ -41,6 +41,15 @@ describe("safe cost grain SQL and importer parity", { concurrency: false }, () =
   const siblings: CostInput[] = [{ ...baseCost, ad_group_id: "a", amount_unscaled: "40000000" },
     { ...baseCost, ad_group_id: "b", amount_unscaled: "60000000" }];
 
+  it("matches the reviewed dated-revision and overlap fixture byte for byte including snapshots and evidence", async () => {
+    const directory = join(process.cwd(), "fixtures/v0.4/59-disjoint-cost-grains");
+    const value = JSON.parse(readFileSync(join(directory, "input.json"), "utf8"));
+    await ingestFixture("safe-cost-fixture59", value, app, seed);
+    const runs = await computeSqlMetricRuns(app, value, true);
+    assert.equal(jcs(runs), jcs(evaluate(value).metric_runs));
+    assert.equal(jcs(runs), jcs(JSON.parse(readFileSync(join(directory, "expected_metric_runs.json"), "utf8"))));
+  });
+
   for (const separate of [false, true]) it(`rejects overlapping cost grains from ${separate ? "separate" : "one"} real import transaction(s)`, async () => {
     const value = source();
     value.cost_records = [];
@@ -78,6 +87,17 @@ describe("safe cost grain SQL and importer parity", { concurrency: false }, () =
       "SELECT artifact FROM ledger.metric_runs WHERE metric_run_id=$1", [earlier[0].metric_run_id],
     )).rows);
     assert.equal(jcs(saved[0].artifact), jcs(earlier[0]));
+  });
+
+  it("uses the same safe selection for existing total-net SQL while preserving its recorded acquisition basis", async () => {
+    const value = source();
+    value.metric_definitions = [structuredClone(DISJOINT_COST_METRIC_DEFINITIONS.find(d => d.metric_name === "d30_total_net_roas")!)];
+    value.metric_evaluations[0].metric_names = ["d30_total_net_roas"];
+    delete value.metric_evaluations[0].grouping;
+    await ingestFixture("safe-cost-total-net", value, app, seed);
+    const runs = await computeSqlMetricRuns(app, value, false);
+    assert.equal(jcs(runs), jcs(evaluate(value).metric_runs));
+    assert.equal(runs[0].value_unscaled, "2000000"); // USD20 ad plus no purchases, USD10 cost.
   });
 });
 

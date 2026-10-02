@@ -19,7 +19,8 @@
   "metric_definitions": [
     {
       "metric_name": "d0_roas",
-      "metric_definition_version": "0.4.11",
+      "metric_definition_version": "0.4.12",
+      "cost_selection_policy": "reject_overlapping_grains",
       "anchor_event": "install",
       "aggregation_time_zone": "UTC",
       "value_type": "ratio",
@@ -34,9 +35,9 @@
         "denominator": "cost",
         "cost_basis": "cohort_acquisition_day_current_snapshot"
       },
-      "rule_bundle_id": "metric-selected-acquisition",
-      "rule_bundle_version": "0.4.11",
-      "rule_bundle_hash": "6fd998246bb092f81d8539b8e2c04a1abe421a1916480b63dfd018d11c7bccc5",
+      "rule_bundle_id": "metric-disjoint-cost",
+      "rule_bundle_version": "0.4.12",
+      "rule_bundle_hash": "3ec3e50fc8b9180b55e888895d793739028fdd20abfc34f20110e6ce96e8b053",
       "grouping_dimensions": [
         "campaign_id",
         "network",

@@ -112,6 +112,12 @@ function validMetricDefinition(value: JsonObject): boolean {
   const window = operation.window;
   if (!window || typeof window !== "object" || Array.isArray(window)) return false;
   const boundedWindow = window as JsonObject;
+  if (value.cost_selection_policy && (value.anchor_event !== "install" || value.aggregation_time_zone !== "UTC"
+      || value.rule_bundle_hash !== "3ec3e50fc8b9180b55e888895d793739028fdd20abfc34f20110e6ce96e8b053"
+      || value.value_type !== "ratio" || operation.calculation !== "revenue_over_cost"
+      || operation.denominator !== "cost" || operation.cost_basis !== "cohort_acquisition_day_current_snapshot"
+      || boundedWindow.type !== "elapsed" || !["revenue", "total_net_revenue"].includes(String(operation.numerator))
+      || (value.acquisition_basis !== undefined && (value.acquisition_basis !== "selected_first_party_click" || operation.numerator !== "revenue")))) return false;
   if (Object.keys(boundedWindow).some((key) => !["type", "day"].includes(key))
       || !["elapsed", "calendar_day", "activity_day"].includes(String(boundedWindow.type))
       || !Number.isSafeInteger(boundedWindow.day) || Number(boundedWindow.day) < 0
