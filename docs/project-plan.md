@@ -78,8 +78,32 @@ versions were reached. They do not override current sources of truth.
 The prior integration batch and SDK publication are complete. The
 [roadmap](roadmap.md#next-product-sequence) and
 [plan #172](https://github.com/yubisuke/openmasu/issues/172) select the following
-work from source `1c7c223` on 2026-10-02. These entries are planned, not
-implementation claims; the inventory above remains the completed foundation.
+work from source `1c7c223` on 2026-10-02, expanded after inspecting `ce7b056`
+to connect the core measurement path before improving its screens. These
+entries are planned, not implementation claims; the inventory above remains
+the completed component foundation, not proof that every path is connected.
+
+### Core integration and scoped follow-ups
+
+The first two concerns are based on static source inspection, not an executed
+reproduction. Their implementation begins with a minimal synthetic case.
+
+| Priority / issue | Workstream | Narrow deliverable | Acceptance focus |
+| --- | --- | --- | --- |
+| First / [#182](https://github.com/yubisuke/openmasu/issues/182) | Acquisition projection | Selected first-party Install Referrer click supplies campaign/network to the existing install cohort | Native-shaped install through ingestion to campaign installs/revenue/ROAS; selected evidence only, fixed watermark, privacy and TS/Python/SQL parity |
+| First / [#183](https://github.com/yubisuke/openmasu/issues/183) | Cost grain safety | Detect overlapping campaign/ad-group/country cost scopes and refuse ambiguous denominators | Parent 100 plus detail 40+60 never silently becomes 200; disjoint partitions and as-of revisions still work; selection is saved and replayable |
+| Next / [#184](https://github.com/yubisuke/openmasu/issues/184) | Late-input correction | Bounded advertising-revenue/purchase/refund impact selection uses existing recalculation jobs | Late arrival to new immutable run, exact replay and deduplication, visible bounds/unsupported evidence and deletion fencing |
+| Next / [#185](https://github.com/yubisuke/openmasu/issues/185) | Campaign discovery | Opt-in bounded campaign target discovery for existing daily install-cohort schedules | New campaign appears without editing a list, frozen target-set replay, cost-only/unknown/empty/overflow handling, unchanged manual schedules |
+| Follow-up / [#186](https://github.com/yubisuke/openmasu/issues/186) | App Store purchase binding | Authenticated installation-to-verified-transaction binding and existing purchase/refund projections | Synthetic signed/read-back path reaches cohort revenue; unbound stays unbound, duplicate and privacy safety, no live Store claim |
+| Follow-up / [#187](https://github.com/yubisuke/openmasu/issues/187) | Detailed acquisition grain | Selected ad-group/creative dimensions and same-grain cost support | Additive fixture-backed parity, unknown dimensions, overlapping cost refusal and no estimated parent-cost allocation |
+| Follow-up / [#188](https://github.com/yubisuke/openmasu/issues/188) | Re-engagement outcomes | Separate first-party engagement conversion and advertising revenue series | Explicit anchor/window/credit policy, duplicate protection, unchanged acquisition runs and separation from signed aggregate evidence; no initial re-engagement ROAS claim |
+
+Implement #182/#183, then #184/#185 before the workflow improvements below.
+#184/#185 reuse #182/#183; #186 depends on #184, #187 on #182/#183, and #188 on
+#182/#177. Keep the scoped follow-ups separate from the initial Android-first
+campaign path. They do not add a new provider, identity graph or metric service.
+
+### Existing workflow improvements
 
 | Order / issue | Workstream | Narrow deliverable | Acceptance focus |
 | --- | --- | --- | --- |
@@ -92,9 +116,9 @@ implementation claims; the inventory above remains the completed foundation.
 | 7 / [#179](https://github.com/yubisuke/openmasu/issues/179) | Correction workflow | SSR request/status and links to original/replacement run details using existing bounded recalculation | Cost revision to completion, duplicate request identity, existing bounds/permissions, no second selector or all-history recomputation |
 | 8 / [#180](https://github.com/yubisuke/openmasu/issues/180) | Cohort presentation | Saved retention matrix with dates as rows and definition-backed horizons as columns | Exact values and source links, compatible series only, missing/undefined/zero/maturity and page-boundary distinctions |
 
-The only required dependency between these slices is #173 before #174.
-The other entries can use the existing foundations independently; #179 and
-#180 are lower priority. Reuse current services and suites, and implement one
+Within the original eight workflow slices, #173 must precede #174.
+Their priority now follows the four core integration slices above; #179 and
+#180 remain lower priority. Reuse current services and suites, and implement one
 bounded user workflow per PR. A non-breaking contract addition must still
 record fixture derivation, migration and evaluator parity. The plan does not
 select another provider adapter, general BI/funnel builder, infrastructure

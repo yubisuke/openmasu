@@ -94,11 +94,36 @@ completeness, and operational correctness.
 
 The integration batch in [plan #155](https://github.com/yubisuke/openmasu/issues/155)
 is complete, including [v0.3.0-rc.1 publication](validation/v0.3.0-rc.1-publication.md).
-[Plan #172](https://github.com/yubisuke/openmasu/issues/172) records the next
-eight product slices. All are **planned, not implemented** at selection on
-2026-10-02, based on source `1c7c223`.
+[Plan #172](https://github.com/yubisuke/openmasu/issues/172) records fifteen
+planned slices: the eight workflow improvements selected from `1c7c223`, plus
+seven core integration and follow-up slices identified at `ce7b056` on
+2026-10-02. All are **planned, not implemented**. Static inspection of the
+acquisition-to-cohort and overlapping-cost paths requires synthetic reproduction
+before either concern is reported as a reproduced defect.
 
-The first gap is comparison between a captured OpenMasu calculation and an
+The first priority is a connected measurement path: tracking link, SDK install,
+selected acquisition source, campaign revenue and cost, daily ROAS, late-input
+correction, and saved explanation. Passing existing component gates or adding
+comparison screens alone does not establish that end-to-end path.
+
+| Priority / issue | Planned core slice | Exit gate / project-plan crosswalk |
+| --- | --- | --- |
+| First / [#182](https://github.com/yubisuke/openmasu/issues/182) | Selected acquisition source reaches install cohorts | Reproduce the native-path concern, then use only the selected first-party click for campaign/network metrics with fixed-snapshot TS/Python/SQL parity / Acquisition projection |
+| First / [#183](https://github.com/yubisuke/openmasu/issues/183) | Overlapping cost grains cannot inflate the denominator | Reproduce parent/detail overlap; accept disjoint partitions and revisions, refuse ambiguous cost selection, preserve historical runs / Cost grain safety |
+| Next / [#184](https://github.com/yubisuke/openmasu/issues/184) | Late advertising revenue, purchases and refunds can correct past runs | Bounded affected-run selection and immutable replay through the existing worker, with visible pending/unavailable states / Late-input correction |
+| Next / [#185](https://github.com/yubisuke/openmasu/issues/185) | New campaigns enter daily calculation without manual enumeration | Bounded opt-in discovery with a frozen per-job target set, exact retry and explicit unknown/empty/overflow states / Campaign discovery |
+| Follow-up / [#186](https://github.com/yubisuke/openmasu/issues/186) | Verified App Store purchases reach installation cohorts | Authenticated, verified binding and purchase/refund projection with deletion and duplicate safety; no inferred identity / App Store purchase binding |
+| Follow-up / [#187](https://github.com/yubisuke/openmasu/issues/187) | Ad-group and creative outcomes share the cost grain | Selected-source dimensions and matching cost definitions without allocating parent cost by guesswork / Detailed acquisition grain |
+| Follow-up / [#188](https://github.com/yubisuke/openmasu/issues/188) | First-party re-engagement has separate outcome measures | One explicit conversion key and advertising revenue window, separate from acquisition and Apple aggregate evidence / Re-engagement outcomes |
+
+#182 and #183 precede #184 and #185; #186 follows #184, #187 follows #182/#183,
+and #188 follows #182/#177. Complete the first four core slices before the
+workflow batch below. The last three are scoped follow-ups, not prerequisites
+for the initial Android-first campaign workflow. App Store cohort-purchase
+coverage must not be claimed before #186; re-engagement ROAS is not delivered
+by the initial #188 conversion/revenue slice.
+
+The workflow batch addresses comparison between a captured OpenMasu calculation and an
 external aggregate. The existing CSV converter records declarations, while the
 comparator requires captured meaning on both sides; its declaration-only mode
 does not bridge the two. The next slice introduces explicit external calculation
@@ -117,8 +142,9 @@ It does not make an external calculation authenticated or independently verified
 | 7 | [Correction controls #179](https://github.com/yubisuke/openmasu/issues/179) | Request a bounded cost-driven recalculation and follow its job and original/replacement run details through the dashboard | Correction workflow |
 | 8 | [Retention matrix #180](https://github.com/yubisuke/openmasu/issues/180) | Read saved retention by cohort date and definition-backed horizon without inventing missing values or combining incompatible series | Cohort presentation |
 
-Slice 2 depends on slice 1. The remaining slices use existing foundations and
-can be implemented independently; the table is the default priority order.
+Within the workflow batch, slice 2 depends on slice 1. The remaining slices
+reuse existing foundations; the table gives their relative priority after
+the four core slices above.
 Slices 7 and 8 are lower priority. Keep each slice in a bounded PR and add
 behavioral evidence to existing suites. The
 [project-plan crosswalk](project-plan.md#next-product-slices) specifies the

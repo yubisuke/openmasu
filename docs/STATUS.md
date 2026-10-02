@@ -184,11 +184,16 @@ paths remain separate operational work.
 These are preservation requirements, not another automatic audit backlog.
 The published integration batch is complete. The next
 [planned product sequence](roadmap.md#next-product-sequence), tracked in
-[plan #172](https://github.com/yubisuke/openmasu/issues/172), starts with explicit
-external calculation declarations and a dashboard comparison workflow, then
-adds attribution analysis, calculation controls and cohort outcomes. All eight
-slices are planned; this selection does not change the implemented capability
-table or the published v0.3.0-rc.1 evidence.
+[plan #172](https://github.com/yubisuke/openmasu/issues/172), now starts with
+selected acquisition-source projection, overlapping cost-grain safety,
+late-input correction and daily campaign discovery (#182-#185). Static source
+concerns in the first two require synthetic reproduction; they are not yet
+reproduced test failures. The original eight comparison, analysis and workflow
+slices (#173-#180) remain planned after that core work. App Store purchase
+binding, finer advertising grain and separate re-engagement outcomes
+(#186-#188) are scoped follow-ups. All fifteen slices are planned, not new
+capability claims. Existing component evidence and the published v0.3.0-rc.1
+record remain unchanged; neither proves these missing connections.
 
 Private real-data, real-device, and live-provider work is optional operator work
 and is not required to continue repository-only hardening.
