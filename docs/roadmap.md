@@ -95,20 +95,21 @@ completeness, and operational correctness.
 The integration batch in [plan #155](https://github.com/yubisuke/openmasu/issues/155)
 is complete, including [v0.3.0-rc.1 publication](validation/v0.3.0-rc.1-publication.md).
 [Plan #172](https://github.com/yubisuke/openmasu/issues/172) records fifteen
-planned slices: the eight workflow improvements selected from `1c7c223`, plus
+development slices: the eight workflow improvements selected from `1c7c223`, plus
 seven core integration and follow-up slices identified at `ce7b056` on
-2026-10-02. All are **planned, not implemented**. Static inspection of the
-acquisition-to-cohort and overlapping-cost paths requires synthetic reproduction
-before either concern is reported as a reproduced defect.
+2026-10-02. The selected-acquisition slice now has opt-in v0.4.11 definitions,
+fixture 58, and native-inbox/SQL acceptance tests. The remaining fourteen
+slices are planned. Overlapping-cost selection remains a static concern whose
+first acceptance step is synthetic reproduction.
 
 The first priority is a connected measurement path: tracking link, SDK install,
 selected acquisition source, campaign revenue and cost, daily ROAS, late-input
 correction, and saved explanation. Passing existing component gates or adding
 comparison screens alone does not establish that end-to-end path.
 
-| Priority / issue | Planned core slice | Exit gate / project-plan crosswalk |
+| Priority / issue | Core slice | Exit gate / project-plan crosswalk |
 | --- | --- | --- |
-| First / [#182](https://github.com/yubisuke/openmasu/issues/182) | Selected acquisition source reaches install cohorts | Reproduce the native-path concern, then use only the selected first-party click for campaign/network metrics with fixed-snapshot TS/Python/SQL parity / Acquisition projection |
+| Source implemented / [#182](https://github.com/yubisuke/openmasu/issues/182) | Selected acquisition source reaches install cohorts | Opt-in definitions, fixture 58 and native inbox/SQL tests cover campaign installs/ad-revenue ROAS, fixed snapshots and privacy / Acquisition projection |
 | First / [#183](https://github.com/yubisuke/openmasu/issues/183) | Overlapping cost grains cannot inflate the denominator | Reproduce parent/detail overlap; accept disjoint partitions and revisions, refuse ambiguous cost selection, preserve historical runs / Cost grain safety |
 | Next / [#184](https://github.com/yubisuke/openmasu/issues/184) | Late advertising revenue, purchases and refunds can correct past runs | Bounded affected-run selection and immutable replay through the existing worker, with visible pending/unavailable states / Late-input correction |
 | Next / [#185](https://github.com/yubisuke/openmasu/issues/185) | New campaigns enter daily calculation without manual enumeration | Bounded opt-in discovery with a frozen per-job target set, exact retry and explicit unknown/empty/overflow states / Campaign discovery |

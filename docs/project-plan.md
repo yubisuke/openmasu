@@ -80,17 +80,20 @@ The prior integration batch and SDK publication are complete. The
 [plan #172](https://github.com/yubisuke/openmasu/issues/172) select the following
 work from source `1c7c223` on 2026-10-02, expanded after inspecting `ce7b056`
 to connect the core measurement path before improving its screens. These
-entries are planned, not implementation claims; the inventory above remains
-the completed component foundation, not proof that every path is connected.
+entries identify planned work except the selected-acquisition source slice
+marked below. The inventory above remains the completed component foundation,
+not proof that every path is connected.
 
 ### Core integration and scoped follow-ups
 
-The first two concerns are based on static source inspection, not an executed
-reproduction. Their implementation begins with a minimal synthetic case.
+The acquisition gap is reproduced by a native-shaped synthetic install whose
+legacy campaign cohort is empty; explicit selected-acquisition definitions
+connect it without changing historical definitions. The overlapping-cost
+concern still requires its initial synthetic reproduction.
 
 | Priority / issue | Workstream | Narrow deliverable | Acceptance focus |
 | --- | --- | --- | --- |
-| First / [#182](https://github.com/yubisuke/openmasu/issues/182) | Acquisition projection | Explicit v0.4.11 definitions use selected first-party Install Referrer campaign/network; historical definitions retain recorded-dimension semantics | Native-shaped install through ingestion to campaign installs/ad-revenue ROAS; selected evidence only, fixed watermark, privacy and TS/Python/SQL parity |
+| Source implemented / [#182](https://github.com/yubisuke/openmasu/issues/182) | Acquisition projection | Explicit v0.4.11 definitions use selected first-party Install Referrer campaign/network; historical definitions retain recorded-dimension semantics | Native-shaped install through ingestion to campaign installs/ad-revenue ROAS; selected evidence only, fixed watermark, privacy and TS/Python/SQL parity |
 | First / [#183](https://github.com/yubisuke/openmasu/issues/183) | Cost grain safety | Detect overlapping campaign/ad-group/country cost scopes and refuse ambiguous denominators | Parent 100 plus detail 40+60 never silently becomes 200; disjoint partitions and as-of revisions still work; selection is saved and replayable |
 | Next / [#184](https://github.com/yubisuke/openmasu/issues/184) | Late-input correction | Bounded advertising-revenue/purchase/refund impact selection uses existing recalculation jobs | Late arrival to new immutable run, exact replay and deduplication, visible bounds/unsupported evidence and deletion fencing |
 | Next / [#185](https://github.com/yubisuke/openmasu/issues/185) | Campaign discovery | Opt-in bounded campaign target discovery for existing daily install-cohort schedules | New campaign appears without editing a list, frozen target-set replay, cost-only/unknown/empty/overflow handling, unchanged manual schedules |

@@ -40,7 +40,15 @@ goldens. The SDK is published as `0.3.0-rc.1`. Its eight downloadable assets
 reuse the existing packager and standalone consumer gates, with public
 re-download verification at the exact annotated tag.
 
-## Planned product work
+## Unreleased source and planned product work
+
+Explicit selected-first-party acquisition definitions now connect native SDK
+installs to campaign/network advertising ROAS, LTV, retention and install count.
+The additive v0.4.11 patch adds fixture 58 (58 reviewed fixtures / 754 goldens
+in development) while retaining wire/package identity `0.4.0` and all earlier
+goldens. Native inbox, fixed-watermark, privacy and SQL parity cases extend the
+existing gates. See [selected acquisition metrics](../selected-acquisition-metrics.md).
+Purchase-net and total-net definitions are not expanded by this slice.
 
 Supported-source upgrade procedures, single-host deployment preflight/restart,
 capacity visibility and the limited backend/report HTTP contract also have
@@ -48,15 +56,16 @@ merged acceptance scopes and are included in the publication. The integration
 batch is complete. The next product batch is selected in
 [plan #172](https://github.com/yubisuke/openmasu/issues/172), with the ordered
 [roadmap](../roadmap.md#next-product-sequence) as its canonical crosswalk.
-All fifteen slices are planned, not part of the published baseline. No next
+The other fourteen slices remain planned. No development slice is part of the
+published baseline, and no next
 version or release scope is selected by that development plan.
 These synthetic scopes do not establish real recovery, hosting/TLS,
 representative capacity or live backend/provider interoperability.
 
 Begin with selected acquisition-source projection, overlapping cost-grain
-safety, late-input correction and campaign discovery (#182-#185). The first
-two are static concerns whose execution reproduction is the initial acceptance
-step. Then implement the original external comparison, attribution analysis,
+safety, late-input correction and campaign discovery (#182-#185). The first has
+source implementation; overlapping cost still requires its initial synthetic
+reproduction. Then implement the original external comparison, attribution analysis,
 calculation controls, cohort outcomes and saved-evidence workflow batch
 (#173-#180). App Store binding, finer advertising grain and separate
 re-engagement outcomes (#186-#188) remain scoped follow-ups. These connections
