@@ -11,6 +11,7 @@ import type { OperatorDeliveryHealth } from "../operator-delivery-health.js";
 import type { MeasurementHealth } from "../measurement-health.js";
 import { metricCharts } from "./metric-charts.js";
 import { buildRetentionMatrices } from "./retention-matrix.js";
+import { metricSeries } from "../metric-series.js";
 
 export type DashboardApp = {
   readonly app_id: string;
@@ -80,6 +81,7 @@ export type DashboardView = {
   readonly rows: readonly MetricReportRow[];
   readonly deterministicRows: readonly MetricReportRow[];
   readonly appleAggregateRows: readonly MetricReportRow[];
+  readonly engagementRows: readonly MetricReportRow[];
   readonly records: readonly RecordCountRow[];
   readonly differences: readonly Record<string, unknown>[];
   readonly undefinedCount: number;
@@ -87,6 +89,7 @@ export type DashboardView = {
   readonly retention: ReturnType<typeof buildRetentionMatrices>;
   readonly deterministicCharts: readonly DashboardChart[];
   readonly appleAggregateCharts: readonly DashboardChart[];
+  readonly engagementCharts: readonly DashboardChart[];
   readonly trackingLinks: readonly DashboardTrackingLink[];
   readonly sdkKeys: readonly DashboardSdkKey[];
   readonly serverKeys: readonly DashboardServerKey[];
@@ -146,12 +149,9 @@ export function buildDashboardView(input: {
   readonly canAdminister?: boolean;
 }): DashboardView {
   const rows = [...(input.metrics?.data ?? [])].sort(compare);
-  const aggregateNames = new Set([
-    "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
-    "aak_attributed_reengagements",
-  ]);
-  const deterministicRows = rows.filter((row) => !aggregateNames.has(row.metric_name));
-  const appleAggregateRows = rows.filter((row) => aggregateNames.has(row.metric_name));
+  const deterministicRows = rows.filter((row) => metricSeries(row.metric_name) === "cohort_or_activity");
+  const appleAggregateRows = rows.filter((row) => metricSeries(row.metric_name) === "apple_aggregate");
+  const engagementRows = rows.filter((row) => metricSeries(row.metric_name) === "first_party_engagement");
   const charts = metricCharts(rows);
   return {
     apps: [...input.apps].sort((left, right) => left.app_id.localeCompare(right.app_id, "en")),
@@ -160,13 +160,15 @@ export function buildDashboardView(input: {
     rows,
     deterministicRows,
     appleAggregateRows,
+    engagementRows,
     records: input.records ?? [],
     differences: input.differences?.data ?? [],
     undefinedCount: rows.filter((row) => row.value_state === "undefined").length,
     charts,
     retention: buildRetentionMatrices(rows, Boolean(input.metrics?.next_cursor || input.query?.after)),
-    deterministicCharts: charts.filter((chart) => !aggregateNames.has(chart.metric_name)),
-    appleAggregateCharts: charts.filter((chart) => aggregateNames.has(chart.metric_name)),
+    deterministicCharts: charts.filter((chart) => metricSeries(chart.metric_name) === "cohort_or_activity"),
+    appleAggregateCharts: charts.filter((chart) => metricSeries(chart.metric_name) === "apple_aggregate"),
+    engagementCharts: charts.filter((chart) => metricSeries(chart.metric_name) === "first_party_engagement"),
     trackingLinks: [...(input.trackingLinks ?? [])].sort((left, right) =>
       right.created_at.localeCompare(left.created_at, "en")
       || left.tracking_link_id.localeCompare(right.tracking_link_id, "en")),

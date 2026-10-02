@@ -241,7 +241,10 @@ filters, explicit schedules and bounded cost/late-input corrections preserve
 that grain and saved history; there is no automatic creative discovery or
 estimated allocation of parent cost. Separate re-engagement
 outcomes (#188) have an opt-in v0.4.17 latest-open 24h contract and reference/SQL
-calculation; the CLI, schedules and separate dashboard workflow remain in progress.
+calculation. Explicit CLI/schedules and separate API/HTML/CSV output connect
+that policy to operator workflows; recalculation after deletion excludes removed
+inputs. Automatic discovery and old-date privacy/late-input supersession are
+not supplied for this opt-in series.
 The [policy guide](engagement-outcomes.md) records the device-reported trust
 boundary and lack of ROAS/purchase/cross-device claims. An additive contract and opt-in metric
 profile now link a cancellation to its previously admitted refund, preserving
@@ -256,9 +259,11 @@ uniqueness, old evidence, exact replay and explicit-only supersession
 numerator now uses that metric's selected and fraud-filtered cohort, matching
 Python/SQL rather than counting a different population
 ([#202](https://github.com/yubisuke/openmasu/issues/202)). Neither fix rewrites
-old saved runs. The re-engagement operational connection remains incomplete. Existing
+old saved runs. The planned acquisition-to-daily-report connections and narrow
+first-party engagement extension now have synthetic code gates. Existing
 component evidence and the published v0.3.0-rc.1 record remain unchanged;
-neither proves these remaining connections.
+neither source implementation nor synthetic tests prove live delivery, full
+provider coverage, or production correctness.
 
 Private real-data, real-device, and live-provider work is optional operator work
 and is not required to continue repository-only hardening.

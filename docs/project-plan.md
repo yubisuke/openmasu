@@ -80,9 +80,9 @@ The prior integration batch and SDK publication are complete. The
 [plan #172](https://github.com/yubisuke/openmasu/issues/172) select the following
 work from source `1c7c223` on 2026-10-02, expanded after inspecting `ce7b056`
 to connect the core measurement path before improving its screens. These
-entries identify planned work except the source-implemented slices
-marked below. The inventory above remains the completed component foundation,
-not proof that every path is connected.
+entries record the source-implemented scope and its explicit acceptance
+boundaries. Component and connected synthetic gates remain distinct from
+live-provider or production evidence.
 
 ### Core integration and scoped follow-ups
 
@@ -103,7 +103,7 @@ v0.4.13 commerce definitions and fixture 60.
 | Source implemented / [#186](https://github.com/yubisuke/openmasu/issues/186) | App Store purchase binding | Public Swift preparation/submission, authenticated admission and history-to-financial projection connect through existing paths | Synthetic HMAC/consent/reset tests, compiled StoreKit sample, cohort revenue, duplicate/privacy safety and no inferred identity; live StoreKit delivery and Unity C# purchase helpers remain outside this connection |
 | Source implemented / [#209](https://github.com/yubisuke/openmasu/issues/209) | Refund reversal correction | Link a verified reversal to the previously admitted refund without creating another purchase | Explicit targets, opt-in v0.4.15 metrics, verified App Store projection and late correction; ambiguous multi-part refunds remain unavailable; after #186 and before #187/#188 |
 | Source implemented / [#187](https://github.com/yubisuke/openmasu/issues/187) | Detailed acquisition grain | Explicit v0.4.16 selected dimensions, TS/Python/SQL, manual creative-cost CLI, API/HTML/CSV filters and explicit schedules | Fixture-backed unknown/overlap/privacy parity and bounded cost/late-input corrections; saved history remains intact; no creative discovery or estimated parent-cost allocation |
-| In progress / [#188](https://github.com/yubisuke/openmasu/issues/188) | Re-engagement outcomes | Explicit v0.4.17 latest-open 24h contract and TS/Python/SQL; schedules and separated dashboard workflow remain | Fixture-backed anchor/window/credit policy, duplicate protection and unchanged acquisition; no initial re-engagement ROAS claim |
+| Implemented (synthetic) / [#188](https://github.com/yubisuke/openmasu/issues/188) | Re-engagement outcomes | Explicit v0.4.17 latest-open 24h policy, CLI/schedules, separate API/HTML/CSV and privacy-aware recalculation | Three-engine parity, duplicate protection, unchanged acquisition, retry/privacy gates; no ROAS/purchase/automatic discovery |
 
 The five core slices, #173 external declarations, #174 dashboard comparison
 and #175 recorded attribution analysis have source implementation. Daily
@@ -113,8 +113,10 @@ inputs, exact crash replay and explicit-only supersession (#200). This runtime
 fix and the reference retention population correction (#202) add two completed
 slices to the original sixteen. Custom-event cohort outcomes (#177) and D30
 total-net ROAS evidence (#178), correction controls (#179) and the saved-retention
-matrix (#180) now have source implementation; four scoped follow-up slices remain,
-including the explicit refund-reversal correction (#209) after #186.
+matrix (#180) now have source implementation. App Store purchase binding (#186),
+targeted refund reversal (#209), detailed acquisition (#187) and first-party
+engagement outcomes (#188) complete the scoped follow-up implementation with
+synthetic gates, bringing this plan to nineteen implemented slices.
 #184/#185 reuse #182/#183, with commerce cohorts connected by #191; #186 depends on #184, #187 on #182/#183, and #188 on
 #182/#177. Keep the scoped follow-ups separate from the initial Android-first
 campaign path. They do not add a new provider, identity graph or metric service.

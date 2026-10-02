@@ -1,0 +1,81 @@
+{
+  "tenant_id": "tenant-a",
+  "app_id": "app-a",
+  "fx_policy": {
+    "policy_version": "fx-m7",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "1",
+        "rate_scale": 0,
+        "source": "synthetic-fixture-rate",
+        "as_of": "2026-08-21T06:00:00.000Z"
+      }
+    ]
+  },
+  "metric_definitions": [
+    {
+      "metric_definition_version": "0.4.17",
+      "anchor_event": "deep_link_open",
+      "aggregation_time_zone": "UTC",
+      "engagement_credit_policy": "latest_eligible_open_before_outcome",
+      "grouping_dimensions": [
+        "campaign_id",
+        "metric_date"
+      ],
+      "rule_bundle_id": "metric-first-party-engagement",
+      "rule_bundle_version": "0.4.17",
+      "rule_bundle_hash": "3477decc42d00df4b68cf85bd0281f6ef22b5966a0f1bbbfe254119fa9183730",
+      "metric_name": "engagement_custom_event_converters_24h",
+      "value_type": "count",
+      "conversion_event_key": "tutorial_complete",
+      "definition": {
+        "calculation": "converted_installations",
+        "numerator": "converted_installations",
+        "window": {
+          "type": "elapsed",
+          "day": 0
+        }
+      }
+    },
+    {
+      "metric_definition_version": "0.4.17",
+      "anchor_event": "deep_link_open",
+      "aggregation_time_zone": "UTC",
+      "engagement_credit_policy": "latest_eligible_open_before_outcome",
+      "grouping_dimensions": [
+        "campaign_id",
+        "metric_date"
+      ],
+      "rule_bundle_id": "metric-first-party-engagement",
+      "rule_bundle_version": "0.4.17",
+      "rule_bundle_hash": "3477decc42d00df4b68cf85bd0281f6ef22b5966a0f1bbbfe254119fa9183730",
+      "metric_name": "engagement_ad_revenue_24h_usd",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "revenue_sum",
+        "numerator": "revenue",
+        "window": {
+          "type": "elapsed",
+          "day": 0
+        }
+      }
+    }
+  ],
+  "evaluations": [
+    {
+      "metric_names": [
+        "engagement_custom_event_converters_24h",
+        "engagement_ad_revenue_24h_usd"
+      ],
+      "grouping": {
+        "campaign_id": "synthetic-engagement-a"
+      }
+    }
+  ]
+}

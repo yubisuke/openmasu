@@ -50,6 +50,8 @@ For a complete newcomer reading path, use this order:
 - [Measurement health and missing results](measurement-health.md)
 - [Recorded attribution reason counts](attribution-reasons.md)
 - [Reading and filtering dashboard metrics](dashboard-analysis.md)
+- [Selected ad-group and creative metrics](acquisition-detail-metrics.md)
+- [First-party re-engagement outcomes](engagement-outcomes.md)
 - [Explaining a saved ROAS result](metric-explanations.md)
 - [Privacy and security](privacy-security.md)
 - [Threat model](threat-model.md)

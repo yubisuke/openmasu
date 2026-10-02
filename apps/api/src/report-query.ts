@@ -262,6 +262,10 @@ export function parseMetricQuery(input: {
     "aak_attributed_reengagements",
   ]);
   const selectedAggregate = metricNames.filter((name) => aggregateMetricNames.has(name));
+  const selectedEngagement = metricNames.some(name => ["engagement_custom_event_converters_24h", "engagement_ad_revenue_24h_usd"].includes(name));
+  if (selectedEngagement && Object.keys(grouping).some(key => !["campaign_id", "metric_date"].includes(key))) {
+    throw new ReportQueryError("metric_series_mismatch");
+  }
   const selectedDeterministic = metricNames.filter((name) => !aggregateMetricNames.has(name));
   const deterministicOnlyDimensions: GroupingDimension[] = [
     "campaign_id", "ad_group_id", "creative_id", "network", "country", "cohort_date", "attribution_status",

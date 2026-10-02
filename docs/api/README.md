@@ -82,7 +82,12 @@ download instead of claiming cursor iteration alone supplies one snapshot.
 `supersession=latest` excludes replaced runs; `all` exposes immutable history.
 Deterministic and Apple aggregate series remain distinct. Saved unknown meaning,
 missing results and undefined values are not zero. JSON omits `value_unscaled`
-for undefined; CSV uses an empty cell and retains `undefined_reason`. CSV carries
+for undefined; CSV uses an empty cell and retains `undefined_reason`. Rows also
+carry `measurement_series` (`cohort_or_activity`, `first_party_engagement`, or
+`apple_aggregate`). The [engagement profile](../engagement-outcomes.md) has
+`engagement_evidence_trust: device_reported_forgeable`; other rows have `null`,
+which is not a verification claim. Both fields are appended to CSV without
+moving existing columns. CSV carries
 continuation in `x-next-cursor`; bounded `export=true` requires CSV and refuses
 truncation beyond the configured export limit (default 200000).
 

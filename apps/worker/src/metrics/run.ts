@@ -79,18 +79,27 @@ export function buildMetricDefinitionsInput(config: Any, requestedDate: string, 
       if (!evaluation.grouping || typeof evaluation.grouping !== "object" || Array.isArray(evaluation.grouping)) {
         throw new Error(`evaluation ${index} requires grouping`);
       }
+      const selectedDefinitions = evaluation.metric_names.map((name: string) =>
+        (config.metric_definitions ?? []).find((definition: Any) => definition.metric_name === name));
+      const engagement = selectedDefinitions.some((definition: Any) => definition?.engagement_credit_policy);
+      if (engagement && (selectedDefinitions.some((definition: Any) => !definition?.engagement_credit_policy)
+          || Object.keys(evaluation.grouping).some(key => !["campaign_id", "metric_date"].includes(key)))) {
+        throw new Error("engagement_cli_requires_separate_anchor_evaluation");
+      }
+      const evaluationWatermark = requestedWatermark === undefined && engagement
+        ? new Date(Date.parse(date.watermark) + 86_400_000).toISOString() : watermark;
       return {
-        metric_run_id_prefix: `manual:${date.day}:${sha256(requestedWatermark === undefined ? [config, index] : [config, index, watermark]).slice(0, 24)}`,
-        input_received_at_watermark: watermark,
-        computed_at: watermark,
+        metric_run_id_prefix: `manual:${date.day}:${sha256(requestedWatermark === undefined && !engagement ? [config, index] : [config, index, evaluationWatermark]).slice(0, 24)}`,
+        input_received_at_watermark: evaluationWatermark,
+        computed_at: evaluationWatermark,
         data_freshness: "complete",
         // Operational selected-acquisition runs must not resurrect deleted source
         // semantics. Legacy replay definitions retain their historical default.
         privacy_state: (config.metric_definitions ?? []).some((definition: Any) =>
-          evaluation.metric_names.includes(definition.metric_name) && (definition.acquisition_basis || definition.cost_selection_policy))
+          evaluation.metric_names.includes(definition.metric_name) && (definition.acquisition_basis || definition.cost_selection_policy || definition.engagement_credit_policy))
           ? "after" : "before",
         metric_names: evaluation.metric_names,
-        grouping: { cohort_date: date.day, ...evaluation.grouping },
+        grouping: { [engagement ? "metric_date" : "cohort_date"]: date.day, ...evaluation.grouping },
       };
     }),
   };

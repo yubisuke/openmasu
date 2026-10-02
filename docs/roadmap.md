@@ -115,8 +115,9 @@ retention correction aligns the numerator with its selected and fraud-filtered
 cohort ([#202](https://github.com/yubisuke/openmasu/issues/202)). These two fixes
 extend the original sixteen slices. Explicit custom-event outcomes and D30
 total-net ROAS evidence, correction controls and the bounded saved-retention matrix
-now have source implementation; four scoped follow-ups remain planned, including
-the explicit refund-reversal gap discovered while connecting App Store purchases.
+now have source implementation. The four scoped follow-ups (App Store purchase
+binding, explicit refund reversal, detailed acquisition grain and first-party
+re-engagement outcomes) also have synthetic implementation and connection gates.
 
 The first priority is a connected measurement path: tracking link, SDK install,
 selected acquisition source, campaign revenue and cost, daily ROAS, late-input
@@ -133,12 +134,12 @@ comparison screens alone does not establish that end-to-end path.
 | Source implemented / [#186](https://github.com/yubisuke/openmasu/issues/186) | Verified App Store purchases reach installation cohorts | Public Swift preparation/submission, authenticated admission and history-to-financial projection connect with synthetic gates; live StoreKit delivery and Unity C# purchase helpers remain outside this connection / App Store purchase binding |
 | Source implemented / [#209](https://github.com/yubisuke/openmasu/issues/209) | Verified refund reversals cancel only their target deductions | Explicit targets, opt-in v0.4.15 metrics, verified App Store projection and late correction; ambiguous multi-part refunds remain unavailable / Refund reversal correction |
 | Source implemented / [#187](https://github.com/yubisuke/openmasu/issues/187) | Ad-group and creative outcomes share the cost grain | Explicit v0.4.16 contract, TS/Python/SQL, manual creative-cost CLI, API/HTML/CSV filters, explicit schedules and bounded cost/late-input corrections; no creative discovery or inferred allocation / Detailed acquisition grain |
-| In progress / [#188](https://github.com/yubisuke/openmasu/issues/188) | First-party re-engagement has separate outcome measures | Explicit v0.4.17 latest-open 24h conversion/ad-revenue contract and TS/Python/SQL; operational schedules and separated dashboard workflow remain / Re-engagement outcomes |
+| Implemented (synthetic) / [#188](https://github.com/yubisuke/openmasu/issues/188) | First-party re-engagement has separate outcome measures | Explicit v0.4.17 latest-open 24h conversion/ad-revenue policy, CLI/schedules, separated API/HTML/CSV and privacy-aware recalculation; no ROAS/purchase/automatic discovery / Re-engagement outcomes |
 
 #182 and #183 precede #191, then #184 and #185; #186 follows #184, #209 follows #186,
 and #187 follows #182/#183,
-and #188 follows #182/#177. Complete the first five core slices before the
-workflow batch below. These extensions are scoped follow-ups, not prerequisites
+and #188 follows #182/#177. This dependency order kept the core calculation
+connections ahead of the workflow batch below. These extensions are scoped follow-ups, not prerequisites
 for the initial Android-first campaign workflow. App Store cohort-purchase
 coverage is source implemented with synthetic evidence in #186, not live-store
 proof; refund-reversal recovery is limited to a uniquely linked prior refund,

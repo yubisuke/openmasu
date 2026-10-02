@@ -35,6 +35,13 @@ function rejectsKind(query: string, cursorKind: "difference" | "record", code: s
 }
 
 describe("M3 typed reporting query", () => {
+  it("keeps explicit engagement filters at open-date campaign grain", () => {
+    const prefix = "metric_name=engagement_ad_revenue_24h_usd&grouping_metric_date=2026-08-21";
+    assert.deepEqual(parse(`${prefix}&grouping_campaign_id=synthetic-return`).query.grouping,
+      { campaign_id: "synthetic-return", metric_date: "2026-08-21" });
+    for (const extra of ["grouping_cohort_date=2026-08-21", "grouping_country=JP", "grouping_creative_id=synthetic-creative", "grouping_attribution_status=non_organic"])
+      rejects(`${prefix}&${extra}`, "metric_series_mismatch");
+  });
   it("binds explicit detail filters and refuses identifiers outside their bounded grammar", () => {
     const query = parse("grouping_ad_group_id=synthetic-group-a&grouping_creative_id=synthetic-creative-a").query;
     assert.deepEqual(query.grouping, { ad_group_id: "synthetic-group-a", creative_id: "synthetic-creative-a" });
