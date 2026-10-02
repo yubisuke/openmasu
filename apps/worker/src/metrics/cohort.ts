@@ -606,11 +606,11 @@ async function totalNetRevenueValue(
        SELECT * FROM jsonb_to_recordset($11::jsonb)
          AS supplied(spend_unscaled text, spend_scale integer, currency text)
      )
-     SELECT coalesce(sum(
+     SELECT trim_scale(coalesce(sum(
        CASE WHEN spend_scale <= $10
          THEN spend_unscaled::numeric * power(10::numeric, $10 - spend_scale)
          ELSE ledger.half_even_div(spend_unscaled::numeric, power(10::numeric, spend_scale - $10)) END
-       ), 0::numeric)::text AS value_unscaled,
+       ), 0::numeric))::text AS value_unscaled,
        count(*) FILTER (WHERE currency <> $9)::text AS mismatched_currency_count,
        count(*)::text AS cost_row_count
      FROM current_cost`,

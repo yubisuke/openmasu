@@ -110,7 +110,7 @@ describe("selected commerce SQL parity", { concurrency: false }, () => {
       const before = await metricExplanation(reader, identity, prior.metric_run_id);
       assert.equal(before?.calculation?.version, 2);
       Object.assign(value.metric_evaluations[0], { input_received_at_watermark: late, computed_at: late,
-        metric_run_id_prefix: "commerce-explanation-revised", supersedes_metric_run_id: prior.metric_run_id });
+        metric_run_id_prefix: "commerce-explanation-revised", supersedes_metric_run_id_prefix: "commerce60" });
       const later = await computeSqlMetricRuns(app, value, true);
       assert.equal(jcs(later), jcs(evaluate(value).metric_runs));
       assert.equal(later[0].value_unscaled, "800000");
