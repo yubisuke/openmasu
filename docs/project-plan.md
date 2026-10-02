@@ -101,6 +101,7 @@ v0.4.13 commerce definitions and fixture 60.
 | Source implemented / [#184](https://github.com/yubisuke/openmasu/issues/184) | Late-input correction | Explicit bounded receipt discovery or source IDs select advertising-revenue/purchase/refund impact through existing recalculation jobs | Late arrival to new immutable run, exact replay and deduplication, visible bounds/unsupported evidence and deletion fencing; no implicit all-history enqueue |
 | Source implemented / [#185](https://github.com/yubisuke/openmasu/issues/185) | Campaign discovery | Opt-in bounded campaign target discovery for existing daily install-cohort schedules | New campaign appears without editing a list, frozen target-set replay, cost-only/unknown/empty/overflow handling, unchanged manual schedules |
 | In progress / [#186](https://github.com/yubisuke/openmasu/issues/186) | App Store purchase binding | Purchase preparation is source implemented; signed submission, financial projection and Swift connection remain incomplete | Final gate still requires signed/read-back evidence reaching cohort revenue, duplicate/privacy safety and no inferred identity; preparation alone is not completion |
+| Follow-up / [#209](https://github.com/yubisuke/openmasu/issues/209) | Refund reversal correction | Link a verified reversal to the previously admitted refund without creating another purchase | Additive contract, explicit targets, TS/Python/SQL parity, immutable old runs and privacy; complete after #186 and before #187/#188 |
 | Follow-up / [#187](https://github.com/yubisuke/openmasu/issues/187) | Detailed acquisition grain | Selected ad-group/creative dimensions and same-grain cost support | Additive fixture-backed parity, unknown dimensions, overlapping cost refusal and no estimated parent-cost allocation |
 | Follow-up / [#188](https://github.com/yubisuke/openmasu/issues/188) | Re-engagement outcomes | Separate first-party engagement conversion and advertising revenue series | Explicit anchor/window/credit policy, duplicate protection, unchanged acquisition runs and separation from signed aggregate evidence; no initial re-engagement ROAS claim |
 
@@ -112,7 +113,8 @@ inputs, exact crash replay and explicit-only supersession (#200). This runtime
 fix and the reference retention population correction (#202) add two completed
 slices to the original sixteen. Custom-event cohort outcomes (#177) and D30
 total-net ROAS evidence (#178), correction controls (#179) and the saved-retention
-matrix (#180) now have source implementation; three scoped follow-up slices remain.
+matrix (#180) now have source implementation; four scoped follow-up slices remain,
+including the explicit refund-reversal correction (#209) after #186.
 #184/#185 reuse #182/#183, with commerce cohorts connected by #191; #186 depends on #184, #187 on #182/#183, and #188 on
 #182/#177. Keep the scoped follow-ups separate from the initial Android-first
 campaign path. They do not add a new provider, identity graph or metric service.

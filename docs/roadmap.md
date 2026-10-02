@@ -115,7 +115,8 @@ retention correction aligns the numerator with its selected and fraud-filtered
 cohort ([#202](https://github.com/yubisuke/openmasu/issues/202)). These two fixes
 extend the original sixteen slices. Explicit custom-event outcomes and D30
 total-net ROAS evidence, correction controls and the bounded saved-retention matrix
-now have source implementation; three scoped follow-ups remain planned.
+now have source implementation; four scoped follow-ups remain planned, including
+the explicit refund-reversal gap discovered while connecting App Store purchases.
 
 The first priority is a connected measurement path: tracking link, SDK install,
 selected acquisition source, campaign revenue and cost, daily ROAS, late-input
@@ -130,14 +131,17 @@ comparison screens alone does not establish that end-to-end path.
 | Source implemented / [#184](https://github.com/yubisuke/openmasu/issues/184) | Late advertising revenue, purchases and refunds can correct past runs | Explicit bounded receipt discovery or record selection, immutable replay through the existing worker, and visible pending/unavailable states / Late-input correction |
 | Source implemented / [#185](https://github.com/yubisuke/openmasu/issues/185) | New campaigns enter daily calculation without manual enumeration | Bounded opt-in discovery with a frozen per-job target set, exact retry and explicit unknown/empty/overflow states / Campaign discovery |
 | In progress / [#186](https://github.com/yubisuke/openmasu/issues/186) | Verified App Store purchases reach installation cohorts | Purchase preparation is source implemented; signed submission, financial projection and Swift connection remain incomplete / App Store purchase binding |
+| Follow-up / [#209](https://github.com/yubisuke/openmasu/issues/209) | Verified refund reversals cancel only their target deductions | Explicit append-only reversal linkage and versioned TS/Python/SQL parity, without inventing a purchase or changing old runs / Refund reversal correction |
 | Follow-up / [#187](https://github.com/yubisuke/openmasu/issues/187) | Ad-group and creative outcomes share the cost grain | Selected-source dimensions and matching cost definitions without allocating parent cost by guesswork / Detailed acquisition grain |
 | Follow-up / [#188](https://github.com/yubisuke/openmasu/issues/188) | First-party re-engagement has separate outcome measures | One explicit conversion key and advertising revenue window, separate from acquisition and Apple aggregate evidence / Re-engagement outcomes |
 
-#182 and #183 precede #191, then #184 and #185; #186 follows #184, #187 follows #182/#183,
+#182 and #183 precede #191, then #184 and #185; #186 follows #184, #209 follows #186,
+and #187 follows #182/#183,
 and #188 follows #182/#177. Complete the first five core slices before the
-workflow batch below. The last three are scoped follow-ups, not prerequisites
+workflow batch below. These extensions are scoped follow-ups, not prerequisites
 for the initial Android-first campaign workflow. App Store cohort-purchase
-coverage must not be claimed before #186; re-engagement ROAS is not delivered
+coverage must not be claimed before #186; refund-reversal recovery remains open
+until #209. Complete #209 before #187/#188. Re-engagement ROAS is not delivered
 by the initial #188 conversion/revenue slice.
 
 The workflow batch addresses comparison between a captured OpenMasu calculation and an

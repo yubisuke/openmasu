@@ -78,6 +78,48 @@ Primary references checked 2026-10-02:
   the service-provided UUID accompanies transaction information. Token reassignment
   and cross-installation account linking are not part of this implementation.
 
+### Monetary projection boundary
+
+The signed-transaction normalizer is a prerequisite for the pending financial
+projection, not an installation binding or a running purchase-ingestion path.
+It calls the configured signature verifier before reading claims and requires
+an exact registered bundle/environment match. Raw transaction identifiers and
+the echoed token are protected working data; never log or expose them in reports.
+
+Only `inAppOwnershipType=PURCHASED` is eligible for purchaser-linked money.
+Family-shared, organization-assigned, missing and unknown ownership remain
+non-monetary. Missing price or currency is unavailable, not a zero-price sale.
+Price is an integer in milliunits (scale 3), already including the purchased
+quantity. Multiplying it by quantity would inflate revenue.
+
+A refund requires a revocation timestamp and an explicit monetary revocation
+type. `REFUND_FULL` uses the transaction-price basis. `REFUND_PRORATED` also
+requires the provider's percentage in milli-percent: multiplying the integer
+price by that integer percentage gives an exact derived basis at scale 8.
+The normalizer does not round this intermediate value. It is **not** a claim
+about the provider's settled refund, tax treatment or developer payout. Family
+or organization access revocation, an unknown type, or a revocation date alone
+does not establish refunded money. Contradictory full-refund percentages are
+not projected.
+
+`REFUND_REVERSED` needs a separate append-only link to the previously admitted
+refund. The current settled-only metric contract cannot cancel that deduction
+by appending a reversed row. [Refund reversal follow-up #209](https://github.com/yubisuke/openmasu/issues/209)
+covers this narrow gap; do not synthesize another purchase or rewrite old runs.
+
+Additional primary references checked 2026-10-02:
+
+- [Signed transaction payload](https://developer.apple.com/documentation/appstoreserverapi/jwstransactiondecodedpayload).
+- [Price](https://developer.apple.com/documentation/appstoreserverapi/price):
+  milliunits include quantity; financial/accounting reporting is a separate source.
+- [Ownership](https://developer.apple.com/documentation/appstoreserverapi/inappownershiptype):
+  purchaser and beneficiary access must remain distinct.
+- [Revocation type](https://developer.apple.com/documentation/appstoreserverapi/revocationtype)
+  and [percentage](https://developer.apple.com/documentation/appstoreserverapi/revocationpercentage):
+  explicit full/prorated refund evidence and its integer percentage basis.
+- [Notification type](https://developer.apple.com/documentation/appstoreservernotifications/notificationtype):
+  refund, refund reversal and Family Sharing access loss are different events.
+
 ## Privacy and observability
 
 Purchase tokens, order or transaction identifiers, signed payloads, credentials,

@@ -230,14 +230,17 @@ App Store purchase binding (#186) is in progress: the opt-in
 now issues protected installation-scoped tokens with retry and deletion safety.
 Transaction submission, verified financial projection and the public Swift API
 remain incomplete. Finer advertising grain and separate re-engagement outcomes
-(#187-#188) remain scoped follow-ups. A forward-only runtime fix now permits
+(#187-#188) remain scoped follow-ups. Verified refund reversals need an explicit
+link to their previously admitted refund and remain a separate follow-up
+([#209](https://github.com/yubisuke/openmasu/issues/209)); an appended reversed
+row does not currently undo an existing settled deduction. A forward-only runtime fix now permits
 schedule re-registration over identical inputs while preserving run-ID
 uniqueness, old evidence, exact replay and explicit-only supersession
 ([#200](https://github.com/yubisuke/openmasu/issues/200)). The reference retention
 numerator now uses that metric's selected and fraud-filtered cohort, matching
 Python/SQL rather than counting a different population
 ([#202](https://github.com/yubisuke/openmasu/issues/202)). Neither fix rewrites
-old saved runs. Three scoped follow-up slices remain incomplete. Existing
+old saved runs. Four scoped follow-up slices remain incomplete. Existing
 component evidence and the published v0.3.0-rc.1 record remain unchanged;
 neither proves these remaining connections.
 
