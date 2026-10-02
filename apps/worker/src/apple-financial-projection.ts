@@ -12,6 +12,11 @@ type Purchase = {
   producer: string; producer_version: string; event_id: string; delivery_id: string; schema_version: string;
   occurred_at: string; occurred_at_source: string; received_at: string; processing_purpose_id: string;
   policy_digest: string; consent_evaluation_policy_version: string;
+  correction_target_record_id?: string;
+};
+
+export type AppleRefundReversal = {
+  transaction: AppleTransaction; effectiveAt: string; notificationDigest: string;
 };
 
 function attempt(scope: Scope, recordId: string, name: "purchase" | "refund", occurredAt: string,
@@ -33,12 +38,13 @@ function attempt(scope: Scope, recordId: string, name: "purchase" | "refund", oc
   };
 }
 
-function historical(scope: Scope, purchase: Purchase): CandidateAttempt {
-  const result = attempt(scope,purchase.record_id,"purchase",purchase.occurred_at,new Date(purchase.received_at), {
+function historical(scope: Scope, purchase: Purchase, name: "purchase" | "refund" = "purchase"): CandidateAttempt {
+  const result = attempt(scope,purchase.record_id,name,purchase.occurred_at,new Date(purchase.received_at), {
     installation_id: purchase.installation_id, transaction_id: purchase.transaction_id,
     ...(purchase.original_transaction_id ? { original_transaction_id: purchase.original_transaction_id } : {}),
     amount_unscaled: purchase.amount_unscaled, amount_scale: purchase.amount_scale, currency: purchase.currency,
     financial_status: purchase.financial_status,
+    ...(purchase.correction_target_record_id ? { correction_target_record_id: purchase.correction_target_record_id } : {}),
   });
   Object.assign(result.record, { producer: purchase.producer, producer_version: purchase.producer_version,
     event_id: purchase.event_id, delivery_id: purchase.delivery_id, schema_version: purchase.schema_version,
@@ -51,10 +57,25 @@ function historical(scope: Scope, purchase: Purchase): CandidateAttempt {
 /** The caller owns the current read-back claim and shared tenant privacy fence. */
 export async function projectAppleTransaction(input: Scope & {
   pool: Pool; client: PoolClient; store: PayloadStore; transaction: AppleTransaction; signed: string;
-  now: Date; refundReversal: boolean; createdReferences: string[];
+  now: Date; reversal?: AppleRefundReversal; createdReferences: string[];
 }): Promise<string> {
   const { client, transaction: tx } = input;
-  if (input.refundReversal) return "refund_reversal_unprojected";
+  if (input.reversal) {
+    const notice = input.reversal.transaction;
+    if (notice.transactionId !== tx.transactionId || notice.originalTransactionId !== tx.originalTransactionId
+      || notice.productId !== tx.productId || notice.bundleId !== tx.bundleId || notice.environment !== tx.environment
+      || (notice.appAccountToken !== undefined && tx.appAccountToken !== undefined && notice.appAccountToken !== tx.appAccountToken)) {
+      return "refund_reversal_scope_mismatch";
+    }
+    if (notice.ownership !== "PURCHASED") return "ownership_not_purchased";
+    if (notice.revocationAt || notice.refundExclusion || tx.revocationAt || tx.refundExclusion) return "refund_reversal_not_restored";
+    if (tx.signedAt < notice.signedAt) return "refund_reversal_history_stale";
+    if (notice.purchase && (!tx.purchase || notice.purchase.currency !== tx.purchase.currency
+      || notice.purchase.amountUnscaled !== tx.purchase.amountUnscaled || notice.purchase.amountScale !== tx.purchase.amountScale)) {
+      return "refund_reversal_basis_mismatch";
+    }
+    if (input.reversal.effectiveAt > input.now.toISOString()) return "refund_reversal_history_stale";
+  }
   if (!tx.purchase) return tx.purchaseExclusion!;
   // One global provider transaction binding, even across competing notifications.
   const transactionDigest = sha256(tx.transactionId), originalDigest = sha256(tx.originalTransactionId);
@@ -81,6 +102,8 @@ export async function projectAppleTransaction(input: Scope & {
   if (binding && (binding.apple_intent_id !== intent.intent_id || binding.purchase_record_id !== purchaseId
     || binding.amount_unscaled !== tx.purchase.amountUnscaled || binding.amount_scale !== tx.purchase.amountScale
     || binding.currency !== tx.purchase.currency || binding.original_transaction_digest !== originalDigest)) return "transaction_binding_conflict";
+  // A reversal must never create a purchase merely to make its target exist.
+  if (input.reversal && !binding) return "refund_reversal_target_missing";
 
   async function persist(value: CandidateAttempt, history: CandidateAttempt[] = []) {
     const output = await ingestRuntimeBatch([value],input.pool,history,{ persistenceClient: client });
@@ -94,6 +117,53 @@ export async function projectAppleTransaction(input: Scope & {
       (record_id,tenant_id,app_id,installation_id_digest,intent_id,evidence_ref,signed_digest,recorded_at)
       VALUES ($1,$2,$3,$4,$5::uuid,$6,$7,$8)`, [value.record.record_id,input.tenantId,input.appId,
       intent!.installation_id_digest,intent!.intent_id,evidenceRef,sha256(input.signed),input.now.toISOString()]);
+  }
+  const readPurchase = async () => (await client.query<Purchase>(`SELECT purchase.*,raw.producer,raw.producer_version,raw.event_id,raw.delivery_id,
+    raw.schema_version,raw.occurred_at,raw.occurred_at_source,raw.received_at,raw.processing_purpose_id,
+    raw.policy_digest,raw.consent_evaluation_policy_version
+    FROM ledger.purchase_facts AS purchase JOIN ledger.raw_records AS raw USING (tenant_id,app_id,record_id)
+    JOIN ledger.raw_records_current AS current USING (tenant_id,app_id,record_id)
+    WHERE purchase.tenant_id=$1 AND purchase.app_id=$2 AND purchase.record_id=$3 AND current.payload_lifecycle_status='available'`,
+  [input.tenantId,input.appId,purchaseId])).rows[0];
+  if (input.reversal) {
+    const purchase = await readPurchase();
+    if (!purchase) return "transaction_privacy_blocked";
+    const refunds = (await client.query<Purchase & { lifecycle: string; intent_id: string | null }>(`SELECT refund.*,raw.record_id,
+      raw.producer,raw.producer_version,raw.event_id,raw.delivery_id,raw.schema_version,raw.occurred_at,
+      raw.occurred_at_source,raw.received_at,raw.processing_purpose_id,raw.policy_digest,raw.consent_evaluation_policy_version,
+      current.payload_lifecycle_status AS lifecycle,evidence.intent_id::text
+      FROM ledger.refund_facts AS refund
+      JOIN ledger.logical_events AS logical USING (tenant_id,app_id,logical_event_id)
+      JOIN ledger.raw_records AS raw USING (tenant_id,app_id,record_id)
+      JOIN ledger.raw_records_current AS current USING (tenant_id,app_id,record_id)
+      LEFT JOIN control.apple_purchase_evidence AS evidence USING (tenant_id,app_id,record_id)
+      WHERE refund.tenant_id=$1 AND refund.app_id=$2 AND refund.correction_target_record_id=$3
+        AND refund.financial_status='settled' ORDER BY raw.record_id COLLATE "C" LIMIT 2`,
+    [input.tenantId,input.appId,purchaseId])).rows;
+    // The provider notification names a transaction, not an individual partial
+    // refund. Do not guess which of multiple recorded deductions it cancels.
+    if (!refunds.length) return "refund_reversal_target_missing";
+    if (refunds.length !== 1) return "refund_reversal_target_ambiguous";
+    const refund = refunds[0];
+    if (refund.lifecycle !== "available" || refund.intent_id !== intent.intent_id
+      || refund.producer !== "adapter:app-store") return "refund_reversal_target_unavailable";
+    if (refund.installation_id !== anchor.installationId || refund.currency !== purchase.currency
+      || refund.original_transaction_id !== purchase.transaction_id
+      || refund.occurred_at > input.reversal.effectiveAt || refund.received_at > input.now.toISOString()) {
+      return "refund_reversal_basis_mismatch";
+    }
+    const reversalId = `record:apple-refund-reversal:${sha256(JSON.stringify([purchaseId,refund.record_id])).slice(0,48)}`;
+    if ((await client.query(`SELECT 1 FROM ledger.raw_records WHERE tenant_id=$1 AND app_id=$2 AND record_id=$3`,
+      [input.tenantId,input.appId,reversalId])).rowCount) return "refund_reversal_already_projected";
+    await persist(attempt(input,reversalId,"refund",input.reversal.effectiveAt,input.now, {
+      installation_id: anchor.installationId, transaction_id: reversalId.replace("record:","transaction:"),
+      original_transaction_id: purchase.transaction_id, correction_target_record_id: purchaseId,
+      reverses_refund_record_id: refund.record_id, amount_unscaled: refund.amount_unscaled,
+      amount_scale: refund.amount_scale, currency: refund.currency, financial_status: "reversed",
+      extensions: { store_verification_provider: "app_store", monetary_authority: "app_store_refund_reversal",
+        monetary_basis: "previously_verified_refund", notification_digest: input.reversal.notificationDigest },
+    }),[historical(input,purchase),historical(input,refund,"refund")]);
+    return "refund_reversal_projected";
   }
   if (!binding) {
     // Do not put the subscription-series identifier in original_transaction_id:
@@ -113,13 +183,7 @@ export async function projectAppleTransaction(input: Scope & {
       tx.purchase.amountScale,tx.purchase.currency,tx.quantity ?? 1,input.now.toISOString(),intent.intent_id]);
   }
   if (!tx.refund) return tx.refundExclusion ?? "purchase_projected";
-  const purchase = (await client.query<Purchase>(`SELECT purchase.*,raw.producer,raw.producer_version,raw.event_id,raw.delivery_id,
-    raw.schema_version,raw.occurred_at,raw.occurred_at_source,raw.received_at,raw.processing_purpose_id,
-    raw.policy_digest,raw.consent_evaluation_policy_version
-    FROM ledger.purchase_facts AS purchase JOIN ledger.raw_records AS raw USING (tenant_id,app_id,record_id)
-    JOIN ledger.raw_records_current AS current USING (tenant_id,app_id,record_id)
-    WHERE purchase.tenant_id=$1 AND purchase.app_id=$2 AND purchase.record_id=$3 AND current.payload_lifecycle_status='available'`,
-  [input.tenantId,input.appId,purchaseId])).rows[0];
+  const purchase = await readPurchase();
   if (!purchase) return "transaction_privacy_blocked";
   const previous = (await client.query<{ amount_unscaled: string; amount_scale: number }>(`SELECT amount_unscaled,amount_scale
     FROM ledger.refund_facts WHERE tenant_id=$1 AND app_id=$2 AND correction_target_record_id=$3 AND financial_status='settled'`,

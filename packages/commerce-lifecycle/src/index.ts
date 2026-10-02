@@ -198,7 +198,9 @@ export function normalizeAppleNotification(
   }
   const transactionId = transaction?.transactionId;
   const originalTransactionId = transaction?.originalTransactionId;
-  const effectiveAt = transaction?.revocationDate !== undefined
+  // A restored transaction still has its original purchase date. The signed
+  // notification time is the reversal observation, not another purchase time.
+  const effectiveAt = notificationType === "REFUND_REVERSED" ? signedDate : transaction?.revocationDate !== undefined
     ? timestamp(transaction.revocationDate, "apple_revocation_date")
     : transaction?.purchaseDate !== undefined
       ? timestamp(transaction.purchaseDate, "apple_purchase_date")
