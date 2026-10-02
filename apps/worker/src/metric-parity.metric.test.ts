@@ -45,6 +45,11 @@ describe("safe cost grain SQL and importer parity", { concurrency: false }, () =
     const directory = join(process.cwd(), "fixtures/v0.4/59-disjoint-cost-grains");
     const value = JSON.parse(readFileSync(join(directory, "input.json"), "utf8"));
     await ingestFixture("safe-cost-fixture59", value, app, seed);
+    const dated = await withTenant(app, "tenant-a", async client => (await client.query(
+      `SELECT count(DISTINCT cost_date)::int AS dates, count(*)::int AS observations
+       FROM ledger.cost_records WHERE tenant_id='tenant-a' AND app_id='app-a'`,
+    )).rows[0]);
+    assert.deepEqual(dated, { dates: 2, observations: 6 });
     const runs = await computeSqlMetricRuns(app, value, true);
     assert.equal(jcs(runs), jcs(evaluate(value).metric_runs));
     assert.equal(jcs(runs), jcs(JSON.parse(readFileSync(join(directory, "expected_metric_runs.json"), "utf8"))));
