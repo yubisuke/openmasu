@@ -48,8 +48,8 @@ describe("selected native acquisition SQL parity", { concurrency: false }, () =>
     const [click, ...rest] = source.records;
     const late = "2026-08-13T00:00:00.000Z";
     source.batches = [
-      { server_context: source.server_context, records: rest },
-      { server_context: { ...source.server_context, received_at: late }, records: [{ ...click, received_at: late }] },
+      { batch_id: "selected-acquisition-initial", server_context: source.server_context, records: rest },
+      { batch_id: "selected-acquisition-late-click", server_context: { ...source.server_context, received_at: late }, records: [{ ...click, received_at: late }] },
     ];
     delete source.records;
     await ingestFixture("selected-acquisition-late", source, app, seed);
