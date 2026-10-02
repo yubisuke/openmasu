@@ -38,6 +38,11 @@ run describes only its own cohort and cutoff, not all cohorts or all received
 data. No provider completeness, real-device delivery, or production readiness
 is implied by recorded results.
 
+For the next step after ingestion, use [recorded attribution reason counts](attribution-reasons.md)
+to read installation-level acquisition by stored status, method and reason at
+an explicit cohort period and cutoff. That denominator is separate from these
+retained-history operational counts.
+
 ## Privacy and cost boundaries
 
 The endpoint uses the existing reader role and explicit tenant/app predicates.

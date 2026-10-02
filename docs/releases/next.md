@@ -67,6 +67,9 @@ upgrades the external claim to verified execution or completeness.
 The [dashboard comparison flow](../cohort-comparison.md#compare-through-the-dashboard)
 adds bounded file selection, condition review and identical JSON/HTML downloads
 using those same pure functions, with no server-side comparison history.
+[Recorded attribution analysis](../attribution-reasons.md) adds reader-only
+fixed-cutoff counts by stored acquisition status, method and reason, with
+one retained install per subject and current privacy filtering.
 
 Supported-source upgrade procedures, single-host deployment preflight/restart,
 capacity visibility and the limited backend/report HTTP contract also have
@@ -74,7 +77,7 @@ merged acceptance scopes and are included in the publication. The integration
 batch is complete. The next product batch is selected in
 [plan #172](https://github.com/yubisuke/openmasu/issues/172), with the ordered
 [roadmap](../roadmap.md#next-product-sequence) as its canonical crosswalk.
-The other nine slices remain planned. No development slice is part of the
+The other eight slices remain planned. No development slice is part of the
 published baseline, and no next
 version or release scope is selected by that development plan.
 These synthetic scopes do not establish real recovery, hosting/TLS,
@@ -83,9 +86,9 @@ representative capacity or live backend/provider interoperability.
 Begin with selected acquisition-source projection, overlapping cost-grain
 safety, purchase/total-net acquisition, late-input correction and campaign
 discovery (#182/#183/#191/#184/#185). All five have source implementation.
-The external declaration bridge (#173) and dashboard comparison (#174) also
-have source implementation. Next connect attribution analysis, calculation
-controls, cohort outcomes and saved-evidence workflows (#175-#180).
+The external declaration bridge (#173), dashboard comparison (#174) and
+attribution analysis (#175) also have source implementation. Next connect
+calculation controls, cohort outcomes and saved-evidence workflows (#176-#180).
 App Store binding, finer advertising grain and separate
 re-engagement outcomes (#186-#188) remain scoped follow-ups. These connections
 must not be inferred from existing component coverage. Each Issue reuses

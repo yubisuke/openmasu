@@ -1,18 +1,23 @@
 /** Bound parameters: tenant $1, app $2, received-at watermark $3. */
-export const selectedAcquisitionSql = `
+function selectionSql(report = false): string {
+  const time = (column: string) => report ? `(${column})::timestamptz` : column;
+  const watermark = report ? "$3::timestamptz" : "$3";
+  const received = report ? "raw.received_at_ts" : "raw.received_at";
+  return `
   WITH eligible AS (
     SELECT candidate.* FROM ledger.attribution_results AS candidate
     WHERE candidate.tenant_id=$1 AND candidate.app_id=$2
       AND candidate.subject_scope='installation_level'
-      AND candidate.decided_at <= $3
-      AND candidate.artifact->>'input_cutoff_at' <= $3
+      AND ${time("candidate.decided_at")} <= ${watermark}
+      AND ${time("candidate.artifact->>'input_cutoff_at'")} <= ${watermark}
+      ${report ? "AND candidate.subject_ref IN (SELECT installation_id FROM cohort)" : ""}
       AND EXISTS (
         SELECT 1 FROM ledger.install_facts AS install
         JOIN ledger.logical_events AS event USING (logical_event_id)
         JOIN ledger.raw_records_current AS raw
           ON raw.tenant_id=event.tenant_id AND raw.app_id=event.app_id AND raw.record_id=event.record_id
         WHERE install.tenant_id=$1 AND install.app_id=$2
-          AND install.installation_id=candidate.subject_ref AND raw.received_at <= $3
+          AND install.installation_id=candidate.subject_ref AND ${received} <= ${watermark}
       )
       AND NOT EXISTS (
         SELECT 1 FROM jsonb_array_elements(candidate.artifact->'evidence_refs') AS ref
@@ -21,7 +26,7 @@ export const selectedAcquisitionSql = `
           JOIN ledger.raw_records_current AS raw
             ON raw.tenant_id=event.tenant_id AND raw.app_id=event.app_id AND raw.record_id=event.record_id
           WHERE event.tenant_id=$1 AND event.app_id=$2 AND event.record_id=ref->>'ref'
-            AND raw.received_at <= $3
+            AND ${received} <= ${watermark}
         )
       )
   )
@@ -29,9 +34,15 @@ export const selectedAcquisitionSql = `
   WHERE NOT EXISTS (
     SELECT 1 FROM eligible AS newer
     WHERE newer.artifact->>'supersedes_attribution_id'=candidate.attribution_id
+      ${report ? "AND newer.subject_ref=candidate.subject_ref" : ""}
   )
-  ORDER BY candidate.subject_ref COLLATE "C", candidate.decided_at DESC, candidate.attribution_id COLLATE "C" DESC
+  ORDER BY candidate.subject_ref COLLATE "C", ${time("candidate.decided_at")} DESC, candidate.attribution_id COLLATE "C" DESC
 `;
+}
+// Historical calculation profiles retain their existing timestamp representation rules.
+export const selectedAcquisitionSql = selectionSql();
+/** Reporting shares eligibility/supersession rules but compares instants, within the bounded cohort CTE. */
+export const selectedAcquisitionReportSql = selectionSql(true);
 
 /** Only an attribution's chosen evidence can supply dimensions; click_id alone is never enough. */
 export function selectedClickJoinSql(enabled: "$7" | "$15" | "$18", privacy: "$8" | "$12" | "$15"): string {

@@ -106,7 +106,8 @@ and total-net cohorts, exercised by fixture 60. Bounded explicit late-input
 requests now connect revenue and commerce arrivals to saved-run corrections.
 Daily schedules discover bounded frozen campaign targets. The external ad-ROAS
 declaration bridge and bounded dashboard comparison flow are also source
-implemented; nine slices remain planned.
+implemented, followed by reader-only recorded attribution analysis; eight
+slices remain planned.
 
 The first priority is a connected measurement path: tracking link, SDK install,
 selected acquisition source, campaign revenue and cost, daily ROAS, late-input
@@ -142,7 +143,7 @@ It does not make an external calculation authenticated or independently verified
 | --- | --- | --- | --- |
 | Source implemented | [External calculation declarations #173](https://github.com/yubisuke/openmasu/issues/173) | A saved elapsed ad-revenue ROAS and a fully declared external calculation produce exact deltas with explicit mixed evidence; unknown/mismatched conditions cannot | External comparison meaning |
 | Source implemented | [Dashboard comparison #174](https://github.com/yubisuke/openmasu/issues/174) | Bounded SSR input, condition review and JSON/HTML download reuse CLI pure functions, preserve evidence levels and perform no server-side persistence | Comparison workflow |
-| 3 | [Attribution reason counts #175](https://github.com/yubisuke/openmasu/issues/175) | Read fixed-watermark install attribution counts by recorded status, method and reason without raw identifiers or inferred causes | Attribution analysis |
+| Source implemented | [Attribution reason counts #175](https://github.com/yubisuke/openmasu/issues/175) | Bounded fixed-watermark API/SSR reads one eligible stored acquisition decision per retained install, with current privacy and no inferred causes | Attribution analysis |
 | 4 | [Metric schedule controls #176](https://github.com/yubisuke/openmasu/issues/176) | Register, inspect and disable the existing daily schedules through the dashboard | Daily calculation controls |
 | 5 | [Custom-event conversion #177](https://github.com/yubisuke/openmasu/issues/177) | Measure distinct cohort members reaching one explicit event key and their conversion rate, with contract/evaluator/SQL parity | Cohort outcomes |
 | 6 | [Total-net ROAS evidence #178](https://github.com/yubisuke/openmasu/issues/178) | Explain an existing D30 total-net ROAS from its saved advertising, purchase, refund and cost operands | Commerce calculation evidence |

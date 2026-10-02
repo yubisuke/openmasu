@@ -47,6 +47,8 @@ import { encodeFraudAudit, fraudAudit, FraudAuditQueryError, parseFraudAuditQuer
 import { googleDeliveryHealth } from "./google-delivery-health.js";
 import { operatorDeliveryHealth } from "./operator-delivery-health.js";
 import { measurementHealth } from "./measurement-health.js";
+import { attributionReport, AttributionReportError, parseAttributionQuery } from "./attribution-reporting.js";
+import { renderAttributionReport } from "./dashboard/attribution-report.js";
 import type { KeyedTokenBucket, TokenBucket } from "./rate-limit.js";
 import { matchRoute, type RouteDefinition } from "./routes.js";
 import { activateRuleBundle } from "./rule-bundles.js";
@@ -506,6 +508,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
       if ([
         "dashboard_app", "dashboard_metric_explanation", "dashboard_export", "dashboard_comparison_export", "dashboard_records", "dashboard_differences", "dashboard_fraud",
         "dashboard_comparison_form", "dashboard_comparison_submit",
+        "dashboard_attribution_report",
         "dashboard_tracking_links_list", "dashboard_tracking_links_create", "dashboard_tracking_link_transition",
         "dashboard_sdk_keys_issue", "dashboard_sdk_keys_retire",
         "dashboard_server_keys_issue", "dashboard_server_keys_retire", "dashboard_link_domain",
@@ -574,6 +577,16 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
         const appId = dashboardAppId(target.pathname) ?? "";
         try {
           const appIdentity = await requireRegisteredApp(dependencies.readerPool, sessionIdentity, appId);
+          if (route.handler === "dashboard_attribution_report") {
+            try {
+              const report = [...target.searchParams].length ? await attributionReport(dependencies.readerPool, appIdentity, parseAttributionQuery(target.searchParams)) : undefined;
+              dashboardHtml(response, 200, renderAttributionReport(appId, report));
+            } catch (error) {
+              if (!(error instanceof AttributionReportError)) throw error;
+              dashboardHtml(response, error.statusCode, `<!doctype html><html lang="en"><body><h1>Attribution report not completed</h1><p>${escapeHtml(error.code)}</p><p>No partial counts were returned. Narrow the selection or check the service state.</p></body></html>`);
+            }
+            return;
+          }
           if (route.handler === "dashboard_comparison_form" || route.handler === "dashboard_comparison_submit") {
             const deadline = startedAt + comparisonWorkflowLimits.milliseconds;
             try {
@@ -1092,6 +1105,17 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             json(response, 200, await measurementHealth(pool, appIdentity));
           } catch (error) {
             if (error instanceof AppNotFoundError) json(response, 404, { error: "app_not_found" });
+            else throw error;
+          }
+          return;
+        }
+        if (route.handler === "admin_attribution_report") {
+          try {
+            const appIdentity = await requireRegisteredApp(pool, identity, adminAppId(target.pathname) ?? "");
+            json(response, 200, await attributionReport(pool, appIdentity, parseAttributionQuery(target.searchParams)));
+          } catch (error) {
+            if (error instanceof AppNotFoundError) json(response, 404, { error: "app_not_found" });
+            else if (error instanceof AttributionReportError) json(response, error.statusCode, { error: error.code });
             else throw error;
           }
           return;
