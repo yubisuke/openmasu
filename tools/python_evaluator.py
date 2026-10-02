@@ -23,6 +23,7 @@ METRIC_PURCHASE_NET_LONG_BUNDLE_HASH = "709f6688c7bb8537b7af3aa3b5a3aa879036a866
 METRIC_TOTAL_NET_BUNDLE_HASH = "fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3"
 METRIC_SELECTED_ACQUISITION_BUNDLE_HASH = "6fd998246bb092f81d8539b8e2c04a1abe421a1916480b63dfd018d11c7bccc5"
 METRIC_DISJOINT_COST_BUNDLE_HASH = "3ec3e50fc8b9180b55e888895d793739028fdd20abfc34f20110e6ce96e8b053"
+METRIC_SELECTED_COMMERCE_BUNDLE_HASH = "49554ad7fe9709e851f5cba7ac12215b539a9b209cc96ab66a085f0b1b46615d"
 DAY_MS = 86_400_000
 
 
@@ -1159,7 +1160,19 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
         raise ValueError(f"metric_definition_series_mismatch:{metric_name}")
 
     strict_costs = "cost_selection_policy" in definition
-    if strict_costs or definition.get("rule_bundle_id") == "metric-disjoint-cost":
+    selected_commerce = definition.get("rule_bundle_id") == "metric-selected-commerce"
+    if selected_commerce:
+        operation = definition.get("definition", {})
+        if (definition.get("acquisition_basis") != "selected_first_party_click"
+                or definition.get("anchor_event") != "install" or definition.get("aggregation_time_zone") != "UTC"
+                or definition.get("metric_definition_version") != "0.4.13"
+                or definition.get("rule_bundle_version") != "0.4.13"
+                or definition.get("rule_bundle_hash") != METRIC_SELECTED_COMMERCE_BUNDLE_HASH
+                or operation.get("numerator") not in ("purchase_net_revenue", "total_net_revenue")
+                or (definition.get("cost_selection_policy") != "reject_overlapping_grains"
+                    if operation.get("calculation") == "revenue_over_cost" else strict_costs)):
+            fail()
+    if not selected_commerce and (strict_costs or definition.get("rule_bundle_id") == "metric-disjoint-cost"):
         if (definition.get("cost_selection_policy") != "reject_overlapping_grains"
                 or definition.get("anchor_event") != "install" or definition.get("aggregation_time_zone") != "UTC"
                 or definition.get("metric_definition_version") != "0.4.12"
@@ -1173,7 +1186,7 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
         if "acquisition_basis" in definition and (definition.get("acquisition_basis") != "selected_first_party_click"
                 or definition.get("definition", {}).get("numerator") != "revenue"):
             fail()
-    if not strict_costs and ("acquisition_basis" in definition or definition.get("rule_bundle_id") == "metric-selected-acquisition"):
+    if not selected_commerce and not strict_costs and ("acquisition_basis" in definition or definition.get("rule_bundle_id") == "metric-selected-acquisition"):
         if (definition.get("acquisition_basis") != "selected_first_party_click"
                 or definition.get("anchor_event") != "install"
                 or definition.get("metric_definition_version") != "0.4.11"
@@ -1185,8 +1198,8 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
 
     if definition.get("definition", {}).get("numerator") == "purchase_net_revenue" or metric_name in purchase_net_days:
         expected_day = purchase_net_days.get(metric_name)
-        expected_version = "0.4.9" if expected_day in {30, 90} else "0.4.8"
-        expected_hash = (METRIC_PURCHASE_NET_LONG_BUNDLE_HASH
+        expected_version = "0.4.13" if selected_commerce else "0.4.9" if expected_day in {30, 90} else "0.4.8"
+        expected_hash = METRIC_SELECTED_COMMERCE_BUNDLE_HASH if selected_commerce else (METRIC_PURCHASE_NET_LONG_BUNDLE_HASH
                          if expected_version == "0.4.9" else METRIC_PURCHASE_NET_BUNDLE_HASH)
         if (expected_day is None
                 or definition.get("metric_definition_version") != expected_version
@@ -1195,7 +1208,7 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
                 or definition.get("value_type") != "money"
                 or definition.get("currency") != "USD"
                 or definition.get("amount_scale") != 6
-                or definition.get("rule_bundle_id") != "metric-purchase-net"
+                or definition.get("rule_bundle_id") != ("metric-selected-commerce" if selected_commerce else "metric-purchase-net")
                 or definition.get("rule_bundle_version") != expected_version
                 or definition.get("rule_bundle_hash") != expected_hash
                 or definition.get("definition", {}).get("calculation") != "revenue_sum"
@@ -1212,16 +1225,16 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
         expected_day, expected_calculation, expected_value_type = expected
         metric_definition = definition.get("definition", {})
         window = metric_definition.get("window", {})
-        if (definition.get("metric_definition_version") != ("0.4.12" if strict_costs else "0.4.9")
+        if (definition.get("metric_definition_version") != ("0.4.13" if selected_commerce else "0.4.12" if strict_costs else "0.4.9")
                 or definition.get("anchor_event") != "install"
                 or definition.get("aggregation_time_zone") != "UTC"
                 or definition.get("value_type") != expected_value_type
                 or (expected_value_type == "money"
                     and (definition.get("currency") != "USD" or definition.get("amount_scale") != 6))
                 or (expected_value_type == "ratio" and definition.get("ratio_scale") != 6)
-                or definition.get("rule_bundle_id") != ("metric-disjoint-cost" if strict_costs else "metric-total-net")
-                or definition.get("rule_bundle_version") != ("0.4.12" if strict_costs else "0.4.9")
-                or definition.get("rule_bundle_hash") != (METRIC_DISJOINT_COST_BUNDLE_HASH if strict_costs else METRIC_TOTAL_NET_BUNDLE_HASH)
+                or definition.get("rule_bundle_id") != ("metric-selected-commerce" if selected_commerce else "metric-disjoint-cost" if strict_costs else "metric-total-net")
+                or definition.get("rule_bundle_version") != ("0.4.13" if selected_commerce else "0.4.12" if strict_costs else "0.4.9")
+                or definition.get("rule_bundle_hash") != (METRIC_SELECTED_COMMERCE_BUNDLE_HASH if selected_commerce else METRIC_DISJOINT_COST_BUNDLE_HASH if strict_costs else METRIC_TOTAL_NET_BUNDLE_HASH)
                 or metric_definition.get("calculation") != expected_calculation
                 or metric_definition.get("numerator") != "total_net_revenue"
                 or window.get("type") != "elapsed"

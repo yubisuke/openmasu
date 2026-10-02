@@ -386,6 +386,7 @@ async function purchaseNetRevenueValue(
   }
   const result = await client.query<{ value_unscaled: string; missing_fx_count: string }>(
     `WITH
+       acquisition AS (SELECT * FROM (${selectedAcquisitionSql}) AS selected WHERE $15::boolean),
        rates AS (
          SELECT currency, rate_unscaled::numeric AS rate_unscaled, rate_scale
          FROM jsonb_to_recordset($10::jsonb)
@@ -412,15 +413,16 @@ async function purchaseNetRevenueValue(
            ORDER BY candidate.decided_at DESC, candidate.attribution_id DESC
            LIMIT 1
          ) AS attribution ON true
+         ${selectedClickJoinSql("$15", "$12")}
          WHERE install.tenant_id=$1 AND install.app_id=$2 AND install.occurred_at IS NOT NULL
            AND raw.received_at <= $3
            AND ($12='before' OR raw.payload_lifecycle_status='available')
-           AND ($4::text IS NULL OR install.campaign_id=$4)
-           AND ($5::text IS NULL OR install.network=$5)
+           AND ($4::text IS NULL OR coalesce(install.campaign_id, acquisition_source.campaign_id)=$4)
+           AND ($5::text IS NULL OR coalesce(install.network, acquisition_source.network)=$5)
            AND ($6::text IS NULL OR install.country=$6)
            AND ($7::text IS NULL OR timezone($8, install.occurred_at_ts)::date::text=$7)
-           AND ($13::text IS NULL OR attribution.status=$13)
-           AND ($14='gross' OR attribution.reason_code IS DISTINCT FROM 'fraud_excluded')
+           AND ($13::text IS NULL OR (CASE WHEN $15 THEN coalesce(acquisition.status, 'unattributed') ELSE attribution.status END)=$13)
+           AND ($14='gross' OR (CASE WHEN $15 THEN acquisition.reason_code ELSE attribution.reason_code END) IS DISTINCT FROM 'fraud_excluded')
        ),
        purchase_candidates AS (
          SELECT purchase.amount_unscaled, purchase.amount_scale,
@@ -508,6 +510,7 @@ async function purchaseNetRevenueValue(
       privacyState,
       grouping?.attribution_status ?? null,
       definition.fraud_policy ?? "gross",
+      definition.acquisition_basis === "selected_first_party_click",
     ],
   );
   const row = result.rows[0];
@@ -682,7 +685,7 @@ async function metricValue(
            ORDER BY candidate.decided_at DESC, candidate.attribution_id DESC
            LIMIT 1
          ) AS attribution ON true
-         ${selectedClickJoinSql}
+         ${selectedClickJoinSql("$18", "$15")}
          WHERE install.tenant_id=$1 AND install.app_id=$2 AND install.occurred_at IS NOT NULL
            AND raw.received_at <= $3
            AND ($15='before' OR raw.payload_lifecycle_status='available')
@@ -1094,7 +1097,17 @@ function assertMetricDefinitionSeries(definition: Any): void {
   const grouping = definition.grouping_dimensions ?? [];
   const fail = () => { throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`); };
   const strictCosts = definition.cost_selection_policy !== undefined;
-  if (strictCosts || definition.rule_bundle_id === "metric-disjoint-cost") {
+  const selectedCommerce = definition.rule_bundle_id === "metric-selected-commerce";
+  if (selectedCommerce) {
+    if (definition.acquisition_basis !== "selected_first_party_click" || definition.anchor_event !== "install"
+        || definition.aggregation_time_zone !== "UTC" || definition.metric_definition_version !== "0.4.13"
+        || definition.rule_bundle_version !== "0.4.13"
+        || definition.rule_bundle_hash !== nonFraudBundleHash("metric-selected-commerce")
+        || !["purchase_net_revenue", "total_net_revenue"].includes(definition.definition.numerator)
+        || (definition.definition.calculation === "revenue_over_cost"
+          ? definition.cost_selection_policy !== "reject_overlapping_grains" : strictCosts)) fail();
+  }
+  if (!selectedCommerce && (strictCosts || definition.rule_bundle_id === "metric-disjoint-cost")) {
     if (definition.cost_selection_policy !== "reject_overlapping_grains" || definition.anchor_event !== "install"
         || definition.aggregation_time_zone !== "UTC" || definition.metric_definition_version !== "0.4.12"
         || definition.rule_bundle_id !== "metric-disjoint-cost" || definition.rule_bundle_version !== "0.4.12"
@@ -1104,7 +1117,7 @@ function assertMetricDefinitionSeries(definition: Any): void {
     if (definition.acquisition_basis !== undefined && (definition.acquisition_basis !== "selected_first_party_click"
         || definition.definition.numerator !== "revenue")) fail();
   }
-  if (!strictCosts && (definition.acquisition_basis !== undefined || definition.rule_bundle_id === "metric-selected-acquisition")) {
+  if (!selectedCommerce && !strictCosts && (definition.acquisition_basis !== undefined || definition.rule_bundle_id === "metric-selected-acquisition")) {
     if (definition.acquisition_basis !== "selected_first_party_click" || definition.anchor_event !== "install"
         || definition.metric_definition_version !== "0.4.11" || definition.rule_bundle_id !== "metric-selected-acquisition"
         || definition.rule_bundle_version !== "0.4.11" || definition.rule_bundle_hash !== nonFraudBundleHash("metric-selected-acquisition")
@@ -1112,13 +1125,13 @@ function assertMetricDefinitionSeries(definition: Any): void {
   }
   if (definition.definition?.numerator === "purchase_net_revenue" || purchaseNetDays.has(definition.metric_name)) {
     const expectedDay = purchaseNetDays.get(definition.metric_name);
-    const expectedVersion = expectedDay === 30 || expectedDay === 90 ? "0.4.9" : "0.4.8";
-    const expectedHash = expectedVersion === "0.4.9"
+    const expectedVersion = selectedCommerce ? "0.4.13" : expectedDay === 30 || expectedDay === 90 ? "0.4.9" : "0.4.8";
+    const expectedHash = selectedCommerce ? nonFraudBundleHash("metric-selected-commerce") : expectedVersion === "0.4.9"
       ? nonFraudBundleHash("metric-purchase-net-v0.4.9") : nonFraudBundleHash("metric-purchase-net");
     if (expectedDay === undefined || definition.metric_definition_version !== expectedVersion
         || definition.anchor_event !== "install" || definition.aggregation_time_zone !== "UTC"
         || definition.value_type !== "money" || definition.currency !== "USD"
-        || definition.amount_scale !== 6 || definition.rule_bundle_id !== "metric-purchase-net"
+        || definition.amount_scale !== 6 || definition.rule_bundle_id !== (selectedCommerce ? "metric-selected-commerce" : "metric-purchase-net")
         || definition.rule_bundle_version !== expectedVersion || definition.rule_bundle_hash !== expectedHash
         || definition.definition?.calculation !== "revenue_sum"
         || definition.definition?.numerator !== "purchase_net_revenue"
@@ -1128,14 +1141,14 @@ function assertMetricDefinitionSeries(definition: Any): void {
   }
   if (definition.definition?.numerator === "total_net_revenue" || totalNetSeries.has(definition.metric_name)) {
     const expected = totalNetSeries.get(definition.metric_name);
-    if (!expected || definition.metric_definition_version !== (strictCosts ? "0.4.12" : "0.4.9")
+    if (!expected || definition.metric_definition_version !== (selectedCommerce ? "0.4.13" : strictCosts ? "0.4.12" : "0.4.9")
         || definition.anchor_event !== "install" || definition.aggregation_time_zone !== "UTC"
         || definition.value_type !== expected.valueType
         || (expected.valueType === "money" && (definition.currency !== "USD" || definition.amount_scale !== 6))
         || (expected.valueType === "ratio" && definition.ratio_scale !== 6)
-        || definition.rule_bundle_id !== (strictCosts ? "metric-disjoint-cost" : "metric-total-net")
-        || definition.rule_bundle_version !== (strictCosts ? "0.4.12" : "0.4.9")
-        || definition.rule_bundle_hash !== nonFraudBundleHash(strictCosts ? "metric-disjoint-cost" : "metric-total-net")
+        || definition.rule_bundle_id !== (selectedCommerce ? "metric-selected-commerce" : strictCosts ? "metric-disjoint-cost" : "metric-total-net")
+        || definition.rule_bundle_version !== (selectedCommerce ? "0.4.13" : strictCosts ? "0.4.12" : "0.4.9")
+        || definition.rule_bundle_hash !== nonFraudBundleHash(selectedCommerce ? "metric-selected-commerce" : strictCosts ? "metric-disjoint-cost" : "metric-total-net")
         || definition.definition?.calculation !== expected.calculation
         || definition.definition?.numerator !== "total_net_revenue"
         || definition.definition?.window?.type !== "elapsed"
