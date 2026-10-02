@@ -120,7 +120,12 @@ compatibility; it is not a substitute for active validation.
 Optional metric-definition `cost_selection_policy=reject_overlapping_grains`
 uses independent `metric-disjoint-cost` version `0.4.12`. It adds
 `overlapping_cost_grains` to the undefined-reason enum and an additive database
-constraint migration. All schema URNs and wire/package versions stay unchanged.
+constraint migration. The database revision uniqueness key also gains
+`cost_date`: historical dimension digests omit date, so equal-grain rows for
+different acquisition dates at one `as_of` must coexist. The same dated cell
+and `as_of` remain unique. This relaxes admission without rewriting existing
+rows or changing historical replay selection. All schema URNs and wire/package
+versions stay unchanged.
 No existing definition, cost digest, raw record, or saved metric changes meaning.
 Historical definitions without the policy retain their previous selection.
 
