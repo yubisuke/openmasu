@@ -17,6 +17,19 @@ function jws(payload: Record<string, unknown>, privateKey: ReturnType<typeof gen
 }
 
 describe("verified commerce lifecycle", () => {
+  it("dates a verified refund reversal by its signed notification without treating Family Sharing revocation as restoration", () => {
+    const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+    const verify = (value: string) => verifyCompactJws(value, publicKey);
+    const transaction = jws({ transactionId: "synthetic-refund-reversal",originalTransactionId: "synthetic-original",
+      bundleId: "dev.synthetic.reversal",environment: "Sandbox",purchaseDate: 1787623200000 },privateKey);
+    const envelope = (notificationType: string) => jws({ notificationType,notificationUUID: "synthetic-notice",
+      signedDate: 1787623260000,data: { bundleId: "dev.synthetic.reversal",environment: "Sandbox",signedTransactionInfo: transaction } },privateKey);
+    const expected = { bundleId: "dev.synthetic.reversal",environment: "Sandbox" as const };
+    const result = normalizeAppleNotification(envelope("REFUND_REVERSED"),verify,expected);
+    assert.equal(result.event.financialEffect,"refund_reversal");
+    assert.equal(result.event.effectiveAt,new Date(1787623260000).toISOString());
+    assert.notEqual(normalizeAppleNotification(envelope("REVOKE"),verify,expected).event.financialEffect,"refund_reversal");
+  });
   it("maps every documented Google subscription lifecycle notification without making state financial", () => {
     assert.equal(googleSubscriptionLifecycle(1), "subscription_recovered");
     assert.equal(googleSubscriptionLifecycle(2), "subscription_renewed");

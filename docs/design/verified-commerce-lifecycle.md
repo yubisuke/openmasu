@@ -175,9 +175,29 @@ does not establish refunded money. Contradictory full-refund percentages are
 not projected.
 
 `REFUND_REVERSED` must link to the previously admitted refund, not synthesize
-another purchase. The contract and opt-in metric profile below support that
-link. The verified Apple normalizer does not yet project it; the provider
-connection and late correction remain in [refund reversal follow-up #209](https://github.com/yubisuke/openmasu/issues/209).
+another purchase. The verified notification and authenticated history must name
+the same restored, purchaser-owned transaction, product, original series,
+bundle and environment. The active installation binding and recorded purchase
+money must still match. The worker considers only that transaction, not every
+renewal on a history page.
+
+Projection requires exactly one previously admitted monetary refund for that
+purchase, with protected verification evidence from the same intent. Its exact
+stored amount supplies the cancellation; notification price is not new revenue.
+Multiple partial-refund records are deliberately `refund_reversal_target_ambiguous`:
+the public notification names a transaction, not which recorded deduction to
+cancel. Unrelated transactions/refunds remain untouched. A still-revoked,
+family-shared, mismatched or privacy-unavailable target is not restored. No
+automatic multi-part cancellation or repeated refund-cycle accounting is claimed.
+
+Missing purchase/refund/history targets remain explicit lifecycle outcomes and
+use the existing bounded retry (at most 20 attempts); history pagination keeps
+that retry count. The final missing page clears the cursor so a later refund can
+be found on a fresh traversal. A target-scoped deterministic record ID and the
+existing transaction lock make duplicate notifications restore one target once.
+The notification's signed time is the cancellation observation, not the original
+purchase time or a claim about settlement time. Projection, protected evidence,
+claim completion and privacy fencing share the existing transaction boundary.
 
 ## Explicit refund-cancellation metrics
 
@@ -204,6 +224,13 @@ new profile is not silently compared as equivalent to an old one. The existing
 cumulative settled-refund admission cap is not reopened by a cancellation;
 repeat refund/reversal cycles are not a general accounting engine.
 
+Late-input correction recognizes an explicit admitted cancellation only for
+definitions carrying this policy. It selects affected cohorts using the original
+refund occurrence, even if the cancellation arrives after the elapsed window.
+The existing recalculation job captures the new receipt watermark and appends
+a replacement; old runs and legacy definitions are never rewritten. Missing or
+deleted source evidence blocks the correction instead of producing a silent zero.
+
 Additional primary references checked 2026-10-02:
 
 - [Signed transaction payload](https://developer.apple.com/documentation/appstoreserverapi/jwstransactiondecodedpayload).
@@ -216,6 +243,8 @@ Additional primary references checked 2026-10-02:
   explicit full/prorated refund evidence and its integer percentage basis.
 - [Notification type](https://developer.apple.com/documentation/appstoreservernotifications/notificationtype):
   refund, refund reversal and Family Sharing access loss are different events.
+- [Decoded notification payload](https://developer.apple.com/documentation/appstoreservernotifications/responsebodyv2decodedpayload):
+  `signedDate` is the time Apple signed the notification, not a financial settlement timestamp.
 
 ## Privacy and observability
 
@@ -229,5 +258,5 @@ outcomes only.
 
 Live stores, credentials, delivery, quotas, root/key rotation, complete missed-
 notification recovery, Unity C# purchase helpers, cross-product/account relinking,
-verified-provider refund-reversal ingestion, entitlement, tax and payout
+ambiguous multi-part refund reversals, repeated refund cycles, entitlement, tax and payout
 remain unfinished or unverified operator/product concerns.

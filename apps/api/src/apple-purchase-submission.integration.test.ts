@@ -8,6 +8,7 @@ import { after, describe, it, type TestContext } from "node:test";
 import { createAppPool, createReaderPool, createSeedPool, EncryptedFilePayloadStore, PayloadNotFoundError, withTenant, type PayloadStore } from "@openmasu/runtime";
 import { sha256, verifyCompactJws } from "@openmasu/commerce-lifecycle";
 import { jcs } from "@openmasu/attribution-core";
+import { REFUND_REVERSAL_METRIC_DEFINITIONS, SELECTED_COMMERCE_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { ensureSdkKeys, issueInstallationCredential, signSdkRequest } from "./sdk-auth.js";
 import { registerAppleApp } from "./apple-admin.js";
 import { createRequestHandler } from "./router.js";
@@ -30,17 +31,19 @@ function signed(value: Any) {
   const body = `${Buffer.from('{"alg":"ES256"}').toString("base64url")}.${Buffer.from(JSON.stringify(value)).toString("base64url")}`;
   return `${body}.${sign("sha256",Buffer.from(body),{ key: pair.privateKey,dsaEncoding: "ieee-p1363" }).toString("base64url")}`;
 }
-async function harness(t: TestContext, cohort = false) {
+async function harness(t: TestContext, options: { cohort?: boolean; refundReversals?: boolean } = {}) {
   const tag = randomBytes(6).toString("hex"), tenantId = `tenant-apple-${tag}`, appId = `app-apple-${tag}`;
   const installationId = `installation:${tag}`, bundleId = `dev.openmasu.synthetic.${tag}`;
   const root = mkdtempSync(join(tmpdir(),"openmasu-apple-projection-"));
   const store = new EncryptedFilePayloadStore(join(root,"payloads"),`synthetic-master-${tag}-0000000000000000`);
   let measurement: Any | undefined, old: Any[] = [];
-  if (cohort) {
+  if (options.cohort) {
     measurement = JSON.parse(readFileSync("fixtures/v0.4/60-selected-commerce/input.json","utf8")
       .replaceAll('"tenant-a"',JSON.stringify(tenantId)).replaceAll('"app-a"',JSON.stringify(appId))
       .replaceAll('"installation:install-1"',JSON.stringify(installationId)));
     measurement!.records = measurement!.records.filter((record: Any) => !["purchase","refund"].includes(record.event_name));
+    if (options.refundReversals) measurement!.metric_definitions = REFUND_REVERSAL_METRIC_DEFINITIONS.filter(definition =>
+      measurement!.metric_definitions.some((previous: Any) => previous.metric_name === definition.metric_name));
     measurement!.metric_evaluations[0].privacy_state = "after";
     await ingestFixture(`synthetic-apple-${tag}`,{ ...measurement,metric_evaluations: [] },pool,seed);
     old = await computeSqlMetricRuns(pool,measurement!,true);
@@ -152,7 +155,7 @@ describe("installation-bound App Store monetary projection",{ concurrency: false
     assert.deepEqual(refunds.map(row => row.amount_unscaled).sort(),["4000000000000000000","6000000000000000000"]);
   });
 
-  it("keeps missing money family access unknown tokens and refund reversals out of monetary facts",async t => {
+  it("keeps missing money family access unknown tokens and unbound refund reversals out of monetary facts",async t => {
     const h = await harness(t); await h.submit();
     const values = [
       { ...h.transaction,transactionId: "synthetic-family",inAppOwnershipType: "FAMILY_SHARED" },
@@ -163,7 +166,7 @@ describe("installation-bound App Store monetary projection",{ concurrency: false
     assert.deepEqual(await h.work(values),{ processed: 1,deferred: 0,failed: 0 }); assert.deepEqual(await h.facts(),[]);
     await h.notify(h.transaction,"REFUND_REVERSED"); await h.work([h.transaction]); assert.deepEqual(await h.facts(),[]);
     const kinds = (await h.query("SELECT event_kind FROM ledger.commerce_lifecycle_facts WHERE tenant_id=$1 AND app_id=$2")).map(row => row.event_kind);
-    for (const kind of ["ownership_not_purchased","money_missing","transaction_unbound","refund_reversal_unprojected"]) assert.ok(kinds.includes(kind));
+    for (const kind of ["ownership_not_purchased","money_missing","transaction_unbound","refund_reversal_target_missing"]) assert.ok(kinds.includes(kind));
   });
 
   it("rolls back a whole invalid page or failed encrypted evidence write and retries without partial bindings",async t => {
@@ -192,7 +195,7 @@ describe("installation-bound App Store monetary projection",{ concurrency: false
   });
 
   it("connects authenticated purchases and late refunds to immutable campaign revenue LTV and ROAS runs",async t => {
-    const h = await harness(t,true); await h.submit(); await h.work([h.transaction]);
+    const h = await harness(t,{ cohort: true }); await h.submit(); await h.work([h.transaction]);
     const identity = { tenantId: h.tenantId,appId: h.appId,keyId: "synthetic-admin",role: "admin" as const };
     const allRuns = () => h.query("SELECT artifact FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2").then(rows => rows.map(row => row.artifact));
     async function recalculate(recordIds: string[], watermark: string) {
@@ -215,11 +218,152 @@ describe("installation-bound App Store monetary projection",{ concurrency: false
     for (const prior of [...h.old,...purchaseRuns]) assert.equal(jcs(saved.find(row => row.metric_run_id === prior.metric_run_id)),jcs(prior));
   });
 
-  it("purges submitted and projected evidence in all privacy scopes and after an object-only restore",async t => {
+  it("restores 10 to 6 to 10 through verified refund cancellation and late recalculation without rewriting purchases or old definitions",async t => {
+    const h = await harness(t,{ cohort: true,refundReversals: true });
+    const identity = { tenantId: h.tenantId,appId: h.appId,keyId: "synthetic-admin",role: "admin" as const };
+    const allRuns = () => h.query("SELECT artifact FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2").then(rows => rows.map(row => row.artifact));
+    async function recalculate(ids: string[], offset: number) {
+      const job = await requestMetricRecalculation(pool,identity,{ trigger_kind: "late_events",source_record_ids: ids,
+        date_from: "2026-08-06",date_to: "2026-08-06",watermark: new Date(Date.now()+offset).toISOString() });
+      assert.equal(job.selected_runs,4);
+      assert.equal((await processMetricRecalculations(pool,h.tenantId)).completed,4);
+      const rows = await allRuns();
+      return rows.filter(row => !rows.some(next => next.supersedes_metric_run_id === row.metric_run_id)
+        && row.metric_definition_version === "0.4.15");
+    }
+    await h.submit(); await h.work([h.transaction]);
+    const purchaseRuns = await recalculate((await h.facts()).map(row => row.record_id),60000);
+    assert.equal(purchaseRuns.find(row => row.metric_name === "cohort_purchase_net_revenue_d30_usd").value_unscaled,"10000000");
+    const purchaseBefore = jcs((await h.facts()).filter(row => row.kind === "purchase"));
+    const refund = { ...h.transaction,revocationType: "REFUND_PRORATED",revocationPercentage: 40000,revocationDate: h.transaction.purchaseDate+3600000 };
+    await h.notify(refund,"REFUND"); await h.work([refund],{ now: new Date(Date.now()+120000) });
+    const refundRuns = await recalculate((await h.facts()).filter(row => row.kind === "refund").map(row => row.record_id),180000);
+    assert.equal(refundRuns.find(row => row.metric_name === "cohort_purchase_net_revenue_d30_usd").value_unscaled,"6000000");
+    const legacy = await computeSqlMetricRuns(pool,{ ...h.measurement,metric_definitions: SELECTED_COMMERCE_METRIC_DEFINITIONS.filter(d =>
+      h.measurement!.metric_definitions.some((previous: Any) => previous.metric_name === d.metric_name)),
+      metric_evaluations: [{ ...h.measurement!.metric_evaluations[0],metric_run_id_prefix: `legacy:${h.appId}`,
+        input_received_at_watermark: new Date(Date.now()+180000).toISOString() }] },true);
+    await h.notify(h.transaction,"REFUND_REVERSED"); await h.notify(h.transaction,"REFUND_REVERSED");
+    const outcomes = await Promise.all([h.work([h.transaction],{ now: new Date(Date.now()+240000) }),
+      h.work([h.transaction],{ now: new Date(Date.now()+240000) })]);
+    assert.equal(outcomes.reduce((sum,value) => sum+value.processed,0),2);
+    assert.ok(outcomes.every(value => value.deferred === 0 && value.failed === 0));
+    const reversals = await h.query(`SELECT logical.record_id,refund.artifact FROM ledger.refund_facts AS refund
+      JOIN ledger.logical_events AS logical USING (tenant_id,app_id,logical_event_id)
+      WHERE refund.tenant_id=$1 AND refund.app_id=$2 AND financial_status='reversed'`);
+    assert.equal(reversals.length,1); assert.equal(typeof reversals[0].artifact.reverses_refund_record_id,"string");
+    const final = await recalculate(reversals.map(row => row.record_id),300000);
+    assert.equal(final.find(row => row.metric_name === "cohort_purchase_net_revenue_d30_usd").value_unscaled,"10000000");
+    assert.equal(final.find(row => row.metric_name === "cohort_total_net_ltv_d30_usd").value_unscaled,"30000000");
+    assert.equal(final.find(row => row.metric_name === "d30_total_net_roas").value_unscaled,"3000000");
+    assert.equal(jcs((await h.facts()).filter(row => row.kind === "purchase")),purchaseBefore);
+    const saved = await allRuns();
+    for (const prior of [...h.old,...purchaseRuns,...refundRuns,...legacy]) {
+      assert.equal(jcs(saved.find(row => row.metric_run_id === prior.metric_run_id)),jcs(prior));
+    }
+    const evidence = await h.query(`SELECT artifact FROM ledger.metric_calculation_evidence WHERE tenant_id=$1 AND app_id=$2 AND metric_run_id=$3`,
+      [h.tenantId,h.appId,final.find(row => row.metric_name === "d30_total_net_roas").metric_run_id]);
+    assert.equal(evidence[0].artifact.operands.purchase_event_count,"1");
+    assert.equal(evidence[0].artifact.operands.refund_reversal_unscaled,"4000000");
+    assert.doesNotMatch(JSON.stringify(evidence),/app_account_token|signed_transaction|transactionId|reverses_refund_record_id/);
+  });
+
+  it("retries an out-of-order reversal across history pages until its verified refund arrives without inventing a purchase",async t => {
+    const h = await harness(t); await h.submit(); await h.work([h.transaction]);
+    await h.notify(h.transaction,"REFUND_REVERSED");
+    assert.deepEqual(await h.work([h.transaction]),{ processed: 0,deferred: 1,failed: 0 });
+    assert.equal((await h.facts()).length,1);
+    const unrelated = { ...h.transaction,transactionId: "synthetic-unrelated-page" };
+    assert.deepEqual(await h.work([],{ now: new Date(Date.now()+60000),body: {
+      signedTransactions: [signed(unrelated)],hasMore: true,revision: "synthetic-next-reversal-page" } }),
+    { processed: 1,deferred: 0,failed: 0 });
+    const [checkpoint] = await h.query("SELECT attempts,cursor_ref FROM ephemeral.commerce_provider_readbacks WHERE tenant_id=$1 AND app_id=$2");
+    assert.equal(checkpoint.attempts,1,"pagination must not reset bounded missing-target retries"); assert.ok(checkpoint.cursor_ref);
+    assert.deepEqual(await h.work([],{ now: new Date(Date.now()+61000) }),{ processed: 0,deferred: 1,failed: 0 });
+    assert.deepEqual(await h.query("SELECT attempts,cursor_ref FROM ephemeral.commerce_provider_readbacks WHERE tenant_id=$1 AND app_id=$2"),
+      [{ attempts: 2,cursor_ref: null }]);
+    assert.equal((await h.facts()).length,1,"unrelated history entries must not become purchases on a reversal read-back");
+    const refund = { ...h.transaction,revocationType: "REFUND_PRORATED",revocationPercentage: 40000,revocationDate: h.transaction.purchaseDate+1000 };
+    await h.notify(refund,"REFUND");
+    assert.deepEqual(await h.work([refund],{ now: new Date(Date.now()+62000) }),{ processed: 1,deferred: 0,failed: 0 });
+    assert.deepEqual(await h.work([h.transaction],{ now: new Date(Date.now()+180000) }),{ processed: 1,deferred: 0,failed: 0 });
+    assert.equal((await h.facts()).filter(row => row.kind === "purchase").length,1);
+    assert.equal((await h.facts()).filter(row => row.kind === "refund").length,2);
+    const kinds = (await h.query("SELECT event_kind FROM ledger.commerce_lifecycle_facts WHERE tenant_id=$1 AND app_id=$2")).map(row => row.event_kind);
+    assert.ok(kinds.includes("refund_reversal_target_missing")); assert.ok(kinds.includes("refund_reversal_projected"));
+  });
+
+  it("never applies a reversal to other renewals and refuses ambiguous partial-refund targets",async t => {
+    const h = await harness(t); await h.submit(); await h.work([h.transaction]);
+    const refund = { ...h.transaction,revocationType: "REFUND_PRORATED",revocationPercentage: 40000,revocationDate: h.transaction.purchaseDate+1000 };
+    await h.notify(refund,"REFUND"); await h.work([refund]);
+    const other = { ...h.transaction,transactionId: "synthetic-other-renewal",purchaseDate: h.transaction.purchaseDate+86400000,
+      revocationType: "REFUND_PRORATED",revocationPercentage: 20000,revocationDate: h.transaction.purchaseDate+86401000 };
+    await h.notify(other,"REFUND"); await h.work([other]);
+    const before = await h.facts();
+    await h.notify(h.transaction,"REFUND_REVERSED"); await h.work([other,h.transaction]);
+    const links = await h.query(`SELECT refund.artifact->>'reverses_refund_record_id' AS target FROM ledger.refund_facts AS refund
+      WHERE tenant_id=$1 AND app_id=$2 AND financial_status='reversed'`);
+    assert.equal(links.length,1);
+    const target = before.find(row => row.record_id === links[0].target);
+    assert.equal(target!.amount_unscaled,"4000000000000000000");
+    assert.equal((await h.facts()).filter(row => row.kind === "purchase").length,2);
+    // Two append-only deltas for the other transaction cannot be disambiguated
+    // from a notification that names only that transaction.
+    const expanded = { ...other,revocationPercentage: 60000,revocationDate: other.revocationDate+1 };
+    await h.notify(expanded,"REFUND"); await h.work([expanded]);
+    const restoredOther = { ...h.transaction,transactionId: other.transactionId,purchaseDate: other.purchaseDate };
+    await h.notify(restoredOther,"REFUND_REVERSED"); await h.work([restoredOther]);
+    assert.equal((await h.query("SELECT 1 FROM ledger.refund_facts WHERE tenant_id=$1 AND app_id=$2 AND financial_status='reversed'")).length,1);
+    assert.ok((await h.query("SELECT 1 FROM ledger.commerce_lifecycle_facts WHERE tenant_id=$1 AND app_id=$2 AND event_kind='refund_reversal_target_ambiguous'")).length);
+  });
+
+  it("excludes mismatched ownership scope money stale history and Family Sharing access loss from cancellation",async t => {
+    const h = await harness(t); await h.submit(); await h.work([h.transaction]);
+    const refund = { ...h.transaction,revocationType: "REFUND_FULL",revocationDate: h.transaction.purchaseDate+1000 };
+    await h.notify(refund,"REFUND"); await h.work([refund]);
+    for (const change of [{ inAppOwnershipType: "FAMILY_SHARED" },{ currency: "EUR" },{ productId: "synthetic.other" },
+      { originalTransactionId: "synthetic-other-series" },{ appAccountToken: randomUUID() }]) {
+      await h.notify({ ...h.transaction,...change },"REFUND_REVERSED"); await h.work([h.transaction]);
+      assert.equal((await h.facts()).length,2);
+    }
+    await h.notify(h.transaction,"REFUND_REVERSED"); await h.work([refund]);
+    assert.equal((await h.facts()).length,2);
+    const family = { ...refund,inAppOwnershipType: "FAMILY_SHARED",revocationType: "FAMILY_REVOKE" };
+    await h.notify(family,"REVOKE"); await h.work([family]);
+    assert.equal((await h.facts()).length,2);
+    await h.notify(h.transaction,"REFUND_REVERSED");
+    assert.deepEqual(await h.work([{ ...h.transaction,signedDate: h.transaction.signedDate-1 }]),
+      { processed: 0,deferred: 1,failed: 0 });
+    assert.ok((await h.query("SELECT 1 FROM ledger.commerce_lifecycle_facts WHERE tenant_id=$1 AND app_id=$2 AND event_kind='refund_reversal_history_stale'")).length);
+    await h.notify(h.transaction,"REFUND_REVERSED");
+    assert.deepEqual(await h.work([h.transaction],{ body: { signedTransactions: ["invalid.signature.value"],hasMore: false } }),
+      { processed: 0,deferred: 1,failed: 0 });
+    assert.equal((await h.facts()).length,2);
+  });
+
+  it("rolls back a failed cancellation evidence write and retries only the same refund",async t => {
+    const h = await harness(t); await h.submit(); await h.work([h.transaction]);
+    const refund = { ...h.transaction,revocationType: "REFUND_FULL",revocationDate: h.transaction.purchaseDate+1000 };
+    await h.notify(refund,"REFUND"); await h.work([refund]); await h.notify(h.transaction,"REFUND_REVERSED");
+    const before = jcs(await h.facts());
+    const failing: PayloadStore = { read: h.store.read.bind(h.store),purge: h.store.purge.bind(h.store),scanFor: h.store.scanFor.bind(h.store),
+      write: async () => { throw new Error("synthetic cancellation storage interruption"); } };
+    assert.deepEqual(await h.work([h.transaction],{ store: failing }),{ processed: 0,deferred: 1,failed: 0 });
+    assert.equal(jcs(await h.facts()),before);
+    assert.deepEqual(await h.work([h.transaction],{ now: new Date(Date.now()+60000) }),{ processed: 1,deferred: 0,failed: 0 });
+    assert.equal((await h.facts()).length,3);
+  });
+
+  it("purges submitted and projected cancellation evidence in all privacy scopes and after an object-only restore",async t => {
     for (const scope of ["installation","app","tenant"] as const) {
       const h = await harness(t); await h.submit();
       assert.deepEqual(await h.work([h.transaction]),{ processed: 1,deferred: 0,failed: 0 });
       assert.equal((await h.facts()).length,1);
+      const refund = { ...h.transaction,revocationType: "REFUND_FULL",revocationDate: h.transaction.purchaseDate+1000 };
+      await h.notify(refund,"REFUND"); await h.work([refund]);
+      await h.notify(h.transaction,"REFUND_REVERSED"); await h.work([h.transaction]);
+      assert.equal((await h.facts()).length,3);
       await h.submit({ ...h.transaction,signedDate: h.transaction.signedDate+1 });
       const refs = (await h.query(`SELECT evidence_ref AS reference FROM control.apple_purchase_evidence WHERE tenant_id=$1 AND app_id=$2
         UNION SELECT evidence_ref FROM control.commerce_provider_notifications WHERE tenant_id=$1 AND app_id=$2`)).map(row => row.reference);
@@ -235,14 +379,24 @@ describe("installation-bound App Store monetary projection",{ concurrency: false
     }
   });
 
-  it("does not publish a provider response that completes after installation deletion",async t => {
-    const h = await harness(t); await h.submit();
+  it("does not publish a cancellation response that completes after installation deletion",async t => {
+    const h = await harness(t); await h.submit(); await h.work([h.transaction]);
+    const refund = { ...h.transaction,revocationType: "REFUND_FULL",revocationDate: h.transaction.purchaseDate+1000 };
+    await h.notify(refund,"REFUND"); await h.work([refund]); await h.notify(h.transaction,"REFUND_REVERSED");
+    const before = jcs(await h.facts());
     let entered!: () => void,release!: () => void;
     const requested = new Promise<void>(resolve => { entered = resolve; }), resume = new Promise<void>(resolve => { release = resolve; });
     const pending = processCommerceReadbacks(pool,h.store,h.tenantId,{ now: new Date(Date.now()+1000),verifyAppleSignedData: verifier,
       appleClient: async () => { entered(); await resume; return { status: 200,body: Buffer.from(JSON.stringify({ signedTransactions: [signed(h.transaction)],hasMore: false })) }; } });
     await requested;
     try { assert.equal((await h.remove("installation")).status,"completed"); } finally { release(); }
-    assert.deepEqual(await pending,{ processed: 0,deferred: 0,failed: 0 }); assert.deepEqual(await h.facts(),[]);
+    assert.deepEqual(await pending,{ processed: 0,deferred: 0,failed: 0 });
+    // Privacy purges payloads and changes availability; it does not delete the
+    // append-only fact ledger. No cancellation may be appended after the fence.
+    assert.equal(jcs(await h.facts()),before);
+    assert.deepEqual(await h.query(`SELECT record_id FROM ledger.raw_records_current
+      WHERE tenant_id=$1 AND app_id=$2 AND payload_lifecycle_status='available'`),[]);
+    const refs = await h.query("SELECT evidence_ref FROM control.apple_purchase_evidence WHERE tenant_id=$1 AND app_id=$2");
+    for (const ref of refs) await assert.rejects(h.store.read(ref.evidence_ref),PayloadNotFoundError);
   });
 });
