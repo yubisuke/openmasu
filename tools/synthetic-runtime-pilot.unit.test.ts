@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   assertCleanDemo,
   assertRuntimeParityOutput,
+  assertRestartPreserved,
   assertSeedOutput,
   parseSyntheticPilotArguments,
   plannedSyntheticPilotSteps,
@@ -61,6 +62,15 @@ describe("disposable synthetic runtime pilot", () => {
     assert.deepEqual(ordinary.slice(-2), ["cleanup", "cleanup_verification"]);
     assert.ok(!ordinary.includes("synthetic_load"));
     assert.ok(plannedSyntheticPilotSteps(true).includes("synthetic_load"));
+    assert.ok(ordinary.indexOf("normal_restart") > ordinary.indexOf("seed_contract_fixtures"));
+    assert.ok(ordinary.indexOf("normal_restart") < ordinary.indexOf("runtime_smoke"));
+  });
+
+  it("refuses a normal restart that loses data or rotates the secret set", () => {
+    const before = { counts: { origin: "postgresql_ledger", raw_records: 12, metric_runs: 3 }, secret_fingerprint: "a".repeat(64) };
+    assert.doesNotThrow(() => assertRestartPreserved(before, structuredClone(before)));
+    assert.throws(() => assertRestartPreserved(before, { ...before, counts: { raw_records: 0 } }));
+    assert.throws(() => assertRestartPreserved(before, { ...before, secret_fingerprint: "b".repeat(64) }));
   });
 
   it("accepts only the clean-ledger demo and the two reviewed fixture-33 preview values", () => {

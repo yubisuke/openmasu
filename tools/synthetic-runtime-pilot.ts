@@ -76,6 +76,7 @@ export function plannedSyntheticPilotSteps(load: boolean): string[] {
     "verify_runtime_parity",
     "resume_runtime",
     "stable_worker",
+    "normal_restart",
     "runtime_smoke",
     ...(load ? ["synthetic_load"] : []),
     "cleanup",
@@ -120,6 +121,12 @@ export function assertRuntimeParityOutput(parityOutput: string): void {
     parityOutput,
     /^Runtime parity passed: 57 fixtures, 10 artifact families, 558 JCS byte-identical artifacts\.$/m,
   );
+}
+
+export function assertRestartPreserved(before: { counts: unknown; secret_fingerprint: string }, after: { counts: unknown; secret_fingerprint: string }): void {
+  assert.deepEqual(after.counts, before.counts, "normal restart must preserve the seeded ledger counts");
+  assert.match(before.secret_fingerprint, /^[0-9a-f]{64}$/);
+  assert.equal(after.secret_fingerprint, before.secret_fingerprint, "normal restart must preserve bootstrap secret identity");
 }
 
 async function freeLoopbackPorts(count: number): Promise<number[]> {
@@ -283,6 +290,20 @@ export async function runSyntheticRuntimePilot(
       steps.set("stable_worker", "failed");
       throw new PilotStepError("stable_worker");
     }
+    // Reuse this isolated stack rather than adding a second deployment harness.
+    // Only aggregate counts and an in-memory secret hash leave the container;
+    // the hash is never included in the public evidence artifact or console.
+    const restartSnapshot = () => {
+      const result = requireSuccess("normal_restart", "docker", [
+        ...compose, "exec", "-T", "api", ...shell("set -a && . /run/openmasu/app/runtime.env && set +a && node --input-type=module -e 'import {createHash} from \"node:crypto\"; import {execFileSync} from \"node:child_process\"; const demo=JSON.parse(execFileSync(\"node\",[\"--import\",\"tsx\",\"apps/worker/src/demo-metrics.ts\"],{encoding:\"utf8\"})); const keys=[\"OPENMASU_ADMIN_KEY\",\"OPENMASU_PAYLOAD_MASTER_KEY\",\"OPENMASU_SDK_KEY\",\"OPENMASU_INSTALLATION_DIGEST_KEY\",\"OPENMASU_APP_DATABASE_URL\"]; const values=keys.map(key=>process.env[key]); if(values.some(value=>!value))process.exit(2); console.log(JSON.stringify({counts:demo.ledger_counts,secret_fingerprint:createHash(\"sha256\").update(JSON.stringify(values)).digest(\"hex\")}));'"),
+      ], staging);
+      return JSON.parse(result.stdout) as { counts: unknown; secret_fingerprint: string };
+    };
+    const beforeRestart = restartSnapshot();
+    runStep("normal_restart", [...compose, "restart", "api", "worker", "redirector"]);
+    runStep("normal_restart", [...compose, "up", "-d", "--wait"]);
+    try { assertRestartPreserved(beforeRestart, restartSnapshot()); }
+    catch { steps.set("normal_restart", "failed"); throw new PilotStepError("normal_restart"); }
     runVerifiedStep("runtime_smoke", [
       ...compose, "exec", "-T", "api",
       ...shell("set -a && . /run/openmasu/app/runtime.env && set +a && OPENMASU_API_HOST_PORT=8080 OPENMASU_RUNTIME_SMOKE_REDIRECTOR_PROBE_BASE_URL=http://redirector:8090 node --import tsx tools/runtime-smoke.ts"),

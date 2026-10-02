@@ -113,6 +113,7 @@ The command creates an isolated temporary checkout and Compose project. It:
 - disables live provider integrations;
 - verifies the empty ledger;
 - seeds all reviewed synthetic fixtures while normal writers are stopped;
+- restarts normal services without reseeding and checks preserved ledger counts and secret identity;
 - compares PostgreSQL output with committed canonical goldens;
 - exercises the health, dashboard, redirector, and SDK ingest surfaces;
 - removes its containers, networks, volumes, secrets, and staging directory.

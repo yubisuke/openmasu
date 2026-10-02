@@ -150,6 +150,10 @@ campaigns, or provider data.
 For a persistent local development stack and operator commands, follow the
 [getting started guide](docs/getting-started.md). Do not run volume-reset or
 fixture-seed commands against a stack that contains data you need to keep.
+For an operator-owned service, use the separate [single-host deployment path](docs/operations/single-host.md):
+one existing Compose stack, a pinned release, protected persistent volumes and an
+operator HTTPS proxy. Its read-only `deploy:preflight` checks configuration;
+it does not certify a real deployment or a live TLS chain.
 Use the [confirmation-bound import session](docs/import-mappings.md#confirmation-bound-runtime-import)
 to preview exact local input bytes before allowing an existing-MMP import to
 write to the ledger.
