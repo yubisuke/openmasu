@@ -6,8 +6,10 @@ import { DISJOINT_COST_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { jcs, sha256, type CandidateAttempt } from "@openmasu/attribution-core";
 import { createAppPool, createReaderPool, createSeedPool, withTenant } from "@openmasu/runtime";
 import { registerMetricSchedule, listMetricSchedules, disableMetricSchedule } from "../../api/src/metric-schedules.js";
+import { requestMetricRecalculation } from "../../api/src/metric-recalculations.js";
 import { ingestFixture, ingestRuntimeBatch } from "./ingestion.js";
 import { claimNextScheduledDate, processMetricSchedules } from "./metric-schedule-worker.js";
+import { processMetricRecalculations } from "./metric-recalculation-worker.js";
 type Any = Record<string, any>;
 
 describe("bounded campaign discovery in the existing daily worker", { concurrency: false }, () => {
@@ -30,9 +32,10 @@ describe("bounded campaign discovery in the existing daily worker", { concurrenc
     `SELECT artifact FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2 ORDER BY metric_run_id`, [identity.tenantId, identity.appId])).rows.map(row => row.artifact));
   const listed = () => listMetricSchedules(reader, identity);
   async function cost(campaign: string | null, date = "2026-08-06") {
-    const artifact = { ...input.cost_records[0], cost_record_id: `synthetic-cost-${campaign ?? "unknown"}-${date}`,
+    const artifact: Any = { ...input.cost_records[0], cost_record_id: `synthetic-cost-${campaign ?? "unknown"}-${date}`,
       campaign_id: campaign, date, dimension_digest: sha256({ campaign, date }),
       as_of: date === "2026-08-06" ? "2026-08-12T00:00:00.000Z" : "2026-08-13T00:00:00.000Z" };
+    if (campaign === null) delete artifact.campaign_id;
     await withTenant(app, identity.tenantId, client => client.query(`INSERT INTO ledger.cost_records
       (cost_record_id,tenant_id,app_id,network,campaign_id,country,cost_date,spend_unscaled,spend_scale,currency,
        source,as_of,report_snapshot_digest,cost_key_digest,import_run_id,artifact)
@@ -68,7 +71,7 @@ describe("bounded campaign discovery in the existing daily worker", { concurrenc
     history.push(...attempts);
   }
 
-  it("adds the next day's new campaign without manual edits and never emits an all-campaign total", async () => {
+  it("connects daily campaign discovery, the next campaign and late-input correction without a duplicate total", async () => {
     await register();
     await processMetricSchedules(app, identity.tenantId, { now: first });
     const original = await rows(); assert.equal(original.length, 1); assert.equal(original[0].value_unscaled, "2000000");
@@ -80,6 +83,19 @@ describe("bounded campaign discovery in the existing daily worker", { concurrenc
     assert.deepEqual(daily.map(row => row.grouping.dimensions.campaign_id).sort(), ["campaign-a", "synthetic-campaign-b"]);
     assert.ok(all.every(row => row.grouping.dimensions.attribution_status === "non_organic"));
     assert.equal(jcs(all.find(row => row.metric_run_id === original[0].metric_run_id)), jcs(original[0]));
+    const receivedAt = "2026-08-14T00:00:00.000Z";
+    const late: CandidateAttempt = { server: { ...input.server_context, received_at: receivedAt }, batch_id: "synthetic-late-after-schedule",
+      record: { ...input.records[2], record_id: "synthetic-late-after-schedule", event_id: "synthetic-late-after-schedule",
+        delivery_id: "synthetic-late-after-schedule", received_at: receivedAt,
+        payload: { ...input.records[2].payload, amount_unscaled: "10000000" } } };
+    assert.equal((await ingestRuntimeBatch([late], app, history)).rejections.length, 0);
+    const job = await requestMetricRecalculation(app, identity, { trigger_kind: "late_events",
+      source_record_ids: [late.record.record_id], date_from: "2026-08-06", date_to: "2026-08-07", watermark: receivedAt });
+    assert.equal(job.selected_runs, 1);
+    assert.equal((await processMetricRecalculations(app, identity.tenantId)).completed, 1);
+    const corrected = await rows();
+    assert.equal(corrected.find(row => row.supersedes_metric_run_id === original[0].metric_run_id)?.value_unscaled, "3000000");
+    assert.equal(jcs(corrected.find(row => row.metric_run_id === original[0].metric_run_id)), jcs(original[0]));
   });
 
   it("freezes targets before calculation and replays committed evidence with the same set after a crash", async () => {
