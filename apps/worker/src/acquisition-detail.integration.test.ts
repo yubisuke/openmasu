@@ -23,13 +23,13 @@ type Any = Record<string, any>;
 describe("selected acquisition detail operator workflow", { concurrency: false }, () => {
   const app = createAppPool(), reader = createReaderPool(), seed = createSeedPool();
   const origin = "http://localhost:8080";
-  const key = `synthetic-acquisition-detail-${randomBytes(32).toString("base64url")}`;
-  let input: Any, costs: Any[], base: string, cookie: string, csrf: string;
+  let key: string, input: Any, costs: Any[], base: string, cookie: string, csrf: string;
   let identity: { tenantId: string; appId: string; keyId: string; role: "admin" };
   let server: ReturnType<typeof createServer> | undefined;
 
   beforeEach(async () => {
     const tenantId = `tenant-detail-${randomBytes(5).toString("hex")}`;
+    key = `synthetic-acquisition-detail-${randomBytes(32).toString("base64url")}`;
     input = JSON.parse(readFileSync("fixtures/v0.4/63-selected-acquisition-detail/input.json", "utf8")
       .replaceAll('"tenant-a"', JSON.stringify(tenantId)));
     costs = input.cost_records;
