@@ -14,6 +14,8 @@ export type RetentionMatrix = {
   meaning: Meaning;
   policyVersions: readonly string[];
   ruleBundle: string;
+  ruleBundleHash: string;
+  definitionVersion: string;
   watermark: string;
   days: number[];
   cohorts: { date: string; cells: { day: number; observations: RetentionObservation[] }[] }[];
@@ -72,6 +74,7 @@ export function buildRetentionMatrices(rows: readonly MetricReportRow[], partial
     const first = group[0];
     matrices.push({ dimensions: first.dimensions, meaning: first.meaning,
       policyVersions: first.value.row.policy_versions, ruleBundle: first.value.row.rule_bundle_id,
+      ruleBundleHash: first.value.row.rule_bundle_hash, definitionVersion: first.value.row.metric_definition_version,
       watermark: first.value.row.input_received_at_watermark, days,
       cohorts: dates.map(date => ({ date, cells: days.map(day => ({ day,
         observations: group.filter(item => item.date === date && item.day === day).map(item => item.value)
