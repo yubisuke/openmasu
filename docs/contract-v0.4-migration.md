@@ -114,3 +114,20 @@ digest construction are documented in `fixtures/v0.4/README.md`.
 Use `schemas/`, `registries/`, `fixtures/v0.4/`, and
 `spec/event-metric-contract-v0.4.md` together. This migration document explains
 compatibility; it is not a substitute for active validation.
+
+## Optional disjoint-cost selection (0.4.12)
+
+Optional metric-definition `cost_selection_policy=reject_overlapping_grains`
+uses independent `metric-disjoint-cost` version `0.4.12`. It adds
+`overlapping_cost_grains` to the undefined-reason enum and an additive database
+constraint migration. All schema URNs and wire/package versions stay unchanged.
+No existing definition, cost digest, raw record, or saved metric changes meaning.
+Historical definitions without the policy retain their previous selection.
+
+Fixture `59-disjoint-cost-grains` is the complete golden change inventory:
+one new input and 13 new `expected_*.json` files. No pre-existing golden changes.
+Use `git diff --name-status 703ae43 -- fixtures/v0.4/` to verify this inventory;
+only fixture 59 and the shared README should differ. The README gives the
+seven hand-calculated runs and independent snapshot derivation. Runtime SQL
+uses the same selected costs for arithmetic, evidence and replay, while the
+independent Python implementation exercises the contract selection separately.

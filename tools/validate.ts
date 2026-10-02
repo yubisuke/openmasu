@@ -322,7 +322,8 @@ function validateRegistryReferences(output: Any, label: string): void {
       "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
       "aak_attributed_reengagements",
     ]);
-    const expectedVersion = definition.acquisition_basis === "selected_first_party_click"
+    const expectedVersion = definition.cost_selection_policy === "reject_overlapping_grains"
+      ? "0.4.12" : definition.acquisition_basis === "selected_first_party_click"
       ? "0.4.11"
       : definition.definition.numerator === "total_net_revenue" ||
       ["cohort_purchase_net_revenue_d30_usd", "cohort_purchase_net_revenue_d90_usd"].includes(definition.metric_name)
@@ -572,8 +573,8 @@ if (!summaryOnly) {
         }
       });
     }
-    it("contains 58 fixture directories", () => {
-      check(fixtureDirs.length === 58, `expected 58 fixture directories, found ${fixtureDirs.length}`);
+    it("contains 59 fixture directories", () => {
+      check(fixtureDirs.length === 59, `expected 59 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -989,12 +990,25 @@ const scenarios: Array<[string, () => void]> = [
     check(value.metric_definitions.filter((item: Any) => item.metric_definition_version === "0.4.11")
       .every((item: Any) => item.acquisition_basis === "selected_first_party_click"), "scenario 58 versioned grouping basis");
   }],
+  ["59 disjoint cost grains and dated revisions", () => {
+    const runs = fixture("59-disjoint-cost-grains").output.metric_runs;
+    const values = Object.fromEntries(runs.map((run: Any) => [run.metric_run_id, run.value_unscaled]));
+    check(values["cost59-w0-day6:d0_roas"] === "200000" && values["cost59-w0-all:d0_roas"] === "100000",
+      "scenario 59 sums disjoint siblings and keeps acquisition dates separate");
+    check(values["cost59-w1-day6:d0_roas"] === "181818" && values["cost59-w1-all:d0_roas"] === "95238",
+      "scenario 59 uses visible cost revisions with half-even rounding");
+    const overlap = runs.find((run: Any) => run.metric_run_id === "cost59-w2-day6:d0_roas");
+    check(overlap?.value_state === "undefined" && overlap.undefined_reason === "overlapping_cost_grains"
+      && !Object.hasOwn(overlap, "value_unscaled"), "scenario 59 refuses an uncertain denominator");
+    check(values["cost59-w2-day7:d0_roas"] === "0" && values["cost59-w2-legacy:d0_legacy_roas"] === "95238",
+      "scenario 59 isolates another acquisition date and preserves historical definitions");
+  }],
 ];
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 58 scenario assertions", () => {
-      check(scenarios.length === 58, "scenario assertion inventory must contain 58 entries");
+    it("contains 59 scenario assertions", () => {
+      check(scenarios.length === 59, "scenario assertion inventory must contain 59 entries");
     });
   });
 
@@ -1563,7 +1577,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 58 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 59 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1603,7 +1617,7 @@ const acceptance: Array<[string, () => void]> = [
     for (const forbidden of ["threshold", "model_weight", "watchlist", "ip_address", "user_agent", "response_timing"]) check(!schemaText.includes(forbidden), `AC20 ${forbidden}`);
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
-  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 58 && outputArtifactCount === 58 * 13, "AC21")],
+  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 59 && outputArtifactCount === 59 * 13, "AC21")],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {
     for (const { output, python } of results.values()) check(equal(output, python), "AC22 evaluator mismatch");
     const vector = { numbers: [333333333.33333329, 1e30, 4.50, 2e-3, 1e-27, -0], string: "€$\u000f\nA'B\"\\\"/" };

@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 56 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 59 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -212,6 +212,57 @@ the scoped selected attribution ID and artifact digest. It is
 three runs. The grouping digest is
 `b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6`.
 Previous fixture inputs and goldens are unchanged.
+
+### Fixture 59: disjoint cost grains
+
+The three accepted click/install/ad-revenue records, selected attribution and
+ten non-cost/non-definition/non-metric artifact families are unchanged copies
+of fixture 58. There is one USD20 installation-revenue cohort on August 6; the
+August 7 cost scope has no installs. Six synthetic cost observations cover
+August 6 and 7: USD40 group-a plus USD60 group-b on each date at August 12 (W0),
+an August 6 group-a correction to USD50 at August 13 (W1), and an August 6
+campaign-wide USD100 parent at August 14 (W2). Dimension digests deliberately
+remain the existing date-free contract digests; the new explicit revision key
+must keep the dates separate. All observations remain in cost artifacts.
+
+| Run prefix | Visible cost selection | Independent value at ratio scale 6 |
+| --- | --- | --- |
+| cost59-w0-day6 | 40 + 60 | 20 / 100 = 200000 |
+| cost59-w0-all | 40 + 60 on each date | 20 / 200 = 100000 |
+| cost59-w1-day6 | 50 + 60 | 20 / 110 = 181818, half-even |
+| cost59-w1-all | 50 + 60 and 40 + 60 | 20 / 210 = 95238, half-even |
+| cost59-w2-day6 | 50 + 60 + overlapping parent 100 | undefined / overlapping_cost_grains; no numeric value |
+| cost59-w2-day7 | 40 + 60 | 0 / 100 = 0; separate date unaffected |
+| cost59-w2-legacy | historical definition, 50 + 60 + 100 | 20 / 210 = 95238; retained legacy meaning |
+
+The safe metric definition binds optional `cost_selection_policy` to
+`metric-disjoint-cost` version `0.4.12`, hash
+`3ec3e50fc8b9180b55e888895d793739028fdd20abfc34f20110e6ce96e8b053`.
+The legacy comparison retains selected-acquisition version `0.4.11` under a
+separate metric name. Three existing default definitions are also emitted.
+
+Snapshot derivation uses the three input records ordered by received time and
+record ID, each represented as `[received_at, record_id, available, policy-v0.1]`.
+Append only the selected current costs ordered by `as_of, cost_record_id` as
+`[cost, as_of, cost_record_id, report_snapshot_digest, dimension_digest]`.
+Hash that JCS array, then use the fixture-58 acquisition snapshot wrapper and
+unchanged selected-attribution artifact digest. The input server policy digest
+is used; it is not a field on the public raw-record artifact.
+
+| Run suffix | Independently derived input_snapshot_id |
+| --- | --- |
+| w0-day6 | 3e44c147db076421030224f28952a2dbe4c1ec4e9e324fee4c0a0e23fed733a2 |
+| w0-all | 78b952ce1c0137cac1c854f65ad4fec9256b2456faf9e3794b01a8ed78e6593d |
+| w1-day6 | 6f2780929ab5da12a0b0f08bc9469c3697d411b983a8b657a51d47ec35a43b4d |
+| w1-all | 9bb8a6cba148f574375a66c772145cd72f36a8b2c6d6523051ce2891165d50e9 |
+| w2-day6 and w2-legacy | 264e3900379e38434d0f48e85f3f91fc197d25252e284a5768e63f733fb11acb |
+| w2-day7 | 2d59e2848f119c9a71d87485e8efef32560279e318e571353014019a58746520 |
+
+Undefined runs retain all candidate cost evidence; a superseded cost revision
+does not enter their snapshot. Matching snapshots can still have different
+definition meanings, which are bound independently by version and bundle.
+Prior fixture inputs and goldens are unchanged. Candidate TS/Python outputs
+were compared before the manually constructed goldens were promoted.
 
 ## Adding a fixture procedure
 
