@@ -13,6 +13,7 @@ import { metricReport } from "../../api/src/reporting.js";
 import { reportToSnapshot } from "../../../tools/report-to-snapshot.js";
 import { compareSnapshots } from "../../../tools/compare-cohorts.js";
 import { DISJOINT_COST_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import { syntheticRetentionCases } from "../../../tools/synthetic-retention-cases.js";
 import { persistCostImport, type CostInput } from "./import/cost.js";
 
 type Any = Record<string, any>;
@@ -194,6 +195,17 @@ describe("selected native acquisition SQL parity", { concurrency: false }, () =>
   before(() => { app = createAppPool(); seed = createSeedPool(); });
   after(async () => { await app?.end(); await seed?.end(); });
   const fixture58 = () => JSON.parse(readFileSync(join(process.cwd(), "fixtures/v0.4/58-selected-native-acquisition/input.json"), "utf8"));
+
+  it("matches retained-install arithmetic for selected-source and gross/net retention without admitting late sessions", async () => {
+    for (const entry of syntheticRetentionCases(fixture58())) {
+      await ingestFixture(`retention-${entry.name}`, entry.input, app, seed);
+      const runs = await computeSqlMetricRuns(app, entry.input, false);
+      for (const [name, expected] of Object.entries(entry.expected)) {
+        assert.equal(runs.find(run => run.metric_name === name)?.value_unscaled, expected, `${entry.name}: ${name}`);
+      }
+      assert.equal(jcs(runs), jcs(evaluate(entry.input).metric_runs), entry.name);
+    }
+  });
 
   it("selects campaign from attribution evidence without rewriting SDK install facts", async () => {
     const source = fixture58();

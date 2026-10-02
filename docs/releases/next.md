@@ -79,6 +79,11 @@ uniqueness constraint through forward migration `059_metric_run_identity.sql`.
 Distinct schedules, cutoffs and FX definitions can retain the same input evidence
 without colliding. Run-ID uniqueness, old artifact bytes and exact retries remain;
 re-registration does not implicitly supersede prior results.
+The TypeScript reference retention calculation also now joins sessions to its
+eligible installation cohort, matching the denominator's selected-source and
+gross/net filters. Synthetic TS/Python/SQL cases cover previously wrong 0% and
+100% outcomes, gross/net arithmetic and a late session. No existing golden,
+metric-definition identity or saved artifact is rewritten by this correction.
 
 Supported-source upgrade procedures, single-host deployment preflight/restart,
 capacity visibility and the limited backend/report HTTP contract also have
@@ -87,7 +92,8 @@ batch is complete. The next product batch is selected in
 [plan #172](https://github.com/yubisuke/openmasu/issues/172), with the ordered
 [roadmap](../roadmap.md#next-product-sequence) as its canonical crosswalk.
 The other seven original slices remain planned; the separately reproduced
-schedule identity collision (#200) now has source implementation.
+schedule identity collision (#200) and reference retention population mismatch
+(#202) now have source implementation.
 No development slice is part of the
 published baseline, and no next
 version or release scope is selected by that development plan.

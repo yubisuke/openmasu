@@ -54,6 +54,20 @@ selection to purchase-net and total-net. Platform-assigned acquisition, daily
 event counts, creative granularity and Apple aggregate metrics are not expanded.
 No live provider, real-device or production-delivery evidence is claimed.
 
+Retention joins activity back to the same eligible installation set used for
+the denominator, after acquisition grouping and the chosen gross/net policy.
+A native install does not need to repeat its selected click's campaign in the
+SDK payload. A fraud-excluded installation's session cannot enter a net
+retention numerator. D1/D7 remain activity-day metrics, not cumulative event
+counts. Fixed receipt cutoffs still exclude later session deliveries.
+
+The reference TypeScript evaluator previously joined retention activity to
+the recorded-dimension cohort before these filters, which could undercount a
+selected campaign or overcount a net cohort. The correction aligns it with
+the Python evaluator and SQL cohort calculation. It changes no definition
+identity or stored run; previously exported reference results must not be
+treated as corrected simply because the source code was upgraded.
+
 ## Purchase, refunds and total revenue
 
 Use the separate
@@ -91,3 +105,8 @@ cost, USD 20 D0 LTV, and ROAS 2 with TypeScript/Python contract parity. Runtime
 tests exercise normalized ledger reads and the actual inbox/SDK worker before
 SQL calculation. `npm run validate`, `npm run test:metric-parity`, and
 `npm run test:integration` cover the respective gates.
+Shared synthetic retention cases additionally prove selected-source D1 1/1,
+gross 1/2 versus net 0/1 when only the excluded install returns, unchanged
+recorded-dimension support, and exclusion of a session beyond the watermark.
+The expected values are hand-derived, with full TypeScript/Python artifact
+parity and SQL metric-run byte parity; existing fixture goldens are unchanged.

@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import { validateEventPayload } from "@openmasu/contracts";
 import { Ajv2020Module, addFormatsModule, canonicalize } from "@openmasu/contracts/validation-tooling";
 import { evaluate, sha256, TimestampInvalidError } from "@openmasu/attribution-core";
+import { syntheticRetentionCases } from "./synthetic-retention-cases.js";
 
 type Any = Record<string, any>;
 type Captured<T> = { ok: true; value: T } | { ok: false; error: unknown };
@@ -2077,6 +2078,21 @@ const validRevenue = {
 };
 if (!summaryOnly) {
   describe("semantic mutations", () => {
+    it("joins retention activity to the same selected and fraud-filtered cohort in TypeScript and Python", () => {
+      const cases = syntheticRetentionCases(fixture("58-selected-native-acquisition").input);
+      const python = pythonOutputs(cases.map(entry => entry.input));
+      for (const [index, entry] of cases.entries()) {
+        const output = evaluate(entry.input);
+        check(output.rejections.length === 0, `${entry.name}: schema-conforming records must be admitted`);
+        for (const definition of entry.input.metric_definitions) {
+          check(validatorFor("urn:openmasu:schema:metric-definition:v0.4")(definition), `${entry.name}: definition invalid`);
+        }
+        for (const [name, expected] of Object.entries(entry.expected)) {
+          check(output.metric_runs.find(row => row.metric_name === name)?.value_unscaled === expected, `${entry.name}: ${name} must equal ${expected}`);
+        }
+        check(equal(output, python[index]), `${entry.name}: full artifact TS/Python parity`);
+      }
+    });
     it("keeps daily event counts bound to one date and one supported event", () => {
       const definitionValidator = validatorFor("urn:openmasu:schema:metric-definition:v0.4");
       const baseline = structuredClone(fixture("42-daily-metric-date").input);

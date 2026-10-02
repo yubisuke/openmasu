@@ -220,7 +220,11 @@ binding, finer advertising grain and separate re-engagement outcomes
 (#186-#188) are scoped follow-ups. A forward-only runtime fix now permits
 schedule re-registration over identical inputs while preserving run-ID
 uniqueness, old evidence, exact replay and explicit-only supersession
-([#200](https://github.com/yubisuke/openmasu/issues/200)). Seven slices remain planned. Existing
+([#200](https://github.com/yubisuke/openmasu/issues/200)). The reference retention
+numerator now uses that metric's selected and fraud-filtered cohort, matching
+Python/SQL rather than counting a different population
+([#202](https://github.com/yubisuke/openmasu/issues/202)). Neither fix rewrites
+old saved runs. Seven slices remain planned. Existing
 component evidence and the published v0.3.0-rc.1 record remain unchanged;
 neither proves these remaining connections.
 

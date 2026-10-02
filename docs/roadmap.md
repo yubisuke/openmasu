@@ -110,8 +110,11 @@ implemented, followed by reader-only recorded attribution analysis and admin
 dashboard controls for the existing daily schedules. A forward-only runtime fix
 also permits schedule re-registration over identical inputs while preserving
 run-ID uniqueness, exact replay, old evidence and explicit supersession
-([#200](https://github.com/yubisuke/openmasu/issues/200)). Seven slices remain
-planned, starting with custom-event outcomes.
+([#200](https://github.com/yubisuke/openmasu/issues/200)). A separate reference
+retention correction aligns the numerator with its selected and fraud-filtered
+cohort ([#202](https://github.com/yubisuke/openmasu/issues/202)). These two fixes
+extend the original sixteen slices; seven remain planned, starting with
+custom-event outcomes.
 
 The first priority is a connected measurement path: tracking link, SDK install,
 selected acquisition source, campaign revenue and cost, daily ROAS, late-input
@@ -150,6 +153,7 @@ It does not make an external calculation authenticated or independently verified
 | Source implemented | [Attribution reason counts #175](https://github.com/yubisuke/openmasu/issues/175) | Bounded fixed-watermark API/SSR reads one eligible stored acquisition decision per retained install, with current privacy and no inferred causes | Attribution analysis |
 | Source implemented | [Metric schedule controls #176](https://github.com/yubisuke/openmasu/issues/176) | Admin-only SSR registration, saved definition/checkpoint inspection and disablement reuse the existing immutable schedule service and worker | Daily calculation controls |
 | Source implemented | [Schedule re-registration recovery #200](https://github.com/yubisuke/openmasu/issues/200) | Run-ID uniqueness permits distinct schedules/cutoffs/definitions over identical inputs; exact crash replay, reader pagination and explicit-only supersession preserve old evidence | Schedule recovery |
+| Source implemented | [Retention cohort correction #202](https://github.com/yubisuke/openmasu/issues/202) | Retention activity joins the same selected/fraud-filtered cohort as its denominator, with TS/Python/SQL arithmetic parity and unchanged goldens | Retention population |
 | 5 | [Custom-event conversion #177](https://github.com/yubisuke/openmasu/issues/177) | Measure distinct cohort members reaching one explicit event key and their conversion rate, with contract/evaluator/SQL parity | Cohort outcomes |
 | 6 | [Total-net ROAS evidence #178](https://github.com/yubisuke/openmasu/issues/178) | Explain an existing D30 total-net ROAS from its saved advertising, purchase, refund and cost operands | Commerce calculation evidence |
 | 7 | [Correction controls #179](https://github.com/yubisuke/openmasu/issues/179) | Request a bounded cost-driven recalculation and follow its job and original/replacement run details through the dashboard | Correction workflow |
