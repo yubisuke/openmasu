@@ -36,7 +36,7 @@ in [Project plan](project-plan.md).
 | Operator-owned bulk event exports | Synthetic complete | Default-off S3-compatible destinations, deterministic gzip NDJSON, SigV4 conditional writes, durable keyset cursors, and destination-scoped deletion notices |
 
 The current contract gate preserves parity across 28 schemas, 8 registries,
-and 61 reviewed synthetic fixtures, including explicitly versioned native acquisition cohorts, safe cost selection and custom conversions.
+and 62 reviewed synthetic fixtures, including explicitly versioned native acquisition cohorts, safe cost selection, custom conversions and targeted refund cancellation.
 
 ## Completed milestone: integration and release coherence
 
@@ -131,7 +131,7 @@ comparison screens alone does not establish that end-to-end path.
 | Source implemented / [#184](https://github.com/yubisuke/openmasu/issues/184) | Late advertising revenue, purchases and refunds can correct past runs | Explicit bounded receipt discovery or record selection, immutable replay through the existing worker, and visible pending/unavailable states / Late-input correction |
 | Source implemented / [#185](https://github.com/yubisuke/openmasu/issues/185) | New campaigns enter daily calculation without manual enumeration | Bounded opt-in discovery with a frozen per-job target set, exact retry and explicit unknown/empty/overflow states / Campaign discovery |
 | Source implemented / [#186](https://github.com/yubisuke/openmasu/issues/186) | Verified App Store purchases reach installation cohorts | Public Swift preparation/submission, authenticated admission and history-to-financial projection connect with synthetic gates; live StoreKit delivery and Unity C# purchase helpers remain outside this connection / App Store purchase binding |
-| Follow-up / [#209](https://github.com/yubisuke/openmasu/issues/209) | Verified refund reversals cancel only their target deductions | Explicit append-only reversal linkage and versioned TS/Python/SQL parity, without inventing a purchase or changing old runs / Refund reversal correction |
+| Contract source implemented; provider follow-up / [#209](https://github.com/yubisuke/openmasu/issues/209) | Verified refund reversals cancel only their target deductions | Explicit append-only targets and opt-in v0.4.15 TS/Python/SQL metrics; verified-provider ingestion and late correction remain to be connected / Refund reversal correction |
 | Follow-up / [#187](https://github.com/yubisuke/openmasu/issues/187) | Ad-group and creative outcomes share the cost grain | Selected-source dimensions and matching cost definitions without allocating parent cost by guesswork / Detailed acquisition grain |
 | Follow-up / [#188](https://github.com/yubisuke/openmasu/issues/188) | First-party re-engagement has separate outcome measures | One explicit conversion key and advertising revenue window, separate from acquisition and Apple aggregate evidence / Re-engagement outcomes |
 

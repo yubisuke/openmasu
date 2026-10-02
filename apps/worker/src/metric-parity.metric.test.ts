@@ -15,6 +15,7 @@ import { compareSnapshots } from "../../../tools/compare-cohorts.js";
 import { DISJOINT_COST_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { syntheticRetentionCases } from "../../../tools/synthetic-retention-cases.js";
 import { syntheticConversionCases } from "../../../tools/synthetic-conversion-cases.js";
+import { syntheticRefundReversalCases } from "../../../tools/synthetic-refund-reversal-cases.js";
 import { persistCostImport, type CostInput } from "./import/cost.js";
 
 type Any = Record<string, any>;
@@ -25,6 +26,50 @@ const goldenPath = join(fixtureDirectory, "expected_metric_runs.json");
 const goldenBefore = readFileSync(goldenPath);
 const golden: Any[] = JSON.parse(goldenBefore.toString("utf8"));
 const oracle = evaluate(input).metric_runs;
+
+describe("explicit refund cancellation SQL parity", { concurrency: false }, () => {
+  let app: Pool;
+  let seed: Pool;
+  let reader: Pool;
+  before(() => { app = createAppPool(); seed = createSeedPool(); reader = createReaderPool(); });
+  after(async () => { await app?.end(); await seed?.end(); await reader?.end(); });
+  const baseline = JSON.parse(readFileSync("fixtures/v0.4/62-explicit-refund-reversal/input.json", "utf8"));
+  for (const entry of syntheticRefundReversalCases(baseline)) it(entry.name, async () => {
+    await ingestFixture(`reversal-${entry.name}`, entry.input, app, seed);
+    const runs = await computeSqlMetricRuns(app, entry.input, false);
+    assert.equal(jcs(runs), jcs(evaluate(entry.input).metric_runs));
+    assert.deepEqual(entry.input.metric_evaluations.map((ev: Any) => runs.find(run =>
+      run.metric_run_id === `${ev.metric_run_id_prefix}:cohort_purchase_net_revenue_d30_usd`)?.value_unscaled), entry.expectedNet);
+  });
+  it("records cancellation operands separately without increasing purchases or rewriting old evidence", async () => {
+    await ingestFixture("reversal-saved-evidence", baseline, app, seed);
+    const runs = await computeSqlMetricRuns(app, baseline, true);
+    assert.equal(jcs(runs), jcs(JSON.parse(readFileSync("fixtures/v0.4/62-explicit-refund-reversal/expected_metric_runs.json", "utf8"))));
+    const saved = await withTenant(app, "tenant-a", async client => (await client.query(
+      "SELECT comparison_context FROM ledger.metric_runs WHERE metric_run_id='reversal62-cancel:d30_total_net_roas'",
+    )).rows[0]);
+    assert.equal(saved.comparison_context.definition.refund_reversal_policy, "cancel_target_refund_at_watermark");
+    const explanation = await metricExplanation(reader, { tenantId: "tenant-a", appId: "app-a", keyId: "synthetic-reader", role: "read_only" },
+      "reversal62-cancel:d30_total_net_roas");
+    assert.equal(explanation?.calculation?.version, 3);
+    const evidence = explanation!.calculation!;
+    if (evidence.version !== 3) throw Error("missing reversal evidence");
+    assert.equal(evidence.operands.purchase_revenue_unscaled, "10000000");
+    assert.equal(evidence.operands.purchase_event_count, "1");
+    assert.equal(evidence.operands.refund_deduction_unscaled, "4000000");
+    assert.equal(evidence.operands.refund_event_count, "1");
+    assert.equal(evidence.operands.refund_reversal_unscaled, "4000000");
+    assert.equal(evidence.operands.refund_reversal_event_count, "1");
+    assert.equal(evidence.operands.revenue_unscaled, "30000000");
+    const html = renderMetricExplanation("app-a", explanation!);
+    assert.match(html, /20000000 \+ 10000000 - 4000000 \+ 4000000 = 30000000/);
+    assert.ok(!JSON.stringify(explanation).includes("reversal-transaction-62"));
+    assert.ok(!html.includes("reverses_refund_record_id"));
+    const earlier = await metricExplanation(reader, { tenantId: "tenant-a", appId: "app-a", keyId: "synthetic-reader", role: "read_only" },
+      "reversal62-refund:d30_total_net_roas");
+    assert.equal(earlier?.calculation?.operands.revenue_unscaled, "26000000");
+  });
+});
 
 describe("selected commerce SQL parity", { concurrency: false }, () => {
   let app: Pool;

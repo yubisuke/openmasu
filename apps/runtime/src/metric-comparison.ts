@@ -46,6 +46,7 @@ export function captureMetricComparisonContext(
     ...(definition.acquisition_basis ? { acquisition_basis: definition.acquisition_basis } : {}),
     ...(definition.conversion_event_key !== undefined ? { conversion_event_key: definition.conversion_event_key } : {}),
     ...(definition.cost_selection_policy ? { cost_selection_policy: definition.cost_selection_policy } : {}),
+    ...(definition.refund_reversal_policy ? { refund_reversal_policy: definition.refund_reversal_policy } : {}),
     rule_bundle_id: definition.rule_bundle_id, rule_bundle_version: definition.rule_bundle_version,
     rule_bundle_hash: definition.rule_bundle_hash,
   };
@@ -91,6 +92,7 @@ export function comparisonMeaning(context: MetricComparisonContext) {
     acquisition_basis: d.acquisition_basis ?? "recorded_dimensions",
     ...(conversion ? { conversion_event_key: d.conversion_event_key } : {}),
     cost_selection_policy: d.cost_selection_policy ?? "legacy_dimension_digest_latest",
+    ...(d.refund_reversal_policy ? { refund_reversal_policy: d.refund_reversal_policy } : {}),
     grouping_dimensions: [...(d.grouping_dimensions ?? [])].sort(),
     activity_events: calculation === "active_installations_over_cohort" ? [...(d.activity_events ?? ["session_start"])].sort() : [],
     event_names: calculation === "event_count" ? [...(d.event_names ?? [])].sort() : [],

@@ -267,6 +267,15 @@ export const SELECTED_COMMERCE_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricD
       rule_bundle_hash: nonFraudBundleHash("metric-selected-commerce"),
     }));
 
+/** Explicit opt-in only: historical commerce definitions never change meaning. */
+export const REFUND_REVERSAL_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricDefinitionV04> =
+  SELECTED_COMMERCE_METRIC_DEFINITIONS.map((definition) => ({
+    ...definition, metric_definition_version: "0.4.15",
+    refund_reversal_policy: "cancel_target_refund_at_watermark",
+    rule_bundle_id: "metric-refund-reversal", rule_bundle_version: "0.4.15",
+    rule_bundle_hash: nonFraudBundleHash("metric-refund-reversal"),
+  }));
+
 /** One explicitly selected outcome, not an event count or a cross-device person count. */
 export function customConversionMetricDefinitions(eventKey: string): OpenMasuMetricDefinitionV04[] {
   if (!/^[a-z][a-z0-9_]{0,63}$/.test(eventKey)) throw new Error("conversion_event_key_invalid");

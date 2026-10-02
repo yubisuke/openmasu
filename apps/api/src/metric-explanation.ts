@@ -39,14 +39,19 @@ function publicEvidence(value: RoasCalculationEvidence): RoasCalculationEvidence
       cohort_size: value.operands.cohort_size, last_window_end: value.operands.last_window_end,
       window_elapsed: value.operands.window_elapsed },
   };
-  return value.version === 2 ? { ...common, version: 2, numerator: "total_net_revenue",
-    operands: { ...common.operands,
+  if (value.version === 1) return { ...common, version: 1, numerator: "revenue" };
+  const operands = { ...common.operands,
       ad_revenue_unscaled: value.operands.ad_revenue_unscaled,
       purchase_revenue_unscaled: value.operands.purchase_revenue_unscaled,
       refund_deduction_unscaled: value.operands.refund_deduction_unscaled,
       purchase_event_count: value.operands.purchase_event_count,
       refund_event_count: value.operands.refund_event_count,
-    } } : { ...common, version: 1, numerator: "revenue" };
+  };
+  return value.version === 3 ? { ...common, version: 3, numerator: "total_net_revenue",
+    refund_reversal_policy: value.refund_reversal_policy,
+    operands: { ...operands, refund_reversal_unscaled: value.operands.refund_reversal_unscaled,
+      refund_reversal_event_count: value.operands.refund_reversal_event_count } }
+    : { ...common, version: 2, numerator: "total_net_revenue", operands };
 }
 
 export async function metricExplanation(pool: Pool, identity: AppAdminIdentity, metricRunId: string): Promise<MetricExplanation | undefined> {

@@ -7,6 +7,7 @@ import { Ajv2020Module, addFormatsModule, canonicalize } from "@openmasu/contrac
 import { evaluate, sha256, TimestampInvalidError } from "@openmasu/attribution-core";
 import { syntheticRetentionCases } from "./synthetic-retention-cases.js";
 import { syntheticConversionCases } from "./synthetic-conversion-cases.js";
+import { syntheticRefundReversalCases } from "./synthetic-refund-reversal-cases.js";
 
 type Any = Record<string, any>;
 type Captured<T> = { ok: true; value: T } | { ok: false; error: unknown };
@@ -324,7 +325,8 @@ function validateRegistryReferences(output: Any, label: string): void {
       "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
       "aak_attributed_reengagements",
     ]);
-    const expectedVersion = definition.rule_bundle_id === "metric-custom-conversion" ? "0.4.14" : definition.rule_bundle_id === "metric-selected-commerce"
+    const expectedVersion = definition.rule_bundle_id === "metric-refund-reversal" ? "0.4.15"
+      : definition.rule_bundle_id === "metric-custom-conversion" ? "0.4.14" : definition.rule_bundle_id === "metric-selected-commerce"
       ? "0.4.13" : definition.cost_selection_policy === "reject_overlapping_grains"
       ? "0.4.12" : definition.acquisition_basis === "selected_first_party_click"
       ? "0.4.11"
@@ -576,8 +578,8 @@ if (!summaryOnly) {
         }
       });
     }
-    it("contains 61 fixture directories", () => {
-      check(fixtureDirs.length === 61, `expected 61 fixture directories, found ${fixtureDirs.length}`);
+    it("contains 62 fixture directories", () => {
+      check(fixtureDirs.length === 62, `expected 62 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -1023,12 +1025,22 @@ const scenarios: Array<[string, () => void]> = [
     check(output.metric_definitions.filter((definition: Any) => definition.conversion_event_key === "tutorial_complete").length === 2,
       "scenario 61 exercises both independent conversion calculations");
   }],
+  ["62 explicit refund cancellation preserves purchase count and restores only its target", () => {
+    const output = fixture("62-explicit-refund-reversal").output;
+    check(output.logical_events.filter((row: Any) => row.event_name === "purchase").length === 1, "scenario 62 one purchase");
+    for (const [suffix, net, roas] of [["before", "10000000", "3000000"], ["refund", "6000000", "2600000"], ["cancel", "10000000", "3000000"]]) {
+      check(output.metric_runs.find((row: Any) => row.metric_run_id === `reversal62-${suffix}:cohort_purchase_net_revenue_d30_usd`)?.value_unscaled === net,
+        `scenario 62 ${suffix} purchase net`);
+      check(output.metric_runs.find((row: Any) => row.metric_run_id === `reversal62-${suffix}:d30_total_net_roas`)?.value_unscaled === roas,
+        `scenario 62 ${suffix} total ROAS`);
+    }
+  }],
 ];
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 61 scenario assertions", () => {
-      check(scenarios.length === 61, "scenario assertion inventory must contain 61 entries");
+    it("contains 62 scenario assertions", () => {
+      check(scenarios.length === 62, "scenario assertion inventory must contain 62 entries");
     });
   });
 
@@ -1597,7 +1609,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 61 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 62 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1637,7 +1649,7 @@ const acceptance: Array<[string, () => void]> = [
     for (const forbidden of ["threshold", "model_weight", "watchlist", "ip_address", "user_agent", "response_timing"]) check(!schemaText.includes(forbidden), `AC20 ${forbidden}`);
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
-  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 61 && outputArtifactCount === 61 * 13, "AC21")],
+  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 62 && outputArtifactCount === 62 * 13, "AC21")],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {
     for (const { output, python } of results.values()) check(equal(output, python), "AC22 evaluator mismatch");
     const vector = { numbers: [333333333.33333329, 1e30, 4.50, 2e-3, 1e-27, -0], string: "€$\u000f\nA'B\"\\\"/" };
@@ -2086,6 +2098,17 @@ const validRevenue = {
 };
 if (!summaryOnly) {
   describe("semantic mutations", () => {
+    it("keeps explicit refund cancellation target scope money time privacy and legacy TS/Python parity", () => {
+      const cases = syntheticRefundReversalCases(fixture("62-explicit-refund-reversal").input);
+      const python = pythonOutputs(cases.map(entry => entry.input));
+      for (const [index, entry] of cases.entries()) {
+        const output = evaluate(entry.input);
+        check(equal(entry.input.metric_evaluations.map((ev: Any) => output.metric_runs.find(run =>
+          run.metric_run_id === `${ev.metric_run_id_prefix}:cohort_purchase_net_revenue_d30_usd`)?.value_unscaled), entry.expectedNet), entry.name);
+        check((output.rejections.length > 0) === entry.rejected, `${entry.name}: rejection boundary`);
+        check(equal(output, python[index]), `${entry.name}: full independent parity`);
+      }
+    });
     it("counts one selected custom outcome per eligible installation across windows privacy and fraud", () => {
       const cases = syntheticConversionCases(fixture("61-custom-conversion").input, fixture("58-selected-native-acquisition").input);
       const python = pythonOutputs(cases.map(entry => entry.input));

@@ -8,17 +8,21 @@ export function renderMetricExplanation(appId: string, value: MetricExplanation)
     ? `${exactDecimal(run.value_unscaled, run.ratio_scale)} ×` : `— (${run.undefined_reason ?? "value unavailable"})`;
   const item = (label: string, text: unknown) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(text)}</dd>`;
   const evidence = value.calculation;
-  const components = evidence?.version === 2 ? [
+  const components = evidence && evidence.version !== 1 ? [
     item("Advertising revenue", `${evidence.target_currency} ${exactDecimal(evidence.operands.ad_revenue_unscaled, evidence.target_scale)}`),
     item("Settled purchase revenue", `${evidence.target_currency} ${exactDecimal(evidence.operands.purchase_revenue_unscaled, evidence.target_scale)}`),
     item("Settled refund deduction", `${evidence.target_currency} ${exactDecimal(evidence.operands.refund_deduction_unscaled, evidence.target_scale)}`),
     item("Accepted settled purchases", evidence.operands.purchase_event_count),
     item("Accepted settled refunds", evidence.operands.refund_event_count),
-    item("Numerator composition", `${evidence.operands.ad_revenue_unscaled} + ${evidence.operands.purchase_revenue_unscaled} - ${evidence.operands.refund_deduction_unscaled} = ${evidence.operands.revenue_unscaled} target units`),
+    ...(evidence.version === 3 ? [
+      item("Explicit refund cancellation", `${evidence.target_currency} ${exactDecimal(evidence.operands.refund_reversal_unscaled, evidence.target_scale)}`),
+      item("Cancelled settled refunds", evidence.operands.refund_reversal_event_count),
+    ] : []),
+    item("Numerator composition", `${evidence.operands.ad_revenue_unscaled} + ${evidence.operands.purchase_revenue_unscaled} - ${evidence.operands.refund_deduction_unscaled}${evidence.version === 3 ? ` + ${evidence.operands.refund_reversal_unscaled}` : ""} = ${evidence.operands.revenue_unscaled} target units`),
   ] : [];
   const detail = evidence ? `<h2>Recorded calculation</h2><dl>${[
     item("Evidence version", evidence.version), ...components,
-    item(evidence.version === 2 ? "Numerator: total net revenue" : "Numerator: accepted ad revenue", `${evidence.target_currency} ${exactDecimal(evidence.operands.revenue_unscaled, evidence.target_scale)}`),
+    item(evidence.version !== 1 ? "Numerator: total net revenue" : "Numerator: accepted ad revenue", `${evidence.target_currency} ${exactDecimal(evidence.operands.revenue_unscaled, evidence.target_scale)}`),
     item("Denominator: selected acquisition cost", `${evidence.target_currency} ${exactDecimal(evidence.operands.cost_unscaled, evidence.target_scale)}`),
     item("Accepted ad revenue events", evidence.operands.revenue_event_count), item("Selected cost rows", evidence.operands.cost_row_count),
     item("Cohort installations", evidence.operands.cohort_size),
@@ -32,7 +36,8 @@ export function renderMetricExplanation(appId: string, value: MetricExplanation)
     item("Target currency / scale", `${evidence.target_currency} / ${evidence.target_scale}`),
     item("Conversion rates", evidence.rates.map((rate) => `${rate.currency}: ${exactDecimal(rate.rate_unscaled, rate.rate_scale)}`).join("; ")),
     item("Rounding", "half-even per revenue event before summation; half-even per cost row when scaling down; half-even after division"),
-    ...(evidence.version === 2 ? [item("Commerce policy", "Settled purchases minus settled refunds; each is independently converted and half-even rounded in its own occurrence-time window")] : []),
+    ...(evidence.version !== 1 ? [item("Commerce policy", "Settled purchases minus settled refunds; each is independently converted and half-even rounded in its own occurrence-time window")] : []),
+    ...(evidence.version === 3 ? [item("Refund cancellation policy", "Explicit targets cancel their original refund contribution once as of the watermark, using the refund's window and rounded amount, not a new purchase")] : []),
     item("Formula", evidence.operands.cost_unscaled === "0" ? "undefined: no_attributed_cost"
       : `half_even(${evidence.operands.revenue_unscaled} × 10^${evidence.ratio_scale} / ${evidence.operands.cost_unscaled})`),
   ].join("")}</dl><p>An elapsed window does not prove all delayed inputs have arrived. Revenue uses accepted installation-level events in the recorded window. Cost uses one latest row per acquisition-day cost key at the watermark. Exclusion reasons were not recorded individually and are unavailable.</p>`

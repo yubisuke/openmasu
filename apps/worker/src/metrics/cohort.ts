@@ -385,6 +385,7 @@ async function purchaseNetRevenueValue(
 ): Promise<{ value_state: "present"; value_unscaled: string; commerce: {
   purchase_revenue_unscaled: string; refund_deduction_unscaled: string;
   purchase_event_count: string; refund_event_count: string;
+  refund_reversal_unscaled?: string; refund_reversal_event_count?: string;
 } }> {
   if (definition.definition.calculation !== "revenue_sum"
       || definition.definition.window?.type !== "elapsed") {
@@ -392,7 +393,8 @@ async function purchaseNetRevenueValue(
   }
   const result = await client.query<{ value_unscaled: string; missing_fx_count: string;
     purchase_revenue_unscaled: string; refund_deduction_unscaled: string;
-    purchase_event_count: string; refund_event_count: string }>(
+    purchase_event_count: string; refund_event_count: string;
+    refund_reversal_unscaled: string; refund_reversal_event_count: string }>(
     `WITH
        acquisition AS (SELECT * FROM (${selectedAcquisitionSql}) AS selected WHERE $15::boolean),
        rates AS (
@@ -434,7 +436,7 @@ async function purchaseNetRevenueValue(
        ),
        purchase_candidates AS (
          SELECT purchase.amount_unscaled, purchase.amount_scale,
-                rate.rate_unscaled, rate.rate_scale, 1::numeric AS sign
+                rate.rate_unscaled, rate.rate_scale, 1::numeric AS sign, false AS reversed
          FROM ledger.purchase_facts AS purchase
          JOIN cohort ON cohort.installation_id=purchase.installation_id
          JOIN ledger.logical_events AS logical
@@ -455,7 +457,25 @@ async function purchaseNetRevenueValue(
        ),
        refund_candidates AS (
          SELECT refund.amount_unscaled, refund.amount_scale,
-                rate.rate_unscaled, rate.rate_scale, -1::numeric AS sign
+                rate.rate_unscaled, rate.rate_scale, -1::numeric AS sign,
+                ($16::boolean AND EXISTS (
+                  SELECT 1 FROM ledger.refund_facts AS reversal
+                  JOIN ledger.logical_events AS reversal_logical USING (logical_event_id, tenant_id, app_id)
+                  JOIN ledger.raw_records_current AS reversal_raw
+                    ON reversal_raw.tenant_id=reversal.tenant_id AND reversal_raw.app_id=reversal.app_id
+                   AND reversal_raw.record_id=reversal_logical.record_id
+                  WHERE reversal.tenant_id=refund.tenant_id AND reversal.app_id=refund.app_id
+                    AND reversal.original_transaction_id=refund.original_transaction_id
+                    AND reversal.financial_status='reversed'
+                    AND reversal.artifact->>'reverses_refund_record_id'=refund_logical.record_id
+                    AND reversal.correction_target_record_id=refund.correction_target_record_id
+                    AND reversal.installation_id=refund.installation_id AND reversal.currency=refund.currency
+                    AND reversal.amount_unscaled::numeric * power(10::numeric, refund.amount_scale)
+                      = refund.amount_unscaled::numeric * power(10::numeric, reversal.amount_scale)
+                    AND reversal.occurred_at_ts >= refund.occurred_at_ts
+                    AND reversal_raw.received_at >= refund_raw.received_at AND reversal_raw.received_at <= $3
+                    AND ($12='before' OR reversal_raw.payload_lifecycle_status='available')
+                )) AS reversed
          FROM ledger.refund_facts AS refund
          JOIN ledger.logical_events AS refund_logical
            ON refund_logical.logical_event_id=refund.logical_event_id
@@ -497,16 +517,18 @@ async function purchaseNetRevenueValue(
          UNION ALL
          SELECT * FROM refund_candidates
        ), converted AS (
-         SELECT sign, rate_unscaled, ledger.half_even_div(
+         SELECT sign, reversed, rate_unscaled, ledger.half_even_div(
               amount_unscaled::numeric * rate_unscaled * power(10::numeric, $11),
               power(10::numeric, amount_scale + rate_scale)
             ) AS amount FROM commerce
        )
-     SELECT coalesce(sum(sign * amount), 0::numeric)::text AS value_unscaled,
+     SELECT coalesce(sum(CASE WHEN reversed THEN 0 ELSE sign * amount END), 0::numeric)::text AS value_unscaled,
             trim_scale(coalesce(sum(amount) FILTER (WHERE sign=1), 0::numeric))::text AS purchase_revenue_unscaled,
             trim_scale(coalesce(sum(amount) FILTER (WHERE sign=-1), 0::numeric))::text AS refund_deduction_unscaled,
             count(*) FILTER (WHERE sign=1)::text AS purchase_event_count,
             count(*) FILTER (WHERE sign=-1)::text AS refund_event_count,
+            trim_scale(coalesce(sum(amount) FILTER (WHERE reversed), 0::numeric))::text AS refund_reversal_unscaled,
+            count(*) FILTER (WHERE reversed)::text AS refund_reversal_event_count,
             count(*) FILTER (WHERE rate_unscaled IS NULL)::text AS missing_fx_count
      FROM converted`,
     [
@@ -525,6 +547,7 @@ async function purchaseNetRevenueValue(
       grouping?.attribution_status ?? null,
       definition.fraud_policy ?? "gross",
       definition.acquisition_basis === "selected_first_party_click",
+      definition.refund_reversal_policy === "cancel_target_refund_at_watermark",
     ],
   );
   const row = result.rows[0];
@@ -532,6 +555,8 @@ async function purchaseNetRevenueValue(
   return { value_state: "present", value_unscaled: row.value_unscaled, commerce: {
     purchase_revenue_unscaled: row.purchase_revenue_unscaled, refund_deduction_unscaled: row.refund_deduction_unscaled,
     purchase_event_count: row.purchase_event_count, refund_event_count: row.refund_event_count,
+    ...(definition.refund_reversal_policy ? { refund_reversal_unscaled: row.refund_reversal_unscaled,
+      refund_reversal_event_count: row.refund_reversal_event_count } : {}),
   } };
 }
 
@@ -1132,7 +1157,12 @@ export async function computeSqlMetricRunsWithClient(
               rate_unscaled: rate.rate_unscaled, rate_scale: rate.rate_scale })),
             rounding_mode: "half_even", ratio_scale: definition.ratio_scale,
             ...(value.totalNetOperands
-              ? { version: 2, numerator: "total_net_revenue", operands: value.totalNetOperands }
+              ? definition.refund_reversal_policy
+                ? { version: 3, numerator: "total_net_revenue", refund_reversal_policy: "cancel_target_refund_at_watermark",
+                  operands: { ...value.totalNetOperands,
+                    refund_reversal_unscaled: value.totalNetOperands.refund_reversal_unscaled!,
+                    refund_reversal_event_count: value.totalNetOperands.refund_reversal_event_count! } }
+                : { version: 2, numerator: "total_net_revenue", operands: value.totalNetOperands }
               : { version: 1, numerator: "revenue", operands: value.operands! }),
           };
           await client.query(
@@ -1151,6 +1181,14 @@ export async function computeSqlMetricRunsWithClient(
 }
 
 function assertMetricDefinitionSeries(definition: Any): void {
+  if (definition.refund_reversal_policy !== undefined || definition.rule_bundle_id === "metric-refund-reversal") {
+    if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`);
+    const base: Any = { ...definition, metric_definition_version: "0.4.13", rule_bundle_id: "metric-selected-commerce",
+      rule_bundle_version: "0.4.13", rule_bundle_hash: nonFraudBundleHash("metric-selected-commerce") };
+    delete base.refund_reversal_policy;
+    assertMetricDefinitionSeries(base);
+    return;
+  }
   if (definition.conversion_event_key !== undefined || definition.rule_bundle_id === "metric-custom-conversion"
       || definition.definition?.numerator === "converted_installations"
       || ["converted_installations", "converted_installations_over_cohort"].includes(definition.definition?.calculation)) {

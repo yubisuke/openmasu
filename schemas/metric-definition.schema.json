@@ -51,11 +51,35 @@
     "acquisition_basis": { "const": "selected_first_party_click" },
     "conversion_event_key": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
     "cost_selection_policy": { "const": "reject_overlapping_grains" },
+    "refund_reversal_policy": { "const": "cancel_target_refund_at_watermark" },
     "rule_bundle_id": { "$ref": "common.schema.json#/$defs/id" },
     "rule_bundle_version": { "type": "string" },
     "rule_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
   },
   "allOf": [
+    {
+      "if": { "anyOf": [
+        { "properties": { "refund_reversal_policy": {} }, "required": ["refund_reversal_policy"] },
+        { "properties": { "rule_bundle_id": { "const": "metric-refund-reversal" } }, "required": ["rule_bundle_id"] }
+      ] },
+      "then": {
+        "required": ["refund_reversal_policy", "acquisition_basis"],
+        "properties": {
+          "refund_reversal_policy": {}, "acquisition_basis": { "const": "selected_first_party_click" },
+          "anchor_event": { "const": "install" }, "aggregation_time_zone": { "const": "UTC" },
+          "metric_definition_version": { "const": "0.4.15" },
+          "rule_bundle_id": { "const": "metric-refund-reversal" }, "rule_bundle_version": { "const": "0.4.15" },
+          "rule_bundle_hash": { "const": "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc" },
+          "definition": { "type": "object", "additionalProperties": true,
+            "properties": { "numerator": { "enum": ["purchase_net_revenue", "total_net_revenue"] },
+              "window": { "type": "object", "additionalProperties": true, "properties": { "type": { "const": "elapsed" } } } } }
+        },
+        "if": { "properties": { "definition": { "type": "object", "additionalProperties": true,
+          "properties": { "calculation": { "const": "revenue_over_cost" } }, "required": ["calculation"] } }, "required": ["definition"] },
+        "then": { "properties": { "cost_selection_policy": {} }, "required": ["cost_selection_policy"] },
+        "else": { "not": { "properties": { "cost_selection_policy": {} }, "required": ["cost_selection_policy"] } }
+      }
+    },
     {
       "if": { "anyOf": [
         { "properties": { "conversion_event_key": {} }, "required": ["conversion_event_key"] },
@@ -118,7 +142,7 @@
       "then": { "properties": { "cost_selection_policy": {} }, "required": ["cost_selection_policy"] }
     },
     {
-      "if": { "properties": { "cost_selection_policy": {}, "rule_bundle_id": { "not": { "const": "metric-selected-commerce" } } }, "required": ["cost_selection_policy", "rule_bundle_id"] },
+      "if": { "properties": { "cost_selection_policy": {}, "rule_bundle_id": { "not": { "enum": ["metric-selected-commerce", "metric-refund-reversal"] } } }, "required": ["cost_selection_policy", "rule_bundle_id"] },
       "then": {
         "properties": {
           "anchor_event": { "const": "install" }, "aggregation_time_zone": { "const": "UTC" },
@@ -142,7 +166,7 @@
       }
     },
     {
-      "if": { "properties": { "acquisition_basis": {}, "cost_selection_policy": {}, "rule_bundle_id": { "not": { "enum": ["metric-selected-commerce", "metric-custom-conversion"] } } }, "required": ["acquisition_basis", "rule_bundle_id"], "not": { "required": ["cost_selection_policy"] } },
+      "if": { "properties": { "acquisition_basis": {}, "cost_selection_policy": {}, "rule_bundle_id": { "not": { "enum": ["metric-selected-commerce", "metric-custom-conversion", "metric-refund-reversal"] } } }, "required": ["acquisition_basis", "rule_bundle_id"], "not": { "required": ["cost_selection_policy"] } },
       "then": {
         "properties": {
           "anchor_event": { "const": "install" },
@@ -204,6 +228,11 @@
           }
         },
         "oneOf": [
+          {
+            "properties": { "refund_reversal_policy": {}, "metric_definition_version": { "const": "0.4.15" },
+              "rule_bundle_id": { "const": "metric-refund-reversal" } },
+            "required": ["refund_reversal_policy"]
+          },
           {
             "properties": {
               "acquisition_basis": {},
@@ -275,7 +304,7 @@
             "properties": { "window": { "type": "object", "additionalProperties": true, "properties": { "type": { "const": "elapsed" }, "day": { "enum": [30, 90] } } } }
           }
         },
-        "if": { "properties": { "rule_bundle_id": { "const": "metric-selected-commerce" } }, "required": ["rule_bundle_id"] },
+        "if": { "properties": { "rule_bundle_id": { "enum": ["metric-selected-commerce", "metric-refund-reversal"] } }, "required": ["rule_bundle_id"] },
         "then": {},
         "else": {
           "if": { "properties": { "cost_selection_policy": {} }, "required": ["cost_selection_policy"] },

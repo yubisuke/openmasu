@@ -14,6 +14,8 @@ export type TotalNetRoasOperands = RoasOperands & {
   readonly refund_deduction_unscaled: string;
   readonly purchase_event_count: string;
   readonly refund_event_count: string;
+  readonly refund_reversal_unscaled?: string;
+  readonly refund_reversal_event_count?: string;
 };
 
 type RoasEvidenceBase = {
@@ -41,4 +43,7 @@ type RoasEvidenceBase = {
 export type RoasCalculationEvidence = RoasEvidenceBase & (
   { readonly version: 1; readonly numerator: "revenue"; readonly operands: RoasOperands }
   | { readonly version: 2; readonly numerator: "total_net_revenue"; readonly operands: TotalNetRoasOperands }
+  | { readonly version: 3; readonly numerator: "total_net_revenue";
+      readonly refund_reversal_policy: "cancel_target_refund_at_watermark";
+      readonly operands: TotalNetRoasOperands & { readonly refund_reversal_unscaled: string; readonly refund_reversal_event_count: string } }
 );

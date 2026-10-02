@@ -221,6 +221,7 @@ export type OpenMasuMetricDefinitionV04 = {
   acquisition_basis?: "selected_first_party_click";
   conversion_event_key?: string;
   cost_selection_policy?: "reject_overlapping_grains";
+  refund_reversal_policy?: "cancel_target_refund_at_watermark";
   rule_bundle_id: string;
   rule_bundle_version: string;
   rule_bundle_hash: string;

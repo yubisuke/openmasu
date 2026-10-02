@@ -1,12 +1,21 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
-import { M1B_METRIC_DEFINITIONS, M3_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS, customConversionMetricDefinitions } from "@openmasu/contracts";
+import { M1B_METRIC_DEFINITIONS, M3_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS, SELECTED_COMMERCE_METRIC_DEFINITIONS, REFUND_REVERSAL_METRIC_DEFINITIONS, customConversionMetricDefinitions } from "@openmasu/contracts";
 import { sha256 } from "@openmasu/attribution-core";
 import { captureMetricComparisonContext, comparisonMeaning, comparisonMaturity } from "./metric-comparison.js";
 
 const fx = { policy_version: "synthetic", target_currency: "USD", target_scale: 6, rounding_mode: "half_even" as const,
   rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0, as_of: "2026-01-01T00:00:00.000Z", source: "not-in-reader-projection" }] };
 const run = { metric_run_id: "synthetic", input_snapshot_id: "a".repeat(64) };
+it("records explicit refund cancellation meaning without equating historical commerce definitions", () => {
+  const capture = (d: typeof REFUND_REVERSAL_METRIC_DEFINITIONS[number]) => captureMetricComparisonContext(run, d, fx, "after", sha256);
+  const current = capture(REFUND_REVERSAL_METRIC_DEFINITIONS[0]);
+  const legacy = capture(SELECTED_COMMERCE_METRIC_DEFINITIONS[0]);
+  assert.equal(current.definition.refund_reversal_policy, "cancel_target_refund_at_watermark");
+  assert.notEqual(current.definition_digest, legacy.definition_digest);
+  assert.notDeepEqual(comparisonMeaning(current), comparisonMeaning(legacy));
+  assert.equal(Object.hasOwn(legacy.definition, "refund_reversal_policy"), false);
+});
 it("keeps different custom outcomes incomparable and derives cumulative D7 maturity without FX meaning", () => {
   const first = captureMetricComparisonContext(run, customConversionMetricDefinitions("tutorial_complete")[1], fx, "after", sha256);
   const second = captureMetricComparisonContext(run, customConversionMetricDefinitions("different_outcome")[1], fx, "after", sha256);
