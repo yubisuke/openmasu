@@ -253,6 +253,20 @@ async function encryptedReferences(
         AND batch.object_ref LIKE 'encrypted:%'`,
     scope === "tenant" ? [request.tenant_id] : [request.tenant_id, request.app_id],
   );
+  const appleIntents = await client.query<{ reference: string }>(
+    `SELECT anchor_ref AS reference FROM control.apple_purchase_intents AS intent WHERE tenant_id=$1
+      AND ($2='tenant' OR app_id=$3) AND (
+        ($2='installation' AND installation_id_digest=$4)
+        OR ($2 IN ('app','tenant') AND control.canonical_timestamp_value(created_at)<=control.canonical_timestamp_value($5::text))
+        OR EXISTS (SELECT 1 FROM control.privacy_payload_purges AS purge
+          WHERE purge.tenant_id=$1 AND purge.privacy_request_id=$6 AND purge.payload_ref=intent.anchor_ref))`,
+    [request.tenant_id, scope, request.app_id, request.artifact.deletion_subject_digest,
+      request.artifact.requested_at, request.privacy_request_id]);
+  // An object-store restore can resurrect an anchor even after its DB row was deleted.
+  const recordedPurges = await client.query<{ reference: string }>(
+    `SELECT payload_ref AS reference FROM control.privacy_payload_purges
+      WHERE tenant_id=$1 AND app_id=$2 AND privacy_request_id=$3`,
+    [request.tenant_id, request.app_id, request.privacy_request_id]);
   const credentials = scope === "installation"
     ? await client.query<{ reference: string }>(
         `SELECT DISTINCT credential.secret_ref AS reference
@@ -268,7 +282,7 @@ async function encryptedReferences(
     ...googleResults.rows, ...integrityResults.rows, ...integrityLookups.rows, ...googleLookups.rows,
     ...googleRtdn.rows,
     ...googleConversions.rows, ...commerce.rows,
-    ...webhooks.rows, ...bulk.rows, ...credentials.rows,
+    ...webhooks.rows, ...bulk.rows, ...credentials.rows, ...appleIntents.rows, ...recordedPurges.rows,
   ].map((row) => row.reference))].sort();
 }
 
@@ -424,6 +438,14 @@ async function applyRecreatedDatabaseState(
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [request.privacy_request_id]);
   await appendPrivacyArtifacts(client, request, records);
   const scope = String(request.artifact.deletion_scope ?? "");
+  await client.query(`DELETE FROM control.apple_purchase_intents AS intent WHERE tenant_id=$1
+    AND ($2='tenant' OR app_id=$3) AND (
+      ($2='installation' AND installation_id_digest=$4)
+      OR ($2 IN ('app','tenant') AND control.canonical_timestamp_value(created_at)<=control.canonical_timestamp_value($5::text))
+      OR EXISTS (SELECT 1 FROM control.privacy_payload_purges AS purge
+        WHERE purge.tenant_id=$1 AND purge.privacy_request_id=$6 AND purge.payload_ref=intent.anchor_ref))`,
+  [request.tenant_id, scope, request.app_id, request.artifact.deletion_subject_digest,
+    request.artifact.requested_at, request.privacy_request_id]);
   await client.query(
     `DELETE FROM ephemeral.adservices_lookups
       WHERE tenant_id=$1

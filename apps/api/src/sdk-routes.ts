@@ -4,6 +4,7 @@ import { appendDurableBatch, uuidV7, type PayloadStore } from "@openmasu/runtime
 import { executePrivacyRequest, privacyResponseStatus, type PrivacyRequestBody } from "./privacy.js";
 import { assertDsarResponseSafe, generateDsarResponse, parseDsarRequest } from "./dsar.js";
 import { type KeyedTokenBucket } from "./rate-limit.js";
+import { ApplePurchaseIntentError, prepareApplePurchaseIntent, type ApplePurchaseEnvironment } from "./apple-purchase-intents.js";
 import { parseJsonBody, readRawBody, RequestBodyError } from "./raw-body.js";
 import {
   installationIdDigest,
@@ -26,6 +27,7 @@ export type SdkRouteDependencies = {
   installationBucket: KeyedTokenBucket;
   appBucket: KeyedTokenBucket;
   privacyBucket: KeyedTokenBucket;
+  applePurchaseEnvironment?: ApplePurchaseEnvironment;
 };
 
 function writeJson(response: ServerResponse, status: number, value: unknown): void {
@@ -302,6 +304,26 @@ export async function handleSdkBatch(
     requestDigest: identity.requestDigest, outcome: "succeeded",
   });
   writeJson(response, 202, { ingest_batch_id: ingestBatchId, status: "pending" });
+}
+
+export async function handleApplePurchasePreparation(request: IncomingMessage, response: ServerResponse, dependencies: SdkRouteDependencies): Promise<void> {
+  const body = await readRawBody(request, Math.min(dependencies.maximumBytes, 16 * 1024));
+  const identity = await authenticate(request, body, dependencies, true);
+  if (!identity) return writeJson(response, 401, { error: "unauthorized" });
+  if (!dependencies.installationBucket.allow(identity.installationKeyId!) || !dependencies.appBucket.allow(identity.sdkKeyId)) {
+    return writeJson(response, 429, { error: "rate_limited" });
+  }
+  let value: unknown;
+  try { value = parseJsonBody(body); }
+  catch { return writeJson(response, 400, { error: "malformed_json" }); }
+  try {
+    const prepared = await prepareApplePurchaseIntent({ ...dependencies, identity, value, environment: dependencies.applePurchaseEnvironment });
+    writeJson(response, 200, prepared);
+  } catch (error) {
+    if (error instanceof ApplePurchaseIntentError) return writeJson(response, error.status, { error: error.message });
+    // Never serialize protected references, tokens, or database diagnostics.
+    writeJson(response, 503, { error: "app_store_purchase_preparation_unavailable" });
+  }
 }
 
 export async function handleDevicePrivacy(

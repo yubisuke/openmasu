@@ -225,16 +225,19 @@ refund and cost operands from the saved calculation (#178). The dashboard connec
 bounded [cost-recalculation controls](metric-corrections.md) to existing jobs and
 original/replacement details (#179). A definition-backed [retention matrix](dashboard-analysis.md#saved-retention-matrix)
 aligns only comparable saved cohorts and horizons on the current page (#180).
-App Store purchase
-binding, finer advertising grain and separate re-engagement outcomes
-(#186-#188) are scoped follow-ups. A forward-only runtime fix now permits
+App Store purchase binding (#186) is in progress: the opt-in
+[purchase-preparation API](design/verified-commerce-lifecycle.md#installation-bound-purchase-preparation)
+now issues protected installation-scoped tokens with retry and deletion safety.
+Transaction submission, verified financial projection and the public Swift API
+remain incomplete. Finer advertising grain and separate re-engagement outcomes
+(#187-#188) remain scoped follow-ups. A forward-only runtime fix now permits
 schedule re-registration over identical inputs while preserving run-ID
 uniqueness, old evidence, exact replay and explicit-only supersession
 ([#200](https://github.com/yubisuke/openmasu/issues/200)). The reference retention
 numerator now uses that metric's selected and fraud-filtered cohort, matching
 Python/SQL rather than counting a different population
 ([#202](https://github.com/yubisuke/openmasu/issues/202)). Neither fix rewrites
-old saved runs. Three scoped follow-up slices remain planned. Existing
+old saved runs. Three scoped follow-up slices remain incomplete. Existing
 component evidence and the published v0.3.0-rc.1 record remain unchanged;
 neither proves these remaining connections.
 
