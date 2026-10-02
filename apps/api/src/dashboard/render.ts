@@ -98,7 +98,7 @@ function configurationForms(view: DashboardView): string {
   if (!view.selectedAppId || !view.canAdminister) return "";
   const app = encodeURIComponent(view.selectedAppId);
   const csrf = `<input type="hidden" name="csrf_token" value="${escapeHtml(view.csrfToken)}">`;
-  return `<section><h2>App configuration</h2><p>Each submission is validated by the same service used by the admin API.</p>
+  return `<section><h2>App configuration</h2><p>Each submission is validated by the same service used by the admin API.</p><p><a href="/dashboard/apps/${app}/metric-schedules">Manage daily metric schedules</a></p>
   <h3>App link identity</h3><form method="post" action="/dashboard/apps/${app}/link-identity">${csrf}<label>Android package <input name="android_package_name"></label><label>Android SHA-256 fingerprints (comma-separated) <input name="android_sha256_fingerprints"></label><label>Apple team ID <input name="apple_team_id"></label><label>Apple bundle ID <input name="apple_bundle_id"></label><button type="submit">Register link identity</button></form>
   <h3>Apple app</h3><form method="post" action="/dashboard/apps/${app}/apple-registration">${csrf}<label>Apple app Adam ID <input name="apple_app_adam_id" required inputmode="numeric"></label><label>Apple bundle ID <input name="apple_bundle_id"></label><button type="submit">Register Apple app</button></form>
   <h3>Conversion schema</h3><form method="post" action="/dashboard/apps/${app}/conversion-schemas">${csrf}<label>Schema version <input name="schema_version" required placeholder="1.0.0"></label><label>Definition JSON <textarea name="definition_json" required></textarea></label><button type="submit">Register conversion schema</button></form>

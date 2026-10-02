@@ -1,0 +1,23 @@
+import type { MetricScheduleRecord } from "../metric-schedules.js";
+import { escapeHtml as escape } from "./render.js";
+
+/** Decode transport only; registerMetricSchedule owns all definition validation. */
+export function metricScheduleFormRequest(form: URLSearchParams, disable = false): Record<string, unknown> {
+  const allowed = disable ? ["csrf_token"] : ["csrf_token", "request_json"];
+  if ([...form.keys()].some(key => !allowed.includes(key) || form.getAll(key).length !== 1)) {
+    throw new Error("metric_schedule_form_invalid");
+  }
+  if (disable) return {};
+  let body: unknown;
+  try { body = JSON.parse(form.get("request_json") ?? ""); }
+  catch { throw new Error("metric_schedule_json_invalid"); }
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("metric_schedule_json_invalid");
+  return body as Record<string, unknown>;
+}
+
+export function renderMetricSchedules(appId: string, schedules: readonly MetricScheduleRecord[], csrfToken: string): string {
+  const base = `/dashboard/apps/${encodeURIComponent(appId)}/metric-schedules`;
+  const csrf = `<input type="hidden" name="csrf_token" value="${escape(csrfToken)}">`;
+  const rows = schedules.map(schedule => `<tr data-metric-schedule-id="${escape(schedule.metric_schedule_id)}"><th scope="row">${escape(schedule.metric_schedule_id)}</th><td>${escape(schedule.status)}</td><td>${escape(schedule.lag_days)}</td><td>${escape(schedule.start_date)}</td><td>${escape(schedule.last_target_date ?? "not processed")}</td><td>${escape(schedule.pending_target_date ?? "none")}</td><td>${escape(schedule.safe_reason ?? "none")}</td><td><code>${escape(schedule.definition_digest)}</code><details><summary>Immutable definition</summary><pre>${escape(JSON.stringify(schedule.definition, null, 2))}</pre></details>${schedule.latest_discovery ? `<details><summary>Latest discovery receipt (not provider completeness)</summary><pre>${escape(JSON.stringify(schedule.latest_discovery, null, 2))}</pre></details>` : ""}</td><td>${schedule.status === "active" ? `<form method="post" action="${base}/${encodeURIComponent(schedule.metric_schedule_id)}/disable">${csrf}<button type="submit">Disable</button></form>` : "Disabled; retained for history"}</td></tr>`).join("");
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>OpenMasu metric schedules</title><link rel="stylesheet" href="/dashboard/app.css"></head><body><main><h1>Daily metric schedules</h1><p>App: ${escape(appId)} · <a href="/dashboard/apps/${encodeURIComponent(appId)}">Back to cohort reports</a></p><p>These are the same immutable schedules used by the admin API and existing durable worker. Refresh this page to read progress; opening it does not start a calculation.</p>${schedules.length ? `<table><caption>Saved schedule state and target-date checkpoints</caption><thead><tr><th scope="col">Schedule</th><th scope="col">Status</th><th scope="col">Lag days</th><th scope="col">Start date</th><th scope="col">Last completed target date</th><th scope="col">Pending target date</th><th scope="col">Safe reason</th><th scope="col">Definition digest and evidence</th><th scope="col">Action</th></tr></thead><tbody>${rows}</tbody></table>` : "<p>No metric schedules are registered for this app.</p>"}<section><h2>Register a schedule</h2><p>Start with <a href="https://github.com/yubisuke/openmasu/blob/main/examples/synthetic/metric-schedule.json">the synthetic schedule JSON</a>. Paste the complete API request, including fx_policy and evaluations, and optional metric_definitions. Set lag_days (1–365) and an optional YYYY-MM-DD start_date in that JSON; do not add static dates to evaluation grouping. When omitted, lag_days defaults to 1 and start_date to the currently eligible UTC date. The request is validated by the same service as the API.</p><p>The synthetic FX snapshot is an example, not a production rate feed. Use a deliberate lag long enough for the selected metric window. Registration does not assert source completeness or execute a run immediately.</p><form method="post" action="${base}">${csrf}<label>Complete schedule request JSON <textarea name="request_json" rows="18" required spellcheck="false"></textarea></label><button type="submit">Register daily calculation</button></form></section><p>A metric name may belong to only one active schedule per app. Definitions, lag and start date cannot be edited. Disable and register a new schedule to change them; there is no resume or run-now action. Disablement prevents new claims, but an already claimed date may finish. Existing definitions, checkpoints and metric runs remain stored. A missing checkpoint is not a successful run.</p></main></body></html>`;
+}

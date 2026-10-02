@@ -204,7 +204,7 @@ an SDK key is not required. Keep all secrets out of source, logs and shell histo
 | Configuration exists, no receipt | Check the selected app/endpoint and producer configuration; do not call it successful delivery |
 | Batch pending | Check worker progress; repeated sends do not force calculation |
 | Rejections recorded | Correct the explicit validation failure before retrying; do not upload private payloads for diagnosis |
-| Logical events but no metric runs | Run the existing `metrics:run` with date/definition/cutoff or inspect the app's [metric schedule](scheduled-metrics.md) |
+| Logical events but no metric runs | As an admin, open **App configuration → Manage daily metric schedules** to [register, inspect or disable a daily calculation](scheduled-metrics.md#manage-schedules-through-the-dashboard), or use `metrics:run` for a deliberate one-off date/definition/cutoff |
 | Run exists but no comparable input | Check units, saved meaning, temporal maturity and complete selection; unknown is a valid result |
 
 [Measurement health](measurement-health.md) describes what each observation can

@@ -9,11 +9,15 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import {
   createAppPool,
+  createReaderPool,
   createSeedPool,
   EncryptedFilePayloadStore,
   withTenant,
 } from "@openmasu/runtime";
 import { ensureAdminKeys } from "../../api/src/admin-auth.js";
+import { renderMetricSchedules } from "../../api/src/dashboard/metric-schedules.js";
+import type { MetricScheduleRecord } from "../../api/src/metric-schedules.js";
+import { csrfToken, issueDashboardSession, type DashboardSession } from "../../api/src/session.js";
 import { buildDashboardView } from "../../api/src/dashboard/view.js";
 import { parseMetricQuery } from "../../api/src/report-query.js";
 import { metricReport } from "../../api/src/reporting.js";
@@ -42,6 +46,8 @@ const payloadStore = new EncryptedFilePayloadStore(
 );
 const appPool = createAppPool();
 const seedPool = createSeedPool();
+const readerPool = createReaderPool();
+let session: Omit<DashboardSession, "role">;
 let api: ReturnType<typeof createServer>;
 let baseUrl = "";
 let scheduleId = "";
@@ -65,10 +71,11 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
       `TRUNCATE control.metric_schedule_checkpoints,control.metric_schedule_states,
          control.metric_schedules CASCADE`,
     );
-    await ensureAdminKeys(appPool, { tenantId, appId }, [adminKey]);
+    const [adminKeyId] = await ensureAdminKeys(appPool, { tenantId, appId }, [adminKey]);
+    session = await issueDashboardSession(appPool, tenantId, adminKeyId!, 43_200);
     api = createServer(createRequestHandler({
       pool: appPool,
-      readerPool: appPool,
+      readerPool,
       payloadStore,
       maxConfig: {
         tenantId,
@@ -81,7 +88,7 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
       },
       publicBaseUrl: "http://localhost:8080",
       redirectorBaseUrl: "http://localhost:8090",
-      dashboard: { enabled: false, publicBaseUrl: "http://localhost:8080", tenantId, sessionTtlSeconds: 43_200 },
+      dashboard: { enabled: true, publicBaseUrl: "http://localhost:8080", tenantId, sessionTtlSeconds: 43_200 },
     }));
     api.listen(0, "127.0.0.1");
     await once(api, "listening");
@@ -91,7 +98,7 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
   after(async () => {
     api.close();
     await once(api, "close");
-    await Promise.all([appPool.end(), seedPool.end()]);
+    await Promise.all([appPool.end(), seedPool.end(), readerPool.end()]);
     rmSync(payloadRoot, { recursive: true, force: true });
   });
 
@@ -278,5 +285,112 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     assert.deepEqual(await processMetricSchedules(appPool, tenantId, {
       now: new Date("2026-08-11T12:00:00.000Z"),
     }), { schedules: 0, completedDates: 0, replayedDates: 0, failedSchedules: 0 });
+  });
+
+  it("connects dashboard registration to worker checkpoint and disablement with API parity and scoped permissions", async () => {
+    const path = `/dashboard/apps/${appId}/metric-schedules`;
+    const apiPath = `/v1/admin/apps/${appId}/metric-schedules`;
+    const cookie = `openmasu_dashboard=${session.token}`;
+    const csrf = csrfToken(session.token);
+    const list = async (): Promise<MetricScheduleRecord[]> => {
+      const response = await admin(apiPath); assert.equal(response.status, 200);
+      return (await response.json() as { data: MetricScheduleRecord[] }).data;
+    };
+    const page = (url = path, selectedCookie = cookie) => fetch(`${baseUrl}${url}`, { headers: { cookie: selectedCookie }, redirect: "manual" });
+    const post = (body: URLSearchParams, url = path, selectedCookie = cookie, origin = "http://localhost:8080") => fetch(`${baseUrl}${url}`, {
+      method: "POST", body, headers: { cookie: selectedCookie, origin }, redirect: "manual",
+    });
+    const form = (body: Any) => new URLSearchParams({ csrf_token: csrf, request_json: JSON.stringify(body) });
+    const state = () => withTenant(readerPool, tenantId, async client => (await client.query(
+      `SELECT (SELECT count(*)::int FROM control.metric_schedules WHERE tenant_id=$1 AND app_id=$2) AS schedules,
+        (SELECT count(*)::int FROM control.metric_schedule_states WHERE tenant_id=$1 AND app_id=$2) AS states,
+        (SELECT count(*)::int FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2) AS runs,
+        (SELECT count(*)::int FROM ledger.audit_logs WHERE tenant_id=$1) AS audits`, [tenantId, appId],
+    )).rows[0]);
+    const assertPage = async () => {
+      const records = await list(), before = await state(), response = await page();
+      assert.equal(response.status, 200); assert.equal(response.headers.get("cache-control"), "no-store");
+      assert.equal(await response.text(), renderMetricSchedules(appId, records, csrf));
+      assert.deepEqual(await state(), before, "GET uses the reader pool and does not mutate schedules, runs or audit logs");
+      return records;
+    };
+    await assertPage();
+    // This UI flow uses a different aggregate selection from the API cases.
+    // Re-registering the exact saved selection is tracked separately in #200.
+    const body = { lag_days: 9, start_date: "2026-08-01", fx_policy: fixtureInput.fx_policy,
+      metric_definitions: fixtureInput.metric_definitions, evaluations: [{ metric_names: ["d7_roas"],
+        date_dimension: "cohort_date", grouping: { campaign_id: "provider-campaign-33", country: "JP", attribution_status: "non_organic" } }] };
+    const before = await list();
+    const registered = await post(form(body)); assert.equal(registered.status, 303); assert.equal(registered.headers.get("location"), path);
+    const records = await assertPage();
+    const created = records.find(row => !before.some(old => old.metric_schedule_id === row.metric_schedule_id))!;
+    assert.ok(created); assert.equal(created.status, "active"); assert.equal(created.last_target_date, null);
+    assert.equal(created.lag_days, 9); assert.equal(created.start_date, "2026-08-01");
+    assert.deepEqual(created.definition.evaluations, body.evaluations);
+
+    const invalid = structuredClone(body); invalid.metric_definitions[0].definition.calculation = "unsupported";
+    for (const [candidate, status, reason] of [
+      [invalid, 400, "metric_schedule_definitions_invalid"],
+      [body, 409, "metric_schedule_metric_overlap"],
+      [{ ...body, start_date: "9999-01-01" }, 400, "metric_schedule_start_date_in_future"],
+    ] as const) {
+      const apiResponse = await admin(apiPath, { method: "POST", body: JSON.stringify(candidate) });
+      assert.equal(apiResponse.status, status); assert.deepEqual(await apiResponse.json(), { error: reason });
+      const browserResponse = await post(form(candidate)); assert.equal(browserResponse.status, status);
+      assert.ok((await browserResponse.text()).includes(reason));
+      assert.deepEqual(await list(), records, "rejected registration does not change a schedule");
+    }
+
+    const disablePath = `${path}/${encodeURIComponent(created.metric_schedule_id)}/disable`;
+    const readerKey = `synthetic-schedule-reader-${randomBytes(32).toString("base64url")}`;
+    const [readerId] = await ensureAdminKeys(appPool, { tenantId, appId }, [{ key: readerKey, role: "read_only" }]);
+    const readerSession = await issueDashboardSession(appPool, tenantId, readerId!, 43_200);
+    const readerCookie = `openmasu_dashboard=${readerSession.token}`;
+    assert.equal((await page(path, readerCookie)).status, 403);
+    assert.equal((await post(new URLSearchParams({ csrf_token: csrfToken(readerSession.token), request_json: JSON.stringify(body) }), path, readerCookie)).status, 403);
+    assert.equal((await post(new URLSearchParams({ csrf_token: csrfToken(readerSession.token) }), disablePath, readerCookie)).status, 403);
+    assert.equal((await fetch(`${baseUrl}${path}`, { headers: { authorization: `Bearer ${adminKey}` } })).status, 401);
+    assert.equal((await fetch(`${baseUrl}${apiPath}`, { headers: { cookie } })).status, 401);
+    for (const token of ["", csrfToken(readerSession.token)]) {
+      assert.equal((await post(new URLSearchParams({ csrf_token: token, request_json: JSON.stringify(body) }))).status, 403);
+      assert.equal((await post(new URLSearchParams({ csrf_token: token }), disablePath)).status, 403);
+    }
+    assert.equal((await post(form(body), path, cookie, "https://other.example.test")).status, 403);
+    assert.equal((await post(new URLSearchParams({ csrf_token: csrf }), disablePath, cookie, "https://other.example.test")).status, 403);
+    for (const [tenant, app] of [["tenant-schedule-foreign", "app-schedule-foreign"], [tenantId, "app-schedule-other"]]) {
+      await withTenant(appPool, tenant!, client => client.query(
+        "INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ($1,$2,'2026-08-01T00:00:00.000Z') ON CONFLICT DO NOTHING",
+        [tenant, app],
+      ));
+    }
+    for (const app of ["app-schedule-foreign", "app-schedule-missing"]) {
+      const foreignPath = `/dashboard/apps/${app}/metric-schedules`;
+      assert.equal((await page(foreignPath)).status, 404);
+      assert.equal((await post(form(body), foreignPath)).status, 404);
+    }
+    assert.equal((await post(new URLSearchParams({ csrf_token: csrf }),
+      `/dashboard/apps/app-schedule-other/metric-schedules/${encodeURIComponent(created.metric_schedule_id)}/disable`)).status, 404);
+    assert.deepEqual(await list(), records);
+
+    const savedRuns = () => withTenant(readerPool, tenantId, async client => (await client.query<{ metric_run_id: string; artifact: Any }>(
+      "SELECT metric_run_id,artifact FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2 ORDER BY metric_run_id", [tenantId, appId],
+    )).rows);
+    const oldRuns = await savedRuns();
+    assert.deepEqual(await processMetricSchedules(appPool, tenantId, { now: new Date("2026-08-10T12:34:56.000Z") }),
+      { schedules: 1, completedDates: 1, replayedDates: 0, failedSchedules: 0 });
+    const completedRuns = await savedRuns();
+    const newRuns = completedRuns.filter(run => !oldRuns.some(old => old.metric_run_id === run.metric_run_id));
+    assert.equal(newRuns.length, 1); assert.equal(newRuns[0]!.artifact.value_unscaled, "1500000");
+    assert.equal(newRuns[0]!.artifact.input_received_at_watermark, "2026-08-10T00:00:00.000Z");
+    const completed = (await assertPage()).find(row => row.metric_schedule_id === created.metric_schedule_id)!;
+    assert.equal(completed.last_target_date, "2026-08-01"); assert.equal(completed.pending_target_date, null);
+    const stopped = await post(new URLSearchParams({ csrf_token: csrf }), disablePath);
+    assert.equal(stopped.status, 303); assert.equal(stopped.headers.get("location"), path);
+    const disabled = (await assertPage()).find(row => row.metric_schedule_id === created.metric_schedule_id)!;
+    assert.equal(disabled.status, "disabled"); assert.equal(disabled.last_target_date, "2026-08-01");
+    assert.deepEqual(disabled.definition, created.definition); assert.equal(disabled.definition_digest, created.definition_digest);
+    assert.deepEqual(await processMetricSchedules(appPool, tenantId, { now: new Date("2026-08-11T12:00:00.000Z") }),
+      { schedules: 0, completedDates: 0, replayedDates: 0, failedSchedules: 0 });
+    assert.deepEqual(await savedRuns(), completedRuns, "disablement preserves every existing metric artifact");
   });
 });

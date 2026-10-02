@@ -49,6 +49,7 @@ import { operatorDeliveryHealth } from "./operator-delivery-health.js";
 import { measurementHealth } from "./measurement-health.js";
 import { attributionReport, AttributionReportError, parseAttributionQuery } from "./attribution-reporting.js";
 import { renderAttributionReport } from "./dashboard/attribution-report.js";
+import { metricScheduleFormRequest, renderMetricSchedules } from "./dashboard/metric-schedules.js";
 import type { KeyedTokenBucket, TokenBucket } from "./rate-limit.js";
 import { matchRoute, type RouteDefinition } from "./routes.js";
 import { activateRuleBundle } from "./rule-bundles.js";
@@ -509,6 +510,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
         "dashboard_app", "dashboard_metric_explanation", "dashboard_export", "dashboard_comparison_export", "dashboard_records", "dashboard_differences", "dashboard_fraud",
         "dashboard_comparison_form", "dashboard_comparison_submit",
         "dashboard_attribution_report",
+        "dashboard_metric_schedules_list", "dashboard_metric_schedules_register", "dashboard_metric_schedules_disable",
         "dashboard_tracking_links_list", "dashboard_tracking_links_create", "dashboard_tracking_link_transition",
         "dashboard_sdk_keys_issue", "dashboard_sdk_keys_retire",
         "dashboard_server_keys_issue", "dashboard_server_keys_retire", "dashboard_link_domain",
@@ -577,6 +579,42 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
         const appId = dashboardAppId(target.pathname) ?? "";
         try {
           const appIdentity = await requireRegisteredApp(dependencies.readerPool, sessionIdentity, appId);
+          if (route.handler === "dashboard_metric_schedules_list") {
+            dashboardHtml(response, 200, renderMetricSchedules(appId,
+              await listMetricSchedules(dependencies.readerPool, appIdentity), csrfToken(session.token)));
+            return;
+          }
+          if (route.handler === "dashboard_metric_schedules_register" || route.handler === "dashboard_metric_schedules_disable") {
+            const body = await formBody(request);
+            const scheduleId = metricScheduleId(target.pathname);
+            if (!csrfOriginAccepted(request, dependencies.dashboard.publicBaseUrl)
+              || !verifyCsrfToken(session.token, body.get("csrf_token") ?? undefined)) {
+              await rejectDashboardCsrf(dependencies, response, session, "dashboard_metric_schedule_mutation", "app", appId);
+              return;
+            }
+            try {
+              const disable = route.handler === "dashboard_metric_schedules_disable";
+              const parsed = metricScheduleFormRequest(body, disable);
+              if (disable) {
+                if (!scheduleId) throw new Error("metric_schedule_not_found");
+                await disableMetricSchedule({ pool: dependencies.pool, identity: appIdentity, metricScheduleId: scheduleId });
+              } else {
+                await registerMetricSchedule({ pool: dependencies.pool, identity: appIdentity, body: parsed });
+              }
+              response.writeHead(303, { ...dashboardHeaders, location: `/dashboard/apps/${encodeURIComponent(appId)}/metric-schedules` }).end();
+            } catch (error) {
+              const reason = publicReason(error, "metric_schedule_lifecycle_failed");
+              const notFound = reason === "metric_schedule_not_found";
+              if (!notFound) await recordDashboardAudit(dependencies.pool, {
+                tenantId: appIdentity.tenantId, appId, actorRef: `admin_key:${session.adminKeyId}`,
+                action: "metric_schedule_lifecycle", targetScope: "metric_schedule",
+                targetRef: scheduleId ?? "metric_schedule:new", outcome: "failed", reasonCode: reason,
+              });
+              const status = notFound ? 404 : ["metric_schedule_not_active", "metric_schedule_metric_overlap"].includes(reason) ? 409 : 400;
+              dashboardHtml(response, status, `<!doctype html><html lang="en"><body><h1>Metric schedule operation failed</h1><p>${escapeHtml(notFound ? "not_found" : reason)}</p><p><a href="/dashboard/apps/${encodeURIComponent(appId)}/metric-schedules">Return to metric schedules</a></p></body></html>`);
+            }
+            return;
+          }
           if (route.handler === "dashboard_attribution_report") {
             try {
               const report = [...target.searchParams].length ? await attributionReport(dependencies.readerPool, appIdentity, parseAttributionQuery(target.searchParams)) : undefined;

@@ -31,6 +31,9 @@ export type RouteHandler =
   | "admin_metric_schedules_list"
   | "admin_metric_schedules_register"
   | "admin_metric_schedules_disable"
+  | "dashboard_metric_schedules_list"
+  | "dashboard_metric_schedules_register"
+  | "dashboard_metric_schedules_disable"
   | "admin_cost_schedules_list"
   | "admin_cost_schedules_register"
   | "admin_cost_schedules_disable"
@@ -173,6 +176,9 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_differences", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/differences$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_fraud", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/fraud$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_attribution_report", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/attribution$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_metric_schedules_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules$/, auth: "dashboard_session", mutates: false, capability: "administer" },
+  { handler: "dashboard_metric_schedules_register", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_metric_schedules_disable", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules\/[^/]+\/disable$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_tracking_links_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/tracking-links$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_tracking_links_create", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/tracking-links$/, auth: "dashboard_session", mutates: true, capability: "operate" },
   { handler: "dashboard_tracking_link_transition", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/tracking-links\/[^/]+\/(?:pause|archive)$/, auth: "dashboard_session", mutates: true, capability: "operate" },

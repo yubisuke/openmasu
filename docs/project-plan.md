@@ -106,7 +106,10 @@ v0.4.13 commerce definitions and fixture 60.
 
 The five core slices, #173 external declarations, #174 dashboard comparison
 and #175 recorded attribution analysis have source implementation. Daily
-schedule controls (#176) are next.
+schedule controls (#176) now connect the dashboard to the existing worker.
+Fix the synthetic saved-run identity collision on schedule re-registration
+(#200) before custom-event cohort outcomes (#177); this adds one runtime fix
+to the original sixteen slices.
 #184/#185 reuse #182/#183, with commerce cohorts connected by #191; #186 depends on #184, #187 on #182/#183, and #188 on
 #182/#177. Keep the scoped follow-ups separate from the initial Android-first
 campaign path. They do not add a new provider, identity graph or metric service.
@@ -118,7 +121,8 @@ campaign path. They do not add a new provider, identity graph or metric service.
 | Source implemented / [#173](https://github.com/yubisuke/openmasu/issues/173) | External comparison meaning | Explicit external declarations for one elapsed ad-revenue ROAS family; retain captured versus declared evidence | Fixture-derived report and CSV conversion through ordinary CLI produce known exact deltas with opt-in; unknown, window/FX/gross-net/rounding mismatches refuse; both provenance and legacy modes remain |
 | Source implemented / [#174](https://github.com/yubisuke/openmasu/issues/174) | Comparison workflow | Bounded SSR input, condition review and result download using existing converters/comparator | CLI/Web result identity, receipt app scope, input limits, no partial file, no server-side file/history persistence, session and CSRF checks |
 | Source implemented / [#175](https://github.com/yubisuke/openmasu/issues/175) | Attribution analysis | Reader-only fixed-watermark install counts by status/method/recorded reason | As-of decision selection, no duplicate subject counts, not-recorded distinct from organic, privacy and tenant scope, no raw IDs or mixed aggregate population |
-| 4 / [#176](https://github.com/yubisuke/openmasu/issues/176) | Daily calculation controls | SSR list/register/disable for existing immutable metric schedules | Register to worker checkpoint to disable, existing validation/ownership rules, administer capability, no GET writes |
+| Source implemented / [#176](https://github.com/yubisuke/openmasu/issues/176) | Daily calculation controls | SSR list/register/disable for existing immutable metric schedules | Register to worker checkpoint to disable, existing validation/ownership rules, administer capability, no GET writes |
+| Next / [#200](https://github.com/yubisuke/openmasu/issues/200) | Schedule recovery | Re-registration of an already calculated selection preserves old evidence and completes the new checkpoint | Explicit run identity, exact retries, distinct definitions/cutoffs, no deletion workaround |
 | 5 / [#177](https://github.com/yubisuke/openmasu/issues/177) | Cohort outcomes | One explicit custom-event key, distinct D7 cohort converters and conversion rate | Additive contract and derived fixtures, TS/Python/SQL parity, duplicate/window/watermark/privacy rules, key-bound saved meaning and schedule validation |
 | 6 / [#178](https://github.com/yubisuke/openmasu/issues/178) | Commerce calculation evidence | Saved operands for existing D30 total-net ROAS in the same calculation transaction | Advertising plus purchases minus refunds, cost and exact rounding, old-run immutability, redacted/unavailable evidence, existing result parity |
 | 7 / [#179](https://github.com/yubisuke/openmasu/issues/179) | Correction workflow | SSR request/status and links to original/replacement run details using existing bounded recalculation | Cost revision to completion, duplicate request identity, existing bounds/permissions, no second selector or all-history recomputation |
