@@ -493,7 +493,8 @@
                   "grouping_digest",
                   "superseded",
                   "comparison_context",
-                  "cost_update_state"
+                  "cost_update_state",
+                  "late_input_update_state"
                 ]
               }
             }
@@ -1802,6 +1803,10 @@
           "cost_update_state": {
             "type": "string",
             "description": "Current persisted recalculation/input-revision state."
+          },
+          "late_input_update_state": {
+            "type": "string",
+            "description": "Explicit late-input request state; not proof of upstream completeness."
           }
         },
         "additionalProperties": false,

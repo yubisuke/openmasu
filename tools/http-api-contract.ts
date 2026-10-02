@@ -25,6 +25,7 @@ export function buildHttpApiContract(): Json {
     grouping_digest: metric.properties.grouping.properties.dimension_digest, superseded: { type: "boolean" },
     comparison_context: { type: ["object", "null"], description: "Saved aggregate-only meaning; null/unknown is not reconstructed." },
     cost_update_state: { type: "string", description: "Current persisted recalculation/input-revision state." },
+    late_input_update_state: { type: "string", description: "Explicit late-input request state; not proof of upstream completeness." },
   });
   for (const name of ["currency", "amount_scale", "ratio_scale", "undefined_reason", "supersedes_metric_run_id"]) metricProperties[name] = nullable(metricProperties[name]);
   const schemas: Json = {

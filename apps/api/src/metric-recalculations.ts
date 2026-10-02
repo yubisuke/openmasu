@@ -1,16 +1,40 @@
 import type { Pool } from "pg";
 import { sha256 } from "@openmasu/attribution-core";
-import { normalizeMetricRecalculationRequest, revisedMetricCostPredicate, withTenant } from "@openmasu/runtime";
+import { acquirePrivacyTenantXactFence, normalizeMetricRecalculationRequest, revisedMetricCostPredicate, withTenant } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
+import { selectLateMetricInputs } from "./late-metric-inputs.js";
 
 export async function requestMetricRecalculation(pool: Pool, identity: AppAdminIdentity, body: unknown, now = new Date()) {
   const request = normalizeMetricRecalculationRequest(body);
   const digest = sha256(request), id = `recalculation:${sha256([identity.tenantId, identity.appId, digest]).slice(0, 48)}`;
   return withTenant(pool, identity.tenantId, async client => {
+    await client.query("SET LOCAL statement_timeout='15000'");
+    await acquirePrivacyTenantXactFence(client, identity.tenantId, "shared");
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [JSON.stringify([identity.tenantId, identity.appId, "metric-recalculation"])]);
     const existing = await client.query("SELECT recalculation_id FROM control.metric_recalculation_jobs WHERE tenant_id=$1 AND app_id=$2 AND request_digest=$3", [identity.tenantId, identity.appId, digest]);
     if (existing.rowCount) return { recalculation_id: id, replayed: true };
+    if (request.trigger_kind === "late_events") {
+      const pending = await client.query<{ pending_count: string }>("SELECT pending_count FROM control.privacy_deletion_backlog()");
+      if (pending.rows[0]?.pending_count !== "0") throw new Error("privacy_pending");
+      const selection = await selectLateMetricInputs(client, identity, request);
+      await client.query(`INSERT INTO control.metric_recalculation_jobs
+        (recalculation_id,tenant_id,app_id,request_digest,date_from,date_to,watermark,created_at,
+         trigger_kind,source_snapshot_digest,source_records,input_status_counts,selection_status)
+        VALUES ($1,$2,$3,$4,$5::date,$6::date,$7,$8,'late_events',$9,$10::jsonb,$11::jsonb,$12)`,
+      [id, identity.tenantId, identity.appId, digest, request.date_from, request.date_to, request.watermark, now.toISOString(),
+        selection.snapshot, JSON.stringify(selection.records), JSON.stringify(selection.counts), selection.status]);
+      for (const row of selection.rows) {
+        await client.query(`INSERT INTO control.metric_recalculation_items
+          (recalculation_id,tenant_id,app_id,source_metric_run_id,replay_digest,state,safe_reason)
+          VALUES ($1,$2,$3,$4,$5,$6,$7)`, [id, identity.tenantId, identity.appId, row.metric_run_id,
+          row.replay ? sha256(row.replay) : null, row.safe_reason ? "unavailable" : "queued", row.safe_reason]);
+      }
+      await recordDashboardAuditWithClient(client, { tenantId: identity.tenantId, appId: identity.appId,
+        actorRef: `admin_key:${identity.keyId}`, action: "metric_recalculation_requested", targetScope: "app", targetRef: id, outcome: "succeeded", now });
+      return { recalculation_id: id, selected_runs: selection.rows.length, selection_status: selection.status,
+        input_status_counts: selection.counts, replayed: false };
+    }
     const imported = await client.query<{ source_snapshot_digest: string; watermark_before_revision: boolean }>(
       `SELECT run.source_snapshot_digest,bool_or(control.canonical_timestamp_value(cost.as_of)>$6::timestamptz) AS watermark_before_revision
        FROM control.import_runs AS run JOIN ledger.cost_records AS cost
@@ -53,7 +77,8 @@ export async function requestMetricRecalculation(pool: Pool, identity: AppAdminI
 export async function listMetricRecalculations(pool: Pool, identity: AppAdminIdentity) {
   return withTenant(pool, identity.tenantId, async client => (await client.query(
     `SELECT job.recalculation_id,job.cost_import_run_id,job.cost_snapshot_digest,job.date_from::text,job.date_to::text,
-       job.watermark,job.created_at,item.source_metric_run_id,item.replacement_metric_run_id,item.state,item.attempts,item.safe_reason
+       job.watermark,job.created_at,job.trigger_kind,job.source_snapshot_digest,job.input_status_counts,job.selection_status,
+       item.source_metric_run_id,item.replacement_metric_run_id,item.state,item.attempts,item.safe_reason
      FROM (SELECT * FROM control.metric_recalculation_jobs WHERE tenant_id=$1 AND app_id=$2
        ORDER BY created_at DESC,recalculation_id COLLATE "C" LIMIT 20) AS job
      LEFT JOIN control.metric_recalculation_items AS item USING (tenant_id,app_id,recalculation_id)
