@@ -6,7 +6,7 @@ import { createAppPool, createReaderPool, createSeedPool, withTenant } from "@op
 import { sha256 } from "@openmasu/attribution-core";
 import { ingestFixture } from "./ingestion.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
-import { costArtifact, persistCostImport } from "./import/cost.js";
+import { persistCostImport } from "./import/cost.js";
 import { requestMetricRecalculation, listMetricRecalculations } from "../../api/src/metric-recalculations.js";
 import { metricReport } from "../../api/src/reporting.js";
 import { buildDashboardView } from "../../api/src/dashboard/view.js";
@@ -31,14 +31,18 @@ describe("bounded cost correction recalculation", { concurrency: false }, () => 
     tenantId = `tenant-correction-${randomBytes(6).toString("hex")}`;
     identity = { tenantId, appId: "app-a", keyId: "synthetic-correction", role: "admin" };
     input = JSON.parse(readFileSync("fixtures/v0.4/33-stage-b-cohort-metrics/input.json", "utf8").replaceAll('"tenant-a"', JSON.stringify(tenantId)));
-    // These are copied synthetic inputs, not changed goldens. A new tenant is
-    // part of the cost key; derive it rather than retaining the original key.
-    for (const cost of input.cost_records) cost.dimension_digest = costArtifact(cost, cost.report_snapshot_digest).dimension_digest;
+    // Populate both cost revisions through the real importer. Contract fixture
+    // cost dimensions are not the importer's scoped database cost keys.
+    const originalCosts = input.cost_records;
+    input.cost_records = [];
     const base = input.metric_evaluations[0];
-    input.metric_evaluations = ["JP", "GB"].map(country => ({ ...structuredClone(base),
+    const evaluations = ["JP", "GB"].map(country => ({ ...structuredClone(base),
       metric_names: ["d7_roas"], metric_run_id_prefix: `synthetic-correction-${country}`,
       grouping: { ...base.grouping, country } }));
+    input.metric_evaluations = [];
     await ingestFixture(`synthetic-correction-${tenantId}`, input, app, seed);
+    for (const cost of originalCosts) await persistCostImport(app, "synthetic-correction-original", [cost]);
+    input.metric_evaluations = evaluations;
     old = await computeSqlMetricRuns(app, input, true);
     const cost = await persistCostImport(app, "synthetic-correction", [{ tenant_id: tenantId, app_id: "app-a",
       network: "synthetic-network", campaign_id: "provider-campaign-33", country: "JP", date: "2026-08-01",
