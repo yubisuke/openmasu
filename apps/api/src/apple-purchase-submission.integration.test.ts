@@ -383,12 +383,20 @@ describe("installation-bound App Store monetary projection",{ concurrency: false
     const h = await harness(t); await h.submit(); await h.work([h.transaction]);
     const refund = { ...h.transaction,revocationType: "REFUND_FULL",revocationDate: h.transaction.purchaseDate+1000 };
     await h.notify(refund,"REFUND"); await h.work([refund]); await h.notify(h.transaction,"REFUND_REVERSED");
+    const before = jcs(await h.facts());
     let entered!: () => void,release!: () => void;
     const requested = new Promise<void>(resolve => { entered = resolve; }), resume = new Promise<void>(resolve => { release = resolve; });
     const pending = processCommerceReadbacks(pool,h.store,h.tenantId,{ now: new Date(Date.now()+1000),verifyAppleSignedData: verifier,
       appleClient: async () => { entered(); await resume; return { status: 200,body: Buffer.from(JSON.stringify({ signedTransactions: [signed(h.transaction)],hasMore: false })) }; } });
     await requested;
     try { assert.equal((await h.remove("installation")).status,"completed"); } finally { release(); }
-    assert.deepEqual(await pending,{ processed: 0,deferred: 0,failed: 0 }); assert.deepEqual(await h.facts(),[]);
+    assert.deepEqual(await pending,{ processed: 0,deferred: 0,failed: 0 });
+    // Privacy purges payloads and changes availability; it does not delete the
+    // append-only fact ledger. No cancellation may be appended after the fence.
+    assert.equal(jcs(await h.facts()),before);
+    assert.deepEqual(await h.query(`SELECT record_id FROM ledger.raw_records_current
+      WHERE tenant_id=$1 AND app_id=$2 AND payload_lifecycle_status='available'`),[]);
+    const refs = await h.query("SELECT evidence_ref FROM control.apple_purchase_evidence WHERE tenant_id=$1 AND app_id=$2");
+    for (const ref of refs) await assert.rejects(h.store.read(ref.evidence_ref),PayloadNotFoundError);
   });
 });
