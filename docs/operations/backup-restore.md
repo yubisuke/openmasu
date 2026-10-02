@@ -58,8 +58,9 @@ deployment.
    pg_restore --exit-on-error --no-owner --dbname "$OPENMASU_MIGRATION_DATABASE_URL" openmasu.dump
    ```
 
-   Before a forward version upgrade, restore as `--role=openmasu_owner` after
-   provisioning its CREATE/CONNECT grants on the isolated target. A no-owner
+   Before a forward version upgrade, create the isolated database with
+   `OWNER openmasu_owner` and restore as `--role=openmasu_owner`. A database-level
+   CREATE grant alone does not permit creation in the default public schema. A no-owner
    restore as the bootstrap administrator alone does not transfer old table
    ownership for later DDL. Follow [Safe upgrade](upgrade.md) for the complete path.
 

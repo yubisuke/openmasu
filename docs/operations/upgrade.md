@@ -72,9 +72,11 @@ This path is a stopped-writer upgrade, not zero-downtime deployment.
 
 On failure leave traffic stopped. Continue the same checksummed forward migration,
 or restore the complete matched backup into a **new isolated PostgreSQL 17 target**.
-Provision roles and grant `openmasu_owner` CREATE/CONNECT on that new database before
+Provision roles and create the new database with `OWNER openmasu_owner` before
 `pg_restore --exit-on-error --no-owner --role=openmasu_owner`; this preserves the
-owner needed by subsequent forward migrations. Never restore over the live DB.
+owner needed by subsequent forward migrations, including creation in the default
+`public` schema through PostgreSQL's database-owner privileges. A CREATE grant on
+the database alone does not permit creation in `public`. Never restore over the live DB.
 Drain/reapply recognized privacy state before reports or traffic. An earlier app
 may be used only if its schema compatibility is established; no automatic rollback,
 table deletion or resurrection of deleted payloads is provided.

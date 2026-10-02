@@ -508,7 +508,7 @@ it("upgrades the frozen v0.2.0 backup, resumes a failed migration, retains ledge
   let targetPool: Pool | undefined;
   try {
     for (const name of names) {
-      await admin.query(`CREATE DATABASE "${name}"`);
+      await admin.query(`CREATE DATABASE "${name}" OWNER openmasu_owner`);
       await admin.query(`GRANT CONNECT,CREATE ON DATABASE "${name}" TO openmasu_owner`);
     }
     sourceClient = new Client({ connectionString: source.toString() }); await sourceClient.connect();
