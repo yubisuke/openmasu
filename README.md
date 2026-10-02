@@ -68,9 +68,10 @@ material. For the shortest safe first run, go directly to the
 Its annotated tag and
 [GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.1)
 point to green `main` commit `90a0f5f`, with eight verified SDK download assets.
-It retains the independent Contract
-v0.4 wire and package identity, including the additive patch ledger through
-v0.4.13 with 60 reviewed fixtures and 780 goldens. Later `main` commits are not
+The release retains Contract v0.4 identity with patches through v0.4.10
+(57 fixtures / 741 goldens). Current development retains that wire/package
+identity and adds patches through v0.4.14 (61 fixtures / 793 goldens), including
+[explicit custom-event conversion](docs/custom-conversion-metrics.md). Later `main` commits are not
 evidence for that release. [`docs/STATUS.md`](docs/STATUS.md) defines the
 current source tree, and the [release index](docs/releases/README.md) separates
 the exact published record from ongoing development and historical prereleases.
@@ -184,8 +185,8 @@ The main contract gate is:
 npm run validate
 ```
 
-It checks 28 schemas, 8 registries, 60 reviewed synthetic fixtures, 780 golden
-output artifacts, 60 scenario assertions, 27 acceptance criteria,
+It checks 28 schemas, 8 registries, 61 reviewed synthetic fixtures, 793 golden
+output artifacts, 61 scenario assertions, 27 acceptance criteria,
 deterministic TypeScript, the independent Python evaluator, release identity,
 documentation drift, fraud artifacts, and RFC 8785 canonicalization.
 

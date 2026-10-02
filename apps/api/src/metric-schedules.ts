@@ -44,7 +44,7 @@ const metricGroupingKeys = new Set([...groupingKeys, "cohort_date", "metric_date
 const metricDefinitionFields = new Set([
   "metric_name", "metric_definition_version", "anchor_event", "aggregation_time_zone", "value_type",
   "currency", "amount_scale", "ratio_scale", "definition", "activity_events", "event_names",
-  "grouping_dimensions", "fraud_policy", "acquisition_basis", "cost_selection_policy", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash",
+  "grouping_dimensions", "fraud_policy", "acquisition_basis", "conversion_event_key", "cost_selection_policy", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash",
 ]);
 
 function object(value: unknown, error: string): JsonObject {
@@ -93,10 +93,11 @@ function validStringArray(value: unknown, allowed?: ReadonlySet<string>): boolea
 
 function validMetricDefinition(value: JsonObject): boolean {
   const selectedCommerce = value.rule_bundle_id === "metric-selected-commerce";
+  const customConversion = value.rule_bundle_id === "metric-custom-conversion";
   if (!selectedCommerce && value.cost_selection_policy !== undefined && (value.cost_selection_policy !== "reject_overlapping_grains"
       || value.metric_definition_version !== "0.4.12" || value.rule_bundle_id !== "metric-disjoint-cost"
       || value.rule_bundle_version !== "0.4.12")) return false;
-  if (!selectedCommerce && !value.cost_selection_policy && value.acquisition_basis !== undefined && (value.acquisition_basis !== "selected_first_party_click"
+  if (!selectedCommerce && !customConversion && !value.cost_selection_policy && value.acquisition_basis !== undefined && (value.acquisition_basis !== "selected_first_party_click"
       || value.anchor_event !== "install" || value.metric_definition_version !== "0.4.11"
       || value.rule_bundle_id !== "metric-selected-acquisition" || value.rule_bundle_version !== "0.4.11")) return false;
   if (Object.keys(value).some((key) => !metricDefinitionFields.has(key))
@@ -112,11 +113,27 @@ function validMetricDefinition(value: JsonObject): boolean {
   if (!definition || typeof definition !== "object" || Array.isArray(definition)) return false;
   const operation = definition as JsonObject;
   if (Object.keys(operation).some((key) => !["calculation", "window", "numerator", "denominator", "cost_basis"].includes(key))
-      || !["revenue_sum", "revenue_over_cost", "active_installations_over_cohort", "revenue_over_cohort", "cohort_size", "event_count"].includes(String(operation.calculation))
-      || !["revenue", "purchase_net_revenue", "total_net_revenue", "active_installations", "cohort_size", "events"].includes(String(operation.numerator))) return false;
+      || !["revenue_sum", "revenue_over_cost", "active_installations_over_cohort", "revenue_over_cohort", "cohort_size", "event_count", "converted_installations", "converted_installations_over_cohort"].includes(String(operation.calculation))
+      || !["revenue", "purchase_net_revenue", "total_net_revenue", "active_installations", "cohort_size", "events", "converted_installations"].includes(String(operation.numerator))) return false;
   const window = operation.window;
   if (!window || typeof window !== "object" || Array.isArray(window)) return false;
   const boundedWindow = window as JsonObject;
+  const conversionCalculations = ["converted_installations", "converted_installations_over_cohort"];
+  if (customConversion || value.conversion_event_key !== undefined || operation.numerator === "converted_installations"
+      || conversionCalculations.includes(String(operation.calculation))) {
+    const count = operation.calculation === "converted_installations";
+    if (!customConversion || typeof value.conversion_event_key !== "string" || !/^[a-z][a-z0-9_]{0,63}$/.test(value.conversion_event_key)
+        || value.metric_definition_version !== "0.4.14" || value.rule_bundle_version !== "0.4.14"
+        || value.rule_bundle_hash !== "fb2a468a0d09624ab3cb0bfef07d83b7e8fc62dd036756dbef1a095cda2223ab"
+        || value.acquisition_basis !== "selected_first_party_click" || value.anchor_event !== "install" || value.aggregation_time_zone !== "UTC"
+        || operation.numerator !== "converted_installations" || !conversionCalculations.includes(String(operation.calculation))
+        || boundedWindow.type !== "elapsed" || boundedWindow.day !== 7 || value.value_type !== (count ? "count" : "ratio")
+        || (count ? operation.denominator !== undefined || value.ratio_scale !== undefined
+          : operation.denominator !== "cohort_size" || value.ratio_scale !== 6)
+        || ["activity_events", "event_names", "cost_selection_policy", "currency", "amount_scale"].some(key => value[key] !== undefined)
+        || operation.cost_basis !== undefined || !validStringArray(value.grouping_dimensions,
+          new Set(["campaign_id", "network", "country", "cohort_date", "attribution_status"]))) return false;
+  }
   if (selectedCommerce && (value.acquisition_basis !== "selected_first_party_click"
       || value.metric_definition_version !== "0.4.13" || value.rule_bundle_version !== "0.4.13"
       || value.rule_bundle_hash !== "49554ad7fe9709e851f5cba7ac12215b539a9b209cc96ab66a085f0b1b46615d"

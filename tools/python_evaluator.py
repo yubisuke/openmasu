@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
@@ -24,6 +25,7 @@ METRIC_TOTAL_NET_BUNDLE_HASH = "fc95798477e664215aa213ab59402b5ad348db3d59c1b886
 METRIC_SELECTED_ACQUISITION_BUNDLE_HASH = "6fd998246bb092f81d8539b8e2c04a1abe421a1916480b63dfd018d11c7bccc5"
 METRIC_DISJOINT_COST_BUNDLE_HASH = "3ec3e50fc8b9180b55e888895d793739028fdd20abfc34f20110e6ce96e8b053"
 METRIC_SELECTED_COMMERCE_BUNDLE_HASH = "49554ad7fe9709e851f5cba7ac12215b539a9b209cc96ab66a085f0b1b46615d"
+METRIC_CUSTOM_CONVERSION_BUNDLE_HASH = "fb2a468a0d09624ab3cb0bfef07d83b7e8fc62dd036756dbef1a095cda2223ab"
 DAY_MS = 86_400_000
 
 
@@ -1159,6 +1161,28 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
     def fail() -> None:
         raise ValueError(f"metric_definition_series_mismatch:{metric_name}")
 
+    operation = definition.get("definition", {})
+    conversion_calculations = ("converted_installations", "converted_installations_over_cohort")
+    if ("conversion_event_key" in definition or definition.get("rule_bundle_id") == "metric-custom-conversion"
+            or operation.get("numerator") == "converted_installations" or operation.get("calculation") in conversion_calculations):
+        count = operation.get("calculation") == "converted_installations"
+        if (not isinstance(definition.get("conversion_event_key"), str)
+                or not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", definition["conversion_event_key"])
+                or definition.get("rule_bundle_id") != "metric-custom-conversion"
+                or definition.get("metric_definition_version") != "0.4.14" or definition.get("rule_bundle_version") != "0.4.14"
+                or definition.get("rule_bundle_hash") != METRIC_CUSTOM_CONVERSION_BUNDLE_HASH
+                or definition.get("acquisition_basis") != "selected_first_party_click"
+                or definition.get("anchor_event") != "install" or definition.get("aggregation_time_zone") != "UTC"
+                or operation.get("calculation") not in conversion_calculations or operation.get("numerator") != "converted_installations"
+                or operation.get("window") != {"type": "elapsed", "day": 7}
+                or definition.get("value_type") != ("count" if count else "ratio")
+                or ("denominator" in operation or "ratio_scale" in definition if count
+                    else operation.get("denominator") != "cohort_size" or definition.get("ratio_scale") != 6)
+                or any(key in definition for key in ("activity_events", "event_names", "cost_selection_policy", "currency", "amount_scale"))
+                or "cost_basis" in operation or not grouping
+                or any(key not in ("campaign_id", "network", "country", "cohort_date", "attribution_status") for key in grouping)):
+            fail()
+        return
     strict_costs = "cost_selection_policy" in definition
     selected_commerce = definition.get("rule_bundle_id") == "metric-selected-commerce"
     if selected_commerce:
@@ -1532,7 +1556,7 @@ def metric_runs(
             if unsupported:
                 raise ValueError(f"unsupported grouping for {metric_name}: {','.join(unsupported)}")
             revenue_value = 0
-            for item in revenue:
+            for item in ([] if "conversion_event_key" in definition else revenue):
                 installation = next(
                     (
                         candidate for candidate in eligible_installs
@@ -1593,6 +1617,20 @@ def metric_runs(
                     undefined_reason = "no_attributed_cost"
                 else:
                     amount = round_half_even(selected_revenue_value * 10 ** int(definition.get("ratio_scale", 6)), cost_value)
+            elif calculation in ("converted_installations", "converted_installations_over_cohort"):
+                if cohort_size == 0:
+                    undefined_reason = "empty_cohort"
+                else:
+                    converted: set[str] = set()
+                    for event in (item for item in visible if item["record"]["event_name"] == "custom_event"
+                                  and item["record"]["payload"]["event_key"] == definition["conversion_event_key"]):
+                        installation = next((candidate for candidate in eligible_installs
+                                             if candidate["server"]["tenant_id"] == event["server"]["tenant_id"]
+                                             and candidate["server"]["app_id"] == event["server"]["app_id"]
+                                             and candidate["record"]["payload"]["installation_id"] == event["record"]["payload"]["installation_id"]), None)
+                        if installation and eligible_revenue(definition, installation["record"], event["record"]):
+                            converted.add(installation["record"]["payload"]["installation_id"])
+                    amount = len(converted) if calculation == "converted_installations" else round_half_even(len(converted) * 1000000, cohort_size)
             elif calculation == "active_installations_over_cohort":
                 if cohort_size == 0:
                     undefined_reason = "empty_cohort"

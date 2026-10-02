@@ -6,6 +6,7 @@ export {
   SELECTED_ACQUISITION_METRIC_DEFINITIONS,
   DISJOINT_COST_METRIC_DEFINITIONS,
   SELECTED_COMMERCE_METRIC_DEFINITIONS,
+  customConversionMetricDefinitions,
   REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
 } from "./m1b-metric-definitions.js";
 export { M3_METRIC_DEFINITIONS } from "./m3-metric-definitions.js";

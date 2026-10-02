@@ -6,6 +6,7 @@ import { validateEventPayload } from "@openmasu/contracts";
 import { Ajv2020Module, addFormatsModule, canonicalize } from "@openmasu/contracts/validation-tooling";
 import { evaluate, sha256, TimestampInvalidError } from "@openmasu/attribution-core";
 import { syntheticRetentionCases } from "./synthetic-retention-cases.js";
+import { syntheticConversionCases } from "./synthetic-conversion-cases.js";
 
 type Any = Record<string, any>;
 type Captured<T> = { ok: true; value: T } | { ok: false; error: unknown };
@@ -323,7 +324,7 @@ function validateRegistryReferences(output: Any, label: string): void {
       "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
       "aak_attributed_reengagements",
     ]);
-    const expectedVersion = definition.rule_bundle_id === "metric-selected-commerce"
+    const expectedVersion = definition.rule_bundle_id === "metric-custom-conversion" ? "0.4.14" : definition.rule_bundle_id === "metric-selected-commerce"
       ? "0.4.13" : definition.cost_selection_policy === "reject_overlapping_grains"
       ? "0.4.12" : definition.acquisition_basis === "selected_first_party_click"
       ? "0.4.11"
@@ -575,8 +576,8 @@ if (!summaryOnly) {
         }
       });
     }
-    it("contains 60 fixture directories", () => {
-      check(fixtureDirs.length === 60, `expected 60 fixture directories, found ${fixtureDirs.length}`);
+    it("contains 61 fixture directories", () => {
+      check(fixtureDirs.length === 61, `expected 61 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -1015,12 +1016,19 @@ const scenarios: Array<[string, () => void]> = [
       && values.cohort_total_net_ltv_d30_usd === "26000000" && values.d30_total_net_roas === "2600000",
       "scenario 60 hand calculation: (20 + 10 - 4) / 10 = 2.6");
   }],
+  ["61 distinct custom-event conversion in a ten-install cohort", () => {
+    const output = fixture("61-custom-conversion").output;
+    check(output.logical_events.length === 16 && output.attributions.length === 10, "scenario 61 ten installs and six accepted outcome events");
+    check(equal(output.metric_runs.map((run: Any) => run.value_unscaled), ["300000", "3"]), "scenario 61 three distinct converters / ten installs = 0.3");
+    check(output.metric_definitions.filter((definition: Any) => definition.conversion_event_key === "tutorial_complete").length === 2,
+      "scenario 61 exercises both independent conversion calculations");
+  }],
 ];
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 60 scenario assertions", () => {
-      check(scenarios.length === 60, "scenario assertion inventory must contain 60 entries");
+    it("contains 61 scenario assertions", () => {
+      check(scenarios.length === 61, "scenario assertion inventory must contain 61 entries");
     });
   });
 
@@ -1589,7 +1597,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 60 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 61 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1629,7 +1637,7 @@ const acceptance: Array<[string, () => void]> = [
     for (const forbidden of ["threshold", "model_weight", "watchlist", "ip_address", "user_agent", "response_timing"]) check(!schemaText.includes(forbidden), `AC20 ${forbidden}`);
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
-  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 60 && outputArtifactCount === 60 * 13, "AC21")],
+  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 61 && outputArtifactCount === 61 * 13, "AC21")],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {
     for (const { output, python } of results.values()) check(equal(output, python), "AC22 evaluator mismatch");
     const vector = { numbers: [333333333.33333329, 1e30, 4.50, 2e-3, 1e-27, -0], string: "€$\u000f\nA'B\"\\\"/" };
@@ -2078,6 +2086,33 @@ const validRevenue = {
 };
 if (!summaryOnly) {
   describe("semantic mutations", () => {
+    it("counts one selected custom outcome per eligible installation across windows privacy and fraud", () => {
+      const cases = syntheticConversionCases(fixture("61-custom-conversion").input, fixture("58-selected-native-acquisition").input);
+      const python = pythonOutputs(cases.map(entry => entry.input));
+      for (const [index, entry] of cases.entries()) {
+        const output = evaluate(entry.input);
+        check(output.rejections.length === 0, `${entry.name}: synthetic records rejected`);
+        check(equal(output.metric_runs.map(row => row.value_unscaled ?? row.undefined_reason), entry.expected), `${entry.name}: independent converter arithmetic`);
+        check(equal(output, python[index]), `${entry.name}: full TS/Python custom-conversion parity`);
+      }
+    });
+    it("rejects partial custom-conversion profiles rather than ignoring the event key", () => {
+      const baseline = fixture("61-custom-conversion").input;
+      const definition = baseline.metric_definitions[0];
+      for (const change of [
+        { conversion_event_key: "" }, { conversion_event_key: "openmasu.conversion_value_updated" },
+        { metric_definition_version: "0.3.0" }, { rule_bundle_hash: "0".repeat(64) }, { acquisition_basis: undefined },
+        { activity_events: ["custom_event"] }, { event_names: ["install"] }, { ratio_scale: 6 },
+        { definition: { ...definition.definition, window: { type: "activity_day", day: 7 } } },
+        { definition: { ...definition.definition, calculation: "cohort_size", numerator: "cohort_size" } },
+      ]) {
+        const mutated = JSON.parse(JSON.stringify({ ...definition, ...change }));
+        check(!validatorFor("urn:openmasu:schema:metric-definition:v0.4")(mutated), "schema accepted partial conversion profile");
+        const input = { ...baseline, metric_definitions: [mutated] };
+        check(!capture(() => evaluate(input)).ok, "TypeScript accepted partial conversion profile");
+        check(!capture(() => pythonOutputs([input])).ok, "Python accepted partial conversion profile");
+      }
+    });
     it("joins retention activity to the same selected and fraud-filtered cohort in TypeScript and Python", () => {
       const cases = syntheticRetentionCases(fixture("58-selected-native-acquisition").input);
       const python = pythonOutputs(cases.map(entry => entry.input));

@@ -179,13 +179,21 @@ export type OpenMasuMetricDefinitionV04 = {
       | "active_installations_over_cohort"
       | "revenue_over_cohort"
       | "cohort_size"
-      | "event_count";
+      | "event_count"
+      | "converted_installations"
+      | "converted_installations_over_cohort";
     window: {
       type: "elapsed" | "calendar_day" | "activity_day";
       day: number;
     };
     numerator:
-      "revenue" | "purchase_net_revenue" | "total_net_revenue" | "active_installations" | "cohort_size" | "events";
+      | "revenue"
+      | "purchase_net_revenue"
+      | "total_net_revenue"
+      | "active_installations"
+      | "cohort_size"
+      | "events"
+      | "converted_installations";
     denominator?: "cost" | "cohort_size";
     cost_basis?: "cohort_acquisition_day_current_snapshot";
   };
@@ -211,6 +219,7 @@ export type OpenMasuMetricDefinitionV04 = {
   )[];
   fraud_policy?: "gross" | "net";
   acquisition_basis?: "selected_first_party_click";
+  conversion_event_key?: string;
   cost_selection_policy?: "reject_overlapping_grains";
   rule_bundle_id: string;
   rule_bundle_version: string;

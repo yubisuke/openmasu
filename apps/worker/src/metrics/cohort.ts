@@ -4,6 +4,7 @@ import {
   M1B_METRIC_DEFINITIONS,
   REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
   nonFraudBundleHash,
+  validateMetricDefinition,
 } from "@openmasu/contracts";
 import { jcs, sha256, selectDisjointCosts, type ScopedCost } from "@openmasu/attribution-core";
 import type { RoasCalculationEvidence, RoasOperands } from "@openmasu/runtime";
@@ -618,6 +619,52 @@ async function totalNetRevenueValue(
   return { value_state: "present", value_unscaled: ratio.rows[0].value_unscaled };
 }
 
+async function customConversionValue(
+  client: Queryable, scope: Scope, watermark: string, grouping: Any, definition: Any,
+  privacyState: "before" | "after",
+): Promise<MetricValue> {
+  const result = await client.query<{ cohort_size: string; value_unscaled: string | null }>(
+    `WITH acquisition AS (${selectedAcquisitionSql}),
+     cohort AS (
+       SELECT DISTINCT install.installation_id, install.occurred_at_ts AS installed_at
+       FROM ledger.install_facts AS install
+       JOIN ledger.logical_events AS logical USING (logical_event_id)
+       JOIN ledger.raw_records_current AS raw
+         ON raw.record_id=logical.record_id AND raw.tenant_id=logical.tenant_id AND raw.app_id=logical.app_id
+       ${selectedClickJoinSql("$7", "$8")}
+       WHERE install.tenant_id=$1 AND install.app_id=$2 AND install.occurred_at IS NOT NULL
+         AND raw.received_at <= $3 AND ($8='before' OR raw.payload_lifecycle_status='available')
+         AND ($4::text IS NULL OR coalesce(install.campaign_id, acquisition_source.campaign_id)=$4)
+         AND ($5::text IS NULL OR coalesce(install.network, acquisition_source.network)=$5)
+         AND ($6::text IS NULL OR install.country=$6)
+         AND ($9::text IS NULL OR timezone('UTC', install.occurred_at_ts)::date::text=$9)
+         AND ($10::text IS NULL OR coalesce(acquisition.status, 'unattributed')=$10)
+         AND ($11::text='gross' OR acquisition.reason_code IS DISTINCT FROM 'fraud_excluded')
+     ), converted AS (
+       SELECT count(DISTINCT event.installation_id)::numeric AS value
+       FROM ledger.custom_event_facts AS event
+       JOIN cohort USING (installation_id)
+       JOIN ledger.logical_events AS logical USING (logical_event_id)
+       JOIN ledger.raw_records_current AS raw
+         ON raw.record_id=logical.record_id AND raw.tenant_id=logical.tenant_id AND raw.app_id=logical.app_id
+       WHERE event.tenant_id=$1 AND event.app_id=$2 AND event.event_key=$12
+         AND raw.received_at <= $3 AND ($8='before' OR raw.payload_lifecycle_status='available')
+         AND control.canonical_timestamp_value(raw.occurred_at) >= cohort.installed_at
+         AND control.canonical_timestamp_value(raw.occurred_at) < cohort.installed_at + interval '8 days'
+     ), totals AS (SELECT count(DISTINCT installation_id)::numeric AS size FROM cohort)
+     SELECT totals.size::text AS cohort_size,
+       CASE WHEN totals.size=0 THEN NULL
+         WHEN $13::text='converted_installations' THEN converted.value
+         ELSE ledger.half_even_div(converted.value * 1000000, totals.size) END::text AS value_unscaled
+     FROM totals CROSS JOIN converted`,
+    [scope.tenant_id, scope.app_id, watermark, grouping?.campaign_id ?? null, grouping?.network ?? null,
+      grouping?.country ?? null, true, privacyState, grouping?.cohort_date ?? null, grouping?.attribution_status ?? null,
+      definition.fraud_policy ?? "gross", definition.conversion_event_key, definition.definition.calculation],
+  );
+  return result.rows[0].cohort_size === "0" ? { value_state: "undefined", undefined_reason: "empty_cohort" }
+    : { value_state: "present", value_unscaled: result.rows[0].value_unscaled! };
+}
+
 async function metricValue(
   client: Queryable,
   scope: Scope,
@@ -629,6 +676,9 @@ async function metricValue(
   selectedCosts?: CostSelection,
 ): Promise<MetricValue> {
   const calculation = definition.definition.calculation;
+  if (["converted_installations", "converted_installations_over_cohort"].includes(calculation)) {
+    return customConversionValue(client, scope, watermark, grouping, definition, privacyState);
+  }
   if (selectedCosts?.rows.some((cost) => cost.currency !== fxPolicy.target_currency)) {
     throw new Error(`cost currency mismatch for ${definition.metric_name}`);
   }
@@ -1075,6 +1125,12 @@ export async function computeSqlMetricRunsWithClient(
 }
 
 function assertMetricDefinitionSeries(definition: Any): void {
+  if (definition.conversion_event_key !== undefined || definition.rule_bundle_id === "metric-custom-conversion"
+      || definition.definition?.numerator === "converted_installations"
+      || ["converted_installations", "converted_installations_over_cohort"].includes(definition.definition?.calculation)) {
+    if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`);
+    return;
+  }
   const purchaseNetDays = new Map<string, number>([
     ["cohort_purchase_net_revenue_d0_usd", 0],
     ["cohort_purchase_net_revenue_d1_usd", 1],

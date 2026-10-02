@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 60 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 61 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -299,12 +299,46 @@ unchanged. TS and independent Python candidate bytes matched, and all 13
 manually constructed expected families matched before promotion. Existing
 fixture inputs and goldens remain unchanged.
 
+### Fixture 61: distinct custom-event conversions
+
+Ten synthetic organic installations occur at `2026-08-06T00:00:00.000Z`.
+Installations 01, 02 and 03 each emit `tutorial_complete` twice, on August 7
+and 8. All 16 records are accepted, unique, available and received at the fixed
+August 15 watermark. The six outcomes represent three converters, not six:
+count is `3`, and the rate is `3 * 1000000 / 10 = 300000` at ratio scale 6.
+The elapsed D7 window is `[August 6, August 14)`; it is not an on-day retention
+metric. The optional definition field and two new calculations are exercised
+under independent `metric-custom-conversion` version `0.4.14`.
+
+The raw/delivery/logical objects use the existing reviewed admission templates:
+16 protected payloads, 16 accepted deliveries and 16 active logical events.
+Each of the ten no-referrer installs has one organic/no_referrer attribution
+with its own protected evidence reference, installation time and fixed receipt
+cutoff. No cost, fraud, correction, rejection, privacy or reconciliation is
+warranted. Five definitions are emitted: the unchanged three reference
+definitions plus the explicitly selected count and rate.
+
+Independently hash each payload's JCS for its raw digest. Sort records by ID
+(all receipt times are equal), and hash `[received_at,record_id,available,
+policy-v0.1]` tuples. Wrap that digest with the ten ordered scoped attribution
+IDs and their independently constructed JCS digests. The resulting snapshot
+is `36451d126334d3d4e6601bd84ef04e12568494c8bf4c9f66932416bdb580c8b8`.
+The organic/cohort-date grouping digest is
+`0e5ef0d7cab05df6253d9b92cbdbe4cbe1b33ce19b5737834f0397ae0162fd14`.
+The last input position is `2026-08-15T00:00:00.000Z|outcome-03-2`.
+All thirteen expected families were constructed from these templates and
+arithmetic, independently of evaluator output; candidate TS/Python bytes
+matched before promotion. Earlier goldens are unchanged. Shared mutations
+exercise duplicate delivery, other keys, exact/pre-install/end boundaries,
+late receipt, empty/unreached cohorts, current privacy, native selected
+campaigns and gross/net fraud populations.
+
 ## Adding a fixture procedure
 
 `fixtures/.candidates/` is a gitignored working area for proposed synthetic inputs. It is outside `fixtures/v0.4/` and is not discovered by `npm run validate`.
 
 1. Create `fixtures/.candidates/<NN-name>/input.json`. Use only synthetic data and keep the proposed number and name stable during review.
-2. Run `evaluate()` from `tools/evaluator.ts` manually and run `python tools/python_evaluator.py fixtures/.candidates/<NN-name>/input.json` independently. Save neither command's output as an approved golden automatically.
+2. Run `evaluate()` from `@openmasu/attribution-core` manually and run `python tools/python_evaluator.py fixtures/.candidates/<NN-name>/input.json` independently. Save neither command's output as an approved golden automatically.
 3. Compare the two outputs, review every field by hand against the schemas and contract, and record the derivation of each meaningful expected value in the pull-request description. Resolve any disagreement before promotion.
 4. Promote the approved input to `fixtures/v0.4/<NN-name>/`, hand-create the 13 `expected_*.json` output files, and update the named scenario assertions and inventory checks in `tools/validate.ts`. Run `npm run validate` before requesting review.
 

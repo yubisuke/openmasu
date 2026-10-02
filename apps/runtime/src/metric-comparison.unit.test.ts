@@ -1,12 +1,25 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
-import { M1B_METRIC_DEFINITIONS, M3_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import { M1B_METRIC_DEFINITIONS, M3_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS, customConversionMetricDefinitions } from "@openmasu/contracts";
 import { sha256 } from "@openmasu/attribution-core";
 import { captureMetricComparisonContext, comparisonMeaning, comparisonMaturity } from "./metric-comparison.js";
 
 const fx = { policy_version: "synthetic", target_currency: "USD", target_scale: 6, rounding_mode: "half_even" as const,
   rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0, as_of: "2026-01-01T00:00:00.000Z", source: "not-in-reader-projection" }] };
 const run = { metric_run_id: "synthetic", input_snapshot_id: "a".repeat(64) };
+it("keeps different custom outcomes incomparable and derives cumulative D7 maturity without FX meaning", () => {
+  const first = captureMetricComparisonContext(run, customConversionMetricDefinitions("tutorial_complete")[1], fx, "after", sha256);
+  const second = captureMetricComparisonContext(run, customConversionMetricDefinitions("different_outcome")[1], fx, "after", sha256);
+  assert.equal(first.definition.conversion_event_key, "tutorial_complete");
+  assert.notEqual(first.definition_digest, second.definition_digest);
+  assert.equal(comparisonMeaning(first)?.conversion_event_key, "tutorial_complete");
+  assert.notDeepEqual(comparisonMeaning(first), comparisonMeaning(second));
+  assert.equal(comparisonMeaning(first)?.aggregation, "cumulative");
+  assert.equal(comparisonMeaning(first)?.fx, null);
+  assert.deepEqual(comparisonMaturity(first, { cohort_date: "2026-08-06" }, "2026-08-14T23:59:59.999Z"),
+    { state: "unknown", closes_at: "2026-08-15T00:00:00.000Z" });
+  assert.equal(comparisonMaturity(first, { cohort_date: "2026-08-06" }, "2026-08-15T00:00:00.000Z").state, "window_elapsed");
+});
 it("preserves safe-cost selection in comparison context and refuses equivalence with legacy denominators", () => {
   const legacy = captureMetricComparisonContext(run, SELECTED_ACQUISITION_METRIC_DEFINITIONS[0], fx, "after", sha256);
   const safe = captureMetricComparisonContext(run, DISJOINT_COST_METRIC_DEFINITIONS[0], fx, "after", sha256);
