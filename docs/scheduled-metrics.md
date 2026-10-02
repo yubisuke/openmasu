@@ -213,6 +213,13 @@ does not configure an external alert receiver.
 
 ## Evidence boundary
 
+Explicit [selected acquisition detail profiles](acquisition-detail-metrics.md)
+can also schedule ad-group/creative selections. Use the v0.4.16 definitions and
+`date_dimension: "cohort_date"`; the schedule supplies the date. Legacy
+definitions cannot silently acquire these dimensions. These profiles use
+explicit grouping, not automatic campaign/creative discovery. Their saved
+meaning is retained during bounded cost and late-input recalculation.
+
 Runtime CI registers schedules with synthetic data, exercises both cohort-date
 and metric-date definitions, verifies report and dashboard visibility, simulates
 the post-commit crash window, and checks disablement. This is durable scheduling

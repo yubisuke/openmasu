@@ -338,6 +338,24 @@
             }
           },
           {
+            "name": "grouping_ad_group_id",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "$ref": "#/components/schemas/Common/$defs/id"
+            }
+          },
+          {
+            "name": "grouping_creative_id",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "$ref": "#/components/schemas/Common/$defs/id"
+            }
+          },
+          {
             "name": "grouping_network",
             "in": "query",
             "required": false,
@@ -419,6 +437,8 @@
           "format",
           "export",
           "grouping_campaign_id",
+          "grouping_ad_group_id",
+          "grouping_creative_id",
           "grouping_network",
           "grouping_country",
           "grouping_cohort_date",
@@ -710,6 +730,24 @@
             }
           },
           {
+            "name": "grouping_ad_group_id",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "$ref": "#/components/schemas/Common/$defs/id"
+            }
+          },
+          {
+            "name": "grouping_creative_id",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "$ref": "#/components/schemas/Common/$defs/id"
+            }
+          },
+          {
             "name": "grouping_network",
             "in": "query",
             "required": false,
@@ -791,6 +829,8 @@
           "format",
           "export",
           "grouping_campaign_id",
+          "grouping_ad_group_id",
+          "grouping_creative_id",
           "grouping_network",
           "grouping_country",
           "grouping_cohort_date",
@@ -1058,6 +1098,24 @@
             }
           },
           {
+            "name": "grouping_ad_group_id",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "$ref": "#/components/schemas/Common/$defs/id"
+            }
+          },
+          {
+            "name": "grouping_creative_id",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "$ref": "#/components/schemas/Common/$defs/id"
+            }
+          },
+          {
             "name": "grouping_network",
             "in": "query",
             "required": false,
@@ -1139,6 +1197,8 @@
           "format",
           "export",
           "grouping_campaign_id",
+          "grouping_ad_group_id",
+          "grouping_creative_id",
           "grouping_network",
           "grouping_country",
           "grouping_cohort_date",

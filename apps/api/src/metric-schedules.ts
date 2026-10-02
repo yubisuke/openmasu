@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 import { sha256Jcs } from "@openmasu/fraud-rules";
 import { uuidV7, withTenant } from "@openmasu/runtime";
+import { acquisitionDetailBase, validateMetricDefinition } from "@openmasu/contracts";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
 
@@ -38,7 +39,7 @@ const identifier = /^[A-Za-z0-9._:-]{1,128}$/;
 const metricName = /^[a-z][a-z0-9_]{2,127}$/;
 const datePattern = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 const groupingKeys = new Set([
-  "campaign_id", "network", "country", "attribution_status", "apple_conversion_bucket",
+  "campaign_id", "ad_group_id", "creative_id", "network", "country", "attribution_status", "apple_conversion_bucket",
 ]);
 const metricGroupingKeys = new Set([...groupingKeys, "cohort_date", "metric_date"]);
 const metricDefinitionFields = new Set([
@@ -92,6 +93,11 @@ function validStringArray(value: unknown, allowed?: ReadonlySet<string>): boolea
 }
 
 function validMetricDefinition(value: JsonObject): boolean {
+  if (value.acquisition_dimension_policy !== undefined || value.rule_bundle_id === "metric-acquisition-detail"
+      || (Array.isArray(value.grouping_dimensions) && value.grouping_dimensions.some(key => ["ad_group_id", "creative_id"].includes(String(key))))) {
+    return validateMetricDefinition(value) && value.acquisition_dimension_policy === "selected_link_ad_group_creative"
+      && validMetricDefinition(acquisitionDetailBase(value as unknown as Parameters<typeof acquisitionDetailBase>[0]) as unknown as JsonObject);
+  }
   if (value.refund_reversal_policy !== undefined || value.rule_bundle_id === "metric-refund-reversal") {
     if (value.refund_reversal_policy !== "cancel_target_refund_at_watermark" || value.rule_bundle_id !== "metric-refund-reversal"
         || value.metric_definition_version !== "0.4.15" || value.rule_bundle_version !== "0.4.15"
@@ -201,7 +207,7 @@ function normalizedGrouping(value: unknown): JsonObject {
     if (typeof candidate !== "string" || candidate.length < 1 || candidate.length > 128) {
       throw new Error("metric_schedule_grouping_value_invalid");
     }
-    if (key === "campaign_id" && !identifier.test(candidate)) throw new Error("metric_schedule_grouping_value_invalid");
+    if (["campaign_id", "ad_group_id", "creative_id"].includes(key) && !identifier.test(candidate)) throw new Error("metric_schedule_grouping_value_invalid");
     if (key === "country" && !/^[A-Z]{2}$/.test(candidate)) throw new Error("metric_schedule_grouping_value_invalid");
     if (key === "attribution_status" && !["organic", "non_organic", "unattributed"].includes(candidate)) {
       throw new Error("metric_schedule_grouping_value_invalid");
@@ -261,6 +267,11 @@ export function normalizeMetricScheduleRequest(
     }
     const dateDimension: "cohort_date" | "metric_date" = evaluation.date_dimension;
     const grouping = normalizedGrouping(evaluation.grouping);
+    if ((grouping.ad_group_id !== undefined || grouping.creative_id !== undefined)
+        && (dateDimension !== "cohort_date" || evaluation.metric_names.some(name => {
+          const metric = suppliedDefinitions.find(value => value.metric_name === name);
+          return metric?.acquisition_dimension_policy !== "selected_link_ad_group_creative";
+        }))) throw new Error("metric_schedule_detail_profile_required");
     let discovery: { policy: "selected_acquisition_and_cost_v1"; max_targets: number } | undefined;
     if (evaluation.campaign_discovery !== undefined) {
       const candidate = object(evaluation.campaign_discovery, "metric_schedule_discovery_invalid");
@@ -271,6 +282,7 @@ export function normalizeMetricScheduleRequest(
           || evaluation.metric_names.some(name => {
             const metric = suppliedDefinitions.find(value => value.metric_name === name);
             return !metric || metric.anchor_event !== "install" || metric.aggregation_time_zone !== "UTC"
+              || metric.acquisition_dimension_policy !== undefined
               || metric.acquisition_basis !== "selected_first_party_click"
               || ((metric.definition as JsonObject).calculation === "revenue_over_cost"
                 && metric.cost_selection_policy !== "reject_overlapping_grains");

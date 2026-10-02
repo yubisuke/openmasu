@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { DISJOINT_COST_METRIC_DEFINITIONS, SELECTED_COMMERCE_METRIC_DEFINITIONS, REFUND_REVERSAL_METRIC_DEFINITIONS, customConversionMetricDefinitions } from "@openmasu/contracts";
+import { ACQUISITION_DETAIL_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS, SELECTED_COMMERCE_METRIC_DEFINITIONS, REFUND_REVERSAL_METRIC_DEFINITIONS, customConversionMetricDefinitions } from "@openmasu/contracts";
 import { metricScheduleTargetDate, normalizeMetricScheduleRequest } from "./metric-schedules.js";
 
 const body = {
@@ -25,6 +25,23 @@ const body = {
 };
 
 describe("scheduled metric configuration", () => {
+  it("captures explicit detail definitions and groupings without implicit discovery or legacy upgrade", () => {
+    const request = { ...body, metric_definitions: structuredClone(ACQUISITION_DETAIL_METRIC_DEFINITIONS),
+      evaluations: [{ metric_names: ["d30_total_net_roas"], date_dimension: "cohort_date",
+        grouping: { ad_group_id: "synthetic-group", creative_id: "synthetic-creative" } }] };
+    const normalize = (value: any) => normalizeMetricScheduleRequest(value, new Date("2026-08-10T12:00:00.000Z"));
+    assert.deepEqual(normalize(request).definition.metric_definitions, request.metric_definitions);
+    assert.deepEqual(normalize(request).definition.evaluations[0].grouping, request.evaluations[0].grouping);
+    for (const change of [{ acquisition_dimension_policy: undefined }, { rule_bundle_hash: "0".repeat(64) },
+      { metric_definition_version: "0.4.15" }]) {
+      assert.throws(() => normalize({ ...request, metric_definitions: request.metric_definitions.map(d => ({ ...d, ...change })) }), /definitions_invalid/);
+    }
+    assert.throws(() => normalize({ ...request, metric_definitions: [] }), /detail_profile_required/);
+    assert.throws(() => normalize({ ...request, metric_definitions: REFUND_REVERSAL_METRIC_DEFINITIONS }), /detail_profile_required/);
+    assert.throws(() => normalize({ ...request, evaluations: [{ ...request.evaluations[0],
+      campaign_discovery: { policy: "selected_acquisition_and_cost_v1", max_targets: 10 } }] }), /discovery_invalid/);
+    assert.throws(() => normalize({ ...request, evaluations: [{ ...request.evaluations[0], grouping: { creative_id: "bad identifier" } }] }), /grouping_value_invalid/);
+  });
   it("preserves explicit refund cancellation definitions and rejects partial opt-ins", () => {
     const request = { ...body, metric_definitions: structuredClone(REFUND_REVERSAL_METRIC_DEFINITIONS),
       evaluations: [{ metric_names: ["d30_total_net_roas"], date_dimension: "cohort_date", grouping: {} }] };

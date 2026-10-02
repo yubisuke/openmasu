@@ -35,6 +35,17 @@ function rejectsKind(query: string, cursorKind: "difference" | "record", code: s
 }
 
 describe("M3 typed reporting query", () => {
+  it("binds explicit detail filters and refuses identifiers outside their bounded grammar", () => {
+    const query = parse("grouping_ad_group_id=synthetic-group-a&grouping_creative_id=synthetic-creative-a").query;
+    assert.deepEqual(query.grouping, { ad_group_id: "synthetic-group-a", creative_id: "synthetic-creative-a" });
+    const sql = buildMetricQuery(query);
+    for (const value of Object.values(query.grouping!)) {
+      assert.ok(sql.values.includes(value)); assert.ok(!sql.text.includes(value));
+    }
+    rejects("grouping_creative_id=%27%3BDROP", "grouping_value_invalid");
+    rejects("metric_name=aak_attributed_installs&grouping_creative_id=synthetic-a", "metric_series_mismatch");
+    rejects("metric_name=skan_attributed_installs&grouping_ad_group_id=synthetic-a", "metric_series_mismatch");
+  });
   it("C09 parses the same query twice into deeply equal typed values", () => {
     const cursor = encodeMetricCursor({
       metricName: "daily_install_count",

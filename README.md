@@ -74,7 +74,7 @@ identity and adds patches through v0.4.16 (63 fixtures / 819 goldens), including
 [explicit custom-event conversion](docs/custom-conversion-metrics.md) and an opt-in
 [targeted refund-cancellation profile](docs/design/verified-commerce-lifecycle.md#explicit-refund-cancellation-metrics).
 An explicit [ad-group/creative calculation profile](docs/acquisition-detail-metrics.md)
-adds same-grain CLI calculation; dashboard/schedule integration remains in progress.
+connects same-grain CLI calculation, dashboard filters, schedules and bounded corrections.
 Later `main` commits are not
 evidence for that release. [`docs/STATUS.md`](docs/STATUS.md) defines the
 current source tree, and the [release index](docs/releases/README.md) separates

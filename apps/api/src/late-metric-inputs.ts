@@ -26,7 +26,8 @@ export function supportsLateMetric(replay: Any): boolean {
     && definition.window.day >= 0 && definition.window.day <= 90
     && typeof replay.evaluation?.grouping?.cohort_date === "string"
     && Object.keys(replay.evaluation.grouping).every(key =>
-      ["campaign_id", "network", "country", "cohort_date", "attribution_status"].includes(key));
+      ["campaign_id", "network", "country", "cohort_date", "attribution_status"].includes(key)
+        || (metric.acquisition_dimension_policy === "selected_link_ad_group_creative" && ["ad_group_id", "creative_id"].includes(key)));
 }
 
 export async function selectLateMetricInputs(
@@ -151,6 +152,8 @@ export async function selectLateMetricInputs(
            AND timezone($9,install.occurred_at_ts)::date::text=$5::jsonb->>'cohort_date'
            AND ($5::jsonb->>'campaign_id' IS NULL OR coalesce(install.campaign_id,acquisition_source.campaign_id)=$5::jsonb->>'campaign_id')
            AND ($5::jsonb->>'network' IS NULL OR coalesce(install.network,acquisition_source.network)=$5::jsonb->>'network')
+           AND ($5::jsonb->>'ad_group_id' IS NULL OR acquisition_source.ad_group_id=$5::jsonb->>'ad_group_id')
+           AND ($5::jsonb->>'creative_id' IS NULL OR acquisition_source.creative_id=$5::jsonb->>'creative_id')
            AND ($5::jsonb->>'country' IS NULL OR install.country=$5::jsonb->>'country')
            AND ($5::jsonb->>'attribution_status' IS NULL OR
              (CASE WHEN $7 THEN coalesce(acquisition.status,'unattributed') ELSE attribution.status END)=$5::jsonb->>'attribution_status')
