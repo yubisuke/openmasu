@@ -40,7 +40,7 @@ const metricGroupingKeys = new Set([...groupingKeys, "cohort_date", "metric_date
 const metricDefinitionFields = new Set([
   "metric_name", "metric_definition_version", "anchor_event", "aggregation_time_zone", "value_type",
   "currency", "amount_scale", "ratio_scale", "definition", "activity_events", "event_names",
-  "grouping_dimensions", "fraud_policy", "acquisition_basis", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash",
+  "grouping_dimensions", "fraud_policy", "acquisition_basis", "cost_selection_policy", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash",
 ]);
 
 function object(value: unknown, error: string): JsonObject {
@@ -88,7 +88,10 @@ function validStringArray(value: unknown, allowed?: ReadonlySet<string>): boolea
 }
 
 function validMetricDefinition(value: JsonObject): boolean {
-  if (value.acquisition_basis !== undefined && (value.acquisition_basis !== "selected_first_party_click"
+  if (value.cost_selection_policy !== undefined && (value.cost_selection_policy !== "reject_overlapping_grains"
+      || value.metric_definition_version !== "0.4.12" || value.rule_bundle_id !== "metric-disjoint-cost"
+      || value.rule_bundle_version !== "0.4.12")) return false;
+  if (!value.cost_selection_policy && value.acquisition_basis !== undefined && (value.acquisition_basis !== "selected_first_party_click"
       || value.anchor_event !== "install" || value.metric_definition_version !== "0.4.11"
       || value.rule_bundle_id !== "metric-selected-acquisition" || value.rule_bundle_version !== "0.4.11")) return false;
   if (Object.keys(value).some((key) => !metricDefinitionFields.has(key))

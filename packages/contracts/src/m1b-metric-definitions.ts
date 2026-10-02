@@ -243,3 +243,14 @@ export const SELECTED_ACQUISITION_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetr
       rule_bundle_version: "0.4.11",
       rule_bundle_hash: nonFraudBundleHash("metric-selected-acquisition"),
     }));
+
+/** Explicit safe denominators. Legacy saved definitions remain replayable. */
+export const DISJOINT_COST_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricDefinitionV04> = [
+  ...SELECTED_ACQUISITION_METRIC_DEFINITIONS.filter((d) => d.definition.calculation === "revenue_over_cost"),
+  ...M1B_METRIC_DEFINITIONS.filter((d) => d.definition.numerator === "total_net_revenue"
+    && d.definition.calculation === "revenue_over_cost"),
+].map((definition) => ({
+  ...definition, metric_definition_version: "0.4.12", cost_selection_policy: "reject_overlapping_grains",
+  rule_bundle_id: "metric-disjoint-cost", rule_bundle_version: "0.4.12",
+  rule_bundle_hash: nonFraudBundleHash("metric-disjoint-cost"),
+}));

@@ -37,7 +37,7 @@
       "default": "present",
       "description": "Absence is semantically present for v0.2.0 compatibility."
     },
-    "undefined_reason": { "enum": ["no_attributed_cost", "no_activity_events", "empty_cohort"] },
+    "undefined_reason": { "enum": ["no_attributed_cost", "no_activity_events", "empty_cohort", "overlapping_cost_grains"] },
     "value_unscaled": { "type": "string", "pattern": "^-?[0-9]+$" },
     "fraud_policy": { "enum": ["gross", "net"], "default": "gross" },
     "amount_scale": { "type": "integer", "minimum": 0, "maximum": 18 },

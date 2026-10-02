@@ -7,6 +7,7 @@ export type NonFraudRuleBundleId =
   | "metric-default"
   | "metric-stage-b"
   | "metric-selected-acquisition"
+  | "metric-disjoint-cost"
   | "metric-stage-m3"
   | "metric-purchase-net"
   | "metric-total-net";
@@ -50,6 +51,13 @@ export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonF
     implementation: "reference-metric-v0.4",
     rules: ["cohort-roas", "cohort-retention", "cohort-ltv", "cohort-install-count",
       "selected-first-party-click-dimensions", "attribution-and-evidence-as-of-watermark"],
+  },
+  "metric-disjoint-cost": {
+    id: "metric-disjoint-cost", version: "0.4.12", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["explicit-dated-cost-revision-key", "reject-overlapping-cost-grains",
+      "cost-and-evidence-as-of-watermark", "cohort-ad-or-total-net-roas",
+      "optional-selected-first-party-click-dimensions"],
   },
   "metric-stage-m3": {
     id: "metric-stage-m3", version: "0.3.1", kind: "metric",

@@ -1,12 +1,20 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
-import { M1B_METRIC_DEFINITIONS, M3_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import { M1B_METRIC_DEFINITIONS, M3_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { sha256 } from "@openmasu/attribution-core";
 import { captureMetricComparisonContext, comparisonMeaning, comparisonMaturity } from "./metric-comparison.js";
 
 const fx = { policy_version: "synthetic", target_currency: "USD", target_scale: 6, rounding_mode: "half_even" as const,
   rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0, as_of: "2026-01-01T00:00:00.000Z", source: "not-in-reader-projection" }] };
 const run = { metric_run_id: "synthetic", input_snapshot_id: "a".repeat(64) };
+it("preserves safe-cost selection in comparison context and refuses equivalence with legacy denominators", () => {
+  const legacy = captureMetricComparisonContext(run, SELECTED_ACQUISITION_METRIC_DEFINITIONS[0], fx, "after", sha256);
+  const safe = captureMetricComparisonContext(run, DISJOINT_COST_METRIC_DEFINITIONS[0], fx, "after", sha256);
+  assert.equal(safe.definition.cost_selection_policy, "reject_overlapping_grains");
+  assert.equal(safe.definition_digest, sha256(safe.definition));
+  assert.equal(comparisonMeaning(safe)?.cost_selection_policy, "reject_overlapping_grains");
+  assert.notDeepEqual(comparisonMeaning(legacy), comparisonMeaning(safe));
+});
 it("binds selected acquisition to saved comparison meaning instead of equating legacy grouping", () => {
   const legacy = captureMetricComparisonContext(run, M1B_METRIC_DEFINITIONS[0], fx, "after", sha256);
   const selected = captureMetricComparisonContext(run, SELECTED_ACQUISITION_METRIC_DEFINITIONS[0], fx, "after", sha256);

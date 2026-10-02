@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { selectDisjointCosts } from "./cost-selection.js";
+export { selectDisjointCosts, type ScopedCost } from "./cost-selection.js";
 import { canonicalize } from "json-canonicalize";
 import {
   DEFAULT_FRAUD_BUNDLE,
@@ -1103,7 +1105,18 @@ function validateMetricDefinitionSeries(definition: Any): void {
   const eventNames = definition.event_names ?? [];
   const grouping = definition.grouping_dimensions ?? [];
   const fail = () => { throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`); };
-  if (definition.acquisition_basis !== undefined || definition.rule_bundle_id === "metric-selected-acquisition") {
+  const strictCosts = definition.cost_selection_policy !== undefined;
+  if (strictCosts || definition.rule_bundle_id === "metric-disjoint-cost") {
+    if (definition.cost_selection_policy !== "reject_overlapping_grains" || definition.anchor_event !== "install"
+        || definition.aggregation_time_zone !== "UTC" || definition.metric_definition_version !== "0.4.12"
+        || definition.rule_bundle_id !== "metric-disjoint-cost" || definition.rule_bundle_version !== "0.4.12"
+        || definition.rule_bundle_hash !== nonFraudBundleHash("metric-disjoint-cost")
+        || definition.definition.calculation !== "revenue_over_cost" || definition.definition.window.type !== "elapsed"
+        || !["revenue", "total_net_revenue"].includes(definition.definition.numerator)) fail();
+    if (definition.acquisition_basis !== undefined && (definition.acquisition_basis !== "selected_first_party_click"
+        || definition.definition.numerator !== "revenue")) fail();
+  }
+  if (!strictCosts && (definition.acquisition_basis !== undefined || definition.rule_bundle_id === "metric-selected-acquisition")) {
     if (definition.acquisition_basis !== "selected_first_party_click" || definition.anchor_event !== "install"
         || definition.metric_definition_version !== "0.4.11" || definition.rule_bundle_id !== "metric-selected-acquisition"
         || definition.rule_bundle_version !== "0.4.11" || definition.rule_bundle_hash !== nonFraudBundleHash("metric-selected-acquisition")
@@ -1126,14 +1139,14 @@ function validateMetricDefinitionSeries(definition: Any): void {
   }
   if (definition.definition?.numerator === "total_net_revenue" || totalNetSeries.has(definition.metric_name)) {
     const expected = totalNetSeries.get(definition.metric_name);
-    if (!expected || definition.metric_definition_version !== "0.4.9" ||
+    if (!expected || definition.metric_definition_version !== (strictCosts ? "0.4.12" : "0.4.9") ||
         definition.anchor_event !== "install" || definition.aggregation_time_zone !== "UTC" ||
         definition.value_type !== expected.valueType ||
         (expected.valueType === "money" && (definition.currency !== "USD" || definition.amount_scale !== 6)) ||
         (expected.valueType === "ratio" && definition.ratio_scale !== 6) ||
-        definition.rule_bundle_id !== "metric-total-net" ||
-        definition.rule_bundle_version !== "0.4.9"
-        || definition.rule_bundle_hash !== nonFraudBundleHash("metric-total-net") ||
+        definition.rule_bundle_id !== (strictCosts ? "metric-disjoint-cost" : "metric-total-net") ||
+        definition.rule_bundle_version !== (strictCosts ? "0.4.12" : "0.4.9")
+        || definition.rule_bundle_hash !== nonFraudBundleHash(strictCosts ? "metric-disjoint-cost" : "metric-total-net") ||
         definition.definition?.calculation !== expected.calculation ||
         definition.definition?.numerator !== "total_net_revenue" ||
         definition.definition?.window?.type !== "elapsed" || definition.definition?.window?.day !== expected.day ||
@@ -1316,7 +1329,8 @@ function metricRuns(
       return ["campaign_id", "network", "country"].every((field) => grouping[field] === undefined || cost[field] === grouping[field]) &&
         (grouping.cohort_date === undefined || cost.date === grouping.cohort_date);
     });
-    const currentCosts = [...new Map(groupedCosts
+    const disjoint = definition.cost_selection_policy ? selectDisjointCosts(groupedCosts) : undefined;
+    const currentCosts = disjoint?.rows ?? [...new Map(groupedCosts
       .sort((a, b) => compareText(a.as_of, b.as_of) || compareText(a.cost_record_id, b.cost_record_id))
       .map((cost) => [compositeKey([cost.tenant_id, cost.app_id, cost.dimension_digest]), cost])).values()];
     const costSnapshotRows = sortByKey(currentCosts, (cost) => [cost.as_of, cost.cost_record_id]).map((cost) => [
@@ -1380,7 +1394,7 @@ function metricRuns(
           : revenueValue;
       const cohortSize = BigInt(new Set(eligibleInstalls.map((install) => install.record.payload.installation_id)).size);
       let value: bigint | undefined;
-      let undefined_reason: "no_attributed_cost" | "no_activity_events" | "empty_cohort" | undefined;
+      let undefined_reason: "no_attributed_cost" | "no_activity_events" | "empty_cohort" | "overlapping_cost_grains" | undefined;
       if (definition.definition.calculation === "revenue_sum") {
         value = selectedRevenueValue;
       } else if (definition.definition.calculation === "revenue_over_cost") {
@@ -1388,7 +1402,9 @@ function metricRuns(
           if (item.currency !== fxPolicy.target_currency) throw new Error(`cost currency mismatch: ${item.cost_record_id}`);
           return sum + scaleMoney(item, fxPolicy.target_scale);
         }, 0n);
-        if (cost === 0n) {
+        if (disjoint?.overlapping) {
+          undefined_reason = "overlapping_cost_grains";
+        } else if (cost === 0n) {
           undefined_reason = "no_attributed_cost";
         } else {
           value = roundHalfEven(selectedRevenueValue * (10n ** BigInt(definition.ratio_scale ?? 6)), cost);

@@ -4650,3 +4650,13 @@ RETURNS SETOF control.identifier LANGUAGE sql STABLE SECURITY DEFINER SET search
   UNION SELECT item.tenant_id FROM control.metric_recalculation_items AS item WHERE item.state IN ('queued','processing','retry')
   ORDER BY 1
 $$;
+
+-- 056_disjoint_cost_reason.sql
+-- Preserve existing values and allow an explicitly unsafe cost denominator.
+ALTER TABLE ledger.metric_runs
+  DROP CONSTRAINT IF EXISTS metric_runs_undefined_reason_check;
+ALTER TABLE ledger.metric_runs
+  ADD CONSTRAINT metric_runs_undefined_reason_check
+  CHECK (undefined_reason IS NULL OR undefined_reason IN (
+    'no_attributed_cost', 'no_activity_events', 'empty_cohort', 'overlapping_cost_grains'
+  ));

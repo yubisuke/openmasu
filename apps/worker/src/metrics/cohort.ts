@@ -5,7 +5,7 @@ import {
   REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
   nonFraudBundleHash,
 } from "@openmasu/contracts";
-import { jcs, sha256 } from "@openmasu/attribution-core";
+import { jcs, sha256, selectDisjointCosts, type ScopedCost } from "@openmasu/attribution-core";
 import type { RoasCalculationEvidence, RoasOperands } from "@openmasu/runtime";
 import { captureMetricComparisonContext, type MetricComparisonContext } from "@openmasu/runtime";
 import { selectedAcquisitionSql, selectedClickJoinSql } from "./selected-acquisition.js";
@@ -13,7 +13,7 @@ import { selectedAcquisitionSql, selectedClickJoinSql } from "./selected-acquisi
 type Any = Record<string, any>;
 type Queryable = Pick<PoolClient, "query">;
 type MetricValue = ({ value_state: "present"; value_unscaled: string } | {
-  value_state: "undefined"; undefined_reason: "no_attributed_cost" | "empty_cohort";
+  value_state: "undefined"; undefined_reason: "no_attributed_cost" | "empty_cohort" | "overlapping_cost_grains";
 }) & { operands?: RoasOperands };
 
 export type MetricScope = { tenant_id: string; app_id: string };
@@ -34,6 +34,8 @@ type CurrentCost = {
   report_snapshot_digest: string;
   dimension_digest: string;
 };
+type DisjointCost = CurrentCost & ScopedCost & { currency: string; spend_unscaled: string; spend_scale: number };
+type CostSelection = { rows: DisjointCost[]; overlapping: boolean };
 
 function inputAttempts(input: Any): Array<{ server: Any; record: Any }> {
   if (Array.isArray(input.batches)) {
@@ -63,7 +65,7 @@ function compareText(left: string, right: string): number {
 type SnapshotScan = {
   records: SnapshotRecord[];
   append: (row: unknown) => void;
-  finish: () => string;
+  finish: (costRows: unknown[]) => string;
 };
 
 async function scanSnapshotRecords(
@@ -124,9 +126,14 @@ async function scanSnapshotRecords(
   return {
     records,
     append,
-    finish: () => {
-      hasher.update("]");
-      return hasher.digest("hex");
+    finish: (costRows) => {
+      // Fork the record prefix so mixed historical and safe-cost definitions
+      // receive their own exact cost snapshot without another ledger scan.
+      const copy = hasher.copy();
+      let separator = first ? "" : ",";
+      for (const row of costRows) { copy.update(separator + jcs(row)); separator = ","; }
+      copy.update("]");
+      return copy.digest("hex");
     },
   };
 }
@@ -165,6 +172,23 @@ async function currentCosts(
     ],
   );
   return result.rows;
+}
+
+async function disjointCosts(client: Queryable, scope: Scope, watermark: string, grouping: Any): Promise<CostSelection> {
+  if (grouping?.attribution_status !== undefined && grouping.attribution_status !== "non_organic") return { rows: [], overlapping: false };
+  const result = await client.query<DisjointCost>(
+    `SELECT DISTINCT ON (network, cost_date, campaign_id, ad_group_id, country)
+       tenant_id, app_id, cost_record_id, as_of, report_snapshot_digest, cost_key_digest AS dimension_digest,
+       network, cost_date::text AS date, campaign_id, ad_group_id, country, currency, spend_unscaled, spend_scale
+     FROM ledger.cost_records
+     WHERE tenant_id=$1 AND app_id=$2 AND as_of <= $3
+       AND ($4::text IS NULL OR campaign_id=$4) AND ($5::text IS NULL OR network=$5)
+       AND ($6::text IS NULL OR country=$6) AND ($7::date IS NULL OR cost_date=$7::date)
+     ORDER BY network, cost_date, campaign_id, ad_group_id, country, as_of DESC, cost_record_id DESC`,
+    [scope.tenant_id, scope.app_id, watermark, grouping?.campaign_id ?? null, grouping?.network ?? null,
+      grouping?.country ?? null, grouping?.cohort_date ?? null],
+  );
+  return selectDisjointCosts(result.rows);
 }
 
 async function eventCountValue(
@@ -499,6 +523,7 @@ async function totalNetRevenueValue(
   definition: Any,
   fxPolicy: Any,
   privacyState: "before" | "after",
+  selectedCosts?: CostSelection,
 ): Promise<{ value_state: "present"; value_unscaled: string } | {
   value_state: "undefined";
   undefined_reason: "no_attributed_cost" | "empty_cohort";
@@ -549,9 +574,9 @@ async function totalNetRevenueValue(
   }>(
     `WITH current_cost AS (
        SELECT * FROM (
-         SELECT DISTINCT ON (cost_key_digest) *
+         SELECT DISTINCT ON (cost_key_digest) spend_unscaled, spend_scale, currency
          FROM ledger.cost_records
-         WHERE tenant_id=$1 AND app_id=$2 AND as_of <= $3
+         WHERE $11::jsonb IS NULL AND tenant_id=$1 AND app_id=$2 AND as_of <= $3
            AND ($8::text IS NULL OR $8='non_organic')
            AND ($4::text IS NULL OR campaign_id=$4)
            AND ($5::text IS NULL OR network=$5)
@@ -559,6 +584,9 @@ async function totalNetRevenueValue(
            AND ($7::date IS NULL OR cost_date=$7::date)
          ORDER BY cost_key_digest, as_of DESC, cost_record_id DESC
        ) AS selected
+       UNION ALL
+       SELECT * FROM jsonb_to_recordset($11::jsonb)
+         AS supplied(spend_unscaled text, spend_scale integer, currency text)
      )
      SELECT coalesce(sum(
        CASE WHEN spend_scale <= $10
@@ -569,7 +597,8 @@ async function totalNetRevenueValue(
      FROM current_cost`,
     [scope.tenant_id, scope.app_id, watermark, grouping?.campaign_id ?? null,
       grouping?.network ?? null, grouping?.country ?? null, grouping?.cohort_date ?? null,
-      grouping?.attribution_status ?? null, fxPolicy.target_currency, fxPolicy.target_scale],
+      grouping?.attribution_status ?? null, fxPolicy.target_currency, fxPolicy.target_scale,
+      selectedCosts ? JSON.stringify(selectedCosts.rows) : null],
   );
   if (cost.rows[0].mismatched_currency_count !== "0") {
     throw new Error(`cost currency mismatch for ${definition.metric_name}`);
@@ -592,10 +621,17 @@ async function metricValue(
   definition: Any,
   fxPolicy: Any,
   privacyState: "before" | "after",
+  selectedCosts?: CostSelection,
 ): Promise<MetricValue> {
   const calculation = definition.definition.calculation;
+  if (selectedCosts?.rows.some((cost) => cost.currency !== fxPolicy.target_currency)) {
+    throw new Error(`cost currency mismatch for ${definition.metric_name}`);
+  }
+  if (calculation === "revenue_over_cost" && selectedCosts?.overlapping) {
+    return { value_state: "undefined", undefined_reason: "overlapping_cost_grains" };
+  }
   if (definition.definition.numerator === "total_net_revenue") {
-    return totalNetRevenueValue(client, scope, watermark, grouping, definition, fxPolicy, privacyState);
+    return totalNetRevenueValue(client, scope, watermark, grouping, definition, fxPolicy, privacyState, selectedCosts);
   }
   if (definition.definition.numerator === "purchase_net_revenue") {
     return purchaseNetRevenueValue(client, scope, watermark, grouping, definition, fxPolicy, privacyState);
@@ -701,9 +737,9 @@ async function metricValue(
        ),
        current_cost AS (
          SELECT * FROM (
-           SELECT DISTINCT ON (cost_key_digest) *
+           SELECT DISTINCT ON (cost_key_digest) spend_unscaled, spend_scale, currency
            FROM ledger.cost_records
-           WHERE tenant_id=$1 AND app_id=$2 AND as_of <= $3
+           WHERE $19::jsonb IS NULL AND tenant_id=$1 AND app_id=$2 AND as_of <= $3
              AND ($16::text IS NULL OR $16='non_organic')
              AND ($4::text IS NULL OR campaign_id=$4)
              AND ($5::text IS NULL OR network=$5)
@@ -711,6 +747,9 @@ async function metricValue(
              AND ($7::date IS NULL OR cost_date=$7::date)
            ORDER BY cost_key_digest, as_of DESC, cost_record_id DESC
          ) AS selected
+         UNION ALL
+         SELECT * FROM jsonb_to_recordset($19::jsonb)
+           AS supplied(spend_unscaled text, spend_scale integer, currency text)
        ),
        cost AS (
          SELECT coalesce(sum(
@@ -777,6 +816,7 @@ async function metricValue(
       grouping?.attribution_status ?? null,
       definition.fraud_policy ?? "gross",
       definition.acquisition_basis === "selected_first_party_click",
+      selectedCosts ? JSON.stringify(selectedCosts.rows) : null,
     ],
   );
   const row = result.rows[0];
@@ -902,38 +942,22 @@ export async function computeSqlMetricRunsWithClient(
     );
     const records = snapshot.records;
     const grouping = evaluation.grouping;
-    const costs = await currentCosts(client, scope, evaluation.input_received_at_watermark, grouping);
-    for (const cost of costs) {
-      snapshot.append([
-        "cost", cost.as_of, cost.cost_record_id,
-        cost.report_snapshot_digest, cost.dimension_digest,
-      ]);
-    }
-    const inputSnapshotId = snapshot.finish();
+    const legacyCosts = await currentCosts(client, scope, evaluation.input_received_at_watermark, grouping);
+    const needsDisjoint = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.cost_selection_policy);
+    const safeCosts = needsDisjoint ? await disjointCosts(client, scope, evaluation.input_received_at_watermark, grouping) : undefined;
     const usesAcquisition = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.acquisition_basis);
     const acquisitionRows = usesAcquisition ? (await client.query<{ artifact: Any }>(
       selectedAcquisitionSql, [scope.tenant_id, scope.app_id, evaluation.input_received_at_watermark],
     )).rows.map(({ artifact }) => artifact).sort((a, b) => compareText(a.tenant_id, b.tenant_id)
       || compareText(a.app_id, b.app_id) || compareText(a.attribution_id, b.attribution_id))
       .map((artifact) => [artifact.tenant_id, artifact.app_id, artifact.attribution_id, sha256(artifact)]) : [];
-    const evidenceRefs = [
-      ...records.map((record) => ({
+    const recordEvidence = records.map((record) => ({
         tenant_id: record.tenant_id,
         app_id: record.app_id,
         ref: record.record_id,
         lifecycle_status: record.lifecycle_status,
         access_class: "protected",
-      })),
-      ...costs.map((cost) => ({
-        tenant_id: cost.tenant_id,
-        app_id: cost.app_id,
-        ref: cost.cost_record_id,
-        lifecycle_status: "available",
-        access_class: "protected",
-      })),
-    ].sort((left, right) => compareText(left.ref, right.ref)
-      || compareText(left.tenant_id, right.tenant_id)
-      || compareText(left.app_id, right.app_id));
+      }));
     const privacyAffected = records.some((record) =>
       record.lifecycle_status !== "available" && record.privacy_request_id !== null);
     const states = records.map((record) => record.lifecycle_status);
@@ -946,6 +970,16 @@ export async function computeSqlMetricRunsWithClient(
     for (const metricName of evaluation.metric_names ?? []) {
       const definition = definitions.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
+      const selectedCosts = definition.cost_selection_policy ? safeCosts : undefined;
+      const costs = selectedCosts?.rows ?? legacyCosts;
+      const inputSnapshotId = snapshot.finish(costs.map((cost) => [
+        "cost", cost.as_of, cost.cost_record_id, cost.report_snapshot_digest, cost.dimension_digest,
+      ]));
+      const evidenceRefs = [...recordEvidence, ...costs.map((cost) => ({
+        tenant_id: cost.tenant_id, app_id: cost.app_id, ref: cost.cost_record_id,
+        lifecycle_status: "available", access_class: "protected",
+      }))].sort((left, right) => compareText(left.ref, right.ref)
+        || compareText(left.tenant_id, right.tenant_id) || compareText(left.app_id, right.app_id));
       const value = await metricValue(
         client,
         scope,
@@ -954,6 +988,7 @@ export async function computeSqlMetricRunsWithClient(
         definition,
         fxPolicy,
         evaluation.privacy_state,
+        selectedCosts,
       );
       const moneyFields = definition.value_type === "money" && value.value_state === "present" ? {
         fx_rate_unscaled: fxRate.rate_unscaled,
@@ -1058,7 +1093,18 @@ function assertMetricDefinitionSeries(definition: Any): void {
   const eventNames = definition.event_names ?? [];
   const grouping = definition.grouping_dimensions ?? [];
   const fail = () => { throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`); };
-  if (definition.acquisition_basis !== undefined || definition.rule_bundle_id === "metric-selected-acquisition") {
+  const strictCosts = definition.cost_selection_policy !== undefined;
+  if (strictCosts || definition.rule_bundle_id === "metric-disjoint-cost") {
+    if (definition.cost_selection_policy !== "reject_overlapping_grains" || definition.anchor_event !== "install"
+        || definition.aggregation_time_zone !== "UTC" || definition.metric_definition_version !== "0.4.12"
+        || definition.rule_bundle_id !== "metric-disjoint-cost" || definition.rule_bundle_version !== "0.4.12"
+        || definition.rule_bundle_hash !== nonFraudBundleHash("metric-disjoint-cost")
+        || definition.definition.calculation !== "revenue_over_cost" || definition.definition.window.type !== "elapsed"
+        || !["revenue", "total_net_revenue"].includes(definition.definition.numerator)) fail();
+    if (definition.acquisition_basis !== undefined && (definition.acquisition_basis !== "selected_first_party_click"
+        || definition.definition.numerator !== "revenue")) fail();
+  }
+  if (!strictCosts && (definition.acquisition_basis !== undefined || definition.rule_bundle_id === "metric-selected-acquisition")) {
     if (definition.acquisition_basis !== "selected_first_party_click" || definition.anchor_event !== "install"
         || definition.metric_definition_version !== "0.4.11" || definition.rule_bundle_id !== "metric-selected-acquisition"
         || definition.rule_bundle_version !== "0.4.11" || definition.rule_bundle_hash !== nonFraudBundleHash("metric-selected-acquisition")
@@ -1082,14 +1128,14 @@ function assertMetricDefinitionSeries(definition: Any): void {
   }
   if (definition.definition?.numerator === "total_net_revenue" || totalNetSeries.has(definition.metric_name)) {
     const expected = totalNetSeries.get(definition.metric_name);
-    if (!expected || definition.metric_definition_version !== "0.4.9"
+    if (!expected || definition.metric_definition_version !== (strictCosts ? "0.4.12" : "0.4.9")
         || definition.anchor_event !== "install" || definition.aggregation_time_zone !== "UTC"
         || definition.value_type !== expected.valueType
         || (expected.valueType === "money" && (definition.currency !== "USD" || definition.amount_scale !== 6))
         || (expected.valueType === "ratio" && definition.ratio_scale !== 6)
-        || definition.rule_bundle_id !== "metric-total-net"
-        || definition.rule_bundle_version !== "0.4.9"
-        || definition.rule_bundle_hash !== nonFraudBundleHash("metric-total-net")
+        || definition.rule_bundle_id !== (strictCosts ? "metric-disjoint-cost" : "metric-total-net")
+        || definition.rule_bundle_version !== (strictCosts ? "0.4.12" : "0.4.9")
+        || definition.rule_bundle_hash !== nonFraudBundleHash(strictCosts ? "metric-disjoint-cost" : "metric-total-net")
         || definition.definition?.calculation !== expected.calculation
         || definition.definition?.numerator !== "total_net_revenue"
         || definition.definition?.window?.type !== "elapsed"

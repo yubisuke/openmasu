@@ -211,6 +211,7 @@ export type OpenMasuMetricDefinitionV04 = {
   )[];
   fraud_policy?: "gross" | "net";
   acquisition_basis?: "selected_first_party_click";
+  cost_selection_policy?: "reject_overlapping_grains";
   rule_bundle_id: string;
   rule_bundle_version: string;
   rule_bundle_hash: string;
@@ -243,7 +244,7 @@ export type OpenMasuMetricRunV04 = {
    * Absence is semantically present for v0.2.0 compatibility.
    */
   value_state?: "present" | "undefined";
-  undefined_reason?: "no_attributed_cost" | "no_activity_events" | "empty_cohort";
+  undefined_reason?: "no_attributed_cost" | "no_activity_events" | "empty_cohort" | "overlapping_cost_grains";
   value_unscaled?: string;
   fraud_policy?: "gross" | "net";
   amount_scale?: number;

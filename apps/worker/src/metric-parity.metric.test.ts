@@ -12,6 +12,8 @@ import { renderMetricExplanation } from "../../api/src/dashboard/metric-explanat
 import { metricReport } from "../../api/src/reporting.js";
 import { reportToSnapshot } from "../../../tools/report-to-snapshot.js";
 import { compareSnapshots } from "../../../tools/compare-cohorts.js";
+import { DISJOINT_COST_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import { persistCostImport, type CostInput } from "./import/cost.js";
 
 type Any = Record<string, any>;
 const fixtureName = "33-stage-b-cohort-metrics";
@@ -21,6 +23,63 @@ const goldenPath = join(fixtureDirectory, "expected_metric_runs.json");
 const goldenBefore = readFileSync(goldenPath);
 const golden: Any[] = JSON.parse(goldenBefore.toString("utf8"));
 const oracle = evaluate(input).metric_runs;
+
+describe("safe cost grain SQL and importer parity", { concurrency: false }, () => {
+  let app: Pool;
+  let seed: Pool;
+  before(() => { app = createAppPool(); seed = createSeedPool(); });
+  after(async () => { await app?.end(); await seed?.end(); });
+  const source = () => {
+    const value = JSON.parse(readFileSync(join(process.cwd(), "fixtures/v0.4/58-selected-native-acquisition/input.json"), "utf8"));
+    value.metric_definitions = [structuredClone(DISJOINT_COST_METRIC_DEFINITIONS[0])];
+    value.metric_evaluations[0].metric_names = ["d0_roas"];
+    return value;
+  };
+  const baseCost: CostInput = { tenant_id: "tenant-a", app_id: "app-a", network: "synthetic-network", campaign_id: "campaign-a",
+    date: "2026-08-06", amount_unscaled: "100000000", amount_scale: 6, currency: "USD", source: "imported_reported",
+    as_of: "2026-08-12T00:00:00.000Z" };
+  const siblings: CostInput[] = [{ ...baseCost, ad_group_id: "a", amount_unscaled: "40000000" },
+    { ...baseCost, ad_group_id: "b", amount_unscaled: "60000000" }];
+
+  for (const separate of [false, true]) it(`rejects overlapping cost grains from ${separate ? "separate" : "one"} real import transaction(s)`, async () => {
+    const value = source();
+    value.cost_records = [];
+    await ingestFixture(`safe-cost-import-${separate}`, value, app, seed);
+    if (separate) {
+      await persistCostImport(app, "synthetic-parent", [baseCost]);
+      await persistCostImport(app, "synthetic-detail", siblings);
+    } else await persistCostImport(app, "synthetic-mixed", [baseCost, ...siblings]);
+    const runs = await computeSqlMetricRuns(app, value, true);
+    assert.equal(runs[0].undefined_reason, "overlapping_cost_grains");
+    assert.equal(Object.hasOwn(runs[0], "value_unscaled"), false);
+    const saved = await withTenant(app, "tenant-a", async client => (await client.query(
+      "SELECT comparison_context FROM ledger.metric_runs WHERE metric_run_id=$1", [runs[0].metric_run_id],
+    )).rows);
+    assert.equal(saved[0].comparison_context.definition.cost_selection_policy, "reject_overlapping_grains");
+    assert.equal(saved[0].comparison_context.definition_digest, sha256(value.metric_definitions[0]));
+  });
+
+  it("keeps disjoint imported siblings and cost corrections as-of without changing a saved run", async () => {
+    const value = source();
+    value.cost_records = [];
+    await ingestFixture("safe-cost-revision", value, app, seed);
+    await persistCostImport(app, "synthetic-detail", siblings);
+    const earlier = await computeSqlMetricRuns(app, value, true);
+    assert.equal(earlier[0].value_unscaled, "200000");
+    await persistCostImport(app, "synthetic-correction", [{ ...siblings[0], amount_unscaled: "50000000", as_of: "2026-08-13T00:00:00.000Z" }]);
+    assert.equal(jcs(await computeSqlMetricRuns(app, value, false)), jcs(earlier));
+    Object.assign(value.metric_evaluations[0], { metric_run_id_prefix: "safe-revised",
+      input_received_at_watermark: "2026-08-13T00:00:00.000Z", computed_at: "2026-08-13T00:00:00.000Z",
+      supersedes_metric_run_id: earlier[0].metric_run_id, data_freshness: "recalculated" });
+    const revised = await computeSqlMetricRuns(app, value, true);
+    assert.equal(revised[0].value_unscaled, "181818");
+    assert.notEqual(revised[0].input_snapshot_id, earlier[0].input_snapshot_id);
+    const saved = await withTenant(app, "tenant-a", async client => (await client.query(
+      "SELECT artifact FROM ledger.metric_runs WHERE metric_run_id=$1", [earlier[0].metric_run_id],
+    )).rows);
+    assert.equal(jcs(saved[0].artifact), jcs(earlier[0]));
+  });
+});
 
 describe("selected native acquisition SQL parity", { concurrency: false }, () => {
   let app: Pool;
