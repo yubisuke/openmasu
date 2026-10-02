@@ -1426,7 +1426,7 @@ function metricRuns(
           const activityEvents = new Set(definition.activity_events ?? ["session_start"]);
           const active = new Set<string>();
           for (const session of activities.filter((item) => activityEvents.has(item.record.event_name))) {
-            const installation = installs.find((candidate) =>
+            const installation = eligibleInstalls.find((candidate) =>
               candidate.server.tenant_id === session.server.tenant_id && candidate.server.app_id === session.server.app_id &&
               candidate.record.payload.installation_id === session.record.payload.installation_id,
             );

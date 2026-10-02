@@ -109,8 +109,9 @@ and #175 recorded attribution analysis have source implementation. Daily
 schedule controls (#176) now connect the dashboard to the existing worker.
 Schedule re-registration now preserves distinct run identities over identical
 inputs, exact crash replay and explicit-only supersession (#200). This runtime
-fix adds one completed slice to the original sixteen; the seven remaining slices
-start with custom-event cohort outcomes (#177).
+fix and the reference retention population correction (#202) add two completed
+slices to the original sixteen; the seven remaining slices start with
+custom-event cohort outcomes (#177).
 #184/#185 reuse #182/#183, with commerce cohorts connected by #191; #186 depends on #184, #187 on #182/#183, and #188 on
 #182/#177. Keep the scoped follow-ups separate from the initial Android-first
 campaign path. They do not add a new provider, identity graph or metric service.
@@ -124,6 +125,7 @@ campaign path. They do not add a new provider, identity graph or metric service.
 | Source implemented / [#175](https://github.com/yubisuke/openmasu/issues/175) | Attribution analysis | Reader-only fixed-watermark install counts by status/method/recorded reason | As-of decision selection, no duplicate subject counts, not-recorded distinct from organic, privacy and tenant scope, no raw IDs or mixed aggregate population |
 | Source implemented / [#176](https://github.com/yubisuke/openmasu/issues/176) | Daily calculation controls | SSR list/register/disable for existing immutable metric schedules | Register to worker checkpoint to disable, existing validation/ownership rules, administer capability, no GET writes |
 | Source implemented / [#200](https://github.com/yubisuke/openmasu/issues/200) | Schedule recovery | Re-registration of an already calculated selection preserves old evidence and completes the new checkpoint | Run-ID primary key, exact retries, distinct definitions/cutoffs, reader keysets, duplicate-comparison refusal, explicit-only supersession |
+| Source implemented / [#202](https://github.com/yubisuke/openmasu/issues/202) | Retention population | Reference retention numerator uses the same selected and fraud-filtered installs as its denominator | Selected campaign 1/1, gross 1/2 versus net 0/1, recorded-dimension support, late-session exclusion, TS/Python/SQL parity |
 | 5 / [#177](https://github.com/yubisuke/openmasu/issues/177) | Cohort outcomes | One explicit custom-event key, distinct D7 cohort converters and conversion rate | Additive contract and derived fixtures, TS/Python/SQL parity, duplicate/window/watermark/privacy rules, key-bound saved meaning and schedule validation |
 | 6 / [#178](https://github.com/yubisuke/openmasu/issues/178) | Commerce calculation evidence | Saved operands for existing D30 total-net ROAS in the same calculation transaction | Advertising plus purchases minus refunds, cost and exact rounding, old-run immutability, redacted/unavailable evidence, existing result parity |
 | 7 / [#179](https://github.com/yubisuke/openmasu/issues/179) | Correction workflow | SSR request/status and links to original/replacement run details using existing bounded recalculation | Cost revision to completion, duplicate request identity, existing bounds/permissions, no second selector or all-history recomputation |
