@@ -118,7 +118,7 @@ export async function projectAppleTransaction(input: Scope & {
     raw.policy_digest,raw.consent_evaluation_policy_version
     FROM ledger.purchase_facts AS purchase JOIN ledger.raw_records AS raw USING (tenant_id,app_id,record_id)
     JOIN ledger.raw_records_current AS current USING (tenant_id,app_id,record_id)
-    WHERE purchase.tenant_id=$1 AND purchase.app_id=$2 AND purchase.record_id=$3 AND current.lifecycle_status='available'`,
+    WHERE purchase.tenant_id=$1 AND purchase.app_id=$2 AND purchase.record_id=$3 AND current.payload_lifecycle_status='available'`,
   [input.tenantId,input.appId,purchaseId])).rows[0];
   if (!purchase) return "transaction_privacy_blocked";
   const previous = (await client.query<{ amount_unscaled: string; amount_scale: number }>(`SELECT amount_unscaled,amount_scale

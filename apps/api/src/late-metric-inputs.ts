@@ -20,8 +20,8 @@ export type LateSelection = {
 export function supportsLateMetric(replay: Any): boolean {
   const metric = replay.metric_definition, definition = metric?.definition;
   return !!metric && validateMetricDefinition(metric) && metric.anchor_event === "install"
-    && definition?.calculation === "revenue_over_cost"
-    && ["revenue", "total_net_revenue"].includes(definition.numerator)
+    && ["revenue_sum", "revenue_over_cohort", "revenue_over_cost"].includes(definition?.calculation)
+    && ["revenue", "purchase_net_revenue", "total_net_revenue"].includes(definition.numerator)
     && definition.window?.type === "elapsed" && Number.isSafeInteger(definition.window.day)
     && definition.window.day >= 0 && definition.window.day <= 90
     && typeof replay.evaluation?.grouping?.cohort_date === "string"
@@ -94,7 +94,8 @@ export async function selectLateMetricInputs(
      WHERE mr.tenant_id=$1 AND mr.app_id=$2 AND mr.input_received_at_watermark<$3
        AND mr.grouping->>'cohort_date' BETWEEN $4 AND $5
        AND ($6::text[] IS NULL OR mr.metric_name=ANY($6::text[]))
-       AND (mr.comparison_context IS NULL OR mr.comparison_context->'definition'->'definition'->>'calculation'='revenue_over_cost')
+       AND (mr.comparison_context IS NULL OR mr.comparison_context->'definition'->'definition'->>'calculation'
+         IN ('revenue_sum','revenue_over_cohort','revenue_over_cost'))
        AND NOT EXISTS (SELECT 1 FROM ledger.metric_runs AS newer WHERE newer.tenant_id=mr.tenant_id
          AND newer.app_id=mr.app_id AND newer.supersedes_metric_run_id=mr.metric_run_id)
      ORDER BY mr.metric_run_id COLLATE "C" LIMIT 101`,
@@ -124,7 +125,9 @@ export async function selectLateMetricInputs(
            ORDER BY candidate.decided_at DESC,candidate.attribution_id DESC LIMIT 1) AS attribution ON true
          ${selectedClickJoinSql("$7", "$8")}
          WHERE changed.received_at>$12 AND raw.received_at<=$3 AND raw.payload_lifecycle_status='available'
-           AND ($11='total_net_revenue' OR changed.event_name='ad_revenue')
+           AND ($11='total_net_revenue'
+             OR ($11='purchase_net_revenue' AND changed.event_name IN ('purchase','refund'))
+             OR ($11='revenue' AND changed.event_name='ad_revenue'))
            AND control.canonical_timestamp_value(changed.occurred_at)>=install.occurred_at_ts
            AND control.canonical_timestamp_value(changed.occurred_at)<install.occurred_at_ts+(($6+1)*interval '1 day')
            AND timezone($9,install.occurred_at_ts)::date::text=$5::jsonb->>'cohort_date'
