@@ -90,13 +90,14 @@ The advertising-acquisition gap is reproduced by a native-shaped synthetic insta
 legacy campaign cohort is empty; explicit selected-acquisition definitions
 connect it without changing historical definitions. Separate synthetic cases
 reproduce parent/detail cost double counting, now refused by explicit safe-cost
-definitions, and the still-missing purchase/total-net acquisition connection.
+definitions, and purchase/total-net acquisition, now connected by explicit
+v0.4.13 commerce definitions and fixture 60.
 
 | Priority / issue | Workstream | Narrow deliverable | Acceptance focus |
 | --- | --- | --- | --- |
 | Source implemented / [#182](https://github.com/yubisuke/openmasu/issues/182) | Acquisition projection | Explicit v0.4.11 definitions use selected first-party Install Referrer campaign/network; historical definitions retain recorded-dimension semantics | Native-shaped install through ingestion to campaign installs/ad-revenue ROAS; selected evidence only, fixed watermark, privacy and TS/Python/SQL parity |
 | Source implemented / [#183](https://github.com/yubisuke/openmasu/issues/183) | Cost grain safety | Explicit v0.4.12 definitions detect overlapping campaign/ad-group/country cost scopes and refuse ambiguous denominators | Fixture 59 and importer/SQL tests cover overlap, disjoint siblings, dated as-of revisions, saved meaning and immutable old runs |
-| Next / [#191](https://github.com/yubisuke/openmasu/issues/191) | Commerce acquisition projection | Reuse selected source and safe cost selection for explicit purchase/refund/total-net definitions | Advertising 20 plus purchase 10 minus refund 4 over cost 10 gives total-net 26 and ROAS 2.6, with parity, unchanged old runs and privacy boundaries |
+| Source implemented / [#191](https://github.com/yubisuke/openmasu/issues/191) | Commerce acquisition projection | Explicit v0.4.13 definitions reuse selected source and safe costs for purchase/refund/total-net | Fixture 60 and SQL parity fix advertising 20 plus purchase 10 minus refund 4 over cost 10 at total-net 26 and ROAS 2.6, with unchanged old runs and privacy boundaries |
 | Next / [#184](https://github.com/yubisuke/openmasu/issues/184) | Late-input correction | Bounded advertising-revenue/purchase/refund impact selection uses existing recalculation jobs | Late arrival to new immutable run, exact replay and deduplication, visible bounds/unsupported evidence and deletion fencing |
 | Next / [#185](https://github.com/yubisuke/openmasu/issues/185) | Campaign discovery | Opt-in bounded campaign target discovery for existing daily install-cohort schedules | New campaign appears without editing a list, frozen target-set replay, cost-only/unknown/empty/overflow handling, unchanged manual schedules |
 | Follow-up / [#186](https://github.com/yubisuke/openmasu/issues/186) | App Store purchase binding | Authenticated installation-to-verified-transaction binding and existing purchase/refund projections | Synthetic signed/read-back path reaches cohort revenue; unbound stays unbound, duplicate and privacy safety, no live Store claim |
