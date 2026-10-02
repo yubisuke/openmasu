@@ -1657,7 +1657,8 @@
                 "enum": [
                   "no_attributed_cost",
                   "no_activity_events",
-                  "empty_cohort"
+                  "empty_cohort",
+                  "overlapping_cost_grains"
                 ]
               },
               {
@@ -1830,7 +1831,8 @@
                   "enum": [
                     "no_attributed_cost",
                     "no_activity_events",
-                    "empty_cohort"
+                    "empty_cohort",
+                    "overlapping_cost_grains"
                   ]
                 }
               },

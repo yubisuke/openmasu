@@ -22,6 +22,7 @@ METRIC_PURCHASE_NET_BUNDLE_HASH = "01b66078d11af8ace103a5d2cf594ffe79c19bd59a4dc
 METRIC_PURCHASE_NET_LONG_BUNDLE_HASH = "709f6688c7bb8537b7af3aa3b5a3aa879036a866fe13a21b83244baec6389712"
 METRIC_TOTAL_NET_BUNDLE_HASH = "fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3"
 METRIC_SELECTED_ACQUISITION_BUNDLE_HASH = "6fd998246bb092f81d8539b8e2c04a1abe421a1916480b63dfd018d11c7bccc5"
+METRIC_DISJOINT_COST_BUNDLE_HASH = "3ec3e50fc8b9180b55e888895d793739028fdd20abfc34f20110e6ce96e8b053"
 DAY_MS = 86_400_000
 
 
@@ -143,6 +144,38 @@ def sort_by_key(values: list[dict[str, Any]], key: SortKey) -> list[dict[str, An
     return sorted(values, key=lambda value: tuple(
         utf16_key(part) for part in (*key(value), digest(value))
     ))
+
+
+def select_disjoint_costs(costs: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], bool]:
+    """Latest explicit dated grains; absent dimensions do not prove separation."""
+    dimensions = ("campaign_id", "ad_group_id", "country")
+    revisions: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for row in sorted(costs, key=lambda value: (utf16_key(value["as_of"]), utf16_key(value["cost_record_id"]))):
+        key = tuple(row.get(field) for field in ("tenant_id", "app_id", "network", "date", *dimensions))
+        revisions[key] = row
+    rows = sorted(revisions.values(), key=lambda value: (utf16_key(value["as_of"]), utf16_key(value["cost_record_id"])))
+    cells: dict[tuple[str, ...], dict[int, dict[int, set[tuple[Any, ...]]]]] = {}
+    overlapping = False
+    for row in rows:
+        values = tuple(row.get(field) for field in dimensions)
+        mask = sum(1 << bit for bit, value in enumerate(values) if value is not None)
+        cell = cells.setdefault(tuple(row[field] for field in ("tenant_id", "app_id", "network", "date")), {})
+
+        def project(bits: int) -> tuple[Any, ...]:
+            return tuple(value for bit, value in enumerate(values) if bits & (1 << bit))
+
+        for previous_mask, projections in cell.items():
+            overlap_mask = previous_mask & mask
+            if project(overlap_mask) in projections[overlap_mask]:
+                overlapping = True
+        projections = cell.setdefault(mask, {})
+        subset = mask
+        while True:
+            projections.setdefault(subset, set()).add(project(subset))
+            if subset == 0:
+                break
+            subset = (subset - 1) & mask
+    return rows, overlapping
 
 
 def raw_record_sort_key(value: dict[str, Any]) -> tuple[str, ...]:
@@ -1125,7 +1158,22 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
     def fail() -> None:
         raise ValueError(f"metric_definition_series_mismatch:{metric_name}")
 
-    if "acquisition_basis" in definition or definition.get("rule_bundle_id") == "metric-selected-acquisition":
+    strict_costs = "cost_selection_policy" in definition
+    if strict_costs or definition.get("rule_bundle_id") == "metric-disjoint-cost":
+        if (definition.get("cost_selection_policy") != "reject_overlapping_grains"
+                or definition.get("anchor_event") != "install" or definition.get("aggregation_time_zone") != "UTC"
+                or definition.get("metric_definition_version") != "0.4.12"
+                or definition.get("rule_bundle_id") != "metric-disjoint-cost"
+                or definition.get("rule_bundle_version") != "0.4.12"
+                or definition.get("rule_bundle_hash") != METRIC_DISJOINT_COST_BUNDLE_HASH
+                or definition.get("definition", {}).get("calculation") != "revenue_over_cost"
+                or definition.get("definition", {}).get("window", {}).get("type") != "elapsed"
+                or definition.get("definition", {}).get("numerator") not in ("revenue", "total_net_revenue")):
+            fail()
+        if "acquisition_basis" in definition and (definition.get("acquisition_basis") != "selected_first_party_click"
+                or definition.get("definition", {}).get("numerator") != "revenue"):
+            fail()
+    if not strict_costs and ("acquisition_basis" in definition or definition.get("rule_bundle_id") == "metric-selected-acquisition"):
         if (definition.get("acquisition_basis") != "selected_first_party_click"
                 or definition.get("anchor_event") != "install"
                 or definition.get("metric_definition_version") != "0.4.11"
@@ -1164,16 +1212,16 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
         expected_day, expected_calculation, expected_value_type = expected
         metric_definition = definition.get("definition", {})
         window = metric_definition.get("window", {})
-        if (definition.get("metric_definition_version") != "0.4.9"
+        if (definition.get("metric_definition_version") != ("0.4.12" if strict_costs else "0.4.9")
                 or definition.get("anchor_event") != "install"
                 or definition.get("aggregation_time_zone") != "UTC"
                 or definition.get("value_type") != expected_value_type
                 or (expected_value_type == "money"
                     and (definition.get("currency") != "USD" or definition.get("amount_scale") != 6))
                 or (expected_value_type == "ratio" and definition.get("ratio_scale") != 6)
-                or definition.get("rule_bundle_id") != "metric-total-net"
-                or definition.get("rule_bundle_version") != "0.4.9"
-                or definition.get("rule_bundle_hash") != METRIC_TOTAL_NET_BUNDLE_HASH
+                or definition.get("rule_bundle_id") != ("metric-disjoint-cost" if strict_costs else "metric-total-net")
+                or definition.get("rule_bundle_version") != ("0.4.12" if strict_costs else "0.4.9")
+                or definition.get("rule_bundle_hash") != (METRIC_DISJOINT_COST_BUNDLE_HASH if strict_costs else METRIC_TOTAL_NET_BUNDLE_HASH)
                 or metric_definition.get("calculation") != expected_calculation
                 or metric_definition.get("numerator") != "total_net_revenue"
                 or window.get("type") != "elapsed"
@@ -1442,6 +1490,9 @@ def metric_runs(
             for cost in sorted(grouped_costs, key=lambda item: (utf16_key(item["as_of"]), utf16_key(item["cost_record_id"]))):
                 current_by_digest[(cost["tenant_id"], cost["app_id"], cost["dimension_digest"])] = cost
             current_costs = list(current_by_digest.values())
+            overlapping_costs = False
+            if definition.get("cost_selection_policy"):
+                current_costs, overlapping_costs = select_disjoint_costs(grouped_costs)
             cost_snapshot_rows = [
                 ["cost", cost["as_of"], cost["cost_record_id"], cost["report_snapshot_digest"], cost["dimension_digest"]]
                 for cost in sort_by_key(current_costs, lambda item: (item["as_of"], item["cost_record_id"]))
@@ -1523,7 +1574,9 @@ def metric_runs(
                     if cost["currency"] != policy["target_currency"]:
                         raise ValueError(f"cost currency mismatch: {cost['cost_record_id']}")
                     cost_value += scale_money(cost, int(policy["target_scale"]))
-                if cost_value == 0:
+                if overlapping_costs:
+                    undefined_reason = "overlapping_cost_grains"
+                elif cost_value == 0:
                     undefined_reason = "no_attributed_cost"
                 else:
                     amount = round_half_even(selected_revenue_value * 10 ** int(definition.get("ratio_scale", 6)), cost_value)

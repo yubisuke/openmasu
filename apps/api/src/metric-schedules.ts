@@ -40,7 +40,7 @@ const metricGroupingKeys = new Set([...groupingKeys, "cohort_date", "metric_date
 const metricDefinitionFields = new Set([
   "metric_name", "metric_definition_version", "anchor_event", "aggregation_time_zone", "value_type",
   "currency", "amount_scale", "ratio_scale", "definition", "activity_events", "event_names",
-  "grouping_dimensions", "fraud_policy", "acquisition_basis", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash",
+  "grouping_dimensions", "fraud_policy", "acquisition_basis", "cost_selection_policy", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash",
 ]);
 
 function object(value: unknown, error: string): JsonObject {
@@ -88,7 +88,10 @@ function validStringArray(value: unknown, allowed?: ReadonlySet<string>): boolea
 }
 
 function validMetricDefinition(value: JsonObject): boolean {
-  if (value.acquisition_basis !== undefined && (value.acquisition_basis !== "selected_first_party_click"
+  if (value.cost_selection_policy !== undefined && (value.cost_selection_policy !== "reject_overlapping_grains"
+      || value.metric_definition_version !== "0.4.12" || value.rule_bundle_id !== "metric-disjoint-cost"
+      || value.rule_bundle_version !== "0.4.12")) return false;
+  if (!value.cost_selection_policy && value.acquisition_basis !== undefined && (value.acquisition_basis !== "selected_first_party_click"
       || value.anchor_event !== "install" || value.metric_definition_version !== "0.4.11"
       || value.rule_bundle_id !== "metric-selected-acquisition" || value.rule_bundle_version !== "0.4.11")) return false;
   if (Object.keys(value).some((key) => !metricDefinitionFields.has(key))
@@ -109,6 +112,12 @@ function validMetricDefinition(value: JsonObject): boolean {
   const window = operation.window;
   if (!window || typeof window !== "object" || Array.isArray(window)) return false;
   const boundedWindow = window as JsonObject;
+  if (value.cost_selection_policy && (value.anchor_event !== "install" || value.aggregation_time_zone !== "UTC"
+      || value.rule_bundle_hash !== "3ec3e50fc8b9180b55e888895d793739028fdd20abfc34f20110e6ce96e8b053"
+      || value.value_type !== "ratio" || operation.calculation !== "revenue_over_cost"
+      || operation.denominator !== "cost" || operation.cost_basis !== "cohort_acquisition_day_current_snapshot"
+      || boundedWindow.type !== "elapsed" || !["revenue", "total_net_revenue"].includes(String(operation.numerator))
+      || (value.acquisition_basis !== undefined && (value.acquisition_basis !== "selected_first_party_click" || operation.numerator !== "revenue")))) return false;
   if (Object.keys(boundedWindow).some((key) => !["type", "day"].includes(key))
       || !["elapsed", "calendar_day", "activity_day"].includes(String(boundedWindow.type))
       || !Number.isSafeInteger(boundedWindow.day) || Number(boundedWindow.day) < 0

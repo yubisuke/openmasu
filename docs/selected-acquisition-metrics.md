@@ -25,9 +25,10 @@ The same explicit definitions can be supplied to a metric schedule. The CLI
 and schedule builder use current (`after`) privacy state for these definitions,
 including initial runs, so deleted click semantics cannot regain credit.
 
-These definitions opt into `acquisition_basis=selected_first_party_click`, use
-independent metric/rule version `0.4.11`, and include the exact checked-in bundle
-digest. Definitions without that field keep historical recorded-dimension
+These definitions opt into `acquisition_basis=selected_first_party_click`.
+The example's D0 ROAS also uses [safe cost selection](cost-selection.md) version
+`0.4.12`; its LTV and count retain version `0.4.11`. Each includes its exact
+checked-in bundle digest. Definitions without acquisition basis keep historical recorded-dimension
 semantics. Existing schedules and saved replay manifests are **not** silently
 upgraded. Create a new explicit schedule/definition when changing semantics;
 compare or supersede prior runs deliberately.

@@ -159,6 +159,24 @@ The persisted source identifier contains only a one-way digest derived from the 
 
 This is executable provider wiring with synthetic tests only. It is not live proof for a particular Google Ads account, token, developer-token access level, manager hierarchy, API version, date range, field combination, quota, or permission set. OAuth token refresh remains operator-owned. This one-shot command does not retry or schedule itself; the separate default-off [bounded daily cost refresh](cost-refresh.md) reuses the same adapter with durable range/configuration checkpoints and atomic publication.
 
+## Cost grain safety
+
+Cost import keeps append-only observations; successful import does not prove
+that rows form a disjoint denominator. Do not combine campaign totals with
+their ad-group or country breakdowns and expect automatic allocation. Explicit
+safe-cost metric definitions select the latest visible revision for each
+tenant/app/network/date/campaign/ad-group/country tuple. Missing dimensions
+mean unknown coverage, not a new disjoint partition. Two grains overlap unless
+at least one dimension present in both proves them distinct. Different scopes,
+dates, or disjoint siblings remain separate; equal amounts alone prove nothing.
+
+The opt-in `reject_overlapping_grains` policy emits
+`undefined/overlapping_cost_grains` instead of silently summing ambiguous rows.
+It retains candidate evidence for diagnosis and does not guess which import is
+authoritative. Existing disjoint adapter partitions continue to work. Historical
+metric definitions retain legacy behavior for reproducibility; create new
+explicit definitions using [safe cost selection](cost-selection.md).
+
 ## Producer-wide event IDs
 
 The contract idempotency key excludes `event_name`. If multiple mappings for the same tenant, app, and provider reuse one source ID column, give each route a stable, distinct `prefix`. The CLI emits `event_id_source_reused_across_routes` when sibling mappings overlap without disjoint prefixes. See `synthetic-shared-id-click.json` and `synthetic-shared-id-install.json` for the safe pattern.

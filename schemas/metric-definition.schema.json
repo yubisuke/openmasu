@@ -49,13 +49,42 @@
     },
     "fraud_policy": { "enum": ["gross", "net"], "default": "gross" },
     "acquisition_basis": { "const": "selected_first_party_click" },
+    "cost_selection_policy": { "const": "reject_overlapping_grains" },
     "rule_bundle_id": { "$ref": "common.schema.json#/$defs/id" },
     "rule_bundle_version": { "type": "string" },
     "rule_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
   },
   "allOf": [
     {
-      "if": { "properties": { "acquisition_basis": {} }, "required": ["acquisition_basis"] },
+      "if": { "properties": { "rule_bundle_id": { "const": "metric-disjoint-cost" } }, "required": ["rule_bundle_id"] },
+      "then": { "properties": { "cost_selection_policy": {} }, "required": ["cost_selection_policy"] }
+    },
+    {
+      "if": { "properties": { "cost_selection_policy": {} }, "required": ["cost_selection_policy"] },
+      "then": {
+        "properties": {
+          "anchor_event": { "const": "install" }, "aggregation_time_zone": { "const": "UTC" },
+          "metric_definition_version": { "const": "0.4.12" },
+          "rule_bundle_id": { "const": "metric-disjoint-cost" },
+          "rule_bundle_version": { "const": "0.4.12" },
+          "rule_bundle_hash": { "const": "3ec3e50fc8b9180b55e888895d793739028fdd20abfc34f20110e6ce96e8b053" },
+          "definition": {
+            "type": "object", "additionalProperties": true,
+            "properties": { "calculation": { "const": "revenue_over_cost" },
+              "window": { "type": "object", "additionalProperties": true, "properties": { "type": { "const": "elapsed" } } } }
+          }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "acquisition_basis": {} }, "required": ["acquisition_basis"] },
+            "then": { "properties": { "definition": { "type": "object", "additionalProperties": true,
+              "properties": { "numerator": { "const": "revenue" } } } } }
+          }
+        ]
+      }
+    },
+    {
+      "if": { "properties": { "acquisition_basis": {}, "cost_selection_policy": {} }, "required": ["acquisition_basis"], "not": { "required": ["cost_selection_policy"] } },
       "then": {
         "properties": {
           "anchor_event": { "const": "install" },
@@ -170,19 +199,22 @@
       },
       "then": {
         "properties": {
-          "metric_definition_version": { "const": "0.4.9" },
           "metric_name": { "enum": ["cohort_total_net_revenue_d30_usd", "cohort_total_net_revenue_d90_usd", "d30_total_net_roas", "d90_total_net_roas", "cohort_total_net_ltv_d30_usd", "cohort_total_net_ltv_d90_usd"] },
           "anchor_event": { "const": "install" },
           "aggregation_time_zone": { "const": "UTC" },
-          "rule_bundle_id": { "const": "metric-total-net" },
-          "rule_bundle_version": { "const": "0.4.9" },
-          "rule_bundle_hash": { "const": "fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3" },
           "definition": {
             "type": "object",
             "additionalProperties": true,
             "properties": { "window": { "type": "object", "additionalProperties": true, "properties": { "type": { "const": "elapsed" }, "day": { "enum": [30, 90] } } } }
           }
-        }
+        },
+        "if": { "properties": { "cost_selection_policy": {} }, "required": ["cost_selection_policy"] },
+        "then": { "properties": { "metric_name": { "enum": ["d30_total_net_roas", "d90_total_net_roas"] }, "ratio_scale": { "const": 6 } } },
+        "else": { "properties": {
+          "metric_definition_version": { "const": "0.4.9" },
+          "rule_bundle_id": { "const": "metric-total-net" }, "rule_bundle_version": { "const": "0.4.9" },
+          "rule_bundle_hash": { "const": "fc95798477e664215aa213ab59402b5ad348db3d59c1b886d713ab11490b8fd3" }
+        } }
       }
     },
     {

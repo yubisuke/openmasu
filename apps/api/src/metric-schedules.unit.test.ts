@@ -32,6 +32,9 @@ describe("scheduled metric configuration", () => {
     const mismatch = structuredClone(request);
     mismatch.metric_definitions[0].metric_definition_version = "0.3.0";
     assert.throws(() => normalizeMetricScheduleRequest(mismatch, new Date("2026-08-10T12:00:00.000Z")), /definitions_invalid/);
+    const wrongPolicy = structuredClone(request);
+    wrongPolicy.metric_definitions[0].rule_bundle_hash = "0".repeat(64);
+    assert.throws(() => normalizeMetricScheduleRequest(wrongPolicy, new Date("2026-08-10T12:00:00.000Z")), /definitions_invalid/);
   });
 
   it("normalizes a daily UTC schedule and hashes the normalized definition", () => {

@@ -1,0 +1,491 @@
+[
+  {
+    "metric_definition_version": "0.4.12",
+    "input_snapshot_id": "78b952ce1c0137cac1c854f65ad4fec9256b2456faf9e3794b01a8ed78e6593d",
+    "input_received_at_watermark": "2026-08-12T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|revenue-native-acquisition",
+    "computed_at": "2026-08-12T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-disjoint-cost",
+    "rule_bundle_version": "0.4.12",
+    "rule_bundle_hash": "3ec3e50fc8b9180b55e888895d793739028fdd20abfc34f20110e6ce96e8b053",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "2e042377815dad9abbc979c5608c3f369f00fd6ae7acbad56da2aa1eada2d1df"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d6-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d6-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d7-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d7-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "cost59-w0-all:d0_roas",
+    "metric_name": "d0_roas",
+    "value_type": "ratio",
+    "value_unscaled": "100000",
+    "ratio_scale": 6
+  },
+  {
+    "metric_definition_version": "0.4.12",
+    "input_snapshot_id": "3e44c147db076421030224f28952a2dbe4c1ec4e9e324fee4c0a0e23fed733a2",
+    "input_received_at_watermark": "2026-08-12T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|revenue-native-acquisition",
+    "computed_at": "2026-08-12T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-disjoint-cost",
+    "rule_bundle_version": "0.4.12",
+    "rule_bundle_hash": "3ec3e50fc8b9180b55e888895d793739028fdd20abfc34f20110e6ce96e8b053",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d6-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d6-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "cost59-w0-day6:d0_roas",
+    "metric_name": "d0_roas",
+    "value_type": "ratio",
+    "value_unscaled": "200000",
+    "ratio_scale": 6
+  },
+  {
+    "metric_definition_version": "0.4.12",
+    "input_snapshot_id": "9bb8a6cba148f574375a66c772145cd72f36a8b2c6d6523051ce2891165d50e9",
+    "input_received_at_watermark": "2026-08-13T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|revenue-native-acquisition",
+    "computed_at": "2026-08-13T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-disjoint-cost",
+    "rule_bundle_version": "0.4.12",
+    "rule_bundle_hash": "3ec3e50fc8b9180b55e888895d793739028fdd20abfc34f20110e6ce96e8b053",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "2e042377815dad9abbc979c5608c3f369f00fd6ae7acbad56da2aa1eada2d1df"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d6-a-revised",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d6-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d7-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d7-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "cost59-w1-all:d0_roas",
+    "metric_name": "d0_roas",
+    "value_type": "ratio",
+    "value_unscaled": "95238",
+    "ratio_scale": 6
+  },
+  {
+    "metric_definition_version": "0.4.12",
+    "input_snapshot_id": "6f2780929ab5da12a0b0f08bc9469c3697d411b983a8b657a51d47ec35a43b4d",
+    "input_received_at_watermark": "2026-08-13T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|revenue-native-acquisition",
+    "computed_at": "2026-08-13T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-disjoint-cost",
+    "rule_bundle_version": "0.4.12",
+    "rule_bundle_hash": "3ec3e50fc8b9180b55e888895d793739028fdd20abfc34f20110e6ce96e8b053",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d6-a-revised",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d6-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "cost59-w1-day6:d0_roas",
+    "metric_name": "d0_roas",
+    "value_type": "ratio",
+    "value_unscaled": "181818",
+    "ratio_scale": 6
+  },
+  {
+    "metric_definition_version": "0.4.12",
+    "input_snapshot_id": "264e3900379e38434d0f48e85f3f91fc197d25252e284a5768e63f733fb11acb",
+    "input_received_at_watermark": "2026-08-14T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|revenue-native-acquisition",
+    "computed_at": "2026-08-14T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-disjoint-cost",
+    "rule_bundle_version": "0.4.12",
+    "rule_bundle_hash": "3ec3e50fc8b9180b55e888895d793739028fdd20abfc34f20110e6ce96e8b053",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d6-a-revised",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d6-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d6-parent",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "cost59-w2-day6:d0_roas",
+    "metric_name": "d0_roas",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "value_state": "undefined",
+    "undefined_reason": "overlapping_cost_grains"
+  },
+  {
+    "metric_definition_version": "0.4.12",
+    "input_snapshot_id": "2d59e2848f119c9a71d87485e8efef32560279e318e571353014019a58746520",
+    "input_received_at_watermark": "2026-08-14T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|revenue-native-acquisition",
+    "computed_at": "2026-08-14T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-disjoint-cost",
+    "rule_bundle_version": "0.4.12",
+    "rule_bundle_hash": "3ec3e50fc8b9180b55e888895d793739028fdd20abfc34f20110e6ce96e8b053",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-07"
+      },
+      "dimension_digest": "de9f69a4120d8df4d3426361f37e0ef7949ab0f9d5a6972dc10ab85d7109d6c0"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d7-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d7-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "cost59-w2-day7:d0_roas",
+    "metric_name": "d0_roas",
+    "value_type": "ratio",
+    "value_unscaled": "0",
+    "ratio_scale": 6
+  },
+  {
+    "metric_definition_version": "0.4.11",
+    "input_snapshot_id": "264e3900379e38434d0f48e85f3f91fc197d25252e284a5768e63f733fb11acb",
+    "input_received_at_watermark": "2026-08-14T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|revenue-native-acquisition",
+    "computed_at": "2026-08-14T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-selected-acquisition",
+    "rule_bundle_version": "0.4.11",
+    "rule_bundle_hash": "6fd998246bb092f81d8539b8e2c04a1abe421a1916480b63dfd018d11c7bccc5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d6-a-revised",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d6-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost59-d6-parent",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "cost59-w2-legacy:d0_legacy_roas",
+    "metric_name": "d0_legacy_roas",
+    "value_type": "ratio",
+    "value_unscaled": "95238",
+    "ratio_scale": 6
+  }
+]
