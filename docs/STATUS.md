@@ -2,10 +2,13 @@
 
 Status date: 2026-10-02.
 
-`v0.2.0` is the current published source and SDK release. Its annotated tag,
-[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.2.0),
-and every required full platform gate identify green commit `68b8c48`. This
-document describes the later current `main` source tree; tagged release notes
+`v0.3.0-rc.1` is the current published source and SDK release (prerelease).
+Its annotated tag,
+[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.1),
+eight public SDK assets and every required full platform gate identify green
+commit `90a0f5f`. The [publication receipt](validation/v0.3.0-rc.1-publication.md)
+records public re-download verification. This document describes the
+current `main` source tree; tagged release notes
 and evidence manifests remain authoritative only for the exact source revision
 they name.
 
@@ -14,15 +17,16 @@ they name.
 | Source line | Contract patch ledger | Reviewed inventory | Release meaning |
 | --- | --- | --- | --- |
 | `v0.2.0-rc.3` tag | through v0.4.9 | 56 fixtures / 728 golden artifacts | Previously published prerelease and frozen historical evidence |
-| `v0.2.0-rc.4` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Latest published prerelease and frozen exact-commit evidence |
+| `v0.2.0-rc.4` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Previously published prerelease and frozen exact-commit evidence |
 | `v0.2.0` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Published non-prerelease at green commit `68b8c48`; frozen exact-commit evidence |
+| `v0.3.0-rc.1` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Current published prerelease at green commit `90a0f5f`; eight SDK assets and exact-commit synthetic evidence |
 
 The Contract wire and package identity remains `0.4.0`; v0.4.10 is the latest
-additive patch ledger entry. The current source and SDK are configured for
-candidate `v0.3.0-rc.1`. Its [distribution guide](sdk-distribution.md) separates
-compiled Android modules from source-distributed Swift and Unity. Publication
-requires a matching annotated tag, exact-commit full CI and Release assets;
-the version string alone is not a distribution receipt.
+additive patch ledger entry. The published SDK version is `0.3.0-rc.1`.
+Its [distribution guide](sdk-distribution.md) separates compiled Android
+modules from source-distributed Swift and Unity. Publication has a matching
+annotated tag, exact-commit full CI and verified Release assets; later `main`
+commits do not alter this record or substitute for its evidence.
 The rc.4 tag, GitHub prerelease, and exact-commit platform evidence remain
 frozen at `2a2f6b5`; the stable v0.2.0 record is independently frozen at
 `68b8c48`. A version string alone never proves publication or exact-commit
@@ -162,12 +166,10 @@ lists, fixed-label metrics, and that health view. Lease expiry can still repeat 
 operation; live quota allocation and distributed pacing for other provider
 paths remain separate operational work.
 
-1. preserve the rc.4 notes, SDK identities, SBOMs, bundle paths, tag, and
-   evidence manifest as one immutable historical release record while keeping
-   v0.2.0 bound to its own source, SBOM, bundle, tag, and evidence;
+1. preserve each published version's notes, SDK identities, SBOMs, bundle
+   paths, tag and evidence as one immutable record, including v0.3.0-rc.1;
 2. preserve the server-event, operator-webhook, and bulk-export key, replay,
-   egress, privacy, and durable-queue invariants while auditing other
-   high-impact compatibility gaps;
+   egress, privacy, and durable-queue invariants in future product changes;
 3. preserve bounded tenant concurrency, Google conversion distributed pacing
    and operator-visible delivery health,
    and the AdServices, integrity, Google Play, and commerce read-back claim-
@@ -178,6 +180,10 @@ paths remain separate operational work.
 5. ensure every durable runtime queue can independently make its tenant
    discoverable to the worker before a tenant RLS context exists;
 6. preserve the current synthetic/operator evidence distinction.
+
+These are preservation requirements, not another automatic audit backlog.
+The published integration batch is complete. Select any subsequent feature by
+its user outcome and give it a separate, narrow synthetic acceptance scope.
 
 Private real-data, real-device, and live-provider work is optional operator work
 and is not required to continue repository-only hardening.

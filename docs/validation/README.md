@@ -11,6 +11,9 @@ For the current checkout, use the disposable pilot and gates in
 [Getting started](../getting-started.md) and [Development](../development.md).
 Their result applies only to the exact source revision that ran them.
 
+The [v0.3.0-rc.1 publication receipt](v0.3.0-rc.1-publication.md) records
+full CI and eight verified public SDK assets at tagged commit `90a0f5f`.
+It does not apply to later source changes or production operation.
 The v0.2.0 evidence manifest is the frozen public record for green commit
 `68b8c48`, identified by the annotated tag and
 [GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.2.0).
@@ -19,7 +22,8 @@ The rc.4 evidence manifest remains release evidence only for tagged commit
 
 ## Tagged and historical repository evidence
 
-- [Configured v0.3.0-rc.1 candidate evidence requirements](v0.3.0-rc.1-synthetic-evidence.md)
+- [v0.3.0-rc.1 public SDK receipt](v0.3.0-rc.1-publication.md)
+- [v0.3.0-rc.1 frozen evidence requirements](v0.3.0-rc.1-synthetic-evidence.md)
 
 - [v0.2.0 synthetic evidence](v0.2.0-synthetic-evidence.md)
 - [v0.2.0-rc.4 synthetic evidence](v0.2.0-rc.4-synthetic-evidence.md)

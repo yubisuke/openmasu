@@ -17,6 +17,7 @@ private provider material.
 | Send events from an app backend | [Server-to-server events](server-to-server-events.md) |
 | Use backend receipt or report HTTP from another tool | [Limited OpenAPI contract and client example](api/README.md) |
 | Download and integrate a versioned SDK | [SDK distribution](sdk-distribution.md) |
+| Check the published SDK's exact source and download evidence | [v0.3.0-rc.1 publication receipt](validation/v0.3.0-rc.1-publication.md) |
 | Deliver accepted events to an operator receiver | [Operator event webhooks](operator-event-webhooks.md) |
 | Deliver deterministic event files to operator storage | [Operator bulk event exports](operator-bulk-exports.md) |
 | Run daily cohort or calendar metrics | [Scheduled metric runs](scheduled-metrics.md) |
