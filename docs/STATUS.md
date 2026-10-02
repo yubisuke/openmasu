@@ -238,16 +238,18 @@ connection proves StoreKit delivery, live roots or accounting proceeds.
 Finer advertising grain and separate re-engagement outcomes
 (#187-#188) remain scoped follow-ups. An additive contract and opt-in metric
 profile now link a cancellation to its previously admitted refund, preserving
-old definitions and saved runs. The verified-provider connection remains a
-separate follow-up ([#209](https://github.com/yubisuke/openmasu/issues/209)); an
-unlinked reversed row still does not undo a settled deduction. A forward-only runtime fix now permits
+old definitions and saved runs. The verified App Store worker connects a
+uniquely identified prior refund to this profile and the existing late-correction
+job ([#209](https://github.com/yubisuke/openmasu/issues/209)). Missing targets retry;
+ambiguous partial-refund targets remain explicitly unavailable. An unlinked
+reversed row still does not undo a settled deduction. A forward-only runtime fix now permits
 schedule re-registration over identical inputs while preserving run-ID
 uniqueness, old evidence, exact replay and explicit-only supersession
 ([#200](https://github.com/yubisuke/openmasu/issues/200)). The reference retention
 numerator now uses that metric's selected and fraud-filtered cohort, matching
 Python/SQL rather than counting a different population
 ([#202](https://github.com/yubisuke/openmasu/issues/202)). Neither fix rewrites
-old saved runs. Three scoped follow-up slices remain incomplete. Existing
+old saved runs. Two scoped follow-up slices remain incomplete. Existing
 component evidence and the published v0.3.0-rc.1 record remain unchanged;
 neither proves these remaining connections.
 

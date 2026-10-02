@@ -20,7 +20,7 @@ import { googleServiceAccountAccessToken } from "./google-service-account.js";
 import { callAppleStoreApi, type AppleStoreApiCredentials } from "./apple-store-api.js";
 import type { CandidateAttempt } from "@openmasu/attribution-core";
 import { activeApplePurchaseAnchor, readApplePurchaseIntent } from "../../runtime/src/apple-purchase-binding.js";
-import { projectAppleTransaction } from "./apple-financial-projection.js";
+import { projectAppleTransaction, type AppleRefundReversal } from "./apple-financial-projection.js";
 
 type JsonObject = Record<string, unknown>;
 type ReadbackRow = {
@@ -435,7 +435,7 @@ export async function processCommerceReadbacks(
       }
       const envelope = parse(raw, "apple_envelope");
       let bundleId: string, environment: "Sandbox" | "Production", appAppleId: number | undefined, transactionId: string;
-      let refundReversal = false;
+      let reversal: AppleRefundReversal | undefined;
       if (row.event_kind === "sdk_transaction_submitted") {
         if (envelope.format !== "apple_sdk_transaction_v1") throw new Error("apple_sdk_evidence_invalid");
         const source = await withCurrentClaim(pool,row,async client => {
@@ -464,7 +464,13 @@ export async function processCommerceReadbacks(
         const normalized = normalizeAppleNotification(compact, options.verifyAppleSignedData, {
           bundleId, environment, ...(appAppleId === undefined ? {} : { appAppleId }),
         });
-        refundReversal = normalized.event.financialEffect === "refund_reversal";
+        if (normalized.event.financialEffect === "refund_reversal") {
+          reversal = {
+            transaction: normalizeAppleTransaction(string(data.signedTransactionInfo,"apple_signed_transaction",256*1024),
+              options.verifyAppleSignedData,{ bundleId,environment }),
+            effectiveAt: normalized.event.effectiveAt, notificationDigest: row.notification_digest,
+          };
+        }
         transactionId = string(normalized.transaction?.originalTransactionId ?? normalized.transaction?.transactionId, "apple_transaction_id", 128);
       }
       if (!new Set(["Sandbox", "Production"]).has(String(environment))
@@ -500,16 +506,13 @@ export async function processCommerceReadbacks(
         const signed = string(value,"apple_signed_transaction",256*1024);
         return { signed, transaction: normalizeAppleTransaction(signed,options.verifyAppleSignedData!,{ bundleId,environment }) };
       }).sort((a,b) => sha256(a.transaction.transactionId).localeCompare(sha256(b.transaction.transactionId)));
-      for (const { transaction } of transactions) {
+      for (const { transaction } of reversal ? [] : transactions) {
         const transactionDigest = sha256(transaction.transactionId);
         const originalDigest = sha256(transaction.originalTransactionId);
         const revoked = transaction.revocationAt !== undefined;
-        const financialEffect = refundReversal
-          ? "refund_reversal" as const
-          : transaction.refund ? "refund" as const : transaction.purchase ? "purchase" as const : "none" as const;
+        const financialEffect = transaction.refund ? "refund" as const : transaction.purchase ? "purchase" as const : "none" as const;
         lifecycle.push({
-          eventKind: financialEffect === "refund_reversal" ? "refund_reversal_verified"
-            : revoked ? "refund_history_verified" : "transaction_history_verified",
+          eventKind: revoked ? "refund_history_verified" : "transaction_history_verified",
           providerEventDigest: transactionDigest,
           transactionDigest, originalTransactionDigest: originalDigest,
           financialEffect, environment,
@@ -518,6 +521,22 @@ export async function processCommerceReadbacks(
       }
       const createdReferences: string[] = [];
       const project = async (client: PoolClient) => {
+        if (reversal) {
+          // A series history can contain many renewals. Only the transaction
+          // explicitly named by the verified reversal is eligible, ever.
+          const matching = [...new Map(transactions.filter(entry => entry.transaction.transactionId === reversal!.transaction.transactionId)
+            .map(entry => [sha256(JSON.stringify(entry.transaction)),entry])).values()];
+          if (!matching.length) return undefined;
+          const result = matching.length !== 1 ? "refund_reversal_history_ambiguous"
+            : await projectAppleTransaction({ pool,client,store: payloadStore,tenantId: row.tenant_id,appId: row.app_id,
+              ...matching[0],now,reversal,createdReferences });
+          await appendLifecycleFact(client,row,{ eventKind: result,
+            financialEffect: ["refund_reversal_projected","refund_reversal_already_projected"].includes(result) ? "refund_reversal" : "none",
+            environment,transactionDigest: sha256(reversal.transaction.transactionId),
+            originalTransactionDigest: sha256(reversal.transaction.originalTransactionId),
+            providerEventDigest: sha256(`${row.notification_digest}\0${result}`),effectiveAt: reversal.effectiveAt,now });
+          return result;
+        }
         for (const { transaction } of transactions) {
           await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`apple-purchase:${sha256(transaction.transactionId)}`]);
         }
@@ -527,7 +546,7 @@ export async function processCommerceReadbacks(
           - Number(a.transaction.appAccountToken !== undefined));
         for (const { signed, transaction } of bindingOrder) {
           const result = await projectAppleTransaction({ pool,client,store: payloadStore,tenantId: row.tenant_id,appId: row.app_id,
-            transaction,signed,now,refundReversal,createdReferences });
+            transaction,signed,now,createdReferences });
           await appendLifecycleFact(client,row,{ eventKind: result, financialEffect: "none", environment,
             transactionDigest: sha256(transaction.transactionId), originalTransactionDigest: sha256(transaction.originalTransactionId),
             providerEventDigest: sha256(`${sha256(signed)}\0${result}`), effectiveAt: now.toISOString(),now });
@@ -537,19 +556,31 @@ export async function processCommerceReadbacks(
       try {
         const nextRevision = page.hasMore === true ? string(page.revision,"apple_revision",4096) : undefined;
         const committed = await withCurrentClaim(pool, row, async (client) => {
-          await project(client);
+          const projection = await project(client);
           for (const fact of lifecycle) await appendLifecycleFact(client, row, fact);
-          if (nextRevision !== undefined) {
+          const retryReversal = reversal && ((projection === undefined && nextRevision === undefined)
+            || ["transaction_unbound","refund_reversal_target_missing","refund_reversal_history_stale"].includes(projection ?? ""));
+          if (retryReversal) {
+            if (projection === undefined) await appendLifecycleFact(client,row,{ eventKind: "refund_reversal_transaction_unavailable",
+              financialEffect: "none",environment,providerEventDigest: sha256(`${row.notification_digest}\0transaction_unavailable`),
+              effectiveAt: reversal!.effectiveAt,now });
+            // A late purchase/refund may appear earlier in a newly read history.
+            // Retry from its start rather than pinning a stale final-page cursor.
+            await client.query("UPDATE ephemeral.commerce_provider_readbacks SET cursor_ref=NULL WHERE readback_id=$1::uuid",[row.readback_id]);
+            await client.query(`UPDATE control.commerce_backfill_checkpoints SET cursor_ref=NULL,updated_at=$4
+              WHERE tenant_id=$1 AND app_id=$2 AND provider='app_store' AND stream=$3`,
+            [row.tenant_id,row.app_id,checkpointStream(row),now.toISOString()]);
+          } else if (nextRevision !== undefined && (!reversal || projection === undefined)) {
             nextRef = await payloadStore.write(
               { tenantId: row.tenant_id, appId: row.app_id, objectId: `apple-commerce-cursor-${row.readback_id}-${row.attempts}` },
               Buffer.from(JSON.stringify({ revision: nextRevision }), "utf8"),
             );
             const updated = await client.query(
               `UPDATE ephemeral.commerce_provider_readbacks
-                  SET cursor_ref=$4,attempts=0,next_attempt_at=$5,last_status=200,
+                  SET cursor_ref=$4,attempts=CASE WHEN $7::boolean THEN attempts ELSE 0 END,next_attempt_at=$5,last_status=200,
                       claim_token=NULL,claimed_until=NULL
                 WHERE tenant_id=$1 AND app_id=$2 AND readback_id=$3::uuid AND claim_token=$6::uuid`,
-              [row.tenant_id, row.app_id, row.readback_id, nextRef, now.toISOString(), row.claim_token],
+              [row.tenant_id, row.app_id, row.readback_id, nextRef, now.toISOString(), row.claim_token, reversal !== undefined],
             );
             if (updated.rowCount !== 1) throw new Error("commerce_readback_claim_lost_during_checkpoint");
             await client.query(
@@ -562,9 +593,10 @@ export async function processCommerceReadbacks(
             await finish(client, row, true, now);
           }
           if (row.cursor_ref) await payloadStore.purge(row.cursor_ref);
-          return true;
+          return retryReversal ? "retry" as const : "processed" as const;
         });
         if (!committed) continue;
+        if (committed === "retry") { record(await retryOrFail(pool,payloadStore,row,now)); continue; }
       } catch (error) {
         if (nextRef) await payloadStore.purge(nextRef);
         for (const reference of createdReferences) await payloadStore.purge(reference);

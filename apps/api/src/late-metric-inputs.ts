@@ -7,7 +7,7 @@ type Any = Record<string, any>;
 type InputRow = {
   record_id: string; payload_sha256: string; event_name: string; received_at: string;
   lifecycle: string; logical_event_id: string | null; installation_id: string | null;
-  occurred_at: string | null; financial_status: string | null; target_available: boolean;
+  occurred_at: string | null; financial_status: string | null; target_available: boolean; refund_reversal: boolean;
 };
 export type LateSelection = {
   rows: { metric_run_id: string; replay: Any | null; safe_reason: string | null }[];
@@ -37,12 +37,23 @@ export async function selectLateMetricInputs(
        raw.payload_lifecycle_status AS lifecycle,logical.logical_event_id,
        CASE raw.event_name WHEN 'ad_revenue' THEN revenue.installation_id
          WHEN 'purchase' THEN purchase.installation_id WHEN 'refund' THEN target.installation_id END AS installation_id,
-       coalesce(revenue.occurred_at,purchase.occurred_at,refund.occurred_at) AS occurred_at,
+       coalesce(revenue.occurred_at,purchase.occurred_at,
+         CASE WHEN refund.artifact ? 'reverses_refund_record_id' THEN cancelled.occurred_at ELSE refund.occurred_at END) AS occurred_at,
+       coalesce(refund.financial_status='reversed' AND refund.artifact ? 'reverses_refund_record_id',false) AS refund_reversal,
        coalesce(purchase.financial_status,refund.financial_status) AS financial_status,
        (raw.event_name<>'refund' OR (target.financial_status='settled'
          AND refund.installation_id=target.installation_id AND refund.currency=target.currency
          AND refund.occurred_at_ts>=target.occurred_at_ts AND target_raw.received_at<=$3
-         AND target_raw.payload_lifecycle_status='available')) IS TRUE AS target_available
+         AND target_raw.payload_lifecycle_status='available'
+         AND (refund.financial_status<>'reversed' OR (
+           cancelled.financial_status='settled' AND cancelled.correction_target_record_id=target.record_id
+           AND cancelled.installation_id=refund.installation_id AND cancelled.currency=refund.currency
+           AND cancelled.original_transaction_id=refund.original_transaction_id
+           AND refund.amount_unscaled::numeric * power(10::numeric,cancelled.amount_scale)
+             = cancelled.amount_unscaled::numeric * power(10::numeric,refund.amount_scale)
+           AND refund.occurred_at_ts>=cancelled.occurred_at_ts
+           AND cancelled_raw.received_at<=raw.received_at AND cancelled_raw.received_at<=$3
+           AND cancelled_raw.payload_lifecycle_status='available')))) IS TRUE AS target_available
      FROM ledger.raw_records_current AS raw
      LEFT JOIN ledger.logical_events AS logical ON logical.tenant_id=raw.tenant_id
        AND logical.app_id=raw.app_id AND logical.record_id=raw.record_id
@@ -53,6 +64,12 @@ export async function selectLateMetricInputs(
        AND target.record_id=refund.correction_target_record_id
      LEFT JOIN ledger.raw_records_current AS target_raw ON target_raw.tenant_id=target.tenant_id
        AND target_raw.app_id=target.app_id AND target_raw.record_id=target.record_id
+     LEFT JOIN ledger.logical_events AS cancelled_logical ON cancelled_logical.tenant_id=raw.tenant_id
+       AND cancelled_logical.app_id=raw.app_id AND cancelled_logical.record_id=refund.artifact->>'reverses_refund_record_id'
+     LEFT JOIN ledger.refund_facts AS cancelled ON cancelled.logical_event_id=cancelled_logical.logical_event_id
+       AND cancelled.tenant_id=raw.tenant_id AND cancelled.app_id=raw.app_id
+     LEFT JOIN ledger.raw_records_current AS cancelled_raw ON cancelled_raw.tenant_id=raw.tenant_id
+       AND cancelled_raw.app_id=raw.app_id AND cancelled_raw.record_id=cancelled_logical.record_id
      WHERE raw.tenant_id=$1 AND raw.app_id=$2
        AND (($4::text[] IS NOT NULL AND raw.record_id=ANY($4::text[]))
          OR ($4::text[] IS NULL AND raw.event_name IN ('ad_revenue','purchase','refund')
@@ -68,7 +85,7 @@ export async function selectLateMetricInputs(
       : !["ad_revenue", "purchase", "refund"].includes(row.event_name) ? "unsupported_input"
       : row.received_at > request.watermark ? "after_watermark"
       : !row.installation_id || !row.occurred_at || !row.target_available
-        || (row.event_name !== "ad_revenue" && row.financial_status !== "settled") ? "non_contributing" : "eligible";
+        || (row.event_name !== "ad_revenue" && row.financial_status !== "settled" && !row.refund_reversal) ? "non_contributing" : "eligible";
     counts[reason] = (counts[reason] ?? 0) + 1;
     return reason === "eligible";
   });
@@ -113,7 +130,7 @@ export async function selectLateMetricInputs(
       const impacted = await client.query(
         `WITH acquisition AS (SELECT * FROM (${selectedAcquisitionSql}) AS selected WHERE $7::boolean)
          SELECT DISTINCT changed.record_id FROM jsonb_to_recordset($4::jsonb)
-           AS changed(record_id text,event_name text,installation_id text,received_at text,occurred_at text)
+           AS changed(record_id text,event_name text,installation_id text,received_at text,occurred_at text,refund_reversal boolean)
          JOIN ledger.install_facts AS install ON install.tenant_id=$1 AND install.app_id=$2
            AND install.installation_id=changed.installation_id
          JOIN ledger.logical_events AS logical ON logical.logical_event_id=install.logical_event_id
@@ -125,6 +142,7 @@ export async function selectLateMetricInputs(
            ORDER BY candidate.decided_at DESC,candidate.attribution_id DESC LIMIT 1) AS attribution ON true
          ${selectedClickJoinSql("$7", "$8")}
          WHERE changed.received_at>$12 AND raw.received_at<=$3 AND raw.payload_lifecycle_status='available'
+           AND (NOT changed.refund_reversal OR $13::boolean)
            AND ($11='total_net_revenue'
              OR ($11='purchase_net_revenue' AND changed.event_name IN ('purchase','refund'))
              OR ($11='revenue' AND changed.event_name='ad_revenue'))
@@ -140,7 +158,8 @@ export async function selectLateMetricInputs(
          LIMIT 101`, [scope.tenantId, scope.appId, request.watermark, JSON.stringify(eligible),
           JSON.stringify(row.replay.evaluation.grouping), metric.definition.window.day,
           metric.acquisition_basis === "selected_first_party_click", "after", metric.aggregation_time_zone,
-          metric.fraud_policy ?? "gross", metric.definition.numerator, row.watermark]);
+          metric.fraud_policy ?? "gross", metric.definition.numerator, row.watermark,
+          metric.refund_reversal_policy === "cancel_target_refund_at_watermark"]);
       if (!impacted.rowCount) continue;
       for (const match of impacted.rows) matchedRecords.add(match.record_id);
       if (row.pending) reason = "already_pending";

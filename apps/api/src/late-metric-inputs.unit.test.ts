@@ -4,7 +4,7 @@ import { it } from "node:test";
 import { supportsLateMetric } from "./late-metric-inputs.js";
 
 it("restricts late-input selection to saved install-cohort revenue LTV and ROAS definitions without rewriting their profiles", () => {
-  for (const fixture of ["33-stage-b-cohort-metrics", "58-selected-native-acquisition", "59-disjoint-cost-grains", "60-selected-commerce"]) {
+  for (const fixture of ["33-stage-b-cohort-metrics", "58-selected-native-acquisition", "59-disjoint-cost-grains", "60-selected-commerce", "62-explicit-refund-reversal"]) {
     const input = JSON.parse(readFileSync(`fixtures/v0.4/${fixture}/input.json`, "utf8"));
     for (const metric of input.metric_definitions) {
       const replay = { metric_definition: metric, evaluation: { grouping: { cohort_date: "2026-08-06" } } };
