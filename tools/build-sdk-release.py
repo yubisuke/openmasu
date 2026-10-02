@@ -492,6 +492,33 @@ def verify_bundle(
                 )
 
 
+def write_release_assets(bundle: Path, output: Path, revision: str, version: str) -> None:
+    """Wrap an already verified, same-commit CI bundle without rebuilding it."""
+    verify_bundle(bundle, expected_revision=revision, expected_version=version)
+    if output.exists():
+        raise RuntimeError("Release asset output already exists; do not replace published candidates")
+    files = sorted(path for path in bundle.rglob("*") if path.is_file())
+    if any(path.is_symlink() for path in bundle.rglob("*")):
+        raise RuntimeError("Release bundle contains a symbolic link")
+    output.mkdir(parents=True)
+    with zipfile.ZipFile(output / f"openmasu-sdk-{version}.zip", "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        for path in files:
+            name = f"openmasu-sdk-{version}/{path.relative_to(bundle).as_posix()}"
+            info = zipfile.ZipInfo(name, FIXED_ZIP_TIME)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            info.create_system = 3
+            archive.writestr(info, path.read_bytes())
+    for name in [f"com.openmasu.sdk-{version}.tgz", f"OpenMasuIOS-{version}-source.zip", "release-manifest.json"]:
+        shutil.copyfile(bundle / name, output / name)
+    for path in sorted((bundle / "sbom").glob("*.cdx.json")):
+        shutil.copyfile(path, output / path.name)
+    assets = sorted(path for path in output.iterdir() if path.is_file())
+    (output / "SHA256SUMS").write_text(
+        "".join(f"{file_hash(path)}  {path.name}\n" for path in assets), encoding="utf-8", newline="\n",
+    )
+
+
 def compare_trees(first: Path, second: Path) -> None:
     left = {path.relative_to(first).as_posix(): file_hash(path) for path in first.rglob("*") if path.is_file()}
     right = {path.relative_to(second).as_posix(): file_hash(path) for path in second.rglob("*") if path.is_file()}
@@ -505,8 +532,11 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=ROOT / "build/sdk-release")
     parser.add_argument("--verify-only", type=Path)
     parser.add_argument("--verify-tag", action="store_true")
+    parser.add_argument("--release-assets", type=Path, help="Create downloadable assets from an exact-tag verified CI bundle")
     parser.add_argument("--reproducibility-check", action="store_true")
     arguments = parser.parse_args()
+    if arguments.release_assets and not (arguments.verify_only and arguments.verify_tag):
+        parser.error("--release-assets requires --verify-only and --verify-tag")
     assert_release_worktree()
     if arguments.verify_only:
         revision = source_revision()
@@ -518,6 +548,8 @@ def main() -> None:
         )
         if arguments.verify_tag:
             verify_release_tag(version, revision)
+        if arguments.release_assets:
+            write_release_assets(arguments.verify_only.resolve(), arguments.release_assets.resolve(), revision, version)
         print(f"Verified SDK release bundle: {arguments.verify_only}")
         return
     if arguments.verify_tag:

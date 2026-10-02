@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
+import tempfile
 import unittest
+import zipfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest.mock import patch
@@ -106,6 +109,40 @@ class SdkReleaseDependencyVersionTests(unittest.TestCase):
         self.assertIn("verifySdkSbom", gradle)
         self.assertTrue(run.call_args_list[0].kwargs["check"])
         self.assertTrue(run.call_args_list[1].kwargs["check"])
+
+    def test_download_assets_are_deterministic_and_preserve_the_verified_bundle(self) -> None:
+        version, revision = "9.8.7-future.1", "a" * 40
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / "bundle"
+            bundle.mkdir()
+            (bundle / "sbom").mkdir()
+            for name in [f"com.openmasu.sdk-{version}.tgz", f"OpenMasuIOS-{version}-source.zip", "release-manifest.json", "SHA256SUMS", "sbom/sdk-android.cdx.json"]:
+                (bundle / name).write_bytes(f"synthetic {name}\n".encode())
+            with patch.object(RELEASE, "verify_bundle") as verify:
+                RELEASE.write_release_assets(bundle, root / "first", revision, version)
+                RELEASE.write_release_assets(bundle, root / "second", revision, version)
+                self.assertEqual(verify.call_count, 2)
+                verify.assert_called_with(bundle, expected_revision=revision, expected_version=version)
+            RELEASE.compare_trees(root / "first", root / "second")
+            with zipfile.ZipFile(root / "first" / f"openmasu-sdk-{version}.zip") as archive:
+                for path in bundle.rglob("*"):
+                    if path.is_file():
+                        self.assertEqual(archive.read(f"openmasu-sdk-{version}/{path.relative_to(bundle).as_posix()}"), path.read_bytes())
+            for line in (root / "first" / "SHA256SUMS").read_text().splitlines():
+                digest, name = line.split("  ", 1)
+                self.assertEqual(hashlib.sha256((root / "first" / name).read_bytes()).hexdigest(), digest)
+            with patch.object(RELEASE, "verify_bundle"):
+                with self.assertRaisesRegex(RuntimeError, "already exists"):
+                    RELEASE.write_release_assets(bundle, root / "first", revision, version)
+
+    def test_download_assets_refuse_an_unverified_bundle_before_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch.object(RELEASE, "verify_bundle", side_effect=RuntimeError("manifest revision differs")):
+                with self.assertRaisesRegex(RuntimeError, "manifest revision differs"):
+                    RELEASE.write_release_assets(root / "bundle", root / "assets", "a" * 40, "future")
+            self.assertFalse((root / "assets").exists())
 
 
 if __name__ == "__main__":

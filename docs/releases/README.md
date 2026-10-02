@@ -8,6 +8,7 @@ describe later `main` behavior.
 
 | Tag | Record | Evidence |
 | --- | --- | --- |
+| `v0.3.0-rc.1` candidate | [Release notes](v0.3.0-rc.1.md) | [Synthetic evidence](../validation/v0.3.0-rc.1-synthetic-evidence.md) |
 | `v0.2.0` | [Release notes](v0.2.0.md) | [Synthetic evidence](../validation/v0.2.0-synthetic-evidence.md) |
 | `v0.2.0-rc.4` | [Release notes](v0.2.0-rc.4.md) | [Synthetic evidence](../validation/v0.2.0-rc.4-synthetic-evidence.md) |
 | `v0.2.0-rc.3` | [Release notes](v0.2.0-rc.3.md) | [Synthetic evidence](../validation/v0.2.0-rc.3-synthetic-evidence.md) |

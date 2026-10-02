@@ -19,6 +19,8 @@ The rc.4 evidence manifest remains release evidence only for tagged commit
 
 ## Tagged and historical repository evidence
 
+- [Configured v0.3.0-rc.1 candidate evidence requirements](v0.3.0-rc.1-synthetic-evidence.md)
+
 - [v0.2.0 synthetic evidence](v0.2.0-synthetic-evidence.md)
 - [v0.2.0-rc.4 synthetic evidence](v0.2.0-rc.4-synthetic-evidence.md)
 - [v0.2.0-rc.3 synthetic evidence](v0.2.0-rc.3-synthetic-evidence.md)

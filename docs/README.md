@@ -15,6 +15,7 @@ private provider material.
 | Implement or review contract behavior | [Contract specification](../spec/event-metric-contract-v0.4.md), [Schema versioning](schema-versioning.md), and [Contract v0.4 migration ledger](contract-v0.4-migration.md) |
 | Integrate a platform or provider | [Provider capability matrix](integrations/provider-capability-matrix.md) and [Primary references](references.md) |
 | Send events from an app backend | [Server-to-server events](server-to-server-events.md) |
+| Download and integrate a versioned SDK | [SDK distribution](sdk-distribution.md) |
 | Deliver accepted events to an operator receiver | [Operator event webhooks](operator-event-webhooks.md) |
 | Deliver deterministic event files to operator storage | [Operator bulk event exports](operator-bulk-exports.md) |
 | Run daily cohort or calendar metrics | [Scheduled metric runs](scheduled-metrics.md) |

@@ -18,7 +18,11 @@ they name.
 | `v0.2.0` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Published non-prerelease at green commit `68b8c48`; frozen exact-commit evidence |
 
 The Contract wire and package identity remains `0.4.0`; v0.4.10 is the latest
-additive patch ledger entry. The SDK version configured on `main` is `0.2.0`.
+additive patch ledger entry. The current source and SDK are configured for
+candidate `v0.3.0-rc.1`. Its [distribution guide](sdk-distribution.md) separates
+compiled Android modules from source-distributed Swift and Unity. Publication
+requires a matching annotated tag, exact-commit full CI and Release assets;
+the version string alone is not a distribution receipt.
 The rc.4 tag, GitHub prerelease, and exact-commit platform evidence remain
 frozen at `2a2f6b5`; the stable v0.2.0 record is independently frozen at
 `68b8c48`. A version string alone never proves publication or exact-commit

@@ -18,7 +18,7 @@ public sealed class OpenMasuSample : MonoBehaviour
             Endpoint = endpoint,
             SdkKeyId = sdkKeyId,
             SdkSecret = sdkSecret,
-            WrapperVersion = "unity-sample-0.2.0",
+            WrapperVersion = "unity-sample-0.3.0-rc.1",
         });
         client.StartSession();
 #else

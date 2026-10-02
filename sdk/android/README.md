@@ -5,6 +5,11 @@ events, Google Play Install Referrer, optional Meta Install Referrer, AppLovin
 MAX impression-level revenue, signed delivery, and consent/reset lifecycle. The
 minimum Android API level is 24.
 
+For compiled, version-bound AAR/POM downloads rather than building the entire
+repository, follow [SDK distribution](../../docs/sdk-distribution.md). The
+configured candidate must have its matching verified tag and public assets;
+source setup alone is not publication.
+
 ## Modules
 
 - `core`: installation identity, bounded SQLite queue, HMAC transport, consent,
