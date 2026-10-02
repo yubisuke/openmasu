@@ -38,7 +38,7 @@ in [Project plan](project-plan.md).
 The current contract gate preserves parity across 28 schemas, 8 registries,
 and 57 reviewed synthetic fixtures.
 
-## Current milestone: integration and release coherence
+## Completed milestone: integration and release coherence
 
 This milestone consolidates the existing system rather than adding another
 provider or attribution family.
@@ -92,23 +92,44 @@ completeness, and operational correctness.
 
 ## Next product sequence
 
-The [measurement comparison requirements](integrations/mmp-landscape.md) motivate three
-ordered slices: an [offline same-cohort comparison](cohort-comparison.md) (implemented with synthetic tests) with explicit definitions and
-exact values; integration with saved metric runs and report provenance; then
-durable cost refresh and historical corrections. The offline CLI includes a
-static HTML report and conversion from saved report JSON with input provenance.
-Saved-run semantics, bounded dashboard download, neutral aggregate CSV conversion
-and the integrated first-use journey are implemented. Default-off bounded cost
-refresh and selected correction-driven recalculation are implemented.
-Exact-tag SDK publication is complete for v0.3.0-rc.1, with a
-[public receipt](validation/v0.3.0-rc.1-publication.md). Supported-source upgrades, one single-host
-configuration path, read-only capacity observation and the limited HTTP contract
-are implemented as integration slices. Unknown source/backup combinations are
-refused before mutation; real recovery, deployment and capacity remain operator
-gates. The distribution tool and [consumer guide](sdk-distribution.md) are
-implemented and published for v0.3.0-rc.1 at the exact verified tag.
-Each has a synthetic acceptance gate and requires no live provider
-credentials. Numeric differences alone must never become inferred causal reasons.
+The integration batch in [plan #155](https://github.com/yubisuke/openmasu/issues/155)
+is complete, including [v0.3.0-rc.1 publication](validation/v0.3.0-rc.1-publication.md).
+[Plan #172](https://github.com/yubisuke/openmasu/issues/172) records the next
+eight product slices. All are **planned, not implemented** at selection on
+2026-10-02, based on source `1c7c223`.
+
+The first gap is comparison between a captured OpenMasu calculation and an
+external aggregate. The existing CSV converter records declarations, while the
+comparator requires captured meaning on both sides; its declaration-only mode
+does not bridge the two. The next slice introduces explicit external calculation
+declarations for one supported ROAS family, retaining the different evidence
+levels and requiring opt-in. Unknown or incompatible conditions remain blocked.
+It does not make an external calculation authenticated or independently verified.
+
+| Order | Planned slice | User outcome / exit gate | Project-plan crosswalk |
+| --- | --- | --- | --- |
+| 1 | [External calculation declarations #173](https://github.com/yubisuke/openmasu/issues/173) | A saved elapsed ad-revenue ROAS and a fully declared external calculation can produce exact deltas with explicit mixed evidence; unknown/mismatched conditions cannot | External comparison meaning |
+| 2 | [Dashboard comparison #174](https://github.com/yubisuke/openmasu/issues/174) | Select saved JSON and external CSV/mapping, inspect conditions, compare and save results through SSR using the same pure functions as the CLI | Comparison workflow |
+| 3 | [Attribution reason counts #175](https://github.com/yubisuke/openmasu/issues/175) | Read fixed-watermark install attribution counts by recorded status, method and reason without raw identifiers or inferred causes | Attribution analysis |
+| 4 | [Metric schedule controls #176](https://github.com/yubisuke/openmasu/issues/176) | Register, inspect and disable the existing daily schedules through the dashboard | Daily calculation controls |
+| 5 | [Custom-event conversion #177](https://github.com/yubisuke/openmasu/issues/177) | Measure distinct cohort members reaching one explicit event key and their conversion rate, with contract/evaluator/SQL parity | Cohort outcomes |
+| 6 | [Total-net ROAS evidence #178](https://github.com/yubisuke/openmasu/issues/178) | Explain an existing D30 total-net ROAS from its saved advertising, purchase, refund and cost operands | Commerce calculation evidence |
+| 7 | [Correction controls #179](https://github.com/yubisuke/openmasu/issues/179) | Request a bounded cost-driven recalculation and follow its job and original/replacement run details through the dashboard | Correction workflow |
+| 8 | [Retention matrix #180](https://github.com/yubisuke/openmasu/issues/180) | Read saved retention by cohort date and definition-backed horizon without inventing missing values or combining incompatible series | Cohort presentation |
+
+Slice 2 depends on slice 1. The remaining slices use existing foundations and
+can be implemented independently; the table is the default priority order.
+Slices 7 and 8 are lower priority. Keep each slice in a bounded PR and add
+behavioral evidence to existing suites. The
+[project-plan crosswalk](project-plan.md#next-product-slices) specifies the
+corresponding acceptance focus.
+
+Use the existing PostgreSQL, worker, SSR session/roles and exact arithmetic.
+Do not introduce a comparison-history service, SPA, general funnel builder or
+another metric engine. Tests and checked-in examples remain synthetic. Real
+providers, devices and private shadow pilots are not required. Additional
+adapters, predictive analytics, multi-cloud hosting and another release are
+not selected by this plan. Numeric differences alone never establish causes.
 
 ## Optional operator evidence
 

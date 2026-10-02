@@ -37,7 +37,7 @@ versions were reached. They do not override current sources of truth.
    notes, SBOMs, SDK artifacts, documentation, and CI on the exact commit to be
    tagged.
 
-## Current integration work
+## Implemented integration work
 
 | Workstream | Deliverable | Required evidence |
 | --- | --- | --- |
@@ -75,26 +75,30 @@ versions were reached. They do not override current sources of truth.
 
 ## Next product slices
 
-The product slices are defined in the roadmap: offline same-cohort
-comparison, saved-run/report integration, and durable cost refresh, in that
-order. The offline [comparison CLI](cohort-comparison.md), saved-run meaning
-and bounded dashboard download are implemented with synthetic tests. The [comparison requirements](integrations/mmp-landscape.md) record the
-intended behavior and synthetic acceptance scope. The CLI also emits a static
-HTML report and converts saved report JSON with run provenance. Fixed-selection
-cross-page downloads and neutral aggregate CSV conversion are also implemented.
-The integrated first-use journey and default-off bounded cost refresh are
-implemented. Selected correction-driven recalculation is implemented with bounded
-requests and saved definitions; no automatic all-history recomputation is added.
-The SDK distribution tool and consumer guide are implemented for v0.3.0-rc.1;
-the [exact-tag public asset receipt](validation/v0.3.0-rc.1-publication.md)
-completes its publication gate. Safe upgrades,
-deployment guidance, capacity visibility and the limited HTTP surface now have
-their own narrow implementation and synthetic acceptance scopes.
-Safe upgrades now have a read-only source/backup preflight and one frozen-release
-restore/resume case in the existing backup gate; production recovery remains unverified.
-The single-host deployment guide reuses Compose and keeps normal start/restart
-separate from disposable seeding. Static preflight and the existing isolated
-pilot's no-reseed restart cover configuration and retention, not live TLS or deployment.
+The prior integration batch and SDK publication are complete. The
+[roadmap](roadmap.md#next-product-sequence) and
+[plan #172](https://github.com/yubisuke/openmasu/issues/172) select the following
+work from source `1c7c223` on 2026-10-02. These entries are planned, not
+implementation claims; the inventory above remains the completed foundation.
+
+| Order / issue | Workstream | Narrow deliverable | Acceptance focus |
+| --- | --- | --- | --- |
+| 1 / [#173](https://github.com/yubisuke/openmasu/issues/173) | External comparison meaning | Explicit external declarations for one elapsed ad-revenue ROAS family; retain captured versus declared evidence | Matching declared/captured meaning with opt-in produces known exact deltas; unknown, window/FX/gross-net/rounding mismatches refuse; provenance and legacy behavior remain |
+| 2 / [#174](https://github.com/yubisuke/openmasu/issues/174) | Comparison workflow | Bounded SSR input, condition review and result download using existing converters/comparator | CLI/Web result identity, receipt app scope, input limits, no partial file, no server-side file/history persistence, session and CSRF checks |
+| 3 / [#175](https://github.com/yubisuke/openmasu/issues/175) | Attribution analysis | Reader-only fixed-watermark install counts by status/method/recorded reason | As-of decision selection, no duplicate subject counts, not-recorded distinct from organic, privacy and tenant scope, no raw IDs or mixed aggregate population |
+| 4 / [#176](https://github.com/yubisuke/openmasu/issues/176) | Daily calculation controls | SSR list/register/disable for existing immutable metric schedules | Register to worker checkpoint to disable, existing validation/ownership rules, administer capability, no GET writes |
+| 5 / [#177](https://github.com/yubisuke/openmasu/issues/177) | Cohort outcomes | One explicit custom-event key, distinct D7 cohort converters and conversion rate | Additive contract and derived fixtures, TS/Python/SQL parity, duplicate/window/watermark/privacy rules, key-bound saved meaning and schedule validation |
+| 6 / [#178](https://github.com/yubisuke/openmasu/issues/178) | Commerce calculation evidence | Saved operands for existing D30 total-net ROAS in the same calculation transaction | Advertising plus purchases minus refunds, cost and exact rounding, old-run immutability, redacted/unavailable evidence, existing result parity |
+| 7 / [#179](https://github.com/yubisuke/openmasu/issues/179) | Correction workflow | SSR request/status and links to original/replacement run details using existing bounded recalculation | Cost revision to completion, duplicate request identity, existing bounds/permissions, no second selector or all-history recomputation |
+| 8 / [#180](https://github.com/yubisuke/openmasu/issues/180) | Cohort presentation | Saved retention matrix with dates as rows and definition-backed horizons as columns | Exact values and source links, compatible series only, missing/undefined/zero/maturity and page-boundary distinctions |
+
+The only required dependency between these slices is #173 before #174.
+The other entries can use the existing foundations independently; #179 and
+#180 are lower priority. Reuse current services and suites, and implement one
+bounded user workflow per PR. A non-breaking contract addition must still
+record fixture derivation, migration and evaluator parity. The plan does not
+select another provider adapter, general BI/funnel builder, infrastructure
+service, private pilot or release. Promotion remains a separate decision.
 
 ## Change acceptance
 

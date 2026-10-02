@@ -182,8 +182,13 @@ paths remain separate operational work.
 6. preserve the current synthetic/operator evidence distinction.
 
 These are preservation requirements, not another automatic audit backlog.
-The published integration batch is complete. Select any subsequent feature by
-its user outcome and give it a separate, narrow synthetic acceptance scope.
+The published integration batch is complete. The next
+[planned product sequence](roadmap.md#next-product-sequence), tracked in
+[plan #172](https://github.com/yubisuke/openmasu/issues/172), starts with explicit
+external calculation declarations and a dashboard comparison workflow, then
+adds attribution analysis, calculation controls and cohort outcomes. All eight
+slices are planned; this selection does not change the implemented capability
+table or the published v0.3.0-rc.1 evidence.
 
 Private real-data, real-device, and live-provider work is optional operator work
 and is not required to continue repository-only hardening.
