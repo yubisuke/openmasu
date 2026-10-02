@@ -11,6 +11,7 @@ export function syntheticConversionCases(baseline: Any, native: Any): Conversion
     const input = structuredClone(baseline); change(input); cases.push({ name, input, expected });
   };
   add("three-of-ten", ["300000", "3"]);
+  add("without-grouping", ["300000", "3"], input => { delete input.metric_evaluations[0].grouping; });
   add("irrelevant-duplicate-and-half-open-boundaries", ["300000", "3"], input => {
     const original = input.records.find((row: Any) => row.event_name === "custom_event");
     // Same logical identity is delivered again; it cannot add a converter.

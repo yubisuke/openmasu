@@ -657,8 +657,8 @@ async function customConversionValue(
          WHEN $13::text='converted_installations' THEN converted.value
          ELSE ledger.half_even_div(converted.value * 1000000, totals.size) END::text AS value_unscaled
      FROM totals CROSS JOIN converted`,
-    [scope.tenant_id, scope.app_id, watermark, grouping.campaign_id ?? null, grouping.network ?? null,
-      grouping.country ?? null, true, privacyState, grouping.cohort_date ?? null, grouping.attribution_status ?? null,
+    [scope.tenant_id, scope.app_id, watermark, grouping?.campaign_id ?? null, grouping?.network ?? null,
+      grouping?.country ?? null, true, privacyState, grouping?.cohort_date ?? null, grouping?.attribution_status ?? null,
       definition.fraud_policy ?? "gross", definition.conversion_event_key, definition.definition.calculation],
   );
   return result.rows[0].cohort_size === "0" ? { value_state: "undefined", undefined_reason: "empty_cohort" }
