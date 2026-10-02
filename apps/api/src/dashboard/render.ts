@@ -176,7 +176,11 @@ function metricTable(caption: string, rows: DashboardView["rows"], appId?: strin
       : row.cost_update_state === "input_revised" ? "Cost input revised; this saved value has not been recalculated."
       : row.cost_update_state === "no_recorded_revision" ? "No newer matching cost input recorded (not proof of source completeness)."
       : "Cost revision state unknown.";
-    return `<tr><th scope="row">${escapeHtml(row.metric_name)}</th><td>${escapeHtml(grouping(row.grouping))}<small>Window: see saved run details. Cohort maturity: unknown.</small><small>Run watermark: ${escapeHtml(row.input_received_at_watermark)}</small></td><td>${value}${details}</td><td>${escapeHtml(row.data_freshness)}<small>${escapeHtml(costState)}</small></td><td>${escapeHtml(row.computed_at)}</td><td>${escapeHtml(row.rule_bundle_id)} / ${escapeHtml(row.metric_definition_version)}</td><td>${escapeHtml(row.reproducibility_status)}${row.superseded ? " (superseded)" : ""}</td></tr>`;
+    const lateState = row.late_input_update_state === "recalculation_pending" ? "Late revenue or commerce input; recalculation pending."
+      : row.late_input_update_state === "unavailable" ? "Late-input recalculation unavailable; inspect the request's safe reason."
+      : row.late_input_update_state === "completed" ? "Late-input recalculation completed; the original run is preserved."
+      : "No late-input request recorded (not proof of source completeness).";
+    return `<tr><th scope="row">${escapeHtml(row.metric_name)}</th><td>${escapeHtml(grouping(row.grouping))}<small>Window: see saved run details. Cohort maturity: unknown.</small><small>Run watermark: ${escapeHtml(row.input_received_at_watermark)}</small></td><td>${value}${details}</td><td>${escapeHtml(row.data_freshness)}<small>${escapeHtml(costState)}</small><small>${escapeHtml(lateState)}</small></td><td>${escapeHtml(row.computed_at)}</td><td>${escapeHtml(row.rule_bundle_id)} / ${escapeHtml(row.metric_definition_version)}</td><td>${escapeHtml(row.reproducibility_status)}${row.superseded ? " (superseded)" : ""}</td></tr>`;
   }).join("")}</tbody></table>`;
 }
 

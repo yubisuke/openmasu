@@ -5,7 +5,8 @@ import { acquirePrivacyTenantSessionReadFence, withTenant } from "@openmasu/runt
 import { computeSqlMetricRunsWithClient } from "./metrics/cohort.js";
 
 type Claim = { recalculation_id: string; source_metric_run_id: string; tenant_id: string; app_id: string;
-  replay_digest: string; watermark: string; created_at: string; lease_token: string };
+  replay_digest: string; watermark: string; created_at: string; lease_token: string;
+  trigger_kind: "cost_revision" | "late_events"; source_records: { record_id: string; payload_sha256: string }[] | null };
 
 async function claimNext(pool: Pool, tenantId: string): Promise<Claim | undefined> {
   return withTenant(pool, tenantId, async client => {
@@ -15,7 +16,7 @@ async function claimNext(pool: Pool, tenantId: string): Promise<Claim | undefine
         AND (lease_expires_at IS NULL OR lease_expires_at<=clock_timestamp())`, [tenantId]);
     const next = await client.query<Omit<Claim, "lease_token">>(
       `SELECT item.recalculation_id,item.source_metric_run_id,item.tenant_id,item.app_id,item.replay_digest,
-         job.watermark,job.created_at FROM control.metric_recalculation_items AS item
+         job.watermark,job.created_at,job.trigger_kind,job.source_records FROM control.metric_recalculation_items AS item
        JOIN control.metric_recalculation_jobs AS job USING (tenant_id,app_id,recalculation_id)
        WHERE item.tenant_id=$1 AND item.attempts<3 AND item.state IN ('queued','retry','processing')
          AND item.next_attempt_at<=clock_timestamp() AND (item.lease_expires_at IS NULL OR item.lease_expires_at<=clock_timestamp())
@@ -48,6 +49,23 @@ async function calculate(pool: Pool, claim: Claim): Promise<"completed" | "skipp
     if (!owned.rowCount) { await client.query("COMMIT"); transaction = false; return "fenced"; }
     const pending = await client.query<{ pending_count: string }>("SELECT pending_count FROM control.privacy_deletion_backlog()");
     if (pending.rows[0]?.pending_count !== "0") throw new Error("privacy_pending");
+    if (claim.trigger_kind === "late_events") {
+      const missing = await client.query(`SELECT 1 FROM jsonb_to_recordset($3::jsonb)
+        AS source(record_id text,payload_sha256 text)
+        LEFT JOIN ledger.raw_records_current AS raw ON raw.tenant_id=$1 AND raw.app_id=$2 AND raw.record_id=source.record_id
+        WHERE raw.record_id IS NULL OR raw.payload_lifecycle_status<>'available' OR raw.payload_sha256<>source.payload_sha256
+        LIMIT 1`, [claim.tenant_id, claim.app_id, JSON.stringify(claim.source_records)]);
+      if (missing.rowCount) throw new Error("input_unavailable");
+      const lostEvidence = await client.query(`SELECT 1 FROM ledger.metric_runs AS mr,
+        LATERAL jsonb_array_elements(coalesce(mr.artifact->'evidence_refs','[]'::jsonb)) AS ref
+        LEFT JOIN ledger.raw_records_current AS raw ON raw.tenant_id=$1 AND raw.app_id=$2 AND raw.record_id=ref->>'ref'
+        LEFT JOIN ledger.cost_records AS cost ON cost.tenant_id=$1 AND cost.app_id=$2 AND cost.cost_record_id=ref->>'ref'
+        WHERE mr.tenant_id=$1 AND mr.app_id=$2 AND mr.metric_run_id=$3
+          AND ((raw.record_id IS NOT NULL AND raw.payload_lifecycle_status<>'available')
+            OR (raw.record_id IS NULL AND cost.cost_record_id IS NULL)) LIMIT 1`,
+      [claim.tenant_id, claim.app_id, claim.source_metric_run_id]);
+      if (lostEvidence.rowCount) throw new Error("input_unavailable");
+    }
     const superseded = await client.query(`SELECT 1 FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2
       AND supersedes_metric_run_id=$3`, [claim.tenant_id, claim.app_id, claim.source_metric_run_id]);
     let replacementId: string | null = null;
@@ -96,10 +114,10 @@ export async function processMetricRecalculations(pool: Pool, tenantId: string, 
     if (!claim) break;
     try { counts[await calculate(pool, claim)] += 1; }
     catch (error) {
-      const reason = error instanceof Error && ["privacy_pending", "definition_changed"].includes(error.message)
+      const reason = error instanceof Error && ["privacy_pending", "definition_changed", "input_unavailable"].includes(error.message)
         ? error.message : "calculation_unavailable";
       await withTenant(pool, tenantId, client => client.query(`UPDATE control.metric_recalculation_items
-        SET state=CASE WHEN attempts>=3 OR $6='definition_changed' THEN 'failed' ELSE 'retry' END,
+        SET state=CASE WHEN $6='input_unavailable' THEN 'unavailable' WHEN attempts>=3 OR $6='definition_changed' THEN 'failed' ELSE 'retry' END,
           safe_reason=$6,lease_token=NULL,lease_expires_at=NULL,next_attempt_at=clock_timestamp()+interval '30 seconds',updated_at=clock_timestamp()
         WHERE tenant_id=$1 AND app_id=$2 AND recalculation_id=$3 AND source_metric_run_id=$4 AND lease_token=$5::uuid`,
       [tenantId, claim.app_id, claim.recalculation_id, claim.source_metric_run_id, claim.lease_token, reason]));

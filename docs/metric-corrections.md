@@ -1,4 +1,4 @@
-# Cost Corrections and Bounded Metric Recalculation
+# Input Corrections and Bounded Metric Recalculation
 
 A completed cost import can revise the inputs of an already saved ROAS run.
 An input revision does not prove that a value changed or explain a causal
@@ -66,6 +66,71 @@ snapshot receipt, range, states and safe reasons. It excludes replay bodies,
 credentials, raw evidence references and claim tokens. Other apps/tenants and
 unknown import receipts cannot reveal the private source.
 
+## Late advertising revenue, purchases and refunds
+
+The same `operate`-authorized POST accepts `trigger_kind: late_events`. It does
+not fabricate a cost-import receipt. Supply either 1–100 `source_record_ids`
+or an explicit receipt interval of at most 24 hours, exclusive at the start
+and inclusive at the end. The receipt cutoff must not exceed `watermark`.
+The following bounded query discovers accepted revenue/commerce inputs; it
+does not require downloading their payloads or transaction identifiers:
+
+```json
+{
+  "trigger_kind": "late_events",
+  "source_received_from": "2026-08-12T00:00:00.000Z",
+  "source_received_to": "2026-08-13T00:00:00.000Z",
+  "date_from": "2026-08-06",
+  "date_to": "2026-08-06",
+  "watermark": "2026-08-13T00:00:00.000Z",
+  "metric_names": ["d30_total_net_roas"]
+}
+```
+
+These values are synthetic. The cohort range is inclusive and at most 31 days.
+An interval containing over 100 source records or a selection containing over
+100 candidate unsuperseded runs fails with `metric_recalculation_input_limit`
+or `metric_recalculation_selection_limit`; no partial job is saved. Narrow the
+input interval, cohort range or metric list instead of silently truncating it.
+Selection has a 15-second SQL statement limit and no all-history option.
+
+Initial support is saved installation-anchored, elapsed-window advertising
+ROAS and total-net ROAS. Canonical accepted `ad_revenue`, settled `purchase`
+and settled `refund` projections are considered. A refund must have the existing
+same-installation/currency settled purchase target. Unknown/unbound commerce,
+pending or reversed amounts, non-canonical deliveries and future receipts do
+not trigger calculation. Receipt acceptance is not independent provider proof.
+
+Impact selection reuses selected first-party click evidence and the saved
+definition's cohort, attribution status, gross/net policy and half-open window.
+It does not infer a campaign from arbitrary clicks. Refunds affect total-net
+ROAS, not advertising-only ROAS. Legacy, selected-acquisition, disjoint-cost
+and selected-commerce profiles retain their original replay definitions and FX.
+
+The accepted job fixes its input receipt digest, candidate metadata, original
+run IDs/replay digests and watermark. Status responses expose aggregate
+`input_status_counts`, `selection_status` and `source_snapshot_digest`, never
+source record/transaction IDs or payloads. `eligible` means accepted input;
+`matched_to_supported_runs` and `not_matched_to_supported_runs` describe the
+bounded definition selection, not universal contribution or completeness.
+`no_eligible_inputs` and `no_matching_runs` are distinct recorded results.
+Unavailable replay, unsupported definitions, unavailable historical evidence
+and another pending request appear as `unavailable` items with separate safe
+reasons. An overlapping pending request is not silently retargeted to a future
+replacement: inspect the first job, then submit a new bounded request.
+
+Late-input jobs also refuse removed source or historical evidence at execution,
+using `input_unavailable`. They do not rebuild missing evidence from current
+values. Original artifacts stay immutable. `late_input_update_state` is
+appended to metric JSON/CSV and the dashboard; it distinguishes pending,
+completed, unavailable and `no_recorded_request`. The latter is not a claim
+that no late input exists. Cost-specific labels continue to describe cost only.
+
+**Automation boundary:** detection requires this explicit bounded API request.
+The existing worker automatically processes the accepted items. Ingestion
+does not enqueue unlimited history work, and daily schedule checkpoints are
+not rewound. No new scheduler, provider call, metric engine or service is added.
+
 ## Execution and recovery
 
 The existing worker checks explicit requests each tenant cycle. It processes
@@ -113,6 +178,11 @@ The existing Runtime CI runs `bounded cost correction recalculation` tests for:
 - redacted/purged revenue exclusion and historical/affected snapshot refusal.
 
 Unit gates cover closed requests, range/work bounds and honest dashboard labels.
+The `bounded late revenue and commerce recalculation` Runtime suite exercises
+purchase USD 10 / cost USD 10 = 1, late advertising USD 20 = 3, then late refund
+USD 4 = 2.6; unchanged prior runs, selected source, unrelated/window/future
+inputs, canonical retry, concurrent workers, expired claims, pending conflicts,
+missing replay, limits and deletion fences. The contract goldens are unchanged.
 The role matrix covers both new control tables. No contract, reviewed golden,
 dependency, service or physical-device/provider requirement is added.
 

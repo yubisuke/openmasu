@@ -1373,8 +1373,8 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
             }
           } catch (error) {
             const reason = publicReason(error, "metric_recalculation_failed");
-            json(response, error instanceof AppNotFoundError || reason === "cost_revision_not_found" ? 404 : 400,
-              { error: error instanceof AppNotFoundError || reason === "cost_revision_not_found" ? "not_found" : reason });
+            const notFound = error instanceof AppNotFoundError || ["cost_revision_not_found", "metric_revision_not_found"].includes(reason);
+            json(response, notFound ? 404 : 400, { error: notFound ? "not_found" : reason });
           }
           return;
         }

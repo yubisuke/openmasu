@@ -102,7 +102,9 @@ review and subsequent synthetic reproductions on
 fixture 58, and native-inbox/SQL acceptance tests. Explicit safe-cost definitions
 add dated revision selection and overlap refusal, exercised by fixture 59.
 Explicit commerce definitions connect that selected source to purchase/refund
-and total-net cohorts, exercised by fixture 60. Thirteen slices remain planned.
+and total-net cohorts, exercised by fixture 60. Bounded explicit late-input
+requests now connect revenue and commerce arrivals to saved-run corrections.
+Twelve slices remain planned.
 
 The first priority is a connected measurement path: tracking link, SDK install,
 selected acquisition source, campaign revenue and cost, daily ROAS, late-input
@@ -114,7 +116,7 @@ comparison screens alone does not establish that end-to-end path.
 | Source implemented / [#182](https://github.com/yubisuke/openmasu/issues/182) | Selected acquisition source reaches install cohorts | Opt-in definitions, fixture 58 and native inbox/SQL tests cover campaign installs/ad-revenue ROAS, fixed snapshots and privacy / Acquisition projection |
 | Source implemented / [#183](https://github.com/yubisuke/openmasu/issues/183) | Overlapping cost grains cannot inflate the denominator | Explicit v0.4.12 selection accepts disjoint partitions and dated revisions, refuses overlapping candidates, and binds evidence/replay/comparison without changing historical definitions / Cost grain safety |
 | Source implemented / [#191](https://github.com/yubisuke/openmasu/issues/191) | Selected acquisition also reaches purchase and total-net cohorts | Explicit v0.4.13 definitions, fixture 60 and SQL tests reuse selected source and safe costs without reinterpreting old definitions / Commerce acquisition projection |
-| Next / [#184](https://github.com/yubisuke/openmasu/issues/184) | Late advertising revenue, purchases and refunds can correct past runs | Bounded affected-run selection and immutable replay through the existing worker, with visible pending/unavailable states / Late-input correction |
+| Source implemented / [#184](https://github.com/yubisuke/openmasu/issues/184) | Late advertising revenue, purchases and refunds can correct past runs | Explicit bounded receipt discovery or record selection, immutable replay through the existing worker, and visible pending/unavailable states / Late-input correction |
 | Next / [#185](https://github.com/yubisuke/openmasu/issues/185) | New campaigns enter daily calculation without manual enumeration | Bounded opt-in discovery with a frozen per-job target set, exact retry and explicit unknown/empty/overflow states / Campaign discovery |
 | Follow-up / [#186](https://github.com/yubisuke/openmasu/issues/186) | Verified App Store purchases reach installation cohorts | Authenticated, verified binding and purchase/refund projection with deletion and duplicate safety; no inferred identity / App Store purchase binding |
 | Follow-up / [#187](https://github.com/yubisuke/openmasu/issues/187) | Ad-group and creative outcomes share the cost grain | Selected-source dimensions and matching cost definitions without allocating parent cost by guesswork / Detailed acquisition grain |

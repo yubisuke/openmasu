@@ -80,7 +80,7 @@ The prior integration batch and SDK publication are complete. The
 [plan #172](https://github.com/yubisuke/openmasu/issues/172) select the following
 work from source `1c7c223` on 2026-10-02, expanded after inspecting `ce7b056`
 to connect the core measurement path before improving its screens. These
-entries identify planned work except the selected-acquisition and safe-cost slices
+entries identify planned work except the source-implemented slices
 marked below. The inventory above remains the completed component foundation,
 not proof that every path is connected.
 
@@ -98,13 +98,13 @@ v0.4.13 commerce definitions and fixture 60.
 | Source implemented / [#182](https://github.com/yubisuke/openmasu/issues/182) | Acquisition projection | Explicit v0.4.11 definitions use selected first-party Install Referrer campaign/network; historical definitions retain recorded-dimension semantics | Native-shaped install through ingestion to campaign installs/ad-revenue ROAS; selected evidence only, fixed watermark, privacy and TS/Python/SQL parity |
 | Source implemented / [#183](https://github.com/yubisuke/openmasu/issues/183) | Cost grain safety | Explicit v0.4.12 definitions detect overlapping campaign/ad-group/country cost scopes and refuse ambiguous denominators | Fixture 59 and importer/SQL tests cover overlap, disjoint siblings, dated as-of revisions, saved meaning and immutable old runs |
 | Source implemented / [#191](https://github.com/yubisuke/openmasu/issues/191) | Commerce acquisition projection | Explicit v0.4.13 definitions reuse selected source and safe costs for purchase/refund/total-net | Fixture 60 and SQL parity fix advertising 20 plus purchase 10 minus refund 4 over cost 10 at total-net 26 and ROAS 2.6, with unchanged old runs and privacy boundaries |
-| Next / [#184](https://github.com/yubisuke/openmasu/issues/184) | Late-input correction | Bounded advertising-revenue/purchase/refund impact selection uses existing recalculation jobs | Late arrival to new immutable run, exact replay and deduplication, visible bounds/unsupported evidence and deletion fencing |
+| Source implemented / [#184](https://github.com/yubisuke/openmasu/issues/184) | Late-input correction | Explicit bounded receipt discovery or source IDs select advertising-revenue/purchase/refund impact through existing recalculation jobs | Late arrival to new immutable run, exact replay and deduplication, visible bounds/unsupported evidence and deletion fencing; no implicit all-history enqueue |
 | Next / [#185](https://github.com/yubisuke/openmasu/issues/185) | Campaign discovery | Opt-in bounded campaign target discovery for existing daily install-cohort schedules | New campaign appears without editing a list, frozen target-set replay, cost-only/unknown/empty/overflow handling, unchanged manual schedules |
 | Follow-up / [#186](https://github.com/yubisuke/openmasu/issues/186) | App Store purchase binding | Authenticated installation-to-verified-transaction binding and existing purchase/refund projections | Synthetic signed/read-back path reaches cohort revenue; unbound stays unbound, duplicate and privacy safety, no live Store claim |
 | Follow-up / [#187](https://github.com/yubisuke/openmasu/issues/187) | Detailed acquisition grain | Selected ad-group/creative dimensions and same-grain cost support | Additive fixture-backed parity, unknown dimensions, overlapping cost refusal and no estimated parent-cost allocation |
 | Follow-up / [#188](https://github.com/yubisuke/openmasu/issues/188) | Re-engagement outcomes | Separate first-party engagement conversion and advertising revenue series | Explicit anchor/window/credit policy, duplicate protection, unchanged acquisition runs and separation from signed aggregate evidence; no initial re-engagement ROAS claim |
 
-Build on #182/#183, then implement #191 and #184/#185 before the workflow improvements below.
+The first four core slices are implemented; complete #185 before the workflow improvements below.
 #184/#185 reuse #182/#183, with commerce cohorts connected by #191; #186 depends on #184, #187 on #182/#183, and #188 on
 #182/#177. Keep the scoped follow-ups separate from the initial Android-first
 campaign path. They do not add a new provider, identity graph or metric service.

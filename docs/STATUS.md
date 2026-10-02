@@ -195,10 +195,13 @@ Historical definitions and saved runs retain their meaning. Explicit v0.4.12
 and preserves disjoint siblings and dated revisions (#183). Explicit v0.4.13
 definitions also connect selected acquisition to purchase/total-net cohorts
 (#191), with fixture 60 fixing purchase net 6, total net 26 and ROAS 2.6.
+Explicit bounded [late-input requests](metric-corrections.md#late-advertising-revenue-purchases-and-refunds)
+connect accepted revenue/commerce arrivals to immutable corrections (#184).
+Input discovery is requested through the API; only accepted jobs execute automatically.
 The original eight comparison, analysis and workflow
 slices (#173-#180) remain planned after that core work. App Store purchase
 binding, finer advertising grain and separate re-engagement outcomes
-(#186-#188) are scoped follow-ups. Thirteen slices remain planned. Existing
+(#186-#188) are scoped follow-ups. Twelve slices remain planned. Existing
 component evidence and the published v0.3.0-rc.1 record remain unchanged;
 neither proves these remaining connections.
 
