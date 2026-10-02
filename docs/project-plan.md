@@ -111,8 +111,8 @@ Schedule re-registration now preserves distinct run identities over identical
 inputs, exact crash replay and explicit-only supersession (#200). This runtime
 fix and the reference retention population correction (#202) add two completed
 slices to the original sixteen. Custom-event cohort outcomes (#177) and D30
-total-net ROAS evidence (#178) and correction controls (#179) now have source
-implementation; four slices remain.
+total-net ROAS evidence (#178), correction controls (#179) and the saved-retention
+matrix (#180) now have source implementation; three scoped follow-up slices remain.
 #184/#185 reuse #182/#183, with commerce cohorts connected by #191; #186 depends on #184, #187 on #182/#183, and #188 on
 #182/#177. Keep the scoped follow-ups separate from the initial Android-first
 campaign path. They do not add a new provider, identity graph or metric service.
@@ -130,11 +130,11 @@ campaign path. They do not add a new provider, identity graph or metric service.
 | Source implemented / [#177](https://github.com/yubisuke/openmasu/issues/177) | Cohort outcomes | One explicit custom-event key, distinct D7 cohort converters and conversion rate | Fixture 61 independently fixes 3/10; shared TS/Python/SQL cases cover duplicate/window/watermark/privacy/fraud, with key-bound saved meaning and schedule validation |
 | Source implemented / [#178](https://github.com/yubisuke/openmasu/issues/178) | Commerce calculation evidence | Version 2 saved operands for existing D30 total-net ROAS in the same calculation transaction | Advertising plus purchases minus refunds, cost and exact rounding, old-run immutability, redacted/unavailable evidence, existing result parity |
 | Source implemented / [#179](https://github.com/yubisuke/openmasu/issues/179) | Correction workflow | SSR condition review/request, reader-visible job status and original/replacement details using existing bounded recalculation | Cost revision to completion, duplicate request identity, existing bounds/permissions, no second selector or all-history recomputation |
-| 8 / [#180](https://github.com/yubisuke/openmasu/issues/180) | Cohort presentation | Saved retention matrix with dates as rows and definition-backed horizons as columns | Exact values and source links, compatible series only, missing/undefined/zero/maturity and page-boundary distinctions |
+| Source implemented / [#180](https://github.com/yubisuke/openmasu/issues/180) | Cohort presentation | Current-page retention matrix with dates as rows and saved activity-day horizons as columns | Exact values and source links, compatible series only, missing/undefined/zero/maturity, duplicate snapshots and both page boundaries; bounded cell expansion |
 
 Within the original eight workflow slices, #173 must precede #174.
-Their priority now follows the five core integration slices above; #179 and
-#180 remain lower priority. Reuse current services and suites, and implement one
+All eight workflow slices now have source implementation. Reuse current services
+and suites for follow-ups, and implement one
 bounded user workflow per PR. A non-breaking contract addition must still
 record fixture derivation, migration and evaluator parity. The plan does not
 select another provider adapter, general BI/funnel builder, infrastructure

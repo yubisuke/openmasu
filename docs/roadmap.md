@@ -114,8 +114,8 @@ run-ID uniqueness, exact replay, old evidence and explicit supersession
 retention correction aligns the numerator with its selected and fraud-filtered
 cohort ([#202](https://github.com/yubisuke/openmasu/issues/202)). These two fixes
 extend the original sixteen slices. Explicit custom-event outcomes and D30
-total-net ROAS evidence and correction controls now have source implementation;
-four remain planned.
+total-net ROAS evidence, correction controls and the bounded saved-retention matrix
+now have source implementation; three scoped follow-ups remain planned.
 
 The first priority is a connected measurement path: tracking link, SDK install,
 selected acquisition source, campaign revenue and cost, daily ROAS, late-input
@@ -158,7 +158,7 @@ It does not make an external calculation authenticated or independently verified
 | Source implemented | [Custom-event conversion #177](https://github.com/yubisuke/openmasu/issues/177) | Explicit v0.4.14 definitions count distinct D7 converters in the same eligible cohort, with fixed key/replay/comparison meaning and TS/Python/SQL parity | Cohort outcomes |
 | Source implemented | [Total-net ROAS evidence #178](https://github.com/yubisuke/openmasu/issues/178) | Version 2 evidence explains existing D30 total-net ROAS from its saved advertising, purchase, refund and cost operands without HTTP recalculation | Commerce calculation evidence |
 | Source implemented | [Correction controls #179](https://github.com/yubisuke/openmasu/issues/179) | Review conditions before requesting an existing bounded cost-driven recalculation; follow reader-visible job and original/replacement details | Correction workflow |
-| 8 | [Retention matrix #180](https://github.com/yubisuke/openmasu/issues/180) | Read saved retention by cohort date and definition-backed horizon without inventing missing values or combining incompatible series | Cohort presentation |
+| Source implemented | [Retention matrix #180](https://github.com/yubisuke/openmasu/issues/180) | Current-page retention by saved cohort/date horizon, exact values/details, explicit page gaps and per-observation maturity; incompatible meanings remain separate | Cohort presentation |
 
 Within the workflow batch, slice 2 depends on slice 1. The remaining slices
 reuse existing foundations; the table gives their relative priority after

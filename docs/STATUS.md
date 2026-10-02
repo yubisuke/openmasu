@@ -223,7 +223,8 @@ independent reference and SQL arithmetic. No new service or event payload.
 [D30 total-net ROAS details](metric-explanations.md) retain advertising, purchase,
 refund and cost operands from the saved calculation (#178). The dashboard connects
 bounded [cost-recalculation controls](metric-corrections.md) to existing jobs and
-original/replacement details (#179). Retention presentation (#180) remains planned.
+original/replacement details (#179). A definition-backed [retention matrix](dashboard-analysis.md#saved-retention-matrix)
+aligns only comparable saved cohorts and horizons on the current page (#180).
 App Store purchase
 binding, finer advertising grain and separate re-engagement outcomes
 (#186-#188) are scoped follow-ups. A forward-only runtime fix now permits
@@ -233,7 +234,7 @@ uniqueness, old evidence, exact replay and explicit-only supersession
 numerator now uses that metric's selected and fraud-filtered cohort, matching
 Python/SQL rather than counting a different population
 ([#202](https://github.com/yubisuke/openmasu/issues/202)). Neither fix rewrites
-old saved runs. Four slices remain planned. Existing
+old saved runs. Three scoped follow-up slices remain planned. Existing
 component evidence and the published v0.3.0-rc.1 record remain unchanged;
 neither proves these remaining connections.
 
