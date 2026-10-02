@@ -80,9 +80,9 @@ The prior integration batch and SDK publication are complete. The
 [plan #172](https://github.com/yubisuke/openmasu/issues/172) select the following
 work from source `1c7c223` on 2026-10-02, expanded after inspecting `ce7b056`
 to connect the core measurement path before improving its screens. These
-entries identify planned work except the source-implemented slices
-marked below. The inventory above remains the completed component foundation,
-not proof that every path is connected.
+entries record the source-implemented scope and its explicit acceptance
+boundaries. Component and connected synthetic gates remain distinct from
+live-provider or production evidence.
 
 ### Core integration and scoped follow-ups
 
@@ -113,8 +113,10 @@ inputs, exact crash replay and explicit-only supersession (#200). This runtime
 fix and the reference retention population correction (#202) add two completed
 slices to the original sixteen. Custom-event cohort outcomes (#177) and D30
 total-net ROAS evidence (#178), correction controls (#179) and the saved-retention
-matrix (#180) now have source implementation; four scoped follow-up slices remain,
-including the explicit refund-reversal correction (#209) after #186.
+matrix (#180) now have source implementation. App Store purchase binding (#186),
+targeted refund reversal (#209), detailed acquisition (#187) and first-party
+engagement outcomes (#188) complete the scoped follow-up implementation with
+synthetic gates, bringing this plan to nineteen implemented slices.
 #184/#185 reuse #182/#183, with commerce cohorts connected by #191; #186 depends on #184, #187 on #182/#183, and #188 on
 #182/#177. Keep the scoped follow-ups separate from the initial Android-first
 campaign path. They do not add a new provider, identity graph or metric service.

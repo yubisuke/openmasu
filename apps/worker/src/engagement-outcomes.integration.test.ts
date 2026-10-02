@@ -127,7 +127,12 @@ describe("first-party engagement operator workflow", { concurrency: false }, () 
     const section = html.match(/<section aria-label="First-party engagement outcomes">[\s\S]*?<\/section>/)?.[0] ?? "";
     assert.match(section, /Device-reported opens are forgeable/);
     assert.doesNotMatch(section, /data-metric-run-id="detail63-/);
-    for (const row of report.data) assert.ok(section.includes(`data-metric-run-id="${row.metric_run_id}"`));
+    for (const row of report.data) {
+      assert.ok(section.includes(`/metrics/${encodeURIComponent(row.metric_run_id)}/explanation`), `missing saved run ${row.metric_run_id}`);
+      assert.equal(section.includes(`data-metric-run-id="${row.metric_run_id}"`), row.value_state === "present",
+        "Only present values may carry numeric HTML data attributes");
+    }
+    assert.match(section, /class="undefined-value">—<\/span><small>empty_cohort<\/small>/);
     assert.match(html, /data-metric-run-id="detail63-/);
     query.set("format", "csv"); query.set("export", "true");
     const apiCsv = await admin(`/v1/reports/metrics?${query}`), dashboardCsv = await page(`/dashboard/apps/app-a/cohorts.csv?${query}`);

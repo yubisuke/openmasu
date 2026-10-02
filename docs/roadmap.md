@@ -115,8 +115,9 @@ retention correction aligns the numerator with its selected and fraud-filtered
 cohort ([#202](https://github.com/yubisuke/openmasu/issues/202)). These two fixes
 extend the original sixteen slices. Explicit custom-event outcomes and D30
 total-net ROAS evidence, correction controls and the bounded saved-retention matrix
-now have source implementation; four scoped follow-ups remain planned, including
-the explicit refund-reversal gap discovered while connecting App Store purchases.
+now have source implementation. The four scoped follow-ups (App Store purchase
+binding, explicit refund reversal, detailed acquisition grain and first-party
+re-engagement outcomes) also have synthetic implementation and connection gates.
 
 The first priority is a connected measurement path: tracking link, SDK install,
 selected acquisition source, campaign revenue and cost, daily ROAS, late-input
@@ -137,8 +138,8 @@ comparison screens alone does not establish that end-to-end path.
 
 #182 and #183 precede #191, then #184 and #185; #186 follows #184, #209 follows #186,
 and #187 follows #182/#183,
-and #188 follows #182/#177. Complete the first five core slices before the
-workflow batch below. These extensions are scoped follow-ups, not prerequisites
+and #188 follows #182/#177. This dependency order kept the core calculation
+connections ahead of the workflow batch below. These extensions are scoped follow-ups, not prerequisites
 for the initial Android-first campaign workflow. App Store cohort-purchase
 coverage is source implemented with synthetic evidence in #186, not live-store
 proof; refund-reversal recovery is limited to a uniquely linked prior refund,
