@@ -104,7 +104,8 @@ add dated revision selection and overlap refusal, exercised by fixture 59.
 Explicit commerce definitions connect that selected source to purchase/refund
 and total-net cohorts, exercised by fixture 60. Bounded explicit late-input
 requests now connect revenue and commerce arrivals to saved-run corrections.
-Twelve slices remain planned.
+Daily schedules discover bounded frozen campaign targets. The external ad-ROAS
+declaration bridge is also source implemented; ten slices remain planned.
 
 The first priority is a connected measurement path: tracking link, SDK install,
 selected acquisition source, campaign revenue and cost, daily ROAS, late-input
@@ -130,16 +131,15 @@ coverage must not be claimed before #186; re-engagement ROAS is not delivered
 by the initial #188 conversion/revenue slice.
 
 The workflow batch addresses comparison between a captured OpenMasu calculation and an
-external aggregate. The existing CSV converter records declarations, while the
-comparator requires captured meaning on both sides; its declaration-only mode
-does not bridge the two. The next slice introduces explicit external calculation
-declarations for one supported ROAS family, retaining the different evidence
-levels and requiring opt-in. Unknown or incompatible conditions remain blocked.
+external aggregate. The CSV converter and pure comparator now support explicit
+external calculation declarations for one elapsed ad-revenue ROAS family,
+retaining the different evidence levels and requiring opt-in. The next slice
+connects this path to the dashboard. Unknown or incompatible conditions remain blocked.
 It does not make an external calculation authenticated or independently verified.
 
 | Order | Planned slice | User outcome / exit gate | Project-plan crosswalk |
 | --- | --- | --- | --- |
-| 1 | [External calculation declarations #173](https://github.com/yubisuke/openmasu/issues/173) | A saved elapsed ad-revenue ROAS and a fully declared external calculation can produce exact deltas with explicit mixed evidence; unknown/mismatched conditions cannot | External comparison meaning |
+| Source implemented | [External calculation declarations #173](https://github.com/yubisuke/openmasu/issues/173) | A saved elapsed ad-revenue ROAS and a fully declared external calculation produce exact deltas with explicit mixed evidence; unknown/mismatched conditions cannot | External comparison meaning |
 | 2 | [Dashboard comparison #174](https://github.com/yubisuke/openmasu/issues/174) | Select saved JSON and external CSV/mapping, inspect conditions, compare and save results through SSR using the same pure functions as the CLI | Comparison workflow |
 | 3 | [Attribution reason counts #175](https://github.com/yubisuke/openmasu/issues/175) | Read fixed-watermark install attribution counts by recorded status, method and reason without raw identifiers or inferred causes | Attribution analysis |
 | 4 | [Metric schedule controls #176](https://github.com/yubisuke/openmasu/issues/176) | Register, inspect and disable the existing daily schedules through the dashboard | Daily calculation controls |
