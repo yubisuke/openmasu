@@ -105,7 +105,7 @@ describe("fixed comparison acquisition", { concurrency: false }, () => {
           numerator: "revenue", denominator: "cost", aggregation: "cumulative", time_zone: "UTC", window: { type: "elapsed", day: 1, boundary: "half_open" },
           population: "accepted_installation_cohort", acquisition_basis: "recorded_dimensions", cost_basis: "cohort_acquisition_day_current_snapshot",
           cost_selection_policy: "legacy_dimension_digest_latest", grouping_dimensions: ["campaign_id", "network", "country", "cohort_date", "attribution_status"],
-          fraud_policy: "gross", privacy_state: "after", value_type: "ratio", ratio_scale: 6,
+          fraud_policy: "gross", privacy_state: "before", value_type: "ratio", ratio_scale: 6,
           fx: { target_currency: "USD", target_scale: 6, conversion: "per_event_round_then_sum", rounding_mode: "half_even",
             rates: [{ currency: "EUR", rate_unscaled: "5", rate_scale: 1, as_of: "2026-08-01T00:00:00.000Z" }] }, final_rounding: "half_even" } };
       const upload = (candidate = saved, map = mapping) => {
@@ -122,7 +122,7 @@ describe("fixed comparison acquisition", { concurrency: false }, () => {
       };
       const noConsent = await post(submit(reviewHtml, "json", false)); assert.equal((await noConsent.json() as any).status, "incomparable");
       const expected = compareSnapshots(saved, aggregateCsvToSnapshot(Buffer.from(csv), mapping), { allowExternalDeclaration: true });
-      assert.equal(expected.status, "external_declared_comparison");
+      assert.equal(expected.status, "external_declared_comparison", expected.mismatches.join(","));
       assert.ok(expected.rows.some(row => row.delta_right_minus_left === "250000"));
       assert.ok(expected.rows.some(row => row.status === "missing_left")); assert.ok(expected.rows.some(row => row.status === "undefined"));
       const resultResponse = await post(submit(reviewHtml, "result", true)); assert.equal(resultResponse.status, 200);
