@@ -36,7 +36,7 @@ in [Project plan](project-plan.md).
 | Operator-owned bulk event exports | Synthetic complete | Default-off S3-compatible destinations, deterministic gzip NDJSON, SigV4 conditional writes, durable keyset cursors, and destination-scoped deletion notices |
 
 The current contract gate preserves parity across 28 schemas, 8 registries,
-and 59 reviewed synthetic fixtures, including explicitly versioned native acquisition cohorts and safe cost selection.
+and 60 reviewed synthetic fixtures, including explicitly versioned native acquisition cohorts and safe cost selection.
 
 ## Completed milestone: integration and release coherence
 
@@ -101,8 +101,8 @@ review and subsequent synthetic reproductions on
 2026-10-02. The selected-acquisition slice now has opt-in v0.4.11 definitions,
 fixture 58, and native-inbox/SQL acceptance tests. Explicit safe-cost definitions
 add dated revision selection and overlap refusal, exercised by fixture 59.
-The remaining fourteen slices are planned, including the separately reproduced
-native purchase/total-net acquisition gap.
+Explicit commerce definitions connect that selected source to purchase/refund
+and total-net cohorts, exercised by fixture 60. Thirteen slices remain planned.
 
 The first priority is a connected measurement path: tracking link, SDK install,
 selected acquisition source, campaign revenue and cost, daily ROAS, late-input
@@ -113,7 +113,7 @@ comparison screens alone does not establish that end-to-end path.
 | --- | --- | --- |
 | Source implemented / [#182](https://github.com/yubisuke/openmasu/issues/182) | Selected acquisition source reaches install cohorts | Opt-in definitions, fixture 58 and native inbox/SQL tests cover campaign installs/ad-revenue ROAS, fixed snapshots and privacy / Acquisition projection |
 | Source implemented / [#183](https://github.com/yubisuke/openmasu/issues/183) | Overlapping cost grains cannot inflate the denominator | Explicit v0.4.12 selection accepts disjoint partitions and dated revisions, refuses overlapping candidates, and binds evidence/replay/comparison without changing historical definitions / Cost grain safety |
-| Next / [#191](https://github.com/yubisuke/openmasu/issues/191) | Selected acquisition also reaches purchase and total-net cohorts | Reuse selected source and safe cost semantics for purchase/refund/total-net metrics without reinterpreting old definitions / Commerce acquisition projection |
+| Source implemented / [#191](https://github.com/yubisuke/openmasu/issues/191) | Selected acquisition also reaches purchase and total-net cohorts | Explicit v0.4.13 definitions, fixture 60 and SQL tests reuse selected source and safe costs without reinterpreting old definitions / Commerce acquisition projection |
 | Next / [#184](https://github.com/yubisuke/openmasu/issues/184) | Late advertising revenue, purchases and refunds can correct past runs | Bounded affected-run selection and immutable replay through the existing worker, with visible pending/unavailable states / Late-input correction |
 | Next / [#185](https://github.com/yubisuke/openmasu/issues/185) | New campaigns enter daily calculation without manual enumeration | Bounded opt-in discovery with a frozen per-job target set, exact retry and explicit unknown/empty/overflow states / Campaign discovery |
 | Follow-up / [#186](https://github.com/yubisuke/openmasu/issues/186) | Verified App Store purchases reach installation cohorts | Authenticated, verified binding and purchase/refund projection with deletion and duplicate safety; no inferred identity / App Store purchase binding |

@@ -70,7 +70,7 @@ Its annotated tag and
 point to green `main` commit `90a0f5f`, with eight verified SDK download assets.
 It retains the independent Contract
 v0.4 wire and package identity, including the additive patch ledger through
-v0.4.12 with 59 reviewed fixtures and 767 goldens. Later `main` commits are not
+v0.4.13 with 60 reviewed fixtures and 780 goldens. Later `main` commits are not
 evidence for that release. [`docs/STATUS.md`](docs/STATUS.md) defines the
 current source tree, and the [release index](docs/releases/README.md) separates
 the exact published record from ongoing development and historical prereleases.
@@ -184,8 +184,8 @@ The main contract gate is:
 npm run validate
 ```
 
-It checks 28 schemas, 8 registries, 59 reviewed synthetic fixtures, 767 golden
-output artifacts, 59 scenario assertions, 27 acceptance criteria,
+It checks 28 schemas, 8 registries, 60 reviewed synthetic fixtures, 780 golden
+output artifacts, 60 scenario assertions, 27 acceptance criteria,
 deterministic TypeScript, the independent Python evaluator, release identity,
 documentation drift, fraud artifacts, and RFC 8785 canonicalization.
 

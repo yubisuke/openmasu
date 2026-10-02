@@ -44,13 +44,14 @@ re-download verification at the exact annotated tag.
 
 Explicit selected-first-party acquisition definitions now connect native SDK
 installs to campaign/network advertising ROAS, LTV, retention and install count.
-The additive v0.4.11 patch adds fixture 58. Optional v0.4.12 safe cost selection
-adds fixture 59 (59 reviewed fixtures / 767 goldens in development), retaining
+The additive v0.4.11 patch adds fixture 58, v0.4.12 safe cost selection adds
+fixture 59, and v0.4.13 selected-commerce definitions add fixture 60
+(60 reviewed fixtures / 780 goldens in development), retaining
 wire/package identity `0.4.0` and all earlier
 goldens. Native inbox, fixed-watermark, privacy and SQL parity cases extend the
 existing gates. See [selected acquisition metrics](../selected-acquisition-metrics.md).
-Purchase-net and total-net acquisition are not expanded by this slice. Explicit
-safe-cost definitions also protect existing total-net ROAS denominators;
+Explicit purchase-net and total-net definitions now use selected acquisition,
+with settled/capped-refund semantics and safe total-net ROAS denominators;
 [cost selection](../cost-selection.md) explains overlap refusal and legacy replay.
 
 Supported-source upgrade procedures, single-host deployment preflight/restart,
@@ -59,7 +60,7 @@ merged acceptance scopes and are included in the publication. The integration
 batch is complete. The next product batch is selected in
 [plan #172](https://github.com/yubisuke/openmasu/issues/172), with the ordered
 [roadmap](../roadmap.md#next-product-sequence) as its canonical crosswalk.
-The other fourteen slices remain planned. No development slice is part of the
+The other thirteen slices remain planned. No development slice is part of the
 published baseline, and no next
 version or release scope is selected by that development plan.
 These synthetic scopes do not establish real recovery, hosting/TLS,

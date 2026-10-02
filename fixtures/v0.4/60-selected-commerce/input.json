@@ -1,0 +1,327 @@
+{
+  "contract_version": "0.4.0",
+  "fx_policy": {
+    "policy_version": "fx-v0.1",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "100000000",
+        "rate_scale": 8,
+        "source": "synthetic-fixture-rate",
+        "as_of": "2026-08-12T00:00:00.000Z"
+      }
+    ]
+  },
+  "metric_evaluations": [
+    {
+      "metric_run_id_prefix": "commerce60",
+      "input_received_at_watermark": "2026-08-12T00:00:00.000Z",
+      "computed_at": "2026-08-12T00:00:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "metric_names": [
+        "cohort_purchase_net_revenue_d30_usd",
+        "cohort_total_net_revenue_d30_usd",
+        "cohort_total_net_ltv_d30_usd",
+        "d30_total_net_roas"
+      ],
+      "grouping": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      }
+    }
+  ],
+  "reconciliation_inputs": [],
+  "privacy_requests": [],
+  "server_context": {
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-12T00:00:00.000Z",
+    "policy_digest": "policy-v0.1",
+    "processing_purposes": [
+      {
+        "processing_purpose_id": "analytics",
+        "consent_required": false,
+        "policy_version": "consent-v0.1"
+      },
+      {
+        "processing_purpose_id": "revenue_measurement",
+        "consent_required": false,
+        "policy_version": "revenue-v0.4.8"
+      }
+    ],
+    "withdrawals": [],
+    "alternative_legal_bases": []
+  },
+  "records": [
+    {
+      "contract_version": "0.4.0",
+      "record_id": "click-1",
+      "delivery_id": "delivery:click-1",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "redirector",
+      "producer_version": "fixture-v0.1",
+      "event_id": "event:click-1",
+      "event_name": "click",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-05T00:00:00.000Z",
+      "occurred_at_source": "server",
+      "received_at": "2026-08-12T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "click_id": "click-a_0000000000000000",
+        "tracking_link_id": "link-a",
+        "campaign_id": "campaign-a",
+        "redirector_click_at": "2026-08-05T00:00:00.000Z",
+        "redirector_time_status": "available",
+        "network": "synthetic-network"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "install-1",
+      "delivery_id": "delivery:install-1",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.1",
+      "event_id": "event:install-1",
+      "event_name": "install",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-06T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-12T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:install-1",
+        "install_type": "first_install",
+        "referrer_status": "available",
+        "click_id": "click-a_0000000000000000",
+        "install_begin_at_server_status": "available",
+        "install_begin_at_server": "2026-08-06T00:00:00.000Z",
+        "protected_referrer_evidence_ref": "protected:referrer:install-1",
+        "country": "US"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "revenue-native-acquisition",
+      "delivery_id": "delivery:revenue-native-acquisition",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.1",
+      "event_id": "event:revenue-native-acquisition",
+      "event_name": "ad_revenue",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-06T01:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-12T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "subject_scope": "installation_level",
+        "installation_id": "installation:install-1",
+        "ad_network": "synthetic-ad-network",
+        "revenue_source": "client_estimated",
+        "amount_unscaled": "20000000",
+        "amount_scale": 6,
+        "currency": "USD"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "purchase-60",
+      "delivery_id": "delivery:purchase-60",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.8",
+      "event_id": "event:purchase-60",
+      "event_name": "purchase",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-06T02:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-12T00:00:00.000Z",
+      "processing_purpose_id": "revenue_measurement",
+      "processing_sequence": 3,
+      "payload": {
+        "installation_id": "installation:install-1",
+        "transaction_id": "purchase-transaction-60",
+        "original_transaction_id": "original-60",
+        "amount_unscaled": "10000000",
+        "amount_scale": 6,
+        "currency": "USD",
+        "financial_status": "settled"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "refund-60",
+      "delivery_id": "delivery:refund-60",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.8",
+      "event_id": "event:refund-60",
+      "event_name": "refund",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-06T03:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-12T00:00:00.000Z",
+      "processing_purpose_id": "revenue_measurement",
+      "processing_sequence": 9,
+      "payload": {
+        "installation_id": "installation:install-1",
+        "transaction_id": "refund-transaction-60",
+        "original_transaction_id": "original-60",
+        "amount_unscaled": "4000000",
+        "amount_scale": 6,
+        "currency": "USD",
+        "financial_status": "settled"
+      }
+    }
+  ],
+  "metric_definitions": [
+    {
+      "metric_name": "cohort_purchase_net_revenue_d30_usd",
+      "metric_definition_version": "0.4.13",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "revenue_sum",
+        "window": {
+          "type": "elapsed",
+          "day": 30
+        },
+        "numerator": "purchase_net_revenue"
+      },
+      "rule_bundle_id": "metric-selected-commerce",
+      "rule_bundle_version": "0.4.13",
+      "rule_bundle_hash": "49554ad7fe9709e851f5cba7ac12215b539a9b209cc96ab66a085f0b1b46615d",
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "acquisition_basis": "selected_first_party_click"
+    },
+    {
+      "metric_name": "cohort_total_net_revenue_d30_usd",
+      "metric_definition_version": "0.4.13",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "revenue_sum",
+        "window": {
+          "type": "elapsed",
+          "day": 30
+        },
+        "numerator": "total_net_revenue"
+      },
+      "rule_bundle_id": "metric-selected-commerce",
+      "rule_bundle_version": "0.4.13",
+      "rule_bundle_hash": "49554ad7fe9709e851f5cba7ac12215b539a9b209cc96ab66a085f0b1b46615d",
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "acquisition_basis": "selected_first_party_click"
+    },
+    {
+      "metric_name": "d30_total_net_roas",
+      "metric_definition_version": "0.4.13",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "value_type": "ratio",
+      "ratio_scale": 6,
+      "definition": {
+        "calculation": "revenue_over_cost",
+        "window": {
+          "type": "elapsed",
+          "day": 30
+        },
+        "numerator": "total_net_revenue",
+        "denominator": "cost",
+        "cost_basis": "cohort_acquisition_day_current_snapshot"
+      },
+      "rule_bundle_id": "metric-selected-commerce",
+      "rule_bundle_version": "0.4.13",
+      "rule_bundle_hash": "49554ad7fe9709e851f5cba7ac12215b539a9b209cc96ab66a085f0b1b46615d",
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "acquisition_basis": "selected_first_party_click",
+      "cost_selection_policy": "reject_overlapping_grains"
+    },
+    {
+      "metric_name": "cohort_total_net_ltv_d30_usd",
+      "metric_definition_version": "0.4.13",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "revenue_over_cohort",
+        "window": {
+          "type": "elapsed",
+          "day": 30
+        },
+        "numerator": "total_net_revenue",
+        "denominator": "cohort_size"
+      },
+      "rule_bundle_id": "metric-selected-commerce",
+      "rule_bundle_version": "0.4.13",
+      "rule_bundle_hash": "49554ad7fe9709e851f5cba7ac12215b539a9b209cc96ab66a085f0b1b46615d",
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "acquisition_basis": "selected_first_party_click"
+    }
+  ],
+  "cost_records": [
+    {
+      "contract_version": "0.4.0",
+      "cost_record_id": "cost-native-acquisition",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "network": "synthetic-network",
+      "campaign_id": "campaign-a",
+      "date": "2026-08-06",
+      "amount_unscaled": "10000000",
+      "amount_scale": 6,
+      "currency": "USD",
+      "source": "imported_reported",
+      "as_of": "2026-08-12T00:00:00.000Z",
+      "report_snapshot_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+      "dimension_digest": "2e042377815dad9abbc979c5608c3f369f00fd6ae7acbad56da2aa1eada2d1df"
+    }
+  ]
+}

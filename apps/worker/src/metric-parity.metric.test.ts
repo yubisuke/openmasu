@@ -24,6 +24,88 @@ const goldenBefore = readFileSync(goldenPath);
 const golden: Any[] = JSON.parse(goldenBefore.toString("utf8"));
 const oracle = evaluate(input).metric_runs;
 
+describe("selected commerce SQL parity", { concurrency: false }, () => {
+  let app: Pool;
+  let seed: Pool;
+  before(() => { app = createAppPool(); seed = createSeedPool(); });
+  after(async () => { await app?.end(); await seed?.end(); });
+  const directory = join(process.cwd(), "fixtures/v0.4/60-selected-commerce");
+  const source = (): Any => JSON.parse(readFileSync(join(directory, "input.json"), "utf8"));
+  const amount = (runs: Any[], name = "d30_total_net_roas") => runs.find(r => r.metric_name === name)?.value_unscaled;
+
+  it("carries selected native acquisition through purchase/refund facts to all four hand-derived golden runs", async () => {
+    const value = source();
+    await ingestFixture("selected-commerce60", value, app, seed);
+    const runs = await computeSqlMetricRuns(app, value, true);
+    assert.equal(jcs(runs), jcs(evaluate(value).metric_runs));
+    assert.equal(jcs(runs), jcs(JSON.parse(readFileSync(join(directory, "expected_metric_runs.json"), "utf8"))));
+    assert.equal(amount(runs), "2600000");
+    const saved = await withTenant(app, "tenant-a", async client => (await client.query(
+      "SELECT comparison_context FROM ledger.metric_runs WHERE metric_run_id=$1", [runs[3].metric_run_id],
+    )).rows[0].comparison_context);
+    assert.equal(saved.definition.acquisition_basis, "selected_first_party_click");
+    assert.equal(saved.definition.cost_selection_policy, "reject_overlapping_grains");
+  });
+
+  it("excludes pending, reversed and unbound commerce and does not double count retried transactions", async () => {
+    for (const mode of ["pending", "reversed", "unbound", "other-installation", "duplicate"] as const) {
+      const value = source();
+      const purchase = value.records.find((r: Any) => r.event_name === "purchase");
+      if (mode === "unbound") delete purchase.payload.installation_id;
+      else if (mode === "other-installation") purchase.payload.installation_id = "synthetic-other-installation";
+      else if (mode === "duplicate") {
+        for (const record of value.records.slice(3)) value.records.push({ ...structuredClone(record),
+          record_id: `${record.record_id}-retry`, delivery_id: `${record.delivery_id}-retry` });
+      } else purchase.payload.financial_status = mode;
+      await ingestFixture(`selected-commerce-${mode}`, value, app, seed);
+      const runs = await computeSqlMetricRuns(app, value, false);
+      assert.equal(jcs(runs), jcs(evaluate(value).metric_runs), mode);
+      assert.equal(amount(runs), mode === "duplicate" ? "2600000" : "2000000");
+    }
+  });
+
+  it("recomputes visible late commerce at a new watermark without mutating the saved prior run", async () => {
+    const value = source();
+    const late = "2026-08-13T00:00:00.000Z";
+    value.batches = [
+      { batch_id: "commerce60-initial", server_context: value.server_context, records: value.records.slice(0, 3) },
+      { batch_id: "commerce60-late", server_context: { ...value.server_context, received_at: late },
+        records: value.records.slice(3).map((r: Any) => ({ ...r, received_at: late })) },
+    ];
+    delete value.records;
+    await ingestFixture("selected-commerce-late", value, app, seed);
+    const earlier = await computeSqlMetricRuns(app, value, true);
+    assert.equal(jcs(earlier), jcs(evaluate(value).metric_runs));
+    assert.equal(amount(earlier), "2000000");
+    Object.assign(value.metric_evaluations[0], { input_received_at_watermark: late, computed_at: late,
+      metric_run_id_prefix: "commerce60-later", supersedes_metric_run_id_prefix: "commerce60", data_freshness: "recalculated" });
+    const later = await computeSqlMetricRuns(app, value, true);
+    assert.equal(jcs(later), jcs(evaluate(value).metric_runs));
+    assert.equal(amount(later), "2600000");
+    const saved = await withTenant(app, "tenant-a", async client => (await client.query(
+      "SELECT artifact FROM ledger.metric_runs WHERE metric_run_id=$1", [earlier[0].metric_run_id],
+    )).rows[0].artifact);
+    assert.equal(jcs(saved), jcs(earlier[0]));
+  });
+
+  it("applies selected-evidence privacy and ambiguous-cost boundaries to commerce SQL", async () => {
+    for (const mode of ["privacy", "overlap"] as const) {
+      const value = source();
+      if (mode === "privacy") {
+        const privacy = JSON.parse(readFileSync("fixtures/v0.4/17-redaction-recalculation/input.json", "utf8"));
+        value.privacy_requests = [{ ...privacy.privacy_requests[0], affected_records: [{ record_id: "click-1", lifecycle_status: "redacted" }] }];
+        value.metric_evaluations[0].privacy_state = "after";
+      } else value.cost_records.push({ ...value.cost_records[0], cost_record_id: "cost60-overlap", country: "US",
+        dimension_digest: sha256({ network: "synthetic-network", campaign_id: "campaign-a", country: "US" }) });
+      await ingestFixture(`selected-commerce-${mode}`, value, app, seed);
+      const runs = await computeSqlMetricRuns(app, value, false);
+      assert.equal(jcs(runs), jcs(evaluate(value).metric_runs));
+      if (mode === "privacy") assert.equal(amount(runs, "cohort_purchase_net_revenue_d30_usd"), "0");
+      else assert.equal(runs.find(r => r.metric_name === "d30_total_net_roas")?.undefined_reason, "overlapping_cost_grains");
+    }
+  });
+});
+
 describe("safe cost grain SQL and importer parity", { concurrency: false }, () => {
   let app: Pool;
   let seed: Pool;

@@ -1106,7 +1106,17 @@ function validateMetricDefinitionSeries(definition: Any): void {
   const grouping = definition.grouping_dimensions ?? [];
   const fail = () => { throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`); };
   const strictCosts = definition.cost_selection_policy !== undefined;
-  if (strictCosts || definition.rule_bundle_id === "metric-disjoint-cost") {
+  const selectedCommerce = definition.rule_bundle_id === "metric-selected-commerce";
+  if (selectedCommerce) {
+    if (definition.acquisition_basis !== "selected_first_party_click" || definition.anchor_event !== "install"
+        || definition.aggregation_time_zone !== "UTC" || definition.metric_definition_version !== "0.4.13"
+        || definition.rule_bundle_version !== "0.4.13"
+        || definition.rule_bundle_hash !== nonFraudBundleHash("metric-selected-commerce")
+        || !["purchase_net_revenue", "total_net_revenue"].includes(definition.definition.numerator)
+        || (definition.definition.calculation === "revenue_over_cost"
+          ? definition.cost_selection_policy !== "reject_overlapping_grains" : strictCosts)) fail();
+  }
+  if (!selectedCommerce && (strictCosts || definition.rule_bundle_id === "metric-disjoint-cost")) {
     if (definition.cost_selection_policy !== "reject_overlapping_grains" || definition.anchor_event !== "install"
         || definition.aggregation_time_zone !== "UTC" || definition.metric_definition_version !== "0.4.12"
         || definition.rule_bundle_id !== "metric-disjoint-cost" || definition.rule_bundle_version !== "0.4.12"
@@ -1116,7 +1126,7 @@ function validateMetricDefinitionSeries(definition: Any): void {
     if (definition.acquisition_basis !== undefined && (definition.acquisition_basis !== "selected_first_party_click"
         || definition.definition.numerator !== "revenue")) fail();
   }
-  if (!strictCosts && (definition.acquisition_basis !== undefined || definition.rule_bundle_id === "metric-selected-acquisition")) {
+  if (!selectedCommerce && !strictCosts && (definition.acquisition_basis !== undefined || definition.rule_bundle_id === "metric-selected-acquisition")) {
     if (definition.acquisition_basis !== "selected_first_party_click" || definition.anchor_event !== "install"
         || definition.metric_definition_version !== "0.4.11" || definition.rule_bundle_id !== "metric-selected-acquisition"
         || definition.rule_bundle_version !== "0.4.11" || definition.rule_bundle_hash !== nonFraudBundleHash("metric-selected-acquisition")
@@ -1124,13 +1134,13 @@ function validateMetricDefinitionSeries(definition: Any): void {
   }
   if (definition.definition?.numerator === "purchase_net_revenue" || purchaseNetDays.has(definition.metric_name)) {
     const expectedDay = purchaseNetDays.get(definition.metric_name);
-    const expectedVersion = expectedDay === 30 || expectedDay === 90 ? "0.4.9" : "0.4.8";
-    const expectedHash = expectedVersion === "0.4.9"
+    const expectedVersion = selectedCommerce ? "0.4.13" : expectedDay === 30 || expectedDay === 90 ? "0.4.9" : "0.4.8";
+    const expectedHash = selectedCommerce ? nonFraudBundleHash("metric-selected-commerce") : expectedVersion === "0.4.9"
       ? nonFraudBundleHash("metric-purchase-net-v0.4.9") : nonFraudBundleHash("metric-purchase-net");
     if (expectedDay === undefined || definition.metric_definition_version !== expectedVersion ||
         definition.anchor_event !== "install" || definition.aggregation_time_zone !== "UTC" ||
         definition.value_type !== "money" || definition.currency !== "USD" || definition.amount_scale !== 6 ||
-        definition.rule_bundle_id !== "metric-purchase-net" ||
+        definition.rule_bundle_id !== (selectedCommerce ? "metric-selected-commerce" : "metric-purchase-net") ||
         definition.rule_bundle_version !== expectedVersion || definition.rule_bundle_hash !== expectedHash ||
         definition.definition?.calculation !== "revenue_sum" ||
         definition.definition?.numerator !== "purchase_net_revenue" ||
@@ -1139,14 +1149,14 @@ function validateMetricDefinitionSeries(definition: Any): void {
   }
   if (definition.definition?.numerator === "total_net_revenue" || totalNetSeries.has(definition.metric_name)) {
     const expected = totalNetSeries.get(definition.metric_name);
-    if (!expected || definition.metric_definition_version !== (strictCosts ? "0.4.12" : "0.4.9") ||
+    if (!expected || definition.metric_definition_version !== (selectedCommerce ? "0.4.13" : strictCosts ? "0.4.12" : "0.4.9") ||
         definition.anchor_event !== "install" || definition.aggregation_time_zone !== "UTC" ||
         definition.value_type !== expected.valueType ||
         (expected.valueType === "money" && (definition.currency !== "USD" || definition.amount_scale !== 6)) ||
         (expected.valueType === "ratio" && definition.ratio_scale !== 6) ||
-        definition.rule_bundle_id !== (strictCosts ? "metric-disjoint-cost" : "metric-total-net") ||
-        definition.rule_bundle_version !== (strictCosts ? "0.4.12" : "0.4.9")
-        || definition.rule_bundle_hash !== nonFraudBundleHash(strictCosts ? "metric-disjoint-cost" : "metric-total-net") ||
+        definition.rule_bundle_id !== (selectedCommerce ? "metric-selected-commerce" : strictCosts ? "metric-disjoint-cost" : "metric-total-net") ||
+        definition.rule_bundle_version !== (selectedCommerce ? "0.4.13" : strictCosts ? "0.4.12" : "0.4.9")
+        || definition.rule_bundle_hash !== nonFraudBundleHash(selectedCommerce ? "metric-selected-commerce" : strictCosts ? "metric-disjoint-cost" : "metric-total-net") ||
         definition.definition?.calculation !== expected.calculation ||
         definition.definition?.numerator !== "total_net_revenue" ||
         definition.definition?.window?.type !== "elapsed" || definition.definition?.window?.day !== expected.day ||

@@ -2,7 +2,8 @@
 
 ROAS is misleading when a campaign total and its breakdowns are summed twice.
 New explicit definitions can opt into `cost_selection_policy=reject_overlapping_grains`.
-This policy is bound to `metric-disjoint-cost` version `0.4.12`. Existing saved
+This policy is bound to `metric-disjoint-cost` version `0.4.12` or to the explicit
+`metric-selected-commerce` ROAS definitions in version `0.4.13`. Existing saved
 definitions, runs and cost digests are not upgraded or rewritten.
 
 The [native acquisition example](../examples/metrics/synthetic-selected-acquisition.json)
@@ -17,8 +18,10 @@ These are synthetic configuration values, not an instruction to import real
 data into the repository. Configure your deployment privately. The scoped
 ledger must already contain the source events and imported cost observations.
 `DISJOINT_COST_METRIC_DEFINITIONS` also exports D1/D3/D7 advertising ROAS and
-D30/D90 total-net ROAS definitions. Total-net retains recorded acquisition
-dimensions until its separately scoped native-commerce connection is delivered.
+D30/D90 total-net ROAS definitions with their historical recorded acquisition
+basis. For selected native acquisition plus purchase/refund revenue, use the
+separate [commerce definitions](selected-acquisition-metrics.md#purchase-refunds-and-total-revenue)
+instead. Neither family silently changes saved runs from the other.
 
 ## Selection, ambiguity and corrections
 

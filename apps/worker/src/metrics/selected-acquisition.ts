@@ -34,7 +34,8 @@ export const selectedAcquisitionSql = `
 `;
 
 /** Only an attribution's chosen evidence can supply dimensions; click_id alone is never enough. */
-export const selectedClickJoinSql = `
+export function selectedClickJoinSql(enabled: "$15" | "$18", privacy: "$12" | "$15"): string {
+  return `
   LEFT JOIN acquisition ON acquisition.subject_ref=install.installation_id
   LEFT JOIN LATERAL (
     SELECT min(click.campaign_id) AS campaign_id, min(click.network) AS network
@@ -43,12 +44,12 @@ export const selectedClickJoinSql = `
     JOIN ledger.raw_records_current AS click_raw
       ON click_raw.tenant_id=click_event.tenant_id AND click_raw.app_id=click_event.app_id
      AND click_raw.record_id=click_event.record_id
-    WHERE $18::boolean AND logical.producer NOT LIKE 'import:%'
+    WHERE ${enabled}::boolean AND logical.producer NOT LIKE 'import:%'
       AND acquisition.status='non_organic' AND acquisition.method='install_referrer'
       AND acquisition.reason_code='valid_install_referrer'
       AND click.tenant_id=install.tenant_id AND click.app_id=install.app_id
       AND click.click_id=install.click_id AND click_raw.received_at <= $3
-      AND ($15='before' OR click_raw.payload_lifecycle_status='available')
+      AND (${privacy}='before' OR click_raw.payload_lifecycle_status='available')
       AND EXISTS (
         SELECT 1 FROM jsonb_array_elements(acquisition.artifact->'evidence_refs') AS ref
         WHERE ref->>'ref'=click_event.record_id AND ref->>'tenant_id'=click.tenant_id AND ref->>'app_id'=click.app_id
@@ -56,3 +57,4 @@ export const selectedClickJoinSql = `
     HAVING count(*)=1
   ) AS acquisition_source ON true
 `;
+}

@@ -48,11 +48,41 @@ compare or supersede prior runs deliberately.
 - Saved comparison meaning distinguishes this basis from recorded dimensions;
   matching metric names alone do not prove comparable values.
 
-The checked-in definitions cover D0/D1/D3/D7 ad-revenue ROAS and LTV, D1/D7
-retention, and installation count. Purchase-net/total-net definitions, platform
-assigned acquisition, daily event counts, creative granularity, and Apple
-aggregate metrics are not expanded by this change. No live provider, real-device,
-or production-delivery evidence is claimed.
+The advertising family covers D0/D1/D3/D7 ROAS and LTV, D1/D7 retention, and
+installation count. The explicit commerce family below extends the same source
+selection to purchase-net and total-net. Platform-assigned acquisition, daily
+event counts, creative granularity and Apple aggregate metrics are not expanded.
+No live provider, real-device or production-delivery evidence is claimed.
+
+## Purchase, refunds and total revenue
+
+Use the separate
+[`synthetic-selected-commerce.json`](../examples/metrics/synthetic-selected-commerce.json)
+configuration for a native acquisition cohort with installation-bound commerce:
+
+```bash
+npm run metrics:run -- --date=2026-08-06 --watermark=2026-08-12T00:00:00.000Z --definitions=examples/metrics/synthetic-selected-commerce.json
+```
+
+This example chooses D30 purchase net, total net revenue, total net LTV and
+total net ROAS. The checked-in `SELECTED_COMMERCE_METRIC_DEFINITIONS` also covers
+purchase net D0/D1/D3/D7/D90 and total net D90. All use independent version
+`0.4.13` and the `metric-selected-commerce` bundle. UTC/USD scale 6 and existing
+settled purchase, canonical refund target, refund cap, half-open elapsed window,
+and per-event half-even conversion rules stay unchanged. ROAS requires safe
+cost selection; overlapping cost grains remain undefined, not zero.
+
+The same ledger must already contain eligible installation-bound purchase and
+refund facts. This command does not establish a missing store-to-installation
+binding, verify a transaction, or credit an unselected click. Pending/reversed,
+unbound and other-installation commerce does not become cohort revenue. Earlier
+watermarks exclude later receipts; current-privacy recomputation excludes
+removed selected acquisition evidence. Stored comparison context and replay
+preserve the explicit family rather than silently upgrading old definitions.
+
+Fixture 60's independent arithmetic is ad revenue 20 + purchase 10 - refund 4
+= total net 26, purchase net 6, and one-install LTV 26. Cost 10 gives ROAS 2.6.
+The example is entirely synthetic and does not establish live-store coverage.
 
 ## Synthetic evidence
 

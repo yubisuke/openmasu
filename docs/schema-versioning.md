@@ -69,6 +69,7 @@ The v0.4 line adds independently exercised optional vocabulary and definitions:
 | 0.4.10 | AdAttributionKit re-engagement postbacks and separated aggregate metrics |
 | 0.4.11 | optional selected-first-party acquisition basis for independently versioned ad-revenue cohorts |
 | 0.4.12 | optional disjoint-cost selection and an explicit undefined reason for overlapping cost grains |
+| 0.4.13 | explicit selected-acquisition purchase-net and total-net definitions with safe ROAS costs |
 
 Existing schema `$id` values remain on `v0.4`; existing event artifact version
 fields remain `0.4.0` where their schema did not change.

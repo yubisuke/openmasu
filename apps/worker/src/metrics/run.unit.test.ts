@@ -24,9 +24,12 @@ describe("WO16 metric backfill CLI", () => {
   });
 
   it("uses current privacy state for operational selected-acquisition definitions", () => {
-    const example = JSON.parse(readFileSync("examples/metrics/synthetic-selected-acquisition.json", "utf8"));
-    const input = buildMetricDefinitionsInput(example, "2026-08-06", "2026-08-12T00:00:00.000Z");
-    assert.equal(input.metric_evaluations[0].privacy_state, "after");
+    for (const name of ["synthetic-selected-acquisition", "synthetic-selected-commerce"]) {
+      const example = JSON.parse(readFileSync(`examples/metrics/${name}.json`, "utf8"));
+      const input = buildMetricDefinitionsInput(example, "2026-08-06", "2026-08-12T00:00:00.000Z");
+      assert.equal(input.metric_evaluations[0].privacy_state, "after");
+      assert.deepEqual(input.metric_definitions, example.metric_definitions);
+    }
   });
 
   it("uses an explicit watermark and preserves a declared cohort date", () => {

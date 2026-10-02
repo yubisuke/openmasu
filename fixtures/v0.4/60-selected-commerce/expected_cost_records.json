@@ -1,0 +1,18 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "cost_record_id": "cost-native-acquisition",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "network": "synthetic-network",
+    "campaign_id": "campaign-a",
+    "date": "2026-08-06",
+    "amount_unscaled": "10000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "source": "imported_reported",
+    "as_of": "2026-08-12T00:00:00.000Z",
+    "report_snapshot_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+    "dimension_digest": "2e042377815dad9abbc979c5608c3f369f00fd6ae7acbad56da2aa1eada2d1df"
+  }
+]
