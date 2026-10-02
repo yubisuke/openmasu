@@ -1,0 +1,151 @@
+{
+  "tenant_id": "tenant-local",
+  "app_id": "app-local",
+  "fx_policy": {
+    "policy_version": "fx-v0.1",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "100000000",
+        "rate_scale": 8,
+        "source": "synthetic-fixture-rate",
+        "as_of": "2026-08-12T00:00:00.000Z"
+      }
+    ]
+  },
+  "metric_definitions": [
+    {
+      "metric_name": "cohort_purchase_net_revenue_d30_usd",
+      "metric_definition_version": "0.4.13",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "revenue_sum",
+        "window": {
+          "type": "elapsed",
+          "day": 30
+        },
+        "numerator": "purchase_net_revenue"
+      },
+      "rule_bundle_id": "metric-selected-commerce",
+      "rule_bundle_version": "0.4.13",
+      "rule_bundle_hash": "49554ad7fe9709e851f5cba7ac12215b539a9b209cc96ab66a085f0b1b46615d",
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "acquisition_basis": "selected_first_party_click"
+    },
+    {
+      "metric_name": "cohort_total_net_revenue_d30_usd",
+      "metric_definition_version": "0.4.13",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "revenue_sum",
+        "window": {
+          "type": "elapsed",
+          "day": 30
+        },
+        "numerator": "total_net_revenue"
+      },
+      "rule_bundle_id": "metric-selected-commerce",
+      "rule_bundle_version": "0.4.13",
+      "rule_bundle_hash": "49554ad7fe9709e851f5cba7ac12215b539a9b209cc96ab66a085f0b1b46615d",
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "acquisition_basis": "selected_first_party_click"
+    },
+    {
+      "metric_name": "d30_total_net_roas",
+      "metric_definition_version": "0.4.13",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "value_type": "ratio",
+      "ratio_scale": 6,
+      "definition": {
+        "calculation": "revenue_over_cost",
+        "window": {
+          "type": "elapsed",
+          "day": 30
+        },
+        "numerator": "total_net_revenue",
+        "denominator": "cost",
+        "cost_basis": "cohort_acquisition_day_current_snapshot"
+      },
+      "rule_bundle_id": "metric-selected-commerce",
+      "rule_bundle_version": "0.4.13",
+      "rule_bundle_hash": "49554ad7fe9709e851f5cba7ac12215b539a9b209cc96ab66a085f0b1b46615d",
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "acquisition_basis": "selected_first_party_click",
+      "cost_selection_policy": "reject_overlapping_grains"
+    },
+    {
+      "metric_name": "cohort_total_net_ltv_d30_usd",
+      "metric_definition_version": "0.4.13",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "revenue_over_cohort",
+        "window": {
+          "type": "elapsed",
+          "day": 30
+        },
+        "numerator": "total_net_revenue",
+        "denominator": "cohort_size"
+      },
+      "rule_bundle_id": "metric-selected-commerce",
+      "rule_bundle_version": "0.4.13",
+      "rule_bundle_hash": "49554ad7fe9709e851f5cba7ac12215b539a9b209cc96ab66a085f0b1b46615d",
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "acquisition_basis": "selected_first_party_click"
+    }
+  ],
+  "evaluations": [
+    {
+      "metric_names": [
+        "cohort_purchase_net_revenue_d30_usd",
+        "cohort_total_net_revenue_d30_usd",
+        "cohort_total_net_ltv_d30_usd",
+        "d30_total_net_roas"
+      ],
+      "grouping": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      }
+    }
+  ]
+}

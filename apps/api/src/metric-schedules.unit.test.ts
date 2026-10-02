@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { SELECTED_COMMERCE_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { metricScheduleTargetDate, normalizeMetricScheduleRequest } from "./metric-schedules.js";
 
 const body = {
@@ -24,6 +25,14 @@ const body = {
 };
 
 describe("scheduled metric configuration", () => {
+  it("preserves selected commerce and its safe cost policy in scheduled definitions", () => {
+    const request = { ...body, metric_definitions: structuredClone(SELECTED_COMMERCE_METRIC_DEFINITIONS),
+      evaluations: [{ metric_names: ["d30_total_net_roas"], date_dimension: "cohort_date", grouping: {} }] };
+    const normalized = normalizeMetricScheduleRequest(request, new Date("2026-08-10T12:00:00.000Z"));
+    assert.deepEqual(normalized.definition.metric_definitions, request.metric_definitions);
+    request.metric_definitions.find(d => d.metric_name === "d30_total_net_roas")!.rule_bundle_hash = "0".repeat(64);
+    assert.throws(() => normalizeMetricScheduleRequest(request, new Date("2026-08-10T12:00:00.000Z")), /definitions_invalid/);
+  });
   it("preserves the explicit selected-acquisition basis and rejects mismatched versions", () => {
     const example = JSON.parse(readFileSync("examples/metrics/synthetic-selected-acquisition.json", "utf8"));
     const request = { ...body, metric_definitions: example.metric_definitions };
