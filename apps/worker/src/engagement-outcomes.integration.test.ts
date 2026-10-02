@@ -144,7 +144,12 @@ describe("first-party engagement operator workflow", { concurrency: false }, () 
     assert.match(csv, /empty_cohort/);
     const raw = await admin(`/v1/reports/records?app_id=app-a&metric_name=${money}&watermark_at_most=${watermark}`);
     assert.equal(raw.status, 400); assert.deepEqual(await raw.json(), { error: "raw_metric_unsupported" });
+    query.delete("format"); query.delete("export");
     query.set("app_id", "app-unrelated");
+    const unrelated = await admin(`/v1/reports/metrics?${query}`);
+    assert.equal(unrelated.status, 200);
+    assert.deepEqual((await unrelated.json() as Any).data, []);
+    query.set("app_id", "app-not-registered");
     assert.equal((await admin(`/v1/reports/metrics?${query}`)).status, 404);
     assert.equal((await metricReport(reader, { ...identity, tenantId: "tenant-unrelated" }, {
       tenantId: "tenant-unrelated", appId: "app-a", supersession: "latest", limit: 200,
