@@ -267,7 +267,7 @@ describe("selected native acquisition SQL parity", { concurrency: false }, () =>
           const replayed = await computeSqlMetricRuns(app, {
             server_context: entry.input.server_context, metric_definitions: [row.replay.metric_definition],
             metric_evaluations: [row.replay.evaluation], fx_policy: row.replay.fx_policy,
-          }, false);
+          }, false, { tenant_id: "tenant-a", app_id: "app-a" });
           assert.equal(jcs(replayed), jcs([row.artifact]));
         }
       }
