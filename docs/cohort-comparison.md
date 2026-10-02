@@ -92,7 +92,7 @@ or unestablished window maturity also produces `incomparable` without deltas.
 Future implementation changes to these semantics must change the profile,
 not reinterpret stored contexts.
 
-JSON `assurance` and HTML distinguish `definition_backed`, `declared` and
+JSON `assurance` and HTML distinguish `definition_backed`, `external_declared`, `declared` and
 `unknown`. Definition-backed means consistency with the saved implementation
 profile, **not** producer authentication, provider validation, a complete
 population, or proof that all late events have arrived. Operator-selected date
@@ -282,6 +282,125 @@ can compare two intentionally declaration-only snapshots and labels the JSON
 and HTML `declared_comparison`; it cannot bypass captured runtime contexts.
 An external aggregate does not become a verified comparison merely by sharing
 a definition label with OpenMasu.
+
+## Compare a saved ROAS with explicit external calculation conditions
+
+For installation-anchored **elapsed-window ad-revenue ROAS only**, add an
+`external_calculation` object to the aggregate CSV mapping. This is a separate
+operator declaration, not a fabricated OpenMasu execution context. No provider
+or database call is made, and no ledger evidence is inserted.
+
+The following complete synthetic mapping matches the historical D3 ROAS
+definition and FX policy in fixture 33. It is an example, **not** a default to
+copy onto a different provider calculation. Select all fields from the external
+calculation's documented meaning; unknown required conditions must remain
+unresolved rather than borrowed from current OpenMasu settings.
+
+```json
+{
+  "version": 1,
+  "source": "synthetic-external-claim",
+  "conditions": {
+    "date_from": "2026-08-01", "date_to": "2026-08-02", "time_zone": "UTC",
+    "maturity": "operator-declared", "aggregation": "cumulative",
+    "attribution_scope": "non_organic", "metric_definition": "external-d3-ad-roas",
+    "source_cutoff": "2026-08-09T00:00:00.000Z"
+  },
+  "grouping": {
+    "cohort_date": { "column": "day" },
+    "campaign_id": { "constant": "provider-campaign-33" },
+    "network": { "constant": "synthetic-network" },
+    "country": { "constant": "JP" },
+    "attribution_status": { "constant": "non_organic" }
+  },
+  "value": {
+    "column": "roas", "input": "decimal", "scale": 6,
+    "currency": { "constant": "none" },
+    "undefined": { "marker": "", "reason": { "constant": "no_attributed_cost" } }
+  },
+  "external_calculation": {
+    "version": 1, "profile": "external-elapsed-ad-roas-v1",
+    "anchor_event": "install", "calculation": "revenue_over_cost",
+    "numerator": "revenue", "denominator": "cost", "aggregation": "cumulative",
+    "time_zone": "UTC", "window": { "type": "elapsed", "day": 3, "boundary": "half_open" },
+    "population": "accepted_installation_cohort", "acquisition_basis": "recorded_dimensions",
+    "cost_basis": "cohort_acquisition_day_current_snapshot",
+    "cost_selection_policy": "legacy_dimension_digest_latest",
+    "grouping_dimensions": ["campaign_id", "network", "country", "cohort_date", "attribution_status"],
+    "fraud_policy": "gross", "privacy_state": "after", "value_type": "ratio", "ratio_scale": 6,
+    "fx": {
+      "target_currency": "USD", "target_scale": 6, "conversion": "per_event_round_then_sum",
+      "rounding_mode": "half_even",
+      "rates": [{ "currency": "EUR", "rate_unscaled": "5", "rate_scale": 1, "as_of": "2026-08-01T00:00:00.000Z" }]
+    },
+    "final_rounding": "half_even"
+  }
+}
+```
+
+Synthetic CSV: `day,roas` followed by `2026-08-01,1.25`. Save the mapping and
+CSV outside the repository, convert it with the existing command, and explicitly
+opt in when comparing to a saved OpenMasu report:
+
+```bash
+npm run --silent snapshot:report -- --csv aggregate.csv mapping.json > external.json
+npm run --silent compare:cohorts -- --external-declared saved.json external.json
+npm run --silent compare:cohorts -- --external-declared --html saved.json external.json > comparison.html
+```
+
+Exactly one input must have complete supported captured contexts; the other must
+have the closed external declaration. The same pure comparator is used with
+either input order. Every supported meaning must agree: install anchor,
+half-open elapsed window, cumulative population, acquisition basis, cost basis
+and cost-grain selection policy, permitted grouping axes, gross/net policy,
+privacy interpretation, ratio units/precision, FX rate/as-of/target precision,
+conversion order and final half-even rounding. Different display names and
+internal policy identifiers are not semantic differences.
+
+`day=3` means `[install, install + 4 days)`; `day=7` means eight elapsed days,
+not a calendar-week label. Conservatively, a D7 cohort date is mature at that
+date's exclusive end plus eight days. The external maturity is calculated from
+its declaration and cutoff, and remains `external_declared`, never proof of
+delivery completeness. Supported time zones are UTC and Asia/Tokyo. A mapping
+must use `cohort_date`, and row keys may use only declared non-identifying axes.
+Unknown campaigns remain absent axes, not invented identifiers or totals.
+
+Ratios are multiples, not percentages: `1.25` is 125%, encoded as `1250000` at
+scale 6. Percentage normalization is not inferred. `currency` must be `none`,
+and each row scale must equal `ratio_scale`. Zero, absent rows and explicitly
+undefined values remain distinct. A completely empty selection stays
+incomparable. Purchase/total-net ROAS, retention, calendar windows and platform
+aggregate series are outside this bridge. FX uses the currently supported
+single explicit conversion rate; a multi-rate policy is not approximated.
+
+All declaration fields are required and unknown fields are refused. The
+`half_up`/`truncate` rounding and `round_after_sum` conversion declarations can
+be represented to explain a mismatch, but are never treated as equivalent to
+the captured half-even/per-event implementation. No opt-in or any incompatible
+condition produces `incomparable` with empty rows and named mismatches. Malformed
+or missing declaration fields fail conversion with a safe error code. Neither
+`--declared` nor removing one context is a compatibility bypass; combining
+`--declared` and `--external-declared` is an argument error.
+
+Successful matching produces `external_declared_comparison`, **not** `compared`.
+The saved side remains `definition_backed`; the external side remains
+`external_declared`. JSON and standalone HTML retain both snapshot hashes,
+saved report/run references, CSV byte and normalized mapping hashes, and the
+external declaration plus its independent SHA-256. That digest is over JCS of
+the complete declaration. Saved snapshots with changed declarations and stale
+digests are refused. External declarations cannot carry captured contexts,
+saved-run provenance or a database-acquisition receipt.
+
+This is an additive change to the offline `cohort-comparison-v2` format: the
+snapshot gains optional `external_calculation: { declaration, declaration_sha256 }`,
+and output gains an additional status/assurance value and optional provenance
+details. Existing declaration-only and captured-to-captured commands keep their
+semantics. Older readers do not support the new optional field; use a current
+reader rather than stripping it to force a comparison. The measurement wire
+contract, schemas, goldens and historical execution profiles are unchanged.
+Agreement proves only consistency with the operator's claim. It does not
+authenticate an external producer, prove population completeness, validate the
+external implementation, or explain the cause of a numerical difference.
 
 ## Human-readable report
 

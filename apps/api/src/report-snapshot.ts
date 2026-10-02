@@ -8,7 +8,7 @@ function object(v: unknown): asserts v is Record<string, unknown> {
 }
 export function reportToSnapshot(report: unknown, template: unknown) {
   const base = parseSnapshot(template);
-  if (base.rows.length || base.provenance || base.comparison_contexts) throw Error("template_must_be_empty");
+  if (base.rows.length || base.provenance || base.comparison_contexts || base.external_calculation || base.mapping_provenance || base.acquisition) throw Error("template_must_be_empty");
   object(report);
   if (Object.keys(report).some(k => k !== "data") || !Array.isArray(report.data) || report.data.length > 10000) throw Error("incomplete_or_invalid_report");
   const runs: { key: string; metric_run_id: string; input_snapshot_id: string }[] = [];

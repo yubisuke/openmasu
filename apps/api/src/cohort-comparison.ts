@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { jcs } from "@openmasu/attribution-core";
 import { validateMetricDefinition } from "@openmasu/contracts";
 import { comparisonMeaning, comparisonMaturity, type MetricComparisonContext } from "@openmasu/runtime";
-import { groupingDimensionAllowlist, type GroupingDimension } from "./report-query.js";
+import { groupingDimensionAllowlist, validateGrouping, type GroupingDimension } from "./report-query.js";
+import { parseExternalDeclaration, externalDeclarationMeaning, capturedRoasMeaning, externalWindowMaturity, type ExternalCalculation } from "./external-calculation-declaration.js";
 
 const fields = ["date_from", "date_to", "time_zone", "maturity", "aggregation", "attribution_scope", "metric_definition", "source_cutoff"] as const;
 type Conditions = Record<typeof fields[number], string>;
@@ -16,7 +17,7 @@ export type ComparisonAcquisition = {
   filters: { metric_definition_version: string | null; grouping: Partial<Record<GroupingDimension, string>> };
   row_count: number; selection_sha256: string; query_sha256: string; upstream_completeness: "unknown";
 };
-type Snapshot = { source: string; conditions: Conditions; rows: Row[]; provenance?: Provenance; comparison_contexts?: ContextRow[]; acquisition?: ComparisonAcquisition; mapping_provenance?: MappingProvenance };
+type Snapshot = { source: string; conditions: Conditions; rows: Row[]; provenance?: Provenance; comparison_contexts?: ContextRow[]; acquisition?: ComparisonAcquisition; mapping_provenance?: MappingProvenance; external_calculation?: ExternalCalculation };
 export const comparisonDigest = (value: unknown) => createHash("sha256").update(jcs(value)).digest("hex");
 function object(v: unknown): asserts v is Record<string, unknown> {
   if (!v || typeof v !== "object" || Array.isArray(v)) throw Error("expected_object");
@@ -60,7 +61,7 @@ export function parseComparisonContext(value: unknown): MetricComparisonContext 
   return structuredClone(value) as MetricComparisonContext;
 }
 export function parseSnapshot(input: unknown): Snapshot {
-  object(input); keys(input, ["source", "conditions", "rows", ...("provenance" in input ? ["provenance"] : []), ...("comparison_contexts" in input ? ["comparison_contexts"] : []), ...("acquisition" in input ? ["acquisition"] : []), ...("mapping_provenance" in input ? ["mapping_provenance"] : [])]); text(input.source);
+  object(input); keys(input, ["source", "conditions", "rows", ...("provenance" in input ? ["provenance"] : []), ...("comparison_contexts" in input ? ["comparison_contexts"] : []), ...("acquisition" in input ? ["acquisition"] : []), ...("mapping_provenance" in input ? ["mapping_provenance"] : []), ...("external_calculation" in input ? ["external_calculation"] : [])]); text(input.source);
   object(input.conditions); keys(input.conditions, fields);
   for (const key of fields) text(input.conditions[key]);
   const c = { ...input.conditions } as Conditions;
@@ -145,14 +146,46 @@ export function parseSnapshot(input: unknown): Snapshot {
         || provenance || contexts || acquisition) throw Error("invalid_mapping_provenance");
     mappingProvenance = structuredClone(p) as MappingProvenance;
   }
-  return { source: input.source, conditions: { ...c }, rows: [...input.rows].sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0), ...(provenance ? { provenance } : {}), ...(contexts ? { comparison_contexts: contexts } : {}), ...(acquisition ? { acquisition } : {}), ...(mappingProvenance ? { mapping_provenance: mappingProvenance } : {}) } as Snapshot;
+  let external: ExternalCalculation | undefined;
+  if ("external_calculation" in input) {
+    const e = input.external_calculation; object(e); keys(e, ["declaration", "declaration_sha256"]);
+    const declaration = parseExternalDeclaration(e.declaration);
+    if (provenance || contexts || acquisition) throw Error("external_cannot_claim_captured_execution");
+    if (comparisonDigest(declaration) !== e.declaration_sha256) throw Error("external_declaration_digest_mismatch");
+    if (declaration.time_zone !== c.time_zone || declaration.aggregation !== c.aggregation) throw Error("external_conditions_mismatch");
+    for (const row of input.rows as Row[]) {
+      if (row.currency !== "none" || row.scale !== declaration.ratio_scale) throw Error("external_units_mismatch");
+      let group: unknown; try { group = JSON.parse(row.key); } catch { throw Error("external_grouping_invalid"); }
+      object(group);
+      if (jcs(group) !== row.key || typeof group.cohort_date !== "string"
+          || group.cohort_date < c.date_from || group.cohort_date >= c.date_to
+          || (group.attribution_status ?? "all") !== c.attribution_scope) throw Error("external_grouping_mismatch");
+      for (const [key, value] of Object.entries(group)) {
+        if (!declaration.grouping_dimensions.includes(key as GroupingDimension) || typeof value !== "string") throw Error("external_grouping_mismatch");
+        validateGrouping(key as GroupingDimension, value);
+      }
+    }
+    external = { declaration, declaration_sha256: e.declaration_sha256 as string };
+  }
+  return { source: input.source, conditions: { ...c }, rows: [...input.rows].sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0), ...(provenance ? { provenance } : {}), ...(contexts ? { comparison_contexts: contexts } : {}), ...(acquisition ? { acquisition } : {}), ...(mappingProvenance ? { mapping_provenance: mappingProvenance } : {}), ...(external ? { external_calculation: external } : {}) } as Snapshot;
 }
-type Assurance = { acquisition: { state: "complete" | "not_recorded"; row_count: number; upstream_completeness: "unknown" }; conditions: Record<string, { state: "declared" | "definition_backed" | "unknown"; value: string | null }>;
-  meaning: "definition_backed" | "unknown"; missing: string[]; execution: { definition_digest: string; rule_bundle_id: string; rule_bundle_version: string; rule_bundle_hash: string; fx_policy_version: string; fx_digest: string; metric_run_id: string; input_snapshot_id: string }[] };
+type Assurance = { acquisition: { state: "complete" | "not_recorded"; row_count: number; upstream_completeness: "unknown" }; conditions: Record<string, { state: "declared" | "external_declared" | "definition_backed" | "unknown"; value: string | null }>;
+  meaning: "definition_backed" | "external_declared" | "unknown"; missing: string[]; execution: { definition_digest: string; rule_bundle_id: string; rule_bundle_version: string; rule_bundle_hash: string; fx_policy_version: string; fx_digest: string; metric_run_id: string; input_snapshot_id: string }[] };
 export function snapshotAssurance(snapshot: Snapshot) {
   const contexts = snapshot.comparison_contexts ?? [];
   const conditions: Assurance["conditions"] = Object.fromEntries(fields.map(key => [key, { state: "declared", value: snapshot.conditions[key] }]));
   const missing: string[] = [];
+  if (snapshot.external_calculation) {
+    const d = snapshot.external_calculation.declaration;
+    const elapsed = snapshot.rows.length > 0 && snapshot.rows.every(row =>
+      externalWindowMaturity(d, JSON.parse(row.key).cohort_date, snapshot.conditions.source_cutoff) === "window_elapsed");
+    for (const field of ["time_zone", "aggregation", "metric_definition"] as const) conditions[field].state = "external_declared";
+    conditions.maturity = { state: elapsed ? "external_declared" : "unknown", value: elapsed ? "window_elapsed" : "unknown" };
+    if (!elapsed) missing.push("window_maturity");
+    const assurance: Assurance = { acquisition: { state: "not_recorded", row_count: snapshot.rows.length, upstream_completeness: "unknown" },
+      conditions, meaning: elapsed ? "external_declared" : "unknown", missing, execution: [] };
+    return { assurance, meaning: undefined };
+  }
   if (!snapshot.rows.length || contexts.length !== snapshot.rows.length) missing.push("captured_definition_and_policy");
   const meanings = contexts.map(({ context }) => comparisonMeaning(context));
   if (meanings.some(value => !value)) missing.push("unsupported_implementation_profile");
@@ -185,23 +218,55 @@ export function snapshotAssurance(snapshot: Snapshot) {
   return { assurance, meaning: missing.length ? undefined : meaning };
 }
 type ComparisonRow = { key: string; status: string; left: Row | null; right: Row | null; currency?: string; scale?: number; delta_right_minus_left?: string };
-export type ComparisonResult = { format: "cohort-comparison-v2"; provenance: { left: { source: string; sha256: string }; right: { source: string; sha256: string } };
-  status: "compared" | "declared_comparison" | "incomparable"; conditions: Conditions; mismatches: string[];
+type ResultProvenance = { source: string; sha256: string; saved_report?: Provenance; mapping_provenance?: MappingProvenance; external_calculation?: ExternalCalculation };
+export type ComparisonResult = { format: "cohort-comparison-v2"; provenance: { left: ResultProvenance; right: ResultProvenance };
+  status: "compared" | "declared_comparison" | "external_declared_comparison" | "incomparable"; conditions: Conditions; mismatches: string[];
   assurance: { left: Assurance; right: Assurance }; rows: ComparisonRow[] };
-export function compareSnapshots(left: unknown, right: unknown, options: { declaredOnly?: boolean } = {}): ComparisonResult {
+export function compareSnapshots(left: unknown, right: unknown, options: { declaredOnly?: boolean; allowExternalDeclaration?: boolean } = {}): ComparisonResult {
+  if (options.declaredOnly && options.allowExternalDeclaration) throw Error("conflicting_comparison_modes");
   const a = parseSnapshot(left), b = parseSnapshot(right);
   const la = snapshotAssurance(a), ra = snapshotAssurance(b);
-  const declared = options.declaredOnly === true && !a.comparison_contexts?.length && !b.comparison_contexts?.length;
+  const external = Boolean(a.external_calculation || b.external_calculation);
+  const declared = options.declaredOnly === true && !external && !a.comparison_contexts?.length && !b.comparison_contexts?.length;
   const comparedFields = declared ? fields : fields.filter(key => key !== "metric_definition");
   const mismatches: string[] = comparedFields.filter(k => (declared ? a.conditions[k] : la.assurance.conditions[k].value) !== (declared ? b.conditions[k] : ra.assurance.conditions[k].value));
-  if (!declared && la.meaning && ra.meaning) {
+  let externalComparable = false;
+  if (external) {
+    if (!options.allowExternalDeclaration) mismatches.push("external_declaration_opt_in_required");
+    if (Boolean(a.external_calculation) === Boolean(b.external_calculation)) mismatches.push("requires_one_captured_and_one_external_input");
+    else {
+      const captured = a.external_calculation ? b : a, declaration = (a.external_calculation ?? b.external_calculation)!.declaration;
+      const capturedAssurance = a.external_calculation ? ra : la, externalAssurance = a.external_calculation ? la : ra;
+      const meaning = capturedAssurance.assurance.meaning === "definition_backed" && captured.comparison_contexts?.[0]
+        ? capturedRoasMeaning(captured.comparison_contexts[0].context) : undefined;
+      if (capturedAssurance.assurance.meaning !== "definition_backed" || !meaning) mismatches.push("supported_captured_ad_roas_required");
+      if (externalAssurance.assurance.meaning !== "external_declared") mismatches.push("external_window_maturity_unknown");
+      if (meaning) {
+        const declaredMeaning = externalDeclarationMeaning(declaration);
+        for (const key of Object.keys(meaning) as (keyof typeof meaning)[]) {
+          if (jcs(meaning[key]) !== jcs(declaredMeaning[key])) mismatches.push(`meaning.${key}`);
+        }
+        // A declared dimension is a permitted axis, not proof that every row uses it.
+        // Still refuse captured arbitrary/undeclared keys instead of silently missing matches.
+        for (const row of captured.rows) {
+          const group = JSON.parse(row.key);
+          if (jcs(group) !== row.key || Object.keys(group).some(key => !meaning.grouping_dimensions.includes(key as GroupingDimension))) mismatches.push("captured_grouping_mismatch");
+        }
+      }
+      externalComparable = Boolean(options.allowExternalDeclaration && meaning
+        && capturedAssurance.assurance.meaning === "definition_backed" && externalAssurance.assurance.meaning === "external_declared");
+    }
+  } else if (!declared && la.meaning && ra.meaning) {
     for (const key of Object.keys(la.meaning) as (keyof typeof la.meaning)[]) {
       if (jcs(la.meaning[key]) !== jcs(ra.meaning[key])) mismatches.push(`meaning.${key}`);
     }
   }
-  const result: ComparisonResult = { format: "cohort-comparison-v2", provenance: { left: { source: a.source, sha256: comparisonDigest(a) }, right: { source: b.source, sha256: comparisonDigest(b) } },
+  const provenance = (s: Snapshot): ResultProvenance => ({ source: s.source, sha256: comparisonDigest(s),
+    ...(s.provenance ? { saved_report: s.provenance } : {}), ...(s.mapping_provenance ? { mapping_provenance: s.mapping_provenance } : {}),
+    ...(s.external_calculation ? { external_calculation: s.external_calculation } : {}) });
+  const result: ComparisonResult = { format: "cohort-comparison-v2", provenance: { left: provenance(a), right: provenance(b) },
     conditions: a.conditions, status: "incomparable", mismatches: [...new Set(mismatches)].sort(), assurance: { left: la.assurance, right: ra.assurance }, rows: [] };
-  if (mismatches.length || (!declared && (!la.meaning || !ra.meaning))) return result;
+  if (mismatches.length || (external ? !externalComparable : !declared && (!la.meaning || !ra.meaning))) return result;
   const am = new Map(a.rows.map(r => [r.key, r])), bm = new Map(b.rows.map(r => [r.key, r]));
   const rows = [...new Set([...am.keys(), ...bm.keys()])].sort().map(key => {
     const l = am.get(key), r = bm.get(key);
@@ -212,5 +277,5 @@ export function compareSnapshots(left: unknown, right: unknown, options: { decla
     const delta = BigInt(r.value) * 10n ** BigInt(scale - r.scale) - BigInt(l.value) * 10n ** BigInt(scale - l.scale);
     return { key, status: delta === 0n ? "equal" : "different", currency: l.currency, scale, delta_right_minus_left: delta.toString(), left: l, right: r };
   });
-  return { ...result, status: declared ? "declared_comparison" : "compared", rows };
+  return { ...result, status: external ? "external_declared_comparison" : declared ? "declared_comparison" : "compared", rows };
 }
