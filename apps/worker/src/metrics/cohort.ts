@@ -158,7 +158,7 @@ async function currentCosts(
          AND ($5::text IS NULL OR network=$5)
          AND ($6::text IS NULL OR country=$6)
          AND ($7::date IS NULL OR cost_date=$7::date)
-       ORDER BY cost_key_digest, as_of DESC, cost_record_id DESC
+       ORDER BY cost_key_digest, as_of DESC, cost_record_id COLLATE "C" DESC
      ) AS current
      ORDER BY as_of, cost_record_id`,
     [
@@ -171,7 +171,9 @@ async function currentCosts(
       grouping?.cohort_date ?? null,
     ],
   );
-  return result.rows;
+  // Snapshot order follows the contract's UTF-16 text order, not database locale.
+  return result.rows.sort((left, right) => compareText(left.as_of, right.as_of)
+    || compareText(left.cost_record_id, right.cost_record_id));
 }
 
 async function disjointCosts(client: Queryable, scope: Scope, watermark: string, grouping: Any): Promise<CostSelection> {
@@ -184,7 +186,7 @@ async function disjointCosts(client: Queryable, scope: Scope, watermark: string,
      WHERE tenant_id=$1 AND app_id=$2 AND as_of <= $3
        AND ($4::text IS NULL OR campaign_id=$4) AND ($5::text IS NULL OR network=$5)
        AND ($6::text IS NULL OR country=$6) AND ($7::date IS NULL OR cost_date=$7::date)
-     ORDER BY network, cost_date, campaign_id, ad_group_id, country, as_of DESC, cost_record_id DESC`,
+     ORDER BY network, cost_date, campaign_id, ad_group_id, country, as_of DESC, cost_record_id COLLATE "C" DESC`,
     [scope.tenant_id, scope.app_id, watermark, grouping?.campaign_id ?? null, grouping?.network ?? null,
       grouping?.country ?? null, grouping?.cohort_date ?? null],
   );
@@ -585,7 +587,7 @@ async function totalNetRevenueValue(
            AND ($5::text IS NULL OR network=$5)
            AND ($6::text IS NULL OR country=$6)
            AND ($7::date IS NULL OR cost_date=$7::date)
-         ORDER BY cost_key_digest, as_of DESC, cost_record_id DESC
+         ORDER BY cost_key_digest, as_of DESC, cost_record_id COLLATE "C" DESC
        ) AS selected
        UNION ALL
        SELECT * FROM jsonb_to_recordset($11::jsonb)
@@ -748,7 +750,7 @@ async function metricValue(
              AND ($5::text IS NULL OR network=$5)
              AND ($6::text IS NULL OR country=$6)
              AND ($7::date IS NULL OR cost_date=$7::date)
-           ORDER BY cost_key_digest, as_of DESC, cost_record_id DESC
+           ORDER BY cost_key_digest, as_of DESC, cost_record_id COLLATE "C" DESC
          ) AS selected
          UNION ALL
          SELECT * FROM jsonb_to_recordset($19::jsonb)
