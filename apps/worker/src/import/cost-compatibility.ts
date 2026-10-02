@@ -62,7 +62,7 @@ const requiredFields = [
   "money.currency",
   "network",
 ].sort();
-const optionalFields = ["ad_group_id", "campaign_id", "country"].sort();
+const optionalFields = ["ad_group_id", "campaign_id", "creative_id", "country"].sort();
 
 function expandedDeclaredFields(mapping: ImportMapping): string[] {
   const declared = declaredMappingTargetFields(mapping);

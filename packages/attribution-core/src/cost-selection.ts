@@ -5,6 +5,7 @@ export type ScopedCost = {
   network: string;
   campaign_id?: string | null;
   ad_group_id?: string | null;
+  creative_id?: string | null;
   country?: string | null;
   date: string;
   cost_record_id: string;
@@ -21,24 +22,25 @@ const revisionOrder = (left: ScopedCost, right: ScopedCost) =>
  * unknown coverage, not proven non-overlap. Do not arbitrarily prefer a parent
  * or its detail rows: preserve candidates and report unsafe overlap separately.
  */
-export function selectDisjointCosts<T extends ScopedCost>(input: readonly T[]): {
+export function selectDisjointCosts<T extends ScopedCost>(input: readonly T[], includeCreative = false): {
   rows: T[];
   overlapping: boolean;
 } {
+  const dimensionsToUse = includeCreative ? [...optionalDimensions, "creative_id" as const] : optionalDimensions;
   const revisions = new Map<string, T>();
   for (const row of input) {
     const key = JSON.stringify([row.tenant_id, row.app_id, row.network, row.date,
-      ...optionalDimensions.map((field) => row[field] ?? null)]);
+      ...dimensionsToUse.map((field) => row[field] ?? null)]);
     const previous = revisions.get(key);
     if (!previous || revisionOrder(previous, row) < 0) revisions.set(key, row);
   }
   const rows = [...revisions.values()].sort(revisionOrder);
-  // Eight nullable-dimension masks keep the overlap check linear in row count.
+  // Bounded nullable-dimension masks keep the overlap check linear in row count.
   // Each mask indexes its projections onto all subsets of its known dimensions.
   const cells = new Map<string, Map<number, Map<number, Set<string>>>>();
   let overlapping = false;
   for (const row of rows) {
-    const dimensions = optionalDimensions.map((field) => row[field] ?? null);
+    const dimensions = dimensionsToUse.map((field) => row[field] ?? null);
     const mask = dimensions.reduce<number>((value, dimension, bit) =>
       value | (dimension === null ? 0 : 1 << bit), 0);
     const project = (subset: number) => JSON.stringify(dimensions.filter((_, bit) => subset & (1 << bit)));

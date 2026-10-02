@@ -10,6 +10,7 @@ export type NonFraudRuleBundleId =
   | "metric-disjoint-cost"
   | "metric-selected-commerce"
   | "metric-refund-reversal"
+  | "metric-acquisition-detail"
   | "metric-custom-conversion"
   | "metric-stage-m3"
   | "metric-purchase-net"
@@ -85,6 +86,15 @@ export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonF
       "cancel-target-refund-at-watermark-once", "reuse-target-refund-window-and-rounded-value",
       "purchase-plus-ad-net-revenue", "total-net-roas-and-ltv",
       "explicit-dated-cost-revision-key", "reject-overlapping-cost-grains"],
+  },
+  "metric-acquisition-detail": {
+    id: "metric-acquisition-detail", version: "0.4.16", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["selected-first-party-click-dimensions", "attribution-and-evidence-as-of-watermark",
+      "selected-link-ad-group-and-creative", "unknown-detail-remains-unknown",
+      "no-parent-cost-allocation", "explicit-dated-creative-cost-revision-key",
+      "reject-overlapping-cost-grains", "cohort-install-ad-and-commerce-values",
+      "cancel-target-refund-at-watermark-once", "reuse-target-refund-window-and-rounded-value"],
   },
   "metric-stage-m3": {
     id: "metric-stage-m3", version: "0.3.1", kind: "metric",

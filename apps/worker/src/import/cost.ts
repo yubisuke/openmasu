@@ -8,6 +8,7 @@ export type CostInput = {
   network: string;
   campaign_id?: string | null;
   ad_group_id?: string | null;
+  creative_id?: string | null;
   country?: string | null;
   date: string;
   amount_unscaled: string;
@@ -34,6 +35,7 @@ function dimensionObject(row: CostInput): Record<string, unknown> {
     network: row.network,
     campaign_id: row.campaign_id ?? null,
     ad_group_id: row.ad_group_id ?? null,
+    ...(row.creative_id != null ? { creative_id: row.creative_id } : {}),
     country: row.country ?? null,
     date: row.date,
   }).sort(([left], [right]) => left.localeCompare(right)));
@@ -60,6 +62,7 @@ export function costArtifact(row: CostInput, reportSnapshotDigest: string): Reco
     network: row.network,
     campaign_id: row.campaign_id ?? null,
     ...(row.ad_group_id ? { ad_group_id: row.ad_group_id } : {}),
+    ...(row.creative_id ? { creative_id: row.creative_id } : {}),
     ...(row.country ? { country: row.country } : {}),
     date: row.date,
     amount_unscaled: row.amount_unscaled,
