@@ -681,8 +681,10 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
     assert.equal(recordsHtml.includes("<script"), false);
   });
 
-  it("aligns saved retention cohorts through the reader dashboard with unchanged filters values scope and page boundaries", async () => {
-    const input = fixture("33-stage-b-cohort-metrics");
+  it("aligns saved retention cohorts through the reader dashboard with unchanged filters values scope and page boundaries", async (t) => {
+    const tenant = "tenant-retention-matrix";
+    const input = JSON.parse(JSON.stringify(fixture("33-stage-b-cohort-metrics")),
+      (key, value) => key === "tenant_id" && value === "tenant-a" ? tenant : value);
     const base = input.metric_evaluations[0];
     input.metric_evaluations = ["2026-08-01", "2026-08-02"].map(date => ({ ...structuredClone(base),
       metric_names: ["retention_d1", "retention_d7"], metric_run_id_prefix: `retention-matrix-${date}`,
@@ -690,7 +692,15 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
     await registerAndIngest("synthetic-retention-matrix", input);
     await computeSqlMetricRuns(appPool, input, true);
     const readKey = "synthetic-retention-matrix-reader-key-000000000000001";
-    await ensureAdminKeys(appPool, { tenantId: "tenant-a", appId: "app-a" }, [{ key: readKey, role: "read_only" }]);
+    await ensureAdminKeys(appPool, { tenantId: tenant, appId: "app-a" }, [{ key: readKey, role: "read_only" }]);
+    const matrixServer = createServer(createRequestHandler({ pool: appPool, readerPool, payloadStore: {} as PayloadStore,
+      maxConfig: { tenantId: tenant, appId: "app-a", pathSecret: "synthetic", eventKey: "synthetic", tokenMode: "all", maxParameters: 40, maxQueryBytes: 8192 },
+      publicBaseUrl: "http://localhost:8080", redirectorBaseUrl: "http://localhost:8090",
+      dashboard: { enabled: true, publicBaseUrl: "http://localhost:8080", tenantId: tenant, sessionTtlSeconds: 3600 } }));
+    await new Promise<void>(resolve => matrixServer.listen(0, "127.0.0.1", resolve));
+    t.after(() => new Promise<void>((resolve, reject) => matrixServer.close(error => error ? reject(error) : resolve())));
+    const address = matrixServer.address(); assert.ok(address && typeof address === "object");
+    const baseUrl = `http://127.0.0.1:${address.port}`;
     const login = await fetch(`${baseUrl}/dashboard/session`, { method: "POST", redirect: "manual",
       headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ admin_key: readKey }) });
     assert.equal(login.status, 303);
