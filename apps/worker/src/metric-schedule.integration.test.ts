@@ -442,7 +442,7 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     assert.equal(oldRun.input_snapshot_id, newRun.input_snapshot_id);
     assert.notEqual(oldRun.metric_run_id, newRun.metric_run_id);
     assert.equal(newRun.value_unscaled, "1500000");
-    await withTenant(readerPool, tenantId, async client => {
+    await withTenant(appPool, tenantId, async client => {
       const manifests = await client.query(`SELECT source_metric_run_id FROM control.metric_replay_manifests
         WHERE tenant_id=$1 AND app_id=$2 AND source_metric_run_id=ANY($3::text[])`,
       [tenantId, appId, [oldRun.metric_run_id, newRun.metric_run_id]]);
@@ -501,7 +501,7 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     const [differentFx] = await computeSqlMetricRuns(appPool, changedInput, true, { tenant_id: tenantId, app_id: appId });
     assert.equal(differentFx.input_snapshot_id, later.input_snapshot_id); assert.notEqual(differentFx.metric_run_id, later.metric_run_id);
     assert.equal(differentFx.value_unscaled, "1200000");
-    const manifests = await withTenant(readerPool, tenantId, async client => (await client.query<{ source_metric_run_id: string; artifact: Any }>(
+    const manifests = await withTenant(appPool, tenantId, async client => (await client.query<{ source_metric_run_id: string; artifact: Any }>(
       "SELECT source_metric_run_id,artifact FROM control.metric_replay_manifests WHERE tenant_id=$1 AND app_id=$2 AND source_metric_run_id=ANY($3::text[])",
       [tenantId, appId, [later.metric_run_id, differentFx.metric_run_id]],
     )).rows);
