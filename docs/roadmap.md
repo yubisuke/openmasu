@@ -113,8 +113,8 @@ run-ID uniqueness, exact replay, old evidence and explicit supersession
 ([#200](https://github.com/yubisuke/openmasu/issues/200)). A separate reference
 retention correction aligns the numerator with its selected and fraud-filtered
 cohort ([#202](https://github.com/yubisuke/openmasu/issues/202)). These two fixes
-extend the original sixteen slices. Explicit custom-event outcomes now have
-source implementation; six remain planned, starting with total-net ROAS evidence.
+extend the original sixteen slices. Explicit custom-event outcomes and D30
+total-net ROAS evidence now have source implementation; five remain planned.
 
 The first priority is a connected measurement path: tracking link, SDK install,
 selected acquisition source, campaign revenue and cost, daily ROAS, late-input
@@ -155,7 +155,7 @@ It does not make an external calculation authenticated or independently verified
 | Source implemented | [Schedule re-registration recovery #200](https://github.com/yubisuke/openmasu/issues/200) | Run-ID uniqueness permits distinct schedules/cutoffs/definitions over identical inputs; exact crash replay, reader pagination and explicit-only supersession preserve old evidence | Schedule recovery |
 | Source implemented | [Retention cohort correction #202](https://github.com/yubisuke/openmasu/issues/202) | Retention activity joins the same selected/fraud-filtered cohort as its denominator, with TS/Python/SQL arithmetic parity and unchanged goldens | Retention population |
 | Source implemented | [Custom-event conversion #177](https://github.com/yubisuke/openmasu/issues/177) | Explicit v0.4.14 definitions count distinct D7 converters in the same eligible cohort, with fixed key/replay/comparison meaning and TS/Python/SQL parity | Cohort outcomes |
-| 6 | [Total-net ROAS evidence #178](https://github.com/yubisuke/openmasu/issues/178) | Explain an existing D30 total-net ROAS from its saved advertising, purchase, refund and cost operands | Commerce calculation evidence |
+| Source implemented | [Total-net ROAS evidence #178](https://github.com/yubisuke/openmasu/issues/178) | Version 2 evidence explains existing D30 total-net ROAS from its saved advertising, purchase, refund and cost operands without HTTP recalculation | Commerce calculation evidence |
 | 7 | [Correction controls #179](https://github.com/yubisuke/openmasu/issues/179) | Request a bounded cost-driven recalculation and follow its job and original/replacement run details through the dashboard | Correction workflow |
 | 8 | [Retention matrix #180](https://github.com/yubisuke/openmasu/issues/180) | Read saved retention by cohort date and definition-backed horizon without inventing missing values or combining incompatible series | Cohort presentation |
 

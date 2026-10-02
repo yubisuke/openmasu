@@ -80,8 +80,10 @@ not score a provider, certify its product, or recommend migration.
 
 ## Current engineering focus
 
-New elapsed-window ad-revenue ROAS runs include [saved calculation evidence](metric-explanations.md)
-for their exact numerator, denominator, FX and window. Reader-only JSON/HTML details
+New elapsed-window ad-revenue ROAS and D30 total-net ROAS runs include
+[saved calculation evidence](metric-explanations.md) for their exact numerator,
+denominator, FX and window. D30 total-net retains advertising, settled purchases
+and refund deductions separately in version 2 evidence. Reader-only JSON/HTML details
 retain historical cost selection and withhold operands when source evidence is
 redacted or purged. Older and unsupported runs show unavailable evidence explicitly.
 This addition is outside the frozen v0.2.0 release evidence.

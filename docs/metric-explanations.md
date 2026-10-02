@@ -4,7 +4,8 @@ Select an application in the dashboard and follow **Saved run details** beside
 a metric value. The detail page shows the run's definition version, grouping,
 watermark, input snapshot, rule bundle, result and revision relationship.
 
-For newly computed installation-anchored, elapsed-window **ad-revenue ROAS**,
+For newly computed installation-anchored, elapsed-window **ad-revenue ROAS**
+and the existing **D30 total-net ROAS** (`d30_total_net_roas`),
 the page also shows the recorded numerator and denominator, currency/scales,
 conversion rates, rounding rules, selected input counts and window boundaries.
 Other calculations and older runs retain provenance but show `not_recorded`
@@ -18,6 +19,29 @@ half-even before summation. One latest acquisition-day cost row per cost key is
 selected at the run watermark; scaling down rounds each selected cost row
 half-even. The final ratio is half-even rounded at the definition's ratio scale.
 An actual zero cost denominator produces `undefined / no_attributed_cost`.
+
+D30 total-net evidence uses version 2: advertising revenue plus settled
+purchase revenue minus settled refund deductions, divided by the selected
+cost. Each component is read from the same SQL aggregates used for the result.
+Purchases and refunds are independently converted and half-even rounded before
+summation, using their own occurrence times inside the half-open window.
+Refund deductions are positive operands in the subtraction, not negative inputs.
+The evidence includes the accepted ad-event, settled-purchase and settled-refund
+counts, selected cost count and eligible cohort size. It is not entitlement,
+tax, payout or provider-verification evidence.
+
+Synthetic advertising 100 + purchases 80 - refunds 20 gives numerator 160;
+against cost 100 the ratio is 1.6. Two EUR ad events of `100000001`, a EUR
+purchase of `160000001`, and a EUR refund of `40000001` (all scale 6), converted
+at 0.5, produce the same USD components 100, 80 and 20 after per-event half-even
+rounding. Summing unrounded values first would change the numerator and is not
+the calculation being explained.
+
+Version 1 ad-revenue evidence remains readable and unchanged. Version 2 is
+limited to D30 total-net ROAS, with either its recorded-dimension or explicit
+selected-acquisition definition. D90 total-net, purchase-net-only metrics and
+other unsupported series retain `not_recorded`. Overlapping cost grains refuse
+the metric calculation; they are not presented as a known zero denominator.
 
 These aggregates are inserted into `ledger.metric_calculation_evidence` in the
 same transaction as the metric run and its replay manifest. The evidence is
@@ -73,7 +97,15 @@ It creates only the evidence table, tenant RLS, append-only enforcement and role
 grants. It does not backfill old explanations or change metric-run contract
 artifacts, schemas, evaluators or golden fixtures.
 
+Migration `060_total_net_calculation_evidence.sql` additionally permits the
+version 2 evidence envelope alongside version 1. Existing rows, run artifacts,
+RLS, role grants and append-only enforcement are retained; no backfill occurs.
+Deploy this migration before a worker capable of writing version 2 evidence.
+
 The SQL parity gate covers exact operands, per-event rounding, one current cost
 row, duplicate deliveries, undefined cost, cost history, missing evidence,
-privacy removal, determinism and reader tenant/app isolation. Existing HTTP and
+privacy removal, determinism and reader tenant/app isolation. D30 total-net
+cases add component arithmetic, settled-event counts, duplicate delivery,
+per-event FX ties, late refunds and cost revisions with immutable prior evidence.
+Existing HTTP and
 role tests cover the new paths. All inputs are synthetic.

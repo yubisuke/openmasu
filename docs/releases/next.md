@@ -92,8 +92,8 @@ merged acceptance scopes and are included in the publication. The integration
 batch is complete. The next product batch is selected in
 [plan #172](https://github.com/yubisuke/openmasu/issues/172), with the ordered
 [roadmap](../roadmap.md#next-product-sequence) as its canonical crosswalk.
-The other six original slices remain planned; explicit custom-event outcomes
-(#177) now have source implementation. The separately reproduced
+The other five original slices remain planned; explicit custom-event outcomes
+(#177) and D30 total-net ROAS evidence (#178) now have source implementation. The separately reproduced
 schedule identity collision (#200) and reference retention population mismatch
 (#202) now have source implementation.
 No development slice is part of the
@@ -110,8 +110,12 @@ attribution analysis (#175) and daily calculation controls (#176) also have
 source implementation. [Custom-event outcomes](../custom-conversion-metrics.md)
 (#177) use a single saved key, distinct eligible converters and elapsed D7,
 with TS/Python/SQL parity and independent 3/10 arithmetic. Different keys are
-not comparable; zero and empty-cohort undefined remain distinct. Next connect
-saved-evidence workflows (#178-#180).
+not comparable; zero and empty-cohort undefined remain distinct.
+[D30 total-net explanations](../metric-explanations.md) (#178) retain original
+advertising, purchase, refund and cost components with exact rounding. Version 1
+ad-revenue evidence remains readable; older and unsupported runs are not
+backfilled. Apply migration 060 before the new worker. Next connect correction
+and retention presentation workflows (#179-#180).
 App Store binding, finer advertising grain and separate
 re-engagement outcomes (#186-#188) remain scoped follow-ups. These connections
 must not be inferred from existing component coverage. Each Issue reuses
