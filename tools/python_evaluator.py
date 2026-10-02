@@ -549,6 +549,20 @@ def admitted_refunds(
         target = resolve_refund_target_identity(candidate, candidates)
         if target is None:
             continue
+        reversal_target = candidate["record"]["payload"].get("reverses_refund_record_id")
+        if reversal_target is not None:
+            prior = next((refund for refund in winners.values()
+                          if refund["record"]["record_id"] == reversal_target
+                          and refund["server"]["tenant_id"] == candidate["server"]["tenant_id"]
+                          and refund["server"]["app_id"] == candidate["server"]["app_id"]), None)
+            if (prior is None or candidate["record"]["payload"]["financial_status"] != "reversed"
+                    or prior["record"]["payload"]["financial_status"] != "settled"
+                    or targets.get(attempt_decision_key(prior)) is not target
+                    or not received_no_later_than(prior, candidate) or not occurred_no_later_than(prior, candidate)):
+                continue
+            scale = max(int(prior["record"]["payload"]["amount_scale"]), int(candidate["record"]["payload"]["amount_scale"]))
+            if exact_money_at_scale(prior["record"]["payload"], scale) != exact_money_at_scale(candidate["record"]["payload"], scale):
+                continue
         if candidate["record"]["payload"]["financial_status"] == "settled":
             target_key = attempt_decision_key(target)
             prior = settled_by_target.get(target_key, [])
@@ -1133,6 +1147,18 @@ def metric_definitions(value: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def validate_metric_definition_series(definition: dict[str, Any]) -> None:
+    if "refund_reversal_policy" in definition or definition.get("rule_bundle_id") == "metric-refund-reversal":
+        if (definition.get("refund_reversal_policy") != "cancel_target_refund_at_watermark"
+                or definition.get("rule_bundle_id") != "metric-refund-reversal"
+                or definition.get("metric_definition_version") != "0.4.15"
+                or definition.get("rule_bundle_version") != "0.4.15"
+                or definition.get("rule_bundle_hash") != "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc"):
+            raise ValueError(f"metric_definition_series_mismatch:{definition['metric_name']}")
+        base = {**definition, "metric_definition_version": "0.4.13", "rule_bundle_id": "metric-selected-commerce",
+                "rule_bundle_version": "0.4.13", "rule_bundle_hash": METRIC_SELECTED_COMMERCE_BUNDLE_HASH}
+        del base["refund_reversal_policy"]
+        validate_metric_definition_series(base)
+        return
     purchase_net_days = {
         "cohort_purchase_net_revenue_d0_usd": 0,
         "cohort_purchase_net_revenue_d1_usd": 1,
@@ -1582,6 +1608,15 @@ def metric_runs(
                 for item in refunds:
                     target = resolve_refund_target(item, visible)
                     if target is None or target["record"]["payload"]["financial_status"] != "settled":
+                        continue
+                    if definition.get("refund_reversal_policy") and any(
+                        reversal["record"]["event_name"] == "refund"
+                        and reversal["record"]["payload"]["financial_status"] == "reversed"
+                        and reversal["server"]["tenant_id"] == item["server"]["tenant_id"]
+                        and reversal["server"]["app_id"] == item["server"]["app_id"]
+                        and reversal["record"]["payload"].get("reverses_refund_record_id") == item["record"]["record_id"]
+                        for reversal in visible
+                    ):
                         continue
                     installation = next((
                         candidate for candidate in eligible_installs

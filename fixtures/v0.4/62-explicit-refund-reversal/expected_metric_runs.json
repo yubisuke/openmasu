@@ -1,0 +1,917 @@
+[
+  {
+    "metric_definition_version": "0.4.15",
+    "input_snapshot_id": "ccb3e45382b681204995e9a6e82da4b0eec7d81861d96e44dcddaeee7facca0b",
+    "input_received_at_watermark": "2026-08-12T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|revenue-native-acquisition",
+    "computed_at": "2026-08-12T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-refund-reversal",
+    "rule_bundle_version": "0.4.15",
+    "rule_bundle_hash": "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "reversal62-before:cohort_purchase_net_revenue_d30_usd",
+    "metric_name": "cohort_purchase_net_revenue_d30_usd",
+    "value_type": "money",
+    "value_unscaled": "10000000",
+    "currency": "USD",
+    "amount_scale": 6,
+    "fx_rate_unscaled": "100000000",
+    "fx_rate_scale": 8,
+    "fx_rate_source": "synthetic-fixture-rate",
+    "fx_rate_as_of": "2026-08-12T00:00:00.000Z",
+    "fx_rate_snapshot_id": "ffa58914aa0e3f8339ca16e6b7a79dd194b20f6b3df574e3e22997d6612f4a05",
+    "fx_policy_version": "fx-v0.1"
+  },
+  {
+    "metric_definition_version": "0.4.15",
+    "input_snapshot_id": "ccb3e45382b681204995e9a6e82da4b0eec7d81861d96e44dcddaeee7facca0b",
+    "input_received_at_watermark": "2026-08-12T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|revenue-native-acquisition",
+    "computed_at": "2026-08-12T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-refund-reversal",
+    "rule_bundle_version": "0.4.15",
+    "rule_bundle_hash": "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "reversal62-before:cohort_total_net_ltv_d30_usd",
+    "metric_name": "cohort_total_net_ltv_d30_usd",
+    "value_type": "money",
+    "value_unscaled": "30000000",
+    "currency": "USD",
+    "amount_scale": 6,
+    "fx_rate_unscaled": "100000000",
+    "fx_rate_scale": 8,
+    "fx_rate_source": "synthetic-fixture-rate",
+    "fx_rate_as_of": "2026-08-12T00:00:00.000Z",
+    "fx_rate_snapshot_id": "ffa58914aa0e3f8339ca16e6b7a79dd194b20f6b3df574e3e22997d6612f4a05",
+    "fx_policy_version": "fx-v0.1"
+  },
+  {
+    "metric_definition_version": "0.4.15",
+    "input_snapshot_id": "ccb3e45382b681204995e9a6e82da4b0eec7d81861d96e44dcddaeee7facca0b",
+    "input_received_at_watermark": "2026-08-12T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|revenue-native-acquisition",
+    "computed_at": "2026-08-12T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-refund-reversal",
+    "rule_bundle_version": "0.4.15",
+    "rule_bundle_hash": "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "reversal62-before:cohort_total_net_revenue_d30_usd",
+    "metric_name": "cohort_total_net_revenue_d30_usd",
+    "value_type": "money",
+    "value_unscaled": "30000000",
+    "currency": "USD",
+    "amount_scale": 6,
+    "fx_rate_unscaled": "100000000",
+    "fx_rate_scale": 8,
+    "fx_rate_source": "synthetic-fixture-rate",
+    "fx_rate_as_of": "2026-08-12T00:00:00.000Z",
+    "fx_rate_snapshot_id": "ffa58914aa0e3f8339ca16e6b7a79dd194b20f6b3df574e3e22997d6612f4a05",
+    "fx_policy_version": "fx-v0.1"
+  },
+  {
+    "metric_definition_version": "0.4.15",
+    "input_snapshot_id": "ccb3e45382b681204995e9a6e82da4b0eec7d81861d96e44dcddaeee7facca0b",
+    "input_received_at_watermark": "2026-08-12T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|revenue-native-acquisition",
+    "computed_at": "2026-08-12T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-refund-reversal",
+    "rule_bundle_version": "0.4.15",
+    "rule_bundle_hash": "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "reversal62-before:d30_total_net_roas",
+    "metric_name": "d30_total_net_roas",
+    "value_type": "ratio",
+    "value_unscaled": "3000000",
+    "ratio_scale": 6
+  },
+  {
+    "metric_definition_version": "0.4.15",
+    "input_snapshot_id": "100f0194b5c26d5681d3eccec69b7b05bdba859ef5e22fe8fbbd8ea6d09bcefd",
+    "input_received_at_watermark": "2026-08-14T00:00:00.000Z",
+    "input_ledger_position": "2026-08-14T00:00:00.000Z|reversal-62",
+    "computed_at": "2026-08-14T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-refund-reversal",
+    "rule_bundle_version": "0.4.15",
+    "rule_bundle_hash": "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "reversal-62",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "reversal62-cancel:cohort_purchase_net_revenue_d30_usd",
+    "metric_name": "cohort_purchase_net_revenue_d30_usd",
+    "value_type": "money",
+    "value_unscaled": "10000000",
+    "currency": "USD",
+    "amount_scale": 6,
+    "fx_rate_unscaled": "100000000",
+    "fx_rate_scale": 8,
+    "fx_rate_source": "synthetic-fixture-rate",
+    "fx_rate_as_of": "2026-08-12T00:00:00.000Z",
+    "fx_rate_snapshot_id": "ffa58914aa0e3f8339ca16e6b7a79dd194b20f6b3df574e3e22997d6612f4a05",
+    "fx_policy_version": "fx-v0.1"
+  },
+  {
+    "metric_definition_version": "0.4.15",
+    "input_snapshot_id": "100f0194b5c26d5681d3eccec69b7b05bdba859ef5e22fe8fbbd8ea6d09bcefd",
+    "input_received_at_watermark": "2026-08-14T00:00:00.000Z",
+    "input_ledger_position": "2026-08-14T00:00:00.000Z|reversal-62",
+    "computed_at": "2026-08-14T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-refund-reversal",
+    "rule_bundle_version": "0.4.15",
+    "rule_bundle_hash": "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "reversal-62",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "reversal62-cancel:cohort_total_net_ltv_d30_usd",
+    "metric_name": "cohort_total_net_ltv_d30_usd",
+    "value_type": "money",
+    "value_unscaled": "30000000",
+    "currency": "USD",
+    "amount_scale": 6,
+    "fx_rate_unscaled": "100000000",
+    "fx_rate_scale": 8,
+    "fx_rate_source": "synthetic-fixture-rate",
+    "fx_rate_as_of": "2026-08-12T00:00:00.000Z",
+    "fx_rate_snapshot_id": "ffa58914aa0e3f8339ca16e6b7a79dd194b20f6b3df574e3e22997d6612f4a05",
+    "fx_policy_version": "fx-v0.1"
+  },
+  {
+    "metric_definition_version": "0.4.15",
+    "input_snapshot_id": "100f0194b5c26d5681d3eccec69b7b05bdba859ef5e22fe8fbbd8ea6d09bcefd",
+    "input_received_at_watermark": "2026-08-14T00:00:00.000Z",
+    "input_ledger_position": "2026-08-14T00:00:00.000Z|reversal-62",
+    "computed_at": "2026-08-14T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-refund-reversal",
+    "rule_bundle_version": "0.4.15",
+    "rule_bundle_hash": "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "reversal-62",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "reversal62-cancel:cohort_total_net_revenue_d30_usd",
+    "metric_name": "cohort_total_net_revenue_d30_usd",
+    "value_type": "money",
+    "value_unscaled": "30000000",
+    "currency": "USD",
+    "amount_scale": 6,
+    "fx_rate_unscaled": "100000000",
+    "fx_rate_scale": 8,
+    "fx_rate_source": "synthetic-fixture-rate",
+    "fx_rate_as_of": "2026-08-12T00:00:00.000Z",
+    "fx_rate_snapshot_id": "ffa58914aa0e3f8339ca16e6b7a79dd194b20f6b3df574e3e22997d6612f4a05",
+    "fx_policy_version": "fx-v0.1"
+  },
+  {
+    "metric_definition_version": "0.4.15",
+    "input_snapshot_id": "100f0194b5c26d5681d3eccec69b7b05bdba859ef5e22fe8fbbd8ea6d09bcefd",
+    "input_received_at_watermark": "2026-08-14T00:00:00.000Z",
+    "input_ledger_position": "2026-08-14T00:00:00.000Z|reversal-62",
+    "computed_at": "2026-08-14T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-refund-reversal",
+    "rule_bundle_version": "0.4.15",
+    "rule_bundle_hash": "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "reversal-62",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "reversal62-cancel:d30_total_net_roas",
+    "metric_name": "d30_total_net_roas",
+    "value_type": "ratio",
+    "value_unscaled": "3000000",
+    "ratio_scale": 6
+  },
+  {
+    "metric_definition_version": "0.4.15",
+    "input_snapshot_id": "8f5a2ab06c7820a368b8114f74cc1f14ef8f588e153771c0cdd3f58a835c9621",
+    "input_received_at_watermark": "2026-08-13T00:00:00.000Z",
+    "input_ledger_position": "2026-08-13T00:00:00.000Z|refund-60",
+    "computed_at": "2026-08-13T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-refund-reversal",
+    "rule_bundle_version": "0.4.15",
+    "rule_bundle_hash": "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "reversal62-refund:cohort_purchase_net_revenue_d30_usd",
+    "metric_name": "cohort_purchase_net_revenue_d30_usd",
+    "value_type": "money",
+    "value_unscaled": "6000000",
+    "currency": "USD",
+    "amount_scale": 6,
+    "fx_rate_unscaled": "100000000",
+    "fx_rate_scale": 8,
+    "fx_rate_source": "synthetic-fixture-rate",
+    "fx_rate_as_of": "2026-08-12T00:00:00.000Z",
+    "fx_rate_snapshot_id": "ffa58914aa0e3f8339ca16e6b7a79dd194b20f6b3df574e3e22997d6612f4a05",
+    "fx_policy_version": "fx-v0.1"
+  },
+  {
+    "metric_definition_version": "0.4.15",
+    "input_snapshot_id": "8f5a2ab06c7820a368b8114f74cc1f14ef8f588e153771c0cdd3f58a835c9621",
+    "input_received_at_watermark": "2026-08-13T00:00:00.000Z",
+    "input_ledger_position": "2026-08-13T00:00:00.000Z|refund-60",
+    "computed_at": "2026-08-13T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-refund-reversal",
+    "rule_bundle_version": "0.4.15",
+    "rule_bundle_hash": "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "reversal62-refund:cohort_total_net_ltv_d30_usd",
+    "metric_name": "cohort_total_net_ltv_d30_usd",
+    "value_type": "money",
+    "value_unscaled": "26000000",
+    "currency": "USD",
+    "amount_scale": 6,
+    "fx_rate_unscaled": "100000000",
+    "fx_rate_scale": 8,
+    "fx_rate_source": "synthetic-fixture-rate",
+    "fx_rate_as_of": "2026-08-12T00:00:00.000Z",
+    "fx_rate_snapshot_id": "ffa58914aa0e3f8339ca16e6b7a79dd194b20f6b3df574e3e22997d6612f4a05",
+    "fx_policy_version": "fx-v0.1"
+  },
+  {
+    "metric_definition_version": "0.4.15",
+    "input_snapshot_id": "8f5a2ab06c7820a368b8114f74cc1f14ef8f588e153771c0cdd3f58a835c9621",
+    "input_received_at_watermark": "2026-08-13T00:00:00.000Z",
+    "input_ledger_position": "2026-08-13T00:00:00.000Z|refund-60",
+    "computed_at": "2026-08-13T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-refund-reversal",
+    "rule_bundle_version": "0.4.15",
+    "rule_bundle_hash": "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "reversal62-refund:cohort_total_net_revenue_d30_usd",
+    "metric_name": "cohort_total_net_revenue_d30_usd",
+    "value_type": "money",
+    "value_unscaled": "26000000",
+    "currency": "USD",
+    "amount_scale": 6,
+    "fx_rate_unscaled": "100000000",
+    "fx_rate_scale": 8,
+    "fx_rate_source": "synthetic-fixture-rate",
+    "fx_rate_as_of": "2026-08-12T00:00:00.000Z",
+    "fx_rate_snapshot_id": "ffa58914aa0e3f8339ca16e6b7a79dd194b20f6b3df574e3e22997d6612f4a05",
+    "fx_policy_version": "fx-v0.1"
+  },
+  {
+    "metric_definition_version": "0.4.15",
+    "input_snapshot_id": "8f5a2ab06c7820a368b8114f74cc1f14ef8f588e153771c0cdd3f58a835c9621",
+    "input_received_at_watermark": "2026-08-13T00:00:00.000Z",
+    "input_ledger_position": "2026-08-13T00:00:00.000Z|refund-60",
+    "computed_at": "2026-08-13T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-refund-reversal",
+    "rule_bundle_version": "0.4.15",
+    "rule_bundle_hash": "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-60",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "reversal62-refund:d30_total_net_roas",
+    "metric_name": "d30_total_net_roas",
+    "value_type": "ratio",
+    "value_unscaled": "2600000",
+    "ratio_scale": 6
+  }
+]

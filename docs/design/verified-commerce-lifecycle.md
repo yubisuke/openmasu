@@ -174,10 +174,35 @@ or organization access revocation, an unknown type, or a revocation date alone
 does not establish refunded money. Contradictory full-refund percentages are
 not projected.
 
-`REFUND_REVERSED` needs a separate append-only link to the previously admitted
-refund. The current settled-only metric contract cannot cancel that deduction
-by appending a reversed row. [Refund reversal follow-up #209](https://github.com/yubisuke/openmasu/issues/209)
-covers this narrow gap; do not synthesize another purchase or rewrite old runs.
+`REFUND_REVERSED` must link to the previously admitted refund, not synthesize
+another purchase. The contract and opt-in metric profile below support that
+link. The verified Apple normalizer does not yet project it; the provider
+connection and late correction remain in [refund reversal follow-up #209](https://github.com/yubisuke/openmasu/issues/209).
+
+## Explicit refund-cancellation metrics
+
+Contract patch 0.4.15 adds optional `reverses_refund_record_id` to a reversed,
+installation-anchored refund. `correction_target_record_id` still identifies
+the original purchase. The new reference must identify a previously admitted
+settled refund for the same purchase, installation, original transaction and
+currency, with exactly equal money and nondecreasing occurrence/receipt times.
+Unknown, cross-scope or mismatched targets are rejected rather than guessed.
+
+Use `REFUND_REVERSAL_METRIC_DEFINITIONS` from `@openmasu/contracts` to opt into
+independent bundle `metric-refund-reversal` version `0.4.15` and
+`refund_reversal_policy=cancel_target_refund_at_watermark`. Existing definitions
+remain settled-refund-only. No schedule or saved run is automatically upgraded.
+At the input watermark, a valid cancellation suppresses its target refund's
+original contributing amount, rounded in that refund's window. It does not
+add a new purchase, refund unrelated partials, or create positive revenue from
+a refund outside the selected window. Repeated cancellation claims restore
+each target at most once. All three linked records remain subject to privacy.
+
+Saved total-ROAS explanation version 3 shows the original refund deduction and
+its cancellation separately. Comparison and replay capture the policy, so the
+new profile is not silently compared as equivalent to an old one. The existing
+cumulative settled-refund admission cap is not reopened by a cancellation;
+repeat refund/reversal cycles are not a general accounting engine.
 
 Additional primary references checked 2026-10-02:
 
@@ -204,5 +229,5 @@ outcomes only.
 
 Live stores, credentials, delivery, quotas, root/key rotation, complete missed-
 notification recovery, Unity C# purchase helpers, cross-product/account relinking,
-refund reversal, entitlement, tax and payout
+verified-provider refund-reversal ingestion, entitlement, tax and payout
 remain unfinished or unverified operator/product concerns.

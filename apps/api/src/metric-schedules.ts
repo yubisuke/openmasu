@@ -44,7 +44,7 @@ const metricGroupingKeys = new Set([...groupingKeys, "cohort_date", "metric_date
 const metricDefinitionFields = new Set([
   "metric_name", "metric_definition_version", "anchor_event", "aggregation_time_zone", "value_type",
   "currency", "amount_scale", "ratio_scale", "definition", "activity_events", "event_names",
-  "grouping_dimensions", "fraud_policy", "acquisition_basis", "conversion_event_key", "cost_selection_policy", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash",
+  "grouping_dimensions", "fraud_policy", "acquisition_basis", "conversion_event_key", "cost_selection_policy", "refund_reversal_policy", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash",
 ]);
 
 function object(value: unknown, error: string): JsonObject {
@@ -92,6 +92,15 @@ function validStringArray(value: unknown, allowed?: ReadonlySet<string>): boolea
 }
 
 function validMetricDefinition(value: JsonObject): boolean {
+  if (value.refund_reversal_policy !== undefined || value.rule_bundle_id === "metric-refund-reversal") {
+    if (value.refund_reversal_policy !== "cancel_target_refund_at_watermark" || value.rule_bundle_id !== "metric-refund-reversal"
+        || value.metric_definition_version !== "0.4.15" || value.rule_bundle_version !== "0.4.15"
+        || value.rule_bundle_hash !== "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc") return false;
+    const base: JsonObject = { ...value, metric_definition_version: "0.4.13", rule_bundle_id: "metric-selected-commerce",
+      rule_bundle_version: "0.4.13", rule_bundle_hash: "49554ad7fe9709e851f5cba7ac12215b539a9b209cc96ab66a085f0b1b46615d" };
+    delete base.refund_reversal_policy;
+    return validMetricDefinition(base);
+  }
   const selectedCommerce = value.rule_bundle_id === "metric-selected-commerce";
   const customConversion = value.rule_bundle_id === "metric-custom-conversion";
   if (!selectedCommerce && value.cost_selection_policy !== undefined && (value.cost_selection_policy !== "reject_overlapping_grains"

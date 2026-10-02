@@ -174,3 +174,35 @@ expected files were promoted in a commit separate from behavior changes.
 Runtime SQL additionally covers boundary, duplicate, late, privacy, native
 selected-campaign and gross/net inputs, and saves the key in replay/comparison
 context. Earlier tagged release evidence is not reissued by this source patch.
+
+## Explicit targeted refund cancellation (0.4.15)
+
+Optional refund-event `reverses_refund_record_id` is valid only for an
+installation-anchored reversed refund. Its existing purchase correction target
+keeps its meaning. Admission requires an earlier settled refund in the same
+scope, purchase, installation, original transaction and currency with equal
+money. Invalid targets retain the existing `refund_target_invalid` rejection.
+Unlinked reversed refunds preserve their historical admission and metric meaning.
+
+Optional metric-definition `refund_reversal_policy` is tied to independent
+`metric-refund-reversal` version `0.4.15`. Only explicitly selected definitions
+cancel their target refund's original contribution at the input watermark.
+Old definitions, saved runs, schema URNs and wire/package versions are unchanged.
+This is additive conditional behavior; no registry, dependency or table is
+introduced. Forward-only migration 063 admits calculation-evidence version 3
+without rewriting versions 1/2. The existing protected refund-fact artifact carries
+the optional link; normalized money and purchase-reference columns are unchanged.
+Saved explanation version 3 and comparison context retain the policy and the
+separate deduction/cancellation operands. Old evidence versions remain readable.
+
+Complete golden change inventory: new `62-explicit-refund-reversal/input.json`
+and all thirteen new `expected_*.json` files; the shared fixture README records
+their independent derivation. **No pre-existing input or golden changes.**
+Use `git diff --name-status b7984b0 -- fixtures/v0.4/` to confirm only fixture 62
+and that README differ. The three snapshots independently calculate purchase
+net 10 / 6 / 10, total net and LTV 30 / 26 / 30, and ROAS 3 / 2.6 / 3.
+Each payload and snapshot digest was constructed from the specified canonical
+inputs, then compared to both evaluators before promotion. The new expected
+files are committed separately from behavior changes. Synthetic cases also
+cover duplicate claims, unrelated partial refunds, invalid or out-of-order
+targets, different scales, window boundaries and deletion of each linked record.

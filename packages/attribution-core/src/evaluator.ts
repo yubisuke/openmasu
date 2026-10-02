@@ -552,6 +552,18 @@ function admittedRefunds(candidates: readonly Attempt[]): {
     if (winners.has(businessKey)) continue;
     const target = resolveRefundTargetIdentity(candidate, candidates);
     if (!target) continue;
+    const reversalTarget = candidate.record.payload.reverses_refund_record_id;
+    if (reversalTarget !== undefined) {
+      const prior = [...winners.values()].find((refund) =>
+        refund.record.record_id === reversalTarget && refund.server.tenant_id === candidate.server.tenant_id
+        && refund.server.app_id === candidate.server.app_id);
+      if (!prior || candidate.record.payload.financial_status !== "reversed"
+          || prior.record.payload.financial_status !== "settled"
+          || targets.get(attemptDecisionKey(prior)) !== target
+          || !receivedNoLaterThan(prior, candidate) || !occurredNoLaterThan(prior, candidate)) continue;
+      const scale = Math.max(Number(prior.record.payload.amount_scale), Number(candidate.record.payload.amount_scale));
+      if (exactMoneyAtScale(prior.record.payload, scale) !== exactMoneyAtScale(candidate.record.payload, scale)) continue;
+    }
     if (candidate.record.payload.financial_status === "settled") {
       const targetKey = attemptDecisionKey(target);
       const prior = settledByTarget.get(targetKey) ?? [];
@@ -1082,6 +1094,14 @@ function metricDefinitions(input: Any): MetricDefinition[] {
 }
 
 function validateMetricDefinitionSeries(definition: Any): void {
+  if (definition.refund_reversal_policy !== undefined || definition.rule_bundle_id === "metric-refund-reversal") {
+    if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`);
+    const base: Any = { ...definition, metric_definition_version: "0.4.13", rule_bundle_id: "metric-selected-commerce",
+      rule_bundle_version: "0.4.13", rule_bundle_hash: nonFraudBundleHash("metric-selected-commerce") };
+    delete base.refund_reversal_policy;
+    validateMetricDefinitionSeries(base);
+    return;
+  }
   if (definition.conversion_event_key !== undefined || definition.rule_bundle_id === "metric-custom-conversion"
       || definition.definition?.numerator === "converted_installations"
       || ["converted_installations", "converted_installations_over_cohort"].includes(definition.definition?.calculation)) {
@@ -1395,6 +1415,10 @@ function metricRuns(
       }, 0n) - refunds.reduce((sum, item) => {
         const target = resolveRefundTarget(item, visible);
         if (!target || target.record.payload.financial_status !== "settled") return sum;
+        if (definition.refund_reversal_policy && visible.some((reversal) =>
+          reversal.record.event_name === "refund" && reversal.record.payload.financial_status === "reversed"
+          && reversal.server.tenant_id === item.server.tenant_id && reversal.server.app_id === item.server.app_id
+          && reversal.record.payload.reverses_refund_record_id === item.record.record_id)) return sum;
         const installation = eligibleInstalls.find((candidate) =>
           candidate.server.tenant_id === target.server.tenant_id && candidate.server.app_id === target.server.app_id &&
           candidate.record.payload.installation_id === target.record.payload.installation_id,
