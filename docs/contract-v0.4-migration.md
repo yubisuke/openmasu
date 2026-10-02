@@ -74,6 +74,7 @@ grouping, privacy state, or fraud meaning changed.
 | 0.4.8 | installation-anchored purchase/refund net revenue | 55 |
 | 0.4.9 | D30/D90 purchase-net and total-net metrics | 56 |
 | 0.4.10 | AdAttributionKit re-engagement and current conversion targeting | 57 |
+| 0.4.11 | selected first-party acquisition grouping, explicit metric/rule identity, attribution-bound snapshots | 58 |
 
 These patches leave active schema IDs on the v0.4 minor line. Each new vocabulary
 or definition is exercised by synthetic evidence. Earlier goldens remain
@@ -91,6 +92,24 @@ not have been re-engagement postbacks. Fixture 57 adds 13 reviewed golden files.
 Fixtures 1 through 56 and their goldens remain byte-identical.
 
 ## Current source of truth
+
+Patch 0.4.11 adds optional `acquisition_basis=selected_first_party_click` to
+metric definitions. Absence preserves recorded-dimension grouping exactly.
+The new `metric-selected-acquisition` bundle and definitions use independent
+version `0.4.11`; no existing definition or stored run is reinterpreted. The
+wire contract remains `0.4.0` and all schema URNs remain `v0.4`. No event field,
+SDK claim, stored install fact, attribution authority, or Apple aggregate
+semantics changes. Selected acquisition is currently supported for installation
+count, advertising-revenue ROAS/LTV, and retention; purchase-net and total-net
+definitions retain their prior meaning.
+
+Fixture `58-selected-native-acquisition` adds `input.json` and all 13
+`expected_*.json` artifact classes. There are **no changed pre-existing golden
+files**. Compare `git diff --name-status 164ead2 -- fixtures/v0.4/` to confirm
+only fixture 58 and its README derivation were added/updated. The three new run
+values are independently derived as one accepted installation, USD 20 / 1 =
+USD 20 LTV, and USD 20 / USD 10 = 2 ROAS. Attribution/record provenance and
+digest construction are documented in `fixtures/v0.4/README.md`.
 
 Use `schemas/`, `registries/`, `fixtures/v0.4/`, and
 `spec/event-metric-contract-v0.4.md` together. This migration document explains

@@ -231,3 +231,15 @@ export const M1B_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricDefinitionV04> 
     ...ruleBundle(),
   },
 ];
+
+/** New definitions; historical definitions and their replay semantics stay immutable. */
+export const SELECTED_ACQUISITION_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricDefinitionV04> =
+  M1B_METRIC_DEFINITIONS.filter((definition) => definition.rule_bundle_id === "metric-stage-b")
+    .map((definition) => ({
+      ...definition,
+      metric_definition_version: "0.4.11",
+      acquisition_basis: "selected_first_party_click",
+      rule_bundle_id: "metric-selected-acquisition",
+      rule_bundle_version: "0.4.11",
+      rule_bundle_hash: nonFraudBundleHash("metric-selected-acquisition"),
+    }));

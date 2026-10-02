@@ -22,6 +22,60 @@ const goldenBefore = readFileSync(goldenPath);
 const golden: Any[] = JSON.parse(goldenBefore.toString("utf8"));
 const oracle = evaluate(input).metric_runs;
 
+describe("selected native acquisition SQL parity", { concurrency: false }, () => {
+  let app: Pool;
+  let seed: Pool;
+  before(() => { app = createAppPool(); seed = createSeedPool(); });
+  after(async () => { await app?.end(); await seed?.end(); });
+  const fixture58 = () => JSON.parse(readFileSync(join(process.cwd(), "fixtures/v0.4/58-selected-native-acquisition/input.json"), "utf8"));
+
+  it("selects campaign from attribution evidence without rewriting SDK install facts", async () => {
+    const source = fixture58();
+    await ingestFixture("selected-acquisition", source, app, seed);
+    const runs = await computeSqlMetricRuns(app, source, true);
+    assert.equal(jcs(runs), jcs(evaluate(source).metric_runs));
+    assert.deepEqual(runs.map((run) => [run.metric_name, run.value_unscaled]), [
+      ["cohort_install_count", "1"], ["cohort_ltv_d0_usd", "20000000"], ["d0_roas", "2000000"],
+    ]);
+    const facts = await withTenant(app, "tenant-a", async (client) => (await client.query(
+      "SELECT campaign_id,network FROM ledger.install_facts WHERE tenant_id='tenant-a' AND app_id='app-a'",
+    )).rows);
+    assert.deepEqual(facts, [{ campaign_id: null, network: null }]);
+  });
+
+  it("excludes late selected evidence at the prior watermark and matches TS at both cutoffs", async () => {
+    const source = fixture58();
+    const [click, ...rest] = source.records;
+    const late = "2026-08-13T00:00:00.000Z";
+    source.batches = [
+      { batch_id: "selected-acquisition-initial", server_context: source.server_context, records: rest },
+      { batch_id: "selected-acquisition-late-click", server_context: { ...source.server_context, received_at: late }, records: [{ ...click, received_at: late }] },
+    ];
+    delete source.records;
+    await ingestFixture("selected-acquisition-late", source, app, seed);
+    const earlier = await computeSqlMetricRuns(app, source, false);
+    assert.equal(jcs(earlier), jcs(evaluate(source).metric_runs));
+    assert.equal(earlier[0].value_unscaled, "0");
+    source.metric_evaluations[0].input_received_at_watermark = late;
+    source.metric_evaluations[0].computed_at = late;
+    const later = await computeSqlMetricRuns(app, source, false);
+    assert.equal(jcs(later), jcs(evaluate(source).metric_runs));
+    assert.equal(later[0].value_unscaled, "1");
+  });
+
+  it("keeps redacted selected click semantics unavailable during SQL recomputation", async () => {
+    const source = fixture58();
+    const privacy = JSON.parse(readFileSync(join(process.cwd(), "fixtures/v0.4/17-redaction-recalculation/input.json"), "utf8"));
+    source.privacy_requests = [{ ...privacy.privacy_requests[0], affected_records: [{ record_id: "click-1", lifecycle_status: "redacted" }] }];
+    source.metric_evaluations[0].privacy_state = "after";
+    await ingestFixture("selected-acquisition-privacy", source, app, seed);
+    const runs = await computeSqlMetricRuns(app, source, false);
+    assert.equal(jcs(runs), jcs(evaluate(source).metric_runs));
+    assert.equal(runs[0].value_unscaled, "0");
+    assert.equal(runs[0].reproducibility_status, "redaction_affected");
+  });
+});
+
 let appPool: Pool;
 let seedPool: Pool;
 let sqlRuns: Any[];

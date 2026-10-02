@@ -8,6 +8,7 @@ import {
 import { jcs, sha256 } from "@openmasu/attribution-core";
 import type { RoasCalculationEvidence, RoasOperands } from "@openmasu/runtime";
 import { captureMetricComparisonContext, type MetricComparisonContext } from "@openmasu/runtime";
+import { selectedAcquisitionSql, selectedClickJoinSql } from "./selected-acquisition.js";
 
 type Any = Record<string, any>;
 type Queryable = Pick<PoolClient, "query">;
@@ -620,6 +621,7 @@ async function metricValue(
     window_elapsed: boolean | null;
   }>(
     `WITH
+       acquisition AS (SELECT * FROM (${selectedAcquisitionSql}) AS selected WHERE $18::boolean),
        rates AS (
          SELECT currency, rate_unscaled::numeric AS rate_unscaled, rate_scale
          FROM jsonb_to_recordset($12::jsonb)
@@ -644,15 +646,16 @@ async function metricValue(
            ORDER BY candidate.decided_at DESC, candidate.attribution_id DESC
            LIMIT 1
          ) AS attribution ON true
+         ${selectedClickJoinSql}
          WHERE install.tenant_id=$1 AND install.app_id=$2 AND install.occurred_at IS NOT NULL
            AND raw.received_at <= $3
            AND ($15='before' OR raw.payload_lifecycle_status='available')
-           AND ($4::text IS NULL OR install.campaign_id=$4)
-           AND ($5::text IS NULL OR install.network=$5)
+           AND ($4::text IS NULL OR coalesce(install.campaign_id, acquisition_source.campaign_id)=$4)
+           AND ($5::text IS NULL OR coalesce(install.network, acquisition_source.network)=$5)
            AND ($6::text IS NULL OR install.country=$6)
            AND ($7::text IS NULL OR timezone($8, install.occurred_at_ts)::date::text=$7)
-           AND ($16::text IS NULL OR attribution.status=$16)
-           AND ($17='gross' OR attribution.reason_code IS DISTINCT FROM 'fraud_excluded')
+           AND ($16::text IS NULL OR (CASE WHEN $18 THEN coalesce(acquisition.status, 'unattributed') ELSE attribution.status END)=$16)
+           AND ($17='gross' OR (CASE WHEN $18 THEN acquisition.reason_code ELSE attribution.reason_code END) IS DISTINCT FROM 'fraud_excluded')
        ),
        revenue_candidates AS (
          SELECT revenue.*, cohort.installed_at, rate.rate_unscaled, rate.rate_scale
@@ -773,6 +776,7 @@ async function metricValue(
       privacyState,
       grouping?.attribution_status ?? null,
       definition.fraud_policy ?? "gross",
+      definition.acquisition_basis === "selected_first_party_click",
     ],
   );
   const row = result.rows[0];
@@ -906,6 +910,12 @@ export async function computeSqlMetricRunsWithClient(
       ]);
     }
     const inputSnapshotId = snapshot.finish();
+    const usesAcquisition = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.acquisition_basis);
+    const acquisitionRows = usesAcquisition ? (await client.query<{ artifact: Any }>(
+      selectedAcquisitionSql, [scope.tenant_id, scope.app_id, evaluation.input_received_at_watermark],
+    )).rows.map(({ artifact }) => artifact).sort((a, b) => compareText(a.tenant_id, b.tenant_id)
+      || compareText(a.app_id, b.app_id) || compareText(a.attribution_id, b.attribution_id))
+      .map((artifact) => [artifact.tenant_id, artifact.app_id, artifact.attribution_id, sha256(artifact)]) : [];
     const evidenceRefs = [
       ...records.map((record) => ({
         tenant_id: record.tenant_id,
@@ -959,7 +969,9 @@ export async function computeSqlMetricRunsWithClient(
         metric_run_id: `${evaluation.metric_run_id_prefix}:${metricName}`,
         metric_name: metricName,
         metric_definition_version: definition.metric_definition_version,
-        input_snapshot_id: inputSnapshotId,
+        input_snapshot_id: definition.acquisition_basis ? sha256({
+          record_and_cost_snapshot_id: inputSnapshotId, acquisition_attributions: acquisitionRows,
+        }) : inputSnapshotId,
         input_received_at_watermark: evaluation.input_received_at_watermark,
         input_ledger_position: ledger ? `${ledger.received_at}|${ledger.record_id}` : "empty",
         computed_at: evaluation.computed_at,
@@ -1046,6 +1058,12 @@ function assertMetricDefinitionSeries(definition: Any): void {
   const eventNames = definition.event_names ?? [];
   const grouping = definition.grouping_dimensions ?? [];
   const fail = () => { throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`); };
+  if (definition.acquisition_basis !== undefined || definition.rule_bundle_id === "metric-selected-acquisition") {
+    if (definition.acquisition_basis !== "selected_first_party_click" || definition.anchor_event !== "install"
+        || definition.metric_definition_version !== "0.4.11" || definition.rule_bundle_id !== "metric-selected-acquisition"
+        || definition.rule_bundle_version !== "0.4.11" || definition.rule_bundle_hash !== nonFraudBundleHash("metric-selected-acquisition")
+        || !["revenue", "active_installations", "cohort_size"].includes(definition.definition.numerator)) fail();
+  }
   if (definition.definition?.numerator === "purchase_net_revenue" || purchaseNetDays.has(definition.metric_name)) {
     const expectedDay = purchaseNetDays.get(definition.metric_name);
     const expectedVersion = expectedDay === 30 || expectedDay === 90 ? "0.4.9" : "0.4.8";

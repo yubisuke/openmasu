@@ -36,7 +36,7 @@ in [Project plan](project-plan.md).
 | Operator-owned bulk event exports | Synthetic complete | Default-off S3-compatible destinations, deterministic gzip NDJSON, SigV4 conditional writes, durable keyset cursors, and destination-scoped deletion notices |
 
 The current contract gate preserves parity across 28 schemas, 8 registries,
-and 57 reviewed synthetic fixtures.
+and 58 reviewed synthetic fixtures, including explicitly versioned native acquisition cohorts.
 
 ## Completed milestone: integration and release coherence
 
@@ -94,30 +94,33 @@ completeness, and operational correctness.
 
 The integration batch in [plan #155](https://github.com/yubisuke/openmasu/issues/155)
 is complete, including [v0.3.0-rc.1 publication](validation/v0.3.0-rc.1-publication.md).
-[Plan #172](https://github.com/yubisuke/openmasu/issues/172) records fifteen
-planned slices: the eight workflow improvements selected from `1c7c223`, plus
-seven core integration and follow-up slices identified at `ce7b056` on
-2026-10-02. All are **planned, not implemented**. Static inspection of the
-acquisition-to-cohort and overlapping-cost paths requires synthetic reproduction
-before either concern is reported as a reproduced defect.
+[Plan #172](https://github.com/yubisuke/openmasu/issues/172) records sixteen
+development slices: the eight workflow improvements selected from `1c7c223`, plus
+eight core integration and follow-up slices identified during the `ce7b056`
+review and subsequent synthetic reproductions on
+2026-10-02. The selected-acquisition slice now has opt-in v0.4.11 definitions,
+fixture 58, and native-inbox/SQL acceptance tests. The remaining fifteen
+slices are planned. Synthetic cases reproduce overlapping-cost double counting
+and the separate native purchase/total-net cohort gap.
 
 The first priority is a connected measurement path: tracking link, SDK install,
 selected acquisition source, campaign revenue and cost, daily ROAS, late-input
 correction, and saved explanation. Passing existing component gates or adding
 comparison screens alone does not establish that end-to-end path.
 
-| Priority / issue | Planned core slice | Exit gate / project-plan crosswalk |
+| Priority / issue | Core slice | Exit gate / project-plan crosswalk |
 | --- | --- | --- |
-| First / [#182](https://github.com/yubisuke/openmasu/issues/182) | Selected acquisition source reaches install cohorts | Reproduce the native-path concern, then use only the selected first-party click for campaign/network metrics with fixed-snapshot TS/Python/SQL parity / Acquisition projection |
+| Source implemented / [#182](https://github.com/yubisuke/openmasu/issues/182) | Selected acquisition source reaches install cohorts | Opt-in definitions, fixture 58 and native inbox/SQL tests cover campaign installs/ad-revenue ROAS, fixed snapshots and privacy / Acquisition projection |
 | First / [#183](https://github.com/yubisuke/openmasu/issues/183) | Overlapping cost grains cannot inflate the denominator | Reproduce parent/detail overlap; accept disjoint partitions and revisions, refuse ambiguous cost selection, preserve historical runs / Cost grain safety |
+| Next / [#191](https://github.com/yubisuke/openmasu/issues/191) | Selected acquisition also reaches purchase and total-net cohorts | Reuse selected source and safe cost semantics for purchase/refund/total-net metrics without reinterpreting old definitions / Commerce acquisition projection |
 | Next / [#184](https://github.com/yubisuke/openmasu/issues/184) | Late advertising revenue, purchases and refunds can correct past runs | Bounded affected-run selection and immutable replay through the existing worker, with visible pending/unavailable states / Late-input correction |
 | Next / [#185](https://github.com/yubisuke/openmasu/issues/185) | New campaigns enter daily calculation without manual enumeration | Bounded opt-in discovery with a frozen per-job target set, exact retry and explicit unknown/empty/overflow states / Campaign discovery |
 | Follow-up / [#186](https://github.com/yubisuke/openmasu/issues/186) | Verified App Store purchases reach installation cohorts | Authenticated, verified binding and purchase/refund projection with deletion and duplicate safety; no inferred identity / App Store purchase binding |
 | Follow-up / [#187](https://github.com/yubisuke/openmasu/issues/187) | Ad-group and creative outcomes share the cost grain | Selected-source dimensions and matching cost definitions without allocating parent cost by guesswork / Detailed acquisition grain |
 | Follow-up / [#188](https://github.com/yubisuke/openmasu/issues/188) | First-party re-engagement has separate outcome measures | One explicit conversion key and advertising revenue window, separate from acquisition and Apple aggregate evidence / Re-engagement outcomes |
 
-#182 and #183 precede #184 and #185; #186 follows #184, #187 follows #182/#183,
-and #188 follows #182/#177. Complete the first four core slices before the
+#182 and #183 precede #191, then #184 and #185; #186 follows #184, #187 follows #182/#183,
+and #188 follows #182/#177. Complete the first five core slices before the
 workflow batch below. The last three are scoped follow-ups, not prerequisites
 for the initial Android-first campaign workflow. App Store cohort-purchase
 coverage must not be claimed before #186; re-engagement ROAS is not delivered
@@ -144,7 +147,7 @@ It does not make an external calculation authenticated or independently verified
 
 Within the workflow batch, slice 2 depends on slice 1. The remaining slices
 reuse existing foundations; the table gives their relative priority after
-the four core slices above.
+the five core slices above.
 Slices 7 and 8 are lower priority. Keep each slice in a bounded PR and add
 behavioral evidence to existing suites. The
 [project-plan crosswalk](project-plan.md#next-product-slices) specifies the

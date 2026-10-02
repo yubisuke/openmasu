@@ -70,7 +70,7 @@ Its annotated tag and
 point to green `main` commit `90a0f5f`, with eight verified SDK download assets.
 It retains the independent Contract
 v0.4 wire and package identity, including the additive patch ledger through
-v0.4.10 with 57 reviewed fixtures and 741 goldens. Later `main` commits are not
+v0.4.11 with 58 reviewed fixtures and 754 goldens. Later `main` commits are not
 evidence for that release. [`docs/STATUS.md`](docs/STATUS.md) defines the
 current source tree, and the [release index](docs/releases/README.md) separates
 the exact published record from ongoing development and historical prereleases.
@@ -173,14 +173,19 @@ Operators who need daily cohort or calendar metrics should use the
 
 ## Validation
 
+For campaign metrics from native SDK installs, use the explicit
+[selected-acquisition definitions](docs/selected-acquisition-metrics.md).
+They connect server-selected Install Referrer evidence to ad-revenue cohorts
+without changing historical metric definitions or trusting SDK campaign claims.
+
 The main contract gate is:
 
 ```bash
 npm run validate
 ```
 
-It checks 28 schemas, 8 registries, 57 reviewed synthetic fixtures, 741 golden
-output artifacts, 57 scenario assertions, 27 acceptance criteria,
+It checks 28 schemas, 8 registries, 58 reviewed synthetic fixtures, 754 golden
+output artifacts, 58 scenario assertions, 27 acceptance criteria,
 deterministic TypeScript, the independent Python evaluator, release identity,
 documentation drift, fraud artifacts, and RFC 8785 canonicalization.
 

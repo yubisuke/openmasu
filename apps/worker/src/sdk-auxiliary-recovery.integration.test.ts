@@ -27,6 +27,10 @@ import {
   queueIntegrityVerification,
 } from "./integrity-verifier.js";
 import { processSdkInbox } from "./sdk-worker.js";
+import { SELECTED_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import { computeSqlMetricRuns } from "./metrics/cohort.js";
+import { buildMetricDefinitionsInput } from "./metrics/run.js";
+import { persistCostImport } from "./import/cost.js";
 
 type Any = Record<string, any>;
 
@@ -57,7 +61,7 @@ function scope(label: string, producer: Scope["producer"]): Scope {
 function record(
   input: Scope,
   label: string,
-  eventName: "click" | "install" | "purchase" | "refund" | "consent_changed",
+  eventName: "click" | "install" | "ad_revenue" | "purchase" | "refund" | "consent_changed",
   payload: Record<string, unknown>,
 ): Record<string, unknown> {
   return {
@@ -74,7 +78,7 @@ function record(
     occurred_at: input.receivedAt,
     occurred_at_source: "device",
     received_at: input.receivedAt,
-    processing_purpose_id: ["purchase", "refund"].includes(eventName) ? "revenue_measurement" : "attribution",
+    processing_purpose_id: ["ad_revenue", "purchase", "refund"].includes(eventName) ? "revenue_measurement" : "attribution",
     processing_sequence: 1,
     payload: { event_name: eventName, ...payload },
   };
@@ -159,6 +163,115 @@ after(async () => {
 });
 
 describe("SDK auxiliary queue recovery", () => {
+  it("connects native inbox attribution to campaign install count, ad revenue and ROAS without campaign claims", async () => {
+    const clickScope = scope("selected-source", "redirector");
+    const clickId = `click_${randomBytes(18).toString("base64url")}`;
+    const campaign = `campaign-selected-${run}`;
+    const click = record(clickScope, "selected-click", "click", {
+      click_id: clickId, tracking_link_id: `link-selected-${run}`, campaign_id: campaign,
+      network: "synthetic-network", redirector_click_at: clickScope.receivedAt, redirector_time_status: "available",
+    });
+    await append(clickScope, click);
+    assert.equal(await processSdkInbox(pool, payloadStore, clickScope.tenantId), 1);
+    const installAt = new Date(Date.parse(clickScope.receivedAt) + 60_000).toISOString();
+    const installScope: Scope = { ...clickScope, producer: "sdk-android", receivedAt: installAt };
+    const installationId = `installation:selected-${run}`;
+    const install = record(installScope, "selected-install", "install", {
+      installation_id: installationId, install_type: "first_install", referrer_status: "available", click_id: clickId,
+      install_begin_at_server_status: "available", install_begin_at_server: installAt,
+      protected_referrer_evidence_ref: `protected:selected-${run}`,
+    });
+    await append(installScope, install);
+    assert.equal(await processSdkInbox(pool, payloadStore, installScope.tenantId), 1);
+    const revenueScope: Scope = { ...installScope, receivedAt: new Date(Date.parse(installAt) + 3_600_000).toISOString() };
+    const revenue = record(revenueScope, "selected-revenue", "ad_revenue", {
+      installation_id: installationId, subject_scope: "installation_level", ad_network: "synthetic-ad-network",
+      amount_unscaled: "20000000", amount_scale: 6, currency: "USD", revenue_source: "client_estimated",
+    });
+    await append(revenueScope, revenue);
+    assert.equal(await processSdkInbox(pool, payloadStore, revenueScope.tenantId), 1);
+    const watermark = new Date(Date.parse(installAt) + 2 * 86_400_000).toISOString();
+    const tenantScope = { tenant_id: installScope.tenantId, app_id: installScope.appId };
+    await persistCostImport(pool, `synthetic-selected-cost-${run}`, [{ ...tenantScope,
+      campaign_id: campaign, network: "synthetic-network", date: installAt.slice(0, 10),
+      amount_unscaled: "10000000", amount_scale: 6, currency: "USD", source: "imported_reported", as_of: watermark }]);
+    const definitionInput = buildMetricDefinitionsInput({
+      metric_definitions: SELECTED_ACQUISITION_METRIC_DEFINITIONS,
+      fx_policy: { policy_version: "synthetic-selected-fx", target_currency: "USD", target_scale: 6,
+        rounding_mode: "half_even", rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0,
+          source: "synthetic-1-to-1", as_of: watermark }] },
+      evaluations: [{ metric_names: ["cohort_install_count", "cohort_ltv_d0_usd", "d0_roas"],
+        grouping: { campaign_id: campaign, network: "synthetic-network", cohort_date: installAt.slice(0, 10) } }],
+    }, installAt.slice(0, 10), watermark);
+    const runs = await computeSqlMetricRuns(pool, definitionInput, true, tenantScope);
+    assert.deepEqual(runs.map((row) => row.value_unscaled), ["1", "20000000", "2000000"]);
+    const evidence = await withTenant(pool, installScope.tenantId, async (client) => (await client.query(
+      `SELECT install.campaign_id,install.network,attribution.reason_code FROM ledger.install_facts install
+       JOIN ledger.attribution_results attribution ON attribution.tenant_id=install.tenant_id
+        AND attribution.app_id=install.app_id AND attribution.subject_ref=install.installation_id
+       WHERE install.tenant_id=$1 AND install.app_id=$2`, [tenantScope.tenant_id, tenantScope.app_id],
+    )).rows);
+    assert.deepEqual(evidence, [{ campaign_id: null, network: null, reason_code: "valid_install_referrer" }]);
+    await append(revenueScope, { ...revenue, record_id: `record:${uuidV7()}`, delivery_id: `delivery:${uuidV7()}` });
+    await processSdkInbox(pool, payloadStore, revenueScope.tenantId);
+    assert.deepEqual(await computeSqlMetricRuns(pool, definitionInput, false, tenantScope), runs);
+    await purgeRecordEvidence(clickScope, String(click.record_id));
+    const after = await computeSqlMetricRuns(pool, definitionInput, false, tenantScope);
+    assert.equal(after[0].value_unscaled, "0", "purged source must not resurrect campaign credit");
+  });
+  it("keeps a saved acquisition snapshot unchanged when a backdated attribution gains late click evidence", async () => {
+    const input = scope("selected-late", "sdk-android");
+    const clickId = `click_${randomBytes(18).toString("base64url")}`;
+    const campaign = `campaign-late-${run}`;
+    const install = record(input, "selected-late-install", "install", {
+      installation_id: `installation:selected-late-${run}`, install_type: "first_install",
+      referrer_status: "available", click_id: clickId, install_begin_at_server_status: "available",
+      install_begin_at_server: input.receivedAt, protected_referrer_evidence_ref: `protected:selected-late-${run}`,
+    });
+    await append(input, install);
+    assert.equal(await processSdkInbox(pool, payloadStore, input.tenantId), 1);
+    const watermark = new Date(Date.parse(input.receivedAt) + 86_400_000).toISOString();
+    const tenantScope = { tenant_id: input.tenantId, app_id: input.appId };
+    const definitionInput = {
+      metric_definitions: SELECTED_ACQUISITION_METRIC_DEFINITIONS,
+      fx_policy: { policy_version: "synthetic-selected-fx", target_currency: "USD", target_scale: 6,
+        rounding_mode: "half_even", rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0,
+          source: "synthetic-1-to-1", as_of: watermark }] },
+      metric_evaluations: [{ metric_run_id_prefix: `selected-late-${run}`, input_received_at_watermark: watermark,
+        computed_at: watermark, data_freshness: "complete", privacy_state: "after",
+        metric_names: ["cohort_install_count"], grouping: { campaign_id: campaign } }],
+    };
+    const original = await computeSqlMetricRuns(pool, definitionInput, true, tenantScope);
+    assert.equal(original[0].value_unscaled, "0");
+    const clickAt = new Date(Date.parse(input.receivedAt) - 60_000).toISOString();
+    const lateScope: Scope = { ...input, producer: "redirector",
+      receivedAt: new Date(Date.parse(watermark) + 86_400_000).toISOString() };
+    const click = { ...record(lateScope, "selected-late-click", "click", {
+      click_id: clickId, tracking_link_id: `link-late-${run}`, campaign_id: campaign,
+      network: "synthetic-network", redirector_click_at: clickAt, redirector_time_status: "available",
+    }), occurred_at: clickAt };
+    await append(lateScope, click);
+    assert.equal(await processSdkInbox(pool, payloadStore, input.tenantId), 1);
+    const attributions = await withTenant(pool, input.tenantId, async (client) => (await client.query(
+      `SELECT artifact FROM ledger.attribution_results WHERE tenant_id=$1 AND app_id=$2`,
+      [input.tenantId, input.appId],
+    )).rows.map((row) => row.artifact));
+    assert.ok(attributions.some((item) => item.reason_code === "unknown_click_id"));
+    assert.ok(attributions.some((item) => item.reason_code === "valid_install_referrer" && item.supersedes_attribution_id));
+    assert.deepEqual(await computeSqlMetricRuns(pool, definitionInput, false, tenantScope), original);
+    const laterInput = structuredClone(definitionInput);
+    laterInput.metric_evaluations[0].input_received_at_watermark = lateScope.receivedAt;
+    laterInput.metric_evaluations[0].computed_at = lateScope.receivedAt;
+    const later = await computeSqlMetricRuns(pool, laterInput, false, tenantScope);
+    assert.equal(later[0].value_unscaled, "1");
+    assert.notEqual(later[0].input_snapshot_id, original[0].input_snapshot_id);
+    const saved = await withTenant(pool, input.tenantId, async (client) => (await client.query(
+      "SELECT artifact FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2 AND metric_run_id=$3",
+      [input.tenantId, input.appId, original[0].metric_run_id],
+    )).rows[0].artifact);
+    assert.deepEqual(saved, original[0]);
+  });
+
   it("recovers an AdServices queue failure after base persistence and stays terminal-idempotent", async () => {
     const input = scope("adservices", "sdk-ios");
     const token = `synthetic-adservices-recovery-${run}`;
