@@ -7,7 +7,7 @@ import {
   validateMetricDefinition,
 } from "@openmasu/contracts";
 import { jcs, sha256, selectDisjointCosts, type ScopedCost } from "@openmasu/attribution-core";
-import type { RoasCalculationEvidence, RoasOperands } from "@openmasu/runtime";
+import type { RoasCalculationEvidence, RoasOperands, TotalNetRoasOperands } from "@openmasu/runtime";
 import { captureMetricComparisonContext, type MetricComparisonContext } from "@openmasu/runtime";
 import { selectedAcquisitionSql, selectedClickJoinSql } from "./selected-acquisition.js";
 
@@ -15,7 +15,7 @@ type Any = Record<string, any>;
 type Queryable = Pick<PoolClient, "query">;
 type MetricValue = ({ value_state: "present"; value_unscaled: string } | {
   value_state: "undefined"; undefined_reason: "no_attributed_cost" | "empty_cohort" | "overlapping_cost_grains";
-}) & { operands?: RoasOperands };
+}) & { operands?: RoasOperands; revenueAggregates?: RoasOperands; totalNetOperands?: TotalNetRoasOperands };
 
 export type MetricScope = { tenant_id: string; app_id: string };
 type Scope = MetricScope;
@@ -382,12 +382,17 @@ async function purchaseNetRevenueValue(
   definition: Any,
   fxPolicy: Any,
   privacyState: "before" | "after",
-): Promise<{ value_state: "present"; value_unscaled: string }> {
+): Promise<{ value_state: "present"; value_unscaled: string; commerce: {
+  purchase_revenue_unscaled: string; refund_deduction_unscaled: string;
+  purchase_event_count: string; refund_event_count: string;
+} }> {
   if (definition.definition.calculation !== "revenue_sum"
       || definition.definition.window?.type !== "elapsed") {
     throw new Error(`SQL purchase net revenue definition is invalid: ${definition.metric_name}`);
   }
-  const result = await client.query<{ value_unscaled: string; missing_fx_count: string }>(
+  const result = await client.query<{ value_unscaled: string; missing_fx_count: string;
+    purchase_revenue_unscaled: string; refund_deduction_unscaled: string;
+    purchase_event_count: string; refund_event_count: string }>(
     `WITH
        acquisition AS (SELECT * FROM (${selectedAcquisitionSql}) AS selected WHERE $15::boolean),
        rates AS (
@@ -491,13 +496,19 @@ async function purchaseNetRevenueValue(
          SELECT * FROM purchase_candidates
          UNION ALL
          SELECT * FROM refund_candidates
-       )
-     SELECT coalesce(sum(sign * ledger.half_even_div(
+       ), converted AS (
+         SELECT sign, rate_unscaled, ledger.half_even_div(
               amount_unscaled::numeric * rate_unscaled * power(10::numeric, $11),
               power(10::numeric, amount_scale + rate_scale)
-            )), 0::numeric)::text AS value_unscaled,
+            ) AS amount FROM commerce
+       )
+     SELECT coalesce(sum(sign * amount), 0::numeric)::text AS value_unscaled,
+            trim_scale(coalesce(sum(amount) FILTER (WHERE sign=1), 0::numeric))::text AS purchase_revenue_unscaled,
+            trim_scale(coalesce(sum(amount) FILTER (WHERE sign=-1), 0::numeric))::text AS refund_deduction_unscaled,
+            count(*) FILTER (WHERE sign=1)::text AS purchase_event_count,
+            count(*) FILTER (WHERE sign=-1)::text AS refund_event_count,
             count(*) FILTER (WHERE rate_unscaled IS NULL)::text AS missing_fx_count
-     FROM commerce`,
+     FROM converted`,
     [
       scope.tenant_id,
       scope.app_id,
@@ -518,7 +529,10 @@ async function purchaseNetRevenueValue(
   );
   const row = result.rows[0];
   if (row.missing_fx_count !== "0") throw new Error(`missing FX rate for ${definition.metric_name}`);
-  return { value_state: "present", value_unscaled: row.value_unscaled };
+  return { value_state: "present", value_unscaled: row.value_unscaled, commerce: {
+    purchase_revenue_unscaled: row.purchase_revenue_unscaled, refund_deduction_unscaled: row.refund_deduction_unscaled,
+    purchase_event_count: row.purchase_event_count, refund_event_count: row.refund_event_count,
+  } };
 }
 
 async function totalNetRevenueValue(
@@ -530,10 +544,7 @@ async function totalNetRevenueValue(
   fxPolicy: Any,
   privacyState: "before" | "after",
   selectedCosts?: CostSelection,
-): Promise<{ value_state: "present"; value_unscaled: string } | {
-  value_state: "undefined";
-  undefined_reason: "no_attributed_cost" | "empty_cohort";
-}> {
+): Promise<MetricValue> {
   const revenueDefinition = {
     ...definition,
     definition: { calculation: "revenue_sum", window: definition.definition.window, numerator: "revenue" },
@@ -547,7 +558,7 @@ async function totalNetRevenueValue(
     },
   };
   const adRevenue = await metricValue(
-    client, scope, watermark, grouping, revenueDefinition, fxPolicy, privacyState,
+    client, scope, watermark, grouping, revenueDefinition, fxPolicy, privacyState, selectedCosts,
   );
   const purchaseNet = await purchaseNetRevenueValue(
     client, scope, watermark, grouping, purchaseDefinition, fxPolicy, privacyState,
@@ -577,6 +588,7 @@ async function totalNetRevenueValue(
   const cost = await client.query<{
     value_unscaled: string;
     mismatched_currency_count: string;
+    cost_row_count: string;
   }>(
     `WITH current_cost AS (
        SELECT * FROM (
@@ -594,12 +606,13 @@ async function totalNetRevenueValue(
        SELECT * FROM jsonb_to_recordset($11::jsonb)
          AS supplied(spend_unscaled text, spend_scale integer, currency text)
      )
-     SELECT coalesce(sum(
+     SELECT trim_scale(coalesce(sum(
        CASE WHEN spend_scale <= $10
          THEN spend_unscaled::numeric * power(10::numeric, $10 - spend_scale)
          ELSE ledger.half_even_div(spend_unscaled::numeric, power(10::numeric, spend_scale - $10)) END
-       ), 0::numeric)::text AS value_unscaled,
-       count(*) FILTER (WHERE currency <> $9)::text AS mismatched_currency_count
+       ), 0::numeric))::text AS value_unscaled,
+       count(*) FILTER (WHERE currency <> $9)::text AS mismatched_currency_count,
+       count(*)::text AS cost_row_count
      FROM current_cost`,
     [scope.tenant_id, scope.app_id, watermark, grouping?.campaign_id ?? null,
       grouping?.network ?? null, grouping?.country ?? null, grouping?.cohort_date ?? null,
@@ -609,14 +622,23 @@ async function totalNetRevenueValue(
   if (cost.rows[0].mismatched_currency_count !== "0") {
     throw new Error(`cost currency mismatch for ${definition.metric_name}`);
   }
+  // Capture only the supported D30 total-net series, using the exact aggregates
+  // already consumed above; never recalculate components when serving HTTP.
+  const totalNetOperands: TotalNetRoasOperands | undefined = definition.metric_name === "d30_total_net_roas"
+    && adRevenue.revenueAggregates ? {
+      ...adRevenue.revenueAggregates, ...purchaseNet.commerce,
+      ad_revenue_unscaled: adRevenue.value_unscaled, revenue_unscaled: total.toString(),
+      cost_unscaled: cost.rows[0].value_unscaled, cost_row_count: cost.rows[0].cost_row_count,
+    } : undefined;
+  const evidence = totalNetOperands ? { totalNetOperands } : {};
   if (cost.rows[0].value_unscaled === "0") {
-    return { value_state: "undefined", undefined_reason: "no_attributed_cost" };
+    return { value_state: "undefined", undefined_reason: "no_attributed_cost", ...evidence };
   }
   const ratio = await client.query<{ value_unscaled: string }>(
     "SELECT ledger.half_even_div($1::numeric * power(10::numeric, $3), $2::numeric)::text AS value_unscaled",
     [total.toString(), cost.rows[0].value_unscaled, definition.ratio_scale ?? 6],
   );
-  return { value_state: "present", value_unscaled: ratio.rows[0].value_unscaled };
+  return { value_state: "present", value_unscaled: ratio.rows[0].value_unscaled, ...evidence };
 }
 
 async function customConversionValue(
@@ -879,13 +901,15 @@ async function metricValue(
   if (row.mismatched_cost_currency_count !== "0") {
     throw new Error(`cost currency mismatch for ${definition.metric_name}`);
   }
-  const operands: RoasOperands | undefined = calculation === "revenue_over_cost"
+  const aggregates: RoasOperands | undefined = ["revenue_sum", "revenue_over_cost"].includes(calculation)
     && definition.definition.numerator === "revenue" && definition.definition.window.type === "elapsed"
     ? { revenue_unscaled: row.revenue_value, cost_unscaled: row.cost_value,
       revenue_event_count: row.revenue_event_count, cost_row_count: row.cost_row_count,
       cohort_size: row.cohort_size, last_window_end: row.last_window_end, window_elapsed: row.window_elapsed }
     : undefined;
-  if (row.value_unscaled !== null) return { value_state: "present", value_unscaled: row.value_unscaled, ...(operands ? { operands } : {}) };
+  const operands = calculation === "revenue_over_cost" ? aggregates : undefined;
+  if (row.value_unscaled !== null) return { value_state: "present", value_unscaled: row.value_unscaled,
+    ...(operands ? { operands } : {}), ...(aggregates ? { revenueAggregates: aggregates } : {}) };
   return {
     value_state: "undefined",
     undefined_reason: calculation === "revenue_over_cost" ? "no_attributed_cost" : "empty_cohort",
@@ -1092,9 +1116,9 @@ export async function computeSqlMetricRunsWithClient(
           artifact, definition as any, fxPolicy as any, evaluation.privacy_state, sha256,
         ));
         await persistMetricReplayManifest(client, scope, artifact, definition, evaluation, fxPolicy);
-        if (value.operands) {
+        if (value.operands || value.totalNetOperands) {
           const evidence: RoasCalculationEvidence = {
-            version: 1, calculation: "revenue_over_cost", numerator: "revenue", denominator: "cost",
+            calculation: "revenue_over_cost", denominator: "cost",
             metric_run_id: artifact.metric_run_id, input_snapshot_id: artifact.input_snapshot_id,
             metric_definition_version: definition.metric_definition_version, definition_digest: sha256(definition),
             anchor_event: definition.anchor_event,
@@ -1107,7 +1131,9 @@ export async function computeSqlMetricRunsWithClient(
             rates: fxPolicy.rates.map((rate: Any) => ({ currency: rate.currency,
               rate_unscaled: rate.rate_unscaled, rate_scale: rate.rate_scale })),
             rounding_mode: "half_even", ratio_scale: definition.ratio_scale,
-            operands: value.operands,
+            ...(value.totalNetOperands
+              ? { version: 2, numerator: "total_net_revenue", operands: value.totalNetOperands }
+              : { version: 1, numerator: "revenue", operands: value.operands! }),
           };
           await client.query(
             `INSERT INTO ledger.metric_calculation_evidence

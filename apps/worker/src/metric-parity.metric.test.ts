@@ -34,6 +34,113 @@ describe("selected commerce SQL parity", { concurrency: false }, () => {
   const directory = join(process.cwd(), "fixtures/v0.4/60-selected-commerce");
   const source = (): Any => JSON.parse(readFileSync(join(directory, "input.json"), "utf8"));
   const amount = (runs: Any[], name = "d30_total_net_roas") => runs.find(r => r.metric_name === name)?.value_unscaled;
+  const explanationSource = (): Any => {
+    const value = source();
+    value.records.find((r: Any) => r.event_name === "ad_revenue").payload.amount_unscaled = "100000000";
+    value.records.find((r: Any) => r.event_name === "purchase").payload.amount_unscaled = "80000000";
+    value.records.find((r: Any) => r.event_name === "refund").payload.amount_unscaled = "20000000";
+    value.cost_records[0].amount_unscaled = "100000000";
+    value.metric_evaluations[0].metric_names = ["d30_total_net_roas"];
+    value.metric_evaluations[0].privacy_state = "after";
+    return value;
+  };
+
+  it("saves D30 advertising plus purchases minus refunds over cost with exact FX components and no duplicate inflation", async () => {
+    const reader = createReaderPool();
+    const identity = { keyId: "synthetic", role: "read_only" as const, tenantId: "tenant-a", appId: "app-a" };
+    try {
+      for (const rounding of [false, true]) {
+        const value = explanationSource();
+        if (rounding) {
+          const ad = value.records.find((r: Any) => r.event_name === "ad_revenue");
+          ad.payload.amount_unscaled = "100000001";
+          value.records.find((r: Any) => r.event_name === "purchase").payload.amount_unscaled = "160000001";
+          value.records.find((r: Any) => r.event_name === "refund").payload.amount_unscaled = "40000001";
+          value.records.push({ ...structuredClone(ad), record_id: "ad-second", event_id: "ad-second", delivery_id: "delivery:ad-second" });
+          for (const row of value.records.filter((r: Any) => ["ad_revenue", "purchase", "refund"].includes(r.event_name))) row.payload.currency = "EUR";
+          Object.assign(value.fx_policy.rates[0], { currency: "EUR", rate_unscaled: "5", rate_scale: 1 });
+          for (const row of value.records.slice(2)) value.records.push({ ...structuredClone(row),
+            record_id: `${row.record_id}-duplicate`, delivery_id: `${row.delivery_id}-duplicate` });
+        }
+        await ingestFixture(`commerce-explanation-${rounding}`, value, app, seed);
+        const runs = await computeSqlMetricRuns(app, value, true);
+        assert.equal(jcs(runs), jcs(evaluate(value).metric_runs));
+        assert.equal(runs[0].value_unscaled, "1600000");
+        const detail = await metricExplanation(reader, identity, runs[0].metric_run_id);
+        assert.equal(detail?.evidence_state, "available");
+        const evidence = detail!.calculation!;
+        assert.equal(evidence.version, 2);
+        if (evidence.version !== 2) throw new Error("expected total-net evidence");
+        assert.equal(evidence.numerator, "total_net_revenue");
+        assert.deepEqual(evidence.operands, {
+          revenue_unscaled: "160000000", ad_revenue_unscaled: "100000000", purchase_revenue_unscaled: "80000000",
+          refund_deduction_unscaled: "20000000", cost_unscaled: "100000000", revenue_event_count: rounding ? "2" : "1",
+          purchase_event_count: "1", refund_event_count: "1", cost_row_count: "1", cohort_size: "1",
+          last_window_end: "2026-09-06T00:00:00.000000Z", window_elapsed: false,
+        });
+        assert.equal(evidence.fx_snapshot_id, sha256(value.fx_policy.rates));
+        assert.equal(evidence.definition_digest, sha256(value.metric_definitions.find((d: Any) => d.metric_name === "d30_total_net_roas")));
+        const html = renderMetricExplanation(identity.appId, detail!);
+        assert.match(html, /100000000 \+ 80000000 - 20000000 = 160000000 target units/);
+        assert.match(html, /1\.6 ×/);
+        assert.doesNotMatch(JSON.stringify(detail), /installation_id|transaction_id|record_id|evidence_refs|protected:|original-60|purchase-transaction-60/);
+        assert.equal(await metricExplanation(reader, { ...identity, tenantId: "tenant-other" }, runs[0].metric_run_id), undefined);
+        assert.equal(await metricExplanation(reader, { ...identity, appId: "app-other" }, runs[0].metric_run_id), undefined);
+      }
+    } finally { await reader.end(); }
+  });
+
+  it("preserves total-net explanation history across late refunds cost revisions and unavailable source evidence", async () => {
+    const value = explanationSource();
+    const late = "2026-08-13T00:00:00.000Z";
+    const refund = value.records.find((r: Any) => r.event_name === "refund");
+    value.batches = [
+      { batch_id: "explanation-initial", server_context: value.server_context, records: value.records.filter((r: Any) => r !== refund) },
+      { batch_id: "explanation-late", server_context: { ...value.server_context, received_at: late }, records: [{ ...refund, received_at: late }] },
+    ];
+    delete value.records;
+    value.cost_records.push({ ...value.cost_records[0], cost_record_id: "explanation-cost-revised",
+      amount_unscaled: "200000000", as_of: late, report_snapshot_digest: "2".repeat(64) });
+    await ingestFixture("commerce-explanation-history", value, app, seed);
+    const reader = createReaderPool();
+    const identity = { keyId: "synthetic", role: "read_only" as const, tenantId: "tenant-a", appId: "app-a" };
+    try {
+      const [prior] = await computeSqlMetricRuns(app, value, true);
+      assert.equal(prior.value_unscaled, "1800000");
+      const before = await metricExplanation(reader, identity, prior.metric_run_id);
+      assert.equal(before?.calculation?.version, 2);
+      Object.assign(value.metric_evaluations[0], { input_received_at_watermark: late, computed_at: late,
+        metric_run_id_prefix: "commerce-explanation-revised", supersedes_metric_run_id_prefix: "commerce60" });
+      const later = await computeSqlMetricRuns(app, value, true);
+      assert.equal(jcs(later), jcs(evaluate(value).metric_runs));
+      assert.equal(later[0].value_unscaled, "800000");
+      const after = await metricExplanation(reader, identity, later[0].metric_run_id);
+      assert.equal(after?.calculation?.operands.cost_unscaled, "200000000");
+      assert.equal(after?.calculation?.operands.revenue_unscaled, "160000000");
+      assert.notEqual(before?.calculation?.cost_selection_digest, after?.calculation?.cost_selection_digest);
+      const repeated = await metricExplanation(reader, identity, prior.metric_run_id);
+      assert.equal(repeated?.run.superseded, true);
+      assert.equal(jcs(repeated?.calculation), jcs(before?.calculation));
+      const legacy = { ...prior, metric_run_id: "legacy-total-net-no-evidence" };
+      await withTenant(app, identity.tenantId, client => persistMetricRun(client, { tenant_id: identity.tenantId, app_id: identity.appId }, legacy));
+      assert.equal((await metricExplanation(reader, identity, legacy.metric_run_id))?.evidence_state, "not_recorded");
+      for (const [lifecycle, privacyId, day, expected] of [
+        ["purged", null, "14", "retention_affected"],
+        ["redacted", "privacy:synthetic-commerce-explanation", "15", "redaction_affected"],
+      ] as const) {
+        await withTenant(app, identity.tenantId, client => client.query(
+          `INSERT INTO ledger.raw_payload_states (tenant_id, app_id, record_id, lifecycle_status, changed_at, privacy_request_id)
+           VALUES ($1,$2,'purchase-60',$3,$4,$5)`,
+          [identity.tenantId, identity.appId, lifecycle, `2026-08-${day}T00:00:00.000Z`, privacyId],
+        ));
+        const removed = await metricExplanation(reader, identity, prior.metric_run_id);
+        assert.equal(removed?.evidence_state, expected);
+        assert.equal(removed?.calculation, undefined);
+        assert.equal(removed?.run.value_unscaled, prior.value_unscaled);
+        assert.doesNotMatch(renderMetricExplanation(identity.appId, removed!), /Numerator composition|Settled purchase revenue/);
+      }
+    } finally { await reader.end(); }
+  });
 
   it("carries selected native acquisition through purchase/refund facts to all four hand-derived golden runs", async () => {
     const value = source();

@@ -8,10 +8,16 @@ export type RoasOperands = {
   readonly window_elapsed: boolean | null;
 };
 
-export type RoasCalculationEvidence = {
-  readonly version: 1;
+export type TotalNetRoasOperands = RoasOperands & {
+  readonly ad_revenue_unscaled: string;
+  readonly purchase_revenue_unscaled: string;
+  readonly refund_deduction_unscaled: string;
+  readonly purchase_event_count: string;
+  readonly refund_event_count: string;
+};
+
+type RoasEvidenceBase = {
   readonly calculation: "revenue_over_cost";
-  readonly numerator: "revenue";
   readonly denominator: "cost";
   readonly metric_run_id: string;
   readonly input_snapshot_id: string;
@@ -30,5 +36,9 @@ export type RoasCalculationEvidence = {
   readonly rates: readonly { readonly currency: string; readonly rate_unscaled: string; readonly rate_scale: number }[];
   readonly rounding_mode: "half_even";
   readonly ratio_scale: number;
-  readonly operands: RoasOperands;
 };
+
+export type RoasCalculationEvidence = RoasEvidenceBase & (
+  { readonly version: 1; readonly numerator: "revenue"; readonly operands: RoasOperands }
+  | { readonly version: 2; readonly numerator: "total_net_revenue"; readonly operands: TotalNetRoasOperands }
+);

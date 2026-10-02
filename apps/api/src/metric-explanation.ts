@@ -22,8 +22,8 @@ export type MetricExplanation = {
 
 /** A closed projection. Never expose a raw metric artifact's protected evidence_refs. */
 function publicEvidence(value: RoasCalculationEvidence): RoasCalculationEvidence {
-  return {
-    version: 1, calculation: "revenue_over_cost", numerator: "revenue", denominator: "cost",
+  const common = {
+    calculation: "revenue_over_cost" as const, denominator: "cost" as const,
     metric_run_id: value.metric_run_id, input_snapshot_id: value.input_snapshot_id,
     metric_definition_version: value.metric_definition_version, definition_digest: value.definition_digest,
     anchor_event: value.anchor_event,
@@ -39,6 +39,14 @@ function publicEvidence(value: RoasCalculationEvidence): RoasCalculationEvidence
       cohort_size: value.operands.cohort_size, last_window_end: value.operands.last_window_end,
       window_elapsed: value.operands.window_elapsed },
   };
+  return value.version === 2 ? { ...common, version: 2, numerator: "total_net_revenue",
+    operands: { ...common.operands,
+      ad_revenue_unscaled: value.operands.ad_revenue_unscaled,
+      purchase_revenue_unscaled: value.operands.purchase_revenue_unscaled,
+      refund_deduction_unscaled: value.operands.refund_deduction_unscaled,
+      purchase_event_count: value.operands.purchase_event_count,
+      refund_event_count: value.operands.refund_event_count,
+    } } : { ...common, version: 1, numerator: "revenue" };
 }
 
 export async function metricExplanation(pool: Pool, identity: AppAdminIdentity, metricRunId: string): Promise<MetricExplanation | undefined> {
