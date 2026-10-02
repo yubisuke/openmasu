@@ -72,6 +72,7 @@ The v0.4 line adds independently exercised optional vocabulary and definitions:
 | 0.4.13 | explicit selected-acquisition purchase-net and total-net definitions with safe ROAS costs |
 | 0.4.14 | optional explicit custom-event key and independent D7 converter count/rate definitions |
 | 0.4.15 | optional exact refund-cancellation target and independent opt-in commerce definitions |
+| 0.4.16 | optional selected ad-group/creative metric dimensions and creative-grain costs in an explicit profile |
 
 Existing schema `$id` values remain on `v0.4`; existing event artifact version
 fields remain `0.4.0` where their schema did not change.

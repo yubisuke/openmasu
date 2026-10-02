@@ -161,6 +161,14 @@ This is executable provider wiring with synthetic tests only. It is not live pro
 
 ## Cost grain safety
 
+Manual cost mappings can retain optional `creative_id`; see
+`examples/mappings/synthetic-creative-cost.json` and the inline synthetic CSV in
+[the detail guide](acquisition-detail-metrics.md). Use `omit_if_empty` for an absent optional
+ID, not an invented value. Explicit [detail definitions](acquisition-detail-metrics.md)
+include creative in revision selection and overlap checks. Old metric profiles
+exclude creative-grain cost, so importing it does not silently change their
+denominator. Provider adapters' existing dimension coverage is unchanged.
+
 Cost import keeps append-only observations; successful import does not prove
 that rows form a disjoint denominator. Do not combine campaign totals with
 their ad-group or country breakdowns and expect automatic allocation. Explicit
