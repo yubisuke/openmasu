@@ -29,6 +29,7 @@ import {
 import { processSdkInbox } from "./sdk-worker.js";
 import { SELECTED_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
+import { buildMetricDefinitionsInput } from "./metrics/run.js";
 import { persistCostImport } from "./import/cost.js";
 
 type Any = Record<string, any>;
@@ -194,16 +195,14 @@ describe("SDK auxiliary queue recovery", () => {
     await persistCostImport(pool, `synthetic-selected-cost-${run}`, [{ ...tenantScope,
       campaign_id: campaign, network: "synthetic-network", date: installAt.slice(0, 10),
       amount_unscaled: "10000000", amount_scale: 6, currency: "USD", source: "imported_reported", as_of: watermark }]);
-    const definitionInput = {
+    const definitionInput = buildMetricDefinitionsInput({
       metric_definitions: SELECTED_ACQUISITION_METRIC_DEFINITIONS,
       fx_policy: { policy_version: "synthetic-selected-fx", target_currency: "USD", target_scale: 6,
         rounding_mode: "half_even", rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0,
           source: "synthetic-1-to-1", as_of: watermark }] },
-      metric_evaluations: [{ metric_run_id_prefix: `selected-sdk-${run}`, input_received_at_watermark: watermark,
-        computed_at: watermark, data_freshness: "complete", privacy_state: "after",
-        metric_names: ["cohort_install_count", "cohort_ltv_d0_usd", "d0_roas"],
+      evaluations: [{ metric_names: ["cohort_install_count", "cohort_ltv_d0_usd", "d0_roas"],
         grouping: { campaign_id: campaign, network: "synthetic-network", cohort_date: installAt.slice(0, 10) } }],
-    };
+    }, installAt.slice(0, 10), watermark);
     const runs = await computeSqlMetricRuns(pool, definitionInput, true, tenantScope);
     assert.deepEqual(runs.map((row) => row.value_unscaled), ["1", "20000000", "2000000"]);
     const evidence = await withTenant(pool, installScope.tenantId, async (client) => (await client.query(

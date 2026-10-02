@@ -84,7 +84,11 @@ export function buildMetricDefinitionsInput(config: Any, requestedDate: string, 
         input_received_at_watermark: watermark,
         computed_at: watermark,
         data_freshness: "complete",
-        privacy_state: "before",
+        // Operational selected-acquisition runs must not resurrect deleted source
+        // semantics. Legacy replay definitions retain their historical default.
+        privacy_state: (config.metric_definitions ?? []).some((definition: Any) =>
+          evaluation.metric_names.includes(definition.metric_name) && definition.acquisition_basis)
+          ? "after" : "before",
         metric_names: evaluation.metric_names,
         grouping: { cohort_date: date.day, ...evaluation.grouping },
       };

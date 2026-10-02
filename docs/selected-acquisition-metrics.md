@@ -21,7 +21,9 @@ copy for your deployment; never commit live identifiers, inputs, or credentials.
 Before evaluating, the same scoped ledger must contain a qualified redirector
 click, the SDK install, installation-level ad revenue, and the matching cost
 snapshot. The command does not synthesize a conversion or fetch live data.
-The same explicit definitions can be supplied to a metric schedule.
+The same explicit definitions can be supplied to a metric schedule. The CLI
+and schedule builder use current (`after`) privacy state for these definitions,
+including initial runs, so deleted click semantics cannot regain credit.
 
 These definitions opt into `acquisition_basis=selected_first_party_click`, use
 independent metric/rule version `0.4.11`, and include the exact checked-in bundle

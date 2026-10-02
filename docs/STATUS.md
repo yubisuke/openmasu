@@ -191,10 +191,11 @@ late-input correction and daily campaign discovery (#182-#185). The acquisition
 gap is reproduced and addressed by explicit v0.4.11 definitions, fixture 58 and
 native-inbox/SQL tests; see [selected acquisition metrics](selected-acquisition-metrics.md).
 Historical definitions and saved runs retain their meaning. Overlapping-cost
-selection still requires synthetic reproduction. The original eight comparison, analysis and workflow
+double counting and native purchase/total-net cohort gaps are now synthetically
+reproduced; #183 and #191 cover their respective fixes. The original eight comparison, analysis and workflow
 slices (#173-#180) remain planned after that core work. App Store purchase
 binding, finer advertising grain and separate re-engagement outcomes
-(#186-#188) are scoped follow-ups. Fourteen slices remain planned. Existing
+(#186-#188) are scoped follow-ups. Fifteen slices remain planned. Existing
 component evidence and the published v0.3.0-rc.1 record remain unchanged;
 neither proves these remaining connections.
 

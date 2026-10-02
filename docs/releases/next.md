@@ -56,16 +56,17 @@ merged acceptance scopes and are included in the publication. The integration
 batch is complete. The next product batch is selected in
 [plan #172](https://github.com/yubisuke/openmasu/issues/172), with the ordered
 [roadmap](../roadmap.md#next-product-sequence) as its canonical crosswalk.
-The other fourteen slices remain planned. No development slice is part of the
+The other fifteen slices remain planned. No development slice is part of the
 published baseline, and no next
 version or release scope is selected by that development plan.
 These synthetic scopes do not establish real recovery, hosting/TLS,
 representative capacity or live backend/provider interoperability.
 
 Begin with selected acquisition-source projection, overlapping cost-grain
-safety, late-input correction and campaign discovery (#182-#185). The first has
-source implementation; overlapping cost still requires its initial synthetic
-reproduction. Then implement the original external comparison, attribution analysis,
+safety, purchase/total-net acquisition, late-input correction and campaign
+discovery (#182/#183/#191/#184/#185). The first has source implementation;
+overlapping cost and commerce acquisition have synthetic reproductions but
+remain unfixed. Then implement the original external comparison, attribution analysis,
 calculation controls, cohort outcomes and saved-evidence workflow batch
 (#173-#180). App Store binding, finer advertising grain and separate
 re-engagement outcomes (#186-#188) remain scoped follow-ups. These connections
