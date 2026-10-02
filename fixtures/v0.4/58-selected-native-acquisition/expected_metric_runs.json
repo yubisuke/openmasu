@@ -1,0 +1,179 @@
+[
+  {
+    "metric_definition_version": "0.4.11",
+    "input_snapshot_id": "aed4a5928843a0d67cde5181baacaef3de14cbd3e981ebf838eb5666a948a210",
+    "input_received_at_watermark": "2026-08-12T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|revenue-native-acquisition",
+    "computed_at": "2026-08-12T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-selected-acquisition",
+    "rule_bundle_version": "0.4.11",
+    "rule_bundle_hash": "6fd998246bb092f81d8539b8e2c04a1abe421a1916480b63dfd018d11c7bccc5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "native-acquisition:cohort_install_count",
+    "metric_name": "cohort_install_count",
+    "value_type": "count",
+    "value_unscaled": "1"
+  },
+  {
+    "metric_definition_version": "0.4.11",
+    "input_snapshot_id": "aed4a5928843a0d67cde5181baacaef3de14cbd3e981ebf838eb5666a948a210",
+    "input_received_at_watermark": "2026-08-12T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|revenue-native-acquisition",
+    "computed_at": "2026-08-12T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-selected-acquisition",
+    "rule_bundle_version": "0.4.11",
+    "rule_bundle_hash": "6fd998246bb092f81d8539b8e2c04a1abe421a1916480b63dfd018d11c7bccc5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "native-acquisition:cohort_ltv_d0_usd",
+    "metric_name": "cohort_ltv_d0_usd",
+    "value_type": "money",
+    "value_unscaled": "20000000",
+    "currency": "USD",
+    "amount_scale": 6,
+    "fx_rate_unscaled": "100000000",
+    "fx_rate_scale": 8,
+    "fx_rate_source": "synthetic-fixture-rate",
+    "fx_rate_as_of": "2026-08-12T00:00:00.000Z",
+    "fx_rate_snapshot_id": "ffa58914aa0e3f8339ca16e6b7a79dd194b20f6b3df574e3e22997d6612f4a05",
+    "fx_policy_version": "fx-v0.1"
+  },
+  {
+    "metric_definition_version": "0.4.11",
+    "input_snapshot_id": "aed4a5928843a0d67cde5181baacaef3de14cbd3e981ebf838eb5666a948a210",
+    "input_received_at_watermark": "2026-08-12T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|revenue-native-acquisition",
+    "computed_at": "2026-08-12T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-selected-acquisition",
+    "rule_bundle_version": "0.4.11",
+    "rule_bundle_hash": "6fd998246bb092f81d8539b8e2c04a1abe421a1916480b63dfd018d11c7bccc5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "grouping": {
+      "dimensions": {
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "cohort_date": "2026-08-06"
+      },
+      "dimension_digest": "b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue-native-acquisition",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "metric_run_id": "native-acquisition:d0_roas",
+    "metric_name": "d0_roas",
+    "value_type": "ratio",
+    "value_unscaled": "2000000",
+    "ratio_scale": 6
+  }
+]

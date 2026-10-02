@@ -36,7 +36,7 @@ in [Project plan](project-plan.md).
 | Operator-owned bulk event exports | Synthetic complete | Default-off S3-compatible destinations, deterministic gzip NDJSON, SigV4 conditional writes, durable keyset cursors, and destination-scoped deletion notices |
 
 The current contract gate preserves parity across 28 schemas, 8 registries,
-and 57 reviewed synthetic fixtures.
+and 58 reviewed synthetic fixtures, including explicitly versioned native acquisition cohorts.
 
 ## Completed milestone: integration and release coherence
 

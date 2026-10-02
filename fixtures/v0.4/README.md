@@ -182,7 +182,38 @@ The provenance correction replaces undocumented placeholder hashes on attributio
 
 The affected field locations are 75 in `expected_attributions.json`, 190 in `expected_metric_definitions.json`, 48 in `expected_metric_runs.json`, and 22 in `input.json`. The inputs changed only where they embed expected definition or run artifacts for parity assertions.
 
-## Adding a fixture
+### Fixture 58: selected native acquisition
+
+The three schema-conforming records are one redirector click for `campaign-a`
+and `synthetic-network`, one Android install carrying only its click reference
+and install evidence (no campaign/network claim), and USD 20 installation-level
+advertising revenue one hour after installation. The click's authoritative time
+precedes Play install-begin by one day, inside the seven-day half-open window.
+Exactly one accepted click is therefore selected as `valid_install_referrer`.
+One USD 10 cost row is visible at the fixed watermark. The expected values are
+installation count **1**, D0 LTV **20,000,000** USD micros, and D0 ROAS
+**2,000,000** at ratio scale 6. No rounding is necessary with the 1:1 FX rate.
+
+All three raw records, deliveries, and logical events are accepted, unique,
+on-time, and available; no correction, privacy request/tombstone, rejection,
+fraud, or reconciliation output is warranted. Six metric definitions are
+emitted: the unchanged three reference definitions and three explicitly opted-in
+`0.4.11` definitions. All 13 expected arrays were constructed separately from
+the evaluator and compared with independent TypeScript/Python JCS output.
+
+Payload digests are `e7c3165cecbf1c02d7cfb1fe1b3498109c56b887cfc2dbaf4b300f4c094ca433`
+(click), `6c545dde54d1d79932a66f2fdec89b235c06d643dd472a8a4ed0a7f54f823aba`
+(install), and `fee12056740d4e597bfd167c72d585ef9cb072455bea73eb4f1681a22795925d`
+(revenue), each SHA-256 of the canonical payload. The new snapshot hashes the
+object `{record_and_cost_snapshot_id, acquisition_attributions}`: the first
+field is the existing ordered record/cost snapshot digest, and the second is
+the scoped selected attribution ID and artifact digest. It is
+`aed4a5928843a0d67cde5181baacaef3de14cbd3e981ebf838eb5666a948a210` for all
+three runs. The grouping digest is
+`b93555fee79e16ca299398aac55d71ec267212e1e098ca2f33d8eb9ce63ca1a6`.
+Previous fixture inputs and goldens are unchanged.
+
+## Adding a fixture procedure
 
 `fixtures/.candidates/` is a gitignored working area for proposed synthetic inputs. It is outside `fixtures/v0.4/` and is not discovered by `npm run validate`.
 
