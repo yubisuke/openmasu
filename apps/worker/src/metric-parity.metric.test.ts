@@ -18,6 +18,7 @@ import { syntheticRetentionCases } from "../../../tools/synthetic-retention-case
 import { syntheticConversionCases } from "../../../tools/synthetic-conversion-cases.js";
 import { syntheticRefundReversalCases } from "../../../tools/synthetic-refund-reversal-cases.js";
 import { syntheticAcquisitionDetailCases } from "../../../tools/synthetic-acquisition-detail-cases.js";
+import { syntheticEngagementCases } from "../../../tools/synthetic-engagement-cases.js";
 import { persistCostImport, type CostInput } from "./import/cost.js";
 import { runCostImportFile } from "./import/cost-cli.js";
 
@@ -29,6 +30,31 @@ const goldenPath = join(fixtureDirectory, "expected_metric_runs.json");
 const goldenBefore = readFileSync(goldenPath);
 const golden: Any[] = JSON.parse(goldenBefore.toString("utf8"));
 const oracle = evaluate(input).metric_runs;
+
+describe("first-party engagement SQL parity", { concurrency: false }, () => {
+  let app: Pool;
+  let seed: Pool;
+  before(() => { app = createAppPool(); seed = createSeedPool(); });
+  after(async () => { await app?.end(); await seed?.end(); });
+  const baseline = JSON.parse(readFileSync("fixtures/v0.4/64-first-party-engagement/input.json", "utf8"));
+  for (const entry of syntheticEngagementCases(baseline)) it(entry.name, async () => {
+    await ingestFixture(`engagement-${entry.name}`, entry.input, app, seed);
+    const runs = await computeSqlMetricRuns(app, entry.input, false, { tenant_id: "tenant-a", app_id: "app-a" });
+    assert.equal(jcs(runs), jcs(evaluate(entry.input).metric_runs));
+    assert.deepEqual(runs.map(run => run.value_unscaled ?? run.undefined_reason), entry.expected);
+  });
+  it("persists exact engagement meaning and independently calculated golden artifacts", async () => {
+    await ingestFixture("engagement-saved-meaning", baseline, app, seed);
+    const runs = await computeSqlMetricRuns(app, baseline, true, { tenant_id: "tenant-a", app_id: "app-a" });
+    assert.equal(jcs(runs), jcs(JSON.parse(readFileSync("fixtures/v0.4/64-first-party-engagement/expected_metric_runs.json", "utf8"))));
+    const saved = await withTenant(app, "tenant-a", async client => (await client.query(
+      "SELECT comparison_context FROM ledger.metric_runs WHERE metric_run_id LIKE 'engagement64-%'",
+    )).rows);
+    assert.equal(saved.length, 10);
+    assert.ok(saved.every(row => row.comparison_context.definition.engagement_credit_policy === "latest_eligible_open_before_outcome"));
+    assert.equal(jcs(await computeSqlMetricRuns(app, baseline, true, { tenant_id: "tenant-a", app_id: "app-a" })), jcs(runs));
+  });
+});
 
 describe("selected acquisition detail SQL parity", { concurrency: false }, () => {
   let app: Pool;

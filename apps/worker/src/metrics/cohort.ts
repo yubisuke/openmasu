@@ -11,6 +11,7 @@ import { jcs, sha256, selectDisjointCosts, type ScopedCost } from "@openmasu/att
 import type { RoasCalculationEvidence, RoasOperands, TotalNetRoasOperands } from "@openmasu/runtime";
 import { captureMetricComparisonContext, type MetricComparisonContext } from "@openmasu/runtime";
 import { selectedAcquisitionSql, selectedClickJoinSql } from "./selected-acquisition.js";
+import { engagementMetricValue, engagementSnapshotRows } from "./engagement.js";
 
 type Any = Record<string, any>;
 type Queryable = Pick<PoolClient, "query">;
@@ -730,6 +731,9 @@ async function metricValue(
   selectedCosts?: CostSelection,
 ): Promise<MetricValue> {
   const calculation = definition.definition.calculation;
+  if (definition.engagement_credit_policy) {
+    return engagementMetricValue(client, scope, watermark, grouping, definition, fxPolicy, privacyState);
+  }
   if (["converted_installations", "converted_installations_over_cohort"].includes(calculation)) {
     return customConversionValue(client, scope, watermark, grouping, definition, privacyState);
   }
@@ -1063,6 +1067,8 @@ export async function computeSqlMetricRunsWithClient(
     const needsDetail = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.acquisition_dimension_policy);
     const detailCosts = needsDetail ? await disjointCosts(client, scope, evaluation.input_received_at_watermark, grouping, true) : undefined;
     const usesAcquisition = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.acquisition_basis);
+    const usesEngagement = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.engagement_credit_policy);
+    const engagementRows = usesEngagement ? await engagementSnapshotRows(client, scope, evaluation.input_received_at_watermark) : [];
     const acquisitionRows = usesAcquisition ? (await client.query<{ artifact: Any }>(
       selectedAcquisitionSql, [scope.tenant_id, scope.app_id, evaluation.input_received_at_watermark],
     )).rows.map(({ artifact }) => artifact).sort((a, b) => compareText(a.tenant_id, b.tenant_id)
@@ -1091,7 +1097,7 @@ export async function computeSqlMetricRunsWithClient(
         throw new Error(`unsupported detail grouping for ${metricName}`);
       }
       const selectedCosts = definition.acquisition_dimension_policy ? detailCosts : definition.cost_selection_policy ? safeCosts : undefined;
-      const costs = selectedCosts?.rows ?? legacyCosts;
+      const costs = definition.engagement_credit_policy ? [] : selectedCosts?.rows ?? legacyCosts;
       const inputSnapshotId = snapshot.finish(costs.map((cost) => [
         "cost", cost.as_of, cost.cost_record_id, cost.report_snapshot_digest, cost.dimension_digest,
       ]));
@@ -1124,7 +1130,9 @@ export async function computeSqlMetricRunsWithClient(
         metric_run_id: `${evaluation.metric_run_id_prefix}:${metricName}`,
         metric_name: metricName,
         metric_definition_version: definition.metric_definition_version,
-        input_snapshot_id: definition.acquisition_basis ? sha256({
+        input_snapshot_id: definition.engagement_credit_policy ? sha256({
+          record_snapshot_id: inputSnapshotId, engagement_inputs: engagementRows,
+        }) : definition.acquisition_basis ? sha256({
           record_and_cost_snapshot_id: inputSnapshotId, acquisition_attributions: acquisitionRows,
         }) : inputSnapshotId,
         input_received_at_watermark: evaluation.input_received_at_watermark,
@@ -1197,6 +1205,12 @@ export async function computeSqlMetricRunsWithClient(
 }
 
 function assertMetricDefinitionSeries(definition: Any): void {
+  if (definition.engagement_credit_policy !== undefined || definition.anchor_event === "deep_link_open"
+      || ["engagement_custom_event_converters_24h", "engagement_ad_revenue_24h_usd"].includes(definition.metric_name)
+      || definition.rule_bundle_id === "metric-first-party-engagement") {
+    if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`);
+    return;
+  }
   if (definition.acquisition_dimension_policy !== undefined || definition.rule_bundle_id === "metric-acquisition-detail") {
     if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`);
     assertMetricDefinitionSeries(acquisitionDetailBase(definition as Parameters<typeof acquisitionDetailBase>[0]));

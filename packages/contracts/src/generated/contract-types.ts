@@ -167,7 +167,7 @@ export type OpenMasuMetricDefinitionV04 = {
 } & {
   metric_name: string;
   metric_definition_version: string;
-  anchor_event: "install" | "calendar_day";
+  anchor_event: "install" | "calendar_day" | "deep_link_open";
   aggregation_time_zone: "UTC" | "Asia/Tokyo";
   value_type: "money" | "ratio" | "count";
   currency?: string;
@@ -224,6 +224,7 @@ export type OpenMasuMetricDefinitionV04 = {
   acquisition_basis?: "selected_first_party_click";
   acquisition_dimension_policy?: "selected_link_ad_group_creative";
   conversion_event_key?: string;
+  engagement_credit_policy?: "latest_eligible_open_before_outcome";
   cost_selection_policy?: "reject_overlapping_grains";
   refund_reversal_policy?: "cancel_target_refund_at_watermark";
   rule_bundle_id: string;

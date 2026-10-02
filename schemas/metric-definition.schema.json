@@ -8,7 +8,7 @@
   "properties": {
     "metric_name": { "type": "string", "pattern": "^[a-z][a-z0-9_]{2,127}$" },
     "metric_definition_version": { "type": "string", "minLength": 1, "maxLength": 64 },
-    "anchor_event": { "enum": ["install", "calendar_day"] },
+    "anchor_event": { "enum": ["install", "calendar_day", "deep_link_open"] },
     "aggregation_time_zone": { "$ref": "common.schema.json#/$defs/aggregationTimeZone" },
     "value_type": { "enum": ["money", "ratio", "count"] },
     "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
@@ -51,6 +51,7 @@
     "acquisition_basis": { "const": "selected_first_party_click" },
     "acquisition_dimension_policy": { "const": "selected_link_ad_group_creative" },
     "conversion_event_key": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+    "engagement_credit_policy": { "const": "latest_eligible_open_before_outcome" },
     "cost_selection_policy": { "const": "reject_overlapping_grains" },
     "refund_reversal_policy": { "const": "cancel_target_refund_at_watermark" },
     "rule_bundle_id": { "$ref": "common.schema.json#/$defs/id" },
@@ -58,6 +59,58 @@
     "rule_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
   },
   "allOf": [
+    {
+      "if": { "anyOf": [
+        { "properties": { "anchor_event": { "const": "deep_link_open" } }, "required": ["anchor_event"] },
+        { "properties": { "metric_name": { "enum": ["engagement_custom_event_converters_24h", "engagement_ad_revenue_24h_usd"] } }, "required": ["metric_name"] },
+        { "properties": { "engagement_credit_policy": {} }, "required": ["engagement_credit_policy"] },
+        { "properties": { "rule_bundle_id": { "const": "metric-first-party-engagement" } }, "required": ["rule_bundle_id"] }
+      ] },
+      "then": {
+        "required": ["engagement_credit_policy", "grouping_dimensions"],
+        "properties": {
+          "engagement_credit_policy": {}, "anchor_event": { "const": "deep_link_open" },
+          "aggregation_time_zone": { "const": "UTC" }, "metric_definition_version": { "const": "0.4.17" },
+          "rule_bundle_id": { "const": "metric-first-party-engagement" }, "rule_bundle_version": { "const": "0.4.17" },
+          "rule_bundle_hash": { "const": "3477decc42d00df4b68cf85bd0281f6ef22b5966a0f1bbbfe254119fa9183730" },
+          "grouping_dimensions": { "const": ["campaign_id", "metric_date"] },
+          "definition": { "type": "object", "additionalProperties": true,
+            "properties": { "window": { "const": { "type": "elapsed", "day": 0 } } },
+            "not": { "anyOf": [
+              { "properties": { "denominator": {} }, "required": ["denominator"] },
+              { "properties": { "cost_basis": {} }, "required": ["cost_basis"] }
+            ] }
+          }
+        },
+        "not": { "anyOf": [
+          { "properties": { "acquisition_basis": {} }, "required": ["acquisition_basis"] },
+          { "properties": { "acquisition_dimension_policy": {} }, "required": ["acquisition_dimension_policy"] },
+          { "properties": { "cost_selection_policy": {} }, "required": ["cost_selection_policy"] },
+          { "properties": { "refund_reversal_policy": {} }, "required": ["refund_reversal_policy"] },
+          { "properties": { "fraud_policy": {} }, "required": ["fraud_policy"] },
+          { "properties": { "activity_events": {} }, "required": ["activity_events"] },
+          { "properties": { "event_names": {} }, "required": ["event_names"] },
+          { "properties": { "ratio_scale": {} }, "required": ["ratio_scale"] }
+        ] },
+        "oneOf": [
+          { "properties": { "metric_name": { "const": "engagement_custom_event_converters_24h" },
+              "value_type": { "const": "count" }, "conversion_event_key": {},
+              "definition": { "type": "object", "additionalProperties": true,
+                "properties": { "calculation": { "const": "converted_installations" }, "numerator": { "const": "converted_installations" } } } },
+            "required": ["conversion_event_key"],
+            "not": { "anyOf": [
+              { "properties": { "currency": {} }, "required": ["currency"] },
+              { "properties": { "amount_scale": {} }, "required": ["amount_scale"] }
+            ] } },
+          { "properties": { "metric_name": { "const": "engagement_ad_revenue_24h_usd" },
+              "value_type": { "const": "money" }, "currency": { "const": "USD" }, "amount_scale": { "const": 6 },
+              "definition": { "type": "object", "additionalProperties": true,
+                "properties": { "calculation": { "const": "revenue_sum" }, "numerator": { "const": "revenue" } } } },
+            "required": ["currency", "amount_scale"],
+            "not": { "properties": { "conversion_event_key": {} }, "required": ["conversion_event_key"] } }
+        ]
+      }
+    },
     {
       "if": { "anyOf": [
         { "properties": { "acquisition_dimension_policy": {} }, "required": ["acquisition_dimension_policy"] },
@@ -116,7 +169,7 @@
       }
     },
     {
-      "if": { "anyOf": [
+      "if": { "not": { "properties": { "engagement_credit_policy": {} }, "required": ["engagement_credit_policy"] }, "anyOf": [
         { "properties": { "conversion_event_key": {} }, "required": ["conversion_event_key"] },
         { "properties": { "rule_bundle_id": { "const": "metric-custom-conversion" } }, "required": ["rule_bundle_id"] },
         { "properties": { "definition": { "type": "object", "additionalProperties": true,
@@ -477,8 +530,9 @@
       },
       "else": {
         "not": { "required": ["event_names"] },
+        "if": { "properties": { "anchor_event": { "not": { "const": "deep_link_open" } } }, "required": ["anchor_event"] },
+        "then": { "properties": { "grouping_dimensions": { "type": "array", "not": { "contains": { "const": "metric_date" } } } } },
         "properties": {
-          "grouping_dimensions": { "type": "array", "not": { "contains": { "const": "metric_date" } } },
           "definition": {
             "type": "object",
             "additionalProperties": true,

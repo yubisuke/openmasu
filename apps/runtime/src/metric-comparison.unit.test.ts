@@ -3,10 +3,22 @@ import { it } from "node:test";
 import { M1B_METRIC_DEFINITIONS, M3_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS, SELECTED_COMMERCE_METRIC_DEFINITIONS, REFUND_REVERSAL_METRIC_DEFINITIONS, customConversionMetricDefinitions } from "@openmasu/contracts";
 import { sha256 } from "@openmasu/attribution-core";
 import { captureMetricComparisonContext, comparisonMeaning, comparisonMaturity } from "./metric-comparison.js";
+import { engagementMetricDefinitions } from "@openmasu/contracts";
 
 const fx = { policy_version: "synthetic", target_currency: "USD", target_scale: 6, rounding_mode: "half_even" as const,
   rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0, as_of: "2026-01-01T00:00:00.000Z", source: "not-in-reader-projection" }] };
 const run = { metric_run_id: "synthetic", input_snapshot_id: "a".repeat(64) };
+it("binds re-engagement comparison to open date credit and a conservative 24h maturity", () => {
+  const context = captureMetricComparisonContext(run, engagementMetricDefinitions("tutorial_complete")[0], fx, "after", sha256);
+  assert.equal(context.definition.engagement_credit_policy, "latest_eligible_open_before_outcome");
+  assert.equal(context.definition_digest, sha256(context.definition));
+  assert.equal(comparisonMeaning(context)?.population, "server_resolved_non_organic_engagement");
+  assert.equal(comparisonMeaning(context)?.fx, null);
+  assert.deepEqual(comparisonMaturity(context, { metric_date: "2026-08-21" }, "2026-08-22T23:59:59.999Z"),
+    { state: "unknown", closes_at: "2026-08-23T00:00:00.000Z" });
+  assert.equal(comparisonMaturity(context, { metric_date: "2026-08-21" }, "2026-08-23T00:00:00.000Z").state, "window_elapsed");
+  assert.equal(comparisonMaturity(context, { cohort_date: "2026-08-21" }, "2026-08-23T00:00:00.000Z").state, "unknown");
+});
 it("records explicit refund cancellation meaning without equating historical commerce definitions", () => {
   const capture = (d: typeof REFUND_REVERSAL_METRIC_DEFINITIONS[number]) => captureMetricComparisonContext(run, d, fx, "after", sha256);
   const current = capture(REFUND_REVERSAL_METRIC_DEFINITIONS[0]);

@@ -1147,6 +1147,32 @@ def metric_definitions(value: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def validate_metric_definition_series(definition: dict[str, Any]) -> None:
+    if ("engagement_credit_policy" in definition or definition.get("anchor_event") == "deep_link_open"
+            or definition.get("metric_name") in ("engagement_custom_event_converters_24h", "engagement_ad_revenue_24h_usd")
+            or definition.get("rule_bundle_id") == "metric-first-party-engagement"):
+        count = definition.get("metric_name") == "engagement_custom_event_converters_24h"
+        expected = {
+            "metric_name": "engagement_custom_event_converters_24h" if count else "engagement_ad_revenue_24h_usd",
+            "metric_definition_version": "0.4.17", "anchor_event": "deep_link_open", "aggregation_time_zone": "UTC",
+            "engagement_credit_policy": "latest_eligible_open_before_outcome",
+            "grouping_dimensions": ["campaign_id", "metric_date"],
+            "rule_bundle_id": "metric-first-party-engagement", "rule_bundle_version": "0.4.17",
+            "rule_bundle_hash": "3477decc42d00df4b68cf85bd0281f6ef22b5966a0f1bbbfe254119fa9183730",
+            "value_type": "count" if count else "money",
+            "definition": {"calculation": "converted_installations" if count else "revenue_sum",
+                           "numerator": "converted_installations" if count else "revenue",
+                           "window": {"type": "elapsed", "day": 0}},
+        }
+        if count:
+            event_key = definition.get("conversion_event_key")
+            if not isinstance(event_key, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", event_key):
+                raise ValueError("engagement_conversion_event_key_invalid")
+            expected["conversion_event_key"] = event_key
+        else:
+            expected |= {"currency": "USD", "amount_scale": 6}
+        if definition != expected:
+            raise ValueError("engagement_metric_profile_invalid")
+        return
     if "acquisition_dimension_policy" in definition or definition.get("rule_bundle_id") == "metric-acquisition-detail":
         operation = definition["definition"]
         commerce = operation["numerator"] in ("purchase_net_revenue", "total_net_revenue")
@@ -1465,6 +1491,74 @@ def selected_acquisition_dimensions(install, visible, attributions):
     return clicks[0]["record"]["payload"] if len(clicks) == 1 else {}
 
 
+def engagement_inputs(included: list[dict[str, Any]], attributions: list[dict[str, Any]], cutoff: str) -> list[dict[str, Any]]:
+    result = []
+    for attempt in included:
+        resolution = attempt["server"].get("deep_link_resolution", {})
+        if (attempt["record"]["event_name"] != "deep_link_open" or resolution.get("status") != "active"
+                or not resolution.get("campaign_id")):
+            continue
+        candidates = [row for row in attributions
+                      if row["tenant_id"] == attempt["server"]["tenant_id"] and row["app_id"] == attempt["server"]["app_id"]
+                      and row["subject_scope"] == "engagement_level" and row["subject_ref"] == "engagement:" + attempt["record"]["record_id"]
+                      and row["decided_at"] <= cutoff and row["input_cutoff_at"] <= cutoff]
+        candidates.sort(key=lambda row: utf16_key(row["attribution_id"]))
+        candidates.sort(key=lambda row: timestamp(row["decided_at"], "decided_at"), reverse=True)
+        if not candidates or candidates[0]["status"] != "non_organic" or candidates[0]["method"] != "deep_link":
+            continue
+        result.append({"attempt": attempt, "attribution": candidates[0], "campaign": resolution["campaign_id"],
+                       "link": resolution.get("tracking_link_id")})
+    return sorted(result, key=lambda row: tuple(utf16_key(value) for value in (
+        row["attempt"]["server"]["tenant_id"], row["attempt"]["server"]["app_id"], row["attempt"]["record"]["record_id"])))
+
+
+def engagement_snapshot_rows(opens: list[dict[str, Any]]) -> list[list[Any]]:
+    return [[row["attempt"]["server"]["tenant_id"], row["attempt"]["server"]["app_id"], row["attempt"]["record"]["record_id"],
+             row["link"], row["campaign"], row["attribution"]["attribution_id"], digest(row["attribution"])] for row in opens]
+
+
+def engagement_value(opens: list[dict[str, Any]], visible: list[dict[str, Any]], definition: dict[str, Any],
+                     evaluation: dict[str, Any], lifecycle: dict[tuple[str, str, str], str], policy: dict[str, Any]) -> int | None:
+    grouping = evaluation.get("grouping", {})
+    if not isinstance(grouping.get("metric_date"), str) or set(grouping) - {"metric_date", "campaign_id"}:
+        raise ValueError("engagement_metric_requires_anchor_date")
+    if definition["value_type"] == "money" and (policy["target_currency"] != definition["currency"] or policy["target_scale"] != definition["amount_scale"]):
+        raise ValueError("engagement_metric_fx_target_mismatch")
+
+    def selected(row: dict[str, Any]) -> bool:
+        return ((evaluation["privacy_state"] != "after" or attempt_evidence_key(row["attempt"]) not in lifecycle)
+                and row["attempt"]["record"]["occurred_at"][:10] == grouping["metric_date"]
+                and grouping.get("campaign_id", row["campaign"]) == row["campaign"])
+
+    if not any(selected(row) for row in opens):
+        return None
+    ordered = sorted(opens, key=lambda row: utf16_key(row["attempt"]["record"]["record_id"]))
+    ordered.sort(key=lambda row: timestamp(row["attempt"]["record"]["occurred_at"], "occurred_at"), reverse=True)
+    converted, revenue = set(), 0
+    count = definition["definition"]["calculation"] == "converted_installations"
+    for item in visible:
+        record = item["record"]
+        if count:
+            if record["event_name"] != "custom_event" or record["payload"]["event_key"] != definition["conversion_event_key"]:
+                continue
+        elif record["event_name"] != "ad_revenue" or record["payload"].get("subject_scope") != "installation_level":
+            continue
+        at = timestamp(record["occurred_at"], "occurred_at")
+        scope = (item["server"]["tenant_id"], item["server"]["app_id"], record["payload"]["installation_id"])
+        anchor = next((row for row in ordered
+                       if (row["attempt"]["server"]["tenant_id"], row["attempt"]["server"]["app_id"],
+                           row["attempt"]["record"]["payload"]["installation_id"]) == scope
+                       and timestamp(row["attempt"]["record"]["occurred_at"], "occurred_at") <= at), None)
+        if (anchor is None or at >= timestamp(anchor["attempt"]["record"]["occurred_at"], "occurred_at") + timedelta(days=1)
+                or not selected(anchor)):
+            continue
+        if count:
+            converted.add(scope)
+        else:
+            revenue += convert_money(record["payload"], policy)
+    return len(converted) if count else revenue
+
+
 def metric_runs(
     value: dict[str, Any],
     attempts: list[dict[str, Any]],
@@ -1508,6 +1602,7 @@ def metric_runs(
             attempt for attempt in included
             if evaluation["privacy_state"] != "after" or attempt_evidence_key(attempt) not in lifecycle
         ]
+        engagement = engagement_inputs(included, attributions, evaluation["input_received_at_watermark"])
         acquisition_attributions = selected_acquisition_attributions(attributions, included, evaluation["input_received_at_watermark"])
         acquisition_statuses = {(item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["payload"]["installation_id"]): "unattributed"
                                 for item in included if item["record"]["event_name"] == "install"}
@@ -1574,7 +1669,7 @@ def metric_runs(
             }
             grouped_costs = [
                 cost for cost in costs
-                if cost["as_of"] <= evaluation["input_received_at_watermark"]
+                if not definition.get("engagement_credit_policy") and cost["as_of"] <= evaluation["input_received_at_watermark"]
                 and ("creative_id" not in cost or definition.get("acquisition_dimension_policy"))
                 and evaluation.get("grouping", {}).get("attribution_status", "non_organic") == "non_organic"
                 and (not cohort_scopes or (cost["tenant_id"], cost["app_id"]) in cohort_scopes)
@@ -1614,7 +1709,7 @@ def metric_runs(
             if unsupported:
                 raise ValueError(f"unsupported grouping for {metric_name}: {','.join(unsupported)}")
             revenue_value = 0
-            for item in ([] if "conversion_event_key" in definition else revenue):
+            for item in ([] if definition.get("engagement_credit_policy") or "conversion_event_key" in definition else revenue):
                 installation = next(
                     (
                         candidate for candidate in eligible_installs
@@ -1670,7 +1765,11 @@ def metric_runs(
             calculation = definition["definition"]["calculation"]
             amount: int | None = None
             undefined_reason: str | None = None
-            if calculation == "revenue_sum":
+            if definition.get("engagement_credit_policy"):
+                amount = engagement_value(engagement, visible, definition, evaluation, lifecycle, policy)
+                if amount is None:
+                    undefined_reason = "empty_cohort"
+            elif calculation == "revenue_sum":
                 amount = selected_revenue_value
             elif calculation == "revenue_over_cost":
                 cost_value = 0
@@ -1802,13 +1901,14 @@ def metric_runs(
                     )
             else:
                 raise ValueError(f"unsupported metric calculation: {calculation}")
-            if calculation != "event_count" and evaluation.get("grouping", {}).get("metric_date") is not None:
+            if not definition.get("engagement_credit_policy") and calculation != "event_count" and evaluation.get("grouping", {}).get("metric_date") is not None:
                 raise ValueError(f"metric_date grouping is reserved for event_count: {metric_name}")
             run = {
                 "metric_run_id": f"{evaluation['metric_run_id_prefix']}:{metric_name}",
                 "metric_name": metric_name,
                 "metric_definition_version": definition["metric_definition_version"],
-                "input_snapshot_id": digest({"record_and_cost_snapshot_id": digest(snapshot_rows),
+                "input_snapshot_id": digest({"record_snapshot_id": digest(snapshot_rows), "engagement_inputs": engagement_snapshot_rows(engagement)})
+                                     if definition.get("engagement_credit_policy") else digest({"record_and_cost_snapshot_id": digest(snapshot_rows),
                                              "acquisition_attributions": acquisition_attribution_rows(acquisition_attributions.values())})
                                      if definition.get("acquisition_basis") else digest(snapshot_rows),
                 "input_received_at_watermark": evaluation["input_received_at_watermark"],

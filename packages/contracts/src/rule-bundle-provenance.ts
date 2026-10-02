@@ -11,6 +11,7 @@ export type NonFraudRuleBundleId =
   | "metric-selected-commerce"
   | "metric-refund-reversal"
   | "metric-acquisition-detail"
+  | "metric-first-party-engagement"
   | "metric-custom-conversion"
   | "metric-stage-m3"
   | "metric-purchase-net"
@@ -95,6 +96,17 @@ export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonF
       "no-parent-cost-allocation", "explicit-dated-creative-cost-revision-key",
       "reject-overlapping-cost-grains", "cohort-install-ad-and-commerce-values",
       "cancel-target-refund-at-watermark-once", "reuse-target-refund-window-and-rounded-value"],
+  },
+  "metric-first-party-engagement": {
+    id: "metric-first-party-engagement", version: "0.4.17", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["server-resolved-non-organic-engagement-with-campaign", "device-reported-forgeable-open",
+      "latest-eligible-open-before-outcome", "open-time-tie-record-id-ascending",
+      "select-credit-before-campaign-and-anchor-date-filter", "24h-half-open-elapsed-window",
+      "single-event-key-distinct-converted-installations", "per-event-ad-revenue-half-even-fx",
+      "received-and-attribution-as-of-watermark", "removed-anchor-never-falls-back",
+      "empty-engagement-population-is-undefined", "nonempty-population-without-outcome-is-zero",
+      "no-cost-or-purchase-join", "never-rewrite-install-attribution"],
   },
   "metric-stage-m3": {
     id: "metric-stage-m3", version: "0.3.1", kind: "metric",
