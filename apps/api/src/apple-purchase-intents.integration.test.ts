@@ -110,15 +110,21 @@ describe("App Store installation-scoped purchase preparation", { concurrency: fa
       assert.equal((await h.rows()).length,0);
       await assert.rejects(h.payloadStore.read(stored.anchor_ref),PayloadNotFoundError);
       if (scope === "installation") assert.equal((await h.post()).status,401);
+      const freshRequest = { ...h.value, request_id: randomUUID() };
+      let fresh: any;
+      if (scope !== "installation") {
+        const response = await h.post(freshRequest); assert.equal(response.status,200); fresh = await response.json();
+      }
       cpSync(join(h.root,"backup"),join(h.root,"payloads"),{ recursive: true, force: true });
       assert.ok((await h.payloadStore.read(stored.anchor_ref)).length);
       // A restored DB row, or an object-only restore, must both be covered.
       if (scope !== "app") await withTenant(pool,h.tenantId,client => client.query(
         `INSERT INTO control.apple_purchase_intents SELECT * FROM jsonb_populate_record(NULL::control.apple_purchase_intents,$1::jsonb)`,[JSON.stringify(stored)]));
       const reapplied = await reapplyCompletedPrivacyRequests({ pool, payloadStore: h.payloadStore, tenantId: h.tenantId });
-      assert.equal(reapplied.privacy_requests,1); assert.equal((await h.rows()).length,0);
+      assert.equal(reapplied.privacy_requests,1); assert.equal((await h.rows()).length,fresh ? 1 : 0);
       await assert.rejects(h.payloadStore.read(stored.anchor_ref),PayloadNotFoundError);
       if (scope === "installation") assert.equal((await h.post()).status,401);
+      else { const response = await h.post(freshRequest); assert.equal(response.status,200); assert.deepEqual(await response.json(),fresh); }
     }
   });
 
