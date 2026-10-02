@@ -402,6 +402,46 @@ Agreement proves only consistency with the operator's claim. It does not
 authenticate an external producer, prove population completeness, validate the
 external implementation, or explain the cause of a numerical difference.
 
+## Compare through the dashboard
+
+Open an app and choose **Compare saved measurements** next to the comparison
+JSON download. The same session and app read permission used by reports are
+required; an API bearer key is not a dashboard session.
+
+1. Save the app's comparison JSON using the existing fixed-watermark download.
+2. Select that JSON, an external aggregate CSV, and its mapping JSON. Use the
+   explicit calculation declaration above when comparing elapsed ad-revenue
+   ROAS. Do not upload identifiers or raw events.
+3. Choose **Review conditions**. This step shows each side's conditions,
+   provenance, missing meaning and evidence level; it does not calculate deltas.
+4. Read the conditions and explicitly opt in to the external operator's
+   declaration if appropriate. Choose **Compare**, then save the comparison
+   JSON or standalone HTML. Unknown or mismatched conditions remain
+   incomparable; opting in cannot override them.
+
+The browser flow calls the same pure CSV converter, comparator and HTML
+renderer as the CLI, without launching a subprocess. Identical normalized
+inputs and opt-in produce byte-identical JSON/standalone HTML and hashes.
+The external side does not acquire an authenticated producer, app or run
+receipt. If an input already has an app-scoped acquisition receipt, its tenant
+and app must match the selected app; receipt-less inputs remain uncertified.
+
+This is a server-rendered, no-JavaScript form, including a read-only POST that
+requires the session, matching Origin and CSRF token. Files are handled in
+bounded memory, not saved in a payload store, temporary file or comparison
+history. Only normalized aggregate snapshots are carried in the next form,
+and every submission revalidates them. Unused CSV columns and uploaded file
+names are not reflected in results or application logs. Responses are
+`no-store`; download or close the page when finished and treat saved aggregate
+files as private operator material.
+
+Limits are 4 MiB per input/snapshot and 10,000 aggregate rows, 12 MiB plus
+16 KiB of multipart overhead per request, 32 MiB per completed response, and
+a 30-second request deadline. A failed, interrupted, oversized or timed-out
+operation does not publish a partial success download. These limits do not
+certify upstream completeness, validate an external implementation or explain
+the cause of a difference. No comparison is persisted as a measurement run.
+
 ## Human-readable report
 
 Use `npm run --silent compare:cohorts -- --html left.json right.json > comparison.html`

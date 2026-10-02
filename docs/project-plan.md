@@ -104,8 +104,8 @@ v0.4.13 commerce definitions and fixture 60.
 | Follow-up / [#187](https://github.com/yubisuke/openmasu/issues/187) | Detailed acquisition grain | Selected ad-group/creative dimensions and same-grain cost support | Additive fixture-backed parity, unknown dimensions, overlapping cost refusal and no estimated parent-cost allocation |
 | Follow-up / [#188](https://github.com/yubisuke/openmasu/issues/188) | Re-engagement outcomes | Separate first-party engagement conversion and advertising revenue series | Explicit anchor/window/credit policy, duplicate protection, unchanged acquisition runs and separation from signed aggregate evidence; no initial re-engagement ROAS claim |
 
-The five core slices and the #173 external-declaration bridge have source
-implementation; #174 is the next workflow improvement below.
+The five core slices, the #173 external-declaration bridge and #174 dashboard
+comparison flow have source implementation; #175 attribution analysis is next.
 #184/#185 reuse #182/#183, with commerce cohorts connected by #191; #186 depends on #184, #187 on #182/#183, and #188 on
 #182/#177. Keep the scoped follow-ups separate from the initial Android-first
 campaign path. They do not add a new provider, identity graph or metric service.
@@ -115,7 +115,7 @@ campaign path. They do not add a new provider, identity graph or metric service.
 | Order / issue | Workstream | Narrow deliverable | Acceptance focus |
 | --- | --- | --- | --- |
 | Source implemented / [#173](https://github.com/yubisuke/openmasu/issues/173) | External comparison meaning | Explicit external declarations for one elapsed ad-revenue ROAS family; retain captured versus declared evidence | Fixture-derived report and CSV conversion through ordinary CLI produce known exact deltas with opt-in; unknown, window/FX/gross-net/rounding mismatches refuse; both provenance and legacy modes remain |
-| 2 / [#174](https://github.com/yubisuke/openmasu/issues/174) | Comparison workflow | Bounded SSR input, condition review and result download using existing converters/comparator | CLI/Web result identity, receipt app scope, input limits, no partial file, no server-side file/history persistence, session and CSRF checks |
+| Source implemented / [#174](https://github.com/yubisuke/openmasu/issues/174) | Comparison workflow | Bounded SSR input, condition review and result download using existing converters/comparator | CLI/Web result identity, receipt app scope, input limits, no partial file, no server-side file/history persistence, session and CSRF checks |
 | 3 / [#175](https://github.com/yubisuke/openmasu/issues/175) | Attribution analysis | Reader-only fixed-watermark install counts by status/method/recorded reason | As-of decision selection, no duplicate subject counts, not-recorded distinct from organic, privacy and tenant scope, no raw IDs or mixed aggregate population |
 | 4 / [#176](https://github.com/yubisuke/openmasu/issues/176) | Daily calculation controls | SSR list/register/disable for existing immutable metric schedules | Register to worker checkpoint to disable, existing validation/ownership rules, administer capability, no GET writes |
 | 5 / [#177](https://github.com/yubisuke/openmasu/issues/177) | Cohort outcomes | One explicit custom-event key, distinct D7 cohort converters and conversion rate | Additive contract and derived fixtures, TS/Python/SQL parity, duplicate/window/watermark/privacy rules, key-bound saved meaning and schedule validation |
