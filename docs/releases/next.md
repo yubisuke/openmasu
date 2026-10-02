@@ -1,7 +1,9 @@
 # Next Release Scope
 
 This is a living inventory of source work after published `v0.2.0` at `68b8c48`,
-not a release note, version assignment, published SDK artifact or evidence manifest.
+not a release note, published SDK artifact or evidence manifest. The configured
+next candidate is now `v0.3.0-rc.1`; its separate notes and evidence requirements
+become frozen only at the matching verified tag.
 Do not change the frozen tag or its records to include this later behavior.
 
 ## Source additions to include
@@ -32,11 +34,12 @@ Do not change the frozen tag or its records to include this later behavior.
 
 Contract wire/package identity remains `0.4.0`, with the additive patch ledger
 through v0.4.10. These additions do not change its 57 reviewed fixtures or 741
-goldens. The SDK remains configured as `0.2.0` until a separate release change.
+goldens. The SDK is configured as `0.3.0-rc.1`. Its versioned bundle and
+downloadable assets reuse the existing packager and standalone consumer gates.
 
 ## Not included merely by this inventory
 
-SDK asset publication, upgrade procedures,
+Actual SDK asset publication requires its exact-tag receipt. Upgrade procedures,
 deployment preflight, capacity visibility and the HTTP contract have separate
 acceptance scopes. Reassess this inventory after those changes merge.
 

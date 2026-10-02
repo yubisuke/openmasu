@@ -73,6 +73,13 @@ evidence for that release. [`docs/STATUS.md`](docs/STATUS.md) defines the
 current source tree, and the [release index](docs/releases/README.md) separates
 the exact published record from ongoing development and historical prereleases.
 
+The current source and SDK are configured for candidate `v0.3.0-rc.1`.
+This candidate is published only if the matching annotated tag and GitHub
+Release exist at the same fully verified commit. Contract v0.4 remains through
+v0.4.10; the SDK release number does not change the wire contract.
+See [SDK downloads and installation](docs/sdk-distribution.md) for the candidate
+asset names, checksum verification and minimal Android, Unity and Swift paths.
+
 ## Safe synthetic verification
 
 Requirements:
@@ -213,9 +220,9 @@ Source and SDK releases require the platform AARs and SDK SBOMs before the repos
 packager can run. Follow the complete [release runbook](docs/operations/release.md)
 rather than invoking the final packaging command in a clean checkout.
 
-The configured v0.2.0 bundle path is
-`build/sdk-release/openmasu-sdk-0.2.0`. It is release evidence only when
-built from the exact commit named by the matching `v0.2.0` annotated tag,
+The configured v0.3.0-rc.1 bundle path is
+`build/sdk-release/openmasu-sdk-0.3.0-rc.1`. It is release evidence only when
+built from the exact commit named by the matching `v0.3.0-rc.1` annotated tag,
 after every full platform gate is green for that commit. An untagged bundle is
 only a local candidate artifact. See the [release runbook](docs/operations/release.md).
 The generated Unity UPM archive contains its OpenMasu Android dependency

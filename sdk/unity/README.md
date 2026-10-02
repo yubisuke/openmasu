@@ -1,5 +1,8 @@
 # OpenMasu Unity SDK
 
+For verified versioned tarball downloads and minimal host installation, see
+[SDK distribution](../../docs/sdk-distribution.md).
+
 The package in `com.openmasu.sdk` targets Unity 2022.3 LTS (best effort) and Unity 6 LTS. Android `minSdk` is 24.
 
 The standard source package includes the Android core, Google Play Install Referrer, Meta Install Referrer, and MAX modules. `OpenMasuOptions.EnablePlayReferrer` defaults to `true`; set it to `false` to make the bridge emit explicit unavailable Play evidence without reading the provider. Set `OpenMasuOptions.MetaAppId` to the deployment's non-secret Meta application ID to enable the Meta reader. A blank or invalid value disables that reader. Provider modules are discovered defensively so a deliberately reduced local package fails closed instead of crashing. No provider credential or campaign value belongs in the package.
@@ -28,8 +31,8 @@ Run the actual Unity 6 headless export probe on a machine with the Android
 module installed (replace the Editor path for that machine):
 
 ```powershell
-npm run probe:unity-android-export -- --unity "C:\Program Files\Unity\Hub\Editor\6000.3.11f1\Editor\Unity.exe" --bundle build/sdk-release/openmasu-sdk-0.2.0
-npm run probe:unity-android-export -- --unity "C:\Program Files\Unity\Hub\Editor\6000.3.11f1\Editor\Unity.exe" --bundle build/sdk-release/openmasu-sdk-0.2.0 --without-settings
+npm run probe:unity-android-export -- --unity "C:\Program Files\Unity\Hub\Editor\6000.3.11f1\Editor\Unity.exe" --bundle build/sdk-release/openmasu-sdk-0.3.0-rc.1
+npm run probe:unity-android-export -- --unity "C:\Program Files\Unity\Hub\Editor\6000.3.11f1\Editor\Unity.exe" --bundle build/sdk-release/openmasu-sdk-0.3.0-rc.1 --without-settings
 ```
 
 The second invocation proves that packaged Android dependency resolution does
@@ -37,8 +40,8 @@ not depend on the optional App Links settings file. Both probes create and
 remove a temporary synthetic project. They do not use a
 device, account, credential, provider payload, or production identifier.
 
-For configured candidate `v0.2.0`, the output under
-`build/sdk-release/openmasu-sdk-0.2.0/` contains Maven AAR/POM pairs, the
+For configured candidate `v0.3.0-rc.1`, the output under
+`build/sdk-release/openmasu-sdk-0.3.0-rc.1/` contains Maven AAR/POM pairs, the
 UPM archive, the Swift Package source archive, three CycloneDX SDK SBOMs, a
 source/toolchain manifest, and `SHA256SUMS`. It is a local CI artifact, not a
 public registry publication. Treat the bundle as release evidence only when the

@@ -99,8 +99,8 @@ The packager regenerates the ignored SDK SBOM and Android binary inputs from a
 clean checkout before it creates the bundle. It does not trust existing
 `sbom/` or Gradle `build/` files as release inputs.
 
-The configured v0.2.0 bundle path is
-`build/sdk-release/openmasu-sdk-0.2.0/`. It is valid release evidence only
+The configured v0.3.0-rc.1 bundle path is
+`build/sdk-release/openmasu-sdk-0.3.0-rc.1/`. It is valid release evidence only
 at the exact source commit named by the matching annotated tag, after every
 required full platform gate is green for that commit.
 
@@ -141,11 +141,28 @@ annotated or signed tag and release only after the release owner approves it.
 After creating the annotated tag and rebuilding the bundle at its target, run:
 
 ```bash
-python tools/build-sdk-release.py --verify-only build/sdk-release/openmasu-sdk-0.2.0 --verify-tag
+python tools/build-sdk-release.py --verify-only build/sdk-release/openmasu-sdk-0.3.0-rc.1 --verify-tag
 ```
 
-This final check requires the annotated `v0.2.0` target, current checkout, and
+This final check requires the annotated `v0.3.0-rc.1` target, current checkout, and
 bundle manifest revision to be identical.
+
+Download the `openmasu-sdk-release-bundle` artifact from the full Android workflow
+at that exact green `main` commit. Do not use a PR's merge-preview artifact or an
+older run, and do not rebuild at a later commit. Verify the downloaded bundle,
+then wrap its already verified bytes for public download:
+
+```bash
+python tools/build-sdk-release.py --verify-only build/sdk-release/openmasu-sdk-0.3.0-rc.1 --verify-tag --release-assets build/sdk-release-assets/openmasu-sdk-0.3.0-rc.1
+```
+
+The output refuses an existing directory and contains eight files: the complete
+SDK ZIP, separate Unity and iOS archives, the original manifest, three SDK SBOMs
+and an outer `SHA256SUMS`. The ZIP retains the original internal checksums and
+Maven layout. Attach these exact files to the matching GitHub prerelease; never
+use upload clobber to replace an existing release. Download the published assets
+again and verify checksums and manifest identity. Follow
+[SDK distribution](../sdk-distribution.md) for consumer commands.
 
 Published `v0.2.0` uses
 [its own synthetic evidence manifest](../validation/v0.2.0-synthetic-evidence.md).

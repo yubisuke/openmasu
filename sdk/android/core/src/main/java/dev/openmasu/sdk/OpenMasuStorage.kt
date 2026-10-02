@@ -92,7 +92,7 @@ internal class OpenMasuStorage(context: Context) {
   companion object {
     const val SUBTREE = "openmasu"
     const val PREFERENCES = "openmasu_private"
-    const val SDK_VERSION = "0.2.0"
+    const val SDK_VERSION = "0.3.0-rc.1"
     private const val KEY_INSTALLATION_ID = "installation_id"
     private const val KEY_COLLECTION_ENABLED = "collection_enabled"
     private const val KEY_CONSENT_BARRIER = "consent_barrier"

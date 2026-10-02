@@ -9,7 +9,7 @@ import {
 } from "./check-doc-drift.js";
 
 const summary = "Validated 28 schemas, 8 registries, 57 reviewed fixtures, 741 golden output artifacts, 57 scenario assertions, 27 acceptance criteria, deterministic TypeScript, independent Python, and RFC 8785 conformance.";
-const version = "0.2.0";
+const version = "0.3.0-rc.1";
 
 function documents(): CurrentDocumentation {
   return {

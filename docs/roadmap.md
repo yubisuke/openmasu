@@ -62,6 +62,7 @@ Progress:
 | Current documentation excludes unexplained review, work-order, and decision references | Complete |
 | CI cancels superseded runs and routes expensive gates without hiding required contexts | Complete |
 | Release notes, SDK identity, tagged evidence, and source revision describe one exact release | Complete for v0.2.0 at green commit `68b8c48`; complete historically for v0.2.0-rc.4 |
+| SDK consumers can obtain verified archives without rebuilding the repository | Configured v0.3.0-rc.1 distribution path reuses the packager, same-SHA manifest/checksums/SBOMs and standalone UPM gate; public assets require the exact-tag publication receipt |
 | App backends can submit selected first-party events without SDK-key reuse or advertising identifiers | Complete with synthetic server-key lifecycle, ingestion, rejection, idempotency, and privacy tests |
 | Operators can receive a closed subset of accepted events without raw identifiers or provider-specific wire coupling | Complete with synthetic destination lifecycle, DNS/SSRF, signature, retry, privacy, and disablement tests |
 | Operators can receive delayed deterministic files without adopting a provider-specific export layout | Complete with synthetic SigV4 vectors, object replay, durable cursor, credential boundary, privacy-notice, and lifecycle tests |
@@ -95,8 +96,9 @@ static HTML report and conversion from saved report JSON with input provenance.
 Saved-run semantics, bounded dashboard download, neutral aggregate CSV conversion
 and the integrated first-use journey are implemented. Default-off bounded cost
 refresh and selected correction-driven recalculation are implemented. Next are
-SDK distribution, safe upgrades, deployment guidance, capacity visibility and the
-documented HTTP surface.
+exact-tag SDK asset publication, safe upgrades, deployment guidance, capacity
+visibility and the documented HTTP surface. The distribution tool and
+[consumer guide](sdk-distribution.md) are implemented for v0.3.0-rc.1.
 Each has a synthetic acceptance gate and requires no live provider
 credentials. Numeric differences alone must never become inferred causal reasons.
 
