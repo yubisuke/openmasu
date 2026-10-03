@@ -183,23 +183,26 @@ not selected by this plan. Numeric differences alone never establish causes.
 
 ## Next development foundations
 
-Before expanding the supported MMP workflows, finish the dependency boundary
-work and the ordinary privacy recalculation correction. The structural plan is
+The current source has the dependency, calculation, HTTP/presentation and
+ingestion boundaries needed for the next supported MMP workflows, together with
+ordinary privacy metric recalculation. Keep these seams when adding features.
+The structural plan and its acceptance records are
 [issue #254](https://github.com/yubisuke/openmasu/issues/254); the functional plan
 is [issue #218](https://github.com/yubisuke/openmasu/issues/218).
 
-| Order | Exit gate | Ownership |
+| Current source status | Boundary to retain | Ownership |
 | --- | --- | --- |
-| First | Declared workspace dependencies, public lightweight helpers, no executable-app cross-imports, unchanged contract results | Dependency boundaries #255 |
-| Next | Ordinary deletion invalidates and actually recomputes every affected saved metric group | Privacy correction #219 |
-| Before metric expansion | Shared profile validation; separate SQL selection/calculation/persistence and pure evaluator responsibilities | #257, #258, #259 |
-| Before new HTTP/UI workflows | Feature controllers over the existing authentication and typed view-model boundaries | #256 |
-| Before ingestion/worker internals expand | Runtime ingestion separated from privileged seed support, preserving atomic bulk writes | #260 |
+| Source implemented | Declared workspace dependencies, public lightweight helpers, no executable-app cross-imports, unchanged contract results | Dependency boundaries #255 |
+| Source implemented | Ordinary deletion invalidates and actually recomputes every affected saved metric group | Privacy correction #219 |
+| Source implemented | Shared profile validation; separate SQL selection/calculation/persistence and pure evaluator responsibilities | #257, #258, #259 |
+| Source implemented | Feature controllers over the existing authentication and typed view-model boundaries | #256 |
+| Source implemented | Runtime ingestion separated from privileged seed support, preserving atomic bulk writes | #260 |
 
 Unrelated SDK and operational work does not wait for every structural item.
 Use bounded PRs and existing regression suites. The matching
 [project-plan crosswalk](project-plan.md#next-development-foundations) describes
-the same order and acceptance boundaries.
+the same source state and acceptance boundaries. These structural changes do not
+complete the functional backlog or prove live-provider or production readiness.
 
 ## Optional operator evidence
 

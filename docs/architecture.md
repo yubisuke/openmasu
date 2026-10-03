@@ -53,6 +53,12 @@ function parameter at an IO boundary when a caller needs it; do not create a
 package, generic repository, or framework for each function. Keep independent
 TypeScript, Python, and SQL calculation implementations so parity remains useful.
 
+Production ingestion composes admission, candidate reads and client-only ledger
+writers through one application coordinator. Synthetic reset/seed/capture has a
+separate test-support entrypoint that reuses those writers but is not reachable
+from the production worker import graph. Record, bulk and caller-owned
+transactions retain their distinct units. See [ingestion boundaries](development-ingestion.md).
+
 ## Deployment shape
 
 ```text
