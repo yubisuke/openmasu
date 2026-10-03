@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
-import { acquirePrivacyTenantXactFence, PayloadNotFoundError, reapplyPrivacyMetricsWithClient,
+import { acquirePrivacyTenantXactFence, readPrivacyRecordScopesWithClient, PayloadNotFoundError, reapplyPrivacyMetricsWithClient,
   uuidV7, withTenant, type PayloadStore, type PrivacyCalculatedMetric } from "@openmasu/runtime";
 import { computeSqlMetricRunsWithClient } from "./metrics/cohort.js";
 
@@ -321,12 +321,12 @@ async function appendPrivacyArtifacts(
   request: CompletedPrivacyRequest,
   records: readonly string[],
 ): Promise<void> {
-  for (const recordId of records) {
+  for (const { record_id: recordId, app_id: recordAppId } of await readPrivacyRecordScopesWithClient(client, request.tenant_id, records)) {
     const tombstoneId = `tombstone:${sha256([request.privacy_request_id, recordId]).slice(0, 48)}`;
     const tombstone = {
       contract_version: "0.4.0",
       tenant_id: request.tenant_id,
-      app_id: request.app_id,
+      app_id: recordAppId,
       privacy_request_id: request.privacy_request_id,
       record_id: recordId,
       lifecycle_status: "purged",
@@ -341,20 +341,20 @@ async function appendPrivacyArtifacts(
         privacy_request_id, privacy_tombstone_id
       ) VALUES ($1,$2,$3,'purged',$4,$5,$6)
       ON CONFLICT (record_id, lifecycle_status) DO NOTHING`,
-      [request.tenant_id, request.app_id, recordId, request.completed_at, request.privacy_request_id, tombstoneId],
+      [request.tenant_id, recordAppId, recordId, request.completed_at, request.privacy_request_id, tombstoneId],
     );
     await client.query(
       `INSERT INTO ledger.privacy_tombstones (
         tenant_id, app_id, privacy_request_id, record_id, lifecycle_status, created_at, artifact
       ) VALUES ($1,$2,$3,$4,'purged',$5,$6::jsonb)
       ON CONFLICT DO NOTHING`,
-      [request.tenant_id, request.app_id, request.privacy_request_id, recordId,
+      [request.tenant_id, recordAppId, request.privacy_request_id, recordId,
         request.completed_at, JSON.stringify(tombstone)],
     );
     const correction = {
       contract_version: "0.4.0",
       tenant_id: request.tenant_id,
-      app_id: request.app_id,
+      app_id: recordAppId,
       correction_id: `correction:${sha256([request.privacy_request_id, recordId]).slice(0, 48)}`,
       corrects_record_id: recordId,
       correction_type: "redaction",
@@ -365,7 +365,7 @@ async function appendPrivacyArtifacts(
       `INSERT INTO ledger.corrections (
         correction_id, tenant_id, app_id, corrects_record_id, effective_at, artifact
       ) VALUES ($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT DO NOTHING`,
-      [correction.correction_id, request.tenant_id, request.app_id, recordId,
+      [correction.correction_id, request.tenant_id, recordAppId, recordId,
         request.completed_at, JSON.stringify(correction)],
     );
   }

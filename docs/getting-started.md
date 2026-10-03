@@ -260,7 +260,8 @@ specific security review and trusted certificate plan.
 
 ## Seed and parity
 
-The fixture seed resets the synthetic ledger. Stop all normal writers first:
+The fixture seed resets the synthetic ledger and its derived metric correction
+jobs, so old jobs cannot affect newly seeded artifacts. Stop all normal writers first:
 
 ```bash
 docker compose stop worker api redirector

@@ -235,6 +235,13 @@ describe("privacy metric correction through the existing durable worker", { conc
           metric_run_id: index === 0 ? legacy.metric_run_id : `${legacy.metric_run_id}-${index}` });
     });
     await erase("tenant");
+    const otherAppPrivacy = () => withTenant(reader, tenantId, async client => (await client.query(
+      `SELECT state.app_id,stone.artifact->>'app_id' AS tombstone_app,correction.artifact->>'app_id' AS correction_app
+       FROM ledger.raw_payload_states AS state
+       JOIN ledger.privacy_tombstones AS stone ON stone.tenant_id=state.tenant_id AND stone.record_id=state.record_id
+       JOIN ledger.corrections AS correction ON correction.tenant_id=state.tenant_id AND correction.corrects_record_id=state.record_id
+       WHERE state.tenant_id=$1 AND state.app_id='app-unrelated' AND state.lifecycle_status='purged'`, [tenantId])).rows);
+    assert.deepEqual(await otherAppPrivacy(), [{ app_id: "app-unrelated", tombstone_app: "app-unrelated", correction_app: "app-unrelated" }]);
     assert.equal((await statuses()).length, originals.length + foreign.length + legacyCount);
     const history = await listMetricRecalculations(reader, identity());
     assert.equal(history.length, 100);
@@ -248,5 +255,6 @@ describe("privacy metric correction through the existing durable worker", { conc
     assert.equal((await saved()).filter(run => run.supersedes_metric_run_id === legacy.metric_run_id).length, 0);
     assert.equal(jcs((await saved()).find(run => run.metric_run_id === legacy.metric_run_id)), jcs(legacy));
     assert.equal((await reapplyCompletedPrivacyRequests({ pool: app, payloadStore, tenantId })).unsupported_metric_runs, legacyCount);
+    assert.deepEqual(await otherAppPrivacy(), [{ app_id: "app-unrelated", tombstone_app: "app-unrelated", correction_app: "app-unrelated" }]);
   });
 });

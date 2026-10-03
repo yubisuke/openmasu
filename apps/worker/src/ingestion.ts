@@ -928,6 +928,9 @@ async function resetLedger(seedPool: Pool): Promise<void> {
       );
       if (tables.rowCount === 0) throw new Error("ledger schema contains no base tables");
       const quoted = tables.rows.map(({ table_name }) => `ledger."${table_name.replaceAll('"', '""')}"`);
+      // Synthetic reseeding also resets derived metric work; stale items must not
+      // withdraw newly seeded artifacts that intentionally reuse fixture IDs.
+      quoted.push("control.metric_recalculation_jobs", "control.metric_recalculation_items");
       await client.query(`TRUNCATE TABLE ${quoted.join(", ")} CASCADE`);
       await client.query("COMMIT");
     } catch (error) {

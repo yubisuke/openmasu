@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { it } from "node:test";
 import type { PoolClient } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
+import { readPrivacyRecordScopesWithClient } from "./privacy-fence.js";
 import { requestPrivacyMetricRecalculations, replayPrivacyMetricItem, reapplyPrivacyMetricsWithClient, privacyMetricInvalidationSql } from "./privacy-metrics.js";
 
 const replay = { version: 1, source_metric_run_id: "synthetic-original", metric_definition: { metric_name: "cohort_install_count" },
@@ -66,4 +67,20 @@ it("privacy_metric_restore_does_not_mislabel_already_superseded_items_as_unsuppo
   const result = await reapplyPrivacyMetricsWithClient(client, { ...request, completed_at: request.requested_at },
     async () => { throw new Error("settled items must not be recalculated again"); });
   assert.deepEqual(result, { recalculated: 1, unsupported: 1 });
+});
+it("privacy_record_scope_lookup_preserves_each_app_and_rejects_missing_tenant_records", async () => {
+  const rows = [
+    { record_id: "record-synthetic-a", app_id: "app-synthetic-a" },
+    { record_id: "record-synthetic-b", app_id: "app-synthetic-b" },
+  ];
+  const calls: Array<{ text: string; values: unknown[] }> = [];
+  const client = { query: async (text: string, values: unknown[]) => {
+    calls.push({ text, values }); return { rows };
+  } } as unknown as PoolClient;
+  const ids = ["record-synthetic-a", "record-synthetic-b", "record-synthetic-a"];
+  assert.deepEqual(await readPrivacyRecordScopesWithClient(client, "tenant-synthetic", ids), rows);
+  assert.match(calls[0].text, /tenant_id=\$1 AND record_id=ANY\(\$2::text\[\]\)/);
+  assert.deepEqual(calls[0].values, ["tenant-synthetic", ids.slice(0, 2)]);
+  rows.pop();
+  await assert.rejects(readPrivacyRecordScopesWithClient(client, "tenant-synthetic", ids), /privacy_record_scope_missing/);
 });

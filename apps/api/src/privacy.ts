@@ -6,6 +6,7 @@ import {
   operatorWebhookReference,
   processPrivacyDeletionRequest,
   requestPrivacyMetricRecalculations,
+  readPrivacyRecordScopesWithClient,
   uuidV7,
   withTenant,
   type PayloadStore,
@@ -681,9 +682,9 @@ export async function executePrivacyRequest(
         [requestId, body.tenant_id, body.app_id, sha256(reference), reference, completedAt],
       );
     }
-    for (const recordId of records) {
+    for (const { record_id: recordId, app_id: recordAppId } of await readPrivacyRecordScopesWithClient(client, body.tenant_id, records)) {
       const tombstone = {
-        contract_version: "0.4.0", tenant_id: body.tenant_id, app_id: body.app_id,
+        contract_version: "0.4.0", tenant_id: body.tenant_id, app_id: recordAppId,
         privacy_request_id: requestId, record_id: recordId, lifecycle_status: "purged",
         reason_code: "privacy_deletion", policy_version: "privacy-v0.3",
         provenance_digest: sha256([requestId, recordId, completedAt]), created_at: completedAt,
@@ -694,7 +695,7 @@ export async function executePrivacyRequest(
           privacy_tombstone_id
         ) VALUES ($1,$2,$3,'purged',$4,$5,$6)
         ON CONFLICT (record_id, lifecycle_status) DO NOTHING`,
-        [body.tenant_id, body.app_id, recordId, completedAt, requestId,
+        [body.tenant_id, recordAppId, recordId, completedAt, requestId,
           `tombstone:${sha256([requestId, recordId]).slice(0, 48)}`],
       );
       await client.query(
@@ -702,10 +703,10 @@ export async function executePrivacyRequest(
           tenant_id, app_id, privacy_request_id, record_id, lifecycle_status, created_at, artifact
         ) VALUES ($1,$2,$3,$4,'purged',$5,$6::jsonb)
         ON CONFLICT DO NOTHING`,
-        [body.tenant_id, body.app_id, requestId, recordId, completedAt, JSON.stringify(tombstone)],
+        [body.tenant_id, recordAppId, requestId, recordId, completedAt, JSON.stringify(tombstone)],
       );
       const correction = {
-        contract_version: "0.4.0", tenant_id: body.tenant_id, app_id: body.app_id,
+        contract_version: "0.4.0", tenant_id: body.tenant_id, app_id: recordAppId,
         correction_id: `correction:${sha256([requestId, recordId]).slice(0, 48)}`,
         corrects_record_id: recordId, correction_type: "redaction",
         correction_reason: "privacy_deletion", effective_at: completedAt,
@@ -714,7 +715,7 @@ export async function executePrivacyRequest(
         `INSERT INTO ledger.corrections (
           correction_id, tenant_id, app_id, corrects_record_id, effective_at, artifact
         ) VALUES ($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT DO NOTHING`,
-        [correction.correction_id, body.tenant_id, body.app_id, recordId, completedAt, JSON.stringify(correction)],
+        [correction.correction_id, body.tenant_id, recordAppId, recordId, completedAt, JSON.stringify(correction)],
       );
     }
     await requestPrivacyMetricRecalculations(client, {
