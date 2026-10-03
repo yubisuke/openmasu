@@ -1,7 +1,8 @@
 import type { Pool, PoolClient } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
-import { PayloadNotFoundError, uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
-import { computeSqlMetricRunsWithClient, persistMetricRun } from "./metrics/cohort.js";
+import { acquirePrivacyTenantXactFence, PayloadNotFoundError, reapplyPrivacyMetricsWithClient,
+  uuidV7, withTenant, type PayloadStore, type PrivacyCalculatedMetric } from "@openmasu/runtime";
+import { computeSqlMetricRunsWithClient } from "./metrics/cohort.js";
 
 type Any = Record<string, any>;
 
@@ -370,80 +371,6 @@ async function appendPrivacyArtifacts(
   }
 }
 
-async function recalculateMetrics(
-  client: PoolClient,
-  request: CompletedPrivacyRequest,
-  records: ReadonlySet<string>,
-): Promise<{ recalculated: number; unsupported: number }> {
-  const manifests = await client.query<{ artifact: Any; source_artifact: Any }>(
-    `SELECT manifest.artifact, source.artifact AS source_artifact
-       FROM control.metric_replay_manifests AS manifest
-       JOIN ledger.metric_runs AS source ON source.metric_run_id=manifest.source_metric_run_id
-      WHERE manifest.tenant_id=$1 AND manifest.app_id=$2
-      ORDER BY manifest.source_metric_run_id`,
-    [request.tenant_id, request.app_id],
-  );
-  const affected = manifests.rows.filter((row) => (row.source_artifact.evidence_refs ?? [])
-    .some((reference: Any) => records.has(String(reference.ref))));
-  let recalculated = 0;
-  for (const row of affected) {
-    const sourceId = String(row.artifact.source_metric_run_id);
-    const replacementId = `privacy-reapply:${sha256([request.privacy_request_id, sourceId]).slice(0, 48)}`;
-    const existing = await client.query<{ artifact: Any }>(
-      "SELECT artifact FROM ledger.metric_runs WHERE metric_run_id=$1",
-      [replacementId],
-    );
-    if (existing.rowCount === 1) {
-      recalculated += 1;
-      continue;
-    }
-    const directSuccessor = await client.query<{ metric_run_id: string }>(
-      `SELECT metric_run_id FROM ledger.metric_runs
-        WHERE tenant_id=$1 AND app_id=$2 AND supersedes_metric_run_id=$3
-        ORDER BY computed_at DESC, metric_run_id DESC LIMIT 1`,
-      [request.tenant_id, request.app_id, sourceId],
-    );
-    const evaluation = {
-      ...row.artifact.evaluation,
-      metric_run_id_prefix: "privacy-reapply-candidate",
-      supersedes_metric_run_id_prefix: undefined,
-      metric_names: [row.artifact.metric_definition.metric_name],
-      privacy_state: "after",
-      computed_at: request.completed_at,
-      data_freshness: "recalculated",
-    };
-    const output = await computeSqlMetricRunsWithClient(client, {
-      server_context: { tenant_id: request.tenant_id, app_id: request.app_id },
-      records: [{}],
-      fx_policy: row.artifact.fx_policy,
-      metric_definitions: [row.artifact.metric_definition],
-      metric_evaluations: [evaluation],
-    }, false);
-    if (output.length !== 1) throw new Error(`privacy_reapply_metric_output_invalid:${sourceId}`);
-    const replacement = {
-      ...output[0],
-      metric_run_id: replacementId,
-      supersedes_metric_run_id: directSuccessor.rows[0]?.metric_run_id ?? sourceId,
-    };
-    await persistMetricRun(client, { tenant_id: request.tenant_id, app_id: request.app_id }, replacement);
-    recalculated += 1;
-  }
-  const affectedRunCount = await client.query<{ count: string }>(
-    `SELECT count(DISTINCT run.metric_run_id)::text AS count
-       FROM ledger.metric_runs AS run,
-            jsonb_array_elements(COALESCE(run.artifact->'evidence_refs', '[]'::jsonb)) AS evidence
-      WHERE run.tenant_id=$1 AND run.app_id=$2
-        AND evidence->>'ref'=ANY($3::text[])
-        AND run.computed_at < $4
-        AND NOT EXISTS (
-          SELECT 1 FROM control.metric_replay_manifests AS manifest
-           WHERE manifest.tenant_id=run.tenant_id AND manifest.app_id=run.app_id
-             AND manifest.source_metric_run_id=run.metric_run_id
-        )`,
-    [request.tenant_id, request.app_id, [...records], request.completed_at],
-  );
-  return { recalculated, unsupported: Number(affectedRunCount.rows[0]?.count ?? "0") };
-}
 
 async function applyRecreatedDatabaseState(
   client: PoolClient,
@@ -451,6 +378,7 @@ async function applyRecreatedDatabaseState(
   records: readonly string[],
   references: readonly string[],
 ): Promise<Omit<PrivacyReapplyResult, "privacy_requests">> {
+  await acquirePrivacyTenantXactFence(client, request.tenant_id, "exclusive");
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [request.privacy_request_id]);
   await appendPrivacyArtifacts(client, request, records);
   const scope = String(request.artifact.deletion_scope ?? "");
@@ -512,7 +440,13 @@ async function applyRecreatedDatabaseState(
           ))))`,
     [request.tenant_id, scope, request.app_id, records, request.artifact.deletion_subject_digest, request.artifact.requested_at],
   );
-  const metrics = await recalculateMetrics(client, request, new Set(records));
+  const metrics = await reapplyPrivacyMetricsWithClient(client, {
+    tenant_id: request.tenant_id, app_id: request.app_id, privacy_request_id: request.privacy_request_id,
+    deletion_scope: request.artifact.deletion_scope, requested_at: request.artifact.requested_at,
+    affected_record_ids: records, completed_at: request.completed_at,
+  }, async (metricClient, calculation) => await computeSqlMetricRunsWithClient(
+    metricClient, calculation.input, true, calculation.scope,
+  ) as PrivacyCalculatedMetric[]);
   const priorAudit = await client.query(
     `SELECT 1 FROM ledger.audit_logs
       WHERE tenant_id=$1 AND action='privacy_reapply'

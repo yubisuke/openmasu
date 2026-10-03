@@ -299,7 +299,7 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
 
     const beforeSecond = await withTenant(appPool, "tenant-a", async (client) => ({
       metrics: Number((await client.query<{ count: string }>(
-        "SELECT count(*)::text AS count FROM ledger.metric_runs WHERE metric_run_id LIKE 'privacy-reapply:%'",
+        "SELECT count(*)::text AS count FROM ledger.metric_runs WHERE metric_run_id LIKE 'privacy-recalc:%'",
       )).rows[0].count),
       audits: Number((await client.query<{ count: string }>(
         "SELECT count(*)::text AS count FROM ledger.audit_logs WHERE action='privacy_reapply' AND target_ref=$1",
@@ -314,7 +314,7 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
     assert.equal(second.metrics_recalculated, first.metrics_recalculated);
     const afterSecond = await withTenant(appPool, "tenant-a", async (client) => ({
       metrics: Number((await client.query<{ count: string }>(
-        "SELECT count(*)::text AS count FROM ledger.metric_runs WHERE metric_run_id LIKE 'privacy-reapply:%'",
+        "SELECT count(*)::text AS count FROM ledger.metric_runs WHERE metric_run_id LIKE 'privacy-recalc:%'",
       )).rows[0].count),
       audits: Number((await client.query<{ count: string }>(
         "SELECT count(*)::text AS count FROM ledger.audit_logs WHERE action='privacy_reapply' AND target_ref=$1",
@@ -478,7 +478,7 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
     assert.equal(page.data.length, 1);
     assert.equal(page.data[0].value_unscaled, "0");
     assert.equal(page.data[0].reproducibility_status, "redaction_affected");
-    assert.match(String(page.data[0].metric_run_id), /^privacy-reapply:/);
+    assert.match(String(page.data[0].metric_run_id), /^privacy-recalc:/);
 
     const json = encodeMetricReport(page, "json").body;
     const csv = encodeMetricReport(page, "csv").body;

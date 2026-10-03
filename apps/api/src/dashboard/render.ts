@@ -169,7 +169,9 @@ function metricTable(caption: string, rows: DashboardView["rows"], appId?: strin
   if (rows.length === 0) return "";
   return `<table><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">Metric</th><th scope="col">Grouping</th><th scope="col">Value</th><th scope="col">Freshness</th><th scope="col">Computed at</th><th scope="col">Rule bundle</th><th scope="col">Reproducibility</th></tr></thead><tbody>${rows.map((row) => {
     const details = appId ? `<small><a href="/dashboard/apps/${encodeURIComponent(appId)}/metrics/${encodeURIComponent(row.metric_run_id)}/explanation">Saved run details</a></small>` : "";
-    const value = row.value_state === "undefined"
+    const value = row.value_state === "unavailable"
+      ? `<span class="undefined-value">${escapeHtml(metricValueLabel(row))}</span>`
+      : row.value_state === "undefined"
       ? `<span class="undefined-value">—</span><small>${escapeHtml(row.undefined_reason)}</small>`
       : `<span data-metric-run-id="${escapeHtml(row.metric_run_id)}" data-value-unscaled="${escapeHtml(row.value_unscaled)}">${escapeHtml(metricValueLabel(row))}</span>`;
     const costState = row.cost_update_state === "recalculation_pending" ? "Cost input revised; recalculation pending."

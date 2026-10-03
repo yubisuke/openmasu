@@ -242,9 +242,15 @@ that grain and saved history; there is no automatic creative discovery or
 estimated allocation of parent cost. Separate re-engagement
 outcomes (#188) have an opt-in v0.4.17 latest-open 24h contract and reference/SQL
 calculation. Explicit CLI/schedules and separate API/HTML/CSV output connect
-that policy to operator workflows; recalculation after deletion excludes removed
-inputs. Automatic discovery and old-date privacy/late-input supersession are
-not supplied for this opt-in series.
+that policy to operator workflows. Automatic privacy-deletion corrections now
+select all affected saved-run identities, including old dates, campaign groups,
+custom outcomes, and engagement. A durable worker and offline restore share
+the actual saved-manifest replay; pending or unreplayable values are withdrawn
+from API, CSV, dashboard, and saved-detail projections even at historical
+watermarks. Stored originals remain immutable. This selection is conservative
+over saved input-snapshot evidence, not a claim of minimal numeric influence.
+Automatic discovery and automatic old-date late-input supersession are not
+supplied for this opt-in series.
 The [policy guide](engagement-outcomes.md) records the device-reported trust
 boundary and lack of ROAS/purchase/cross-device claims. An additive contract and opt-in metric
 profile now link a cancellation to its previously admitted refund, preserving

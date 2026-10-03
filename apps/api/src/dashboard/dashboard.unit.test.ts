@@ -13,6 +13,7 @@ import { M1B_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { captureMetricComparisonContext } from "@openmasu/runtime";
 import { comparisonDigest } from "../cohort-comparison.js";
 import { buildRetentionMatrices } from "./retention-matrix.js";
+import { parseCsv } from "@openmasu/runtime/import-normalization";
 
 function metric(overrides: Partial<MetricReportRow> = {}): MetricReportRow {
   return {
@@ -274,6 +275,21 @@ describe("M3 zero-JavaScript dashboard", () => {
     const svg = renderSparkline([1, undefined, 3]);
     assert.equal((svg.match(/<path /g) ?? []).length, 2);
     assert.equal(svg.includes("L120"), false);
+  });
+
+  it("privacy_withdrawn_values_are_explicit_absent_in_csv_and_missing_from_chart_and_html_numeric_attributes", () => {
+    const row = metric({ value_state: "unavailable", value_unscaled: undefined,
+      undefined_reason: null, privacy_update_state: "recalculation_pending", unavailable_reason: "privacy_deletion" });
+    const page: MetricReportPage = { data: [row] };
+    const html = renderDashboard(buildDashboardView({ apps: [], selectedAppId: "app-one", metrics: page, csrfToken: "synthetic" }));
+    assert.match(html, /privacy_deletion; recalculation_pending/);
+    assert.doesNotMatch(html, /data-value-unscaled=/);
+    assert.deepEqual(metricCharts([row])[0].series, [undefined]);
+    const [csv] = parseCsv(encodeMetricReport(page, "csv").body, true);
+    assert.equal(csv.value_unscaled, "");
+    assert.equal(csv.value_state, "unavailable");
+    assert.equal(csv.privacy_update_state, "recalculation_pending");
+    assert.equal(csv.unavailable_reason, "privacy_deletion");
   });
 
   it("C19 emits deterministic, well-formed, self-contained SVG with gaps", () => {

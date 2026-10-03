@@ -269,7 +269,11 @@ describe("selected commerce SQL parity", { concurrency: false }, () => {
         const removed = await metricExplanation(reader, identity, prior.metric_run_id);
         assert.equal(removed?.evidence_state, expected);
         assert.equal(removed?.calculation, undefined);
-        assert.equal(removed?.run.value_unscaled, prior.value_unscaled);
+        assert.equal(removed?.run.value_unscaled, privacyId ? undefined : prior.value_unscaled);
+        if (privacyId) {
+          assert.equal(removed?.run.value_state, "unavailable");
+          assert.equal(removed?.run.unavailable_reason, "privacy_deletion");
+        }
         assert.doesNotMatch(renderMetricExplanation(identity.appId, removed!), /Numerator composition|Settled purchase revenue/);
       }
     } finally { await reader.end(); }
@@ -901,7 +905,9 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
       const removed = await metricExplanation(reader, identity, prior.metric_run_id);
       assert.equal(removed?.evidence_state, "redaction_affected");
       assert.equal(removed?.calculation, undefined);
-      assert.equal(removed?.run.value_unscaled, prior.value_unscaled);
+      assert.equal(removed?.run.value_unscaled, undefined);
+      assert.equal(removed?.run.value_state, "unavailable");
+      assert.equal(removed?.run.unavailable_reason, "privacy_deletion");
       assert.doesNotMatch(renderMetricExplanation(identity.appId, removed!), /Formula|150000000 ×/);
       await ingestFixture(fixtureName, input, appPool, seedPool);
       const retentionInput = { ...input, metric_evaluations: [{ ...base, metric_run_id_prefix: "explanation-retention" }] };

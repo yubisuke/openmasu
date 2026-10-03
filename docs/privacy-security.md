@@ -145,7 +145,8 @@ through `raw_records_current`.
 - Corrections append a new artifact that names the corrected record.
 - Completed deletion removes or crypto-erases protected payloads, appends a
   tombstone with non-identifying provenance, revokes the installation
-  credential, and recalculates affected derived output.
+  credential, and leaves affected derived output withdrawn until actual
+  recalculation completes.
 - Deletion recognition is database-first. One transaction records the
   fail-closed lifecycle, credential deletion, recalculation lineage, and an
   encrypted-reference purge queue before any irreversible payload-store
@@ -181,6 +182,25 @@ through `raw_records_current`.
   Later lawful processing is a new event with its own purpose and legal-basis
   decision. An installation-scoped request also deletes its installation
   credential, so that installation cannot resume ingestion with the old key.
+- Metric withdrawal is immediate at recognition, including historical report
+  selections. The shared operation selects each affected current run by saved
+  evidence and full run identity, not a metric-name allowlist or a single run
+  per name. Its grouping, definition, FX snapshot, and original watermark come
+  from its saved replay manifest. Calculation timestamps are not insertion
+  boundaries and do not exclude an already stored affected run from deletion.
+  Saved evidence describes an input snapshot, so withdrawal can conservatively
+  include a run even when the deleted record was not a numerical contributor.
+- Online recalculation uses the existing durable metric queue and waits for
+  protected-payload purge to complete. The worker holds the tenant privacy
+  barrier, replays the actual SQL calculation, and atomically publishes the
+  successor and item state. Original artifacts never change. Missing or changed
+  replay inputs remain unavailable; copying the original number is not replay.
+  Privacy-request completion describes erasure, not completion of every metric
+  job. Report-only `privacy_update_state` describes the latter independently.
+- Offline restore uses the same affected-run selection and replay function
+  under its exclusive tenant barrier. An already superseded item is skipped,
+  not treated as a newly calculated value or as a missing manifest. Failed or
+  unavailable replay items still prevent the restore release gate from passing.
 - Backup restoration must reapply completed privacy state before normal service
   resumes. Restored `processing` purge jobs must also drain before traffic is
   enabled.

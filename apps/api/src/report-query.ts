@@ -1,5 +1,5 @@
 import type { OpenMasuMetricRunV04 } from "../../../packages/contracts/src/generated/contract-types.js";
-import { revisedMetricCostPredicate } from "@openmasu/runtime";
+import { privacyMetricInvalidationSql, revisedMetricCostPredicate } from "@openmasu/runtime";
 
 type MetricGrouping = NonNullable<OpenMasuMetricRunV04["grouping"]>["dimensions"];
 export type GroupingDimension = keyof MetricGrouping;
@@ -371,6 +371,14 @@ export function buildMetricQuery(query: MetricQuery, checkEvidence = false): Par
   const limit = push(values, query.limit + 1);
   return {
     text: `SELECT mr.artifact, mr.grouping_digest, mr.comparison_context,
+      ${privacyMetricInvalidationSql("mr")} AS privacy_changed,
+      (SELECT CASE WHEN item.state IN ('queued','processing','retry') THEN 'recalculation_pending'
+          WHEN item.state='completed' THEN 'completed' ELSE 'unavailable' END
+        FROM control.metric_recalculation_items AS item
+        JOIN control.metric_recalculation_jobs AS job USING (tenant_id,app_id,recalculation_id)
+        WHERE item.tenant_id=mr.tenant_id AND item.app_id=mr.app_id AND item.source_metric_run_id=mr.metric_run_id
+          AND job.trigger_kind='privacy_deletion'
+        ORDER BY job.created_at DESC,job.recalculation_id COLLATE "C" DESC LIMIT 1) AS privacy_update_state,
       CASE
         WHEN EXISTS (SELECT 1 FROM control.metric_recalculation_items AS item
           JOIN control.metric_recalculation_jobs AS job USING (tenant_id,app_id,recalculation_id)

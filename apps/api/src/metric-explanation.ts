@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { withTenant, type RoasCalculationEvidence } from "@openmasu/runtime";
+import { privacyMetricInvalidationSql, withTenant, type RoasCalculationEvidence } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { groupingDimensionAllowlist } from "./report-query.js";
 
@@ -10,7 +10,8 @@ export type MetricExplanation = {
     readonly metric_definition_version: string; readonly input_snapshot_id: string;
     readonly watermark: string; readonly computed_at: string; readonly data_freshness: string;
     readonly grouping: Readonly<Record<string, string>>;
-    readonly value_state: "present" | "undefined"; readonly value_unscaled?: string;
+    readonly value_state: "present" | "undefined" | "unavailable"; readonly value_unscaled?: string;
+    readonly unavailable_reason?: "privacy_deletion";
     readonly undefined_reason?: string; readonly ratio_scale?: number;
     readonly rule_bundle_id: string; readonly rule_bundle_version: string; readonly rule_bundle_hash: string;
     readonly superseded: boolean; readonly supersedes_metric_run_id?: string;
@@ -61,13 +62,7 @@ export async function metricExplanation(pool: Pool, identity: AppAdminIdentity, 
       privacy_changed: boolean; retention_changed: boolean; superseded: boolean;
     }>(
       `SELECT run.artifact, evidence.artifact AS calculation,
-         EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(run.artifact->'evidence_refs', '[]'::jsonb)) AS ref
-           JOIN ledger.raw_records_current AS raw
-             ON raw.tenant_id=run.tenant_id AND raw.app_id=run.app_id AND raw.record_id=ref->>'ref'
-           WHERE raw.payload_lifecycle_status <> 'available'
-             AND EXISTS (SELECT 1 FROM ledger.raw_payload_states AS state
-               WHERE state.tenant_id=run.tenant_id AND state.app_id=run.app_id
-                 AND state.record_id=raw.record_id AND state.privacy_request_id IS NOT NULL)) AS privacy_changed,
+         ${privacyMetricInvalidationSql("run")} AS privacy_changed,
          EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(run.artifact->'evidence_refs', '[]'::jsonb)) AS ref
            LEFT JOIN ledger.raw_records_current AS raw
              ON raw.tenant_id=run.tenant_id AND raw.app_id=run.app_id AND raw.record_id=ref->>'ref'
@@ -97,9 +92,10 @@ export async function metricExplanation(pool: Pool, identity: AppAdminIdentity, 
       metric_definition_version: artifact.metric_definition_version, input_snapshot_id: artifact.input_snapshot_id,
       watermark: artifact.input_received_at_watermark, computed_at: artifact.computed_at,
       data_freshness: artifact.data_freshness, grouping,
-      value_state: artifact.value_state ?? "present",
-      ...(artifact.value_unscaled !== undefined ? { value_unscaled: artifact.value_unscaled } : {}),
-      ...(artifact.undefined_reason ? { undefined_reason: artifact.undefined_reason } : {}),
+      value_state: row.privacy_changed ? "unavailable" : artifact.value_state ?? "present",
+      ...(row.privacy_changed ? { unavailable_reason: "privacy_deletion" as const } : {}),
+      ...(!row.privacy_changed && artifact.value_unscaled !== undefined ? { value_unscaled: artifact.value_unscaled } : {}),
+      ...(!row.privacy_changed && artifact.undefined_reason ? { undefined_reason: artifact.undefined_reason } : {}),
       ...(artifact.ratio_scale !== undefined ? { ratio_scale: artifact.ratio_scale } : {}),
       rule_bundle_id: artifact.rule_bundle_id, rule_bundle_version: artifact.rule_bundle_version, rule_bundle_hash: artifact.rule_bundle_hash,
       superseded: row.superseded,

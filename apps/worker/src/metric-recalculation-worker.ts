@@ -1,12 +1,15 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
-import { acquirePrivacyTenantSessionReadFence, withTenant } from "@openmasu/runtime";
+import { acquirePrivacyTenantSessionReadFence, replayPrivacyMetricItem, withTenant,
+  type PrivacyCalculatedMetric } from "@openmasu/runtime";
 import { computeSqlMetricRunsWithClient } from "./metrics/cohort.js";
 
 type Claim = { recalculation_id: string; source_metric_run_id: string; tenant_id: string; app_id: string;
   replay_digest: string; watermark: string; created_at: string; lease_token: string;
-  trigger_kind: "cost_revision" | "late_events"; source_records: { record_id: string; payload_sha256: string }[] | null };
+  trigger_kind: "cost_revision" | "late_events" | "privacy_deletion";
+  privacy_request_id: string | null; completed_at: string | null;
+  source_records: { record_id: string; payload_sha256: string }[] | null };
 
 async function claimNext(pool: Pool, tenantId: string): Promise<Claim | undefined> {
   return withTenant(pool, tenantId, async client => {
@@ -16,10 +19,16 @@ async function claimNext(pool: Pool, tenantId: string): Promise<Claim | undefine
         AND (lease_expires_at IS NULL OR lease_expires_at<=clock_timestamp())`, [tenantId]);
     const next = await client.query<Omit<Claim, "lease_token">>(
       `SELECT item.recalculation_id,item.source_metric_run_id,item.tenant_id,item.app_id,item.replay_digest,
-         job.watermark,job.created_at,job.trigger_kind,job.source_records FROM control.metric_recalculation_items AS item
+         job.watermark,job.created_at,job.trigger_kind,job.source_records,job.privacy_request_id,privacy.completed_at
+       FROM control.metric_recalculation_items AS item
        JOIN control.metric_recalculation_jobs AS job USING (tenant_id,app_id,recalculation_id)
+       LEFT JOIN ledger.privacy_requests AS privacy ON privacy.tenant_id=job.tenant_id
+         AND privacy.privacy_request_id=job.privacy_request_id AND privacy.status='completed'
        WHERE item.tenant_id=$1 AND item.attempts<3 AND item.state IN ('queued','retry','processing')
          AND item.next_attempt_at<=clock_timestamp() AND (item.lease_expires_at IS NULL OR item.lease_expires_at<=clock_timestamp())
+         AND (job.trigger_kind<>'privacy_deletion' OR (privacy.completed_at IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM control.privacy_deletion_jobs AS purge
+             WHERE purge.tenant_id=item.tenant_id AND purge.status='processing')))
        ORDER BY job.created_at,item.source_metric_run_id COLLATE "C" LIMIT 1 FOR UPDATE OF item SKIP LOCKED`, [tenantId]);
     if (!next.rows[0]) return undefined;
     const token = randomUUID(), row = next.rows[0];
@@ -69,7 +78,14 @@ async function calculate(pool: Pool, claim: Claim): Promise<"completed" | "skipp
     const superseded = await client.query(`SELECT 1 FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2
       AND supersedes_metric_run_id=$3`, [claim.tenant_id, claim.app_id, claim.source_metric_run_id]);
     let replacementId: string | null = null;
-    if (!superseded.rowCount) {
+    if (claim.trigger_kind === "privacy_deletion") {
+      if (!claim.privacy_request_id || !claim.completed_at) throw new Error("privacy_pending");
+      replacementId = await replayPrivacyMetricItem(client, {
+        ...claim, privacy_request_id: claim.privacy_request_id, completed_at: claim.completed_at,
+      }, async (metricClient, calculation) => await computeSqlMetricRunsWithClient(
+        metricClient, calculation.input, true, calculation.scope,
+      ) as PrivacyCalculatedMetric[]) ?? null;
+    } else if (!superseded.rowCount) {
       const manifest = await client.query<{ artifact: Record<string, any> }>(`SELECT artifact FROM control.metric_replay_manifests
         WHERE tenant_id=$1 AND app_id=$2 AND source_metric_run_id=$3`, [claim.tenant_id, claim.app_id, claim.source_metric_run_id]);
       const replay = manifest.rows[0]?.artifact;

@@ -10,6 +10,7 @@ export * from "./metric-recalculation.js";
 export * from "./selected-acquisition.js";
 export * from "./privacy-purge.js";
 export * from "./privacy-fence.js";
+export * from "./privacy-metrics.js";
 export * from "./webhook-security.js";
 export type { RoasOperands, TotalNetRoasOperands, RoasCalculationEvidence } from "./metric-evidence.js";
 export * from "./metric-comparison.js";

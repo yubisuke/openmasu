@@ -5,7 +5,7 @@ import { escapeHtml } from "./render.js";
 export function renderMetricExplanation(appId: string, value: MetricExplanation): string {
   const run = value.run;
   const result = run.value_state === "present" && run.value_unscaled !== undefined && run.ratio_scale !== undefined
-    ? `${exactDecimal(run.value_unscaled, run.ratio_scale)} ×` : `— (${run.undefined_reason ?? "value unavailable"})`;
+    ? `${exactDecimal(run.value_unscaled, run.ratio_scale)} ×` : `— (${run.unavailable_reason ?? run.undefined_reason ?? "value unavailable"})`;
   const item = (label: string, text: unknown) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(text)}</dd>`;
   const evidence = value.calculation;
   const components = evidence && evidence.version !== 1 ? [

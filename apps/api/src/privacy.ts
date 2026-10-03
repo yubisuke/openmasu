@@ -5,6 +5,7 @@ import {
   acquirePrivacyTenantXactFence,
   operatorWebhookReference,
   processPrivacyDeletionRequest,
+  requestPrivacyMetricRecalculations,
   uuidV7,
   withTenant,
   type PayloadStore,
@@ -716,70 +717,10 @@ export async function executePrivacyRequest(
         [correction.correction_id, body.tenant_id, body.app_id, recordId, completedAt, JSON.stringify(correction)],
       );
     }
-    const previousRuns = await client.query<Any>(
-      `SELECT artifact FROM ledger.metric_runs
-       WHERE tenant_id=$1 AND app_id=$2 AND metric_name IN (
-         'd0_install_to_24h_ad_revenue_usd',
-         'd0_utc_install_calendar_ad_revenue_usd',
-         'd0_jst_install_calendar_ad_revenue_usd',
-         'cohort_purchase_net_revenue_d0_usd',
-         'cohort_purchase_net_revenue_d1_usd',
-         'cohort_purchase_net_revenue_d3_usd',
-         'cohort_purchase_net_revenue_d7_usd',
-         'cohort_purchase_net_revenue_d30_usd',
-         'cohort_purchase_net_revenue_d90_usd',
-         'cohort_total_net_revenue_d30_usd',
-         'cohort_total_net_revenue_d90_usd',
-         'd30_total_net_roas',
-         'd90_total_net_roas',
-         'cohort_total_net_ltv_d30_usd',
-         'cohort_total_net_ltv_d90_usd'
-       ) ORDER BY metric_name, computed_at DESC`,
-      [body.tenant_id, body.app_id],
-    );
-    const seen = new Set<string>();
-    for (const row of previousRuns.rows) {
-      const prior = row.artifact;
-      if (seen.has(prior.metric_name)) continue;
-      seen.add(prior.metric_name);
-      const replacement = {
-        ...prior,
-        metric_run_id: `metric:${sha256([requestId, prior.metric_run_id]).slice(0, 48)}`,
-        input_snapshot_id: sha256([prior.input_snapshot_id, requestId, records]),
-        computed_at: completedAt,
-        data_freshness: "recalculated",
-        reproducibility_status: "redaction_affected",
-        supersedes_metric_run_id: prior.metric_run_id,
-      };
-      await client.query(
-        `INSERT INTO ledger.metric_runs (
-          metric_run_id, tenant_id, app_id, metric_name, metric_definition_version,
-          grouping, grouping_digest, input_snapshot_id, input_received_at_watermark,
-          input_ledger_position, computed_at, data_freshness, aggregation_time_zone,
-          rule_bundle_id, rule_bundle_version, rule_bundle_hash, fx_rate_unscaled,
-          fx_rate_scale, fx_rate_source, fx_rate_as_of, fx_rate_snapshot_id,
-          fx_policy_version, rounding_mode, reproducibility_status, value_type,
-          value_state, undefined_reason, value_unscaled, amount_scale, currency,
-          supersedes_metric_run_id, artifact
-        ) VALUES (
-          $1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
-          $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32::jsonb
-        ) ON CONFLICT DO NOTHING`,
-        [replacement.metric_run_id, body.tenant_id, body.app_id, replacement.metric_name,
-          replacement.metric_definition_version, JSON.stringify(replacement.grouping?.dimensions ?? {}),
-          replacement.grouping?.dimension_digest ?? sha256({}), replacement.input_snapshot_id,
-          replacement.input_received_at_watermark, replacement.input_ledger_position,
-          replacement.computed_at, replacement.data_freshness, replacement.aggregation_time_zone,
-          replacement.rule_bundle_id, replacement.rule_bundle_version, replacement.rule_bundle_hash,
-          replacement.fx_rate_unscaled ?? null, replacement.fx_rate_scale ?? null,
-          replacement.fx_rate_source ?? null, replacement.fx_rate_as_of ?? null,
-          replacement.fx_rate_snapshot_id ?? null, replacement.fx_policy_version ?? null,
-          replacement.rounding_mode, replacement.reproducibility_status, replacement.value_type,
-          replacement.value_state ?? "present", replacement.undefined_reason ?? null,
-          replacement.value_unscaled ?? null, replacement.amount_scale ?? null, replacement.currency ?? null,
-          replacement.supersedes_metric_run_id, JSON.stringify(replacement)],
-      );
-    }
+    await requestPrivacyMetricRecalculations(client, {
+      tenant_id: body.tenant_id, app_id: body.app_id, privacy_request_id: requestId,
+      deletion_scope: body.deletion_scope, requested_at: completedAt, affected_record_ids: records,
+    });
     const { deletion_subject_digest: _completedDigest, ...processingTemplate } = artifactTemplate;
     return {
       processingArtifact: {
