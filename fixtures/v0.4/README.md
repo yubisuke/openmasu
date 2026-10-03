@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 66 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 68 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -504,6 +504,15 @@ ID/artifact tuples and trusted projection tuples. All thirteen families match
 TypeScript and Python JCS at combined SHA-256
 `5a97c353d0479a9fd0b288dcb269f493869cb744277698abd3c752911ea0491a`.
 No existing 65 fixture inputs or 845 golden artifacts changed.
+
+## Fixture 68: explicit local-calendar acquisition
+
+[The independent derivation](68-calendar-acquisition-cohorts/README.md) constructs
+all thirteen output families, including 99 qualified calendar series and two
+unchanged elapsed controls. Local date, exclusive midnight, on-day retention and
+explicit same-zone cost stay distinct. Three source bases never blend. Combined
+JCS SHA-256 is `84800e44dcd47d150e7234d08078fb08206b7573dd706c60850ef82a66ff95d2`.
+Existing 67 inputs and 871 expected files are unchanged.
 
 ## Adding a fixture procedure
 

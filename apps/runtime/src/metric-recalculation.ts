@@ -55,6 +55,8 @@ export const metricCostScopePredicate = `
   AND coalesce(mr.grouping->>'attribution_status','non_organic')='non_organic'
   AND cost.tenant_id=mr.tenant_id AND cost.app_id=mr.app_id
   AND cost.cost_date::text=mr.grouping->>'cohort_date'
+  AND (mr.comparison_context->'definition'->>'calendar_cohort_policy' IS NULL OR
+    cost.artifact->>'reporting_time_zone'=mr.comparison_context->'definition'->>'aggregation_time_zone')
   AND (mr.grouping->>'campaign_id' IS NULL OR cost.campaign_id=mr.grouping->>'campaign_id')
   AND (mr.grouping->>'ad_group_id' IS NULL OR cost.ad_group_id=mr.grouping->>'ad_group_id')
   AND (mr.grouping->>'creative_id' IS NULL OR cost.artifact->>'creative_id'=mr.grouping->>'creative_id')

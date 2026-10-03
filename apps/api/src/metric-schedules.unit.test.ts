@@ -3,9 +3,11 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { ACQUISITION_DETAIL_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS, SELECTED_COMMERCE_METRIC_DEFINITIONS, REFUND_REVERSAL_METRIC_DEFINITIONS, customConversionMetricDefinitions } from "@openmasu/contracts";
 import { metricScheduleTargetDate, normalizeMetricScheduleRequest } from "./metric-schedules.js";
+import { metricScheduleRequestDefinition } from "./metric-schedule-definition.js";
 import { engagementMetricDefinitions, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { VERIFIED_PLATFORM_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 import { importedAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
+import { calendarAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
 
 const body = {
   lag_days: 2,
@@ -28,6 +30,21 @@ const body = {
 };
 
 describe("scheduled metric configuration", () => {
+  it("calendar_schedule_captures_one_local_zone_and_rejects_mixed_or_implicitly_discovered_dates", () => {
+    const request = {...body,metric_definitions:calendarAcquisitionMetricDefinitions("America/New_York"),
+      evaluations:[{metric_names:["calendar_ny_d0_roas"],date_dimension:"cohort_date",grouping:{campaign_id:"synthetic-campaign"}}]};
+    const normalize = (value: any)=>normalizeMetricScheduleRequest(value,new Date("2026-11-02T01:00:00.000Z"));
+    const value = normalize({...request,start_date:undefined});
+    assert.equal(value.definition.cohort_time_zone,"America/New_York");
+    assert.equal(value.startDate,"2026-10-30");
+    assert.deepEqual(normalize({...metricScheduleRequestDefinition(value.definition),lag_days:2,start_date:value.startDate}).definition,value.definition);
+    assert.equal(metricScheduleTargetDate(new Date("2026-11-02T01:00:00.000Z"),2,"America/New_York"),"2026-10-30");
+    for (const change of [{metric_definitions:[...request.metric_definitions,...calendarAcquisitionMetricDefinitions("UTC")]},
+      {metric_definitions:[...request.metric_definitions,...DISJOINT_COST_METRIC_DEFINITIONS]},
+      {evaluations:[{...request.evaluations[0],date_dimension:"metric_date"}]},
+      {evaluations:[{...request.evaluations[0],campaign_discovery:{policy:"selected_acquisition_and_cost_v1",max_targets:10}}]}])
+      assert.throws(()=>normalize({...request,...change}),/calendar_profile_required/);
+  });
   it("captures the imported provider explicitly and refuses implicit campaign discovery", () => {
     const normalize = (value: any) => normalizeMetricScheduleRequest(value,new Date("2026-10-01T12:00:00.000Z"));
     const request = {...body,metric_definitions:importedAcquisitionMetricDefinitions("synthetic-export"),

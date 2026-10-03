@@ -1,4 +1,5 @@
 import type { OpenMasuMetricDefinitionV04 as MetricDefinition } from "../../../packages/contracts/src/generated/contract-types.js";
+import { cohortDayStart, addCalendarDays } from "@openmasu/contracts/definitions";
 
 /** Aggregate-only metadata. Never store a replay manifest or evidence IDs here. */
 export type ComparisonFx = {
@@ -45,6 +46,7 @@ export function captureMetricComparisonContext(
     ...(definition.fraud_policy ? { fraud_policy: definition.fraud_policy } : {}),
     ...(definition.acquisition_basis ? { acquisition_basis: definition.acquisition_basis } : {}),
     ...(definition.import_provider ? { import_provider: definition.import_provider } : {}),
+    ...(definition.calendar_cohort_policy ? { calendar_cohort_policy: definition.calendar_cohort_policy } : {}),
     ...(definition.acquisition_dimension_policy ? { acquisition_dimension_policy: definition.acquisition_dimension_policy } : {}),
     ...(definition.conversion_event_key !== undefined ? { conversion_event_key: definition.conversion_event_key } : {}),
     ...(definition.cost_selection_policy ? { cost_selection_policy: definition.cost_selection_policy } : {}),
@@ -89,8 +91,8 @@ export function comparisonMeaning(context: MetricComparisonContext) {
     };
   }
   const supported = d.anchor_event === (calculation === "event_count" ? "calendar_day" : "install")
-    && (revenue ? window.type === "elapsed" && ["revenue", "purchase_net_revenue", "total_net_revenue"].includes(d.definition.numerator)
-      : calculation === "active_installations_over_cohort" ? window.type === "activity_day" && d.definition.numerator === "active_installations"
+    && (revenue ? (window.type === "elapsed" || !!d.calendar_cohort_policy && window.type === "calendar_day") && ["revenue", "purchase_net_revenue", "total_net_revenue"].includes(d.definition.numerator)
+      : calculation === "active_installations_over_cohort" ? (window.type === "activity_day" || !!d.calendar_cohort_policy && window.type === "calendar_day") && d.definition.numerator === "active_installations"
       : calculation === "event_count" ? window.type === "calendar_day" && window.day === 0 && d.definition.numerator === "events"
       : conversion ? window.type === "elapsed" && window.day === 7 && d.definition.numerator === "converted_installations"
         && typeof d.conversion_event_key === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(d.conversion_event_key)
@@ -112,6 +114,8 @@ export function comparisonMeaning(context: MetricComparisonContext) {
     window: { ...window, boundary: "half_open" },
     population: calculation === "event_count" ? "accepted_logical_events" : "accepted_installation_cohort",
     acquisition_basis: d.acquisition_basis ?? "recorded_dimensions",
+    ...(d.calendar_cohort_policy ? { calendar_cohort_policy: d.calendar_cohort_policy,
+      cohort_date_basis: "installation_local_date", cost_reporting_time_zone: "same_as_aggregation_time_zone" } : {}),
     ...(d.import_provider ? { import_provider: d.import_provider,
       outcome_binding: "same_import_producer_explicit_installation", dimensions: "canonical_import_context",
       attribution_revision: "selected_provider_reported_at_watermark" } : {}),
@@ -138,6 +142,10 @@ export function comparisonMaturity(context: MetricComparisonContext, grouping: R
   if (!comparisonMeaning(context) || !day || !/^\d{4}-\d{2}-\d{2}$/.test(day)
       || new Date(day).toISOString().slice(0, 10) !== day) return { state: "unknown", closes_at: null } as const;
   const offset = d.aggregation_time_zone === "Asia/Tokyo" ? 9 * 3_600_000 : 0;
+  if (d.calendar_cohort_policy) {
+    const closesAt = cohortDayStart(addCalendarDays(day, calculation === "cohort_size" ? 1 : d.definition.window.day + 1), d.aggregation_time_zone);
+    return { state: Date.parse(watermark) >= Date.parse(closesAt) ? "window_elapsed" : "unknown", closes_at: closesAt } as const;
+  }
   // Installs may occur anywhere within the cohort date. Use its exclusive end,
   // plus the complete elapsed/activity window, never an inferred install time.
   const days = calculation === "event_count" || calculation === "cohort_size" ? 1 : d.definition.window.day + 2;

@@ -8,6 +8,7 @@ import {
   SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS,
   VERIFIED_PLATFORM_METRIC_DEFINITIONS,
   importedAcquisitionMetricDefinitions,
+  calendarAcquisitionMetricDefinitions, COHORT_TIME_ZONES,
   SELECTED_COMMERCE_METRIC_DEFINITIONS, customConversionMetricDefinitions, engagementMetricDefinitions,
   METRIC_PROFILE_METADATA, metricProfileMetadata,
 } from "@openmasu/contracts/definitions";
@@ -81,12 +82,28 @@ async function boundaryResult(name: string, definition: Definition): Promise<Bou
 }
 
 describe("metric profile entry boundaries", () => {
+  it("calendar_profile_requires_its_policy_zone_name_day_and_binding_without_upgrading_legacy_definitions", () => {
+    const definition = calendarAcquisitionMetricDefinitions("America/New_York")[0];
+    assert.ok(validateMetricDefinition(definition));
+    for (const change of [{calendar_cohort_policy:undefined},{aggregation_time_zone:"UTC"},{metric_name:"calendar_jst_d0_roas"},
+      {rule_bundle_hash:"0".repeat(64)},{metric_definition_version:"0.4.20"},
+      {definition:{...definition.definition,window:{...definition.definition.window,type:"elapsed"}}}]) {
+      const mutated = {...structuredClone(definition),...change};
+      assert.equal(validateMetricDefinition(mutated),false);
+      assert.equal(validateScheduledMetricDefinition(mutated),false);
+      assert.throws(()=>assertMetricDefinitionSeries(mutated as unknown as Definition),/metric_definition_series_mismatch/);
+    }
+    assert.equal(validateMetricDefinition({...SELECTED_ACQUISITION_METRIC_DEFINITIONS[0],calendar_cohort_policy:definition.calendar_cohort_policy}),false);
+  });
   it("metric_profile_schema_consistency distinguishes registered identities from legacy and external declarations", () => {
     const valid = [...metricProfileBoundaryCases().filter(entry => entry.name.endsWith("/valid")),
       ...SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS.map(definition => ({ name: "daily_acquisition/valid", definition })),
       ...VERIFIED_PLATFORM_METRIC_DEFINITIONS.map(definition => ({ name: "platform/valid", definition })),
-      ...importedAcquisitionMetricDefinitions("synthetic-export").map(definition => ({ name: "imported/valid", definition }))];
-    assert.equal(valid.length, 123);
+      ...importedAcquisitionMetricDefinitions("synthetic-export").map(definition => ({ name: "imported/valid", definition })),
+      ...COHORT_TIME_ZONES.flatMap(zone=>["selected_first_party_click","selected_verified_platform","selected_imported_provider"].flatMap(basis=>
+        calendarAcquisitionMetricDefinitions(zone,basis as NonNullable<Definition["acquisition_basis"]>,basis === "selected_imported_provider" ? "synthetic-export" : undefined)
+          .map(definition=>({name:"calendar/valid",definition}))))];
+    assert.equal(valid.length, 222);
     const exercised = new Set<string>();
     for (const { name, definition } of valid) {
       assert.ok(validateMetricDefinition(definition), name);

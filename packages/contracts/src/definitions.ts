@@ -15,6 +15,9 @@ export {
   REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
 } from "./m1b-metric-definitions.js";
 export { M3_METRIC_DEFINITIONS, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "./m3-metric-definitions.js";
+export { calendarAcquisitionMetricDefinitions } from "./calendar-metric-definitions.js";
+export { COHORT_TIME_ZONES, cohortLocalDate, cohortDayStart, addCalendarDays, cohortCalendarDayIndex,
+  type CohortTimeZone } from "./calendar-time.js";
 export {
   METRIC_PROFILE_METADATA,
   ENGAGEMENT_METRIC_NAMES,

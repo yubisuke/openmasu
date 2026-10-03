@@ -11,6 +11,7 @@ import {
   metricScheduleTargetDate, normalizeMetricScheduleRequest,
   saveMetricScheduleWithClient, type MetricScheduleRecord,
 } from "./metric-schedules.js";
+import { metricScheduleRequestDefinition } from "./metric-schedule-definition.js";
 import { recordDashboardAuditWithClient } from "./session.js";
 
 type Json = Record<string, unknown>;
@@ -161,11 +162,11 @@ async function previewWithClient(client: PoolClient, identity: AppAdminIdentity,
         && expected?.definition_digest === row.comparison_context.definition_digest
         && expected.fx_digest === row.comparison_context.fx_digest && privacyState === row.comparison_context.privacy_state
         && row.provenance.target_date >= request.schedule.startDate
-        && row.provenance.target_date <= metricScheduleTargetDate(now, request.schedule.lagDays)
+        && row.provenance.target_date <= metricScheduleTargetDate(now, request.schedule.lagDays, request.schedule.definition.cohort_time_zone ?? "UTC")
         && row.artifact.input_received_at_watermark <= watermark });
   }
-  const schedule: Json = { lag_days: request.schedule.lagDays, start_date: request.schedule.startDate, ...request.schedule.definition };
-  const oldSchedule: Json = { lag_days: source.lag_days, start_date: source.start_date, ...source.definition };
+  const schedule: Json = { lag_days: request.schedule.lagDays, start_date: request.schedule.startDate, ...metricScheduleRequestDefinition(request.schedule.definition) };
+  const oldSchedule: Json = { lag_days: source.lag_days, start_date: source.start_date, ...metricScheduleRequestDefinition(source.definition) };
   const changes = Object.keys(schedule).filter(key => sha256Jcs(oldSchedule[key]) !== sha256Jcs(schedule[key]))
     .map(field => ({ field, before: oldSchedule[field], after: schedule[field] }));
   const preview = { source_metric_schedule_id: sourceId, mode: request.mode, schedule,

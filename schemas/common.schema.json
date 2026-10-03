@@ -62,7 +62,7 @@
         }
       ]
     },
-    "aggregationTimeZone": { "enum": ["UTC", "Asia/Tokyo"] },
+    "aggregationTimeZone": { "enum": ["UTC", "Asia/Tokyo", "America/New_York"] },
     "importContext": {
       "type": "object",
       "additionalProperties": false,

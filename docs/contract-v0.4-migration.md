@@ -202,6 +202,38 @@ independently exercise boundaries, deduplication, latest-open filtering, removed
 anchors/outcomes, different installations and per-event half-even rounding in
 TypeScript, Python and SQL. Operational scheduling/reporting is a separate step.
 
+## Calendar acquisition cohorts (0.4.21)
+
+Add optional metric-definition `calendar_cohort_policy`, optional cost-record
+`reporting_time_zone`, and qualified zone `America/New_York`. Only the new closed
+calendar profile requires the policy; UTC/Tokyo/New York names, windows and bundle
+bind version 0.4.21 and hash
+`1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb`.
+Existing URNs, wire/package versions, registries and historical definitions
+remain unchanged. This additive profile does not reinterpret any saved D7.
+TypeScript/Python and SQL use local-date membership and exclusive local-midnight
+ends; calendar costs require explicitly matching zone metadata. Schedules and
+comparison/evidence projections retain that meaning. No new service, table or
+runtime dependency is added. Hash-pinned first-party `tzdata==2025.2` is added
+only for the independent cross-platform Python validation oracle.
+
+Complete new inventory in `68-calendar-acquisition-cohorts`: `input.json`,
+`README.md`, `expected_raw_records.json`, `expected_deliveries.json`,
+`expected_logical_events.json`, `expected_corrections.json`,
+`expected_cost_records.json`, `expected_privacy_requests.json`,
+`expected_privacy_tombstones.json`, `expected_attributions.json`,
+`expected_fraud_decisions.json`, `expected_rejections.json`,
+`expected_reconciliation.json`, `expected_metric_definitions.json`,
+`expected_metric_runs.json`; plus the shared fixture README.
+No existing 67 inputs or 871 expected files change. Verify using
+`git diff --name-status 71f400b9 -- fixtures/v0.4/`: only fixture 68 and the
+shared README may differ. Calculation/schema and expected files are separate
+commits. The independent derivation records 101 scalar runs, 104 definitions,
+all thirteen families and their canonical hash construction, with combined JCS
+SHA-256 `84800e44dcd47d150e7234d08078fb08206b7573dd706c60850ef82a66ff95d2`.
+Validation remains read-only. See [the guide](calendar-cohort-metrics.md) for
+qualified-zone/time-zone-data upgrade and live-provider boundaries.
+
 ## Imported provider acquisition (0.4.20)
 
 Add optional metric-definition `import_provider` and acquisition basis
