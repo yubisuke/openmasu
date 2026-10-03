@@ -85,7 +85,7 @@ export async function executeMetricCalculation(
     for (const metricName of evaluation.metric_names ?? []) {
       const definition = definitions.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
-      const usesFx = ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(definition.definition.calculation);
+      const usesFx = ["revenue_sum", "revenue_over_cost", "revenue_over_cohort", "cost_sum", "cost_over_cohort"].includes(definition.definition.calculation);
       if (fxPolicy.rate_selection && definition.value_type === "money"
           && (definition.currency !== fxPolicy.target_currency || definition.amount_scale !== fxPolicy.target_scale)) {
         throw new Error("dated_fx_target_mismatch");

@@ -6,6 +6,7 @@ import { reportFields, reportSelectionParams } from "./report-controls.js";
 import { renderComparisonExport } from "./comparison-export.js";
 import { freshnessOfReportRow } from "../metric-freshness.js";
 import { metricFreshnessLabels } from "./metric-freshness.js";
+import { renderAcquisitionKpis } from "./acquisition-kpis.js";
 
 import { escapeHtml } from "./html.js";
 export { escapeHtml } from "./html.js";
@@ -211,7 +212,7 @@ export function renderDashboard(view: DashboardView): string {
     : "");
   const dailyMeaning = view.rows.some(row => row.metric_name === "daily_selected_install_count")
     ? "<p>Daily selected acquisition counts native installs by UTC occurrence day, using the cohort's chosen attribution and click evidence at the saved receipt watermark. Cohort date is the install's UTC day; an explicit cohort-date filter intersects the occurrence day. Known and unknown campaign states are separate; a blank campaign filter includes both. Imported installs and Apple aggregate postbacks are not this series. Historical daily_install_count and raw record counts retain recorded dimensions.</p>" : "";
-  const deterministicMetrics = dailyMeaning + retentionSection(view) + metricTable("Deterministic cohort metrics", view.deterministicRows, selected);
+  const deterministicMetrics = dailyMeaning + renderAcquisitionKpis(view) + retentionSection(view) + metricTable("Deterministic cohort metrics", view.deterministicRows, selected);
   const appleAggregateMetrics = metricTable("Apple aggregate postback metrics", view.appleAggregateRows, selected);
   const engagementMetrics = view.engagementRows.length ? `<section aria-label="First-party engagement outcomes"><h3>First-party re-engagement outcomes</h3><p>Device-reported opens are forgeable. Server link resolution does not prove human activity or incremental lift. These 24h outcomes use the open's UTC date and latest eligible open before each outcome. Do not add them to install acquisition or Apple aggregate results, or sum campaign converter counts as unique users.</p>${metricTable("First-party engagement outcomes", view.engagementRows, selected)}${chartSection("First-party engagement charts", view.engagementCharts)}</section>` : "";
   const recordRows = view.records.length === 0 ? "" : `<table><caption>Aggregate record counts at the fixed watermark</caption><thead><tr><th scope="col">Metric</th><th scope="col">Grouping</th><th scope="col">Count</th></tr></thead><tbody>${view.records.map((row) => `<tr><th scope="row">${escapeHtml(row.metric_name)}</th><td>${escapeHtml(grouping(row.grouping))}</td><td>${escapeHtml(row.count)}</td></tr>`).join("")}</tbody></table>${continuation(view, "/records", view.recordNextCursor, "Next aggregate-record page")}`;

@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 69 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 70 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -524,6 +524,21 @@ The earlier missing EUR rate yields `missing_fx_rate`, not a partial money sum;
 count and retention remain defined. Combined JCS SHA-256 is
 `7bf8aeaefbaafe0425f5ee96ea4aca7df156a52c680b31b5bf601e81302df091`.
 Existing 68 inputs and 884 expected artifacts are unchanged.
+
+## Fixture 70: saved acquisition KPIs
+
+Fixture [70](70-saved-acquisition-kpis/README.md) independently derives 32
+saved count/cost/CPI/revenue/ROAS runs for two campaigns, organic and a cost-only
+campaign. All eight roles share selected records, disjoint costs and scoped
+attribution snapshots. Missing cost/empty cohort stay undefined, not fake zero
+CPI. Advertising, settled purchase net and total net retain separate units.
+The actual `metric-acquisition-kpis` 0.4.23 bundle hash is
+`950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2`.
+All thirteen expected files were hand-constructed from admission templates,
+scoped IDs, snapshot hashes and the written integer arithmetic, separately from
+behavior changes. Combined RFC 8785 SHA-256 is
+`15df48518a3316738114f7c451bc17feae192e5c75a89f04d11c44b9468176cf`.
+The previous 69 inputs and 897 golden files are unchanged.
 
 ## Adding a fixture procedure
 

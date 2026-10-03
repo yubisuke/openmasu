@@ -183,7 +183,9 @@ export type OpenMasuMetricDefinitionV04 = {
       | "cohort_size"
       | "event_count"
       | "converted_installations"
-      | "converted_installations_over_cohort";
+      | "converted_installations_over_cohort"
+      | "cost_sum"
+      | "cost_over_cohort";
     window: {
       type: "elapsed" | "calendar_day" | "activity_day";
       day: number;
@@ -195,7 +197,8 @@ export type OpenMasuMetricDefinitionV04 = {
       | "active_installations"
       | "cohort_size"
       | "events"
-      | "converted_installations";
+      | "converted_installations"
+      | "cost";
     denominator?: "cost" | "cohort_size";
     cost_basis?: "cohort_acquisition_day_current_snapshot";
   };

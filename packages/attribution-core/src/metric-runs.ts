@@ -216,7 +216,8 @@ export function metricRuns(
     for (const metricName of selectedNames) {
       const definition = definitionsByName.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
-      const usesFx = ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(definition.definition.calculation);
+      const costCalculation = ["cost_sum", "cost_over_cohort"].includes(definition.definition.calculation);
+      const usesFx = costCalculation || ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(definition.definition.calculation);
       if (fxPolicy.rate_selection && definition.value_type === "money"
           && (definition.currency !== fxPolicy.target_currency || definition.amount_scale !== fxPolicy.target_scale)) {
         throw new Error("dated_fx_target_mismatch");
@@ -303,7 +304,7 @@ export function metricRuns(
         ? selectedInstalls.filter((candidate) => !excludedInstallationIds.has(candidate.record.payload.installation_id))
         : selectedInstalls;
       const revenueValue = definition.engagement_credit_policy || definition.conversion_event_key !== undefined
-        || fxPolicy.rate_selection && (!usesFx || definition.definition.numerator === "purchase_net_revenue") ? 0n : revenue.reduce((sum, item) => {
+        || costCalculation || fxPolicy.rate_selection && (!usesFx || definition.definition.numerator === "purchase_net_revenue") ? 0n : revenue.reduce((sum, item) => {
         if (definition.import_provider && item.record.producer !== `import:${definition.import_provider}`) return sum;
         const installation = eligibleInstalls.find((candidate) =>
           candidate.server.tenant_id === item.server.tenant_id && candidate.server.app_id === item.server.app_id &&
@@ -359,7 +360,7 @@ export function metricRuns(
         if (value === undefined) undefined_reason = "empty_cohort";
       } else if (definition.definition.calculation === "revenue_sum") {
         value = selectedRevenueValue;
-      } else if (definition.definition.calculation === "revenue_over_cost") {
+      } else if (costCalculation || definition.definition.calculation === "revenue_over_cost") {
         const cost = currentCosts.reduce((sum, item) => {
           if (fxPolicy.rate_selection) return sum + money(item, item.date);
           if (item.currency !== fxPolicy.target_currency) throw new Error(`cost currency mismatch: ${item.cost_record_id}`);
@@ -367,6 +368,14 @@ export function metricRuns(
         }, 0n);
         if (disjoint?.overlapping) {
           undefined_reason = "overlapping_cost_grains";
+        } else if (definition.definition.calculation === "cost_over_cohort" && cohortSize === 0n) {
+          undefined_reason = "empty_cohort";
+        } else if (definition.definition.calculation === "cost_sum") {
+          if (currentCosts.length === 0) undefined_reason = "no_attributed_cost";
+          else value = cost;
+        } else if (definition.definition.calculation === "cost_over_cohort") {
+          if (currentCosts.length === 0) undefined_reason = "no_attributed_cost";
+          else value = roundHalfEven(cost, cohortSize);
         } else if (cost === 0n) {
           undefined_reason = "no_attributed_cost";
         } else {

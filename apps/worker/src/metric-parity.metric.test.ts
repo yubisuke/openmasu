@@ -36,6 +36,10 @@ import { planAutomaticMetricCorrections } from "./automatic-metric-corrections.j
 import { processMetricRecalculations } from "./metric-recalculation-worker.js";
 import { syntheticFxCases, syntheticEngagementFxCases } from "../../../tools/synthetic-fx-cases.js";
 import { requestMetricRecalculation } from "../../api/src/metric-recalculations.js";
+import { syntheticAcquisitionKpiCases } from "../../../tools/synthetic-acquisition-kpi-cases.js";
+import { buildAcquisitionKpiSets } from "../../api/src/acquisition-kpis.js";
+import { buildDashboardView } from "../../api/src/dashboard/view.js";
+import { renderDashboard } from "../../api/src/dashboard/render.js";
 
 type Any = Record<string, any>;
 const fixtureName = "33-stage-b-cohort-metrics";
@@ -51,6 +55,44 @@ const oracle = evaluate(input).metric_runs;
 const datedFxSource: Any = JSON.parse(readFileSync("fixtures/v0.4/69-dated-fx-cohorts/input.json", "utf8"));
 const datedEngagementFxSource: Any = JSON.parse(readFileSync("fixtures/v0.4/64-first-party-engagement/input.json", "utf8"));
 const datedFxCases = [...syntheticFxCases(datedFxSource), ...syntheticEngagementFxCases(datedEngagementFxSource)];
+const acquisitionKpiSource: Any = JSON.parse(readFileSync("fixtures/v0.4/70-saved-acquisition-kpis/input.json", "utf8"));
+const acquisitionKpiCases = syntheticAcquisitionKpiCases(acquisitionKpiSource);
+
+describe("same-set acquisition KPI SQL parity and saved reporting", { concurrency: false }, () => {
+  const app = createAppPool(), seed = createSeedPool(), reader = createReaderPool();
+  after(async () => { await Promise.all([app.end(), seed.end(), reader.end()]); });
+  for (const entry of acquisitionKpiCases) it(entry.name, async () => {
+    await ingestFixture(`kpi70-${entry.name}`, entry.input, app, seed);
+    const actual = await computeSqlMetricRuns(app, entry.input, false);
+    assert.deepEqual(actual.map(run => run.value_unscaled ?? run.undefined_reason), entry.expected, entry.name);
+    assertPlatformRunParity(actual, evaluate(entry.input).metric_runs, entry.name);
+    if (entry.name === "kpi_two_campaigns_organic_and_cost_only_exact_saved_set") {
+      assertPlatformRunParity(actual, JSON.parse(readFileSync("fixtures/v0.4/70-saved-acquisition-kpis/expected_metric_runs.json", "utf8")), "independent acquisition KPI golden");
+    }
+  });
+  it("kpi_saved_JSON_CSV_SSR_and_operand_links_share_the_same_calculation_set", async () => {
+    await ingestFixture("kpi70-saved-report", acquisitionKpiSource, app, seed);
+    await computeSqlMetricRuns(app, acquisitionKpiSource, true);
+    const identity = { keyId: "synthetic-kpi70", tenantId: "tenant-a", appId: "app-a", role: "admin" as const };
+    const page = await metricReport(reader, identity, { tenantId: "tenant-a", appId: "app-a", supersession: "latest", limit: 200 });
+    const sets = buildAcquisitionKpiSets(page.data, false, identity).sets;
+    assert.equal(sets.length, 4); assert.ok(sets.every(set => set.state === "ready"));
+    const csv = parseCsv(encodeMetricReport(page, "csv").body);
+    for (const set of sets) for (const row of Object.values(set.rows)) {
+      assert.equal(row.acquisition_kpi_set_key, set.key);
+      const csvRow = csv.find(value => value.metric_run_id === row.metric_run_id)!;
+      assert.equal(csvRow.acquisition_kpi_set_key, set.key); assert.equal(csvRow.value_unscaled, row.value_unscaled ?? "");
+      assert.equal(csvRow.undefined_reason, row.undefined_reason ?? "");
+    }
+    const view = buildDashboardView({ apps: [], selectedAppId: "app-a", metrics: page,
+      query: { tenantId: "tenant-a", appId: "app-a", supersession: "latest", limit: 200 }, csrfToken: "synthetic" });
+    assert.deepEqual(view.acquisition.sets, sets);
+    const html = renderDashboard(view);
+    assert.match(html, /USD 3\.333333/); assert.match(html, /empty_cohort/);
+    assert.match(html, /kpi70-a%3Aacquisition_d7_cost\/explanation/);
+    assert.match(html, /kpi70-a%3Aacquisition_d7_installs\/explanation/);
+  });
+});
 
 function assertPlatformRunParity(actual: readonly Any[], expected: readonly Any[], label: string): void {
   assert.equal(actual.length, expected.length, `${label}: run count`);

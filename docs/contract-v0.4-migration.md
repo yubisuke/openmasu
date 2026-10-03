@@ -5,6 +5,40 @@ Contract v0.4.0 completed the identity migration from the immutable
 contract identity but did not change field meaning, attribution behavior, metric
 arithmetic, ordering, hashing, privacy, or fraud semantics.
 
+## Saved acquisition KPI set (0.4.23)
+
+Metric-definition adds `cost_sum`, `cost_over_cohort` and the `cost` numerator
+only inside the closed opt-in eight-role `metric-acquisition-kpis` version
+0.4.23 profile. Existing definition branches, names, results, URNs and wire/
+package `0.4.0` identity keep their behavior. The new bundle binds native
+first-party acquisition, UTC elapsed D7, USD6 money, scale-6 ratios, disjoint
+acquisition-day costs, half-even CPI and separate advertising, settled
+purchase-net and total-net revenue/ROAS. No registry, schema count, event
+payload, table, dependency or service changes.
+
+Reports append a nullable set key binding saved input, cutoff, FX, grouping,
+privacy/fraud mode and registered definitions. This HTTP projection is not a
+new metric-run field. CLI and explicit schedules remain the execution path.
+Partial/incompatible selections and duplicates are not joined; immature or
+invalidated sets are blocked. See [acquisition KPIs](acquisition-kpis.md).
+
+Complete golden addition inventory for `70-saved-acquisition-kpis/`:
+
+- `expected_raw_records.json`, `expected_deliveries.json`,
+  `expected_logical_events.json`, `expected_corrections.json`;
+- `expected_privacy_requests.json`, `expected_privacy_tombstones.json`,
+  `expected_attributions.json`, `expected_metric_definitions.json`;
+- `expected_metric_runs.json`, `expected_cost_records.json`,
+  `expected_fraud_decisions.json`, `expected_rejections.json`,
+  `expected_reconciliation.json`;
+- new `input.json` and `README.md`, and the shared provenance README.
+
+All 13 expected families were independently hand-constructed and committed
+separately from behavior changes; their derivation and combined canonical digest
+are in the fixture README. **No pre-existing input or golden file changes.**
+Verify `git diff --name-status 5fbcffb -- fixtures/v0.4/`: only numbered fixture
+70 and the shared README may differ. Validation never generates a golden.
+
 ## Fixed dated FX snapshots (0.4.22)
 
 An explicit closed `utc_event_date_and_cost_date` policy captures 1–128 unique

@@ -1202,6 +1202,37 @@ def metric_definitions(value: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def validate_metric_definition_series(definition: dict[str, Any]) -> None:
+    if (definition.get("rule_bundle_id") == "metric-acquisition-kpis" or definition["metric_name"].startswith("acquisition_d7_")
+            or definition["definition"]["calculation"] in {"cost_sum", "cost_over_cohort"}):
+        operations = {"installs": ("cohort_size", "cohort_size", "count"), "cost": ("cost_sum", "cost", "money"),
+                      "cpi": ("cost_over_cohort", "cost", "money"), "ad_revenue": ("revenue_sum", "revenue", "money"),
+                      "purchase_net": ("revenue_sum", "purchase_net_revenue", "money"), "total_net": ("revenue_sum", "total_net_revenue", "money"),
+                      "ad_roas": ("revenue_over_cost", "revenue", "ratio"), "total_roas": ("revenue_over_cost", "total_net_revenue", "ratio")}
+        role = definition["metric_name"].removeprefix("acquisition_d7_")
+        if role not in operations:
+            raise ValueError("invalid acquisition KPI role")
+        calculation, numerator, value_type = operations[role]
+        operation: dict[str, Any] = {"calculation": calculation, "numerator": numerator, "window": {"type": "elapsed", "day": 7}}
+        if calculation in {"cost_sum", "cost_over_cohort", "revenue_over_cost"}:
+            operation["cost_basis"] = "cohort_acquisition_day_current_snapshot"
+        if calculation == "cost_over_cohort":
+            operation["denominator"] = "cohort_size"
+        elif calculation == "revenue_over_cost":
+            operation["denominator"] = "cost"
+        expected = {"metric_definition_version": "0.4.23", "anchor_event": "install", "aggregation_time_zone": "UTC",
+                    "acquisition_basis": "selected_first_party_click", "value_type": value_type, "definition": operation,
+                    "cost_selection_policy": "reject_overlapping_grains", "rule_bundle_id": "metric-acquisition-kpis",
+                    "rule_bundle_version": "0.4.23", "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+                    "grouping_dimensions": ["campaign_id", "network", "country", "cohort_date", "attribution_status"]}
+        if value_type == "money":
+            expected.update(currency="USD", amount_scale=6)
+        elif value_type == "ratio":
+            expected["ratio_scale"] = 6
+        if (any(definition.get(key) != value for key, value in expected.items())
+                or set(definition) - set(expected) - {"metric_name", "fraud_policy"}
+                or definition.get("fraud_policy", "gross") not in {"gross", "net"}):
+            raise ValueError("invalid acquisition KPI profile")
+        return
     if (definition.get("calendar_cohort_policy") is not None or definition.get("rule_bundle_id") == "metric-calendar-acquisition"
             or re.match(r"^(platform_|imported_)?calendar_", definition["metric_name"])):
         match = re.fullmatch(r"(platform_|imported_)?calendar_(utc|jst|ny)_(d[0137]_roas|retention_d[17]|cohort_ltv_d[0137]_usd|cohort_install_count)", definition["metric_name"])
@@ -1926,7 +1957,8 @@ def metric_runs(
             if metric_name not in definitions_by_name:
                 raise ValueError(f"unknown metric definition: {metric_name}")
             definition = definitions_by_name[metric_name]
-            uses_fx = definition["definition"]["calculation"] in ("revenue_sum", "revenue_over_cost", "revenue_over_cohort")
+            cost_calculation = definition["definition"]["calculation"] in ("cost_sum", "cost_over_cohort")
+            uses_fx = cost_calculation or definition["definition"]["calculation"] in ("revenue_sum", "revenue_over_cost", "revenue_over_cohort")
             if (policy.get("rate_selection") and definition["value_type"] == "money"
                     and (definition["currency"] != policy["target_currency"] or definition["amount_scale"] != policy["target_scale"])):
                 raise ValueError("dated_fx_target_mismatch")
@@ -2027,7 +2059,7 @@ def metric_runs(
             if unsupported:
                 raise ValueError(f"unsupported grouping for {metric_name}: {','.join(unsupported)}")
             revenue_value = 0
-            for item in ([] if definition.get("engagement_credit_policy") or "conversion_event_key" in definition
+            for item in ([] if cost_calculation or definition.get("engagement_credit_policy") or "conversion_event_key" in definition
                          or policy.get("rate_selection") and (not uses_fx or definition["definition"]["numerator"] == "purchase_net_revenue") else revenue):
                 if provider and item["record"]["producer"] != f"import:{provider}":
                     continue
@@ -2092,7 +2124,7 @@ def metric_runs(
                     undefined_reason = "empty_cohort"
             elif calculation == "revenue_sum":
                 amount = selected_revenue_value
-            elif calculation == "revenue_over_cost":
+            elif calculation == "revenue_over_cost" or cost_calculation:
                 cost_value = 0
                 for cost in current_costs:
                     if policy.get("rate_selection"):
@@ -2103,6 +2135,14 @@ def metric_runs(
                     cost_value += scale_money(cost, int(policy["target_scale"]))
                 if overlapping_costs:
                     undefined_reason = "overlapping_cost_grains"
+                elif calculation == "cost_over_cohort" and cohort_size == 0:
+                    undefined_reason = "empty_cohort"
+                elif cost_calculation and not current_costs:
+                    undefined_reason = "no_attributed_cost"
+                elif calculation == "cost_sum":
+                    amount = cost_value
+                elif calculation == "cost_over_cohort":
+                    amount = round_half_even(cost_value, cohort_size)
                 elif cost_value == 0:
                     undefined_reason = "no_attributed_cost"
                 else:
