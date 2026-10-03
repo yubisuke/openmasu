@@ -2,11 +2,48 @@ import { performance } from "node:perf_hooks";
 import { cpus, totalmem } from "node:os";
 import { Client } from "pg";
 import { requireEnvironment } from "@openmasu/runtime";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join, resolve, sep } from "node:path";
+import { isDeepStrictEqual } from "node:util";
+
+type FloorEvidence = {
+  rows: number; value_unscaled: string; aggregate_ms: number; seed_ms: number;
+  environment: Record<string, string | number>;
+  baseline_revision?: string;
+};
+
+function baselineFloor(): FloorEvidence | undefined {
+  const ref = process.argv.slice(2).find(value => value.startsWith("--base-ref="))?.slice("--base-ref=".length);
+  if (!ref) return undefined;
+  if (!/^[0-9a-f]{40}$/.test(ref)) throw new Error("benchmark --base-ref must be a complete local commit SHA");
+  const repository = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
+  const build = resolve(repository, "build");
+  mkdirSync(build, { recursive: true });
+  const temporary = mkdtempSync(join(build, "metric-floor-compare-"));
+  try {
+    // One ignored source file, not a clone or worktree. Both versions use this
+    // checkout's pinned dependencies and the same PostgreSQL connection settings.
+    const source = execFileSync("git", ["show", `${ref}:apps/worker/src/metrics/benchmark.ts`], {
+      cwd: repository, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    });
+    const path = join(temporary, "baseline.ts");
+    writeFileSync(path, source);
+    const result = execFileSync(process.execPath, ["--import", "tsx", path], {
+      cwd: repository, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    });
+    return { ...JSON.parse(result.trim().split(/\r?\n/).at(-1)!), baseline_revision: ref } as FloorEvidence;
+  } finally {
+    if (!resolve(temporary).startsWith(build + sep)) throw new Error("unsafe benchmark cleanup path");
+    rmSync(temporary, { recursive: true, force: true });
+  }
+}
 
 const requestedRows = Number(process.env.OPENMASU_BENCHMARK_ROWS ?? "100000");
 if (!Number.isSafeInteger(requestedRows) || requestedRows < 1 || requestedRows > 10_000_000) {
   throw new Error("OPENMASU_BENCHMARK_ROWS must be an integer between 1 and 10000000");
 }
+const baseline = baselineFloor();
 
 const client = new Client({
   connectionString: requireEnvironment(
@@ -29,7 +66,7 @@ const environmentBase = {
   node_version: process.version,
   host_logical_cpus: cpus().length,
   host_memory_bytes: totalmem(),
-  postgres_version: (await client.query<{ value: string }>("SHOW server_version")).rows[0].value,
+  postgres_version: (await client.query<{ server_version: string }>("SHOW server_version")).rows[0].server_version,
   postgres_cpu_max: await cgroup("/sys/fs/cgroup/cpu.max"),
   postgres_cpuset: await cgroup("/sys/fs/cgroup/cpuset.cpus.effective"),
   postgres_memory_max: await cgroup("/sys/fs/cgroup/memory.max"),
@@ -82,7 +119,7 @@ try {
     query_parallel_worker_limit: 3,
     query_work_mem: "64MB",
   };
-  console.log(JSON.stringify({
+  const evidence = {
     synthetic_only: true,
     rows: requestedRows,
     cohort_date: "2026-08-01",
@@ -91,7 +128,35 @@ try {
     table_bytes: Number(size.rows[0].bytes),
     value_unscaled: aggregation.rows[0].value_unscaled,
     environment,
-  }));
+  };
+  const legacyUnreported = baseline && !Object.hasOwn(baseline.environment, "postgres_version") ? ["postgres_version"] : [];
+  const fixedEnvironment = (environment: FloorEvidence["environment"]) => Object.fromEntries(
+    Object.entries(environment).filter(([key]) => key !== "postgres_memory_current_bytes" && !legacyUnreported.includes(key)),
+  );
+  if (baseline) {
+    if (baseline.rows !== evidence.rows || baseline.value_unscaled !== evidence.value_unscaled
+        || !isDeepStrictEqual(fixedEnvironment(baseline.environment), fixedEnvironment(evidence.environment))) {
+      const before = fixedEnvironment(baseline.environment), after = fixedEnvironment(evidence.environment);
+      const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort();
+      console.error(JSON.stringify({ synthetic_only: true, comparison_mismatch: {
+        row_count: baseline.rows !== evidence.rows,
+        aggregate: baseline.value_unscaled !== evidence.value_unscaled,
+        environment: keys.filter(key => Object.hasOwn(before, key) !== Object.hasOwn(after, key) || !isDeepStrictEqual(before[key], after[key]))
+          .map(key => ({ key, before_present: Object.hasOwn(before, key), after_present: Object.hasOwn(after, key),
+            before: before[key], after: after[key] })),
+      } }));
+      throw new Error("metric floor comparison inputs or environment changed");
+    }
+  }
+  console.log(JSON.stringify({ ...evidence, ...(baseline ? { comparison: {
+    scope: "synthetic_sql_performance_floor_not_runtime_throughput",
+    baseline_revision: baseline.baseline_revision,
+    same_environment: true,
+    compared_environment_fields: Object.keys(fixedEnvironment(evidence.environment)).sort(),
+    legacy_unreported_environment_fields: legacyUnreported,
+    before: { aggregate_ms: baseline.aggregate_ms, seed_ms: baseline.seed_ms },
+    after: { aggregate_ms: evidence.aggregate_ms, seed_ms: evidence.seed_ms },
+  } } : {}) }));
   await client.query("ROLLBACK");
 } catch (error) {
   await client.query("ROLLBACK").catch(() => undefined);

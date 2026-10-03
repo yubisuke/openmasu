@@ -1034,8 +1034,8 @@ describe("M1b SQL metric parity", { concurrency: false }, () => {
     assert.notEqual(secondSequence, firstSequence);
     assert.equal(jcs(second), jcs(first));
     assert.deepEqual(
-      second.map((run) => [run.input_snapshot_id, run.grouping.dimension_digest]),
-      first.map((run) => [run.input_snapshot_id, run.grouping.dimension_digest]),
+      second.map((run) => [run.input_snapshot_id, run.grouping!.dimension_digest]),
+      first.map((run) => [run.input_snapshot_id, run.grouping!.dimension_digest]),
     );
   });
 

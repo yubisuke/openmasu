@@ -25,6 +25,9 @@ change. Repository instructions in `AGENTS.md` remain authoritative.
   [Metric profile boundaries](development-metric-profiles.md) describes the shared
   metadata, entry-specific validators and frozen admission table. Extend those
   declarations rather than copying a profile guard into another entrypoint.
+  [SQL metric boundaries](development-sql-metrics.md) locates input selection,
+  family calculations and persistence inside the existing worker. Keep the
+  caller's client, transaction, privacy fence and saved replay meaning intact.
 - A provider adapter belongs in the corresponding worker import/job module and
   receives bounded synthetic responses in tests. Reuse the existing ingestion,
   privacy fence, and job lifecycle rather than introducing another queue.
