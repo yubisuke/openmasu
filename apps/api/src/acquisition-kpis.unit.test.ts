@@ -26,11 +26,14 @@ function rows(): MetricReportRow[] {
 
 it("acquisition_KPI_projection_aligns_eight_saved_roles_and_operand_run_refs_without_dividing", () => {
   const source = rows(), result = buildAcquisitionKpiSets(source, false, scope);
+  const authorizedIdentity = { ...scope, keyId: "synthetic-kpi70", role: "admin" as const };
+  assert.deepEqual(buildAcquisitionKpiSets(source, false, authorizedIdentity), result);
   assert.equal(result.sets.length, 4); assert.equal(result.omittedRows, 0);
   for (const set of result.sets) {
     assert.equal(set.state, "ready");
     assert.equal(new Set(Object.values(set.rows).map(row => acquisitionKpiSetKey(row, scope))).size, 1);
     assert.equal(acquisitionKpiSetKey(set.rows.installs, scope), set.key);
+    assert.equal(acquisitionKpiSetKey(set.rows.installs, authorizedIdentity), set.key);
     assert.notEqual(acquisitionKpiSetKey(set.rows.installs, { ...scope, appId: "other-synthetic-app" }), set.key);
     assert.deepEqual(set.operands.cpi, { numerator: set.rows.cost.metric_run_id, denominator: set.rows.installs.metric_run_id });
     assert.deepEqual(set.operands.ad_roas, { numerator: set.rows.ad_revenue.metric_run_id, denominator: set.rows.cost.metric_run_id });

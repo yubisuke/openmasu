@@ -47,7 +47,8 @@ function observation(row: MetricReportRow, scope: AcquisitionKpiScope) {
     // The latest install on a cohort date still needs its complete elapsed D7
     // window. Counts/costs do not make the panel mature before its revenue.
     const closesAt = new Date(Date.parse(date) + 9 * 86_400_000).toISOString();
-    const key = comparisonDigest({ profile: "saved-acquisition-d7-v1", scope, grouping: row.grouping,
+    const key = comparisonDigest({ profile: "saved-acquisition-d7-v1",
+      scope: { tenantId: scope.tenantId, appId: scope.appId }, grouping: row.grouping,
       definitionVersion: d.metric_definition_version,
       bundle: [d.rule_bundle_id, d.rule_bundle_version, d.rule_bundle_hash],
       acquisitionBasis: d.acquisition_basis, window: d.definition.window, timeZone: d.aggregation_time_zone,
