@@ -88,6 +88,12 @@ deployment.
    nonzero unsupported count is a hard stop: do not serve reports until the
    missing versioned replay input has been resolved through an approved newer
    backup or migration.
+   Reapplication uses the same saved-run selection and calculation operation
+   as online deletion. It resumes pending items, reuses completed successors,
+   and skips already superseded items without counting them as unsupported.
+   Each actual replay keeps its saved grouping, watermark, definition, and FX
+   snapshot. Unavailable or failed inputs are not converted to copied numbers.
+   Historical report watermarks never bypass deletion withdrawal.
 7. Verify that no `control.privacy_deletion_jobs` row remains `processing`,
    protected references affected by completed requests cannot be
    decrypted, completed artifacts contain no deletion subject, replacement

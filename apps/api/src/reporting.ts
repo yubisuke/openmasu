@@ -26,6 +26,7 @@ export const metricColumns = [
   "reproducibility_status", "supersedes_metric_run_id", "input_ledger_position",
   "grouping_digest", "superseded", "comparison_context", "cost_update_state", "late_input_update_state",
   "measurement_series", "engagement_evidence_trust",
+  "privacy_update_state", "unavailable_reason",
 ] as const;
 
 export const differenceColumns = [
@@ -43,7 +44,7 @@ export type MetricReportRow = {
   readonly input_received_at_watermark: string;
   readonly input_snapshot_id: string;
   readonly data_freshness: string;
-  readonly value_state: "present" | "undefined";
+  readonly value_state: "present" | "undefined" | "unavailable";
   readonly undefined_reason: string | null;
   readonly value_unscaled?: string;
   readonly value_type: string;
@@ -65,6 +66,8 @@ export type MetricReportRow = {
   readonly late_input_update_state?: "recalculation_pending" | "unavailable" | "completed" | "no_recorded_request";
   readonly measurement_series?: ReturnType<typeof metricSeries>;
   readonly engagement_evidence_trust?: "device_reported_forgeable" | null;
+  readonly privacy_update_state?: "not_affected" | "recalculation_pending" | "unavailable" | "completed";
+  readonly unavailable_reason?: "privacy_deletion" | null;
 };
 
 export type MetricReportPage = {
@@ -110,7 +113,7 @@ export function supportsRecordCounts(query: MetricQuery): boolean {
     && (query.metricNames === undefined || query.metricNames.every((name) => recordCountMetricNames.has(name)));
 }
 
-function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, comparisonContext: MetricComparisonContext | null, costUpdateState: MetricReportRow["cost_update_state"], lateInputUpdateState: MetricReportRow["late_input_update_state"]): MetricReportRow {
+function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, comparisonContext: MetricComparisonContext | null, costUpdateState: MetricReportRow["cost_update_state"], lateInputUpdateState: MetricReportRow["late_input_update_state"], privacyChanged: boolean, privacyUpdateState: MetricReportRow["privacy_update_state"]): MetricReportRow {
   const valueState = artifact.value_state ?? "present";
   if (valueState === "present" && typeof artifact.value_unscaled !== "string") {
     throw new Error(`metric run ${artifact.metric_run_id} has no present value`);
@@ -129,9 +132,9 @@ function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, c
     input_received_at_watermark: artifact.input_received_at_watermark,
     input_snapshot_id: artifact.input_snapshot_id,
     data_freshness: artifact.data_freshness,
-    value_state: valueState,
-    undefined_reason: artifact.undefined_reason ?? null,
-    ...(valueState === "present" ? { value_unscaled: artifact.value_unscaled } : {}),
+    value_state: privacyChanged ? "unavailable" : valueState,
+    undefined_reason: privacyChanged ? null : artifact.undefined_reason ?? null,
+    ...(valueState === "present" && !privacyChanged ? { value_unscaled: artifact.value_unscaled } : {}),
     value_type: artifact.value_type,
     currency: artifact.currency ?? null,
     amount_scale: artifact.amount_scale ?? null,
@@ -141,7 +144,7 @@ function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, c
     rule_bundle_hash: artifact.rule_bundle_hash,
     aggregation_time_zone: artifact.aggregation_time_zone,
     computed_at: artifact.computed_at,
-    reproducibility_status: artifact.reproducibility_status,
+    reproducibility_status: privacyChanged ? "redaction_affected" : artifact.reproducibility_status,
     supersedes_metric_run_id: artifact.supersedes_metric_run_id ?? null,
     input_ledger_position: artifact.input_ledger_position,
     grouping_digest: groupingDigest,
@@ -151,6 +154,8 @@ function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, c
     late_input_update_state: lateInputUpdateState ?? "no_recorded_request",
     measurement_series: metricSeries(artifact.metric_name),
     engagement_evidence_trust: metricSeries(artifact.metric_name) === "first_party_engagement" ? "device_reported_forgeable" : null,
+    privacy_update_state: privacyChanged ? privacyUpdateState ?? "unavailable" : "not_affected",
+    unavailable_reason: privacyChanged ? "privacy_deletion" : null,
   };
 }
 
@@ -179,7 +184,7 @@ export async function metricReport(
 /** Reuse the ordinary keyset projection inside a caller-owned consistent read. */
 export async function metricReportOnClient(client: PoolClient, query: MetricQuery, checkEvidence = false): Promise<MetricReportPage> {
     const statement = buildMetricQuery(query, checkEvidence);
-    const result = await client.query<{ artifact: Any; grouping_digest: string; superseded: boolean; comparison_context: MetricComparisonContext | null; cost_update_state: MetricReportRow["cost_update_state"]; late_input_update_state: MetricReportRow["late_input_update_state"]; evidence_unavailable?: boolean }>(
+    const result = await client.query<{ artifact: Any; grouping_digest: string; superseded: boolean; comparison_context: MetricComparisonContext | null; cost_update_state: MetricReportRow["cost_update_state"]; late_input_update_state: MetricReportRow["late_input_update_state"]; privacy_changed: boolean; privacy_update_state: MetricReportRow["privacy_update_state"]; evidence_unavailable?: boolean }>(
       statement.text,
       [...statement.values],
     );
@@ -192,6 +197,8 @@ export async function metricReportOnClient(client: PoolClient, query: MetricQuer
       row.comparison_context,
       row.cost_update_state,
       row.late_input_update_state,
+      row.privacy_changed,
+      row.privacy_update_state,
     ));
     const last = rows.at(-1);
     return {

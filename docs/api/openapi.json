@@ -516,7 +516,9 @@
                   "cost_update_state",
                   "late_input_update_state",
                   "measurement_series",
-                  "engagement_evidence_trust"
+                  "engagement_evidence_trust",
+                  "privacy_update_state",
+                  "unavailable_reason"
                 ]
               }
             }
@@ -1709,10 +1711,10 @@
           "value_state": {
             "enum": [
               "present",
-              "undefined"
+              "undefined",
+              "unavailable"
             ],
-            "default": "present",
-            "description": "Absence is semantically present for v0.2.0 compatibility."
+            "description": "Report-only unavailable withdraws a privacy-invalidated saved value; it is not a new metric-run contract state."
           },
           "undefined_reason": {
             "anyOf": [
@@ -1890,6 +1892,21 @@
               null
             ],
             "description": "A first-party open is an SDK claim, not proof of human activity; null is not a verification claim for other series."
+          },
+          "privacy_update_state": {
+            "enum": [
+              "not_affected",
+              "recalculation_pending",
+              "unavailable",
+              "completed"
+            ],
+            "description": "Deletion replay state. A completed successor never makes its invalidated original value public again."
+          },
+          "unavailable_reason": {
+            "enum": [
+              "privacy_deletion",
+              null
+            ]
           }
         },
         "additionalProperties": false,
@@ -1911,6 +1928,25 @@
               ]
             },
             "else": {
+              "not": {
+                "required": [
+                  "value_unscaled"
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "value_state": {
+                  "const": "undefined"
+                }
+              },
+              "required": [
+                "value_state"
+              ]
+            },
+            "then": {
               "required": [
                 "undefined_reason"
               ],
@@ -1923,11 +1959,29 @@
                     "overlapping_cost_grains"
                   ]
                 }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "value_state": {
+                  "const": "unavailable"
+                }
               },
-              "not": {
-                "required": [
-                  "value_unscaled"
-                ]
+              "required": [
+                "value_state"
+              ]
+            },
+            "then": {
+              "required": [
+                "unavailable_reason",
+                "privacy_update_state"
+              ],
+              "properties": {
+                "unavailable_reason": {
+                  "const": "privacy_deletion"
+                }
               }
             }
           }

@@ -58,6 +58,21 @@ export async function acquirePrivacyTenantXactFence(
   await client.query(`SELECT ${lock}(hashtextextended($1,0))`, [tenantLockKey(tenantId)]);
 }
 
+/** Resolve each record's actual app while the caller owns the tenant deletion fence. */
+export async function readPrivacyRecordScopesWithClient(
+  client: PoolClient,
+  tenantId: string,
+  recordIds: readonly string[],
+): Promise<readonly { record_id: string; app_id: string }[]> {
+  assertIdentifier("privacy record tenant identifier", tenantId);
+  const ids = [...new Set(recordIds)];
+  const result = await client.query<{ record_id: string; app_id: string }>(
+    `SELECT record_id,app_id FROM ledger.raw_records WHERE tenant_id=$1 AND record_id=ANY($2::text[])
+      ORDER BY record_id COLLATE "C"`, [tenantId, ids]);
+  if (result.rows.length !== ids.length) throw new Error("privacy_record_scope_missing");
+  return result.rows;
+}
+
 /**
  * Installation deletion permanently blocks its subject. App and tenant
  * deletion block only work received at or before the recognition boundary.

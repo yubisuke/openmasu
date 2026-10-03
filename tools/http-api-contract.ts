@@ -26,6 +26,9 @@ export function buildHttpApiContract(): Json {
     comparison_context: { type: ["object", "null"], description: "Saved aggregate-only meaning; null/unknown is not reconstructed." },
     cost_update_state: { type: "string", description: "Current persisted recalculation/input-revision state." },
     late_input_update_state: { type: "string", description: "Explicit late-input request state; not proof of upstream completeness." },
+    value_state: { enum: ["present", "undefined", "unavailable"], description: "Report-only unavailable withdraws a privacy-invalidated saved value; it is not a new metric-run contract state." },
+    privacy_update_state: { enum: ["not_affected", "recalculation_pending", "unavailable", "completed"], description: "Deletion replay state. A completed successor never makes its invalidated original value public again." },
+    unavailable_reason: { enum: ["privacy_deletion", null] },
     measurement_series: { enum: ["cohort_or_activity", "first_party_engagement", "apple_aggregate"], description: "Separate reporting populations; do not add across series." },
     engagement_evidence_trust: { enum: ["device_reported_forgeable", null], description: "A first-party open is an SDK claim, not proof of human activity; null is not a verification claim for other series." },
   });
@@ -36,7 +39,11 @@ export function buildHttpApiContract(): Json {
     AcceptedBatch: { type: "object", required: ["ingest_batch_id", "status"], properties: { ingest_batch_id: { type: "string" }, status: { const: "pending" } }, additionalProperties: false },
     MetricRow: { type: "object", required: ["metric_run_id", "metric_name", "value_state"], properties: metricProperties, additionalProperties: false,
       allOf: [{ if: { properties: { value_state: { const: "present" } }, required: ["value_state"] }, then: { required: ["value_unscaled"] },
-        else: { required: ["undefined_reason"], properties: { undefined_reason: metric.properties.undefined_reason }, not: { required: ["value_unscaled"] } } }] },
+        else: { not: { required: ["value_unscaled"] } } },
+        { if: { properties: { value_state: { const: "undefined" } }, required: ["value_state"] },
+          then: { required: ["undefined_reason"], properties: { undefined_reason: metric.properties.undefined_reason } } },
+        { if: { properties: { value_state: { const: "unavailable" } }, required: ["value_state"] },
+          then: { required: ["unavailable_reason", "privacy_update_state"], properties: { unavailable_reason: { const: "privacy_deletion" } } } }] },
     DifferenceRow: { type: "object", properties: Object.fromEntries(differenceColumns.map((name) => [name, name === "superseded" ? { type: "boolean" } : commonReferences(reconciliation.properties[name] ?? {})])) },
     RecordCountRow: { type: "object", required: [...recordCountColumns], properties: { metric_name: metric.properties.metric_name, grouping: group, count: { type: "string", pattern: "^[0-9]+$" } }, additionalProperties: false },
     ServerRecord: { oneOf: serverEventNames.map((name) => ({

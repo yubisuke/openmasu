@@ -67,6 +67,37 @@ means duplicate delivery and a changed digest conflicts, even across event
 types. Do not mint a new ID to bypass a result-unknown delivery. This local
 idempotency is not end-to-end exactly-once external delivery.
 
+## Privacy changes do not rewrite a saved number
+
+Deletion recognition immediately withdraws a saved run whose available input
+evidence intersects the deletion scope. Its report projection uses
+`value_state: unavailable`, omits `value_unscaled`, sets `undefined_reason` to
+null, and carries `unavailable_reason: privacy_deletion`. The appended
+`privacy_update_state` is `recalculation_pending` while the durable item waits
+or retries, `completed` once its actual successor commits, or `unavailable`
+when replay is not possible. Unaffected rows use `not_affected`. These are
+HTTP-report fields, not additions to the normative metric-run artifact enum.
+
+A legacy run with neither saved evidence references nor a replay manifest
+cannot prove that it is unaffected. It is conservatively withdrawn in the
+requested app/tenant scope and remains unavailable without a copied successor.
+A valid saved empty-input calculation is not withdrawn solely for having no
+input references. The report marks withdrawn runs as `redaction_affected`
+without changing their stored reproducibility metadata.
+
+An old run remains unavailable even after its successor completes and even
+when a caller requests an earlier watermark or `supersession=all`. Its stored
+artifact and original `data_freshness` remain immutable; they do not certify
+the old value as usable after deletion. Only an actual manifest replay can
+publish a successor with `data_freshness: recalculated`. Missing replay inputs
+never produce a copied value labeled recalculated.
+
+CSV appends `privacy_update_state` and `unavailable_reason` and leaves the
+unavailable number's cell empty. The dashboard and saved-detail view use the
+same withdrawal rule, and charts show a gap rather than zero. Read clients
+must handle the additive `unavailable` report state separately from a metric's
+mathematical `undefined` state. Fixed comparisons reject unavailable values.
+
 ## Read selections and continue pages
 
 Use declared grouping keys only; identifying grouping, unknown keys and duplicate

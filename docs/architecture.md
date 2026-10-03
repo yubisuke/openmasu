@@ -267,6 +267,15 @@ state while holding that barrier. Provider-completion queues have separate
 claim and deletion-race boundaries and are not covered by the SDK projection
 barrier.
 
+Privacy metric corrections use a shared runtime application function for
+affected-run selection and saved-manifest replay. The HTTP adapter queues work
+without importing the worker's private source. Online processing supplies the
+existing SQL calculator through a typed callback and commits a successor with
+its queue transition under the privacy fence. Offline restoration supplies the
+same calculator and owns the exclusive tenant transaction. Report projections
+withdraw affected old values independently of the selected historical watermark;
+they never rewrite an immutable artifact or substitute a copied success.
+
 <!-- m1-component:operational-observability -->
 **Operational observability.** Emits closed structured logs and authenticated
 fixed-label Prometheus metrics without raw payloads or identifiers.

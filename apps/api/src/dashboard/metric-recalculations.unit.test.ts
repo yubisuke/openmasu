@@ -7,6 +7,17 @@ import { metricRecalculationFormRequest, renderMetricRecalculations } from "./me
 const request = { cost_import_run_id: "01800000-0000-7000-8000-000000000000",
   date_from: "2026-08-01", date_to: "2026-08-31", watermark: "2026-09-01T00:00:00.000Z" };
 
+it("discloses the bounded privacy-job display without limiting or claiming completion of its full selection", () => {
+  const html = renderMetricRecalculations("app-a", [{ recalculation_id: "privacy-recalculation:synthetic",
+    trigger_kind: "privacy_deletion", date_from: request.date_from, date_to: request.date_to,
+    watermark: request.watermark, state: "queued", selection_count: "122", selection_truncated: true,
+    source_metric_run_id: "synthetic-original", replacement_metric_run_id: null }], "csrf", false);
+  assert.match(html, /only the first 100 selections are displayed; the worker retains every selected run/);
+  assert.match(html, /122/);
+  assert.match(html, /automatic privacy-deletion jobs/);
+  assert.doesNotMatch(html, /<form/);
+});
+
 it("normalizes cost-only confirmation forms with the existing API rules and rejects ambiguous transport", () => {
   const form = new URLSearchParams({ ...request, csrf_token: "synthetic", metric_names: "d7_roas, d1_roas d7_roas" });
   const parsed = metricRecalculationFormRequest(form);

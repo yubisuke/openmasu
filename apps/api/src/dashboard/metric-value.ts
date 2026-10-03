@@ -14,6 +14,7 @@ export function exactDecimal(integer: string, scale: number): string {
 
 /** Units come from the stored type/scales, never from a metric-name heuristic. */
 export function metricValueLabel(row: MetricReportRow): string {
+  if (row.value_state === "unavailable") return `— (${row.unavailable_reason ?? "value unavailable"}; ${row.privacy_update_state ?? "unavailable"})`;
   if (row.value_state === "undefined") return `— (${row.undefined_reason ?? "reason unavailable"})`;
   if (row.value_unscaled === undefined) return "Value unavailable";
   if (row.value_type === "money" && row.amount_scale !== null && row.currency) {

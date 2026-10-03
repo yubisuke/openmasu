@@ -29,6 +29,10 @@ change. Repository instructions in `AGENTS.md` remain authoritative.
   and decimal operations use `@openmasu/runtime/import-normalization`; hashes use
   `@openmasu/attribution-core/canonical`. Do not import a sibling application's
   private source just to reuse a helper.
+- Privacy metric corrections use the shared runtime selection/replay operation
+  and a typed calculator callback. HTTP queues the existing durable worker;
+  restore owns its exclusive tenant transaction. Do not copy saved numbers or
+  add a sibling-app import to make a deletion appear recalculated.
 - Use `@openmasu/contracts/types` for type-only imports and
   `@openmasu/contracts/definitions` for metadata. Import the validation subpath
   when validation is required; a metadata import must not compile schemas.

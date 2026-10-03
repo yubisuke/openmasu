@@ -29,6 +29,7 @@
     "test:db-invariants": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/runtime/src/db-invariants.test.ts && node --env-file-if-exists=.env --import tsx apps/runtime/src/role-grants.integration.test.ts"
   },
   "dependencies": {
+    "@openmasu/attribution-core": "0.4.0",
     "pg": "8.23.0"
   },
   "devDependencies": {

@@ -78,10 +78,17 @@ export async function listMetricRecalculations(pool: Pool, identity: AppAdminIde
   return withTenant(pool, identity.tenantId, async client => (await client.query(
     `SELECT job.recalculation_id,job.cost_import_run_id,job.cost_snapshot_digest,job.date_from::text,job.date_to::text,
        job.watermark,job.created_at,job.trigger_kind,job.source_snapshot_digest,job.input_status_counts,job.selection_status,
+       total.selection_count::text,total.selection_count>100 AS selection_truncated,
        item.source_metric_run_id,item.replacement_metric_run_id,item.state,item.attempts,item.safe_reason
      FROM (SELECT * FROM control.metric_recalculation_jobs WHERE tenant_id=$1 AND app_id=$2
        ORDER BY created_at DESC,recalculation_id COLLATE "C" LIMIT 20) AS job
-     LEFT JOIN control.metric_recalculation_items AS item USING (tenant_id,app_id,recalculation_id)
+     LEFT JOIN LATERAL (SELECT count(*) AS selection_count FROM control.metric_recalculation_items AS selection
+       WHERE selection.tenant_id=job.tenant_id AND selection.app_id=job.app_id
+         AND selection.recalculation_id=job.recalculation_id) AS total ON true
+     LEFT JOIN LATERAL (SELECT selection.* FROM control.metric_recalculation_items AS selection
+       WHERE selection.tenant_id=job.tenant_id AND selection.app_id=job.app_id
+         AND selection.recalculation_id=job.recalculation_id
+       ORDER BY selection.source_metric_run_id COLLATE "C" LIMIT 100) AS item ON true
      ORDER BY job.created_at DESC,job.recalculation_id COLLATE "C",item.source_metric_run_id COLLATE "C"`,
     [identity.tenantId, identity.appId])).rows);
 }
