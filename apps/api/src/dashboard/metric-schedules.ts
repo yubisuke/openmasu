@@ -1,6 +1,6 @@
 import { metricProfileMetadata } from "@openmasu/contracts/definitions";
 import type { MetricScheduleRecord } from "../metric-schedules.js";
-import { escapeHtml as escape } from "./render.js";
+import { escapeHtml as escape } from "./html.js";
 
 /** Decode transport only; registerMetricSchedule owns all definition validation. */
 export function metricScheduleFormRequest(form: URLSearchParams, disable = false): Record<string, unknown> {

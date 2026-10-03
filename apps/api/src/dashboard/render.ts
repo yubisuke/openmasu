@@ -1,18 +1,12 @@
 import { renderSparkline } from "./svg.js";
 import type { DashboardView } from "./view.js";
-import { measurementNotices } from "../measurement-health.js";
+import { measurementNotices } from "../measurement-notices.js";
 import { metricValueLabel } from "./metric-value.js";
 import { reportFields, reportSelectionParams } from "./report-controls.js";
 import { renderComparisonExport } from "./comparison-export.js";
 
-export function escapeHtml(value: unknown): string {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
+import { escapeHtml } from "./html.js";
+export { escapeHtml } from "./html.js";
 
 function grouping(value: Readonly<Record<string, string>>): string {
   const entries = Object.entries(value).sort(([left], [right]) => left.localeCompare(right, "en"));

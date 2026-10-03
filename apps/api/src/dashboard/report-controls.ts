@@ -1,4 +1,4 @@
-import { groupingDimensionAllowlist, type MetricQuery } from "../report-query.js";
+import { groupingDimensionAllowlist, type MetricQuery } from "../report-query-model.js";
 
 export const reportFields = [
   ["date_from", "Date from (inclusive)"], ["date_to", "Date to (exclusive)"],

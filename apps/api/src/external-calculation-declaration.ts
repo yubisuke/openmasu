@@ -1,4 +1,4 @@
-import { comparisonMeaning, type MetricComparisonContext } from "@openmasu/runtime";
+import { comparisonMeaning, type MetricComparisonContext } from "@openmasu/runtime/metric-comparison";
 import type { GroupingDimension } from "./report-query.js";
 
 type Rounding = "half_even" | "half_up" | "truncate";

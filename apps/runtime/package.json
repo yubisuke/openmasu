@@ -20,6 +20,10 @@
     "./apple-purchase-binding": {
       "types": "./src/apple-purchase-binding.ts",
       "default": "./src/apple-purchase-binding.ts"
+    },
+    "./metric-comparison": {
+      "types": "./src/metric-comparison.ts",
+      "default": "./src/metric-comparison.ts"
     }
   },
   "scripts": {

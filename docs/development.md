@@ -18,6 +18,9 @@ change. Repository instructions in `AGENTS.md` remain authoritative.
   handler. Keep authentication and response parsing at that boundary. Build a
   typed view model before calling a dashboard renderer; rendering does not query
   PostgreSQL or read environment variables.
+  [HTTP and dashboard boundaries](development-http.md) locates the exhaustive
+  controller registry, shared authentication, bounded decoders, validated
+  application adapter, and pure presentation modules.
 - A metric definition belongs in `packages/contracts/src`; its closed shape is
   validated through `@openmasu/contracts/validation`. Calculation changes require
   the reference evaluator, independent Python implementation, and SQL engine in

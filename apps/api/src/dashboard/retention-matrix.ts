@@ -1,4 +1,4 @@
-import { comparisonMeaning, comparisonMaturity } from "@openmasu/runtime";
+import { comparisonMeaning, comparisonMaturity } from "@openmasu/runtime/metric-comparison";
 import { comparisonDigest, parseComparisonContext } from "../cohort-comparison.js";
 import type { MetricReportRow } from "../reporting.js";
 

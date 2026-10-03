@@ -1,7 +1,8 @@
 import { jcs } from "@openmasu/attribution-core/canonical";
-import { snapshotAssurance, type ComparisonResult } from "../cohort-comparison.js";
+import { snapshotAssurance } from "../comparison-model.js";
+import type { ComparisonResult } from "../cohort-comparison.js";
 import type { ComparisonPair } from "../dashboard-comparison.js";
-import { escapeHtml as escape } from "./render.js";
+import { escapeHtml as escape } from "./html.js";
 import { renderComparisonContent } from "./comparison-report.js";
 
 export function renderComparisonWorkflow(appId: string, csrf: string, pair?: ComparisonPair, result?: ComparisonResult, allowExternalDeclaration = false): string {

@@ -27,7 +27,15 @@ describe("module_boundaries_reject_invalid_edges", () => {
     assert.ok(checkModuleBoundaries(modules, owners, []).some(error => error.includes("runtime workspace cycle")));
     assert.deepEqual(checkModuleBoundaries([modules[0], { ...modules[1], imports: modules[1].imports.map(value => ({ ...value, typeOnly: true })) }], owners, []), []);
   });
-  it("keeps the real lightweight entrypoints free of IO and startup modules", () => {
+  it("dashboard_presentation_excludes_io_modules and keeps the other lightweight entrypoints pure", () => {
     assert.deepEqual(inspectWorkspaceBoundaries(process.cwd()).errors, []);
+    const root = "apps/api/src/dashboard/presenter.ts";
+    const owners = [workspace("@openmasu/api", "apps/api")];
+    for (const specifier of ["node:fs", "pg", "ajv/dist/2020.js", "@openmasu/contracts/validation"]) {
+      assert.ok(checkModuleBoundaries([{ path: root, imports: [{ specifier, typeOnly: false }] }], owners, [root])
+        .some(error => error.includes("IO dependency")), specifier);
+    }
+    assert.ok(checkModuleBoundaries([{ path: root, imports: [], performsIO: true }], owners, [root])
+      .some(error => error.includes("IO in")));
   });
 });
