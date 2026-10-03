@@ -20,6 +20,7 @@ export function syntheticPlatformAcquisitionCases(source: Any): PlatformCase[] {
       input.platform_acquisition_inputs.find((proof: Any) => proof.install_record_id === "apple-66").attribution.input_cutoff_at = "2026-10-02T00:00:00.000Z";
     }, [...baseline.slice(0,9), "0","empty_cohort","0","empty_cohort", ...baseline.slice(13)]),
     build("does not fall back after protected context redaction", input => { meta(input).lifecycle_status = "redacted"; }, withoutMeta),
+    build("does not fall back after protected context retention expiry", input => { meta(input).lifecycle_status = "purged"; }, withoutMeta),
     build("rejects a changed protected context digest", input => { meta(input).evidence_digest = "0".repeat(64); }, withoutMeta),
     build("rejects a claimed decryption without its canonical server marker", input => {
       delete install(input).payload.extensions.meta_decryption_key_id;
@@ -29,6 +30,9 @@ export function syntheticPlatformAcquisitionCases(source: Any): PlatformCase[] {
       const campaign = "2066"; install(input).payload.meta_referrer_context.campaign_id = campaign;
       meta(input).context.campaign_id = campaign; meta(input).evidence_digest = sha256(install(input).payload);
       for (const evaluation of input.metric_evaluations) if (evaluation.grouping.network === "meta_install_referrer") evaluation.grouping.campaign_id = campaign;
+      const cost = input.cost_records.find((row: Any) => row.network === "meta_install_referrer");
+      cost.campaign_id = campaign;
+      cost.dimension_digest = sha256({ network: cost.network, campaign_id: campaign });
     }),
     build("is stable under record, proof, definition, cost and evaluation permutations", input => {
       for (const field of ["batches","platform_acquisition_inputs","metric_definitions","cost_records","metric_evaluations"]) input[field].reverse();

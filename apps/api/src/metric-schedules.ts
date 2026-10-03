@@ -174,6 +174,9 @@ export function normalizeMetricScheduleRequest(
     }
     const dateDimension: "cohort_date" | "metric_date" = evaluation.date_dimension;
     const grouping = normalizedGrouping(evaluation.grouping);
+    if ((grouping.campaign_id !== undefined || grouping.ad_group_id !== undefined) && grouping.network === undefined
+        && evaluation.metric_names.some(name => suppliedDefinitions.find(definition => definition.metric_name === name)
+          ?.acquisition_basis === "selected_verified_platform")) throw new Error("platform_acquisition_source_required");
     const dailyAcquisition = evaluation.metric_names.some(name =>
       suppliedDefinitions.find(definition => definition.metric_name === name)?.rule_bundle_id === "metric-selected-daily-acquisition");
     if ((dailyAcquisition || grouping.acquisition_campaign_state !== undefined)

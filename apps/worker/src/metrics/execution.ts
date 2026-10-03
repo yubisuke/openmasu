@@ -139,8 +139,9 @@ export async function executeMetricCalculation(
         rule_bundle_version: definition.rule_bundle_version,
         rule_bundle_hash: definition.rule_bundle_hash,
         rounding_mode: fxPolicy.rounding_mode,
-        reproducibility_status: definition.acquisition_basis === "selected_verified_platform" && platformSnapshot?.unavailable
-          ? "redaction_affected" : reproducibilityStatus,
+        reproducibility_status: definition.acquisition_basis !== "selected_verified_platform" ? reproducibilityStatus
+          : reproducibilityStatus === "redaction_affected" || platformSnapshot?.redacted ? "redaction_affected"
+          : reproducibilityStatus === "retention_affected" || platformSnapshot?.purged ? "retention_affected" : "fully_reproducible",
         ...(definition.fraud_policy ? { fraud_policy: definition.fraud_policy } : {}),
         value_type: definition.value_type,
         ...(value.value_state === "undefined"

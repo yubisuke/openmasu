@@ -128,6 +128,10 @@ export function metricRuns(
     const visible = included.filter((attempt) => evaluation.privacy_state !== "after" || !lifecycle.has(attemptEvidenceKey(attempt)));
     const engagement = engagementInputs(included, attributions, evaluation.input_received_at_watermark);
     const platform = selectPlatformAcquisition(attributions, included, input.platform_acquisition_inputs ?? [], evaluation.input_received_at_watermark);
+    const platformStates = [...platform.attributions.values()].flatMap(attribution => {
+      const proof = platform.proofs.get(compositeKey([attribution.tenant_id,attribution.app_id,attribution.attribution_id]));
+      return proof ? [proof.lifecycle_status] : [];
+    });
     const historicalCandidates = new Map(attributions.map(attribution => [compositeKey([attribution.tenant_id, attribution.app_id, attribution.attribution_id]), attribution]));
     for (const proof of platform.proofs.values()) historicalCandidates.set(compositeKey([proof.attribution.tenant_id, proof.attribution.app_id, proof.attribution.attribution_id]), proof.attribution);
     const acquisitionAttributions = selectedAcquisitionAttributions([...historicalCandidates.values()], included, evaluation.input_received_at_watermark);
@@ -458,10 +462,9 @@ export function metricRuns(
         rule_bundle_version: definition.rule_bundle_version,
         rule_bundle_hash: definition.rule_bundle_hash,
         rounding_mode: fxPolicy.rounding_mode,
-        reproducibility_status: definition.acquisition_basis === "selected_verified_platform" && [...platform.attributions.values()].some(attribution => {
-          const proof = platform.proofs.get(compositeKey([attribution.tenant_id, attribution.app_id, attribution.attribution_id]));
-          return proof && proof.lifecycle_status !== "available";
-        }) ? "redaction_affected" : reproducibility_status,
+        reproducibility_status: definition.acquisition_basis !== "selected_verified_platform" ? reproducibility_status
+          : reproducibility_status === "redaction_affected" || platformStates.includes("redacted") ? "redaction_affected"
+          : reproducibility_status === "retention_affected" || platformStates.includes("purged") ? "retention_affected" : "fully_reproducible",
         value_type: definition.value_type,
         ...(definition.fraud_policy ? { fraud_policy: definition.fraud_policy } : {}),
         ...(value === undefined

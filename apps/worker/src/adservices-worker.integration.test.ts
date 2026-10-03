@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { createCipheriv, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import type { AddressInfo } from "node:net";
@@ -18,6 +18,8 @@ import { KeyedTokenBucket } from "../../api/src/rate-limit.js";
 import { ensureSdkKeys, signSdkRequest } from "../../api/src/sdk-auth.js";
 import { processAdServicesLookups } from "./adservices-worker.js";
 import { listRuntimeWorkTenants, processSdkInbox } from "./sdk-worker.js";
+import { VERIFIED_PLATFORM_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
+import { computeSqlMetricRuns } from "./metrics/cohort.js";
 
 const run = randomBytes(6).toString("hex");
 const tenantId = `tenant-m4-adservices-${run}`;
@@ -150,6 +152,16 @@ function installEvent(label: string, installationId: string, value: Record<strin
   };
 }
 
+async function platformCount(campaignId: string, source: string): Promise<string | undefined> {
+  const at = new Date(Date.now()+1_000).toISOString();
+  const rows = await computeSqlMetricRuns(pool,{fx_policy:{policy_version:"synthetic-platform-http-fx",target_currency:"USD",target_scale:6,rounding_mode:"half_even",
+    rates:[{currency:"USD",rate_unscaled:"1",rate_scale:0,source:"synthetic-rate",as_of:at}]},
+    metric_definitions:VERIFIED_PLATFORM_METRIC_DEFINITIONS,metric_evaluations:[{metric_run_id_prefix:`synthetic-platform-http-${randomBytes(4).toString("hex")}`,
+      metric_names:["platform_cohort_install_count"],input_received_at_watermark:at,computed_at:at,data_freshness:"partial",privacy_state:"after",
+      grouping:{cohort_date:"2026-08-20",campaign_id:campaignId,network:source,attribution_status:"non_organic"}}]},false,{tenant_id:tenantId,app_id:appId});
+  return rows[0].value_unscaled;
+}
+
 async function submitInstall(label: string, token: string): Promise<{
   installationId: string;
   installationKeyId: string;
@@ -264,6 +276,48 @@ describe("M4 AdServices server-side lookup", () => {
     assert.deepEqual(await nested.json(), { error: "device_adservices_claim_forbidden" });
   });
 
+  it("rejects forged platform projections and server decryption markers before durable insertion", async () => {
+    const credential = await enroll("forged-platform");
+    const before = await withTenant(pool,tenantId,async client => Number((await client.query(
+      "SELECT count(*)::text AS count FROM ephemeral.sdk_inbox WHERE tenant_id=$1 AND app_id=$2",[tenantId,appId])).rows[0].count));
+    const claims = [{meta_referrer_status:"decrypted"}, {meta_referrer_context:{campaign_id:"synthetic-forged"}},
+      {protected_referrer_evidence_ref:"payload:synthetic-forged"}, {extensions:{meta_decryption_key_id:"synthetic-forged"}},
+      {extensions:{meta_referrer_context:{campaign_id:"synthetic-forged"}}}];
+    for (const [index,claim] of claims.entries()) {
+      const response = await signed({path:"/v1/events/batch",value:{records:[installEvent(`forged-platform-${index}`,credential.installationId,claim)]},
+        secret:credential.installationSecret,installationKeyId:credential.installationKeyId});
+      assert.equal(response.status,403);
+      assert.deepEqual(await response.json(),{error:"device_platform_attribution_claim_forbidden"});
+    }
+    const event = {...installEvent("forged-platform-projection",credential.installationId,{}),platform_acquisition_inputs:[]};
+    const response = await signed({path:"/v1/events/batch",value:{records:[event]},secret:credential.installationSecret,installationKeyId:credential.installationKeyId});
+    assert.equal(response.status,403);
+    assert.deepEqual(await response.json(),{error:"device_platform_attribution_claim_forbidden"});
+    const after = await withTenant(pool,tenantId,async client => Number((await client.query(
+      "SELECT count(*)::text AS count FROM ephemeral.sdk_inbox WHERE tenant_id=$1 AND app_id=$2",[tenantId,appId])).rows[0].count));
+    assert.equal(after,before);
+  });
+
+  it("connects only server-decrypted synthetic Meta evidence to the independent platform cohort", async () => {
+    const credential=await enroll("verified-meta");
+    const key=randomBytes(32),nonce=randomBytes(12),campaign="synthetic-http-platform",adgroup="synthetic-http-adgroup";
+    const cipher=createCipheriv("aes-256-gcm",key,nonce);
+    const bytes=Buffer.concat([cipher.update(JSON.stringify({campaign_id:campaign,adgroup_id:adgroup}),"utf8"),cipher.final(),cipher.getAuthTag()]);
+    const raw=JSON.stringify({utm_content:{source:{data:bytes.toString("hex"),nonce:nonce.toString("hex")}}});
+    const submit=await signed({path:"/v1/events/batch",value:{records:[installEvent("verified-meta",credential.installationId,
+      {install_origin:"google_play",referrer_status:"unavailable",extensions:{meta_install_referrer_protected:raw}})]},
+      secret:credential.installationSecret,installationKeyId:credential.installationKeyId});
+    assert.equal(submit.status,202);
+    await processSdkInbox(pool,payloadStore,tenantId,{metaKeys:[{key_id:"synthetic-http-meta-key",key_hex:key.toString("hex")}]});
+    const facts=await withTenant(pool,tenantId,async client=>(await client.query(`SELECT artifact FROM ledger.install_facts
+      WHERE tenant_id=$1 AND app_id=$2 AND installation_id=$3`,[tenantId,appId,credential.installationId])).rows);
+    assert.equal(facts.length,1);
+    assert.equal(facts[0].artifact.meta_referrer_status,"decrypted");
+    assert.equal(facts[0].artifact.extensions.meta_decryption_key_id,"synthetic-http-meta-key");
+    assert.equal(await platformCount(campaign,"meta_install_referrer"),"1");
+    assert.equal(await platformCount(campaign,"apple_adservices"),"0");
+  });
+
   it("A08 derives an immutable superseding attribution from a protected raw token", async () => {
     const token = `synthetic-adservices-token-${randomBytes(32).toString("base64url")}`;
     const install = await submitInstall("attributed", token);
@@ -327,6 +381,8 @@ describe("M4 AdServices server-side lookup", () => {
       claimType: "Click",
       countryOrRegion: "US",
     });
+    assert.equal(await platformCount("2","apple_adservices"),"1");
+    assert.equal(await platformCount("2","meta_install_referrer"),"0");
   });
 
   it("A09 purges pending AdServices work before on-device deletion completes", async () => {

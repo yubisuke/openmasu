@@ -1728,6 +1728,8 @@ def metric_runs(
         ]
         engagement = engagement_inputs(included, attributions, evaluation["input_received_at_watermark"])
         platform = selected_platform_acquisition(attributions, included, value.get("platform_acquisition_inputs", []), evaluation["input_received_at_watermark"])
+        platform_states = [platform[1].get((row["tenant_id"], row["app_id"], row["attribution_id"]), {}).get("lifecycle_status", "available")
+                           for row in platform[0].values()]
         historical = {(row["tenant_id"], row["app_id"], row["attribution_id"]): row for row in attributions}
         historical.update({(proof["attribution"]["tenant_id"], proof["attribution"]["app_id"], proof["attribution"]["attribution_id"]): proof["attribution"]
                            for proof in platform[1].values()})
@@ -2078,9 +2080,9 @@ def metric_runs(
                 "rule_bundle_version": definition["rule_bundle_version"],
                 "rule_bundle_hash": definition["rule_bundle_hash"],
                 "rounding_mode": policy["rounding_mode"],
-                "reproducibility_status": "redaction_affected" if definition.get("acquisition_basis") == "selected_verified_platform"
-                    and any(platform[1].get((row["tenant_id"], row["app_id"], row["attribution_id"]), {}).get("lifecycle_status", "available") != "available"
-                            for row in platform[0].values()) else reproducibility,
+                "reproducibility_status": ("redaction_affected" if reproducibility == "redaction_affected" or "redacted" in platform_states
+                    else "retention_affected" if reproducibility == "retention_affected" or "purged" in platform_states else "fully_reproducible")
+                    if definition.get("acquisition_basis") == "selected_verified_platform" else reproducibility,
                 "value_type": definition["value_type"],
                 "evidence_refs": evidence,
             }

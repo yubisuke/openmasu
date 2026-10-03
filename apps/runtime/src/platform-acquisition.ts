@@ -51,7 +51,8 @@ export const selectedPlatformAcquisitionSql = `
     SELECT candidate.*,proof.install_record_id,proof.source,proof.context,proof.evidence_ref,proof.evidence_digest,
       CASE WHEN proof.install_lifecycle<>'available' THEN proof.install_lifecycle
         WHEN EXISTS (SELECT 1 FROM control.privacy_payload_purges AS purge WHERE purge.tenant_id=$1 AND purge.app_id=$2
-          AND purge.payload_ref=proof.evidence_ref) THEN 'redacted' ELSE 'available' END AS lifecycle_status
+          AND (purge.payload_ref=proof.evidence_ref OR 'payload:'||purge.payload_ref=proof.evidence_ref))
+          THEN 'redacted' ELSE 'available' END AS lifecycle_status
     FROM ledger.attribution_results AS candidate
     LEFT JOIN proof ON proof.attribution_id=candidate.attribution_id
     WHERE candidate.tenant_id=$1 AND candidate.app_id=$2 AND candidate.subject_scope='installation_level'
@@ -103,6 +104,7 @@ export async function platformAcquisitionSnapshot(client: Pick<PoolClient,"query
     acquisition_attributions: selected.map(row => [row.artifact.tenant_id,row.artifact.app_id,row.artifact.attribution_id,sha256Jcs(row.artifact)]),
     platform_acquisition_inputs: selected.flatMap(row => { const proof = platformProofInput(row);
       return proof ? [[row.artifact.tenant_id,row.artifact.app_id,row.artifact.attribution_id,sha256Jcs(proof)]] : []; }),
-    unavailable: selected.some(row => row.source && row.lifecycle_status !== "available"),
+    redacted: selected.some(row => row.source && row.lifecycle_status === "redacted"),
+    purged: selected.some(row => row.source && row.lifecycle_status === "purged"),
   };
 }
