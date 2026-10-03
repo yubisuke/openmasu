@@ -1,1 +1,1 @@
-export { selectedAcquisitionSql, selectedClickJoinSql } from "@openmasu/runtime";
+export { selectedAcquisitionSql, selectedClickJoinSql, metricAcquisitionSql, metricAcquisitionJoinSql } from "@openmasu/runtime";

@@ -87,6 +87,11 @@ function normalizedRecord(
   if (payload.adservices_context !== undefined || payload.extensions?.adservices_context !== undefined) {
     throw new Error("device_adservices_claim_forbidden");
   }
+  if (payload.meta_referrer_context !== undefined || payload.meta_referrer_status === "decrypted"
+      || payload.protected_referrer_evidence_ref !== undefined || payload.extensions?.meta_decryption_key_id !== undefined
+      || payload.extensions?.meta_referrer_context !== undefined || source.platform_acquisition_inputs !== undefined) {
+    throw new Error("device_platform_attribution_claim_forbidden");
+  }
   if (source.event_name === "click" && [
     "bot_prefetch", "source_rate_class", "client_class", "remote_click_ref",
   ].some((key) => payload[key] !== undefined)) {

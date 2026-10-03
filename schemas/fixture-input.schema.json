@@ -63,6 +63,28 @@
       "type": "array",
       "items": { "$ref": "#/$defs/sourceDayAggregate" }
     },
+    "platform_acquisition_inputs": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["attribution", "install_record_id", "source", "context", "evidence_ref", "evidence_digest", "lifecycle_status"],
+        "properties": {
+          "attribution": { "$ref": "urn:openmasu:schema:attribution-result:v0.4" },
+          "install_record_id": { "$ref": "common.schema.json#/$defs/id" },
+          "source": { "enum": ["apple_adservices", "meta_install_referrer"] },
+          "context": {
+            "type": "object", "additionalProperties": false,
+            "properties": {
+              "campaign_id": { "$ref": "common.schema.json#/$defs/id" },
+              "ad_group_id": { "$ref": "common.schema.json#/$defs/id" }
+            }
+          },
+          "evidence_ref": { "type": "string", "minLength": 1, "maxLength": 2048 },
+          "evidence_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "lifecycle_status": { "enum": ["available", "redacted", "purged"] }
+        }
+      }
+    },
     "metric_definitions": {
       "type": "array",
       "items": { "$ref": "urn:openmasu:schema:metric-definition:v0.4" }

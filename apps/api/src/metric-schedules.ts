@@ -194,7 +194,8 @@ export function normalizeMetricScheduleRequest(
     if ((grouping.ad_group_id !== undefined || grouping.creative_id !== undefined)
         && (dateDimension !== "cohort_date" || evaluation.metric_names.some(name => {
           const metric = suppliedDefinitions.find(value => value.metric_name === name);
-          return metric?.acquisition_dimension_policy !== "selected_link_ad_group_creative";
+          return metric?.acquisition_dimension_policy !== "selected_link_ad_group_creative"
+            && !(metric?.acquisition_basis === "selected_verified_platform" && grouping.creative_id === undefined);
         }))) throw new Error("metric_schedule_detail_profile_required");
     let discovery: { policy: "selected_acquisition_and_cost_v1"; max_targets: number } | undefined;
     if (evaluation.campaign_discovery !== undefined) {
@@ -207,10 +208,12 @@ export function normalizeMetricScheduleRequest(
             const metric = suppliedDefinitions.find(value => value.metric_name === name);
             return !metric || metric.anchor_event !== "install" || metric.aggregation_time_zone !== "UTC"
               || metric.acquisition_dimension_policy !== undefined
-              || metric.acquisition_basis !== "selected_first_party_click"
+              || !["selected_first_party_click", "selected_verified_platform"].includes(String(metric.acquisition_basis))
               || ((metric.definition as JsonObject).calculation === "revenue_over_cost"
                 && metric.cost_selection_policy !== "reject_overlapping_grains");
           })) throw new Error("metric_schedule_discovery_invalid");
+      const bases = new Set(evaluation.metric_names.map(name => suppliedDefinitions.find(value => value.metric_name === name)?.acquisition_basis));
+      if (bases.size !== 1) throw new Error("metric_schedule_discovery_mixed_basis");
       discovery = { policy: "selected_acquisition_and_cost_v1", max_targets: Number(candidate.max_targets) };
     }
     return {

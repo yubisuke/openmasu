@@ -222,7 +222,7 @@ export type OpenMasuMetricDefinitionV04 = {
     | "acquisition_campaign_state"
   )[];
   fraud_policy?: "gross" | "net";
-  acquisition_basis?: "selected_first_party_click";
+  acquisition_basis?: "selected_first_party_click" | "selected_verified_platform";
   acquisition_dimension_policy?: "selected_link_ad_group_creative";
   conversion_event_key?: string;
   engagement_credit_policy?: "latest_eligible_open_before_outcome";

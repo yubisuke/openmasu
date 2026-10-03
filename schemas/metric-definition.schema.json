@@ -48,7 +48,7 @@
       "items": { "enum": ["campaign_id", "ad_group_id", "creative_id", "network", "country", "cohort_date", "metric_date", "attribution_status", "apple_conversion_bucket", "acquisition_campaign_state"] }
     },
     "fraud_policy": { "enum": ["gross", "net"], "default": "gross" },
-    "acquisition_basis": { "const": "selected_first_party_click" },
+    "acquisition_basis": { "enum": ["selected_first_party_click", "selected_verified_platform"] },
     "acquisition_dimension_policy": { "const": "selected_link_ad_group_creative" },
     "conversion_event_key": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
     "engagement_credit_policy": { "const": "latest_eligible_open_before_outcome" },
@@ -59,6 +59,679 @@
     "rule_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
   },
   "allOf": [
+    {
+      "if": {
+        "anyOf": [
+          {
+            "properties": {
+              "acquisition_basis": {
+                "const": "selected_verified_platform"
+              }
+            },
+            "required": [
+              "acquisition_basis"
+            ]
+          },
+          {
+            "properties": {
+              "rule_bundle_id": {
+                "const": "metric-verified-platform-acquisition"
+              }
+            },
+            "required": [
+              "rule_bundle_id"
+            ]
+          },
+          {
+            "properties": {
+              "metric_name": {
+                "type": "string",
+                "pattern": "^platform_"
+              }
+            },
+            "required": [
+              "metric_name"
+            ]
+          }
+        ]
+      },
+      "then": {
+        "required": [
+          "acquisition_basis",
+          "grouping_dimensions",
+          "metric_definition_version",
+          "anchor_event",
+          "aggregation_time_zone",
+          "rule_bundle_id",
+          "rule_bundle_version",
+          "rule_bundle_hash"
+        ],
+        "properties": {
+          "acquisition_basis": {
+            "const": "selected_verified_platform"
+          },
+          "grouping_dimensions": {
+            "const": [
+              "campaign_id",
+              "network",
+              "country",
+              "cohort_date",
+              "attribution_status",
+              "ad_group_id"
+            ]
+          },
+          "metric_definition_version": {
+            "const": "0.4.19"
+          },
+          "anchor_event": {
+            "const": "install"
+          },
+          "aggregation_time_zone": {
+            "const": "UTC"
+          },
+          "rule_bundle_id": {
+            "const": "metric-verified-platform-acquisition"
+          },
+          "rule_bundle_version": {
+            "const": "0.4.19"
+          },
+          "rule_bundle_hash": {
+            "const": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5"
+          }
+        },
+        "not": {
+          "anyOf": [
+            {
+              "properties": {
+                "acquisition_dimension_policy": {}
+              },
+              "required": [
+                "acquisition_dimension_policy"
+              ]
+            },
+            {
+              "properties": {
+                "refund_reversal_policy": {}
+              },
+              "required": [
+                "refund_reversal_policy"
+              ]
+            },
+            {
+              "properties": {
+                "engagement_credit_policy": {}
+              },
+              "required": [
+                "engagement_credit_policy"
+              ]
+            },
+            {
+              "properties": {
+                "conversion_event_key": {}
+              },
+              "required": [
+                "conversion_event_key"
+              ]
+            },
+            {
+              "properties": {
+                "event_names": {}
+              },
+              "required": [
+                "event_names"
+              ]
+            }
+          ]
+        },
+        "oneOf": [
+          {
+            "properties": {
+              "metric_name": {
+                "const": "platform_d0_roas"
+              },
+              "value_type": {
+                "const": "ratio"
+              },
+              "ratio_scale": {
+                "const": 6
+              },
+              "definition": {
+                "const": {
+                  "calculation": "revenue_over_cost",
+                  "window": {
+                    "type": "elapsed",
+                    "day": 0
+                  },
+                  "numerator": "revenue",
+                  "denominator": "cost",
+                  "cost_basis": "cohort_acquisition_day_current_snapshot"
+                }
+              },
+              "cost_selection_policy": {
+                "const": "reject_overlapping_grains"
+              }
+            },
+            "required": [
+              "metric_name",
+              "value_type",
+              "ratio_scale",
+              "definition",
+              "cost_selection_policy"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "activity_events": {}
+                  },
+                  "required": [
+                    "activity_events"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "properties": {
+              "metric_name": {
+                "const": "platform_d1_roas"
+              },
+              "value_type": {
+                "const": "ratio"
+              },
+              "ratio_scale": {
+                "const": 6
+              },
+              "definition": {
+                "const": {
+                  "calculation": "revenue_over_cost",
+                  "window": {
+                    "type": "elapsed",
+                    "day": 1
+                  },
+                  "numerator": "revenue",
+                  "denominator": "cost",
+                  "cost_basis": "cohort_acquisition_day_current_snapshot"
+                }
+              },
+              "cost_selection_policy": {
+                "const": "reject_overlapping_grains"
+              }
+            },
+            "required": [
+              "metric_name",
+              "value_type",
+              "ratio_scale",
+              "definition",
+              "cost_selection_policy"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "activity_events": {}
+                  },
+                  "required": [
+                    "activity_events"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "properties": {
+              "metric_name": {
+                "const": "platform_d3_roas"
+              },
+              "value_type": {
+                "const": "ratio"
+              },
+              "ratio_scale": {
+                "const": 6
+              },
+              "definition": {
+                "const": {
+                  "calculation": "revenue_over_cost",
+                  "window": {
+                    "type": "elapsed",
+                    "day": 3
+                  },
+                  "numerator": "revenue",
+                  "denominator": "cost",
+                  "cost_basis": "cohort_acquisition_day_current_snapshot"
+                }
+              },
+              "cost_selection_policy": {
+                "const": "reject_overlapping_grains"
+              }
+            },
+            "required": [
+              "metric_name",
+              "value_type",
+              "ratio_scale",
+              "definition",
+              "cost_selection_policy"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "activity_events": {}
+                  },
+                  "required": [
+                    "activity_events"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "properties": {
+              "metric_name": {
+                "const": "platform_d7_roas"
+              },
+              "value_type": {
+                "const": "ratio"
+              },
+              "ratio_scale": {
+                "const": 6
+              },
+              "definition": {
+                "const": {
+                  "calculation": "revenue_over_cost",
+                  "window": {
+                    "type": "elapsed",
+                    "day": 7
+                  },
+                  "numerator": "revenue",
+                  "denominator": "cost",
+                  "cost_basis": "cohort_acquisition_day_current_snapshot"
+                }
+              },
+              "cost_selection_policy": {
+                "const": "reject_overlapping_grains"
+              }
+            },
+            "required": [
+              "metric_name",
+              "value_type",
+              "ratio_scale",
+              "definition",
+              "cost_selection_policy"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "activity_events": {}
+                  },
+                  "required": [
+                    "activity_events"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "properties": {
+              "metric_name": {
+                "const": "platform_retention_d1"
+              },
+              "value_type": {
+                "const": "ratio"
+              },
+              "ratio_scale": {
+                "const": 6
+              },
+              "definition": {
+                "const": {
+                  "calculation": "active_installations_over_cohort",
+                  "window": {
+                    "type": "activity_day",
+                    "day": 1
+                  },
+                  "numerator": "active_installations",
+                  "denominator": "cohort_size"
+                }
+              },
+              "activity_events": {
+                "const": [
+                  "session_start"
+                ]
+              }
+            },
+            "required": [
+              "metric_name",
+              "value_type",
+              "ratio_scale",
+              "definition",
+              "activity_events"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "cost_selection_policy": {}
+                  },
+                  "required": [
+                    "cost_selection_policy"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "properties": {
+              "metric_name": {
+                "const": "platform_retention_d7"
+              },
+              "value_type": {
+                "const": "ratio"
+              },
+              "ratio_scale": {
+                "const": 6
+              },
+              "definition": {
+                "const": {
+                  "calculation": "active_installations_over_cohort",
+                  "window": {
+                    "type": "activity_day",
+                    "day": 7
+                  },
+                  "numerator": "active_installations",
+                  "denominator": "cohort_size"
+                }
+              },
+              "activity_events": {
+                "const": [
+                  "session_start"
+                ]
+              }
+            },
+            "required": [
+              "metric_name",
+              "value_type",
+              "ratio_scale",
+              "definition",
+              "activity_events"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "cost_selection_policy": {}
+                  },
+                  "required": [
+                    "cost_selection_policy"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "properties": {
+              "metric_name": {
+                "const": "platform_cohort_ltv_d0_usd"
+              },
+              "value_type": {
+                "const": "money"
+              },
+              "currency": {
+                "const": "USD"
+              },
+              "amount_scale": {
+                "const": 6
+              },
+              "definition": {
+                "const": {
+                  "calculation": "revenue_over_cohort",
+                  "window": {
+                    "type": "elapsed",
+                    "day": 0
+                  },
+                  "numerator": "revenue",
+                  "denominator": "cohort_size"
+                }
+              }
+            },
+            "required": [
+              "metric_name",
+              "value_type",
+              "currency",
+              "amount_scale",
+              "definition"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "activity_events": {}
+                  },
+                  "required": [
+                    "activity_events"
+                  ]
+                },
+                {
+                  "properties": {
+                    "cost_selection_policy": {}
+                  },
+                  "required": [
+                    "cost_selection_policy"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "properties": {
+              "metric_name": {
+                "const": "platform_cohort_ltv_d1_usd"
+              },
+              "value_type": {
+                "const": "money"
+              },
+              "currency": {
+                "const": "USD"
+              },
+              "amount_scale": {
+                "const": 6
+              },
+              "definition": {
+                "const": {
+                  "calculation": "revenue_over_cohort",
+                  "window": {
+                    "type": "elapsed",
+                    "day": 1
+                  },
+                  "numerator": "revenue",
+                  "denominator": "cohort_size"
+                }
+              }
+            },
+            "required": [
+              "metric_name",
+              "value_type",
+              "currency",
+              "amount_scale",
+              "definition"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "activity_events": {}
+                  },
+                  "required": [
+                    "activity_events"
+                  ]
+                },
+                {
+                  "properties": {
+                    "cost_selection_policy": {}
+                  },
+                  "required": [
+                    "cost_selection_policy"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "properties": {
+              "metric_name": {
+                "const": "platform_cohort_ltv_d3_usd"
+              },
+              "value_type": {
+                "const": "money"
+              },
+              "currency": {
+                "const": "USD"
+              },
+              "amount_scale": {
+                "const": 6
+              },
+              "definition": {
+                "const": {
+                  "calculation": "revenue_over_cohort",
+                  "window": {
+                    "type": "elapsed",
+                    "day": 3
+                  },
+                  "numerator": "revenue",
+                  "denominator": "cohort_size"
+                }
+              }
+            },
+            "required": [
+              "metric_name",
+              "value_type",
+              "currency",
+              "amount_scale",
+              "definition"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "activity_events": {}
+                  },
+                  "required": [
+                    "activity_events"
+                  ]
+                },
+                {
+                  "properties": {
+                    "cost_selection_policy": {}
+                  },
+                  "required": [
+                    "cost_selection_policy"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "properties": {
+              "metric_name": {
+                "const": "platform_cohort_ltv_d7_usd"
+              },
+              "value_type": {
+                "const": "money"
+              },
+              "currency": {
+                "const": "USD"
+              },
+              "amount_scale": {
+                "const": 6
+              },
+              "definition": {
+                "const": {
+                  "calculation": "revenue_over_cohort",
+                  "window": {
+                    "type": "elapsed",
+                    "day": 7
+                  },
+                  "numerator": "revenue",
+                  "denominator": "cohort_size"
+                }
+              }
+            },
+            "required": [
+              "metric_name",
+              "value_type",
+              "currency",
+              "amount_scale",
+              "definition"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "activity_events": {}
+                  },
+                  "required": [
+                    "activity_events"
+                  ]
+                },
+                {
+                  "properties": {
+                    "cost_selection_policy": {}
+                  },
+                  "required": [
+                    "cost_selection_policy"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "properties": {
+              "metric_name": {
+                "const": "platform_cohort_install_count"
+              },
+              "value_type": {
+                "const": "count"
+              },
+              "definition": {
+                "const": {
+                  "calculation": "cohort_size",
+                  "window": {
+                    "type": "elapsed",
+                    "day": 0
+                  },
+                  "numerator": "cohort_size"
+                }
+              }
+            },
+            "required": [
+              "metric_name",
+              "value_type",
+              "definition"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "activity_events": {}
+                  },
+                  "required": [
+                    "activity_events"
+                  ]
+                },
+                {
+                  "properties": {
+                    "cost_selection_policy": {}
+                  },
+                  "required": [
+                    "cost_selection_policy"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
     {
       "if": { "anyOf": [
         { "properties": { "metric_name": { "const": "daily_selected_install_count" } }, "required": ["metric_name"] },
@@ -145,7 +818,7 @@
       }
     },
     {
-      "if": { "anyOf": [
+      "if": { "properties": { "rule_bundle_id": { "not": { "const": "metric-verified-platform-acquisition" } } }, "required": ["rule_bundle_id"], "anyOf": [
         { "properties": { "acquisition_dimension_policy": {} }, "required": ["acquisition_dimension_policy"] },
         { "properties": { "rule_bundle_id": { "const": "metric-acquisition-detail" } }, "required": ["rule_bundle_id"] },
         { "properties": { "grouping_dimensions": { "type": "array", "contains": { "enum": ["ad_group_id", "creative_id"] } } }, "required": ["grouping_dimensions"] }
@@ -263,7 +936,7 @@
       "then": { "properties": { "cost_selection_policy": {} }, "required": ["cost_selection_policy"] }
     },
     {
-      "if": { "properties": { "cost_selection_policy": {}, "rule_bundle_id": { "not": { "enum": ["metric-selected-commerce", "metric-refund-reversal", "metric-acquisition-detail"] } } }, "required": ["cost_selection_policy", "rule_bundle_id"] },
+      "if": { "properties": { "cost_selection_policy": {}, "rule_bundle_id": { "not": { "enum": ["metric-selected-commerce", "metric-refund-reversal", "metric-acquisition-detail", "metric-verified-platform-acquisition"] } } }, "required": ["cost_selection_policy", "rule_bundle_id"] },
       "then": {
         "properties": {
           "anchor_event": { "const": "install" }, "aggregation_time_zone": { "const": "UTC" },
@@ -287,7 +960,7 @@
       }
     },
     {
-      "if": { "properties": { "acquisition_basis": {}, "cost_selection_policy": {}, "rule_bundle_id": { "not": { "enum": ["metric-selected-commerce", "metric-custom-conversion", "metric-refund-reversal", "metric-acquisition-detail", "metric-selected-daily-acquisition"] } } }, "required": ["acquisition_basis", "rule_bundle_id"], "not": { "required": ["cost_selection_policy"] } },
+      "if": { "properties": { "acquisition_basis": {}, "cost_selection_policy": {}, "rule_bundle_id": { "not": { "enum": ["metric-selected-commerce", "metric-custom-conversion", "metric-refund-reversal", "metric-acquisition-detail", "metric-selected-daily-acquisition", "metric-verified-platform-acquisition"] } } }, "required": ["acquisition_basis", "rule_bundle_id"], "not": { "required": ["cost_selection_policy"] } },
       "then": {
         "properties": {
           "anchor_event": { "const": "install" },

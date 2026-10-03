@@ -37,6 +37,8 @@ function validStringArray(value: unknown, allowed?: ReadonlySet<string>): boolea
 export function validateScheduledMetricDefinition(input: unknown): input is ScheduledMetricDefinition {
   if (!input || typeof input !== "object" || Array.isArray(input)) return false;
   const value = input as JsonObject;
+  if (value.acquisition_basis === "selected_verified_platform" || value.rule_bundle_id === METRIC_PROFILE_BINDINGS.platform.rule_bundle_id
+      || String(value.metric_name).startsWith("platform_")) return validateMetricDefinition(value);
   if (value.metric_name === "daily_selected_install_count" || value.rule_bundle_id === METRIC_PROFILE_BINDINGS.daily_acquisition.rule_bundle_id) {
     return validateMetricDefinition(value);
   }
@@ -137,6 +139,11 @@ export function validateScheduledMetricDefinition(input: unknown): input is Sche
 /** Independent calculators share profile constraints, not their calculation implementation. */
 export function assertMetricDefinitionSeries(definition: Definition, entry: "reference" | "sql" = "sql"): void {
   const metricName = definition.metric_name;
+  if (definition.acquisition_basis === "selected_verified_platform" || definition.rule_bundle_id === METRIC_PROFILE_BINDINGS.platform.rule_bundle_id
+      || metricName.startsWith("platform_")) {
+    if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${metricName}`);
+    return;
+  }
   if (metricName === "daily_selected_install_count" || definition.rule_bundle_id === METRIC_PROFILE_BINDINGS.daily_acquisition.rule_bundle_id) {
     if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${metricName}`);
     return;

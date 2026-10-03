@@ -11,6 +11,7 @@ export * from "./metric-correction-policy.js";
 export * from "./late-metric-inputs.js";
 export * from "./metric-schedule-series.js";
 export * from "./selected-acquisition.js";
+export * from "./platform-acquisition.js";
 export * from "./privacy-purge.js";
 export * from "./privacy-fence.js";
 export * from "./privacy-metrics.js";

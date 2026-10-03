@@ -1147,6 +1147,36 @@ def metric_definitions(value: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def validate_metric_definition_series(definition: dict[str, Any]) -> None:
+    if (definition.get("acquisition_basis") == "selected_verified_platform"
+            or definition.get("rule_bundle_id") == "metric-verified-platform-acquisition"
+            or definition["metric_name"].startswith("platform_")):
+        name = definition["metric_name"]
+        common = {"metric_definition_version": "0.4.19", "anchor_event": "install",
+                  "aggregation_time_zone": "UTC", "acquisition_basis": "selected_verified_platform",
+                  "rule_bundle_id": "metric-verified-platform-acquisition", "rule_bundle_version": "0.4.19",
+                  "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+                  "grouping_dimensions": ["campaign_id", "network", "country", "cohort_date", "attribution_status", "ad_group_id"]}
+        series = {}
+        for horizon in (0, 1, 3, 7):
+            window = {"type": "elapsed", "day": horizon}
+            series[f"platform_d{horizon}_roas"] = {"value_type": "ratio", "ratio_scale": 6,
+                "cost_selection_policy": "reject_overlapping_grains", "definition": {
+                    "calculation": "revenue_over_cost", "window": window, "numerator": "revenue",
+                    "denominator": "cost", "cost_basis": "cohort_acquisition_day_current_snapshot"}}
+            series[f"platform_cohort_ltv_d{horizon}_usd"] = {"value_type": "money", "currency": "USD", "amount_scale": 6,
+                "definition": {"calculation": "revenue_over_cohort", "window": window,
+                               "numerator": "revenue", "denominator": "cohort_size"}}
+        for horizon in (1, 7):
+            series[f"platform_retention_d{horizon}"] = {"value_type": "ratio", "ratio_scale": 6,
+                "activity_events": ["session_start"], "definition": {"calculation": "active_installations_over_cohort",
+                    "window": {"type": "activity_day", "day": horizon}, "numerator": "active_installations", "denominator": "cohort_size"}}
+        series["platform_cohort_install_count"] = {"value_type": "count", "definition": {
+            "calculation": "cohort_size", "window": {"type": "elapsed", "day": 0}, "numerator": "cohort_size"}}
+        expected = {**common, "metric_name": name, **series.get(name, {})}
+        if (name not in series or {key: value for key, value in definition.items() if key != "fraud_policy"} != expected
+                or definition.get("fraud_policy", "gross") not in ("gross", "net")):
+            raise ValueError(f"metric_definition_series_mismatch:{name}")
+        return
     if (definition.get("metric_name") == "daily_selected_install_count"
             or definition.get("rule_bundle_id") == "metric-selected-daily-acquisition"
             or "acquisition_campaign_state" in definition.get("grouping_dimensions", [])):
@@ -1428,6 +1458,7 @@ def matches_grouping(
     grouping: dict[str, Any] | None,
     attribution_statuses: dict[tuple[str, str, str], str],
     acquisition: dict[str, Any] | None = None,
+    authoritative_acquisition: bool = False,
 ) -> bool:
     if not grouping:
         return True
@@ -1436,6 +1467,8 @@ def matches_grouping(
     acquisition = acquisition or {}
     campaign = payload.get("campaign_id", attempt["server"].get("deep_link_resolution", {}).get("campaign_id", context.get("provider_campaign_ref", acquisition.get("campaign_id"))))
     network = payload.get("network", payload.get("ad_network", context.get("provider_network", acquisition.get("network"))))
+    if authoritative_acquisition:
+        campaign, network = acquisition.get("campaign_id"), acquisition.get("network")
     if grouping.get("campaign_id") is not None and campaign != grouping["campaign_id"]:
         return False
     if grouping.get("network") is not None and network != grouping["network"]:
@@ -1510,6 +1543,76 @@ def selected_acquisition_dimensions(install, visible, attributions):
               and item["record"]["payload"].get("click_id") == install["record"]["payload"].get("click_id")
               and (tenant, app, item["record"]["record_id"]) in refs]
     return clicks[0]["record"]["payload"] if len(clicks) == 1 else {}
+
+
+def selected_platform_acquisition(attributions, included, inputs, watermark):
+    installs = [item for item in included if item["record"]["event_name"] == "install"
+                and not item["record"]["producer"].startswith("import:")]
+    subjects = {(item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["payload"]["installation_id"]) for item in installs}
+    records = {attempt_evidence_key(item) for item in included}
+    identity = lambda item: (item["tenant_id"], item["app_id"], item["attribution_id"])
+    proofs, conflicts = {}, set()
+    for source in inputs:
+        row = source["attribution"]
+        if (row["subject_scope"] != "installation_level" or row["method"] != source["source"]
+                or row["decided_at"] > watermark or row["input_cutoff_at"] > watermark
+                or not any(item["record"]["record_id"] == source["install_record_id"]
+                           and (item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["payload"]["installation_id"])
+                           == (row["tenant_id"], row["app_id"], row["subject_ref"]) for item in installs)
+                or not any((ref["tenant_id"], ref["app_id"], ref["ref"]) == (row["tenant_id"], row["app_id"], source["install_record_id"])
+                           for ref in row["evidence_refs"])):
+            continue
+        key = identity(row)
+        install = next(item for item in installs if item["record"]["record_id"] == source["install_record_id"]
+                       and item["server"]["tenant_id"] == row["tenant_id"] and item["server"]["app_id"] == row["app_id"])
+        if source["source"] == "meta_install_referrer":
+            payload = install["record"]["payload"]
+            if (payload.get("meta_referrer_status") != "decrypted" or not payload.get("extensions", {}).get("meta_decryption_key_id")
+                    or source["evidence_ref"] != payload.get("protected_referrer_evidence_ref") or source["evidence_digest"] != digest(payload)
+                    or source["context"].get("campaign_id") != payload.get("meta_referrer_context", {}).get("campaign_id")
+                    or source["context"].get("ad_group_id") != payload.get("meta_referrer_context", {}).get("adgroup_id")):
+                continue
+        elif not any(ref["ref"] == source["evidence_ref"] for ref in row["evidence_refs"]):
+            continue
+        if key in proofs:
+            conflicts.add(key)
+        proofs[key] = source
+    for key in conflicts:
+        del proofs[key]
+    candidates = {identity(row): row for row in attributions}
+    candidates.update({key: source["attribution"] for key, source in proofs.items()})
+    eligible = [row for row in candidates.values()
+                if row["subject_scope"] == "installation_level" and (row["tenant_id"], row["app_id"], row["subject_ref"]) in subjects
+                and row["decided_at"] <= watermark and row["input_cutoff_at"] <= watermark
+                and all(ref["tenant_id"] == row["tenant_id"] and ref["app_id"] == row["app_id"]
+                        and ((ref["tenant_id"], ref["app_id"], ref["ref"]) in records
+                             or proofs.get(identity(row), {}).get("evidence_ref") == ref["ref"]) for ref in row["evidence_refs"])]
+    superseded = {(row["tenant_id"], row["app_id"], row["subject_ref"], row["supersedes_attribution_id"])
+                  for row in eligible if row.get("supersedes_attribution_id")}
+    selected = {}
+    for row in sorted(eligible, key=lambda item: (utf16_key(item["decided_at"]), utf16_key(item["attribution_id"]))):
+        if (row["tenant_id"], row["app_id"], row["subject_ref"], row["attribution_id"]) not in superseded:
+            selected[(row["tenant_id"], row["app_id"], row["subject_ref"])] = row
+    return selected, proofs
+
+
+def platform_acquisition_dimensions(install, selection):
+    selected, proofs = selection
+    row = selected.get((install["server"]["tenant_id"], install["server"]["app_id"], install["record"]["payload"]["installation_id"]))
+    proof = proofs.get((row["tenant_id"], row["app_id"], row["attribution_id"])) if row else None
+    if not proof or proof["lifecycle_status"] != "available":
+        return None
+    return {**(proof["context"] if row["status"] == "non_organic" else {}), "network": proof["source"]}
+
+
+def platform_proof_rows(selection):
+    selected, proofs = selection
+    result = []
+    for row in sorted(selected.values(), key=lambda item: tuple(utf16_key(item[key]) for key in ("tenant_id", "app_id", "attribution_id"))):
+        key = (row["tenant_id"], row["app_id"], row["attribution_id"])
+        if key in proofs:
+            result.append([*key, digest(proofs[key])])
+    return result
 
 
 def engagement_inputs(included: list[dict[str, Any]], attributions: list[dict[str, Any]], cutoff: str) -> list[dict[str, Any]]:
@@ -1624,7 +1727,16 @@ def metric_runs(
             if evaluation["privacy_state"] != "after" or attempt_evidence_key(attempt) not in lifecycle
         ]
         engagement = engagement_inputs(included, attributions, evaluation["input_received_at_watermark"])
-        acquisition_attributions = selected_acquisition_attributions(attributions, included, evaluation["input_received_at_watermark"])
+        platform = selected_platform_acquisition(attributions, included, value.get("platform_acquisition_inputs", []), evaluation["input_received_at_watermark"])
+        historical = {(row["tenant_id"], row["app_id"], row["attribution_id"]): row for row in attributions}
+        historical.update({(proof["attribution"]["tenant_id"], proof["attribution"]["app_id"], proof["attribution"]["attribution_id"]): proof["attribution"]
+                           for proof in platform[1].values()})
+        acquisition_attributions = selected_acquisition_attributions(list(historical.values()), included, evaluation["input_received_at_watermark"])
+        platform_statuses = {key: row["status"] for key, row in platform[0].items()}
+        platform_installs = [item for item in visible if item["record"]["event_name"] == "install"
+                             and platform_acquisition_dimensions(item, platform) is not None
+                             and matches_grouping(item, evaluation.get("grouping"), platform_statuses,
+                                                  platform_acquisition_dimensions(item, platform), True)]
         acquisition_statuses = {(item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["payload"]["installation_id"]): "unattributed"
                                 for item in included if item["record"]["event_name"] == "install"}
         acquisition_statuses.update({key: item["status"] for key, item in acquisition_attributions.items()})
@@ -1681,9 +1793,18 @@ def metric_runs(
             if metric_name not in definitions_by_name:
                 raise ValueError(f"unknown metric definition: {metric_name}")
             definition = definitions_by_name[metric_name]
-            if not definition.get("acquisition_dimension_policy") and any(field in evaluation.get("grouping", {}) for field in ("ad_group_id", "creative_id")):
+            if (definition.get("acquisition_basis") == "selected_verified_platform"
+                    and (evaluation.get("grouping", {}).get("campaign_id") or evaluation.get("grouping", {}).get("ad_group_id"))
+                    and not evaluation.get("grouping", {}).get("network")):
+                raise ValueError("platform_acquisition_source_required")
+            if (not definition.get("acquisition_dimension_policy")
+                    and not (definition.get("acquisition_basis") == "selected_verified_platform" and "creative_id" not in evaluation.get("grouping", {}))
+                    and any(field in evaluation.get("grouping", {}) for field in ("ad_group_id", "creative_id"))):
                 raise ValueError(f"unsupported detail grouping for {metric_name}")
-            selected_installs = acquisition_installs if definition.get("acquisition_basis") else installs
+            selected_installs = platform_installs if definition.get("acquisition_basis") == "selected_verified_platform" else acquisition_installs if definition.get("acquisition_basis") else installs
+            if definition.get("acquisition_basis") == "selected_verified_platform" and definition.get("fraud_policy") == "net":
+                selected_installs = [item for item in selected_installs if platform[0].get((item["server"]["tenant_id"], item["server"]["app_id"],
+                    item["record"]["payload"]["installation_id"]), {}).get("reason_code") != "fraud_excluded"]
             selected_daily = definition.get("rule_bundle_id") == "metric-selected-daily-acquisition"
             if selected_daily and evaluation.get("grouping", {}).get("acquisition_campaign_state", "known") not in ("known", "unknown"):
                 raise ValueError("daily_acquisition_campaign_state_invalid")
@@ -1943,6 +2064,9 @@ def metric_runs(
                 "metric_definition_version": definition["metric_definition_version"],
                 "input_snapshot_id": digest({"record_snapshot_id": digest(snapshot_rows), "engagement_inputs": engagement_snapshot_rows(engagement)})
                                      if definition.get("engagement_credit_policy") else digest({"record_and_cost_snapshot_id": digest(snapshot_rows),
+                                             "acquisition_attributions": acquisition_attribution_rows(platform[0].values()),
+                                             "platform_acquisition_inputs": platform_proof_rows(platform)})
+                                     if definition.get("acquisition_basis") == "selected_verified_platform" else digest({"record_and_cost_snapshot_id": digest(snapshot_rows),
                                              "acquisition_attributions": acquisition_attribution_rows(acquisition_attributions.values())})
                                      if definition.get("acquisition_basis") else digest(snapshot_rows),
                 "input_received_at_watermark": evaluation["input_received_at_watermark"],
@@ -1954,7 +2078,9 @@ def metric_runs(
                 "rule_bundle_version": definition["rule_bundle_version"],
                 "rule_bundle_hash": definition["rule_bundle_hash"],
                 "rounding_mode": policy["rounding_mode"],
-                "reproducibility_status": reproducibility,
+                "reproducibility_status": "redaction_affected" if definition.get("acquisition_basis") == "selected_verified_platform"
+                    and any(platform[1].get((row["tenant_id"], row["app_id"], row["attribution_id"]), {}).get("lifecycle_status", "available") != "available"
+                            for row in platform[0].values()) else reproducibility,
                 "value_type": definition["value_type"],
                 "evidence_refs": evidence,
             }

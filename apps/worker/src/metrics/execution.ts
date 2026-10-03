@@ -2,6 +2,7 @@ import { sha256 } from "@openmasu/attribution-core/canonical";
 import type { OpenMasuAttributionResultV04 } from "@openmasu/contracts/types";
 import { captureMetricComparisonContext, metricScheduleCalculationKey, privacyMetricInvalidationSql,
   type MetricComparisonContext, type RoasCalculationEvidence } from "@openmasu/runtime";
+import { platformAcquisitionSnapshot } from "@openmasu/runtime";
 import { metricScopeForInput, prepareMetricCalculation } from "./input.js";
 import { compareMetricText } from "./model.js";
 import type { MetricClient, MetricRun, MetricScope } from "./model.js";
@@ -40,6 +41,8 @@ export async function executeMetricCalculation(
     const needsDetail = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.acquisition_dimension_policy);
     const detailCosts = needsDetail ? await disjointCosts(client, scope, evaluation.input_received_at_watermark, grouping, true) : undefined;
     const usesAcquisition = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.acquisition_basis);
+    const usesPlatform = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.acquisition_basis === "selected_verified_platform");
+    const platformSnapshot = usesPlatform ? await platformAcquisitionSnapshot(client, scope.tenant_id, scope.app_id, evaluation.input_received_at_watermark) : undefined;
     const usesEngagement = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.engagement_credit_policy);
     const engagementRows = usesEngagement ? await engagementSnapshotRows(client, scope, evaluation.input_received_at_watermark) : [];
     const acquisitionRows = usesAcquisition ? (await client.query<{ artifact: OpenMasuAttributionResultV04 }>(
@@ -66,6 +69,8 @@ export async function executeMetricCalculation(
     for (const metricName of evaluation.metric_names ?? []) {
       const definition = definitions.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
+      if (definition.acquisition_basis === "selected_verified_platform" && (grouping?.campaign_id || grouping?.ad_group_id)
+          && !grouping?.network) throw new Error("platform_acquisition_source_required");
       const selectedDaily = definition.rule_bundle_id === "metric-selected-daily-acquisition";
       if (selectedDaily && grouping?.acquisition_campaign_state !== undefined &&
           !["known", "unknown"].includes(grouping.acquisition_campaign_state)) {
@@ -77,7 +82,7 @@ export async function executeMetricCalculation(
       if (selectedDaily && Object.keys(grouping ?? {}).some((key) => !new Set<string>(definition.grouping_dimensions).has(key))) {
         throw new Error(`unsupported grouping for ${metricName}`);
       }
-      if (!definition.acquisition_dimension_policy && (grouping?.ad_group_id !== undefined || grouping?.creative_id !== undefined)) {
+      if (!definition.acquisition_dimension_policy && !(definition.acquisition_basis === "selected_verified_platform" && grouping?.creative_id === undefined) && (grouping?.ad_group_id !== undefined || grouping?.creative_id !== undefined)) {
         throw new Error(`unsupported detail grouping for ${metricName}`);
       }
       const selectedCosts = definition.acquisition_dimension_policy ? detailCosts : definition.cost_selection_policy ? safeCosts : undefined;
@@ -118,6 +123,10 @@ export async function executeMetricCalculation(
         metric_definition_version: definition.metric_definition_version,
         input_snapshot_id: definition.engagement_credit_policy ? sha256({
           record_snapshot_id: inputSnapshotId, engagement_inputs: engagementRows,
+        }) : definition.acquisition_basis === "selected_verified_platform" ? sha256({
+          record_and_cost_snapshot_id: inputSnapshotId,
+          acquisition_attributions: platformSnapshot!.acquisition_attributions,
+          platform_acquisition_inputs: platformSnapshot!.platform_acquisition_inputs,
         }) : definition.acquisition_basis ? sha256({
           record_and_cost_snapshot_id: inputSnapshotId, acquisition_attributions: acquisitionRows,
         }) : inputSnapshotId,
@@ -130,7 +139,8 @@ export async function executeMetricCalculation(
         rule_bundle_version: definition.rule_bundle_version,
         rule_bundle_hash: definition.rule_bundle_hash,
         rounding_mode: fxPolicy.rounding_mode,
-        reproducibility_status: reproducibilityStatus,
+        reproducibility_status: definition.acquisition_basis === "selected_verified_platform" && platformSnapshot?.unavailable
+          ? "redaction_affected" : reproducibilityStatus,
         ...(definition.fraud_policy ? { fraud_policy: definition.fraud_policy } : {}),
         value_type: definition.value_type,
         ...(value.value_state === "undefined"

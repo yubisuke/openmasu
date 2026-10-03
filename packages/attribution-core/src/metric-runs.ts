@@ -1,5 +1,6 @@
 import { sha256 } from "./canonical.js";
 import { selectDisjointCosts } from "./cost-selection.js";
+import { selectPlatformAcquisition, platformAcquisitionDimensions, selectedPlatformProofRows } from "./platform-acquisition.js";
 import { engagementInputs, engagementSnapshotRows, engagementValue } from "./engagement-metrics.js";
 import { REFERENCE_AD_REVENUE_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 import { assertMetricDefinitionSeries } from "@openmasu/contracts/validation";
@@ -126,7 +127,16 @@ export function metricRuns(
     ]);
     const visible = included.filter((attempt) => evaluation.privacy_state !== "after" || !lifecycle.has(attemptEvidenceKey(attempt)));
     const engagement = engagementInputs(included, attributions, evaluation.input_received_at_watermark);
-    const acquisitionAttributions = selectedAcquisitionAttributions(attributions, included, evaluation.input_received_at_watermark);
+    const platform = selectPlatformAcquisition(attributions, included, input.platform_acquisition_inputs ?? [], evaluation.input_received_at_watermark);
+    const historicalCandidates = new Map(attributions.map(attribution => [compositeKey([attribution.tenant_id, attribution.app_id, attribution.attribution_id]), attribution]));
+    for (const proof of platform.proofs.values()) historicalCandidates.set(compositeKey([proof.attribution.tenant_id, proof.attribution.app_id, proof.attribution.attribution_id]), proof.attribution);
+    const acquisitionAttributions = selectedAcquisitionAttributions([...historicalCandidates.values()], included, evaluation.input_received_at_watermark);
+    const platformStatuses = new Map([...platform.attributions].map(([key, attribution]) => [key, attribution.status]));
+    const platformInstalls = visible.filter(attempt => {
+      if (attempt.record.event_name !== "install") return false;
+      const dimensions = platformAcquisitionDimensions(attempt, platform);
+      return dimensions !== undefined && matchesGrouping(attempt, evaluation.grouping, platformStatuses, dimensions, true);
+    });
     const acquisitionStatuses = new Map<string, Attribution["status"]>(included
       .filter((attempt) => attempt.record.event_name === "install")
       .map((attempt) => [compositeKey([attempt.server.tenant_id, attempt.server.app_id,
@@ -166,10 +176,14 @@ export function metricRuns(
     for (const metricName of selectedNames) {
       const definition = definitionsByName.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
-      if (!definition.acquisition_dimension_policy && (evaluation.grouping?.ad_group_id !== undefined || evaluation.grouping?.creative_id !== undefined)) {
+      if (definition.acquisition_basis === "selected_verified_platform" && (evaluation.grouping?.campaign_id || evaluation.grouping?.ad_group_id)
+          && !evaluation.grouping?.network) throw new Error("platform_acquisition_source_required");
+      if (!definition.acquisition_dimension_policy && !(definition.acquisition_basis === "selected_verified_platform" && evaluation.grouping?.creative_id === undefined) && (evaluation.grouping?.ad_group_id !== undefined || evaluation.grouping?.creative_id !== undefined)) {
         throw new Error(`unsupported detail grouping for ${metricName}`);
       }
-      const selectedInstalls = definition.acquisition_basis ? acquisitionInstalls : installs;
+      const selectedInstalls = definition.acquisition_basis === "selected_verified_platform" ? platformInstalls.filter(install => definition.fraud_policy !== "net"
+        || platform.attributions.get(compositeKey([install.server.tenant_id, install.server.app_id, install.record.payload.installation_id]))?.reason_code !== "fraud_excluded")
+        : definition.acquisition_basis ? acquisitionInstalls : installs;
       const selectedDaily = definition.rule_bundle_id === "metric-selected-daily-acquisition";
       if (selectedDaily && evaluation.grouping?.acquisition_campaign_state !== undefined &&
           !["known", "unknown"].includes(evaluation.grouping.acquisition_campaign_state)) {
@@ -427,6 +441,10 @@ export function metricRuns(
         metric_definition_version: definition.metric_definition_version,
         input_snapshot_id: definition.engagement_credit_policy ? sha256({
           record_snapshot_id: sha256(snapshotRows), engagement_inputs: engagementSnapshotRows(engagement, sha256),
+        }) : definition.acquisition_basis === "selected_verified_platform" ? sha256({
+          record_and_cost_snapshot_id: sha256(snapshotRows),
+          acquisition_attributions: acquisitionAttributionRows([...platform.attributions.values()]),
+          platform_acquisition_inputs: selectedPlatformProofRows(platform, sha256),
         }) : definition.acquisition_basis ? sha256({
           record_and_cost_snapshot_id: sha256(snapshotRows),
           acquisition_attributions: acquisitionAttributionRows([...acquisitionAttributions.values()]),
@@ -440,7 +458,10 @@ export function metricRuns(
         rule_bundle_version: definition.rule_bundle_version,
         rule_bundle_hash: definition.rule_bundle_hash,
         rounding_mode: fxPolicy.rounding_mode,
-        reproducibility_status,
+        reproducibility_status: definition.acquisition_basis === "selected_verified_platform" && [...platform.attributions.values()].some(attribution => {
+          const proof = platform.proofs.get(compositeKey([attribution.tenant_id, attribution.app_id, attribution.attribution_id]));
+          return proof && proof.lifecycle_status !== "available";
+        }) ? "redaction_affected" : reproducibility_status,
         value_type: definition.value_type,
         ...(definition.fraud_policy ? { fraud_policy: definition.fraud_policy } : {}),
         ...(value === undefined
@@ -470,11 +491,12 @@ function matchesGrouping(
   grouping: Any,
   attributionStatuses: Map<string, Attribution["status"]>,
   acquisition?: { campaign_id?: string; network?: string; ad_group_id?: string; creative_id?: string },
+  authoritativeAcquisition = false,
 ): boolean {
   if (!grouping) return true;
   const payload = attempt.record.payload;
-  const campaign = payload.campaign_id ?? attempt.server.deep_link_resolution?.campaign_id ?? payload.import_context?.provider_campaign_ref ?? acquisition?.campaign_id;
-  const network = payload.network ?? payload.ad_network ?? payload.import_context?.provider_network ?? acquisition?.network;
+  const campaign = authoritativeAcquisition ? acquisition?.campaign_id : payload.campaign_id ?? attempt.server.deep_link_resolution?.campaign_id ?? payload.import_context?.provider_campaign_ref ?? acquisition?.campaign_id;
+  const network = authoritativeAcquisition ? acquisition?.network : payload.network ?? payload.ad_network ?? payload.import_context?.provider_network ?? acquisition?.network;
   const country = payload.country ?? payload.import_context?.provider_country;
   if (grouping.campaign_id !== undefined && campaign !== grouping.campaign_id) return false;
   if (grouping.network !== undefined && network !== grouping.network) return false;

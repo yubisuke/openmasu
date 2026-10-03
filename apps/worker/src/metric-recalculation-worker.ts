@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
-import { acquirePrivacyTenantSessionReadFence, replayPrivacyMetricItem, withTenant,
+import { acquirePrivacyTenantSessionReadFence, replayPrivacyMetricItem, selectedPlatformAcquisitionSql, withTenant,
   type PrivacyCalculatedMetric } from "@openmasu/runtime";
 import { computeSqlMetricRunsWithClient } from "./metrics/cohort.js";
 
@@ -78,11 +78,14 @@ async function calculate(pool: Pool, claim: Claim): Promise<"completed" | "skipp
         WHERE tenant_id=$1 AND app_id=$2 AND attribution_id=$3`,
       [claim.tenant_id,claim.app_id,claim.attribution_revision_id])).rows[0]?.artifact;
       if (!revision || sha256(revision)!==claim.source_snapshot_digest) throw Error("input_unavailable");
+      const proof=(await client.query(`SELECT evidence_ref FROM (${selectedPlatformAcquisitionSql}) AS selected
+        WHERE attribution_id=$4 AND source IS NOT NULL AND lifecycle_status='available'`,
+      [claim.tenant_id,claim.app_id,claim.watermark,claim.attribution_revision_id])).rows[0]?.evidence_ref ?? null;
       const unavailable=await client.query(`SELECT 1 FROM jsonb_array_elements($3::jsonb) AS ref
         LEFT JOIN ledger.raw_records_current AS raw ON raw.tenant_id=$1 AND raw.app_id=$2 AND raw.record_id=ref->>'ref'
-        WHERE ref->>'tenant_id'<>$1 OR ref->>'app_id'<>$2 OR raw.record_id IS NULL
-          OR raw.payload_lifecycle_status<>'available' LIMIT 1`,
-      [claim.tenant_id,claim.app_id,JSON.stringify(revision.evidence_refs??[])]);
+        WHERE ref->>'tenant_id'<>$1 OR ref->>'app_id'<>$2 OR (
+          NOT coalesce(ref->>'ref'=$4::text,false) AND (raw.record_id IS NULL OR raw.payload_lifecycle_status<>'available')) LIMIT 1`,
+      [claim.tenant_id,claim.app_id,JSON.stringify(revision.evidence_refs??[]),proof]);
       if (unavailable.rowCount) throw Error("input_unavailable");
     }
     if (claim.trigger_kind === "late_events") {
