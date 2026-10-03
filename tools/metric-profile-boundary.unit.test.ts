@@ -6,9 +6,10 @@ import {
   M1B_METRIC_DEFINITIONS, M3_METRIC_DEFINITIONS, REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
   REFUND_REVERSAL_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS,
   SELECTED_COMMERCE_METRIC_DEFINITIONS, customConversionMetricDefinitions, engagementMetricDefinitions,
+  METRIC_PROFILE_METADATA, metricProfileMetadata,
 } from "@openmasu/contracts/definitions";
 import type { OpenMasuMetricDefinitionV04 } from "@openmasu/contracts/types";
-import { validateMetricDefinition } from "@openmasu/contracts/validation";
+import { validateMetricDefinition, validateScheduledMetricDefinition, assertMetricDefinitionSeries } from "@openmasu/contracts/validation";
 import { evaluate } from "@openmasu/attribution-core";
 import { sha256 } from "@openmasu/attribution-core/canonical";
 import { normalizeMetricScheduleRequest } from "../apps/api/src/metric-schedules.js";
@@ -77,6 +78,62 @@ async function boundaryResult(name: string, definition: Definition): Promise<Bou
 }
 
 describe("metric profile entry boundaries", () => {
+  it("metric_profile_schema_consistency distinguishes registered identities from legacy and external declarations", () => {
+    const valid = metricProfileBoundaryCases().filter(entry => entry.name.endsWith("/valid"));
+    assert.equal(valid.length, 100);
+    const exercised = new Set<string>();
+    for (const { name, definition } of valid) {
+      assert.ok(validateMetricDefinition(definition), name);
+      assert.ok(validateScheduledMetricDefinition(definition), name);
+      assert.doesNotThrow(() => assertMetricDefinitionSeries(definition), name);
+      const metadata = metricProfileMetadata(definition);
+      if (name.startsWith("apple/")) {
+        // Existing external aggregate declarations are not registered non-fraud bundles.
+        assert.equal(metadata, undefined, name);
+      } else {
+        assert.ok(metadata, name);
+        exercised.add(metadata.key);
+        assert.deepEqual(metadata.binding, { rule_bundle_id: definition.rule_bundle_id,
+          rule_bundle_version: definition.rule_bundle_version, rule_bundle_hash: definition.rule_bundle_hash }, name);
+      }
+    }
+    assert.deepEqual([...exercised].sort(), METRIC_PROFILE_METADATA.map(value => value.key).sort());
+    const legacy = { ...REFERENCE_AD_REVENUE_METRIC_DEFINITIONS[0], metric_name: "synthetic_legacy",
+      rule_bundle_id: "synthetic-unregistered-bundle" };
+    assert.ok(validateScheduledMetricDefinition(legacy));
+    assert.equal(metricProfileMetadata(legacy), undefined); // No registered-profile fallback.
+    assert.equal(metricProfileMetadata({ ...SELECTED_COMMERCE_METRIC_DEFINITIONS[0], rule_bundle_hash: "0".repeat(64) }), undefined);
+    for (const shape of [null, [], "synthetic", {}, { metric_name: "synthetic_partial" }]) {
+      assert.equal(validateMetricDefinition(shape), false);
+      assert.equal(validateScheduledMetricDefinition(shape), false);
+      assert.equal(metricProfileMetadata(shape), undefined);
+    }
+  });
+
+  it("rejects malformed and unregistered closed profiles before schedule database writes", async () => {
+    const profile = customConversionMetricDefinitions("synthetic_outcome")[0];
+    const invalid = [null, [], {}, { ...profile, rule_bundle_id: "synthetic-unregistered-bundle" },
+      { ...profile, definition: { ...profile.definition, window: "synthetic-invalid-window" } }];
+    for (const candidate of invalid) {
+      assert.equal(validateScheduledMetricDefinition(candidate), false);
+      assert.throws(() => normalizeMetricScheduleRequest({ fx_policy: fx, metric_definitions: [candidate],
+        evaluations: [{ metric_names: [profile.metric_name], date_dimension: "cohort_date", grouping: {} }] }),
+      /metric_schedule_definitions_invalid/);
+    }
+    let databaseCalls = 0;
+    const client: Parameters<typeof computeSqlMetricRunsWithClient>[0] = {
+      query: async () => { databaseCalls++; throw new Error("unexpected database IO"); },
+    };
+    await assert.rejects(() => computeSqlMetricRunsWithClient(client, {
+      fx_policy: fx, metric_definitions: [invalid[3]], metric_evaluations: [],
+    }, true, { tenant_id: "synthetic-profile-tenant", app_id: "synthetic-profile-app" }),
+    /metric_definition_series_mismatch/);
+    assert.equal(databaseCalls, 0);
+    const engagement = { ...engagementMetricDefinitions("synthetic_outcome")[0], rule_bundle_hash: "0".repeat(64) };
+    assert.throws(() => assertMetricDefinitionSeries(engagement, "reference"), /invalid engagement metric profile/);
+    assert.throws(() => assertMetricDefinitionSeries(engagement, "sql"), /metric_definition_series_mismatch/);
+  });
+
   it("metric_profile_boundary_equivalence preserves every existing family and hash/version/window/basis/grouping mutation", async () => {
     const results: BoundaryResult[] = [];
     for (const entry of metricProfileBoundaryCases()) results.push(await boundaryResult(entry.name, entry.definition));

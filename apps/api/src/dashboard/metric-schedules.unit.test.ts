@@ -4,6 +4,7 @@ import { it } from "node:test";
 import { normalizeMetricScheduleRequest, type MetricScheduleRecord } from "../metric-schedules.js";
 import { matchRoute } from "../routes.js";
 import { metricScheduleFormRequest, renderMetricSchedules } from "./metric-schedules.js";
+import { SELECTED_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 
 it("decodes schedule forms without changing the API request and rejects ambiguous transport", () => {
   const body = JSON.parse(readFileSync("examples/synthetic/metric-schedule.json", "utf8"));
@@ -42,6 +43,14 @@ it("renders immutable schedule state and checkpoints with administer-only routes
   assert.ok(!disabled.includes("metric-schedule%3Asynthetic/disable"));
   assert.ok(disabled.includes("Disabled; retained for history"));
   assert.ok(renderMetricSchedules("app-synthetic", [], "csrf").includes("No metric schedules"));
+  const registered = SELECTED_ACQUISITION_METRIC_DEFINITIONS[0];
+  const profiles = renderMetricSchedules("app-synthetic", [{ ...record, definition: { ...record.definition,
+    metric_definitions: [registered, { ...registered, metric_name: "synthetic_legacy",
+      rule_bundle_id: "synthetic-unregistered-bundle" }],
+  } }], "csrf");
+  assert.ok(profiles.includes("Selected acquisition"));
+  assert.ok(profiles.includes("Unregistered bundle identity (legacy or external declaration)"));
+  assert.doesNotMatch(profiles, /<script\b|javascript:|\son[a-z]+=/i);
   for (const [method, suffix, mutates] of [["GET", "", false], ["POST", "", true], ["POST", "/metric-schedule%3Asynthetic/disable", true]] as const) {
     const route = matchRoute(method, `/dashboard/apps/app-synthetic/metric-schedules${suffix}`)!;
     assert.equal(route.auth, "dashboard_session"); assert.equal(route.capability, "administer"); assert.equal(route.mutates, mutates);

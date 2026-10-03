@@ -22,6 +22,9 @@ change. Repository instructions in `AGENTS.md` remain authoritative.
   validated through `@openmasu/contracts/validation`. Calculation changes require
   the reference evaluator, independent Python implementation, and SQL engine in
   `apps/worker/src/metrics` to agree. Use the existing metric-parity suite.
+  [Metric profile boundaries](development-metric-profiles.md) describes the shared
+  metadata, entry-specific validators and frozen admission table. Extend those
+  declarations rather than copying a profile guard into another entrypoint.
 - A provider adapter belongs in the corresponding worker import/job module and
   receives bounded synthetic responses in tests. Reuse the existing ingestion,
   privacy fence, and job lifecycle rather than introducing another queue.

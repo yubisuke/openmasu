@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import Ajv2020Module, { type ErrorObject, type ValidateFunction } from "ajv/dist/2020.js";
 import addFormatsModule from "ajv-formats";
+import type { OpenMasuMetricDefinitionV04 } from "./generated/contract-types.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -71,7 +72,7 @@ ajv.addSchema(metricSchema);
 const metricValidator = ajv.getSchema(String(metricSchema.$id))!;
 
 /** Same frozen definition schema as the contract gate; no defaults are invented. */
-export function validateMetricDefinition(input: unknown): boolean {
+export function validateMetricDefinition(input: unknown): input is OpenMasuMetricDefinitionV04 {
   return Boolean(metricValidator(input));
 }
 

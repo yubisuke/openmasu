@@ -64,3 +64,37 @@ then the contract gate and SQL metric parity. Keep contract, registry, spec and
 reviewed fixture files unchanged. A public metadata import must remain free of
 schema compilation, filesystem, database and network IO. Rendering consumes
 metadata only; it must not decide calculation eligibility.
+
+## Editing a profile
+
+- `packages/contracts/src/m1b-metric-definitions.ts` and
+  `m3-metric-definitions.ts` retain the existing declaration factories.
+  `rule-bundle-provenance.ts` owns registered bundle identities and hashes.
+- `metric-profiles.ts` derives identity metadata and named-series tables from
+  those declarations. Purchase and total-revenue horizons therefore do not need
+  another name/day table in the evaluators. Metadata resolves the bundle triple,
+  not the metric definition version: the two versions are independent.
+  Admission modes describe existing operation, manual-profile, named-series and
+  schema-profile guards; none is a blanket claim that every calculator supports
+  every shape allowed by the schema.
+- `metric-profile-validation.ts` owns the shared schedule admission guard and
+  the reference/SQL series guard. The public `@openmasu/contracts/validation`
+  entrypoint also exposes the existing compiled schema validators. API lag,
+  date, identity, discovery and schedule-name uniqueness stay in the API.
+- Validated schedule input uses `ScheduledMetricDefinition`, a bounded shape
+  with unknown optional values. It intentionally does not pretend legacy input
+  passed the closed schema. Schema validation separately narrows to the generated
+  `OpenMasuMetricDefinitionV04` type. New shared modules do not introduce `any`.
+- Dashboard schedule presentation consumes `metricProfileMetadata`. An unknown
+  bundle triple is explicitly unregistered, not silently assigned a default.
+  Historical Apple aggregate fixtures use external declaration identities and
+  remain supported by the named-series guard; they are not registered non-fraud
+  bundle metadata. Do not invent a registered identity for them in a refactor.
+
+`metric_profile_schema_consistency` covers all 100 unchanged declarations,
+all registered metadata entries, legacy/external identities and malformed or
+unregistered closed opt-ins. The legacy operation path can admit an unregistered
+syntactically valid bundle, as before. Tightening it globally is a compatibility
+change, not part of structural movement. Missing ratio fields in that broad
+legacy path are likewise not repaired by this refactor; the persisted evidence
+assembly retains its existing required-ratio assumption without inventing a scale.

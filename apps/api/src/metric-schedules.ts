@@ -1,8 +1,8 @@
 import type { Pool } from "pg";
 import { sha256Jcs } from "@openmasu/fraud-rules";
 import { uuidV7, withTenant } from "@openmasu/runtime";
-import { acquisitionDetailBase } from "@openmasu/contracts/definitions";
-import { validateMetricDefinition } from "@openmasu/contracts/validation";
+import { ENGAGEMENT_METRIC_NAMES } from "@openmasu/contracts/definitions";
+import { validateScheduledMetricDefinition as validMetricDefinition, type ScheduledMetricDefinition } from "@openmasu/contracts/validation";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
 
@@ -10,7 +10,7 @@ type JsonObject = Record<string, unknown>;
 
 export type MetricScheduleDefinition = Readonly<{
   fx_policy: JsonObject;
-  metric_definitions: readonly JsonObject[];
+  metric_definitions: readonly ScheduledMetricDefinition[];
   evaluations: readonly Readonly<{
     metric_names: readonly string[];
     date_dimension: "cohort_date" | "metric_date";
@@ -41,12 +41,6 @@ const metricName = /^[a-z][a-z0-9_]{2,127}$/;
 const datePattern = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 const groupingKeys = new Set([
   "campaign_id", "ad_group_id", "creative_id", "network", "country", "attribution_status", "apple_conversion_bucket",
-]);
-const metricGroupingKeys = new Set([...groupingKeys, "cohort_date", "metric_date"]);
-const metricDefinitionFields = new Set([
-  "metric_name", "metric_definition_version", "anchor_event", "aggregation_time_zone", "value_type",
-  "currency", "amount_scale", "ratio_scale", "definition", "activity_events", "event_names",
-  "grouping_dimensions", "fraud_policy", "acquisition_basis", "conversion_event_key", "cost_selection_policy", "refund_reversal_policy", "rule_bundle_id", "rule_bundle_version", "rule_bundle_hash",
 ]);
 
 function object(value: unknown, error: string): JsonObject {
@@ -87,106 +81,6 @@ function validFxPolicy(value: JsonObject): boolean {
     && new Date(candidate.as_of).toISOString() === candidate.as_of;
 }
 
-function validStringArray(value: unknown, allowed?: ReadonlySet<string>): boolean {
-  return Array.isArray(value) && value.length > 0
-    && value.every((entry) => typeof entry === "string" && entry.length > 0 && (!allowed || allowed.has(entry)))
-    && new Set(value).size === value.length;
-}
-
-function validMetricDefinition(value: JsonObject): boolean {
-  if (value.engagement_credit_policy !== undefined || value.anchor_event === "deep_link_open"
-      || value.rule_bundle_id === "metric-first-party-engagement"
-      || ["engagement_custom_event_converters_24h", "engagement_ad_revenue_24h_usd"].includes(String(value.metric_name))) {
-    return validateMetricDefinition(value);
-  }
-  if (value.acquisition_dimension_policy !== undefined || value.rule_bundle_id === "metric-acquisition-detail"
-      || (Array.isArray(value.grouping_dimensions) && value.grouping_dimensions.some(key => ["ad_group_id", "creative_id"].includes(String(key))))) {
-    return validateMetricDefinition(value) && value.acquisition_dimension_policy === "selected_link_ad_group_creative"
-      && validMetricDefinition(acquisitionDetailBase(value as unknown as Parameters<typeof acquisitionDetailBase>[0]) as unknown as JsonObject);
-  }
-  if (value.refund_reversal_policy !== undefined || value.rule_bundle_id === "metric-refund-reversal") {
-    if (value.refund_reversal_policy !== "cancel_target_refund_at_watermark" || value.rule_bundle_id !== "metric-refund-reversal"
-        || value.metric_definition_version !== "0.4.15" || value.rule_bundle_version !== "0.4.15"
-        || value.rule_bundle_hash !== "7bd74ac54c44a22044f0cde251a3a607f0bbe408361b30f564fbcae5a7b033cc") return false;
-    const base: JsonObject = { ...value, metric_definition_version: "0.4.13", rule_bundle_id: "metric-selected-commerce",
-      rule_bundle_version: "0.4.13", rule_bundle_hash: "49554ad7fe9709e851f5cba7ac12215b539a9b209cc96ab66a085f0b1b46615d" };
-    delete base.refund_reversal_policy;
-    return validMetricDefinition(base);
-  }
-  const selectedCommerce = value.rule_bundle_id === "metric-selected-commerce";
-  const customConversion = value.rule_bundle_id === "metric-custom-conversion";
-  if (!selectedCommerce && value.cost_selection_policy !== undefined && (value.cost_selection_policy !== "reject_overlapping_grains"
-      || value.metric_definition_version !== "0.4.12" || value.rule_bundle_id !== "metric-disjoint-cost"
-      || value.rule_bundle_version !== "0.4.12")) return false;
-  if (!selectedCommerce && !customConversion && !value.cost_selection_policy && value.acquisition_basis !== undefined && (value.acquisition_basis !== "selected_first_party_click"
-      || value.anchor_event !== "install" || value.metric_definition_version !== "0.4.11"
-      || value.rule_bundle_id !== "metric-selected-acquisition" || value.rule_bundle_version !== "0.4.11")) return false;
-  if (Object.keys(value).some((key) => !metricDefinitionFields.has(key))
-      || typeof value.metric_name !== "string" || !metricName.test(value.metric_name)
-      || !boundedText(value.metric_definition_version, 64)
-      || !["install", "calendar_day"].includes(String(value.anchor_event))
-      || !["UTC", "Asia/Tokyo"].includes(String(value.aggregation_time_zone))
-      || !["money", "ratio", "count"].includes(String(value.value_type))
-      || typeof value.rule_bundle_id !== "string" || !identifier.test(value.rule_bundle_id)
-      || !boundedText(value.rule_bundle_version, 64)
-      || typeof value.rule_bundle_hash !== "string" || !/^[a-f0-9]{64}$/.test(value.rule_bundle_hash)) return false;
-  const definition = value.definition;
-  if (!definition || typeof definition !== "object" || Array.isArray(definition)) return false;
-  const operation = definition as JsonObject;
-  if (Object.keys(operation).some((key) => !["calculation", "window", "numerator", "denominator", "cost_basis"].includes(key))
-      || !["revenue_sum", "revenue_over_cost", "active_installations_over_cohort", "revenue_over_cohort", "cohort_size", "event_count", "converted_installations", "converted_installations_over_cohort"].includes(String(operation.calculation))
-      || !["revenue", "purchase_net_revenue", "total_net_revenue", "active_installations", "cohort_size", "events", "converted_installations"].includes(String(operation.numerator))) return false;
-  const window = operation.window;
-  if (!window || typeof window !== "object" || Array.isArray(window)) return false;
-  const boundedWindow = window as JsonObject;
-  const conversionCalculations = ["converted_installations", "converted_installations_over_cohort"];
-  if (customConversion || value.conversion_event_key !== undefined || operation.numerator === "converted_installations"
-      || conversionCalculations.includes(String(operation.calculation))) {
-    const count = operation.calculation === "converted_installations";
-    if (!customConversion || typeof value.conversion_event_key !== "string" || !/^[a-z][a-z0-9_]{0,63}$/.test(value.conversion_event_key)
-        || value.metric_definition_version !== "0.4.14" || value.rule_bundle_version !== "0.4.14"
-        || value.rule_bundle_hash !== "fb2a468a0d09624ab3cb0bfef07d83b7e8fc62dd036756dbef1a095cda2223ab"
-        || value.acquisition_basis !== "selected_first_party_click" || value.anchor_event !== "install" || value.aggregation_time_zone !== "UTC"
-        || operation.numerator !== "converted_installations" || !conversionCalculations.includes(String(operation.calculation))
-        || boundedWindow.type !== "elapsed" || boundedWindow.day !== 7 || value.value_type !== (count ? "count" : "ratio")
-        || (count ? operation.denominator !== undefined || value.ratio_scale !== undefined
-          : operation.denominator !== "cohort_size" || value.ratio_scale !== 6)
-        || ["activity_events", "event_names", "cost_selection_policy", "currency", "amount_scale"].some(key => value[key] !== undefined)
-        || operation.cost_basis !== undefined || !validStringArray(value.grouping_dimensions,
-          new Set(["campaign_id", "network", "country", "cohort_date", "attribution_status"]))) return false;
-  }
-  if (selectedCommerce && (value.acquisition_basis !== "selected_first_party_click"
-      || value.metric_definition_version !== "0.4.13" || value.rule_bundle_version !== "0.4.13"
-      || value.rule_bundle_hash !== "49554ad7fe9709e851f5cba7ac12215b539a9b209cc96ab66a085f0b1b46615d"
-      || value.anchor_event !== "install" || value.aggregation_time_zone !== "UTC"
-      || !["purchase_net_revenue", "total_net_revenue"].includes(String(operation.numerator))
-      || boundedWindow.type !== "elapsed"
-      || (operation.calculation === "revenue_over_cost"
-        ? value.cost_selection_policy !== "reject_overlapping_grains" : value.cost_selection_policy !== undefined))) return false;
-  if (!selectedCommerce && value.cost_selection_policy && (value.anchor_event !== "install" || value.aggregation_time_zone !== "UTC"
-      || value.rule_bundle_hash !== "3ec3e50fc8b9180b55e888895d793739028fdd20abfc34f20110e6ce96e8b053"
-      || value.value_type !== "ratio" || operation.calculation !== "revenue_over_cost"
-      || operation.denominator !== "cost" || operation.cost_basis !== "cohort_acquisition_day_current_snapshot"
-      || boundedWindow.type !== "elapsed" || !["revenue", "total_net_revenue"].includes(String(operation.numerator))
-      || (value.acquisition_basis !== undefined && (value.acquisition_basis !== "selected_first_party_click" || operation.numerator !== "revenue")))) return false;
-  if (Object.keys(boundedWindow).some((key) => !["type", "day"].includes(key))
-      || !["elapsed", "calendar_day", "activity_day"].includes(String(boundedWindow.type))
-      || !Number.isSafeInteger(boundedWindow.day) || Number(boundedWindow.day) < 0
-      || Number(boundedWindow.day) > 3650) return false;
-  if (value.value_type === "money"
-      && (typeof value.currency !== "string" || !/^[A-Z]{3}$/.test(value.currency)
-        || !Number.isSafeInteger(value.amount_scale) || Number(value.amount_scale) < 0
-        || Number(value.amount_scale) > 18)) return false;
-  if (value.value_type === "ratio"
-      && (!Number.isSafeInteger(value.ratio_scale) || Number(value.ratio_scale) < 0
-        || Number(value.ratio_scale) > 18)) return false;
-  if (value.activity_events !== undefined && !validStringArray(value.activity_events)) return false;
-  if (value.event_names !== undefined && !validStringArray(value.event_names,
-    new Set(["click", "install", "skan_postback", "adattributionkit_postback", "deep_link_open"]))) return false;
-  if (value.grouping_dimensions !== undefined
-      && !validStringArray(value.grouping_dimensions, metricGroupingKeys)) return false;
-  return value.fraud_policy === undefined || value.fraud_policy === "gross" || value.fraud_policy === "net";
-}
 
 function scheduledMetricNames(definition: MetricScheduleDefinition): Set<string> {
   return new Set(definition.evaluations.flatMap((evaluation) => evaluation.metric_names));
@@ -245,12 +139,14 @@ export function normalizeMetricScheduleRequest(
   if (!validFxPolicy(fxPolicy)) {
     throw new Error("metric_schedule_fx_policy_invalid");
   }
-  const suppliedDefinitions = body.metric_definitions ?? [];
-  if (!Array.isArray(suppliedDefinitions)
-      || suppliedDefinitions.some((value) => !value || typeof value !== "object" || Array.isArray(value))
-      || suppliedDefinitions.some((value) => !validMetricDefinition(value as JsonObject))
-      || new Set(suppliedDefinitions.map((value) => (value as JsonObject).metric_name)).size
-        !== suppliedDefinitions.length) {
+  const candidates = body.metric_definitions ?? [];
+  if (!Array.isArray(candidates)) throw new Error("metric_schedule_definitions_invalid");
+  const suppliedDefinitions: ScheduledMetricDefinition[] = [];
+  for (const candidate of candidates as unknown[]) {
+    if (!validMetricDefinition(candidate)) throw new Error("metric_schedule_definitions_invalid");
+    suppliedDefinitions.push(candidate);
+  }
+  if (new Set(suppliedDefinitions.map(value => value.metric_name)).size !== suppliedDefinitions.length) {
     throw new Error("metric_schedule_definitions_invalid");
   }
   if (!Array.isArray(body.evaluations) || body.evaluations.length < 1 || body.evaluations.length > 100) {
@@ -275,7 +171,7 @@ export function normalizeMetricScheduleRequest(
     const grouping = normalizedGrouping(evaluation.grouping);
     const engagement = evaluation.metric_names.some(name =>
       suppliedDefinitions.find(definition => definition.metric_name === name)?.engagement_credit_policy
-      || ["engagement_custom_event_converters_24h", "engagement_ad_revenue_24h_usd"].includes(String(name)));
+      || ENGAGEMENT_METRIC_NAMES.has(name));
     if (engagement && (dateDimension !== "metric_date" || lagDays < 2
         || Object.keys(grouping).some(key => key !== "campaign_id")
         || evaluation.campaign_discovery !== undefined
@@ -322,7 +218,7 @@ export function normalizeMetricScheduleRequest(
   }
   const definition: MetricScheduleDefinition = {
     fx_policy: fxPolicy,
-    metric_definitions: suppliedDefinitions as JsonObject[],
+    metric_definitions: suppliedDefinitions,
     evaluations,
   };
   const definitionDigest = sha256Jcs(definition);
