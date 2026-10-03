@@ -5,6 +5,8 @@ import { normalizeMetricScheduleRequest, type MetricScheduleRecord } from "../me
 import { matchRoute } from "../routes.js";
 import { metricScheduleFormRequest, renderMetricSchedules } from "./metric-schedules.js";
 import { SELECTED_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
+import { expandRecommendedMetricSchedule, recommendedSchedulePreviewDigest } from "../recommended-metric-schedules.js";
+import { renderRecommendedMetricSchedulePreview } from "./measurement-setup.js";
 
 it("decodes schedule forms without changing the API request and rejects ambiguous transport", () => {
   const body = JSON.parse(readFileSync("examples/synthetic/metric-schedule.json", "utf8"));
@@ -26,6 +28,30 @@ it("decodes schedule forms without changing the API request and rejects ambiguou
     lag_days: 9, start_date: "2026-08-06" });
   selection.append("request_json", "{}");
   assert.throws(() => metricScheduleFormRequest(selection), /metric_schedule_form_invalid/);
+  const recommended = new URLSearchParams({ recommended_profile: "native_d7_v1",
+    acquisition_basis: "selected_first_party_click", target_currency: "USD", cutoff_policy: "utc_start_of_worker_day",
+    lag_days: "9", include_retention: "true", start_date: "2026-08-01" });
+  const chosen = metricScheduleFormRequest(recommended);
+  const expanded = expandRecommendedMetricSchedule(chosen, []);
+  const saved = normalizeMetricScheduleRequest(expanded, now);
+  assert.equal(saved.definition.metric_definitions.length, 10);
+  assert.deepEqual(saved.definition.evaluations[0].campaign_discovery,
+    { policy: "selected_acquisition_and_cost_v1", max_targets: 20 });
+  assert.equal(saved.definition.fx_policy.target_currency, "USD");
+  assert.notEqual(recommendedSchedulePreviewDigest(saved), recommendedSchedulePreviewDigest({ ...saved, lagDays: 10 }));
+  for (const [field, value, reason] of [["acquisition_basis", "selected_verified_platform", "recommended_acquisition_basis_unsupported"],
+    ["target_currency", "EUR", "recommended_currency_unsupported"], ["cutoff_policy", "local", "recommended_cutoff_unsupported"],
+    ["lag_days", 1, "recommended_lag_days_invalid"], ["custom_conversion_event_keys", ["unknown"], "custom_conversion_event_key_unknown"]] as const) {
+    assert.throws(() => expandRecommendedMetricSchedule({ ...chosen, [field]: value }, []), new RegExp(reason));
+  }
+  const preview = renderRecommendedMetricSchedulePreview("app-synthetic", { ...saved, selection: { ...chosen, start_date: saved.startDate },
+    preview_digest: recommendedSchedulePreviewDigest(saved) }, "csrf<&");
+  assert.match(preview, /Confirm recommended schedule/);
+  assert.match(preview, /name="preview_digest"/);
+  assert.match(preview, /has not registered a schedule/);
+  assert.doesNotMatch(preview, /<script\b|javascript:|\son[a-z]+=/i);
+  recommended.append("request_json", "{}");
+  assert.throws(() => metricScheduleFormRequest(recommended), /metric_schedule_form_invalid/);
 });
 
 it("renders immutable schedule state and checkpoints with administer-only routes and escaped evidence", () => {
@@ -60,6 +86,9 @@ it("renders immutable schedule state and checkpoints with administer-only routes
   assert.match(conversionForm, /name="custom_conversion_event_keys" value="signup_complete"/);
   assert.match(conversionForm, /value="csrf&lt;&amp;"/);
   assert.doesNotMatch(conversionForm, /<script\b|javascript:|\son[a-z]+=/i);
+  assert.match(conversionForm, /Enable a recommended measurement set/);
+  assert.match(conversionForm, /preview-recommended/);
+  assert.equal(matchRoute("POST", "/dashboard/apps/app-synthetic/metric-schedules/preview-recommended")!.mutates, false);
   for (const [method, suffix, mutates] of [["GET", "", false], ["POST", "", true], ["POST", "/metric-schedule%3Asynthetic/disable", true]] as const) {
     const route = matchRoute(method, `/dashboard/apps/app-synthetic/metric-schedules${suffix}`)!;
     assert.equal(route.auth, "dashboard_session"); assert.equal(route.capability, "administer"); assert.equal(route.mutates, mutates);

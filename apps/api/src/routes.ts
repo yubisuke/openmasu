@@ -37,6 +37,7 @@ export type RouteHandler =
   | "admin_metric_schedules_replace"
   | "dashboard_metric_schedules_list"
   | "dashboard_metric_schedules_register"
+  | "dashboard_metric_schedules_preview_recommended"
   | "dashboard_metric_schedules_disable"
   | "dashboard_metric_schedules_preview_replacement"
   | "dashboard_metric_schedules_replace"
@@ -198,6 +199,7 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_attribution_report", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/attribution$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_metric_schedules_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules$/, auth: "dashboard_session", mutates: false, capability: "administer" },
   { handler: "dashboard_metric_schedules_register", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_metric_schedules_preview_recommended", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules\/preview-recommended$/, auth: "dashboard_session", mutates: false, capability: "administer" },
   { handler: "dashboard_metric_schedules_disable", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules\/[^/]+\/disable$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_metric_schedules_preview_replacement", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules\/[^/]+\/preview-replacement$/, auth: "dashboard_session", mutates: false, capability: "administer" },
   { handler: "dashboard_metric_schedules_replace", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules\/[^/]+\/replace$/, auth: "dashboard_session", mutates: true, capability: "administer" },
