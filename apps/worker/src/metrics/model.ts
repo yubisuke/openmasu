@@ -1,7 +1,7 @@
 import type { PoolClient } from "pg";
 import type { OpenMasuMetricDefinitionV04, OpenMasuMetricRunV04 } from "@openmasu/contracts/types";
 import type { ScopedCost } from "@openmasu/attribution-core";
-import type { ComparisonFx, RoasOperands, TotalNetRoasOperands } from "@openmasu/runtime";
+import type { ComparisonFx, RoasOperands, TotalNetRoasOperands, MetricScheduleProvenance, MetricScheduleHandoff } from "@openmasu/runtime";
 
 export type MetricClient = Pick<PoolClient, "query">;
 export type MetricScope = { tenant_id: string; app_id: string };
@@ -23,6 +23,8 @@ export type MetricEvaluation = {
   grouping?: MetricGrouping;
   supersedes_metric_run_id?: string;
   supersedes_metric_run_id_prefix?: string;
+  metric_schedule?: MetricScheduleProvenance;
+  schedule_supersessions?: Readonly<Record<string, MetricScheduleHandoff>>;
   [key: string]: unknown;
 };
 

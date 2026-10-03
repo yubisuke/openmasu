@@ -59,6 +59,14 @@ finished provider work or computed metrics. Observe the batch through
 surface. Scheduling is described in [Scheduled metrics](../scheduled-metrics.md).
 Schema-invalid payloads can be admitted then rejected without worker crash.
 
+Stored metric queries additionally accept `metric_schedule_id` to select an
+explicit saved schedule series and its recalculation descendants. Use
+`supersession=all` for the replaced series' retained history. This is not a
+metric-name/latest heuristic and does not change CSV columns. Raw-record and
+difference-audit endpoints reject the filter because they have no schedule
+provenance. The administrative replacement preview/confirmation remains outside
+this limited OpenAPI surface; see [Scheduled metrics](../scheduled-metrics.md).
+
 There is no automatic example-client retry. Correct 400/401/403 configuration
 first. Back off on 429, then use a fresh timestamp/nonce/signature. On timeout,
 connection loss or 500, the result may be unknown: inspect receipt state before

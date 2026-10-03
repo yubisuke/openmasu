@@ -56,7 +56,7 @@ export function operatorBulkExportDestinationId(pathname: string): string | unde
 }
 
 export function metricScheduleId(pathname: string): string | undefined {
-  return decodedPathPart(pathname, /\/metric-schedules\/([^/]+)\/disable$/);
+  return decodedPathPart(pathname, /\/metric-schedules\/([^/]+)\/(?:disable|preview-replacement|replace)$/);
 }
 
 export function jsonFormValue(body: URLSearchParams, name: string): unknown {

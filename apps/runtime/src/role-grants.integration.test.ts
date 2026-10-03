@@ -76,6 +76,7 @@ const seedControlTruncate = new Set([
   "control.metric_schedule_states",
   "control.metric_schedule_checkpoints",
   "control.metric_schedule_targets",
+  "control.metric_schedule_runs",
   "control.privacy_deletion_jobs",
   "control.privacy_payload_purges",
   "control.rule_bundle_revisions",

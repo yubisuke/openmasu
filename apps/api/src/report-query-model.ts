@@ -41,6 +41,7 @@ export type MetricQuery = {
   readonly appId: string;
   readonly metricNames?: readonly string[];
   readonly metricDefinitionVersion?: string;
+  readonly metricScheduleId?: string;
   readonly grouping?: Readonly<Partial<Record<GroupingDimension, string>>>;
   readonly dateFrom?: string;
   readonly dateTo?: string;
@@ -83,6 +84,7 @@ export const reportTransportKeys = new Set([
   "app_id",
   "metric_name",
   "metric_definition_version",
+  "metric_schedule_id",
   "date_from",
   "date_to",
   "watermark_at_most",
@@ -251,6 +253,11 @@ export function parseMetricQuery(input: {
   if (metricDefinitionVersion !== undefined && (metricDefinitionVersion.length < 1 || metricDefinitionVersion.length > 64)) {
     throw new ReportQueryError("metric_definition_version_invalid");
   }
+  const metricScheduleId = one(input.searchParams, "metric_schedule_id");
+  if (metricScheduleId !== undefined && !identifierPattern.test(metricScheduleId)) throw new ReportQueryError("metric_schedule_id_invalid");
+  if (metricScheduleId !== undefined && input.cursorKind && input.cursorKind !== "metric") {
+    throw new ReportQueryError("metric_schedule_filter_unsupported");
+  }
 
   const grouping: Partial<Record<GroupingDimension, string>> = {};
   for (const dimension of Object.keys(groupingDimensionAllowlist) as GroupingDimension[]) {
@@ -323,6 +330,7 @@ export function parseMetricQuery(input: {
       appId: input.appId,
       ...(metricNames.length > 0 ? { metricNames } : {}),
       ...(metricDefinitionVersion !== undefined ? { metricDefinitionVersion } : {}),
+      ...(metricScheduleId !== undefined ? { metricScheduleId } : {}),
       ...(Object.keys(grouping).length > 0 ? { grouping } : {}),
       ...(dateFrom !== undefined ? { dateFrom } : {}),
       ...(dateTo !== undefined ? { dateTo } : {}),

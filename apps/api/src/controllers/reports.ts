@@ -176,7 +176,8 @@ export function createReportsControllers(dependencies: Pick<RequestHandlerDepend
     const records = effectiveWatermark && supportsRecordCounts(effectiveQuery)
       ? await recordCounts(dependencies.readerPool, appIdentity, effectiveQuery)
       : { data: [] };
-    const storedDifferences = await differenceAudit(dependencies.readerPool, appIdentity, effectiveQuery);
+    const storedDifferences = effectiveQuery.metricScheduleId ? { data: [] }
+      : await differenceAudit(dependencies.readerPool, appIdentity, effectiveQuery);
     dashboardHtml(response, 200, renderDashboard(buildDashboardView({
       apps,
       selectedAppId: appIdentity.appId,

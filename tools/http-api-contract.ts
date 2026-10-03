@@ -67,6 +67,7 @@ export function buildHttpApiContract(): Json {
     queryParameter("app_id", reference("CommonId"), "Registered app in the authenticated tenant; missing, unknown and cross-tenant apps return the same 404.", true),
     { ...queryParameter("metric_name", { type: "array", items: metric.properties.metric_name }, "Repeated values deduplicate and sort."), style: "form", explode: true },
     queryParameter("metric_definition_version", metric.properties.metric_definition_version, "Exact saved definition version."),
+    queryParameter("metric_schedule_id", reference("CommonId"), "Stored metrics only: exact schedule provenance, including explicit recalculation descendants. Use supersession=all for the retained old series; rejected for raw records and differences."),
     queryParameter("date_from", { type: "string", format: "date" }, "Inclusive lower calendar-date bound."),
     queryParameter("date_to", { type: "string", format: "date" }, "Exclusive upper calendar-date bound; from must precede to."),
     queryParameter("watermark_at_most", { type: "string", pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$" }, "UTC evidence cutoff, not a claim that every upstream event arrived. Required for records."),

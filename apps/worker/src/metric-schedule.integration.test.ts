@@ -6,7 +6,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { after, before, describe, it } from "node:test";
+import { after, before, beforeEach, describe, it } from "node:test";
 import type { Pool } from "pg";
 import { sha256Jcs } from "@openmasu/fraud-rules";
 import {
@@ -18,15 +18,19 @@ import {
 } from "@openmasu/runtime";
 import { ensureAdminKeys } from "../../api/src/admin-auth.js";
 import { renderMetricSchedules } from "../../api/src/dashboard/metric-schedules.js";
-import type { MetricScheduleRecord } from "../../api/src/metric-schedules.js";
+import { disableMetricSchedule, registerMetricSchedule, type MetricScheduleRecord } from "../../api/src/metric-schedules.js";
+import { previewMetricScheduleReplacement, replaceMetricSchedule } from "../../api/src/metric-schedule-replacements.js";
 import { csrfToken, issueDashboardSession, type DashboardSession } from "../../api/src/session.js";
 import { buildDashboardView } from "../../api/src/dashboard/view.js";
 import { parseMetricQuery } from "../../api/src/report-query.js";
 import { metricReport } from "../../api/src/reporting.js";
 import { reportToSnapshot } from "../../api/src/report-snapshot.js";
+import { fixedComparisonDownload } from "../../api/src/fixed-comparison.js";
+import { parseSnapshot } from "../../api/src/cohort-comparison.js";
+import { jcs } from "@openmasu/attribution-core/canonical";
 import { createRequestHandler } from "../../api/src/router.js";
 import { ingestFixture } from "./test-support/fixture-ingestion.js";
-import { buildScheduledMetricInput, processMetricSchedules } from "./metric-schedule-worker.js";
+import { buildScheduledMetricInput, claimNextScheduledDate, processMetricSchedules } from "./metric-schedule-worker.js";
 import { computeSqlMetricRuns, persistMetricRun } from "./metrics/cohort.js";
 
 type Any = Record<string, any>;
@@ -520,6 +524,187 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     await withTenant(readerPool, tenantId, async client => {
       const stored = await client.query<{ artifact: Any }>("SELECT artifact FROM ledger.metric_runs WHERE metric_run_id=$1", [later.metric_run_id]);
       assert.equal(sha256Jcs(stored.rows[0]!.artifact), sha256Jcs(later));
+    });
+  });
+
+  describe("explicit schedule replacement and series handoff", () => {
+    const clock = new Date("2026-08-10T12:00:00.000Z");
+    const body = { lag_days: 9, start_date: "2026-08-01", fx_policy: fixtureInput.fx_policy,
+      metric_definitions: fixtureInput.metric_definitions,
+      evaluations: [{ metric_names: ["d7_roas"], date_dimension: "cohort_date",
+        grouping: { campaign_id: "provider-campaign-33", network: "synthetic-network", country: "JP", attribution_status: "non_organic" } }] };
+    const report = (id: string, supersession: "latest" | "all" = "latest") => ({ tenantId, appId,
+      metricNames: ["d7_roas"], metricScheduleId: id, supersession, limit: 200 });
+    const path = (id: string, action: string) => `/v1/admin/apps/${appId}/metric-schedules/${encodeURIComponent(id)}/${action}`;
+    const stored = async (id: string) => withTenant(readerPool, tenantId, async client =>
+      (await client.query<{ artifact: Any }>("SELECT artifact FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2 AND metric_run_id=$3", [tenantId, appId, id])).rows[0].artifact);
+    const fresh = async (calculate = true) => {
+      const saved = await registerMetricSchedule({ pool: appPool, identity: reportIdentity, body, now: clock });
+      if (calculate) await processMetricSchedules(appPool, tenantId, { now: clock });
+      return saved;
+    };
+    beforeEach(async () => {
+      await seedPool.query("TRUNCATE control.metric_schedules,control.metric_schedule_states,control.metric_schedule_checkpoints CASCADE");
+      await ingestFixture(`replacement-${randomBytes(6).toString("hex")}`, fixtureInput, appPool, seedPool);
+    });
+
+    it("replaces the same meaning once with explicit full keys, unique latest, retained history and an unchanged old comparison file", async () => {
+      const source = await fresh();
+      const oldPage = await metricReport(readerPool, reportIdentity, report(source.metric_schedule_id));
+      const oldRun = oldPage.data[0]; assert.equal(oldPage.data.length, 1);
+      const oldArtifact = jcs(await stored(oldRun.metric_run_id));
+      const oldComparison = await fixedComparisonDownload(readerPool, reportIdentity, { ...report(source.metric_schedule_id),
+        dateFrom: "2026-08-01", dateTo: "2026-08-02", watermarkAtMost: "2026-08-10T00:00:00.000Z" });
+      const request = { mode: "same_meaning", schedule: body };
+      const audits = async () => withTenant(readerPool, tenantId, async client => (await client.query("SELECT count(*)::int AS count FROM ledger.audit_logs WHERE tenant_id=$1", [tenantId])).rows[0].count);
+      const beforePreview = await audits();
+      const response = await admin(path(source.metric_schedule_id, "preview-replacement"), { method: "POST", body: JSON.stringify(request) });
+      assert.equal(response.status, 200);
+      const preview = await response.json() as Any;
+      assert.equal(await audits(), beforePreview, "successful preview uses reader state and makes no writes");
+      assert.equal(preview.definition_matches, true); assert.equal(preview.in_flight.can_replace, true);
+      assert.equal(preview.source_runs.length, 1); assert.equal(preview.source_runs[0].can_supersede, true);
+      const selected = preview.source_runs[0];
+      assert.equal(selected.calculation_key.source_metric_run_id, oldRun.metric_run_id);
+      assert.equal(sha256Jcs(selected.calculation_key), selected.calculation_key_digest);
+      const confirmation = { ...request, preview_digest: preview.preview_digest, supersessions: [{
+        source_metric_run_id: selected.source_metric_run_id, calculation_key_digest: selected.calculation_key_digest }] };
+      const responses = await Promise.all([1, 2].map(() => admin(path(source.metric_schedule_id, "replace"), { method: "POST", body: JSON.stringify(confirmation) })));
+      assert.deepEqual(responses.map(row => row.status), [200, 200]);
+      const replacements = await Promise.all(responses.map(row => row.json() as Promise<Any>));
+      assert.equal(new Set(replacements.map(row => row.metric_schedule_id)).size, 1);
+      assert.deepEqual(replacements.map(row => row.replayed).sort(), [false, true]);
+      const replacement = replacements[0];
+      await processMetricSchedules(appPool, tenantId, { now: clock });
+      const newPage = await metricReport(readerPool, reportIdentity, report(replacement.metric_schedule_id));
+      assert.equal(newPage.data.length, 1); assert.equal(newPage.data[0].supersedes_metric_run_id, oldRun.metric_run_id);
+      assert.equal(newPage.data[0].value_unscaled, oldRun.value_unscaled);
+      const latest = await metricReport(readerPool, reportIdentity, { ...report(source.metric_schedule_id), metricScheduleId: undefined });
+      const selectedLatest = latest.data.filter(row => [oldRun.metric_run_id, newPage.data[0].metric_run_id].includes(row.metric_run_id));
+      assert.deepEqual(selectedLatest.map(row => row.metric_run_id), [newPage.data[0].metric_run_id]);
+      assert.deepEqual((await metricReport(readerPool, reportIdentity, report(source.metric_schedule_id, "all"))).data.map(row => row.metric_run_id), [oldRun.metric_run_id]);
+      assert.equal(jcs(await stored(oldRun.metric_run_id)), oldArtifact);
+      assert.equal(`${jcs(parseSnapshot(JSON.parse(oldComparison)))}\n`, oldComparison, "the previously saved comparison file rereads byte-identically; it is not a new latest export");
+      await assert.rejects(withTenant(appPool, tenantId, client => client.query("UPDATE control.metric_schedule_runs SET evaluation=1 WHERE tenant_id=$1 AND app_id=$2", [tenantId, appId])), /append.only|immutable/i);
+      const query = `metric_schedule_id=${encodeURIComponent(replacement.metric_schedule_id)}&metric_name=d7_roas&format=csv`;
+      const apiCsv = await admin(`/v1/reports/metrics?app_id=${appId}&${query}`);
+      const dashboardCsv = await fetch(`${baseUrl}/dashboard/apps/${appId}/cohorts.csv?${query}`, { headers: { cookie: `openmasu_dashboard=${session.token}` } });
+      assert.equal(apiCsv.status, 200); assert.equal(dashboardCsv.status, 200); assert.equal(await apiCsv.text(), await dashboardCsv.text());
+      const page = await fetch(`${baseUrl}/dashboard/apps/${appId}?${query.replace("&format=csv", "")}`, { headers: { cookie: `openmasu_dashboard=${session.token}` } });
+      assert.equal(page.status, 200); assert.ok((await page.text()).includes(newPage.data[0].metric_run_id));
+    });
+
+    it("separates a changed FX meaning without supersession and renders the same API preview in zero-JS SSR", async () => {
+      const source = await fresh();
+      const schedule = structuredClone(body); schedule.fx_policy.rates[0].rate_unscaled = "4";
+      const request = { mode: "new_series", schedule };
+      const preview = await previewMetricScheduleReplacement(readerPool, reportIdentity, source.metric_schedule_id, request, clock);
+      assert.equal(preview.definition_matches, false); assert.ok(preview.definition_changes.some(row => row.field === "fx_policy"));
+      assert.ok(preview.source_runs.every(row => !row.can_supersede));
+      await assert.rejects(previewMetricScheduleReplacement(readerPool, reportIdentity, source.metric_schedule_id, { ...request, mode: "same_meaning" }, clock), /meaning_changed/);
+      const form = new URLSearchParams({ csrf_token: csrfToken(session.token), request_json: JSON.stringify(request) });
+      const htmlResponse = await fetch(`${baseUrl}/dashboard/apps/${appId}/metric-schedules/${encodeURIComponent(source.metric_schedule_id)}/preview-replacement`, {
+        method: "POST", headers: { cookie: `openmasu_dashboard=${session.token}`, origin: "http://localhost:8080", "content-type": "application/x-www-form-urlencoded" }, body: form,
+      });
+      assert.equal(htmlResponse.status, 200); const html = await htmlResponse.text();
+      assert.ok(html.includes("fx_policy")); assert.ok(html.includes("new_series")); assert.ok(html.includes("2026-08-01"));
+      assert.doesNotMatch(html, /<script\b|javascript:|\son[a-z]+=/i);
+      const replacement = await replaceMetricSchedule(appPool, reportIdentity, source.metric_schedule_id, { ...request, preview_digest: preview.preview_digest }, clock);
+      await processMetricSchedules(appPool, tenantId, { now: clock });
+      const oldRows = (await metricReport(readerPool, reportIdentity, report(source.metric_schedule_id))).data;
+      const newRows = (await metricReport(readerPool, reportIdentity, report(replacement.metric_schedule_id))).data;
+      assert.equal(oldRows.length, 1); assert.equal(newRows.length, 1);
+      assert.equal(oldRows[0].value_unscaled, "1500000"); assert.equal(newRows[0].value_unscaled, "1200000");
+      assert.equal(newRows[0].supersedes_metric_run_id, null); assert.equal(oldRows[0].superseded, false);
+      assert.deepEqual((await metricReport(readerPool, { ...reportIdentity, tenantId: "tenant-synthetic-foreign" }, { ...report(source.metric_schedule_id), tenantId: "tenant-synthetic-foreign" })).data, []);
+    });
+
+    it("rejects stale or foreign full keys and competing successors before writing a replacement", async () => {
+      const source = await fresh();
+      const request = { mode: "same_meaning", schedule: body };
+      const preview = await previewMetricScheduleReplacement(readerPool, reportIdentity, source.metric_schedule_id, request, clock);
+      const selected = preview.source_runs[0];
+      await assert.rejects(replaceMetricSchedule(appPool, reportIdentity, source.metric_schedule_id, { ...request,
+        preview_digest: preview.preview_digest, supersessions: [{ source_metric_run_id: selected.source_metric_run_id, calculation_key_digest: "0".repeat(64) }] }, clock), /source_key_conflict/);
+      await assert.rejects(replaceMetricSchedule(appPool, reportIdentity, source.metric_schedule_id, { ...request,
+        preview_digest: "0".repeat(64) }, clock), /preview_stale/);
+      await assert.rejects(previewMetricScheduleReplacement(readerPool, { ...reportIdentity, tenantId: "tenant-synthetic-foreign" }, source.metric_schedule_id, request, clock), /not_found/);
+      const input = buildScheduledMetricInput(source, { targetDate: "2026-08-01", watermark: "2026-08-11T00:00:00.000Z", definitionDigest: source.definition_digest });
+      input.metric_evaluations[0].metric_run_id_prefix = "synthetic-competing-replay";
+      input.metric_evaluations[0].supersedes_metric_run_id = selected.source_metric_run_id;
+      await computeSqlMetricRuns(appPool, input, true, { tenant_id: tenantId, app_id: appId });
+      await assert.rejects(replaceMetricSchedule(appPool, reportIdentity, source.metric_schedule_id, { ...request,
+        preview_digest: preview.preview_digest, supersessions: [{ source_metric_run_id: selected.source_metric_run_id, calculation_key_digest: selected.calculation_key_digest }] }, clock), /source_key_conflict/);
+      const count = await withTenant(readerPool, tenantId, async client => (await client.query("SELECT count(*)::int AS count FROM control.metric_schedules WHERE tenant_id=$1 AND app_id=$2", [tenantId, appId])).rows[0].count);
+      assert.equal(count, 1);
+    });
+
+    it("serializes replacement with a date claim and refuses to cancel in-flight work", async () => {
+      const source = await fresh(false);
+      const request = { mode: "new_series", schedule: body };
+      const preview = await previewMetricScheduleReplacement(readerPool, reportIdentity, source.metric_schedule_id, request, clock);
+      const [replacement, claim] = await Promise.allSettled([
+        replaceMetricSchedule(appPool, reportIdentity, source.metric_schedule_id, { ...request, preview_digest: preview.preview_digest }, clock),
+        claimNextScheduledDate(appPool, source, clock),
+      ]);
+      assert.equal(claim.status, "fulfilled");
+      if (replacement.status === "fulfilled") {
+        assert.equal((claim as PromiseFulfilledResult<unknown>).value, undefined);
+      } else {
+        assert.match(String(replacement.reason), /date_in_flight/);
+        const blocked = await previewMetricScheduleReplacement(readerPool, reportIdentity, source.metric_schedule_id, request, clock);
+        assert.equal(blocked.in_flight.can_replace, false); assert.equal(blocked.in_flight.pending_target_date, "2026-08-01");
+        await processMetricSchedules(appPool, tenantId, { now: clock });
+        const refreshed = await previewMetricScheduleReplacement(readerPool, reportIdentity, source.metric_schedule_id, request, clock);
+        await replaceMetricSchedule(appPool, reportIdentity, source.metric_schedule_id, { ...request, preview_digest: refreshed.preview_digest }, clock);
+      }
+      assert.equal(await claimNextScheduledDate(appPool, source, clock), undefined, "the disabled source cannot claim another date");
+    });
+
+    it("revalidates a handoff after confirmation and rolls back the date when its source acquires a competing successor", async () => {
+      const source = await fresh();
+      const nextClock = new Date("2026-08-11T12:00:00.000Z");
+      const request = { mode: "same_meaning", schedule: body };
+      const preview = await previewMetricScheduleReplacement(readerPool, reportIdentity, source.metric_schedule_id, request, nextClock);
+      const selected = preview.source_runs[0];
+      const replacement = await replaceMetricSchedule(appPool, reportIdentity, source.metric_schedule_id, { ...request,
+        preview_digest: preview.preview_digest, supersessions: [{ source_metric_run_id: selected.source_metric_run_id,
+          calculation_key_digest: selected.calculation_key_digest }] }, nextClock);
+      const competitor = buildScheduledMetricInput(source, { targetDate: "2026-08-01", watermark: "2026-08-11T00:00:00.000Z", definitionDigest: source.definition_digest });
+      competitor.metric_evaluations[0].metric_run_id_prefix = "synthetic-post-confirmation-replay";
+      competitor.metric_evaluations[0].supersedes_metric_run_id = selected.source_metric_run_id;
+      await computeSqlMetricRuns(appPool, competitor, true, { tenant_id: tenantId, app_id: appId });
+      await assert.rejects(processMetricSchedules(appPool, tenantId, { now: nextClock }), /cycle_failed/);
+      assert.equal((await metricReport(readerPool, reportIdentity, report(replacement.metric_schedule_id, "all"))).data.length, 0);
+      const checkpoint = await withTenant(readerPool, tenantId, async client => (await client.query("SELECT last_target_date::text,pending_target_date::text,safe_reason FROM control.metric_schedule_checkpoints WHERE tenant_id=$1 AND app_id=$2 AND metric_schedule_id=$3", [tenantId, appId, replacement.metric_schedule_id])).rows[0]);
+      assert.equal(checkpoint.last_target_date, null); assert.equal(checkpoint.pending_target_date, "2026-08-01");
+      assert.equal(checkpoint.safe_reason, "calculation_unavailable");
+    });
+
+    it("serializes disablement with a claim without deleting a claimed checkpoint", async () => {
+      const source = await fresh(false);
+      const [, claimed] = await Promise.all([
+        disableMetricSchedule({ pool: appPool, identity: reportIdentity, metricScheduleId: source.metric_schedule_id, now: clock }),
+        claimNextScheduledDate(appPool, source, clock),
+      ]);
+      assert.equal(await claimNextScheduledDate(appPool, source, clock), undefined);
+      const checkpoint = await withTenant(readerPool, tenantId, async client => (await client.query("SELECT pending_target_date::text FROM control.metric_schedule_checkpoints WHERE tenant_id=$1 AND app_id=$2 AND metric_schedule_id=$3", [tenantId, appId, source.metric_schedule_id])).rows[0]);
+      assert.equal(checkpoint.pending_target_date, claimed?.targetDate ?? null);
+    });
+
+    it("adopts a pre-provenance historical run only through its complete deterministic schedule identity", async () => {
+      const source = await fresh(false);
+      const input = buildScheduledMetricInput(source, { targetDate: "2026-08-01", watermark: "2026-08-10T00:00:00.000Z", definitionDigest: source.definition_digest });
+      delete input.metric_evaluations[0].metric_schedule;
+      const [run] = await computeSqlMetricRuns(appPool, input, true, { tenant_id: tenantId, app_id: appId });
+      await withTenant(appPool, tenantId, client => client.query("UPDATE control.metric_schedule_checkpoints SET last_target_date='2026-08-01' WHERE tenant_id=$1 AND app_id=$2 AND metric_schedule_id=$3", [tenantId, appId, source.metric_schedule_id]));
+      assert.equal((await metricReport(readerPool, reportIdentity, report(source.metric_schedule_id))).data.length, 0);
+      const request = { mode: "new_series", schedule: body };
+      const preview = await previewMetricScheduleReplacement(readerPool, reportIdentity, source.metric_schedule_id, request, clock);
+      assert.deepEqual(preview.source_runs.map(row => row.source_metric_run_id), [run.metric_run_id]);
+      await replaceMetricSchedule(appPool, reportIdentity, source.metric_schedule_id, { ...request, preview_digest: preview.preview_digest }, clock);
+      assert.deepEqual((await metricReport(readerPool, reportIdentity, report(source.metric_schedule_id, "all"))).data.map(row => row.metric_run_id), [run.metric_run_id]);
+      assert.equal(jcs(await stored(run.metric_run_id)), jcs(run));
     });
   });
 });

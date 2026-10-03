@@ -37,6 +37,9 @@ describe("declarative API route security", () => {
 
   it("C03 declares every read-only route without mutation authority", () => {
     assert.equal(routes.filter((route) => !route.mutates).every((route) => route.method === "GET"
+      || (route.method === "POST" && route.capability === "administer"
+        && ((route.handler === "admin_metric_schedules_preview_replacement" && route.auth === "admin_bearer")
+          || (route.handler === "dashboard_metric_schedules_preview_replacement" && route.auth === "dashboard_session")))
       || (route.method === "POST" && route.auth === "dashboard_session"
         && ((route.handler === "dashboard_comparison_submit" && route.capability === "read")
           || (route.handler === "dashboard_metric_recalculations_preview" && route.capability === "operate")))), true);
@@ -151,6 +154,7 @@ describe("declarative API route security", () => {
       "dashboard_operator_webhooks_register", "dashboard_operator_webhooks_disable",
       "admin_operator_bulk_exports_list", "admin_operator_bulk_exports_register", "admin_operator_bulk_exports_disable",
       "admin_metric_schedules_list", "admin_metric_schedules_register", "admin_metric_schedules_disable",
+      "admin_metric_schedules_preview_replacement", "admin_metric_schedules_replace",
       "dashboard_operator_bulk_exports_register", "dashboard_operator_bulk_exports_disable",
       "dashboard_app_link_identity", "dashboard_apple_registration", "dashboard_conversion_schema",
       "dashboard_rule_bundle", "dashboard_google_data_manager",
