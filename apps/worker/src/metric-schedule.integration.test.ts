@@ -554,6 +554,7 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
       const oldRun = oldPage.data[0]; assert.equal(oldPage.data.length, 1);
       const oldArtifact = jcs(await stored(oldRun.metric_run_id));
       const oldComparison = await fixedComparisonDownload(readerPool, reportIdentity, { ...report(source.metric_schedule_id),
+        grouping: { attribution_status: "non_organic" },
         dateFrom: "2026-08-01", dateTo: "2026-08-02", watermarkAtMost: "2026-08-10T00:00:00.000Z" });
       const request = { mode: "same_meaning", schedule: body };
       const audits = async () => withTenant(readerPool, tenantId, async client => (await client.query("SELECT count(*)::int AS count FROM ledger.audit_logs WHERE tenant_id=$1", [tenantId])).rows[0].count);
