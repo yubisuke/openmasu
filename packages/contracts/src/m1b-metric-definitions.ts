@@ -256,6 +256,20 @@ export const VERIFIED_PLATFORM_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricD
     rule_bundle_hash: nonFraudBundleHash("metric-verified-platform-acquisition"),
   }));
 
+/** A single declared provider per definition: matching campaign text never merges sources. */
+export function importedAcquisitionMetricDefinitions(provider: string): OpenMasuMetricDefinitionV04[] {
+  if (!/^[a-z0-9-]{1,64}$/.test(provider)) throw new Error("import_provider_invalid");
+  return SELECTED_ACQUISITION_METRIC_DEFINITIONS.map(definition => ({
+    ...definition, metric_name: `imported_${definition.metric_name}`, metric_definition_version: "0.4.20",
+    acquisition_basis: "selected_imported_provider", import_provider: provider,
+    grouping_dimensions: [...METRIC_GROUPING_DIMENSIONS, "ad_group_id"],
+    ...(definition.definition.calculation === "revenue_over_cost"
+      ? { cost_selection_policy: "reject_overlapping_grains" as const } : {}),
+    rule_bundle_id: "metric-imported-provider-acquisition", rule_bundle_version: "0.4.20",
+    rule_bundle_hash: nonFraudBundleHash("metric-imported-provider-acquisition"),
+  }));
+}
+
 /** Explicit safe denominators. Legacy saved definitions remain replayable. */
 export const DISJOINT_COST_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricDefinitionV04> = [
   ...SELECTED_ACQUISITION_METRIC_DEFINITIONS.filter((d) => d.definition.calculation === "revenue_over_cost"),

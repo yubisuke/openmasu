@@ -198,7 +198,7 @@ export function normalizeMetricScheduleRequest(
         && (dateDimension !== "cohort_date" || evaluation.metric_names.some(name => {
           const metric = suppliedDefinitions.find(value => value.metric_name === name);
           return metric?.acquisition_dimension_policy !== "selected_link_ad_group_creative"
-            && !(metric?.acquisition_basis === "selected_verified_platform" && grouping.creative_id === undefined);
+            && !(["selected_verified_platform", "selected_imported_provider"].includes(String(metric?.acquisition_basis)) && grouping.creative_id === undefined);
         }))) throw new Error("metric_schedule_detail_profile_required");
     let discovery: { policy: "selected_acquisition_and_cost_v1"; max_targets: number } | undefined;
     if (evaluation.campaign_discovery !== undefined) {

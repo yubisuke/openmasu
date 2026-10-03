@@ -2,6 +2,7 @@ import type { PlatformAcquisitionInput } from "@openmasu/contracts/types";
 import type { PoolClient } from "pg";
 import { sha256 as sha256Jcs } from "@openmasu/attribution-core/canonical";
 import { selectedAcquisitionSql, selectedClickJoinSql } from "./selected-acquisition.js";
+import { selectedImportedAcquisitionSql, importedAcquisitionJoinSql } from "./imported-acquisition.js";
 
 /** Same three bound scope/cutoff parameters as the historical selection. No request-supplied proofs. */
 export const selectedPlatformAcquisitionSql = `
@@ -72,7 +73,8 @@ export const selectedPlatformAcquisitionSql = `
   ORDER BY candidate.subject_ref COLLATE "C",candidate.decided_at DESC,candidate.attribution_id COLLATE "C" DESC
 `;
 
-export function metricAcquisitionSql(platform: boolean): string {
+export function metricAcquisitionSql(platform: boolean | "selected_imported_provider", provider: "$22" | "$15" | "$10" = "$22"): string {
+  if (platform === "selected_imported_provider") return selectedImportedAcquisitionSql.replaceAll("$4", provider);
   return platform ? selectedPlatformAcquisitionSql : selectedAcquisitionSql;
 }
 
@@ -80,7 +82,8 @@ export function metricAcquisitionDimensionSql(field: "campaign_id" | "network", 
   return platform ? `acquisition_source.${field}` : `coalesce(install.${field},acquisition_source.${field})`;
 }
 
-export function metricAcquisitionJoinSql(enabled: "$7" | "$15" | "$18", privacy: "$8" | "$12" | "$15", platform: boolean): string {
+export function metricAcquisitionJoinSql(enabled: "$7" | "$15" | "$18", privacy: "$8" | "$12" | "$15", platform: boolean | "selected_imported_provider", provider: "$22" | "$15" | "$10" = "$22"): string {
+  if (platform === "selected_imported_provider") return importedAcquisitionJoinSql(enabled, provider);
   if (!platform) return selectedClickJoinSql(enabled, privacy);
   return `LEFT JOIN acquisition ON acquisition.subject_ref=install.installation_id
     LEFT JOIN LATERAL (

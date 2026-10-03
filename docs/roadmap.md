@@ -36,7 +36,7 @@ in [Project plan](project-plan.md).
 | Operator-owned bulk event exports | Synthetic complete | Default-off S3-compatible destinations, deterministic gzip NDJSON, SigV4 conditional writes, durable keyset cursors, and destination-scoped deletion notices |
 
 The current contract gate preserves parity across 28 schemas, 8 registries,
-and 66 reviewed synthetic fixtures, including explicitly versioned first-party and verified-platform acquisition cohorts, daily counts, safe cost selection, custom conversions and targeted refund cancellation.
+and 67 reviewed synthetic fixtures, including explicitly versioned first-party and verified-platform acquisition cohorts, daily counts, safe cost selection, custom conversions and targeted refund cancellation.
 
 ## Completed milestone: integration and release coherence
 
@@ -182,6 +182,14 @@ adapters, predictive analytics, multi-cloud hosting and another release are
 not selected by this plan. Numeric differences alone never establish causes.
 
 ## Next development foundations
+
+The explicit [imported-provider cohort profile](imported-acquisition-metrics.md)
+now calculates provider-reported advertising ROAS, retention and LTV without
+merging first-party or verified-platform populations. Explicit schedules and
+bounded corrections retain provider/revision meaning. Fixture 67 and existing
+TS/Python/SQL gates cover synthetic evidence; external budget ownership, live
+provider completeness and automatic imported campaign discovery remain unproven
+or unsupported. The matching project-plan row records the same scope.
 
 The current source has the dependency, calculation, HTTP/presentation and
 ingestion boundaries needed for the next supported MMP workflows, together with

@@ -36,6 +36,17 @@ export function platformInstallEvidence(payload: Any): Any {
   };
 }
 
+/** Preserve the closed contract context for new imports; historical dimensions are unchanged. */
+export function importedInstallEvidence(payload: Any, producer: string): Any {
+  const context = payload.import_context;
+  if (!context || producer !== `import:${context.provider}`) return {};
+  const fields = ["provider", "provider_attributed", "provider_attribution_strategy", "provider_install_ref",
+    "provider_click_ref", "provider_campaign_ref", "provider_adgroup_ref", "provider_creative_ref",
+    "provider_site_ref", "provider_network", "provider_country", "provider_confirmed_at"];
+  return { import_context: Object.fromEntries(fields.filter(field => context[field] !== undefined)
+    .map(field => [field, context[field]])) };
+}
+
 export async function persistProjectionWithClient(
   client: PoolClient,
   logical: LogicalEvent,
@@ -108,6 +119,7 @@ export async function persistProjectionWithClient(
             network,
             country,
             ...platformInstallEvidence(payload),
+            ...importedInstallEvidence(payload, attempt.record.producer),
           }),
         ],
       );
@@ -324,6 +336,7 @@ export function bulkProjectionRows(
           install_type: payload.install_type, occurred_at: attempt.record.occurred_at,
           campaign_id: campaignId, network, country,
           ...platformInstallEvidence(payload),
+          ...importedInstallEvidence(payload, attempt.record.producer),
         },
       });
     } else if (logical.event_name === "session_start") {

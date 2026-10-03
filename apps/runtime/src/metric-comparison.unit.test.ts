@@ -4,10 +4,25 @@ import { M1B_METRIC_DEFINITIONS, M3_METRIC_DEFINITIONS, SELECTED_ACQUISITION_MET
 import { sha256 } from "@openmasu/attribution-core";
 import { captureMetricComparisonContext, comparisonMeaning, comparisonMaturity } from "./metric-comparison.js";
 import { engagementMetricDefinitions } from "@openmasu/contracts";
+import { importedAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
 
 const fx = { policy_version: "synthetic", target_currency: "USD", target_scale: 6, rounding_mode: "half_even" as const,
   rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0, as_of: "2026-01-01T00:00:00.000Z", source: "not-in-reader-projection" }] };
 const run = { metric_run_id: "synthetic", input_snapshot_id: "a".repeat(64) };
+it("keeps import provider revision outcome binding and native meaning incomparable", () => {
+  const first = captureMetricComparisonContext(run,importedAcquisitionMetricDefinitions("synthetic-export")[0],fx,"after",sha256);
+  const second = captureMetricComparisonContext(run,importedAcquisitionMetricDefinitions("synthetic-second")[0],fx,"after",sha256);
+  const native = captureMetricComparisonContext(run,DISJOINT_COST_METRIC_DEFINITIONS[0],fx,"after",sha256);
+  assert.equal(first.definition.import_provider,"synthetic-export");
+  assert.equal(first.definition_digest,sha256(first.definition));
+  const meaning = comparisonMeaning(first)!;
+  assert.ok("outcome_binding" in meaning && "attribution_revision" in meaning);
+  assert.equal(meaning.outcome_binding,"same_import_producer_explicit_installation");
+  assert.equal(meaning.attribution_revision,"selected_provider_reported_at_watermark");
+  assert.notDeepEqual(comparisonMeaning(first),comparisonMeaning(second));
+  assert.notDeepEqual(comparisonMeaning(first),comparisonMeaning(native));
+  assert.notEqual(first.definition_digest,second.definition_digest);
+});
 it("binds re-engagement comparison to open date credit and a conservative 24h maturity", () => {
   const context = captureMetricComparisonContext(run, engagementMetricDefinitions("tutorial_complete")[0], fx, "after", sha256);
   assert.equal(context.definition.engagement_credit_policy, "latest_eligible_open_before_outcome");

@@ -5,6 +5,7 @@ import { ACQUISITION_DETAIL_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS
 import { metricScheduleTargetDate, normalizeMetricScheduleRequest } from "./metric-schedules.js";
 import { engagementMetricDefinitions, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { VERIFIED_PLATFORM_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
+import { importedAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
 
 const body = {
   lag_days: 2,
@@ -27,6 +28,16 @@ const body = {
 };
 
 describe("scheduled metric configuration", () => {
+  it("captures the imported provider explicitly and refuses implicit campaign discovery", () => {
+    const normalize = (value: any) => normalizeMetricScheduleRequest(value,new Date("2026-10-01T12:00:00.000Z"));
+    const request = {...body,metric_definitions:importedAcquisitionMetricDefinitions("synthetic-export"),
+      evaluations:[{metric_names:["imported_d0_roas"],date_dimension:"cohort_date",grouping:{campaign_id:"synthetic-campaign",ad_group_id:"synthetic-group"}}]};
+    assert.equal(normalize(request).definition.metric_definitions[0].import_provider,"synthetic-export");
+    assert.deepEqual(normalize(request).definition.evaluations[0].grouping,request.evaluations[0].grouping);
+    assert.throws(() => normalize({...request,metric_definitions:request.metric_definitions.map(d => ({...d,import_provider:undefined}))}),/definitions_invalid/);
+    assert.throws(() => normalize({...request,evaluations:[{...request.evaluations[0],grouping:{},
+      campaign_discovery:{policy:"selected_acquisition_and_cost_v1",max_targets:10}}]}),/discovery_invalid/);
+  });
   it("requires an independent platform profile and source namespace while reusing bounded discovery", () => {
     const normalize = (value: any) => normalizeMetricScheduleRequest(value,new Date("2026-10-01T12:00:00.000Z"));
     const request = {...body,metric_definitions:structuredClone(VERIFIED_PLATFORM_METRIC_DEFINITIONS),

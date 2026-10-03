@@ -57,6 +57,7 @@ async function purchaseNetRevenueValue(
          ) AS attribution ON true
          ${metricAcquisitionJoinSql("$15", "$12", definition.acquisition_basis === "selected_verified_platform")}
          WHERE install.tenant_id=$1 AND install.app_id=$2 AND install.occurred_at IS NOT NULL
+           ${definition.acquisition_basis === "selected_first_party_click" ? "AND logical.producer NOT LIKE 'import:%'" : ""}
            ${definition.acquisition_basis === "selected_verified_platform" ? "AND acquisition_source.network IS NOT NULL" : ""}
            AND raw.received_at <= $3
            AND ($12='before' OR raw.payload_lifecycle_status='available')
@@ -335,6 +336,9 @@ export async function metricValue(
     return eventCountValue(client, scope, watermark, grouping, definition, privacyState);
   }
   const activityEvents = definition.activity_events ?? ["session_start"];
+  const imported = definition.acquisition_basis === "selected_imported_provider";
+  const acquisitionMode = imported ? "selected_imported_provider" : definition.acquisition_basis === "selected_verified_platform";
+  const contextDimensions = imported || definition.acquisition_basis === "selected_verified_platform";
   if (calculation === "active_installations_over_cohort" &&
       activityEvents.some((eventName: string) => eventName !== "session_start")) {
     throw new Error(`SQL activity projection does not support ${activityEvents.join(",")}`);
@@ -352,7 +356,7 @@ export async function metricValue(
     window_elapsed: boolean | null;
   }>(
     `WITH
-       acquisition AS (SELECT * FROM (${metricAcquisitionSql(definition.acquisition_basis === "selected_verified_platform")}) AS selected WHERE $18::boolean),
+       acquisition AS (SELECT * FROM (${metricAcquisitionSql(acquisitionMode)}) AS selected WHERE $18::boolean),
        rates AS (
          SELECT currency, rate_unscaled::numeric AS rate_unscaled, rate_scale
          FROM jsonb_to_recordset($12::jsonb)
@@ -377,14 +381,17 @@ export async function metricValue(
            ORDER BY candidate.decided_at DESC, candidate.attribution_id DESC
            LIMIT 1
          ) AS attribution ON true
-         ${metricAcquisitionJoinSql("$18", "$15", definition.acquisition_basis === "selected_verified_platform")}
+         ${metricAcquisitionJoinSql("$18", "$15", acquisitionMode)}
          WHERE install.tenant_id=$1 AND install.app_id=$2 AND install.occurred_at IS NOT NULL
            ${definition.acquisition_basis === "selected_verified_platform" ? "AND acquisition_source.network IS NOT NULL" : ""}
+           ${imported ? "AND acquisition_source.import_provider IS NOT NULL" : ""}
+           AND ($22::text IS NULL OR logical.producer='import:'||$22)
+           ${definition.acquisition_basis === "selected_first_party_click" ? "AND logical.producer NOT LIKE 'import:%'" : ""}
            AND raw.received_at <= $3
            AND ($15='before' OR raw.payload_lifecycle_status='available')
-           AND ($4::text IS NULL OR ${definition.acquisition_basis === "selected_verified_platform" ? "acquisition_source.campaign_id" : "coalesce(install.campaign_id, acquisition_source.campaign_id)"}=$4)
-           AND ($5::text IS NULL OR ${definition.acquisition_basis === "selected_verified_platform" ? "acquisition_source.network" : "coalesce(install.network, acquisition_source.network)"}=$5)
-           AND ($6::text IS NULL OR install.country=$6)
+           AND ($4::text IS NULL OR ${contextDimensions ? "acquisition_source.campaign_id" : "coalesce(install.campaign_id, acquisition_source.campaign_id)"}=$4)
+           AND ($5::text IS NULL OR ${contextDimensions ? "acquisition_source.network" : "coalesce(install.network, acquisition_source.network)"}=$5)
+           AND ($6::text IS NULL OR ${imported ? "acquisition_source.country" : "install.country"}=$6)
            AND ($7::text IS NULL OR timezone($8, install.occurred_at_ts)::date::text=$7)
            AND ($16::text IS NULL OR (CASE WHEN $18 THEN coalesce(acquisition.status, 'unattributed') ELSE attribution.status END)=$16)
            AND ($17='gross' OR (CASE WHEN $18 THEN acquisition.reason_code ELSE attribution.reason_code END) IS DISTINCT FROM 'fraud_excluded')
@@ -403,6 +410,7 @@ export async function metricValue(
           AND raw.app_id=logical.app_id
          LEFT JOIN rates AS rate ON rate.currency=revenue.currency
          WHERE revenue.tenant_id=$1 AND revenue.app_id=$2
+           AND ($22::text IS NULL OR logical.producer='import:'||$22)
            AND raw.received_at <= $3
            AND ($15='before' OR raw.payload_lifecycle_status='available')
            AND revenue.occurred_at_ts >= cohort.installed_at
@@ -428,6 +436,7 @@ export async function metricValue(
           AND raw.tenant_id=logical.tenant_id
           AND raw.app_id=logical.app_id
          WHERE session.tenant_id=$1 AND session.app_id=$2
+           AND ($22::text IS NULL OR logical.producer='import:'||$22)
            AND raw.received_at <= $3
            AND ($15='before' OR raw.payload_lifecycle_status='available')
            AND session.occurred_at_ts >= cohort.installed_at + ($9 * interval '1 day')
@@ -517,6 +526,7 @@ export async function metricValue(
       selectedCosts ? JSON.stringify(selectedCosts.rows) : null,
       grouping?.ad_group_id ?? null,
       grouping?.creative_id ?? null,
+      definition.import_provider ?? null,
     ],
   );
   const row = result.rows[0];

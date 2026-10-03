@@ -28,6 +28,8 @@ import { persistCostImport, type CostInput } from "./import/cost.js";
 import { runCostImportFile } from "./import/cost-cli.js";
 import { syntheticPlatformAcquisitionCases } from "../../../tools/synthetic-platform-acquisition-cases.js";
 import { persistSyntheticPlatformResults } from "./test-support/platform-acquisition.js";
+import { syntheticImportedAcquisitionCases, importedAcquisitionCaseRuns } from "../../../tools/synthetic-imported-acquisition-cases.js";
+import { selectLateMetricInputs } from "@openmasu/runtime";
 
 type Any = Record<string, any>;
 const fixtureName = "33-stage-b-cohort-metrics";
@@ -47,6 +49,62 @@ function assertPlatformRunParity(actual: readonly Any[], expected: readonly Any[
     assert.equal(jcs(run), jcs(expected[index]), `${label}: ${run.metric_run_id} canonical bytes`);
   }
 }
+
+describe("imported provider acquisition SQL parity", { concurrency: false }, () => {
+  const app = createAppPool(), seed = createSeedPool(), reader = createReaderPool();
+  after(async () => { await Promise.all([app.end(),seed.end(),reader.end()]); });
+  const source = JSON.parse(readFileSync("fixtures/v0.4/67-imported-provider-acquisition/input.json","utf8"));
+  for (const entry of syntheticImportedAcquisitionCases(source)) it(entry.name, async () => {
+    await ingestFixture(`import67-${entry.name}`,entry.input,app,seed);
+    for (const revision of entry.revisions ?? []) await persistAttribution(app,revision as Parameters<typeof persistAttribution>[1]);
+    const actual = await computeSqlMetricRuns(app,entry.input,false);
+    assert.deepEqual(actual.map(run => run.value_unscaled ?? run.undefined_reason),entry.expected);
+    assertPlatformRunParity(actual,importedAcquisitionCaseRuns(entry),entry.name);
+    if (entry.name === "keeps paid organic unknown provider and native cohorts separate")
+      assertPlatformRunParity(actual,JSON.parse(readFileSync("fixtures/v0.4/67-imported-provider-acquisition/expected_metric_runs.json","utf8")),"reviewed import golden");
+  });
+  it("stores imported meaning and preserves JSON CSV provider and undefined values", async () => {
+    await ingestFixture("import67-stored",source,app,seed);
+    const actual = await computeSqlMetricRuns(app,source,true);
+    const identity = {keyId:"synthetic-import67",tenantId:"tenant-a",appId:"app-a",role:"admin" as const};
+    const page = await metricReport(reader,identity,{tenantId:"tenant-a",appId:"app-a",supersession:"all",limit:200});
+    for (const run of actual) {
+      const row = page.data.find(value => value.metric_run_id === run.metric_run_id)!;
+      assert.equal(row.value_state,run.value_state ?? "present");
+      assert.equal(row.value_unscaled,run.value_unscaled);
+      assert.equal(row.undefined_reason,run.undefined_reason ?? null);
+      const csv = parseCsv(encodeMetricReport({data:[row]},"csv").body)[0];
+      assert.equal(csv.value_unscaled,run.value_unscaled ?? "");
+      assert.equal(csv.undefined_reason,run.undefined_reason ?? "");
+      if (run.metric_name.startsWith("imported_")) {
+        assert.equal(row.comparison_context?.definition.acquisition_basis,"selected_imported_provider");
+        assert.equal(row.comparison_context?.definition.import_provider,"synthetic-export");
+      }
+    }
+    const native = page.data.find(row => row.metric_name === "cohort_ltv_d0_usd")!;
+    const imported = page.data.find(row => row.metric_run_id === "import67-a-paid:imported_cohort_ltv_d0_usd")!;
+    assert.notEqual(native.comparison_context?.definition_digest,imported.comparison_context?.definition_digest);
+  });
+  it("selects late imported outcomes only for their explicit provider and never SDK contamination", async () => {
+    const before = structuredClone(source);
+    before.records = before.records.filter((row: Any) => !["revenue-paid-67","revenue-paid-retry-67","revenue-sdk-67"].includes(row.record_id));
+    before.metric_evaluations = before.metric_evaluations.slice(0,1);
+    for (const ev of before.metric_evaluations) ev.input_received_at_watermark = "2026-08-14T01:00:00.000Z";
+    await ingestFixture("import67-late",before,app,seed);
+    await computeSqlMetricRuns(app,before,true);
+    const late = source.records.filter((row: Any) => ["revenue-paid-67","revenue-sdk-67"].includes(row.record_id))
+      .map((row: Any) => ({server:{...source.server_context,received_at:"2026-08-14T02:00:00.000Z"},
+        record:{...row,received_at:"2026-08-14T02:00:00.000Z"},batch_id:"import67-late"}));
+    await ingestRuntimeBatch(late,app);
+    for (const record_id of ["revenue-paid-67","revenue-sdk-67"]) {
+      const selected = await withTenant(app,"tenant-a",client => selectLateMetricInputs(client,
+        {tenantId:"tenant-a",appId:"app-a"},{trigger_kind:"late_events",source_record_ids:[record_id],
+          date_from:"2026-08-06",date_to:"2026-08-06",watermark:"2026-08-15T00:00:00.000Z"}));
+      assert.equal(selected.rows.length,record_id === "revenue-paid-67" ? 2 : 0);
+      assert.ok(selected.rows.every(row => row.safe_reason === null));
+    }
+  });
+});
 
 describe("verified platform acquisition SQL parity", { concurrency: false }, () => {
   const app = createAppPool(), seed = createSeedPool(), reader = createReaderPool();

@@ -76,6 +76,7 @@ The v0.4 line adds independently exercised optional vocabulary and definitions:
 | 0.4.17 | opt-in first-party deep-link outcome metrics with a fixed 24h latest-open credit policy, separate from install and Apple aggregate series |
 | 0.4.18 | opt-in native daily acquisition count with cohort-selected click evidence and explicit known/unknown campaign grouping; recorded raw daily semantics stay unchanged |
 | 0.4.19 | opt-in verified-platform acquisition cohorts, trusted source projection and namespaced campaign/ad-group dimensions; recorded and first-party profiles retain their meaning |
+| 0.4.20 | opt-in imported-provider cohorts with explicit provider binding, canonical context and selected imported revisions; no implicit native or aggregate outcome join |
 
 Existing schema `$id` values remain on `v0.4`; existing event artifact version
 fields remain `0.4.0` where their schema did not change.
