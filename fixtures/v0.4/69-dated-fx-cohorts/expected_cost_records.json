@@ -1,0 +1,53 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "cost_record_id": "fx69-cost-eur",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "network": "synthetic-network",
+    "campaign_id": "fx69-campaign",
+    "country": "FR",
+    "date": "2026-08-06",
+    "amount_unscaled": "1",
+    "amount_scale": 0,
+    "currency": "EUR",
+    "source": "imported_reported",
+    "as_of": "2026-08-12T00:00:00.000Z",
+    "dimension_digest": "edc979620aad72dbf740cb75292f6d4702ed013ce9231a9fe40fd7c8608cd791",
+    "report_snapshot_digest": "be4de4a45c5181b56968430927e726fb7ac6d21d88f89ccf42bb85fecb25a4c9"
+  },
+  {
+    "contract_version": "0.4.0",
+    "cost_record_id": "fx69-cost-jpy",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "network": "synthetic-network",
+    "campaign_id": "fx69-campaign",
+    "country": "JP",
+    "date": "2026-08-06",
+    "amount_unscaled": "2",
+    "amount_scale": 0,
+    "currency": "JPY",
+    "source": "imported_reported",
+    "as_of": "2026-08-12T00:00:00.000Z",
+    "dimension_digest": "74656aa91b42bd3d89a4cff34b26fc9c55135f6aca5b48e6bfec760e9639cf91",
+    "report_snapshot_digest": "027d3848f17ade24642acafbe9dd55f32fb1757adeffc9f5d8369318f2b10041"
+  },
+  {
+    "contract_version": "0.4.0",
+    "cost_record_id": "fx69-cost-usd",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "network": "synthetic-network",
+    "campaign_id": "fx69-campaign",
+    "country": "US",
+    "date": "2026-08-06",
+    "amount_unscaled": "1",
+    "amount_scale": 0,
+    "currency": "USD",
+    "source": "imported_reported",
+    "as_of": "2026-08-12T00:00:00.000Z",
+    "dimension_digest": "e8b4b34157eb27b016844f6898b443d2399c73d2391233f07608f24e2b712a12",
+    "report_snapshot_digest": "5f859cfbe19430703e549b2108a51c0f8f3ed18051d3a31bf41a546248eaedd3"
+  }
+]
