@@ -9,6 +9,10 @@ Use the manual `npm run metrics:run` command for an operator-controlled one-off
 calculation or a deliberately selected historical backfill. Use a durable
 schedule when the worker should calculate a stable metric set every day.
 
+For independently named `platform_*` cohort metrics, supply the full
+[verified platform profile](verified-platform-acquisition.md). Source namespaces
+stay explicit and cannot be blended with first-party campaign discovery.
+
 ## Manage schedules through the dashboard
 
 1. Sign in with an admin-role key, open the app, and select **Manage daily metric

@@ -1,0 +1,34 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "cost_record_id": "cost:apple-66",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "network": "apple_adservices",
+    "campaign_id": "2066",
+    "date": "2026-09-28",
+    "amount_unscaled": "10000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "source": "imported_reported",
+    "as_of": "2026-09-28T10:00:00.000Z",
+    "report_snapshot_digest": "ffd983d47be7730ae922c9528d5e844890cb205923870620414238d2dcdf257e",
+    "dimension_digest": "736d5b698345209a0e797099fa785e44bfbb2ff078a67c60376cbfb1eee33ccc"
+  },
+  {
+    "contract_version": "0.4.0",
+    "cost_record_id": "cost:meta-66",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "network": "meta_install_referrer",
+    "campaign_id": "synthetic-platform-66",
+    "date": "2026-09-28",
+    "amount_unscaled": "1000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "source": "imported_reported",
+    "as_of": "2026-09-28T10:00:00.000Z",
+    "report_snapshot_digest": "1bac243f223d73088d7317229a9c5ac35cfb2c8d248236c749745e7343cb66db",
+    "dimension_digest": "96cf1cbbf0928cda8bebb5ad3427520f87c31a75890a15beba430d142fd287a1"
+  }
+]

@@ -12,6 +12,7 @@ import { syntheticRefundReversalCases } from "./synthetic-refund-reversal-cases.
 import { syntheticAcquisitionDetailCases } from "./synthetic-acquisition-detail-cases.js";
 import { syntheticEngagementCases } from "./synthetic-engagement-cases.js";
 import { syntheticDailyAcquisitionCases, dailyAcquisitionCaseRuns, dailyAcquisitionPythonProbe } from "./synthetic-daily-acquisition-cases.js";
+import { syntheticPlatformAcquisitionCases } from "./synthetic-platform-acquisition-cases.js";
 
 type Any = Record<string, any>;
 type Captured<T> = { ok: true; value: T } | { ok: false; error: unknown };
@@ -329,7 +330,8 @@ function validateRegistryReferences(output: Any, label: string): void {
       "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
       "aak_attributed_reengagements",
     ]);
-    const expectedVersion = definition.rule_bundle_id === "metric-selected-daily-acquisition" ? "0.4.18"
+    const expectedVersion = definition.rule_bundle_id === "metric-verified-platform-acquisition" ? "0.4.19"
+      : definition.rule_bundle_id === "metric-selected-daily-acquisition" ? "0.4.18"
       : definition.rule_bundle_id === "metric-first-party-engagement" ? "0.4.17"
       : definition.rule_bundle_id === "metric-acquisition-detail" ? "0.4.16"
       : definition.rule_bundle_id === "metric-refund-reversal" ? "0.4.15"
@@ -585,8 +587,8 @@ if (!summaryOnly) {
         }
       });
     }
-    it("contains 65 fixture directories", () => {
-      check(fixtureDirs.length === 65, `expected 65 fixture directories, found ${fixtureDirs.length}`);
+    it("contains 66 fixture directories", () => {
+      check(fixtureDirs.length === 66, `expected 66 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -1065,12 +1067,19 @@ const scenarios: Array<[string, () => void]> = [
         `scenario 62 ${suffix} total ROAS`);
     }
   }],
+  ["66 verified platform acquisition keeps source namespaces late context and first-party credit separate", () => {
+    const state = fixture("66-verified-platform-acquisition");
+    check(state.output.raw_records.length === 8 && state.output.attributions.length === 3, "scenario 66 canonical install and initial attribution evidence");
+    check(equal(state.output.metric_runs.map((row: Any) => row.value_unscaled ?? row.undefined_reason),
+      syntheticPlatformAcquisitionCases(state.input)[0].expected), "scenario 66 hand-computed platform populations and money");
+    check(state.output.metric_runs.length === 18 && state.output.metric_definitions.length === 15, "scenario 66 closed opt-in profile and unchanged first-party definition");
+  }],
 ];
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 65 scenario assertions", () => {
-      check(scenarios.length === 65, "scenario assertion inventory must contain 65 entries");
+    it("contains 66 scenario assertions", () => {
+      check(scenarios.length === 66, "scenario assertion inventory must contain 66 entries");
     });
   });
 
@@ -1639,7 +1648,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 65 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 66 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1679,7 +1688,7 @@ const acceptance: Array<[string, () => void]> = [
     for (const forbidden of ["threshold", "model_weight", "watchlist", "ip_address", "user_agent", "response_timing"]) check(!schemaText.includes(forbidden), `AC20 ${forbidden}`);
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
-  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 65 && outputArtifactCount === 65 * 13, "AC21")],
+  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 66 && outputArtifactCount === 66 * 13, "AC21")],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {
     for (const { output, python } of results.values()) check(equal(output, python), "AC22 evaluator mismatch");
     const vector = { numbers: [333333333.33333329, 1e30, 4.50, 2e-3, 1e-27, -0], string: "€$\u000f\nA'B\"\\\"/" };
@@ -2128,6 +2137,15 @@ const validRevenue = {
 };
 if (!summaryOnly) {
   describe("semantic mutations", () => {
+    it("keeps verified platform scope cutoff context privacy exclusion and source namespaces in independent TS/Python parity", () => {
+      const cases = syntheticPlatformAcquisitionCases(fixture("66-verified-platform-acquisition").input);
+      const python = pythonOutputs(cases.map(entry => entry.input));
+      for (const [index, entry] of cases.entries()) {
+        const output = evaluate(entry.input);
+        check(equal(output.metric_runs.map(run => run.value_unscaled ?? run.undefined_reason), entry.expected), `${entry.name}: independent platform arithmetic`);
+        check(equal(output, python[index]), `${entry.name}: full independent platform parity`);
+      }
+    });
     it("daily_selected_acquisition_keeps_revision_cutoff_tie_privacy_and_raw_compatibility_in_independent_TS_Python_parity", () => {
       const cases = syntheticDailyAcquisitionCases(fixture("65-selected-daily-acquisition").input);
       const python: Any[][] = JSON.parse(execFileSync("python", ["-c", dailyAcquisitionPythonProbe], {

@@ -1,0 +1,86 @@
+[
+  {
+    "attribution_id": "attr:apple-66",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:apple-66",
+    "status": "unattributed",
+    "method": "none",
+    "model": "none",
+    "reason_code": "platform_referrer_not_available",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-09-28T02:00:00.000Z",
+    "decided_at": "2026-09-28T02:00:01.000Z",
+    "input_cutoff_at": "2026-09-28T02:00:01.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50"
+  },
+  {
+    "attribution_id": "attr:meta-66",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:meta-66",
+    "status": "non_organic",
+    "method": "meta_install_referrer",
+    "model": "last_click",
+    "reason_code": "meta_referrer_decrypted",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-09-28T01:00:00.000Z",
+    "decided_at": "2026-09-28T01:00:01.000Z",
+    "input_cutoff_at": "2026-09-28T01:00:01.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50"
+  },
+  {
+    "attribution_id": "attr:negative-66",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:negative-66",
+    "status": "unattributed",
+    "method": "none",
+    "model": "none",
+    "reason_code": "platform_referrer_not_available",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-09-28T03:00:00.000Z",
+    "decided_at": "2026-09-28T03:00:01.000Z",
+    "input_cutoff_at": "2026-09-28T03:00:01.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50"
+  }
+]
