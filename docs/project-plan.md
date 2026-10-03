@@ -144,6 +144,31 @@ record fixture derivation, migration and evaluator parity. The plan does not
 select another provider adapter, general BI/funnel builder, infrastructure
 service, private pilot or release. Promotion remains a separate decision.
 
+## Next development foundations
+
+The next source work starts with dependency boundaries (#255), followed by the
+ordinary privacy correction (#219). This follows the
+[roadmap order](roadmap.md#next-development-foundations) and the
+[structural plan](https://github.com/yubisuke/openmasu/issues/254).
+
+The boundary change preserves contract fixtures and public exports while making
+workspace dependencies and SBOMs accurate. The privacy correction must invalidate
+all affected metric groups and publish recalculated values only after real
+manifest replay; it must not wait for every refactor.
+
+Before metric expansion, consolidate profile validation (#257), then separate
+SQL selection, calculation, and persistence (#258) and evaluator responsibilities
+(#259) in individual PRs. Before new HTTP workflows, split feature controllers
+while preserving authentication and typed dashboard rendering (#256). Separate
+privileged seed support from production ingestion only when the related worker
+internals need expansion (#260).
+
+SDK and operational changes use their existing public interfaces and do not
+acquire unrelated structural prerequisites. The
+[functional plan](https://github.com/yubisuke/openmasu/issues/218) retains the
+individual feature dependencies. Refactor acceptance uses unchanged contract
+outputs, route/security regressions, and existing SQL/runtime parity gates.
+
 ## Change acceptance
 
 The readable-analysis integration gate adds exact metric units, server-rendered

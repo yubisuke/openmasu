@@ -1,4 +1,4 @@
-import { SELECTED_COMMERCE_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import { SELECTED_COMMERCE_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 
 type Any = Record<string, any>;
 export type RefundReversalCase = { name: string; input: Any; expectedNet: string[]; rejected: boolean };

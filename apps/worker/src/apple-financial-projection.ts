@@ -2,7 +2,7 @@ import type { Pool, PoolClient } from "pg";
 import type { CandidateAttempt } from "@openmasu/attribution-core";
 import { sha256, type AppleTransaction } from "@openmasu/commerce-lifecycle";
 import type { PayloadStore } from "@openmasu/runtime";
-import { activeApplePurchaseAnchor, readApplePurchaseIntent } from "../../runtime/src/apple-purchase-binding.js";
+import { activeApplePurchaseAnchor, readApplePurchaseIntent } from "@openmasu/runtime/apple-purchase-binding";
 import { ingestRuntimeBatch } from "./ingestion.js";
 
 type Scope = { tenantId: string; appId: string };

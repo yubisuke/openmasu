@@ -1,7 +1,8 @@
 import type { Pool } from "pg";
 import { sha256Jcs } from "@openmasu/fraud-rules";
 import { uuidV7, withTenant } from "@openmasu/runtime";
-import { acquisitionDetailBase, validateMetricDefinition } from "@openmasu/contracts";
+import { acquisitionDetailBase } from "@openmasu/contracts/definitions";
+import { validateMetricDefinition } from "@openmasu/contracts/validation";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
 

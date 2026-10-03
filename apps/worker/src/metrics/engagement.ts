@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import { sha256 } from "@openmasu/attribution-core";
+import { sha256 } from "@openmasu/attribution-core/canonical";
 
 type Any = Record<string, any>;
 type Queryable = Pick<PoolClient, "query">;

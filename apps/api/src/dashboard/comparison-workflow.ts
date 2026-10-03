@@ -1,4 +1,4 @@
-import { jcs } from "@openmasu/attribution-core";
+import { jcs } from "@openmasu/attribution-core/canonical";
 import { snapshotAssurance, type ComparisonResult } from "../cohort-comparison.js";
 import type { ComparisonPair } from "../dashboard-comparison.js";
 import { escapeHtml as escape } from "./render.js";

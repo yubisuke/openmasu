@@ -1,7 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { jcs } from "@openmasu/attribution-core";
+import { jcs } from "@openmasu/attribution-core/canonical";
 import { reportToSnapshot } from "../apps/api/src/report-snapshot.js";
 import { aggregateCsvToSnapshot, AggregateCsvError, csvLimits } from "../apps/api/src/aggregate-csv-snapshot.js";
 export { reportToSnapshot } from "../apps/api/src/report-snapshot.js";

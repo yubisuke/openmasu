@@ -1,4 +1,4 @@
-import { sha256 } from "@openmasu/attribution-core";
+import { sha256 } from "@openmasu/attribution-core/canonical";
 
 export type DeepLinkAuditEvidence = {
   readonly evidence_class: "device_reported_unverified";

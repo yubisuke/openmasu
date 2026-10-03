@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { acquirePrivacyTenantXactFence, withTenant, type PayloadStore } from "@openmasu/runtime";
-import { activeApplePurchaseAnchor, readApplePurchaseIntent } from "../../runtime/src/apple-purchase-binding.js";
+import { activeApplePurchaseAnchor, readApplePurchaseIntent } from "@openmasu/runtime/apple-purchase-binding";
 import { normalizeAppleTransaction, sha256, type AppleSignedDataVerifier } from "@openmasu/commerce-lifecycle";
 import { ApplePurchaseIntentError, type ApplePurchaseEnvironment } from "./apple-purchase-intents.js";
 import { installationIdDigest, type SdkAuthConfig, type VerifiedSdkRequest } from "./sdk-auth.js";

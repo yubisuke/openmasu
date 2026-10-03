@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { createHash, createHmac } from "node:crypto";
-import { sha256 } from "@openmasu/attribution-core";
+import { sha256 } from "@openmasu/attribution-core/canonical";
 import {
   acquirePrivacyTenantXactFence,
   operatorWebhookReference,

@@ -17,7 +17,7 @@ import { metricExplanation } from "./metric-explanation.js";
 import { ComparisonExportError } from "./comparison-export.js";
 import { fixedComparisonDownload } from "./fixed-comparison.js";
 import { compareSnapshots } from "./cohort-comparison.js";
-import { jcs } from "@openmasu/attribution-core";
+import { jcs } from "@openmasu/attribution-core/canonical";
 import { ComparisonWorkflowError, comparisonWorkflowLimits, readComparisonSubmission, boundedComparisonOutput } from "./dashboard-comparison.js";
 import { renderComparisonWorkflow } from "./dashboard/comparison-workflow.js";
 import { renderComparison } from "./dashboard/comparison-report.js";

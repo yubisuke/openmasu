@@ -12,6 +12,10 @@
     "./install-referrer-mapping": {
       "types": "./src/install-referrer-mapping.ts",
       "default": "./src/install-referrer-mapping.ts"
+    },
+    "./canonical": {
+      "types": "./src/canonical.ts",
+      "default": "./src/canonical.ts"
     }
   },
   "dependencies": {

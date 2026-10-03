@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { jcs } from "@openmasu/attribution-core";
+import { jcs } from "@openmasu/attribution-core/canonical";
 import { parseSnapshot, parseComparisonContext, snapshotAssurance, canonicalComparisonCutoff } from "./cohort-comparison.js";
 import type { MetricComparisonContext } from "@openmasu/runtime";
 

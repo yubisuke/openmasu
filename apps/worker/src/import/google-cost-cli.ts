@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import type { Pool } from "pg";
-import { sha256 } from "@openmasu/attribution-core";
+import { sha256 } from "@openmasu/attribution-core/canonical";
 import {
   createAppPool,
   EnvironmentSecretStore,

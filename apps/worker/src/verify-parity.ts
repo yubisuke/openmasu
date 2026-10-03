@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { jcs, sha256 } from "@openmasu/attribution-core";
+import { jcs, sha256 } from "@openmasu/attribution-core/canonical";
 import { createSeedPool } from "@openmasu/runtime";
 import { parityKinds, parityLedgerTable, type ParityKind } from "./ingestion.js";
 

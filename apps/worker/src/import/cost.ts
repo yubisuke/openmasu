@@ -1,5 +1,5 @@
 import type { Pool, PoolClient } from "pg";
-import { jcs, sha256 } from "@openmasu/attribution-core";
+import { jcs, sha256 } from "@openmasu/attribution-core/canonical";
 import { uuidV7, withTenant } from "@openmasu/runtime";
 
 export type CostInput = {
@@ -20,13 +20,7 @@ export type CostInput = {
 
 export type CostImportResult = { inserted: number; current: number; import_run_id: string };
 
-export function decimalToUnscaled(value: string, scale = 6): string {
-  const match = /^([0-9]+)(?:\.([0-9]+))?$/.exec(value.trim());
-  if (!match) throw new Error("cost amount must be a non-negative decimal without exponent notation");
-  const fraction = match[2] ?? "";
-  if (fraction.length > scale) throw new Error(`cost amount exceeds scale ${scale}`);
-  return `${match[1]}${fraction.padEnd(scale, "0")}`.replace(/^0+(?=[0-9])/, "");
-}
+export { decimalToUnscaled } from "@openmasu/runtime/import-normalization";
 
 function dimensionObject(row: CostInput): Record<string, unknown> {
   return Object.fromEntries(Object.entries({

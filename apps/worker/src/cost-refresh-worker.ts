@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { sha256 } from "@openmasu/attribution-core";
+import { sha256 } from "@openmasu/attribution-core/canonical";
 import {
   costRefreshRange, costRefreshSecretName, normalizeCostRefreshDefinition, uuidV7, withTenant,
   type CostRefreshDefinition, type SecretStore,

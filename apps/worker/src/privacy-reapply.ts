@@ -1,5 +1,5 @@
 import type { Pool, PoolClient } from "pg";
-import { sha256 } from "@openmasu/attribution-core";
+import { sha256 } from "@openmasu/attribution-core/canonical";
 import { PayloadNotFoundError, uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 import { computeSqlMetricRunsWithClient, persistMetricRun } from "./metrics/cohort.js";
 

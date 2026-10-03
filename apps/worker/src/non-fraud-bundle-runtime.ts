@@ -1,10 +1,6 @@
 import type { Pool } from "pg";
-import {
-  NON_FRAUD_RULE_BUNDLES,
-  nonFraudBundleHash,
-  validateNonFraudBundleDefinition,
-  type NonFraudRuleBundleId,
-} from "@openmasu/contracts";
+import { NON_FRAUD_RULE_BUNDLES, nonFraudBundleHash, validateNonFraudBundleDefinition } from "@openmasu/contracts/definitions";
+import type { NonFraudRuleBundleId } from "@openmasu/contracts/types";
 import { withTenant } from "@openmasu/runtime";
 
 export type BoundNonFraudBundle = {

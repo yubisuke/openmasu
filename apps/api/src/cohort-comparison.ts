@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { jcs } from "@openmasu/attribution-core";
-import { validateMetricDefinition } from "@openmasu/contracts";
+import { jcs } from "@openmasu/attribution-core/canonical";
+import { validateMetricDefinition } from "@openmasu/contracts/validation";
 import { comparisonMeaning, comparisonMaturity, type MetricComparisonContext } from "@openmasu/runtime";
 import { groupingDimensionAllowlist, validateGrouping, type GroupingDimension } from "./report-query.js";
 import { parseExternalDeclaration, externalDeclarationMeaning, capturedRoasMeaning, externalWindowMaturity, type ExternalCalculation } from "./external-calculation-declaration.js";

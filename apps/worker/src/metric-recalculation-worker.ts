@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { sha256 } from "@openmasu/attribution-core";
+import { sha256 } from "@openmasu/attribution-core/canonical";
 import { acquirePrivacyTenantSessionReadFence, withTenant } from "@openmasu/runtime";
 import { computeSqlMetricRunsWithClient } from "./metrics/cohort.js";
 

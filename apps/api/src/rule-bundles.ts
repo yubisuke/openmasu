@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { fraudBundleHash, sha256Jcs, type FraudBundle } from "@openmasu/fraud-rules";
-import { NON_FRAUD_RULE_BUNDLES, validateNonFraudBundleDefinition } from "@openmasu/contracts";
+import { NON_FRAUD_RULE_BUNDLES, validateNonFraudBundleDefinition } from "@openmasu/contracts/definitions";
 import { uuidV7, withTenant } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";

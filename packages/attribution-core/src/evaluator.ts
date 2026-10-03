@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
+import { jcs, sha256 } from "./canonical.js";
+export { jcs, sha256 } from "./canonical.js";
 import { selectDisjointCosts } from "./cost-selection.js";
 import { engagementInputs, engagementSnapshotRows, engagementValue } from "./engagement-metrics.js";
 export { selectDisjointCosts, type ScopedCost } from "./cost-selection.js";
-import { canonicalize } from "json-canonicalize";
 import {
   DEFAULT_FRAUD_BUNDLE,
   clickInjectionPolicyDigest,
@@ -14,13 +14,9 @@ import {
   sha256Jcs,
   type FraudBundle,
 } from "@openmasu/fraud-rules";
-import {
-  REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
-  acquisitionDetailBase,
-  nonFraudBundleHash,
-  validateMetricDefinition,
-  type OpenMasuEvaluationOutputV04 as EvaluationOutput,
-} from "@openmasu/contracts";
+import { REFERENCE_AD_REVENUE_METRIC_DEFINITIONS, acquisitionDetailBase, nonFraudBundleHash } from "@openmasu/contracts/definitions";
+import { validateMetricDefinition } from "@openmasu/contracts/validation";
+import type { OpenMasuEvaluationOutputV04 as EvaluationOutput } from "@openmasu/contracts/types";
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type Any = Record<string, any>;
@@ -59,14 +55,6 @@ function boundNonFraudBundle(server: Any, id: "attribution-default" | "apple-pos
     throw new Error("non_fraud_rule_bundle_binding_mismatch");
   }
   return { rule_bundle_id: id, rule_bundle_version: expectedVersion, rule_bundle_hash: expectedHash };
-}
-
-export function jcs(value: unknown): string {
-  return canonicalize(value);
-}
-
-export function sha256(value: unknown): string {
-  return createHash("sha256").update(jcs(value), "utf8").digest("hex");
 }
 
 type BoundFraudBundle = { readonly definition: FraudBundle; readonly hash: string };

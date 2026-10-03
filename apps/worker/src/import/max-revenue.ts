@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { jcs, sha256 } from "@openmasu/attribution-core";
+import { jcs, sha256 } from "@openmasu/attribution-core/canonical";
 import { uuidV7, withTenant } from "@openmasu/runtime";
 
 export type MaxAggregateRevenueScope = {

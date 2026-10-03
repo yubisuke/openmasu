@@ -1,15 +1,7 @@
 import type { Pool, PoolClient } from "pg";
-import {
-  compareCandidateAttempts,
-  evaluate,
-  IndexedCandidateProvider,
-  jcs,
-  sha256,
-  sortCandidateAttempts,
-  type CandidateAttempt,
-  type CandidateProvider,
-} from "@openmasu/attribution-core";
-import { validateEventPayload } from "@openmasu/contracts";
+import { jcs, sha256 } from "@openmasu/attribution-core/canonical";
+import { compareCandidateAttempts, evaluate, IndexedCandidateProvider, sortCandidateAttempts, type CandidateAttempt, type CandidateProvider } from "@openmasu/attribution-core";
+import { validateEventPayload } from "@openmasu/contracts/validation";
 import {
   clickInjectionPolicyDigest,
   fraudBundleHash,

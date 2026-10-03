@@ -1,5 +1,5 @@
 import type { compareSnapshots } from "../cohort-comparison.js";
-import { jcs } from "@openmasu/attribution-core";
+import { jcs } from "@openmasu/attribution-core/canonical";
 
 type Comparison = ReturnType<typeof compareSnapshots>;
 const escape = (value: unknown) => String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));

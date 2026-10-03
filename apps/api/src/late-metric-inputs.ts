@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
-import { sha256 } from "@openmasu/attribution-core";
-import { validateMetricDefinition } from "@openmasu/contracts";
+import { sha256 } from "@openmasu/attribution-core/canonical";
+import { validateMetricDefinition } from "@openmasu/contracts/validation";
 import { selectedAcquisitionSql, selectedClickJoinSql, type LateEventRecalculationRequest } from "@openmasu/runtime";
 
 type Any = Record<string, any>;
