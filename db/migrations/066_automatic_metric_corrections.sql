@@ -43,6 +43,8 @@ REVOKE ALL ON control.metric_correction_policies,control.metric_correction_recei
 GRANT SELECT,INSERT,UPDATE ON control.metric_correction_policies,control.metric_correction_receipts TO openmasu_app;
 GRANT SELECT ON control.metric_correction_policies TO openmasu_reader;
 -- Reader gets aggregate/status columns only, never device/source refs or private manifests.
+-- Remove the initial ledger migration's inherited whole-table SELECT before column grants.
+REVOKE SELECT ON control.metric_correction_receipts FROM openmasu_reader;
 GRANT SELECT (tenant_id,app_id,source_kind,observed_at,source_cutoff,continuation,state,attempts,
   next_attempt_at,safe_reason,recalculation_ids) ON control.metric_correction_receipts TO openmasu_reader;
 GRANT TRUNCATE ON control.metric_correction_policies,control.metric_correction_receipts TO openmasu_seed;
