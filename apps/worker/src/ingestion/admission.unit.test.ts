@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import type { CandidateAttempt } from "@openmasu/attribution-core";
 import { schemaInvalidArtifacts } from "./admission.js";
-import { acquisitionDimensions } from "./fact-projections.js";
+import { acquisitionDimensions, platformInstallEvidence } from "./fact-projections.js";
 
 describe("ingestion admission and shared projection boundaries", () => {
   it("rejects an invalid payload using only the existing non-identifying metadata", () => {
@@ -32,5 +32,20 @@ describe("ingestion admission and shared projection boundaries", () => {
     assert.deepEqual(acquisitionDimensions({ campaign_id: "synthetic-declared", network: "", country: "US", import_context: imported }), {
       campaignId: "synthetic-declared", network: "", country: "US",
     });
+  });
+  it("projects bounded server-decrypted platform evidence without raw referrer data or unverified markers", () => {
+    const payload = {
+      meta_referrer_status: "decrypted", protected_referrer_evidence_ref: "payload:synthetic-encrypted-referrer",
+      meta_referrer_context: { attribution_model: "last_click", campaign_id: "synthetic-campaign", adgroup_id: "synthetic-adgroup",
+        account_id: "synthetic-unneeded-account", actual_timestamp: 123 },
+      extensions: { meta_decryption_key_id: "synthetic-key", meta_install_referrer_protected: "synthetic-ciphertext" },
+    };
+    assert.deepEqual(platformInstallEvidence(payload), {
+      meta_referrer_status: "decrypted", protected_referrer_evidence_ref: payload.protected_referrer_evidence_ref,
+      meta_referrer_context: { attribution_model: "last_click", campaign_id: "synthetic-campaign", adgroup_id: "synthetic-adgroup" },
+      extensions: { meta_decryption_key_id: "synthetic-key" },
+    });
+    assert.deepEqual(platformInstallEvidence({ ...payload, extensions: {} }), {});
+    assert.deepEqual(platformInstallEvidence({ ...payload, meta_referrer_status: "auth_failed" }), {});
   });
 });

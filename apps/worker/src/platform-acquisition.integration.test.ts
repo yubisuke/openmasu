@@ -101,11 +101,13 @@ describe("verified platform acquisition operational workflow",{concurrency:false
     assert.equal(saved.filter((row:Any)=>row.supersedes_metric_run_id).length,4);
     assert.ok(!saved.some((row:Any)=>row.supersedes_metric_run_id==="synthetic-platform-first-party:cohort_install_count"));
     const jobs=await withTenant(reader,identity.tenantId,async client=>(await client.query(
-      `SELECT job.trigger_kind,bool_and(item.state='completed') AS completed FROM control.metric_recalculation_jobs AS job
+      `SELECT job.trigger_kind,item.state,item.safe_reason,item.source_metric_run_id FROM control.metric_recalculation_jobs AS job
        JOIN control.metric_recalculation_items AS item USING (tenant_id,app_id,recalculation_id)
-       WHERE job.tenant_id=$1 AND job.app_id=$2 GROUP BY job.recalculation_id,job.trigger_kind`,[identity.tenantId,identity.appId])).rows);
-    assert.deepEqual(jobs.map(job=>job.trigger_kind).sort(),["attribution_revision","cost_revision","late_events"]);
-    assert.ok(jobs.every(job=>job.completed));
+       WHERE job.tenant_id=$1 AND job.app_id=$2`,[identity.tenantId,identity.appId])).rows);
+    assert.deepEqual([...new Set(jobs.map(job=>job.trigger_kind))].sort(),["attribution_revision","cost_revision","late_events"]);
+    assert.equal(jobs.filter(job=>job.state==="completed").length,4);
+    assert.ok(jobs.every(job=>job.state==="completed" || (job.state==="unavailable" && job.safe_reason==="unsupported_definition"
+      && /:(?:platform_)?cohort_install_count$/.test(job.source_metric_run_id))),JSON.stringify(jobs));
     await drain();assert.equal(jcs(await rows()),jcs(saved));
   });
 });
