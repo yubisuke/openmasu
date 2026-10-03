@@ -1,9 +1,10 @@
-import type { PoolClient } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
+import type { MetricClient as Queryable, MetricDefinition, MetricFxPolicy, MetricGrouping, MetricScope as Scope } from "./model.js";
 
-type Any = Record<string, any>;
-type Queryable = Pick<PoolClient, "query">;
-type Scope = { tenant_id: string; app_id: string };
+type EngagementRow = {
+  tenant_id: string; app_id: string; record_id: string; tracking_link_id: string;
+  campaign_id: string; attribution_id: string; attribution: unknown;
+};
 
 // Do not filter lifecycle or campaign/date before choosing the latest open:
 // a removed or differently grouped winner must not transfer credit backwards.
@@ -29,15 +30,15 @@ const opensSql = `
     AND attribution.status='non_organic' AND attribution.method='deep_link'`;
 
 export async function engagementSnapshotRows(client: Queryable, scope: Scope, watermark: string): Promise<unknown[][]> {
-  const result = await client.query<Any>(opensSql, [scope.tenant_id, scope.app_id, watermark]);
+  const result = await client.query<EngagementRow>(opensSql, [scope.tenant_id, scope.app_id, watermark]);
   return result.rows.sort((a, b) => a.record_id < b.record_id ? -1 : a.record_id > b.record_id ? 1 : 0)
     .map(row => [row.tenant_id, row.app_id, row.record_id, row.tracking_link_id, row.campaign_id,
       row.attribution_id, sha256(row.attribution)]);
 }
 
 export async function engagementMetricValue(
-  client: Queryable, scope: Scope, watermark: string, grouping: Any,
-  definition: Any, fxPolicy: Any, privacyState: "before" | "after",
+  client: Queryable, scope: Scope, watermark: string, grouping: MetricGrouping | undefined,
+  definition: MetricDefinition, fxPolicy: MetricFxPolicy, privacyState: "before" | "after",
 ): Promise<{ value_state: "present"; value_unscaled: string } | { value_state: "undefined"; undefined_reason: "empty_cohort" }> {
   if (typeof grouping?.metric_date !== "string" || Object.keys(grouping).some(key => !["metric_date", "campaign_id"].includes(key))) {
     throw new Error("engagement_metric_requires_anchor_date");
