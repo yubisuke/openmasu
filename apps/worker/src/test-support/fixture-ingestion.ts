@@ -7,7 +7,7 @@ import { ensureSyntheticDefaultFraudBundle } from "./fraud-bundle-seed.js";
 import { inputAttempts, defaultTimestamp, policyDigestForRecord, refundProjectionTargets } from "../ingestion/input.js";
 import { storedArtifact, persistRawWithClient, persistDeliveryWithClient, persistLogicalWithClient, persistRejectionWithClient } from "../ingestion/record-repository.js";
 import { persistProjectionWithClient } from "../ingestion/fact-projections.js";
-import { type Any } from "../ingestion/model.js";
+import type { Any, Attribution, Correction, Delivery, FraudDecision, LogicalEvent, RawRecord, Rejection } from "../ingestion/model.js";
 import { ensureApps, persistCorrection, persistAttribution, persistFraud, persistReconciliation } from "../ingestion/application.js";
 
 export const parityKinds = [
@@ -123,21 +123,21 @@ export async function ensureFixtureFraudBundles(appPool: Pool, input: Any): Prom
   }
 }
 
-export async function persistRaw(appPool: Pool, artifact: Any, policyDigest: string): Promise<Any> {
+export async function persistRaw(appPool: Pool, artifact: RawRecord, policyDigest: string): Promise<Any> {
   return withTenant(appPool, artifact.tenant_id, (client) => persistRawWithClient(client, artifact, policyDigest));
 }
 
-export async function persistDelivery(appPool: Pool, artifact: Any): Promise<Any> {
+export async function persistDelivery(appPool: Pool, artifact: Delivery): Promise<Any> {
   return withTenant(appPool, artifact.tenant_id, (client) => persistDeliveryWithClient(client, artifact));
 }
 
-export async function persistLogical(appPool: Pool, artifact: Any): Promise<Any> {
+export async function persistLogical(appPool: Pool, artifact: LogicalEvent): Promise<Any> {
   return withTenant(appPool, artifact.tenant_id, (client) => persistLogicalWithClient(client, artifact));
 }
 
 export async function persistProjection(
   appPool: Pool,
-  logical: Any,
+  logical: LogicalEvent,
   input: Any,
   refundTargets: ReadonlyMap<string, string> = new Map(),
 ): Promise<void> {
@@ -188,7 +188,7 @@ export async function persistFixtureCosts(appPool: Pool, input: Any): Promise<vo
   }
 }
 
-export async function persistRejection(appPool: Pool, artifact: Any): Promise<Any> {
+export async function persistRejection(appPool: Pool, artifact: Rejection): Promise<Any> {
   return withTenant(appPool, artifact.tenant_id, (client) => persistRejectionWithClient(client, artifact));
 }
 
@@ -427,15 +427,17 @@ export async function ingestFixture(
     for (const [ordinal, artifact] of values.entries()) {
       const scope = scopeForDerived(artifact, baseOutput, input);
       let stored: Any;
-      if (kind === "raw_records") stored = await persistRaw(appPool, artifact, policyDigestForRecord(input, (artifact as Any).record_id));
-      else if (kind === "deliveries") stored = await persistDelivery(appPool, artifact);
-      else if (kind === "logical_events") stored = await persistLogical(appPool, artifact);
-      else if (kind === "corrections") stored = await persistCorrection(appPool, artifact);
-      else if (kind === "rejections") stored = await persistRejection(appPool, artifact);
+      // The indexed evaluator family fixes this artifact's shape; TypeScript
+      // cannot correlate an indexed union with the separate family variable.
+      if (kind === "raw_records") stored = await persistRaw(appPool, artifact as RawRecord, policyDigestForRecord(input, (artifact as Any).record_id));
+      else if (kind === "deliveries") stored = await persistDelivery(appPool, artifact as Delivery);
+      else if (kind === "logical_events") stored = await persistLogical(appPool, artifact as LogicalEvent);
+      else if (kind === "corrections") stored = await persistCorrection(appPool, artifact as Correction);
+      else if (kind === "rejections") stored = await persistRejection(appPool, artifact as Rejection);
       else if (kind === "privacy_requests") stored = await persistPrivacyRequest(appPool, artifact);
       else if (kind === "privacy_tombstones") stored = await persistPrivacyTombstone(appPool, artifact);
-      else if (kind === "attributions") stored = await persistAttribution(appPool, artifact);
-      else if (kind === "fraud_decisions") stored = await persistFraud(appPool, artifact, scope);
+      else if (kind === "attributions") stored = await persistAttribution(appPool, artifact as Attribution);
+      else if (kind === "fraud_decisions") stored = await persistFraud(appPool, artifact as FraudDecision, scope);
       else stored = await persistMetric(appPool, artifact, scope);
       assertRoundTrip(artifact, stored, `${fixtureName}/${kind}/${ordinal}`);
       const ledgerArtifact = await readLedgerArtifact(appPool, kind, scope, stored);

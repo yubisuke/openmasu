@@ -38,4 +38,23 @@ describe("module_boundaries_reject_invalid_edges", () => {
     assert.ok(checkModuleBoundaries([{ path: root, imports: [], performsIO: true }], owners, [root])
       .some(error => error.includes("IO in")));
   });
+  it("production_ingestion_excludes_seed_support", () => {
+    assert.deepEqual(inspectWorkspaceBoundaries(process.cwd()).errors, []);
+    const root = "apps/worker/src/ingestion.ts";
+    const owners = [workspace("@openmasu/worker", "apps/worker")];
+    const entry = module(root, "./ingestion/application.js", "apps/worker/src/ingestion/application.ts");
+    for (const path of ["apps/worker/src/test-support/fixture-ingestion.ts", "apps/worker/src/seed.ts", "apps/worker/src/verify-parity.ts"]) {
+      const edge = module(entry.imports[0].target!, "../test-support/fixture-ingestion.js", path);
+      assert.ok(checkModuleBoundaries([entry, edge, { path, imports: [] }], owners, [], [root])
+        .some(error => error.includes("privileged seed/testing support")), path);
+    }
+    for (const moduleFlags of [{ privilegedIngestion: true }, { ownsTransaction: true }]) {
+      const path = "apps/worker/src/ingestion/record-repository.ts";
+      const edge = module(root, "./ingestion/record-repository.js", path);
+      assert.notDeepEqual(checkModuleBoundaries([edge, { path, imports: [], ...moduleFlags }], owners, [], [root]), []);
+    }
+    assert.deepEqual(checkModuleBoundaries([{
+      path: root, imports: [{ specifier: "./test-support/fixture-ingestion.js", target: "apps/worker/src/test-support/fixture-ingestion.ts", typeOnly: true }],
+    }], owners, [], [root]), []);
+  });
 });

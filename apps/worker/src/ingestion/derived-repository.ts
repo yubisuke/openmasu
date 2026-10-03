@@ -1,11 +1,11 @@
 import type { PoolClient } from "pg";
 import { fraudBundleHash, sha256Jcs, type FraudBundle } from "@openmasu/fraud-rules";
 import { storedArtifact } from "./record-repository.js";
-import { type Any } from "./model.js";
+import type { Any, Attribution, FraudDecision, Reconciliation } from "./model.js";
 
 export async function persistAttributionWithClient(
   client: PoolClient,
-  artifact: Any,
+  artifact: Attribution,
 ): Promise<Any> {
 return storedArtifact(
     client,
@@ -26,7 +26,7 @@ return storedArtifact(
 
 export async function persistFraudWithClient(
   client: PoolClient,
-  artifact: Any,
+  artifact: FraudDecision,
   scope: { tenant_id: string; app_id: string },
   expectedRevisionId?: string,
 ): Promise<Any> {
@@ -84,7 +84,7 @@ if (artifact.action === "quarantine") {
 return stored;
 }
 
-export async function persistReconciliationWithClient(client: PoolClient, artifact: Any): Promise<Any> {
+export async function persistReconciliationWithClient(client: PoolClient, artifact: Reconciliation): Promise<Any> {
 return storedArtifact(
     client,
     `INSERT INTO ledger.reconciliation_results (

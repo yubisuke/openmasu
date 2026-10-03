@@ -1,12 +1,8 @@
 import { type CandidateAttempt } from "@openmasu/attribution-core";
 import { validateEventPayload } from "@openmasu/contracts/validation";
-import { type Any, type RuntimeIngestionResult } from "./model.js";
+import type { Any, PayloadAdmissionFailure } from "./model.js";
 
-export function schemaInvalidArtifacts(attempt: CandidateAttempt): {
-  delivery: Any;
-  rejection: Any;
-  failure: RuntimeIngestionResult["validation_failures"][number];
-} | undefined {
+export function schemaInvalidArtifacts(attempt: CandidateAttempt): PayloadAdmissionFailure | undefined {
   const validation = validateEventPayload(attempt.record.event_name, attempt.record.payload);
   if (validation.valid) return undefined;
   const purpose = (attempt.server.processing_purposes ?? []).find(
@@ -32,7 +28,7 @@ export function schemaInvalidArtifacts(attempt: CandidateAttempt): {
     consent_decision_reason_code: consentReason,
     ...(withdrawal?.withdrawal_recognized_at ? { withdrawal_recognized_at: withdrawal.withdrawal_recognized_at } : {}),
     reason_code: "payload_schema_invalid",
-  };
+  } as const;
   return {
     delivery: {
       ...common,

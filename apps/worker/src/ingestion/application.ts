@@ -7,7 +7,7 @@ import { assertNonFraudArtifactBinding, nonFraudServerContext, resolveNonFraudBu
 import { inputAttempts, defaultTimestamp, policyDigestForRecord, refundProjectionTargets } from "./input.js";
 import { persistRawWithClient, persistDeliveryWithClient, persistLogicalWithClient, persistCorrectionWithClient, persistRejectionWithClient } from "./record-repository.js";
 import { persistProjectionWithClient } from "./fact-projections.js";
-import { type Any, type RuntimeIngestionResult } from "./model.js";
+import type { Any, Attribution, Correction, FraudDecision, PayloadValidatedAttempt, Reconciliation, RuntimeIngestionResult } from "./model.js";
 import { schemaInvalidArtifacts, runtimeInput } from "./admission.js";
 import { resolveDeepLinkAttempts, ineligibleHistoricalPurchaseTargetIds } from "./candidate-queries.js";
 import { persistAttributionWithClient, persistFraudWithClient, persistReconciliationWithClient } from "./derived-repository.js";
@@ -27,13 +27,13 @@ export async function ensureApps(appPool: Pool, input: Any): Promise<void> {
   }
 }
 
-export async function persistCorrection(appPool: Pool, artifact: Any): Promise<Any> {
+export async function persistCorrection(appPool: Pool, artifact: Correction): Promise<Any> {
   return withTenant(appPool, artifact.tenant_id, (client) => persistCorrectionWithClient(client, artifact));
 }
 
 export async function persistAttribution(
   appPool: Pool,
-  artifact: Any,
+  artifact: Attribution,
   expectedBinding?: BoundNonFraudBundle,
 ): Promise<Any> {
   if (expectedBinding) assertNonFraudArtifactBinding(artifact, expectedBinding);
@@ -42,14 +42,14 @@ export async function persistAttribution(
 
 export async function persistFraud(
   appPool: Pool,
-  artifact: Any,
+  artifact: FraudDecision,
   scope: { tenant_id: string; app_id: string },
   expectedRevisionId?: string,
 ): Promise<Any> {
   return withTenant(appPool, scope.tenant_id, (client) => persistFraudWithClient(client, artifact, scope, expectedRevisionId));
 }
 
-export async function persistReconciliation(appPool: Pool, artifact: Any): Promise<Any> {
+export async function persistReconciliation(appPool: Pool, artifact: Reconciliation): Promise<Any> {
   return withTenant(appPool, artifact.tenant_id, (client) => persistReconciliationWithClient(client, artifact));
 }
 
@@ -151,7 +151,7 @@ export async function ingestRuntimeBatch(
   const boundHistory = historicalAttempts.map(bind);
   const invalid = boundAttempts.map(schemaInvalidArtifacts).filter((value): value is NonNullable<typeof value> => value !== undefined);
   const invalidAttempts = new Set(invalid.map(({ failure }) => `${failure.record_id}\u0000${failure.delivery_id}`));
-  const validAttempts = boundAttempts.filter((attempt) => !invalidAttempts.has(`${attempt.record.record_id}\u0000${attempt.record.delivery_id}`));
+  const validAttempts = boundAttempts.filter((attempt): attempt is PayloadValidatedAttempt => !invalidAttempts.has(`${attempt.record.record_id}\u0000${attempt.record.delivery_id}`));
   // Historical runtime candidates are reconstructed from accepted ledger rows.
   // They have already passed contract validation and must not require protected
   // payload access merely to process a new delivery.

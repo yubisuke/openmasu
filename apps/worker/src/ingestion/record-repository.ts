@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { uuidV7 } from "@openmasu/runtime";
-import { type Any } from "./model.js";
+import type { Any, Correction, Delivery, LogicalEvent, RawRecord, Rejection } from "./model.js";
 
 export async function storedArtifact(
   client: PoolClient,
@@ -15,7 +15,7 @@ export async function storedArtifact(
   return artifact;
 }
 
-export async function persistRawWithClient(client: PoolClient, artifact: Any, policyDigest: string): Promise<Any> {
+export async function persistRawWithClient(client: PoolClient, artifact: RawRecord, policyDigest: string): Promise<Any> {
   return storedArtifact(
     client,
     `INSERT INTO ledger.raw_records (
@@ -43,7 +43,7 @@ export async function persistRawWithClient(client: PoolClient, artifact: Any, po
   );
 }
 
-export async function persistDeliveryWithClient(client: PoolClient, artifact: Any): Promise<Any> {
+export async function persistDeliveryWithClient(client: PoolClient, artifact: Delivery): Promise<Any> {
   const result = await client.query<{ artifact: Any }>(
       `INSERT INTO ledger.event_deliveries (
         delivery_attempt_id, delivery_id, record_id, canonical_record_id, tenant_id, app_id,
@@ -67,7 +67,7 @@ export async function persistDeliveryWithClient(client: PoolClient, artifact: An
   return result.rows[0].artifact;
 }
 
-export async function persistLogicalWithClient(client: PoolClient, artifact: Any): Promise<Any> {
+export async function persistLogicalWithClient(client: PoolClient, artifact: LogicalEvent): Promise<Any> {
   return storedArtifact(
     client,
     `INSERT INTO ledger.logical_events (
@@ -85,7 +85,7 @@ export async function persistLogicalWithClient(client: PoolClient, artifact: Any
   );
 }
 
-export async function persistCorrectionWithClient(client: PoolClient, artifact: Any): Promise<Any> {
+export async function persistCorrectionWithClient(client: PoolClient, artifact: Correction): Promise<Any> {
   return storedArtifact(
     client,
     `INSERT INTO ledger.corrections (
@@ -98,7 +98,7 @@ export async function persistCorrectionWithClient(client: PoolClient, artifact: 
   );
 }
 
-export async function persistRejectionWithClient(client: PoolClient, artifact: Any): Promise<Any> {
+export async function persistRejectionWithClient(client: PoolClient, artifact: Rejection): Promise<Any> {
   const result = await client.query<{ artifact: Any }>(
       `INSERT INTO ledger.rejections (
         tenant_id, app_id, delivery_id, record_id, reason_code, artifact

@@ -3,11 +3,25 @@ import { sha256 } from "@openmasu/attribution-core/canonical";
 import { uuidV7 } from "@openmasu/runtime";
 import { buildDeepLinkAuditEvidence } from "../deep-link-audit.js";
 import { inputAttempts } from "./input.js";
-import { type Any } from "./model.js";
+import type { Any, LogicalEvent } from "./model.js";
+
+/** The row and bulk writers use the same declared acquisition dimensions. */
+export function acquisitionDimensions(payload: Any): {
+  campaignId: string | null;
+  network: string | null;
+  country: string | null;
+} {
+  const context = payload.import_context ?? {};
+  return {
+    campaignId: payload.campaign_id ?? context.provider_campaign_ref ?? null,
+    network: payload.network ?? context.provider_network ?? null,
+    country: payload.country ?? context.provider_country ?? null,
+  };
+}
 
 export async function persistProjectionWithClient(
   client: PoolClient,
-  logical: Any,
+  logical: LogicalEvent,
   input: Any,
   refundTargets: ReadonlyMap<string, string> = new Map(),
 ): Promise<void> {
@@ -18,10 +32,7 @@ export async function persistProjectionWithClient(
   const payload = attempt.record.payload;
   const projected = (value: Any) => JSON.stringify(value);
   if (logical.event_name === "click") {
-      const importContext = payload.import_context ?? {};
-      const campaignId = payload.campaign_id ?? importContext.provider_campaign_ref ?? null;
-      const network = payload.network ?? importContext.provider_network ?? null;
-      const country = payload.country ?? importContext.provider_country ?? null;
+      const { campaignId, network, country } = acquisitionDimensions(payload);
       const trackingLinkId = attempt.record.producer === "redirector" && typeof payload.tracking_link_id === "string"
         ? (await client.query<{ tracking_link_id: string }>(
           `SELECT tracking_link_id FROM control.tracking_links
@@ -57,10 +68,7 @@ export async function persistProjectionWithClient(
         ],
       );
     } else if (logical.event_name === "install") {
-      const importContext = payload.import_context ?? {};
-      const campaignId = payload.campaign_id ?? importContext.provider_campaign_ref ?? null;
-      const network = payload.network ?? importContext.provider_network ?? null;
-      const country = payload.country ?? importContext.provider_country ?? null;
+      const { campaignId, network, country } = acquisitionDimensions(payload);
       await client.query(
         `INSERT INTO ledger.install_facts (
           logical_event_id, tenant_id, app_id, installation_id, prior_installation_id,
@@ -244,19 +252,19 @@ export async function persistProjectionWithClient(
 }
 
 export function bulkProjectionRows(
-  logicals: readonly Any[],
+  logicals: readonly LogicalEvent[],
   input: Any,
   refundTargets: ReadonlyMap<string, string>,
 ): {
   byTable: Map<string, Any[]>;
-  fallback: Any[];
+  fallback: LogicalEvent[];
 } {
   const attempts = new Map(inputAttempts(input).map((attempt) => [
     `${attempt.server.tenant_id}\u0000${attempt.server.app_id}\u0000${attempt.record.record_id}`,
     attempt,
   ]));
   const byTable = new Map<string, Any[]>();
-  const fallback: Any[] = [];
+  const fallback: LogicalEvent[] = [];
   const append = (table: string, row: Any): void => {
     const rows = byTable.get(table) ?? [];
     rows.push(row);
@@ -268,10 +276,7 @@ export function bulkProjectionRows(
     const payload = attempt.record.payload;
     if (logical.event_name === "click") {
       if (attempt.record.producer === "redirector") { fallback.push(logical); continue; }
-      const context = payload.import_context ?? {};
-      const campaignId = payload.campaign_id ?? context.provider_campaign_ref ?? null;
-      const network = payload.network ?? context.provider_network ?? null;
-      const country = payload.country ?? context.provider_country ?? null;
+      const { campaignId, network, country } = acquisitionDimensions(payload);
       const artifact = {
         ...(payload.click_id ? { click_id: payload.click_id } : {}),
         redirector_click_at: payload.redirector_click_at ?? null,
@@ -289,10 +294,7 @@ export function bulkProjectionRows(
         remote_click_ref: payload.remote_click_ref ?? null, tracking_link_id: null, artifact,
       });
     } else if (logical.event_name === "install") {
-      const context = payload.import_context ?? {};
-      const campaignId = payload.campaign_id ?? context.provider_campaign_ref ?? null;
-      const network = payload.network ?? context.provider_network ?? null;
-      const country = payload.country ?? context.provider_country ?? null;
+      const { campaignId, network, country } = acquisitionDimensions(payload);
       append("install", {
         logical_event_id: logical.logical_event_id, tenant_id: logical.tenant_id, app_id: logical.app_id,
         installation_id: payload.installation_id, prior_installation_id: payload.prior_installation_id ?? null,
