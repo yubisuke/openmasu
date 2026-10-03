@@ -77,7 +77,7 @@ export async function requestMetricRecalculation(pool: Pool, identity: AppAdminI
 export async function listMetricRecalculations(pool: Pool, identity: AppAdminIdentity) {
   return withTenant(pool, identity.tenantId, async client => (await client.query(
     `SELECT job.recalculation_id,job.cost_import_run_id,job.cost_snapshot_digest,job.date_from::text,job.date_to::text,
-       job.watermark,job.created_at,job.trigger_kind,job.source_snapshot_digest,job.input_status_counts,job.selection_status,
+       job.watermark,job.created_at,job.trigger_kind,job.source_snapshot_digest,job.input_status_counts,job.selection_status,job.automatic_correction,
        total.selection_count::text,total.selection_count>100 AS selection_truncated,
        item.source_metric_run_id,item.replacement_metric_run_id,item.state,item.attempts,item.safe_reason
      FROM (SELECT * FROM control.metric_recalculation_jobs WHERE tenant_id=$1 AND app_id=$2

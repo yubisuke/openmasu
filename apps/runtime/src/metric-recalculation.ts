@@ -48,7 +48,7 @@ export function normalizeMetricRecalculationRequest(value: unknown): MetricRecal
 }
 
 /** Fixed fragments only; a revised input is not proof that the reported value is wrong. */
-export const revisedMetricCostPredicate = `
+export const metricCostScopePredicate = `
   mr.comparison_context->'definition'->'definition'->>'calculation'='revenue_over_cost'
   AND mr.comparison_context->'definition'->'definition'->>'cost_basis'='cohort_acquisition_day_current_snapshot'
   AND mr.grouping->>'cohort_date' IS NOT NULL
@@ -61,5 +61,6 @@ export const revisedMetricCostPredicate = `
   AND (NOT (cost.artifact ? 'creative_id') OR
     mr.comparison_context->'definition'->>'acquisition_dimension_policy'='selected_link_ad_group_creative')
   AND (mr.grouping->>'network' IS NULL OR cost.network=mr.grouping->>'network')
-  AND (mr.grouping->>'country' IS NULL OR cost.country=mr.grouping->>'country')
+  AND (mr.grouping->>'country' IS NULL OR cost.country=mr.grouping->>'country')`;
+export const revisedMetricCostPredicate = `${metricCostScopePredicate}
   AND control.canonical_timestamp_value(cost.as_of)>control.canonical_timestamp_value(mr.input_received_at_watermark)`;

@@ -20,6 +20,7 @@ export type MetricFreshness = {
     cost: "recalculation_pending" | "input_revised" | "no_recorded_revision" | "unknown";
     late_inputs: "recalculation_pending" | "unavailable" | "completed" | "no_recorded_request" | "unknown";
     privacy: "not_affected" | "recalculation_pending" | "unavailable" | "completed" | "unknown";
+    attribution?: "recalculation_pending" | "unavailable" | "completed" | "no_recorded_request" | "unknown";
   };
 };
 
@@ -34,6 +35,7 @@ type SavedRun = {
   cost_update_state?: MetricFreshness["recalculation_state"]["cost"];
   late_input_update_state?: MetricFreshness["recalculation_state"]["late_inputs"];
   privacy_update_state?: MetricFreshness["recalculation_state"]["privacy"];
+  attribution_update_state?: MetricFreshness["recalculation_state"]["attribution"];
 };
 const timestamp = (value: unknown): value is string => typeof value === "string"
   && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/.test(value)
@@ -69,12 +71,13 @@ export function metricFreshness(run: SavedRun, receipts?: ImportReceiptObservati
     running: receipts?.running ?? null, failed: receipts?.failed ?? null, with_row_rejections: receipts?.with_row_rejections ?? null,
   };
   const cost = run.cost_update_state ?? "unknown", late = run.late_input_update_state ?? "unknown", privacy = run.privacy_update_state ?? "unknown";
-  const channels = [cost, late, privacy];
+  const attribution=run.attribution_update_state;
+  const channels = [cost, late, privacy,...(attribution?[attribution]:[])];
   const recalculation: MetricFreshness["recalculation_state"] = {
     state: channels.includes("recalculation_pending") ? "pending" : channels.includes("unavailable") ? "unavailable"
       : cost === "input_revised" ? "input_revised" : channels.includes("completed") ? "completed"
       : channels.includes("unknown") ? "unknown" : "no_recorded_request",
-    cost, late_inputs: late, privacy,
+    cost, late_inputs: late, privacy,...(attribution?{attribution}:{}),
   };
   return { time_window_maturity: window, source_observation: observation, import_completion: completion, recalculation_state: recalculation };
 }
@@ -104,10 +107,12 @@ export function parseMetricFreshness(value: unknown): MetricFreshness {
   const i = object(root.import_completion, ["state", "scope", "receipts", "completed", "running", "failed", "with_row_rejections"]);
   enumeration(i.state, ["completed", "in_progress", "partial_failure", "failed", "not_observed", "unknown"]); enumeration(i.scope, [receiptScope]);
   for (const field of ["receipts", "completed", "running", "failed", "with_row_rejections"]) count(i[field]);
-  const r = object(root.recalculation_state, ["state", "cost", "late_inputs", "privacy"]);
+  const hasAttribution = !!root.recalculation_state && typeof root.recalculation_state==="object" && "attribution" in root.recalculation_state;
+  const r = object(root.recalculation_state, ["state", "cost", "late_inputs", "privacy",...(hasAttribution?["attribution"]:[])]);
   enumeration(r.state, ["pending", "input_revised", "completed", "unavailable", "no_recorded_request", "unknown"]);
   enumeration(r.cost, ["recalculation_pending", "input_revised", "no_recorded_revision", "unknown"]);
   enumeration(r.late_inputs, ["recalculation_pending", "unavailable", "completed", "no_recorded_request", "unknown"]);
   enumeration(r.privacy, ["not_affected", "recalculation_pending", "unavailable", "completed", "unknown"]);
+  if (hasAttribution) enumeration(r.attribution,["recalculation_pending","unavailable","completed","no_recorded_request","unknown"]);
   return structuredClone(value) as MetricFreshness;
 }

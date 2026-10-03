@@ -45,6 +45,8 @@ export type RouteHandler =
   | "admin_cost_schedules_disable"
   | "admin_metric_recalculations_list"
   | "admin_metric_recalculations_request"
+  | "admin_metric_correction_policy_read"
+  | "admin_metric_correction_policy_save"
   | "dashboard_metric_recalculations_list"
   | "dashboard_metric_recalculations_preview"
   | "dashboard_metric_recalculations_request"
@@ -161,6 +163,8 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "admin_cost_schedules_disable", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/cost-schedules\/[^/]+\/disable$/, auth: "admin_bearer", mutates: true, capability: "operate" },
   { handler: "admin_metric_recalculations_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-recalculations$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_metric_recalculations_request", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-recalculations$/, auth: "admin_bearer", mutates: true, capability: "operate" },
+  { handler: "admin_metric_correction_policy_read", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-correction-policy$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "admin_metric_correction_policy_save", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-correction-policy$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "dashboard_metric_recalculations_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/metric-recalculations$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_metric_recalculations_preview", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/metric-recalculations\/preview$/, auth: "dashboard_session", mutates: false, capability: "operate" },
   { handler: "dashboard_metric_recalculations_request", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/metric-recalculations$/, auth: "dashboard_session", mutates: true, capability: "operate" },

@@ -1,5 +1,9 @@
 # Backend event and report HTTP contract
 
+The app-scoped opt-in administration endpoint and reader-safe status for
+[automatic metric corrections](../automatic-metric-corrections.md) are documented
+separately; they are not included in the limited OpenAPI surface below.
+
 [openapi.json](openapi.json) is a limited OpenAPI 3.1.1 description of four
 existing endpoints. It is not a new API or a claim of complete API coverage:
 

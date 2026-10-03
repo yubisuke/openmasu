@@ -82,6 +82,10 @@ identity and adds patches through v0.4.18 (65 fixtures / 845 goldens), including
 [targeted refund-cancellation profile](docs/design/verified-commerce-lifecycle.md#explicit-refund-cancellation-metrics).
 An explicit [ad-group/creative calculation profile](docs/acquisition-detail-metrics.md)
 connects same-grain CLI calculation, dashboard filters, schedules and bounded corrections.
+Opt-in [automatic corrections](docs/automatic-metric-corrections.md) connect
+retained late-input, cost and selected-attribution receipts to the existing
+worker within an explicit finite cohort period. Original runs remain immutable;
+provider completeness and unsupported profiles are not inferred.
 The [first-party re-engagement profile](docs/engagement-outcomes.md) adds an
 independent 24h conversion/ad-revenue calculation, explicit CLI/schedules and
 separate dashboard/CSV output. It is not re-engagement ROAS or incremental-lift

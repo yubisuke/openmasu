@@ -6,6 +6,7 @@ import { disableMetricSchedule, listMetricSchedules, registerMetricSchedule } fr
 import { previewMetricScheduleReplacement, replaceMetricSchedule } from "../metric-schedule-replacements.js";
 import { disableCostSchedule, listCostSchedules, registerCostSchedule } from "../cost-schedules.js";
 import { listMetricRecalculations, requestMetricRecalculation } from "../metric-recalculations.js";
+import { metricCorrectionStatus, saveMetricCorrectionPolicy } from "../metric-correction-policy.js";
 import { renderMetricRecalculations } from "../dashboard/metric-recalculations.js";
 import { metricRecalculationFormRequest } from "../metric-recalculation-form.js";
 import type { RequestHandlerDependencies } from "../http-types.js";
@@ -24,7 +25,8 @@ const scheduleConflict = (reason: string): boolean => ["metric_schedule_not_acti
 export function createMetricJobsControllers(dependencies: Pick<RequestHandlerDependencies, "readerPool" | "pool" | "dashboard">) {
   const dashboardMetricRecalculationsList = async ({ response, session, appId, appIdentity }: DashboardAppContext): Promise<void> => {
     dashboardHtml(response, 200, renderMetricRecalculations(appId,
-      await listMetricRecalculations(dependencies.readerPool, appIdentity), csrfToken(session.token), roleAllows(session.role, "operate")));
+      await listMetricRecalculations(dependencies.readerPool, appIdentity), csrfToken(session.token), roleAllows(session.role, "operate"),
+      undefined,await metricCorrectionStatus(dependencies.readerPool,appIdentity)));
     return;
   };
 
@@ -196,6 +198,17 @@ export function createMetricJobsControllers(dependencies: Pick<RequestHandlerDep
     return;
   };
 
+  const adminMetricCorrectionPolicy = async ({response,target,route,pool,identity,decoder}: AdminRequestContext): Promise<void> => {
+    try {
+      const scope=await requireRegisteredApp(pool,identity,adminAppId(target.pathname)??"");
+      json(response,200,route.handler==="admin_metric_correction_policy_read" ? await metricCorrectionStatus(pool,scope)
+        : await saveMetricCorrectionPolicy(dependencies.pool,scope,await decoder.json()));
+    } catch(error) {
+      json(response,error instanceof AppNotFoundError?404:400,{error:error instanceof AppNotFoundError?"not_found"
+        :publicReason(error,"metric_correction_policy_failed")});
+    }
+  };
+
   return {
     dashboard_metric_recalculations_list: { boundary: "dashboard_app", handle: dashboardMetricRecalculationsList },
     dashboard_metric_recalculations_preview: { boundary: "dashboard_app", handle: dashboardMetricRecalculationsPreview },
@@ -215,5 +228,7 @@ export function createMetricJobsControllers(dependencies: Pick<RequestHandlerDep
     admin_cost_schedules_disable: { boundary: "admin", handle: adminCostSchedulesList },
     admin_metric_recalculations_list: { boundary: "admin", handle: adminMetricRecalculationsList },
     admin_metric_recalculations_request: { boundary: "admin", handle: adminMetricRecalculationsList },
+    admin_metric_correction_policy_read: { boundary: "admin", handle: adminMetricCorrectionPolicy },
+    admin_metric_correction_policy_save: { boundary: "admin", handle: adminMetricCorrectionPolicy },
   } as const;
 }

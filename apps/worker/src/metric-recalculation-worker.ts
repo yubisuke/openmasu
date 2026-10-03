@@ -7,7 +7,8 @@ import { computeSqlMetricRunsWithClient } from "./metrics/cohort.js";
 
 type Claim = { recalculation_id: string; source_metric_run_id: string; tenant_id: string; app_id: string;
   replay_digest: string; watermark: string; created_at: string; lease_token: string;
-  trigger_kind: "cost_revision" | "late_events" | "privacy_deletion";
+  trigger_kind: "cost_revision" | "late_events" | "privacy_deletion" | "attribution_revision";
+  automatic_correction: boolean; attribution_revision_id: string|null; source_snapshot_digest: string|null;
   privacy_request_id: string | null; completed_at: string | null;
   source_records: { record_id: string; payload_sha256: string }[] | null };
 
@@ -19,13 +20,16 @@ async function claimNext(pool: Pool, tenantId: string): Promise<Claim | undefine
         AND (lease_expires_at IS NULL OR lease_expires_at<=clock_timestamp())`, [tenantId]);
     const next = await client.query<Omit<Claim, "lease_token">>(
       `SELECT item.recalculation_id,item.source_metric_run_id,item.tenant_id,item.app_id,item.replay_digest,
-         job.watermark,job.created_at,job.trigger_kind,job.source_records,job.privacy_request_id,privacy.completed_at
+         job.watermark,job.created_at,job.trigger_kind,job.source_records,job.privacy_request_id,privacy.completed_at,
+         job.automatic_correction,job.attribution_revision_id,job.source_snapshot_digest
        FROM control.metric_recalculation_items AS item
        JOIN control.metric_recalculation_jobs AS job USING (tenant_id,app_id,recalculation_id)
        LEFT JOIN ledger.privacy_requests AS privacy ON privacy.tenant_id=job.tenant_id
          AND privacy.privacy_request_id=job.privacy_request_id AND privacy.status='completed'
        WHERE item.tenant_id=$1 AND item.attempts<3 AND item.state IN ('queued','retry','processing')
          AND item.next_attempt_at<=clock_timestamp() AND (item.lease_expires_at IS NULL OR item.lease_expires_at<=clock_timestamp())
+         AND (NOT job.automatic_correction OR EXISTS (SELECT 1 FROM control.metric_correction_policies AS policy
+           WHERE policy.tenant_id=item.tenant_id AND policy.app_id=item.app_id AND policy.enabled))
          AND (job.trigger_kind<>'privacy_deletion' OR (privacy.completed_at IS NOT NULL
            AND NOT EXISTS (SELECT 1 FROM control.privacy_deletion_jobs AS purge
              WHERE purge.tenant_id=item.tenant_id AND purge.status='processing')))
@@ -56,8 +60,31 @@ async function calculate(pool: Pool, claim: Claim): Promise<"completed" | "skipp
         AND lease_token=$5::uuid AND state='processing' AND lease_expires_at>clock_timestamp() FOR UPDATE`,
     [claim.tenant_id, claim.app_id, claim.recalculation_id, claim.source_metric_run_id, claim.lease_token]);
     if (!owned.rowCount) { await client.query("COMMIT"); transaction = false; return "fenced"; }
+    if (claim.automatic_correction) {
+      const enabled=await client.query(`SELECT enabled FROM control.metric_correction_policies
+        WHERE tenant_id=$1 AND app_id=$2 FOR SHARE`,[claim.tenant_id,claim.app_id]);
+      if (!enabled.rows[0]?.enabled) {
+        await client.query(`UPDATE control.metric_recalculation_items SET state='queued',attempts=greatest(attempts-1,0),
+          lease_token=NULL,lease_expires_at=NULL WHERE tenant_id=$1 AND app_id=$2 AND recalculation_id=$3
+          AND source_metric_run_id=$4 AND lease_token=$5::uuid`,
+        [claim.tenant_id,claim.app_id,claim.recalculation_id,claim.source_metric_run_id,claim.lease_token]);
+        await client.query("COMMIT"); transaction=false; return "fenced";
+      }
+    }
     const pending = await client.query<{ pending_count: string }>("SELECT pending_count FROM control.privacy_deletion_backlog()");
     if (pending.rows[0]?.pending_count !== "0") throw new Error("privacy_pending");
+    if (claim.trigger_kind === "attribution_revision") {
+      const revision=(await client.query(`SELECT artifact FROM ledger.attribution_results
+        WHERE tenant_id=$1 AND app_id=$2 AND attribution_id=$3`,
+      [claim.tenant_id,claim.app_id,claim.attribution_revision_id])).rows[0]?.artifact;
+      if (!revision || sha256(revision)!==claim.source_snapshot_digest) throw Error("input_unavailable");
+      const unavailable=await client.query(`SELECT 1 FROM jsonb_array_elements($3::jsonb) AS ref
+        LEFT JOIN ledger.raw_records_current AS raw ON raw.tenant_id=$1 AND raw.app_id=$2 AND raw.record_id=ref->>'ref'
+        WHERE ref->>'tenant_id'<>$1 OR ref->>'app_id'<>$2 OR raw.record_id IS NULL
+          OR raw.payload_lifecycle_status<>'available' LIMIT 1`,
+      [claim.tenant_id,claim.app_id,JSON.stringify(revision.evidence_refs??[])]);
+      if (unavailable.rowCount) throw Error("input_unavailable");
+    }
     if (claim.trigger_kind === "late_events") {
       const missing = await client.query(`SELECT 1 FROM jsonb_to_recordset($3::jsonb)
         AS source(record_id text,payload_sha256 text)

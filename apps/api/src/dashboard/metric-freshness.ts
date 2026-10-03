@@ -18,6 +18,6 @@ export function metricFreshnessLabels(value: MetricFreshness) {
       : r.state === "input_revised" ? "Cost input revised; no pending recalculation recorded."
       : r.state === "completed" ? "Recalculation completed; original history is preserved."
       : r.state === "unavailable" ? "Recalculation unavailable; inspect its safe reason."
-      : r.state === "no_recorded_request" ? "No recalculation request recorded; not proof of complete arrival." : "Recalculation state unknown."} Cost: ${r.cost}; late inputs: ${r.late_inputs}; privacy: ${r.privacy}.`,
+      : r.state === "no_recorded_request" ? "No recalculation request recorded; not proof of complete arrival." : "Recalculation state unknown."} Cost: ${r.cost}; late inputs: ${r.late_inputs}; privacy: ${r.privacy}; attribution: ${r.attribution??"unknown"}.`,
   };
 }

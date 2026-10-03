@@ -29,6 +29,7 @@ export const metricColumns = [
   "measurement_series", "engagement_evidence_trust",
   "privacy_update_state", "unavailable_reason",
   "time_window_maturity", "source_observation", "import_completion", "recalculation_state",
+  "attribution_update_state",
 ] as const;
 
 export const differenceColumns = [
@@ -66,6 +67,7 @@ export type MetricReportRow = {
   readonly comparison_context?: MetricComparisonContext | null;
   readonly cost_update_state?: "recalculation_pending" | "input_revised" | "no_recorded_revision" | "unknown";
   readonly late_input_update_state?: "recalculation_pending" | "unavailable" | "completed" | "no_recorded_request";
+  readonly attribution_update_state?: "recalculation_pending" | "unavailable" | "completed" | "no_recorded_request";
   readonly measurement_series?: ReturnType<typeof metricSeries>;
   readonly engagement_evidence_trust?: "device_reported_forgeable" | null;
   readonly privacy_update_state?: "not_affected" | "recalculation_pending" | "unavailable" | "completed";
@@ -190,7 +192,7 @@ export async function metricReport(
 /** Reuse the ordinary keyset projection inside a caller-owned consistent read. */
 export async function metricReportOnClient(client: PoolClient, query: MetricQuery, checkEvidence = false): Promise<MetricReportPage> {
     const statement = buildMetricQuery(query, checkEvidence);
-    const result = await client.query<{ artifact: Any; grouping_digest: string; superseded: boolean; comparison_context: MetricComparisonContext | null; cost_update_state: MetricReportRow["cost_update_state"]; late_input_update_state: MetricReportRow["late_input_update_state"]; privacy_changed: boolean; privacy_update_state: MetricReportRow["privacy_update_state"]; evidence_unavailable?: boolean; import_receipt_observation?: ImportReceiptObservation }>(
+    const result = await client.query<{ artifact: Any; grouping_digest: string; superseded: boolean; comparison_context: MetricComparisonContext | null; cost_update_state: MetricReportRow["cost_update_state"]; late_input_update_state: MetricReportRow["late_input_update_state"]; attribution_update_state: MetricReportRow["attribution_update_state"]; privacy_changed: boolean; privacy_update_state: MetricReportRow["privacy_update_state"]; evidence_unavailable?: boolean; import_receipt_observation?: ImportReceiptObservation }>(
       statement.text,
       [...statement.values],
     );
@@ -207,7 +209,7 @@ export async function metricReportOnClient(client: PoolClient, query: MetricQuer
         row.privacy_changed,
         row.privacy_update_state,
       );
-      return { ...result, ...metricFreshness(result, row.import_receipt_observation,
+      return { ...result, attribution_update_state:row.attribution_update_state??"no_recorded_request", ...metricFreshness({...result,attribution_update_state:row.attribution_update_state??"no_recorded_request"}, row.import_receipt_observation,
         Array.isArray(row.artifact.evidence_refs) ? row.artifact.evidence_refs.length : undefined) };
     });
     const last = rows.at(-1);

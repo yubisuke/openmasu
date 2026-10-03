@@ -69,7 +69,9 @@ snapshot digest remain readable. Missing dimensions in a later response are
 not interpreted as deletion. This is local atomic publication, not an immutable
 provider snapshot or an end-to-end exactly-once promise. A retry may observe
 changed upstream data even with the same query. Correction-driven metric
-recalculation is a separate [bounded request workflow](metric-corrections.md); refreshing cost alone does not update a
+recalculation is a separate [bounded request workflow](metric-corrections.md), or
+an explicitly configured [automatic correction policy](automatic-metric-corrections.md);
+without that opt-in policy, refreshing cost alone does not update a
 previously saved metric.
 
 ## Private secrets

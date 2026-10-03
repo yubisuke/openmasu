@@ -75,6 +75,14 @@ export function buildMetricQuery(query: MetricQuery, checkEvidence = false): Par
           ${revisionCutoff ? `AND control.canonical_timestamp_value(job.watermark)<=${revisionCutoff}::timestamptz` : ""}
         ORDER BY job.created_at DESC,job.recalculation_id COLLATE "C" DESC LIMIT 1),
         'no_recorded_request') AS late_input_update_state,
+      coalesce((SELECT CASE WHEN item.state IN ('queued','processing','retry') THEN 'recalculation_pending'
+          WHEN item.state IN ('unavailable','failed','skipped') THEN 'unavailable' ELSE 'completed' END
+        FROM control.metric_recalculation_items AS item
+        JOIN control.metric_recalculation_jobs AS job USING (tenant_id,app_id,recalculation_id)
+        WHERE item.tenant_id=mr.tenant_id AND item.app_id=mr.app_id AND item.source_metric_run_id=mr.metric_run_id
+          AND job.trigger_kind='attribution_revision'
+          ${revisionCutoff ? `AND control.canonical_timestamp_value(job.watermark)<=${revisionCutoff}::timestamptz` : ""}
+        ORDER BY job.created_at DESC,job.recalculation_id COLLATE "C" DESC LIMIT 1),'no_recorded_request') AS attribution_update_state,
       ${checkEvidence ? `EXISTS (
         SELECT 1 FROM jsonb_array_elements(coalesce(mr.artifact->'evidence_refs', '[]'::jsonb)) AS ref
         LEFT JOIN ledger.raw_records_current AS raw

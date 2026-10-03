@@ -1,5 +1,9 @@
 # Input Corrections and Bounded Metric Recalculation
 
+For opt-in receipt-driven processing in a finite cohort period, see
+[automatic metric corrections](automatic-metric-corrections.md). The explicit
+requests below retain their bounds; privacy correction remains independent.
+
 A completed cost import can revise the inputs of an already saved ROAS run.
 An input revision does not prove that a value changed or explain a causal
 measurement difference. Original cost records and metric runs remain immutable.
