@@ -586,7 +586,7 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
       assert.deepEqual((await metricReport(readerPool, reportIdentity, report(source.metric_schedule_id, "all"))).data.map(row => row.metric_run_id), [oldRun.metric_run_id]);
       assert.equal(jcs(await stored(oldRun.metric_run_id)), oldArtifact);
       assert.equal(`${jcs(parseSnapshot(JSON.parse(oldComparison)))}\n`, oldComparison, "the previously saved comparison file rereads byte-identically; it is not a new latest export");
-      await assert.rejects(withTenant(appPool, tenantId, client => client.query("UPDATE control.metric_schedule_runs SET evaluation=1 WHERE tenant_id=$1 AND app_id=$2", [tenantId, appId])), /append.only|immutable/i);
+      await assert.rejects(withTenant(appPool, tenantId, client => client.query("UPDATE control.metric_schedule_runs SET evaluation=1 WHERE tenant_id=$1 AND app_id=$2", [tenantId, appId])), { code: "42501" });
       const query = `metric_schedule_id=${encodeURIComponent(replacement.metric_schedule_id)}&metric_name=d7_roas&format=csv`;
       const apiCsv = await admin(`/v1/reports/metrics?app_id=${appId}&${query}`);
       const dashboardCsv = await fetch(`${baseUrl}/dashboard/apps/${appId}/cohorts.csv?${query}`, { headers: { cookie: `openmasu_dashboard=${session.token}` } });
