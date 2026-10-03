@@ -90,3 +90,10 @@ This floor measures synthetic SQL aggregation, not the whole application or
 production throughput. Review moved SQL and bound parameter expressions for
 identity, use parity tests for output correctness, and do not interpret noisy
 before/after timings as a new capacity guarantee.
+
+Older benchmark records accidentally omitted PostgreSQL version metadata: the
+`SHOW server_version` result was read under the wrong column name. New records
+read the actual column. Comparison lists this specific missing legacy field
+instead of pretending it was reported; all other fixed environment fields must
+match. The two runs use the same connection settings, and changing the result
+count, aggregate or a compared setting fails the command.

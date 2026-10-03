@@ -66,7 +66,7 @@ const environmentBase = {
   node_version: process.version,
   host_logical_cpus: cpus().length,
   host_memory_bytes: totalmem(),
-  postgres_version: (await client.query<{ value: string }>("SHOW server_version")).rows[0].value,
+  postgres_version: (await client.query<{ server_version: string }>("SHOW server_version")).rows[0].server_version,
   postgres_cpu_max: await cgroup("/sys/fs/cgroup/cpu.max"),
   postgres_cpuset: await cgroup("/sys/fs/cgroup/cpuset.cpus.effective"),
   postgres_memory_max: await cgroup("/sys/fs/cgroup/memory.max"),
@@ -129,8 +129,11 @@ try {
     value_unscaled: aggregation.rows[0].value_unscaled,
     environment,
   };
+  const legacyUnreported = baseline && !Object.hasOwn(baseline.environment, "postgres_version") ? ["postgres_version"] : [];
+  const fixedEnvironment = (environment: FloorEvidence["environment"]) => Object.fromEntries(
+    Object.entries(environment).filter(([key]) => key !== "postgres_memory_current_bytes" && !legacyUnreported.includes(key)),
+  );
   if (baseline) {
-    const fixedEnvironment = ({ postgres_memory_current_bytes: _volatile, ...fixed }: FloorEvidence["environment"]) => fixed;
     if (baseline.rows !== evidence.rows || baseline.value_unscaled !== evidence.value_unscaled
         || !isDeepStrictEqual(fixedEnvironment(baseline.environment), fixedEnvironment(evidence.environment))) {
       const before = fixedEnvironment(baseline.environment), after = fixedEnvironment(evidence.environment);
@@ -138,8 +141,9 @@ try {
       console.error(JSON.stringify({ synthetic_only: true, comparison_mismatch: {
         row_count: baseline.rows !== evidence.rows,
         aggregate: baseline.value_unscaled !== evidence.value_unscaled,
-        environment: keys.filter(key => !isDeepStrictEqual(before[key], after[key]))
-          .map(key => ({ key, before: before[key], after: after[key] })),
+        environment: keys.filter(key => Object.hasOwn(before, key) !== Object.hasOwn(after, key) || !isDeepStrictEqual(before[key], after[key]))
+          .map(key => ({ key, before_present: Object.hasOwn(before, key), after_present: Object.hasOwn(after, key),
+            before: before[key], after: after[key] })),
       } }));
       throw new Error("metric floor comparison inputs or environment changed");
     }
@@ -148,6 +152,8 @@ try {
     scope: "synthetic_sql_performance_floor_not_runtime_throughput",
     baseline_revision: baseline.baseline_revision,
     same_environment: true,
+    compared_environment_fields: Object.keys(fixedEnvironment(evidence.environment)).sort(),
+    legacy_unreported_environment_fields: legacyUnreported,
     before: { aggregate_ms: baseline.aggregate_ms, seed_ms: baseline.seed_ms },
     after: { aggregate_ms: evidence.aggregate_ms, seed_ms: evidence.seed_ms },
   } } : {}) }));
