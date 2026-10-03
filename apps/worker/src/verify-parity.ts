@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { jcs, sha256 } from "@openmasu/attribution-core/canonical";
 import { createSeedPool } from "@openmasu/runtime";
-import { parityKinds, parityLedgerTable, type ParityKind } from "./ingestion.js";
+import { parityKinds, parityLedgerTable, type ParityKind } from "./test-support/fixture-ingestion.js";
 
 type Any = Record<string, any>;
 const d0Metrics = new Set([

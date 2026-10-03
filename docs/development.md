@@ -38,6 +38,10 @@ change. Repository instructions in `AGENTS.md` remain authoritative.
 - A provider adapter belongs in the corresponding worker import/job module and
   receives bounded synthetic responses in tests. Reuse the existing ingestion,
   privacy fence, and job lifecycle rather than introducing another queue.
+  [Ingestion boundaries](development-ingestion.md) locates admission, candidate
+  reads, client-only ledger writers and application-owned transactions. Synthetic
+  reset/seed/capture belongs to its separate test-support entrypoint, never the
+  production import graph.
 - Shared IO belongs in an explicit `@openmasu/runtime` export. Shared pure CSV
   and decimal operations use `@openmasu/runtime/import-normalization`; hashes use
   `@openmasu/attribution-core/canonical`. Do not import a sibling application's

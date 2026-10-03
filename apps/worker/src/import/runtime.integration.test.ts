@@ -26,6 +26,7 @@ import { runMaxRevenueImport, runMaxRevenueImportCommand } from "./max-revenue-c
 import { runMetricDefinitionsCommand, runMetricDefinitionsFile } from "../metrics/run.js";
 import { expectedMaxTokenAll, receiveMax, type MaxReceiverConfig } from "../../../api/src/max-receiver.js";
 import { processMaxInbox } from "./max-worker.js";
+import { ingestRuntimeBatch } from "../ingestion.js";
 import { ensureAdminKeys } from "../../../api/src/admin-auth.js";
 import { createRequestHandler } from "../../../api/src/router.js";
 import { privacySubjectDigest } from "../../../api/src/privacy.js";
@@ -657,6 +658,58 @@ describe("M1a import integration", () => {
     } finally {
       await ownerPool.query("DROP TRIGGER IF EXISTS reject_synthetic_click ON ledger.click_facts");
       await ownerPool.query("DROP FUNCTION IF EXISTS testing.reject_synthetic_click()");
+    }
+  });
+
+  it("ingestion_atomicity_preserves_row_and_caller_transactions", async () => {
+    const fixture = JSON.parse(readFileSync("fixtures/v0.4/52-bounded-edge-evidence/input.json", "utf8"));
+    await ownerPool.query(`CREATE OR REPLACE FUNCTION testing.synthetic_ingestion_transaction_failure() RETURNS trigger
+      LANGUAGE plpgsql AS $$ BEGIN
+        IF NEW.click_id LIKE 'synthetic-transaction-%' THEN RAISE EXCEPTION 'synthetic transaction projection fault'; END IF;
+        RETURN NEW;
+      END $$`);
+    await ownerPool.query(`CREATE TRIGGER synthetic_ingestion_transaction_failure
+      BEFORE INSERT ON ledger.click_facts FOR EACH ROW EXECUTE FUNCTION testing.synthetic_ingestion_transaction_failure()`);
+    try {
+      for (const mode of ["row", "caller"] as const) {
+        const recordId = `synthetic-transaction-${mode}`;
+        const attempt = {
+          batch_id: `batch:${recordId}`,
+          server: { ...fixture.server_context, tenant_id: "tenant-local", app_id: "app-local", fraud_enabled: false },
+          record: {
+            ...fixture.records[0], tenant_id: "tenant-local", app_id: "app-local",
+            record_id: recordId, delivery_id: `delivery:${recordId}`, event_id: `event:${recordId}`,
+            payload: { ...fixture.records[0].payload, click_id: `${recordId}-0000000000000000` },
+          },
+        };
+        if (mode === "caller") {
+          const client = await appPool.connect();
+          try {
+            await client.query("BEGIN");
+            await client.query("SELECT set_config('openmasu.tenant_id', $1, true)", ["tenant-local"]);
+            await assert.rejects(ingestRuntimeBatch([attempt], appPool, [], { persistenceClient: client }), /synthetic transaction projection fault/);
+            await client.query("ROLLBACK");
+          } finally {
+            await client.query("ROLLBACK").catch(() => undefined);
+            client.release();
+          }
+        } else {
+          await assert.rejects(ingestRuntimeBatch([attempt], appPool), /synthetic transaction projection fault/);
+        }
+        await withTenant(appPool, "tenant-local", async (client) => {
+          const counts = await client.query(`SELECT
+            (SELECT count(*) FROM ledger.raw_records WHERE record_id=$1)::int AS raw,
+            (SELECT count(*) FROM ledger.raw_payload_states WHERE record_id=$1)::int AS payload_states,
+            (SELECT count(*) FROM ledger.event_deliveries WHERE record_id=$1)::int AS deliveries,
+            (SELECT count(*) FROM ledger.logical_events WHERE record_id=$1)::int AS logical,
+            (SELECT count(*) FROM ledger.click_facts WHERE click_id=$2)::int AS facts`,
+          [recordId, attempt.record.payload.click_id]);
+          assert.deepEqual(counts.rows[0], { raw: 0, payload_states: 0, deliveries: 0, logical: 0, facts: 0 }, mode);
+        });
+      }
+    } finally {
+      await ownerPool.query("DROP TRIGGER IF EXISTS synthetic_ingestion_transaction_failure ON ledger.click_facts");
+      await ownerPool.query("DROP FUNCTION IF EXISTS testing.synthetic_ingestion_transaction_failure()");
     }
   });
 

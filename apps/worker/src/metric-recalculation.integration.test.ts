@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { beforeEach, after, describe, it } from "node:test";
 import { createAppPool, createReaderPool, createSeedPool, withTenant } from "@openmasu/runtime";
 import { sha256 } from "@openmasu/attribution-core";
-import { ingestFixture } from "./ingestion.js";
+import { ingestFixture } from "./test-support/fixture-ingestion.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
 import { persistCostImport } from "./import/cost.js";
 import { requestMetricRecalculation, listMetricRecalculations } from "../../api/src/metric-recalculations.js";

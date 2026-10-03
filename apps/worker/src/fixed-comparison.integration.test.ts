@@ -5,7 +5,7 @@ import { before, after, describe, it } from "node:test";
 import { Pool, type PoolClient } from "pg";
 import { createAppPool, createSeedPool, withTenant } from "@openmasu/runtime";
 import { sha256, jcs } from "@openmasu/attribution-core";
-import { ingestFixture } from "./ingestion.js";
+import { ingestFixture } from "./test-support/fixture-ingestion.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
 import { persistCostImport } from "./import/cost.js";
 import { fixedComparisonDownload, comparisonLimits } from "../../api/src/fixed-comparison.js";

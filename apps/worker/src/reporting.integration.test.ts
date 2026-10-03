@@ -10,7 +10,7 @@ import type { MaxReceiverConfig } from "../../api/src/max-receiver.js";
 import type { PayloadStore } from "@openmasu/runtime";
 import { createAppPool, createReaderPool, createSeedPool, withTenant } from "@openmasu/runtime";
 import type { Pool } from "pg";
-import { ingestFixture } from "./ingestion.js";
+import { ingestFixture } from "./test-support/fixture-ingestion.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
 import { sha256 } from "@openmasu/attribution-core";
 import { compareSnapshots, parseSnapshot } from "../../api/src/cohort-comparison.js";

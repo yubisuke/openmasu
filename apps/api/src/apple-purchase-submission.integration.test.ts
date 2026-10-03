@@ -16,7 +16,7 @@ import { KeyedTokenBucket } from "./rate-limit.js";
 import { executePrivacyRequest, privacySubjectDigest, type PrivacyRequestBody } from "./privacy.js";
 import type { SdkRouteDependencies } from "./sdk-routes.js";
 import { processCommerceReadbacks } from "../../worker/src/commerce-readback-worker.js";
-import { ingestFixture } from "../../worker/src/ingestion.js";
+import { ingestFixture } from "../../worker/src/test-support/fixture-ingestion.js";
 import { computeSqlMetricRuns } from "../../worker/src/metrics/cohort.js";
 import { requestMetricRecalculation } from "./metric-recalculations.js";
 import { processMetricRecalculations } from "../../worker/src/metric-recalculation-worker.js";

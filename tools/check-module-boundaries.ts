@@ -10,7 +10,13 @@ export type Workspace = {
   devDependencies: Readonly<Record<string, string>>;
 };
 export type ModuleImport = { specifier: string; target?: string; typeOnly: boolean };
-export type BoundaryModule = { path: string; imports: readonly ModuleImport[]; performsIO?: boolean };
+export type BoundaryModule = {
+  path: string;
+  imports: readonly ModuleImport[];
+  performsIO?: boolean;
+  privilegedIngestion?: boolean;
+  ownsTransaction?: boolean;
+};
 const executableApps = new Set(["@openmasu/api", "@openmasu/worker", "@openmasu/redirector"]);
 const forbiddenPureImport = /^(?:pg(?:\/|$)|ajv(?:-formats)?(?:\/|$)|@openmasu\/contracts\/validation(?:\/|$)|node:(?:fs|http|https|net|dns|child_process|worker_threads)(?:\/|$))/;
 export const pureEntrypoints = [
@@ -29,12 +35,16 @@ export const pureEntrypoints = [
   "apps/api/src/dashboard/metric-explanation.ts",
   "apps/api/src/dashboard/attribution-report.ts",
 ];
+export const productionIngestionEntrypoints = ["apps/worker/src/ingestion.ts", "apps/worker/src/main.ts"];
+const seedSupportModule = /^apps\/worker\/src\/(?:test-support\/|seed(?:-safety)?\.ts$|verify-parity\.ts$)/;
+const clientOnlyRepository = /^apps\/worker\/src\/ingestion\/(?:record-repository|fact-projections|derived-repository|bulk-repository)\.ts$/;
 
 /** Check production imports, not test fixtures or generated declarations. */
 export function checkModuleBoundaries(
   modules: readonly BoundaryModule[],
   workspaces: readonly Workspace[],
   pureRoots: readonly string[] = pureEntrypoints,
+  ingestionRoots: readonly string[] = [],
 ): string[] {
   const errors = new Set<string>();
   const byPath = new Map(modules.map(module => [module.path, module]));
@@ -86,6 +96,25 @@ export function checkModuleBoundaries(
     }
     pure(root);
   }
+  for (const root of ingestionRoots) {
+    const visited = new Set<string>();
+    function production(path: string): void {
+      if (visited.has(path)) return;
+      visited.add(path);
+      const module = byPath.get(path);
+      if (!module) { errors.add(`${root}: missing production ingestion module ${path}`); return; }
+      if (seedSupportModule.test(path) || module.privilegedIngestion) {
+        errors.add(`${root}: privileged seed/testing support in ${path}`);
+      }
+      if (clientOnlyRepository.test(path) && module.ownsTransaction) {
+        errors.add(`${root}: repository owns a transaction in ${path}`);
+      }
+      for (const entry of module.imports.filter(item => !item.typeOnly)) {
+        if (entry.target && byPath.has(entry.target)) production(entry.target);
+      }
+    }
+    production(root);
+  }
   return [...errors].sort();
 }
 
@@ -112,6 +141,8 @@ export function inspectWorkspaceBoundaries(root: string): { errors: string[]; mo
     const source = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
     const imports: ModuleImport[] = [];
     let performsIO = false;
+    let privilegedIngestion = false;
+    let ownsTransaction = false;
     function add(specifier: string, typeOnly: boolean): void {
       const target = ts.resolveModuleName(specifier, path, options, ts.sys).resolvedModule?.resolvedFileName;
       imports.push({ specifier, typeOnly, ...(target ? { target: normalize(target) } : {}) });
@@ -124,19 +155,32 @@ export function inspectWorkspaceBoundaries(root: string): { errors: string[]; mo
           ? node.isTypeOnly || Boolean(node.exportClause && ts.isNamedExports(node.exportClause) && node.exportClause.elements.length && node.exportClause.elements.every(item => item.isTypeOnly))
           : Boolean(clause && (clause.isTypeOnly || (!clause.name && named && ts.isNamedImports(named) && named.elements.length && named.elements.every(item => item.isTypeOnly))));
         add(node.moduleSpecifier.text, typeOnly);
+        if (!typeOnly && clause?.namedBindings && ts.isNamedImports(clause.namedBindings)
+          && clause.namedBindings.elements.some(item => !item.isTypeOnly && (item.propertyName?.text ?? item.name.text) === "createSeedPool")) {
+          privilegedIngestion = true;
+        }
       }
       if (ts.isCallExpression(node)) {
         const name = node.expression.getText(source);
         if ((node.expression.kind === ts.SyntaxKind.ImportKeyword || name === "require") && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) add(node.arguments[0].text, false);
         if (["fetch", "globalThis.fetch"].includes(name)) performsIO = true;
+        if (/(?:^|\.)(?:createSeedPool|resetLedger)$/.test(name)) privilegedIngestion = true;
+        if (name === "withTenant" || /(?:^|\.)(?:connect|createAppPool|createSeedPool)$/.test(name)) ownsTransaction = true;
+      }
+      if (ts.isFunctionDeclaration(node) && node.name?.text === "resetLedger") privilegedIngestion = true;
+      if (ts.isNewExpression(node) && node.expression.getText(source) === "Pool") ownsTransaction = true;
+      if (ts.isStringLiteralLike(node) || ts.isTemplateExpression(node)) {
+        const value = ts.isStringLiteralLike(node) ? node.text : node.getText(source);
+        if (/\btesting\./.test(value)) privilegedIngestion = true;
+        if (/^\s*(?:BEGIN|COMMIT|ROLLBACK)\b/i.test(value)) ownsTransaction = true;
       }
       if (ts.isPropertyAccessExpression(node) && node.getText(source) === "process.env") performsIO = true;
       ts.forEachChild(node, visit);
     }
     visit(source);
-    return { path: normalize(path), imports, performsIO };
+    return { path: normalize(path), imports, performsIO, privilegedIngestion, ownsTransaction };
   });
-  return { errors: checkModuleBoundaries(modules, workspaces), moduleCount: modules.length };
+  return { errors: checkModuleBoundaries(modules, workspaces, pureEntrypoints, productionIngestionEntrypoints), moduleCount: modules.length };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

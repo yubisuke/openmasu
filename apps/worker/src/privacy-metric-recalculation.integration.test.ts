@@ -16,7 +16,7 @@ import { createRequestHandler } from "../../api/src/router.js";
 import { metricReport, encodeMetricReport } from "../../api/src/reporting.js";
 import { metricExplanation } from "../../api/src/metric-explanation.js";
 import { listMetricRecalculations } from "../../api/src/metric-recalculations.js";
-import { ingestFixture } from "./ingestion.js";
+import { ingestFixture } from "./test-support/fixture-ingestion.js";
 import { computeSqlMetricRuns, persistMetricRun } from "./metrics/cohort.js";
 import { processMetricRecalculations } from "./metric-recalculation-worker.js";
 import { reapplyCompletedPrivacyRequests } from "./privacy-reapply.js";

@@ -8,7 +8,7 @@ import { buildDashboardView } from "./dashboard/view.js";
 import { renderDashboard } from "./dashboard/render.js";
 import { parseMetricQuery } from "./report-query.js";
 import { encodeMetricReport, metricReport, recordCounts, type MetricReportRow, type RecordCountRow } from "./reporting.js";
-import { ingestFixture } from "../../worker/src/ingestion.js";
+import { ingestFixture } from "../../worker/src/test-support/fixture-ingestion.js";
 import { computeSqlMetricRuns } from "../../worker/src/metrics/cohort.js";
 
 type Any = Record<string, any>;

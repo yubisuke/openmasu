@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { retryDeadlockOnce } from "./seed-safety.js";
+import { retryDeadlockOnce } from "./test-support/seed-safety.js";
 
 describe("WO13 synthetic seed deadlock handling", () => {
   it("retries one PostgreSQL 40P01 failure and returns the second result", async () => {

@@ -13,7 +13,7 @@ import { ensureAdminKeys } from "../../api/src/admin-auth.js";
 import { metricReport } from "../../api/src/reporting.js";
 import { createRequestHandler } from "../../api/src/router.js";
 import { issueDashboardSession } from "../../api/src/session.js";
-import { ingestFixture } from "./ingestion.js";
+import { ingestFixture } from "./test-support/fixture-ingestion.js";
 import { processMetricSchedules } from "./metric-schedule-worker.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
 import { runMetricDefinitionsFile } from "./metrics/run.js";
