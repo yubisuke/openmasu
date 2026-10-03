@@ -9,6 +9,9 @@ import re
 import sys
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
+from importlib.resources import files as resource_files
+from zoneinfo import ZoneInfo
 from typing import Any
 
 import rfc8785
@@ -1097,7 +1100,23 @@ def day(value: str, zone: str, field: str) -> str:
     result = timestamp(value, field)
     if zone == "Asia/Tokyo":
         result += timedelta(hours=9)
+    elif zone == "America/New_York":
+        result = result.astimezone(calendar_zone(zone))
     return result.date().isoformat()
+
+
+@lru_cache(maxsize=3)
+def calendar_zone(zone: str) -> ZoneInfo:
+    if zone not in ("UTC", "Asia/Tokyo", "America/New_York"):
+        raise ValueError("calendar_time_zone_unsupported")
+    # Read the hash-pinned first-party package, not the host's mutable database.
+    with resource_files("tzdata.zoneinfo").joinpath(*zone.split("/")).open("rb") as stream:
+        return ZoneInfo.from_file(stream, key=zone)
+
+
+def calendar_day_index(install: str, outcome: str, zone: str) -> int:
+    return (timestamp(outcome, "occurred_at").astimezone(calendar_zone(zone)).date()
+            - timestamp(install, "occurred_at").astimezone(calendar_zone(zone)).date()).days
 
 
 def base_metric_definitions() -> list[dict[str, Any]]:
@@ -1147,6 +1166,29 @@ def metric_definitions(value: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def validate_metric_definition_series(definition: dict[str, Any]) -> None:
+    if (definition.get("calendar_cohort_policy") is not None or definition.get("rule_bundle_id") == "metric-calendar-acquisition"
+            or re.match(r"^(platform_|imported_)?calendar_", definition["metric_name"])):
+        match = re.fullmatch(r"(platform_|imported_)?calendar_(utc|jst|ny)_(d[0137]_roas|retention_d[17]|cohort_ltv_d[0137]_usd|cohort_install_count)", definition["metric_name"])
+        if (not match or definition.get("calendar_cohort_policy") != "cumulative_revenue_on_day_activity"
+                or definition.get("metric_definition_version") != "0.4.21" or definition.get("rule_bundle_version") != "0.4.21"
+                or definition.get("rule_bundle_id") != "metric-calendar-acquisition"
+                or definition.get("rule_bundle_hash") != "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb"
+                or definition.get("aggregation_time_zone") != {"utc": "UTC", "jst": "Asia/Tokyo", "ny": "America/New_York"}[match[2]]
+                or definition["definition"]["window"]["type"] != "calendar_day"):
+            raise ValueError(f"invalid calendar metric profile: {definition['metric_name']}")
+        prefix, _, name = match.groups()
+        prefix = prefix or ""
+        base = {**definition, "definition": {**definition["definition"], "window": {
+            **definition["definition"]["window"], "type": "activity_day" if name.startswith("retention_") else "elapsed"}},
+            "metric_name": prefix + name, "aggregation_time_zone": "UTC"}
+        del base["calendar_cohort_policy"]
+        bundle, version, digest = ("metric-imported-provider-acquisition", "0.4.20", "8e26dc304ddfdccdbd5375ed1251d0e6fb2819bc9ace3c4ba23fa5a6c60fcb25") if prefix == "imported_" else (
+            ("metric-verified-platform-acquisition", "0.4.19", "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5") if prefix == "platform_" else (
+                ("metric-disjoint-cost", "0.4.12", METRIC_DISJOINT_COST_BUNDLE_HASH) if name.endswith("_roas") else
+                ("metric-selected-acquisition", "0.4.11", METRIC_SELECTED_ACQUISITION_BUNDLE_HASH)))
+        base.update({"metric_definition_version": version, "rule_bundle_id": bundle, "rule_bundle_version": version, "rule_bundle_hash": digest})
+        validate_metric_definition_series(base)
+        return
     imported = ("import_provider" in definition or definition.get("acquisition_basis") == "selected_imported_provider"
                 or definition.get("rule_bundle_id") == "metric-imported-provider-acquisition"
                 or definition["metric_name"].startswith("imported_"))
@@ -1447,7 +1489,7 @@ def cost_records(value: dict[str, Any]) -> list[dict[str, Any]]:
     for record in value.get("cost_records", []):
         dimensions = {
             field: record[field]
-            for field in ("network", "campaign_id", "ad_group_id", "creative_id", "country")
+            for field in ("network", "campaign_id", "ad_group_id", "creative_id", "country", "reporting_time_zone")
             if field in record
         }
         if record["dimension_digest"] != digest(dimensions):
@@ -1472,6 +1514,7 @@ def matches_grouping(
     acquisition: dict[str, Any] | None = None,
     authoritative_acquisition: bool = False,
     authoritative_country: bool = False,
+    cohort_zone: str = "UTC",
 ) -> bool:
     if not grouping:
         return True
@@ -1491,7 +1534,7 @@ def matches_grouping(
     country = acquisition.get("country") if authoritative_country else payload.get("country", context.get("provider_country"))
     if grouping.get("country") is not None and country != grouping["country"]:
         return False
-    if grouping.get("cohort_date") is not None and attempt["record"]["event_name"] == "install" and day(attempt["record"]["occurred_at"], "UTC", "occurred_at") != grouping["cohort_date"]:
+    if grouping.get("cohort_date") is not None and attempt["record"]["event_name"] == "install" and day(attempt["record"]["occurred_at"], cohort_zone, "occurred_at") != grouping["cohort_date"]:
         return False
     if grouping.get("attribution_status") is not None and attempt["record"]["event_name"] in ("install", "deep_link_open"):
         subject_ref = (
@@ -1511,6 +1554,9 @@ def matches_grouping(
 
 def eligible_revenue(definition: dict[str, Any], install: dict[str, Any], revenue: dict[str, Any]) -> bool:
     day_index = int(definition["definition"]["window"]["day"])
+    if definition.get("calendar_cohort_policy"):
+        delta = calendar_day_index(install["occurred_at"], revenue["occurred_at"], definition["aggregation_time_zone"])
+        return timestamp(revenue["occurred_at"], "occurred_at") >= timestamp(install["occurred_at"], "occurred_at") and 0 <= delta <= day_index
     if definition["definition"]["window"]["type"] == "calendar_day":
         anchor = timestamp(install["occurred_at"], "occurred_at") + timedelta(days=day_index)
         return day(revenue["occurred_at"], definition["aggregation_time_zone"], "occurred_at") == day(anchor.isoformat(timespec="milliseconds").replace("+00:00", "Z"), definition["aggregation_time_zone"], "occurred_at")
@@ -1850,6 +1896,19 @@ def metric_runs(
                     and any(field in evaluation.get("grouping", {}) for field in ("ad_group_id", "creative_id"))):
                 raise ValueError(f"unsupported detail grouping for {metric_name}")
             selected_installs = platform_installs if definition.get("acquisition_basis") == "selected_verified_platform" else acquisition_installs if definition.get("acquisition_basis") else installs
+            cohort_zone = definition["aggregation_time_zone"] if definition.get("calendar_cohort_policy") else "UTC"
+            if definition.get("calendar_cohort_policy"):
+                if not evaluation.get("grouping", {}).get("cohort_date"):
+                    raise ValueError("calendar_cohort_date_required")
+                verified = definition.get("acquisition_basis") == "selected_verified_platform"
+                selected_installs = []
+                for item in visible:
+                    if item["record"]["event_name"] != "install" or item["record"]["producer"].startswith("import:"):
+                        continue
+                    dimensions = platform_acquisition_dimensions(item, platform) if verified else selected_acquisition_dimensions(item, visible, acquisition_attributions)
+                    if (not verified or dimensions is not None) and matches_grouping(item, evaluation.get("grouping"),
+                            platform_statuses if verified else acquisition_statuses, dimensions, verified, False, cohort_zone):
+                        selected_installs.append(item)
             provider = definition.get("import_provider")
             imported_attributions = selected_imported_attributions(attributions, included, provider, evaluation["input_received_at_watermark"]) if provider else None
             if imported_attributions is not None:
@@ -1857,7 +1916,7 @@ def metric_runs(
                             for item in included if imported_install(item, provider)}
                 statuses.update({key: row["status"] for key, row in imported_attributions.items()})
                 selected_installs = [item for item in visible if imported_install(item, provider)
-                                    and matches_grouping(item, evaluation.get("grouping"), statuses, imported_dimensions(item, imported_attributions), True, True)
+                                    and matches_grouping(item, evaluation.get("grouping"), statuses, imported_dimensions(item, imported_attributions), True, True, cohort_zone)
                                     and (definition.get("fraud_policy") != "net" or imported_attributions.get((item["server"]["tenant_id"],
                                         item["server"]["app_id"], item["record"]["payload"]["installation_id"]), {}).get("reason_code") != "fraud_excluded")]
             if definition.get("acquisition_basis") == "selected_verified_platform" and definition.get("fraud_policy") == "net":
@@ -1875,6 +1934,7 @@ def metric_runs(
             grouped_costs = [
                 cost for cost in costs
                 if not definition.get("engagement_credit_policy") and not selected_daily and cost["as_of"] <= evaluation["input_received_at_watermark"]
+                and (not definition.get("calendar_cohort_policy") or cost.get("reporting_time_zone") == definition["aggregation_time_zone"])
                 and ("creative_id" not in cost or definition.get("acquisition_dimension_policy"))
                 and evaluation.get("grouping", {}).get("attribution_status", "non_organic") == "non_organic"
                 and (not cohort_scopes or (cost["tenant_id"], cost["app_id"]) in cohort_scopes)
@@ -2019,7 +2079,9 @@ def metric_runs(
                                              and candidate["record"]["payload"]["installation_id"] == activity["record"]["payload"].get("installation_id")), None)
                         if installation is None:
                             continue
-                        day_index = (timestamp(activity["record"]["occurred_at"], "occurred_at") - timestamp(installation["record"]["occurred_at"], "occurred_at")).days
+                        if definition.get("calendar_cohort_policy") and timestamp(activity["record"]["occurred_at"], "occurred_at") < timestamp(installation["record"]["occurred_at"], "occurred_at"):
+                            continue
+                        day_index = calendar_day_index(installation["record"]["occurred_at"], activity["record"]["occurred_at"], definition["aggregation_time_zone"]) if definition.get("calendar_cohort_policy") else (timestamp(activity["record"]["occurred_at"], "occurred_at") - timestamp(installation["record"]["occurred_at"], "occurred_at")).days
                         if day_index == definition["definition"]["window"]["day"]:
                             active.add(installation["record"]["payload"]["installation_id"])
                     amount = round_half_even(len(active) * 10 ** int(definition.get("ratio_scale", 6)), cohort_size)

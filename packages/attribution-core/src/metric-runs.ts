@@ -1,5 +1,6 @@
 import { sha256 } from "./canonical.js";
 import { selectDisjointCosts } from "./cost-selection.js";
+import { cohortCalendarDayIndex, type CohortTimeZone } from "@openmasu/contracts/definitions";
 import { selectPlatformAcquisition, platformAcquisitionDimensions, selectedPlatformProofRows } from "./platform-acquisition.js";
 import { engagementInputs, engagementSnapshotRows, engagementValue } from "./engagement-metrics.js";
 import { REFERENCE_AD_REVENUE_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
@@ -28,7 +29,7 @@ export function metricDefinitions(input: Any): MetricDefinition[] {
 export function costRecords(input: Any): CostRecord[] {
   const records: CostRecord[] = (input.cost_records ?? []).map((record: Any) => {
     const dimensions = Object.fromEntries(
-      ["network", "campaign_id", "ad_group_id", "creative_id", "country"]
+      ["network", "campaign_id", "ad_group_id", "creative_id", "country", "reporting_time_zone"]
         .filter((field) => record[field] !== undefined)
         .map((field) => [field, record[field]]),
     );
@@ -222,13 +223,23 @@ export function metricRuns(
         const key = compositeKey([install.server.tenant_id, install.server.app_id, install.record.payload.installation_id]);
         if (!importedStatuses.has(key)) importedStatuses.set(key, "unattributed");
       }
+      const calendarZone = definition.calendar_cohort_policy ? definition.aggregation_time_zone : "UTC";
+      if (definition.calendar_cohort_policy && !evaluation.grouping?.cohort_date) throw new Error("calendar_cohort_date_required");
+      const calendarInstalls = definition.calendar_cohort_policy && !imported ? visible.filter(install => {
+        if (install.record.event_name !== "install" || install.record.producer.startsWith("import:")) return false;
+        const verified = definition.acquisition_basis === "selected_verified_platform";
+        const dimensions = verified ? platformAcquisitionDimensions(install, platform)
+          : selectedAcquisitionDimensions(install, visible, acquisitionAttributions);
+        return (!verified || dimensions !== undefined) && matchesGrouping(install, evaluation.grouping,
+          verified ? platformStatuses : acquisitionStatuses, dimensions, verified, false, calendarZone);
+      }) : undefined;
       const selectedInstalls = imported ? visible.filter(install => importedInstall(install, definition.import_provider!)
-        && matchesGrouping(install, evaluation.grouping, importedStatuses!, importedDimensions(install, imported), true, true)
+        && matchesGrouping(install, evaluation.grouping, importedStatuses!, importedDimensions(install, imported), true, true, calendarZone)
         && (definition.fraud_policy !== "net" || imported.get(compositeKey([install.server.tenant_id, install.server.app_id,
           install.record.payload.installation_id]))?.reason_code !== "fraud_excluded"))
-        : definition.acquisition_basis === "selected_verified_platform" ? platformInstalls.filter(install => definition.fraud_policy !== "net"
+        : definition.acquisition_basis === "selected_verified_platform" ? (calendarInstalls ?? platformInstalls).filter(install => definition.fraud_policy !== "net"
         || platform.attributions.get(compositeKey([install.server.tenant_id, install.server.app_id, install.record.payload.installation_id]))?.reason_code !== "fraud_excluded")
-        : definition.acquisition_basis ? acquisitionInstalls : installs;
+        : definition.acquisition_basis ? calendarInstalls ?? acquisitionInstalls : installs;
       const selectedDaily = definition.rule_bundle_id === "metric-selected-daily-acquisition";
       if (selectedDaily && evaluation.grouping?.acquisition_campaign_state !== undefined &&
           !["known", "unknown"].includes(evaluation.grouping.acquisition_campaign_state)) {
@@ -240,6 +251,7 @@ export function metricRuns(
     const cohortScopes = new Set(selectedInstalls.map((install) => compositeKey([install.server.tenant_id, install.server.app_id])));
     const groupedCosts = cost_records.filter((cost) => {
       if (definition.engagement_credit_policy || selectedDaily) return false;
+      if (definition.calendar_cohort_policy && cost.reporting_time_zone !== definition.aggregation_time_zone) return false;
       const grouping = evaluation.grouping;
       if (cost.creative_id !== undefined && !definition.acquisition_dimension_policy) return false;
       if (grouping?.attribution_status !== undefined && grouping.attribution_status !== "non_organic") return false;
@@ -373,7 +385,10 @@ export function metricRuns(
               candidate.record.payload.installation_id === session.record.payload.installation_id,
             );
             if (!installation) continue;
-            const dayIndex = Math.floor((time(session.record.occurred_at, "occurred_at") - time(installation.record.occurred_at, "occurred_at")) / DAY_MS);
+            if (definition.calendar_cohort_policy && time(session.record.occurred_at, "occurred_at") < time(installation.record.occurred_at, "occurred_at")) continue;
+            const dayIndex = definition.calendar_cohort_policy
+              ? cohortCalendarDayIndex(installation.record.occurred_at, session.record.occurred_at, definition.aggregation_time_zone)
+              : Math.floor((time(session.record.occurred_at, "occurred_at") - time(installation.record.occurred_at, "occurred_at")) / DAY_MS);
             if (dayIndex === definition.definition.window.day) active.add(installation.record.payload.installation_id);
           }
           value = roundHalfEven(BigInt(active.size) * (10n ** BigInt(definition.ratio_scale ?? 6)), cohortSize);
@@ -542,6 +557,7 @@ function matchesGrouping(
   acquisition?: { campaign_id?: string; network?: string; ad_group_id?: string; creative_id?: string; country?: string },
   authoritativeAcquisition = false,
   authoritativeCountry = false,
+  cohortZone: CohortTimeZone = "UTC",
 ): boolean {
   if (!grouping) return true;
   const payload = attempt.record.payload;
@@ -555,7 +571,7 @@ function matchesGrouping(
   }
   if (grouping.country !== undefined && country !== grouping.country) return false;
   if (grouping.cohort_date !== undefined && attempt.record.event_name === "install" &&
-      dateAt(attempt.record.occurred_at, "UTC", "occurred_at") !== grouping.cohort_date) return false;
+      dateAt(attempt.record.occurred_at, cohortZone, "occurred_at") !== grouping.cohort_date) return false;
   if (grouping.attribution_status !== undefined && ["install", "deep_link_open"].includes(attempt.record.event_name)) {
     const subjectRef = attempt.record.event_name === "install"
       ? attempt.record.payload.installation_id
@@ -572,6 +588,10 @@ function matchesGrouping(
 
 function eligibleRevenue(definition: MetricDefinition, install: Any, revenue: Any): boolean {
   const dayIndex = definition.definition.window.day;
+  if (definition.calendar_cohort_policy) {
+    const delta = cohortCalendarDayIndex(install.occurred_at, revenue.occurred_at, definition.aggregation_time_zone);
+    return time(revenue.occurred_at, "occurred_at") >= time(install.occurred_at, "occurred_at") && delta >= 0 && delta <= dayIndex;
+  }
   if (definition.definition.window.type === "calendar_day") {
     return dateAt(revenue.occurred_at, definition.aggregation_time_zone, "occurred_at") ===
       dateAt(new Date(time(install.occurred_at, "occurred_at") + dayIndex * DAY_MS).toISOString(), definition.aggregation_time_zone, "occurred_at");

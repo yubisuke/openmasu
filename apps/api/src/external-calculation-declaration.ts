@@ -76,6 +76,7 @@ export function capturedRoasMeaning(context: MetricComparisonContext) {
   if (context.definition.acquisition_basis === "selected_imported_provider") return undefined;
   const meaning = comparisonMeaning(context);
   if (!meaning || meaning.anchor_event !== "install" || meaning.window.type !== "elapsed"
+      || (meaning.time_zone !== "UTC" && meaning.time_zone !== "Asia/Tokyo")
       || meaning.calculation !== "revenue_over_cost" || meaning.numerator !== "revenue"
       || meaning.value_type !== "ratio" || !meaning.fx || meaning.ratio_scale === null
       || !meaning.grouping_dimensions.includes("cohort_date") || meaning.grouping_dimensions.some(key => !dimensions.includes(key))) return undefined;

@@ -23,7 +23,8 @@ export function supportsLateMetric(replay: Any): boolean {
   return !!metric && validateMetricDefinition(metric) && metric.anchor_event === "install"
     && ["revenue_sum", "revenue_over_cohort", "revenue_over_cost"].includes(definition?.calculation)
     && ["revenue", "purchase_net_revenue", "total_net_revenue"].includes(definition.numerator)
-    && definition.window?.type === "elapsed" && Number.isSafeInteger(definition.window.day)
+    && (definition.window?.type === "elapsed" || (metric.calendar_cohort_policy === "cumulative_revenue_on_day_activity"
+      && definition.window?.type === "calendar_day")) && Number.isSafeInteger(definition.window.day)
     && definition.window.day >= 0 && definition.window.day <= 90
     && typeof replay.evaluation?.grouping?.cohort_date === "string"
     && Object.keys(replay.evaluation.grouping).every(key =>
@@ -36,7 +37,8 @@ export function supportsLateMetric(replay: Any): boolean {
 export function supportsAttributionMetric(replay: Any): boolean {
   if (supportsLateMetric(replay)) return true;
   const metric = replay.metric_definition;
-  return !!metric && validateMetricDefinition(metric) && ["selected_verified_platform","selected_imported_provider"].includes(metric.acquisition_basis ?? "")
+  return !!metric && validateMetricDefinition(metric) && (["selected_verified_platform","selected_imported_provider"].includes(metric.acquisition_basis ?? "")
+    || metric.calendar_cohort_policy === "cumulative_revenue_on_day_activity")
     && ["cohort_size", "active_installations_over_cohort"].includes(metric.definition.calculation)
     && typeof replay.evaluation?.grouping?.cohort_date === "string";
 }
@@ -145,6 +147,9 @@ export async function selectLateMetricInputs(
       const imported = metric.acquisition_basis === "selected_imported_provider";
       const contextDimensions = imported || metric.acquisition_basis === "selected_verified_platform";
       const mode = imported ? "selected_imported_provider" : metric.acquisition_basis === "selected_verified_platform";
+      const windowEnd = metric.calendar_cohort_policy
+        ? "((timezone($9,install.occurred_at_ts)::date+($6::integer+1))::timestamp AT TIME ZONE $9)"
+        : "install.occurred_at_ts+(($6+1)*interval '1 day')";
       const impacted = await client.query(
         `WITH acquisition AS (SELECT * FROM (${metricAcquisitionSql(mode,"$15")}) AS selected WHERE $7::boolean)
          SELECT DISTINCT changed.record_id FROM jsonb_to_recordset($4::jsonb)
@@ -169,7 +174,7 @@ export async function selectLateMetricInputs(
              OR ($11='purchase_net_revenue' AND changed.event_name IN ('purchase','refund'))
              OR ($11='revenue' AND changed.event_name='ad_revenue'))
            AND control.canonical_timestamp_value(changed.occurred_at)>=install.occurred_at_ts
-           AND control.canonical_timestamp_value(changed.occurred_at)<install.occurred_at_ts+(($6+1)*interval '1 day')
+           AND control.canonical_timestamp_value(changed.occurred_at)<${windowEnd}
            AND timezone($9,install.occurred_at_ts)::date::text=$5::jsonb->>'cohort_date'
            AND ($5::jsonb->>'campaign_id' IS NULL OR ${metricAcquisitionDimensionSql("campaign_id", contextDimensions)}=$5::jsonb->>'campaign_id')
            AND ($5::jsonb->>'network' IS NULL OR ${metricAcquisitionDimensionSql("network", contextDimensions)}=$5::jsonb->>'network')

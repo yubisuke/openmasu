@@ -9,6 +9,7 @@ export type NonFraudRuleBundleId =
   | "metric-selected-acquisition"
   | "metric-verified-platform-acquisition"
   | "metric-imported-provider-acquisition"
+  | "metric-calendar-acquisition"
   | "metric-selected-daily-acquisition"
   | "metric-disjoint-cost"
   | "metric-selected-commerce"
@@ -80,6 +81,16 @@ export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonF
       "separate-native-platform-and-imported-series", "explicit-dated-cost-revision-key",
       "reject-overlapping-cost-grains", "never-allocate-parent-cost-to-ad-group",
       "preserve-current-privacy-and-fraud"],
+  },
+  "metric-calendar-acquisition": {
+    id: "metric-calendar-acquisition", version: "0.4.21", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["explicit-qualified-iana-cohort-date", "utc-tokyo-new-york-boundaries",
+      "cumulative-install-to-local-day-end-ad-revenue", "on-local-day-distinct-active-installations",
+      "calendar-arithmetic-not-fixed-24-hour-offsets", "half-open-no-pre-install-outcomes",
+      "reuse-explicit-native-platform-imported-acquisition", "same-zone-dated-cost-only",
+      "unknown-or-mismatched-cost-zone-is-not-allocated", "reject-overlapping-cost-grains",
+      "preserve-current-privacy-and-fraud", "saved-calendar-meaning-and-local-maturity"],
   },
   "metric-selected-daily-acquisition": {
     id: "metric-selected-daily-acquisition", version: "0.4.18", kind: "metric",

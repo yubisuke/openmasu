@@ -37,6 +37,8 @@ function validStringArray(value: unknown, allowed?: ReadonlySet<string>): boolea
 export function validateScheduledMetricDefinition(input: unknown): input is ScheduledMetricDefinition {
   if (!input || typeof input !== "object" || Array.isArray(input)) return false;
   const value = input as JsonObject;
+  if (value.calendar_cohort_policy !== undefined || value.rule_bundle_id === METRIC_PROFILE_BINDINGS.calendar.rule_bundle_id
+      || /^(platform_|imported_)?calendar_/.test(String(value.metric_name))) return validateMetricDefinition(value);
   if (value.import_provider !== undefined || value.acquisition_basis === "selected_imported_provider"
       || value.rule_bundle_id === METRIC_PROFILE_BINDINGS.imported.rule_bundle_id
       || String(value.metric_name).startsWith("imported_")) return validateMetricDefinition(value);
@@ -142,6 +144,11 @@ export function validateScheduledMetricDefinition(input: unknown): input is Sche
 /** Independent calculators share profile constraints, not their calculation implementation. */
 export function assertMetricDefinitionSeries(definition: Definition, entry: "reference" | "sql" = "sql"): void {
   const metricName = definition.metric_name;
+  if (definition.calendar_cohort_policy !== undefined || definition.rule_bundle_id === METRIC_PROFILE_BINDINGS.calendar.rule_bundle_id
+      || /^(platform_|imported_)?calendar_/.test(metricName)) {
+    if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${metricName}`);
+    return;
+  }
   if (definition.import_provider !== undefined || definition.acquisition_basis === "selected_imported_provider"
       || definition.rule_bundle_id === METRIC_PROFILE_BINDINGS.imported.rule_bundle_id
       || definition.metric_name.startsWith("imported_")) {

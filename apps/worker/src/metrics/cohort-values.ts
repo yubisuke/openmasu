@@ -336,6 +336,16 @@ export async function metricValue(
     return eventCountValue(client, scope, watermark, grouping, definition, privacyState);
   }
   const activityEvents = definition.activity_events ?? ["session_start"];
+  const calendar = !!definition.calendar_cohort_policy;
+  const windowEnd = calendar
+    ? "(timezone($8, cohort.installed_at)::date + ($9::integer + 1))::timestamp AT TIME ZONE $8"
+    : "cohort.installed_at + (($9 + 1) * interval '1 day')";
+  const activityWindow = calendar
+    ? "session.occurred_at_ts >= cohort.installed_at AND timezone($8, session.occurred_at_ts)::date = timezone($8, cohort.installed_at)::date + $9::integer"
+    : "session.occurred_at_ts >= cohort.installed_at + ($9 * interval '1 day') AND session.occurred_at_ts < cohort.installed_at + (($9 + 1) * interval '1 day')";
+  const finalWindowEnd = calendar
+    ? "(timezone($8, installed_at)::date + ($9::integer + 1))::timestamp AT TIME ZONE $8"
+    : "installed_at + (($9 + 1) * interval '1 day')";
   const imported = definition.acquisition_basis === "selected_imported_provider";
   const acquisitionMode = imported ? "selected_imported_provider" : definition.acquisition_basis === "selected_verified_platform";
   const contextDimensions = imported || definition.acquisition_basis === "selected_verified_platform";
@@ -414,7 +424,7 @@ export async function metricValue(
            AND raw.received_at <= $3
            AND ($15='before' OR raw.payload_lifecycle_status='available')
            AND revenue.occurred_at_ts >= cohort.installed_at
-           AND revenue.occurred_at_ts < cohort.installed_at + (($9 + 1) * interval '1 day')
+           AND revenue.occurred_at_ts < (${windowEnd})
        ),
        revenue AS (
          SELECT coalesce(sum(ledger.half_even_div(
@@ -439,8 +449,7 @@ export async function metricValue(
            AND ($22::text IS NULL OR logical.producer='import:'||$22)
            AND raw.received_at <= $3
            AND ($15='before' OR raw.payload_lifecycle_status='available')
-           AND session.occurred_at_ts >= cohort.installed_at + ($9 * interval '1 day')
-           AND session.occurred_at_ts < cohort.installed_at + (($9 + 1) * interval '1 day')
+           AND (${activityWindow})
        ),
        current_cost AS (
          SELECT * FROM (
@@ -477,9 +486,9 @@ export async function metricValue(
                 cost.value AS cost_value,
                 revenue.revenue_event_count,
                 cost.cost_row_count,
-                (SELECT to_char(max(installed_at + (($9 + 1) * interval '1 day')) AT TIME ZONE 'UTC',
+                (SELECT to_char(max(${finalWindowEnd}) AT TIME ZONE 'UTC',
                    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') FROM cohort) AS last_window_end,
-                (SELECT max(installed_at + (($9 + 1) * interval '1 day'))
+                (SELECT max(${finalWindowEnd})
                    <= control.canonical_timestamp_value($3) FROM cohort) AS window_elapsed,
                 revenue.missing_fx_count,
                 cost.mismatched_currency_count
@@ -535,7 +544,7 @@ export async function metricValue(
     throw new Error(`cost currency mismatch for ${definition.metric_name}`);
   }
   const aggregates: RoasOperands | undefined = ["revenue_sum", "revenue_over_cost"].includes(calculation)
-    && definition.definition.numerator === "revenue" && definition.definition.window.type === "elapsed"
+    && definition.definition.numerator === "revenue" && (definition.definition.window.type === "elapsed" || calendar)
     ? { revenue_unscaled: row.revenue_value, cost_unscaled: row.cost_value,
       revenue_event_count: row.revenue_event_count, cost_row_count: row.cost_row_count,
       cohort_size: row.cohort_size, last_window_end: row.last_window_end, window_elapsed: row.window_elapsed }

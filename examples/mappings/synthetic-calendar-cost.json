@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "kind": "manual_cost",
+  "source_id": "synthetic-calendar-cost",
+  "tenant_id": "tenant-a",
+  "app_id": "app-a",
+  "format": "csv",
+  "rules": [
+    { "target": "network", "expression": { "source": "network" } },
+    { "target": "campaign_id", "expression": { "source": "campaign_id" } },
+    { "target": "date", "expression": { "source": "date" } },
+    { "target": "reporting_time_zone", "expression": { "source": "reporting_time_zone", "omit_if_empty": true } },
+    { "target": "as_of", "expression": { "source": "as_of", "timestamp": { "default_timezone": "UTC", "truncate_to_milliseconds": true } } },
+    { "target": "money", "expression": { "source": "cost_micros", "money": { "input": "integer", "scale": 6, "currency_source": "currency" } } }
+  ]
+}

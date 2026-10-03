@@ -26,7 +26,8 @@ type RoasEvidenceBase = {
   readonly metric_definition_version: string;
   readonly definition_digest: string;
   readonly anchor_event: string;
-  readonly window: { readonly type: "elapsed"; readonly day: number; readonly boundary: "half_open" };
+  readonly window: { readonly type: "elapsed" | "calendar_day"; readonly day: number; readonly boundary: "half_open" };
+  readonly calendar_cohort_policy?: "cumulative_revenue_on_day_activity";
   readonly aggregation_time_zone: string;
   readonly fraud_policy: "gross" | "net";
   readonly cost_basis: "cohort_acquisition_day_current_snapshot";

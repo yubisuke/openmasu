@@ -1,7 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import { sha256Jcs } from "@openmasu/fraud-rules";
 import { uuidV7, withTenant, type MetricScheduleReplacement } from "@openmasu/runtime";
-import { ENGAGEMENT_METRIC_NAMES } from "@openmasu/contracts/definitions";
+import { ENGAGEMENT_METRIC_NAMES, cohortLocalDate, addCalendarDays, type CohortTimeZone } from "@openmasu/contracts/definitions";
 import { validateScheduledMetricDefinition as validMetricDefinition, type ScheduledMetricDefinition } from "@openmasu/contracts/validation";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
@@ -9,6 +9,7 @@ import { recordDashboardAuditWithClient } from "./session.js";
 type JsonObject = Record<string, unknown>;
 
 export type MetricScheduleDefinition = Readonly<{
+  cohort_time_zone?: CohortTimeZone;
   fx_policy: JsonObject;
   metric_definitions: readonly ScheduledMetricDefinition[];
   evaluations: readonly Readonly<{
@@ -88,13 +89,12 @@ function scheduledMetricNames(definition: MetricScheduleDefinition): Set<string>
   return new Set(definition.evaluations.flatMap((evaluation) => evaluation.metric_names));
 }
 
-export function metricScheduleTargetDate(now: Date, lagDays: number): string {
+export function metricScheduleTargetDate(now: Date, lagDays: number, zone: CohortTimeZone = "UTC"): string {
   if (!Number.isFinite(now.valueOf())) throw new Error("metric_schedule_time_invalid");
   if (!Number.isSafeInteger(lagDays) || lagDays < 1 || lagDays > 365) {
     throw new Error("metric_schedule_lag_days_invalid");
   }
-  const midnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  return new Date(midnight - lagDays * 86_400_000).toISOString().slice(0, 10);
+  return addCalendarDays(cohortLocalDate(now, zone), -lagDays);
 }
 
 function normalizedGrouping(value: unknown): JsonObject {
@@ -134,11 +134,10 @@ export function normalizeMetricScheduleRequest(
   const lagDaysValue = body.lag_days === undefined ? 1 : body.lag_days;
   if (typeof lagDaysValue !== "number") throw new Error("metric_schedule_lag_days_invalid");
   const lagDays = lagDaysValue;
-  const defaultStart = metricScheduleTargetDate(now, lagDays);
-  const startDate = body.start_date === undefined
+  let defaultStart = metricScheduleTargetDate(now, lagDays);
+  let startDate = body.start_date === undefined
     ? defaultStart
     : exactDate(body.start_date, "metric_schedule_start_date_invalid");
-  if (startDate > defaultStart) throw new Error("metric_schedule_start_date_in_future");
 
   const fxPolicy = object(body.fx_policy, "metric_schedule_fx_policy_invalid");
   if (!validFxPolicy(fxPolicy)) {
@@ -154,6 +153,15 @@ export function normalizeMetricScheduleRequest(
   if (new Set(suppliedDefinitions.map(value => value.metric_name)).size !== suppliedDefinitions.length) {
     throw new Error("metric_schedule_definitions_invalid");
   }
+  const calendarDefinitions = suppliedDefinitions.filter(value => value.calendar_cohort_policy);
+  const calendarZones = new Set(calendarDefinitions.map(value => value.aggregation_time_zone));
+  if (calendarDefinitions.length && (calendarDefinitions.length !== suppliedDefinitions.length || calendarZones.size !== 1)) {
+    throw new Error("metric_schedule_calendar_profile_required");
+  }
+  const cohortTimeZone = calendarDefinitions[0]?.aggregation_time_zone;
+  defaultStart = metricScheduleTargetDate(now, lagDays, cohortTimeZone ?? "UTC");
+  if (body.start_date === undefined) startDate = defaultStart;
+  if (startDate > defaultStart) throw new Error("metric_schedule_start_date_in_future");
   if (!Array.isArray(body.evaluations) || body.evaluations.length < 1 || body.evaluations.length > 100) {
     throw new Error("metric_schedule_evaluations_invalid");
   }
@@ -173,6 +181,10 @@ export function normalizeMetricScheduleRequest(
       throw new Error("metric_schedule_date_dimension_invalid");
     }
     const dateDimension: "cohort_date" | "metric_date" = evaluation.date_dimension;
+    if (cohortTimeZone && (dateDimension !== "cohort_date" || evaluation.campaign_discovery !== undefined
+        || evaluation.metric_names.some(name => !calendarDefinitions.some(definition => definition.metric_name === name)))) {
+      throw new Error("metric_schedule_calendar_profile_required");
+    }
     const grouping = normalizedGrouping(evaluation.grouping);
     if ((grouping.campaign_id !== undefined || grouping.ad_group_id !== undefined) && grouping.network === undefined
         && evaluation.metric_names.some(name => suppliedDefinitions.find(definition => definition.metric_name === name)
@@ -235,6 +247,7 @@ export function normalizeMetricScheduleRequest(
     if (maximum > 1000) throw new Error("metric_schedule_discovery_limit");
   }
   const definition: MetricScheduleDefinition = {
+    ...(cohortTimeZone ? { cohort_time_zone: cohortTimeZone } : {}),
     fx_policy: fxPolicy,
     metric_definitions: suppliedDefinitions,
     evaluations,
