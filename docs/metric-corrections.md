@@ -93,13 +93,13 @@ snapshot receipt, range, states and safe reasons. It excludes replay bodies,
 credentials, raw evidence references and claim tokens. Other apps/tenants and
 unknown import receipts cannot reveal the private source.
 
-## Late advertising revenue, purchases and refunds
+## Late advertising revenue, purchases, refunds and custom outcomes
 
 The same `operate`-authorized POST accepts `trigger_kind: late_events`. It does
 not fabricate a cost-import receipt. Supply either 1–100 `source_record_ids`
 or an explicit receipt interval of at most 24 hours, exclusive at the start
 and inclusive at the end. The receipt cutoff must not exceed `watermark`.
-The following bounded query discovers accepted revenue/commerce inputs; it
+The following bounded query discovers accepted revenue/commerce/custom-outcome inputs; it
 does not require downloading their payloads or transaction identifiers:
 
 ```json
@@ -128,6 +128,14 @@ and settled `refund` projections are considered. A refund must have the existing
 same-installation/currency settled purchase target. Unknown/unbound commerce,
 pending or reversed amounts, non-canonical deliveries and future receipts do
 not trigger calculation. Receipt acceptance is not independent provider proof.
+
+The existing explicit custom-conversion D7 profile also supports admitted
+`custom_event` inputs with an installation binding and the exact saved
+`conversion_event_key`. A late tutorial event selects its tutorial count/rate,
+not a signup outcome or revenue metric. Explicit IDs and the bounded receipt
+interval share this selector, its limits, privacy fences and immutable replay.
+This manual correction support does not claim every automatic receipt planner
+or arbitrary retention/event-count profile consumes custom outcomes.
 
 Impact selection reuses selected first-party click evidence and the saved
 definition's cohort, attribution status, gross/net policy and half-open window.
