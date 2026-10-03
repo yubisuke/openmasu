@@ -10,6 +10,7 @@ import { compareSnapshots, parseSnapshot } from "./compare-cohorts.js";
 import { captureMetricComparisonContext } from "@openmasu/runtime";
 import { sha256 } from "@openmasu/attribution-core";
 import { renderComparison } from "./cohort-comparison-html.js";
+import { parseCsv } from "@openmasu/runtime/import-normalization";
 
 const template = () => ({ source: "synthetic-report", conditions: { date_from: "2026-01-01", date_to: "2026-01-02", time_zone: "UTC", maturity: "fully_elapsed_d7", aggregation: "cumulative", attribution_scope: "organic", metric_definition: "revenue_d7@v1", source_cutoff: "2026-01-10T00:00:00.000Z" }, rows: [] });
 const row = (): Record<string, any> => ({ metric_run_id: "synthetic-run", metric_name: "revenue_d7", metric_definition_version: "v1", input_snapshot_id: "a".repeat(64), input_received_at_watermark: "2026-01-10T00:00:00.000Z", aggregation_time_zone: "UTC", grouping: { cohort_date: "2026-01-01", attribution_status: "organic" }, value_type: "money", currency: "USD", amount_scale: 2, ratio_scale: null, value_state: "present", value_unscaled: "900719925474099301", undefined_reason: null, superseded: false, reproducibility_status: "fully_reproducible" });
@@ -32,6 +33,9 @@ it("dated_FX_report_snapshot_requires_the_same_saved_policy_and_exposes_changed_
   r.policy_versions = ["rule_bundle:v1", "fx:0.4.22"];
   const dated = { ...r, fx_conversion_snapshot: { policy, snapshot_id: sha256(policy) } };
   const saved = reportToSnapshot({ data: [dated] }, template());
+  const csv = parseCsv(encodeMetricReport({ data: [dated as unknown as MetricReportRow] }, "csv").body)[0];
+  // CSV embeds ordinary JSON; compare its decoded policy, not JCS key layout.
+  assert.deepEqual(JSON.parse(csv.fx_conversion_snapshot), dated.fx_conversion_snapshot);
   assert.equal(compareSnapshots(saved, saved).status, "compared");
   assert.deepEqual(parseSnapshot(saved), saved);
   assert.throws(() => reportToSnapshot({ data: [r] }, template()), /fx_snapshot_binding_mismatch/);

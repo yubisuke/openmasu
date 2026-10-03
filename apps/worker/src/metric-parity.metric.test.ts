@@ -86,7 +86,8 @@ describe("dated FX snapshot SQL parity and replay", { concurrency: false }, () =
       assert.equal(jcs(row.fx_conversion_snapshot ?? null), jcs(run.fx_conversion_snapshot ?? null));
       const csv = parseCsv(encodeMetricReport({ data: [row] }, "csv").body)[0];
       assert.equal(csv.value_unscaled, run.value_unscaled ?? "");
-      assert.equal(csv.fx_conversion_snapshot, run.fx_conversion_snapshot ? jcs(run.fx_conversion_snapshot) : "");
+      if (run.fx_conversion_snapshot) assert.equal(jcs(JSON.parse(csv.fx_conversion_snapshot)), jcs(run.fx_conversion_snapshot));
+      else assert.equal(csv.fx_conversion_snapshot, "");
       if (!run.fx_conversion_snapshot) continue;
       assert.equal(row.comparison_context?.fx_digest, run.fx_conversion_snapshot.snapshot_id);
       assert.equal(jcs(row.comparison_context!.fx), jcs(run.fx_conversion_snapshot.policy));
