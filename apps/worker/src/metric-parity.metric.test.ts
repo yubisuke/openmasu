@@ -76,7 +76,7 @@ describe("verified platform acquisition SQL parity", { concurrency: false }, () 
     const page = await metricReport(reader,identity,{tenantId:identity.tenantId,appId:identity.appId,supersession:"all",limit:200});
     for (const run of actual) {
       const row = page.data.find(value => value.metric_run_id === run.metric_run_id)!;
-      assert.equal(row.value_state,run.value_state);
+      assert.equal(row.value_state,run.value_state ?? "present");
       assert.equal(row.value_unscaled,run.value_unscaled);
       assert.equal(row.undefined_reason,run.undefined_reason ?? null);
       assert.deepEqual(row.grouping,run.grouping?.dimensions);
