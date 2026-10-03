@@ -29,7 +29,7 @@ export const selectedImportedAcquisitionSql = `
   ORDER BY candidate.subject_ref COLLATE "C",candidate.decided_at DESC,candidate.attribution_id COLLATE "C" DESC
 `;
 
-export function importedAcquisitionJoinSql(enabled: string, provider: "$22" | "$15" | "$10") {
+export function importedAcquisitionJoinSql(enabled: string, provider: "$22" | "$15" | "$10", privacy: "$8" | "$12" | "$15") {
   return `LEFT JOIN acquisition ON acquisition.subject_ref=install.installation_id
     LEFT JOIN LATERAL (
       SELECT install.artifact->'import_context'->>'provider' AS import_provider,
@@ -39,6 +39,7 @@ export function importedAcquisitionJoinSql(enabled: string, provider: "$22" | "$
         install.artifact->'import_context'->>'provider_country' AS country,NULL::text AS creative_id
       WHERE ${enabled}::boolean AND logical.producer='import:'||${provider}::text
         AND install.artifact->'import_context'->>'provider'=${provider}
+        AND ${privacy}::text IN ('before','after')
     ) AS acquisition_source ON true`;
 }
 

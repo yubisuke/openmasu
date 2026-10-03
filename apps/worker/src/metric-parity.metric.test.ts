@@ -30,6 +30,9 @@ import { syntheticPlatformAcquisitionCases } from "../../../tools/synthetic-plat
 import { persistSyntheticPlatformResults } from "./test-support/platform-acquisition.js";
 import { syntheticImportedAcquisitionCases, importedAcquisitionCaseRuns } from "../../../tools/synthetic-imported-acquisition-cases.js";
 import { selectLateMetricInputs } from "@openmasu/runtime";
+import { saveMetricCorrectionPolicy } from "../../api/src/metric-correction-policy.js";
+import { planAutomaticMetricCorrections } from "./automatic-metric-corrections.js";
+import { processMetricRecalculations } from "./metric-recalculation-worker.js";
 
 type Any = Record<string, any>;
 const fixtureName = "33-stage-b-cohort-metrics";
@@ -102,6 +105,34 @@ describe("imported provider acquisition SQL parity", { concurrency: false }, () 
           date_from:"2026-08-06",date_to:"2026-08-06",watermark:"2026-08-15T00:00:00.000Z"}));
       assert.equal(selected.rows.length,record_id === "revenue-paid-67" ? 2 : 0);
       assert.ok(selected.rows.every(row => row.safe_reason === null));
+    }
+  });
+  it("replays an imported revision into both affected cohorts without rewriting original runs", async () => {
+    const initial = structuredClone(source);
+    initial.metric_evaluations = initial.metric_evaluations.slice(0,2);
+    await ingestFixture("import67-auto-revision",initial,app,seed);
+    const originals = await computeSqlMetricRuns(app,initial,true);
+    const identity = {keyId:"synthetic-import67",tenantId:"tenant-a",appId:"app-a",role:"admin" as const};
+    await saveMetricCorrectionPolicy(app,identity,{enabled:true,date_from:"2026-08-06",date_to:"2026-08-06",
+      metric_names:originals.map(row => row.metric_name).filter((value,index,all) => all.indexOf(value) === index),
+      runs_per_page:10,receipts_per_cycle:5,maximum_runs_per_receipt:20});
+    const previous = evaluate(initial).attributions.find(row => row.subject_ref === "installation:paid-67")!;
+    const revision = {...previous,attribution_id:"revision-import67-auto",supersedes_attribution_id:previous.attribution_id,
+      status:"organic" as const,reason_code:"provider_organic",decided_at:"2026-08-16T00:00:00.000Z",input_cutoff_at:"2026-08-16T00:00:00.000Z"};
+    await persistAttribution(app,revision as Parameters<typeof persistAttribution>[1]);
+    await planAutomaticMetricCorrections(app,"tenant-a");
+    assert.deepEqual(await processMetricRecalculations(app,"tenant-a",10),{completed:6,skipped:0,fenced:0,failed:0});
+    const page = await metricReport(reader,identity,{tenantId:"tenant-a",appId:"app-a",supersession:"all",limit:100});
+    for (const original of originals) {
+      const retained = page.data.find(row => row.metric_run_id === original.metric_run_id)!;
+      assert.equal(retained.value_unscaled,original.value_unscaled);
+      assert.equal(retained.undefined_reason,original.undefined_reason ?? null);
+      const replacement = page.data.find(row => row.supersedes_metric_run_id === original.metric_run_id)!;
+      assert.ok(replacement);
+      const expected = original.metric_run_id.startsWith("import67-a-paid")
+        ? ({imported_cohort_install_count:"0",imported_cohort_ltv_d0_usd:"empty_cohort",imported_d0_roas:"0"} as Record<string,string>)
+        : ({imported_cohort_install_count:"2",imported_cohort_ltv_d0_usd:"2500000",imported_d0_roas:"no_attributed_cost"} as Record<string,string>);
+      assert.equal(replacement.value_unscaled ?? replacement.undefined_reason,expected[original.metric_name]);
     }
   });
 });

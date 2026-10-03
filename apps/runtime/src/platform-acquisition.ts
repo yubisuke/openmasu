@@ -83,7 +83,7 @@ export function metricAcquisitionDimensionSql(field: "campaign_id" | "network", 
 }
 
 export function metricAcquisitionJoinSql(enabled: "$7" | "$15" | "$18", privacy: "$8" | "$12" | "$15", platform: boolean | "selected_imported_provider", provider: "$22" | "$15" | "$10" = "$22"): string {
-  if (platform === "selected_imported_provider") return importedAcquisitionJoinSql(enabled, provider);
+  if (platform === "selected_imported_provider") return importedAcquisitionJoinSql(enabled, provider, privacy);
   if (!platform) return selectedClickJoinSql(enabled, privacy);
   return `LEFT JOIN acquisition ON acquisition.subject_ref=install.installation_id
     LEFT JOIN LATERAL (
