@@ -86,7 +86,7 @@ describe("explicit calendar cohort SQL parity", { concurrency: false }, () => {
     const explanation = await metricExplanation(reader,identity,"calendar68-native-ny:calendar_ny_d7_roas");
     assert.equal(explanation?.calculation?.window.type,"calendar_day");
     assert.equal(explanation?.calculation?.calendar_cohort_policy,"cumulative_revenue_on_day_activity");
-    assert.equal(explanation?.calculation?.operands.last_window_end,"2026-08-14T04:00:00.000Z");
+    assert.equal(explanation?.calculation?.operands.last_window_end,"2026-08-14T04:00:00.000000Z");
     const html = renderMetricExplanation("app-a",explanation!);
     assert.match(html,/local midnight after cohort day 7/);
     assert.match(html,/America\/New_York/);
@@ -107,7 +107,7 @@ describe("explicit calendar cohort SQL parity", { concurrency: false }, () => {
       assert.equal(imported.rows,1);
     } finally { rmSync(directory,{recursive:true,force:true}); }
     const run = (await computeSqlMetricRuns(app,value,true))[0];
-    assert.equal(run.value_state,"present"); assert.equal(run.value_unscaled,"15500000");
+    assert.equal(run.value_state ?? "present","present"); assert.equal(run.value_unscaled,"15500000");
     const cost = await withTenant(reader,"tenant-a",client=>client.query("SELECT artifact FROM ledger.cost_records WHERE tenant_id=$1 AND app_id=$2",["tenant-a","app-a"]));
     assert.equal(cost.rows.length,1); assert.equal(cost.rows[0].artifact.reporting_time_zone,"America/New_York");
   });

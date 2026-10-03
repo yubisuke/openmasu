@@ -38,6 +38,15 @@ export function syntheticCalendarCohortCases(source: Any): DailyAcquisitionCase[
         cost.dimension_digest = sha256(Object.fromEntries(["network","campaign_id","reporting_time_zone"]
           .filter(key => cost[key] !== undefined).map(key => [key,cost[key]])));
       }
+      // Removing/changing the zone merges UTC/NY's identical same-date cost
+      // cells. Keep one synthetic observation per real dated-revision key,
+      // rather than testing invalid duplicate INSERTs before metric selection.
+      const datedRevisions = new Set<string>();
+      input.cost_records = input.cost_records.filter((cost: Any) => {
+        const key = JSON.stringify([cost.tenant_id,cost.app_id,cost.date,cost.dimension_digest,cost.as_of]);
+        if (datedRevisions.has(key)) return false;
+        datedRevisions.add(key); return true;
+      });
       input.metric_evaluations = input.metric_evaluations.filter((row: Any) => !row.metric_run_id_prefix.endsWith("legacy")
         && (mode === "missing" || !row.metric_run_id_prefix.endsWith("jst")));
     });
