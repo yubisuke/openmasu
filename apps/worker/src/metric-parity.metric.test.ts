@@ -53,11 +53,18 @@ describe("selected daily acquisition SQL and reporting parity", { concurrency: f
     const rows = new Map(page.data.map(row => [row.metric_run_id, row]));
     for (const run of expected) {
       const row = rows.get(run.metric_run_id)!;
-      assert.equal(row.value_unscaled, run.value_unscaled);
+      // The old recorded profile evaluates before deletion. Its stored artifact
+      // still matches the oracle, but the existing public privacy gate must hide it.
+      const withheld = run.metric_name === "daily_install_count" && Boolean(entry.input.privacy_requests?.length);
+      assert.equal(row.value_state, withheld ? "unavailable" : "present");
+      assert.equal(row.value_unscaled, withheld ? undefined : run.value_unscaled);
+      assert.equal(row.unavailable_reason, withheld ? "privacy_deletion" : null);
       assert.deepEqual(row.grouping, run.grouping?.dimensions);
       const encoded = encodeMetricReport({ data: [row] }, "csv");
       const csv = parseCsv(encoded.body)[0];
-      assert.equal(csv.value_unscaled, run.value_unscaled);
+      assert.equal(csv.value_unscaled, withheld ? "" : run.value_unscaled);
+      assert.equal(csv.value_state, row.value_state);
+      assert.equal(csv.unavailable_reason, row.unavailable_reason ?? "");
       assert.deepEqual(JSON.parse(csv.grouping), run.grouping?.dimensions);
     }
     const facts = await withTenant(app, "tenant-a", async client => (await client.query(
