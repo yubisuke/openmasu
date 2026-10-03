@@ -28,6 +28,10 @@ change. Repository instructions in `AGENTS.md` remain authoritative.
   [SQL metric boundaries](development-sql-metrics.md) locates input selection,
   family calculations and persistence inside the existing worker. Keep the
   caller's client, transaction, privacy fence and saved replay meaning intact.
+  [Reference evaluator boundaries](development-evaluator.md) locates candidate
+  selection, ingestion/commerce decisions, attribution, fraud, metrics,
+  reconciliation and artifact assembly inside the pure calculation package.
+  Preserve the public entrypoint and explicit input order when extending it.
 - A provider adapter belongs in the corresponding worker import/job module and
   receives bounded synthetic responses in tests. Reuse the existing ingestion,
   privacy fence, and job lifecycle rather than introducing another queue.
