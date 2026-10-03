@@ -1,0 +1,205 @@
+[
+  {
+    "attribution_id": "attr:kpi70-install-a-0",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:kpi70-install-a-0",
+    "status": "non_organic",
+    "method": "install_referrer",
+    "model": "last_click",
+    "reason_code": "valid_install_referrer",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-06T00:00:00.000Z",
+    "decided_at": "2026-08-12T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-12T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50"
+  },
+  {
+    "attribution_id": "attr:kpi70-install-a-1",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:kpi70-install-a-1",
+    "status": "non_organic",
+    "method": "install_referrer",
+    "model": "last_click",
+    "reason_code": "valid_install_referrer",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-06T01:00:00.000Z",
+    "decided_at": "2026-08-12T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-12T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50"
+  },
+  {
+    "attribution_id": "attr:kpi70-install-a-2",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:kpi70-install-a-2",
+    "status": "non_organic",
+    "method": "install_referrer",
+    "model": "last_click",
+    "reason_code": "valid_install_referrer",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-06T02:00:00.000Z",
+    "decided_at": "2026-08-12T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-12T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50"
+  },
+  {
+    "attribution_id": "attr:kpi70-install-b-0",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:kpi70-install-b-0",
+    "status": "non_organic",
+    "method": "install_referrer",
+    "model": "last_click",
+    "reason_code": "valid_install_referrer",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-06T03:00:00.000Z",
+    "decided_at": "2026-08-12T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-12T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50"
+  },
+  {
+    "attribution_id": "attr:kpi70-install-b-1",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:kpi70-install-b-1",
+    "status": "non_organic",
+    "method": "install_referrer",
+    "model": "last_click",
+    "reason_code": "valid_install_referrer",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-06T04:00:00.000Z",
+    "decided_at": "2026-08-12T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-12T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50"
+  },
+  {
+    "attribution_id": "attr:kpi70-install-organic-0",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:kpi70-install-organic-0",
+    "status": "organic",
+    "method": "none",
+    "model": "none",
+    "reason_code": "no_referrer",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-06T05:00:00.000Z",
+    "decided_at": "2026-08-12T00:00:00.000Z",
+    "input_cutoff_at": "2026-08-12T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50"
+  }
+]
