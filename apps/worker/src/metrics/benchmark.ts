@@ -133,6 +133,14 @@ try {
     const fixedEnvironment = ({ postgres_memory_current_bytes: _volatile, ...fixed }: FloorEvidence["environment"]) => fixed;
     if (baseline.rows !== evidence.rows || baseline.value_unscaled !== evidence.value_unscaled
         || !isDeepStrictEqual(fixedEnvironment(baseline.environment), fixedEnvironment(evidence.environment))) {
+      const before = fixedEnvironment(baseline.environment), after = fixedEnvironment(evidence.environment);
+      const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort();
+      console.error(JSON.stringify({ synthetic_only: true, comparison_mismatch: {
+        row_count: baseline.rows !== evidence.rows,
+        aggregate: baseline.value_unscaled !== evidence.value_unscaled,
+        environment: keys.filter(key => !isDeepStrictEqual(before[key], after[key]))
+          .map(key => ({ key, before: before[key], after: after[key] })),
+      } }));
       throw new Error("metric floor comparison inputs or environment changed");
     }
   }
