@@ -5,6 +5,12 @@ It uses the existing PostgreSQL ledger, tenant worker cycle and durable metric
 recalculation jobs. There is no additional scheduler, provider lookup or
 all-history backfill. Original artifacts and saved definitions remain immutable.
 
+[Verified platform cohorts](verified-platform-acquisition.md) use this same
+opt-in policy and job queue. A later verified installation revision can correct
+eligible count, retention or revenue series without relabelling first-party
+results; late money and cost continue to use their existing contributing-input
+selection. Earlier runs retain their recorded cutoff and meaning.
+
 ## Configure, pause and inspect
 
 `POST /v1/admin/apps/:app/metric-correction-policy` requires `administer`.

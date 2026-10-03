@@ -153,7 +153,17 @@ function prepareMetaRecord(row: InboxRow, sourceRecord: Any, keys: readonly Meta
   const record = structuredClone(sourceRecord);
   if (record.event_name !== "install") return record;
   const raw = record.payload?.extensions?.meta_install_referrer_protected;
-  if (typeof raw !== "string") return record;
+  if (typeof raw !== "string") {
+    const claimsDecryptedMeta = record.payload?.meta_referrer_context !== undefined
+      || record.payload?.meta_referrer_status === "decrypted"
+      || record.payload?.extensions?.meta_decryption_key_id !== undefined;
+    delete record.payload?.meta_referrer_context;
+    // A legacy first-party referrer reference is not a server-decryption proof.
+    if (claimsDecryptedMeta) delete record.payload?.protected_referrer_evidence_ref;
+    if (record.payload?.meta_referrer_status === "decrypted") record.payload.meta_referrer_status = "decrypt_failed";
+    if (record.payload?.extensions) delete record.payload.extensions.meta_decryption_key_id;
+    return record;
+  }
   const isCt = Number(record.payload.extensions.meta_is_ct_unverified);
   const actualTimestamp = Number(record.payload.extensions.meta_actual_timestamp_unverified);
   const result = decryptMetaInstallReferrer(metaSource(raw), keys);

@@ -1,5 +1,5 @@
 import type { RoasOperands, TotalNetRoasOperands } from "@openmasu/runtime";
-import { selectedAcquisitionSql, selectedClickJoinSql } from "./selected-acquisition.js";
+import { metricAcquisitionSql, metricAcquisitionJoinSql } from "./selected-acquisition.js";
 import { engagementMetricValue } from "./engagement.js";
 import { customConversionValue, eventCountValue } from "./event-values.js";
 import type { CostSelection, MetricClient, MetricDefinition, MetricFxPolicy, MetricGrouping, MetricScope, MetricValue } from "./model.js";
@@ -28,7 +28,7 @@ async function purchaseNetRevenueValue(
     purchase_event_count: string; refund_event_count: string;
     refund_reversal_unscaled: string; refund_reversal_event_count: string }>(
     `WITH
-       acquisition AS (SELECT * FROM (${selectedAcquisitionSql}) AS selected WHERE $15::boolean),
+       acquisition AS (SELECT * FROM (${metricAcquisitionSql(definition.acquisition_basis === "selected_verified_platform")}) AS selected WHERE $15::boolean),
        rates AS (
          SELECT currency, rate_unscaled::numeric AS rate_unscaled, rate_scale
          FROM jsonb_to_recordset($10::jsonb)
@@ -55,12 +55,13 @@ async function purchaseNetRevenueValue(
            ORDER BY candidate.decided_at DESC, candidate.attribution_id DESC
            LIMIT 1
          ) AS attribution ON true
-         ${selectedClickJoinSql("$15", "$12")}
+         ${metricAcquisitionJoinSql("$15", "$12", definition.acquisition_basis === "selected_verified_platform")}
          WHERE install.tenant_id=$1 AND install.app_id=$2 AND install.occurred_at IS NOT NULL
+           ${definition.acquisition_basis === "selected_verified_platform" ? "AND acquisition_source.network IS NOT NULL" : ""}
            AND raw.received_at <= $3
            AND ($12='before' OR raw.payload_lifecycle_status='available')
-           AND ($4::text IS NULL OR coalesce(install.campaign_id, acquisition_source.campaign_id)=$4)
-           AND ($5::text IS NULL OR coalesce(install.network, acquisition_source.network)=$5)
+           AND ($4::text IS NULL OR ${definition.acquisition_basis === "selected_verified_platform" ? "acquisition_source.campaign_id" : "coalesce(install.campaign_id, acquisition_source.campaign_id)"}=$4)
+           AND ($5::text IS NULL OR ${definition.acquisition_basis === "selected_verified_platform" ? "acquisition_source.network" : "coalesce(install.network, acquisition_source.network)"}=$5)
            AND ($6::text IS NULL OR install.country=$6)
            AND ($7::text IS NULL OR timezone($8, install.occurred_at_ts)::date::text=$7)
            AND ($13::text IS NULL OR (CASE WHEN $15 THEN coalesce(acquisition.status, 'unattributed') ELSE attribution.status END)=$13)
@@ -180,7 +181,7 @@ async function purchaseNetRevenueValue(
       privacyState,
       grouping?.attribution_status ?? null,
       definition.fraud_policy ?? "gross",
-      definition.acquisition_basis === "selected_first_party_click",
+      !!definition.acquisition_basis,
       definition.refund_reversal_policy === "cancel_target_refund_at_watermark",
       grouping?.ad_group_id ?? null,
       grouping?.creative_id ?? null,
@@ -351,7 +352,7 @@ export async function metricValue(
     window_elapsed: boolean | null;
   }>(
     `WITH
-       acquisition AS (SELECT * FROM (${selectedAcquisitionSql}) AS selected WHERE $18::boolean),
+       acquisition AS (SELECT * FROM (${metricAcquisitionSql(definition.acquisition_basis === "selected_verified_platform")}) AS selected WHERE $18::boolean),
        rates AS (
          SELECT currency, rate_unscaled::numeric AS rate_unscaled, rate_scale
          FROM jsonb_to_recordset($12::jsonb)
@@ -376,12 +377,13 @@ export async function metricValue(
            ORDER BY candidate.decided_at DESC, candidate.attribution_id DESC
            LIMIT 1
          ) AS attribution ON true
-         ${selectedClickJoinSql("$18", "$15")}
+         ${metricAcquisitionJoinSql("$18", "$15", definition.acquisition_basis === "selected_verified_platform")}
          WHERE install.tenant_id=$1 AND install.app_id=$2 AND install.occurred_at IS NOT NULL
+           ${definition.acquisition_basis === "selected_verified_platform" ? "AND acquisition_source.network IS NOT NULL" : ""}
            AND raw.received_at <= $3
            AND ($15='before' OR raw.payload_lifecycle_status='available')
-           AND ($4::text IS NULL OR coalesce(install.campaign_id, acquisition_source.campaign_id)=$4)
-           AND ($5::text IS NULL OR coalesce(install.network, acquisition_source.network)=$5)
+           AND ($4::text IS NULL OR ${definition.acquisition_basis === "selected_verified_platform" ? "acquisition_source.campaign_id" : "coalesce(install.campaign_id, acquisition_source.campaign_id)"}=$4)
+           AND ($5::text IS NULL OR ${definition.acquisition_basis === "selected_verified_platform" ? "acquisition_source.network" : "coalesce(install.network, acquisition_source.network)"}=$5)
            AND ($6::text IS NULL OR install.country=$6)
            AND ($7::text IS NULL OR timezone($8, install.occurred_at_ts)::date::text=$7)
            AND ($16::text IS NULL OR (CASE WHEN $18 THEN coalesce(acquisition.status, 'unattributed') ELSE attribution.status END)=$16)
@@ -511,7 +513,7 @@ export async function metricValue(
       privacyState,
       grouping?.attribution_status ?? null,
       definition.fraud_policy ?? "gross",
-      definition.acquisition_basis === "selected_first_party_click",
+      !!definition.acquisition_basis,
       selectedCosts ? JSON.stringify(selectedCosts.rows) : null,
       grouping?.ad_group_id ?? null,
       grouping?.creative_id ?? null,

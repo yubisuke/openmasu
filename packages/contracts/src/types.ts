@@ -5,3 +5,4 @@ export type {
   NonFraudRuleBundleKey,
 } from "./rule-bundle-provenance.js";
 export type { EventPayloadValidation } from "./event-validation.js";
+export type { PlatformAcquisitionInput } from "./platform-acquisition.js";

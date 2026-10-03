@@ -202,6 +202,39 @@ independently exercise boundaries, deduplication, latest-open filtering, removed
 anchors/outcomes, different installations and per-event half-even rounding in
 TypeScript, Python and SQL. Operational scheduling/reporting is a separate step.
 
+## Verified platform acquisition (0.4.19)
+
+Optional `acquisition_basis=selected_verified_platform` and trusted fixture
+projection `platform_acquisition_inputs` support the separately named eleven
+definitions in bundle `metric-verified-platform-acquisition`. Current selected
+server evidence supplies source-namespaced campaign/ad-group dimensions. Earlier
+recorded and selected-first-party definitions remain unchanged; no old run is
+relabelled or automatically upgraded. Public URNs and wire/package version stay
+`v0.4` / `0.4.0`. There are no new dependencies, tables or registry values.
+
+Full new fixture inventory in `66-verified-platform-acquisition`: `input.json`,
+`README.md`, and `expected_raw_records.json`, `expected_deliveries.json`,
+`expected_logical_events.json`, `expected_corrections.json`,
+`expected_privacy_requests.json`, `expected_privacy_tombstones.json`,
+`expected_attributions.json`, `expected_metric_definitions.json`,
+`expected_metric_runs.json`, `expected_cost_records.json`,
+`expected_fraud_decisions.json`, `expected_rejections.json`, and
+`expected_reconciliation.json`. The shared fixture README records provenance.
+**None of the earlier 65 inputs or 845 goldens changed.** Verify with
+`git diff --name-status ae5760620e021b0f4d4ca2181cba924b4ade02d2 -- fixtures/v0.4/`:
+only the new directory and shared README may appear.
+
+The fixture README derives all eighteen metric results and every artifact
+family without either evaluator or SQL as its oracle. An independent manual
+construction was compared against TypeScript and Python; all thirteen canonical
+families agree (combined SHA-256
+`5a97c353d0479a9fd0b288dcb269f493869cb744277698abd3c752911ea0491a`).
+Golden additions are committed separately from behavior. Mutations exercise
+late context, negative lookup, source-local ID collisions, forged metadata,
+cross-tenant projection, protected-context redaction, fraud policy and reorder
+stability. [Profile documentation](verified-platform-acquisition.md) separates
+synthetic acceptance from unverified live-provider/device behavior.
+
 ## Explicit selected daily native acquisition (0.4.18)
 
 New registered definition/bundle `metric-selected-daily-acquisition` binds

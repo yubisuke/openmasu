@@ -1,7 +1,7 @@
 import type { PoolClient } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
 import { validateMetricDefinition } from "@openmasu/contracts/validation";
-import { selectedAcquisitionSql, selectedClickJoinSql } from "./selected-acquisition.js";
+import { metricAcquisitionSql, metricAcquisitionJoinSql, metricAcquisitionDimensionSql } from "./platform-acquisition.js";
 import type { LateEventRecalculationRequest } from "./metric-recalculation.js";
 
 type Any = Record<string, any>;
@@ -28,7 +28,17 @@ export function supportsLateMetric(replay: Any): boolean {
     && typeof replay.evaluation?.grouping?.cohort_date === "string"
     && Object.keys(replay.evaluation.grouping).every(key =>
       ["campaign_id", "network", "country", "cohort_date", "attribution_status"].includes(key)
-        || (metric.acquisition_dimension_policy === "selected_link_ad_group_creative" && ["ad_group_id", "creative_id"].includes(key)));
+        || (metric.acquisition_dimension_policy === "selected_link_ad_group_creative" && ["ad_group_id", "creative_id"].includes(key))
+        || (metric.acquisition_basis === "selected_verified_platform" && key === "ad_group_id"));
+}
+
+/** Attribution membership can change counts and retention as well as revenue. */
+export function supportsAttributionMetric(replay: Any): boolean {
+  if (supportsLateMetric(replay)) return true;
+  const metric = replay.metric_definition;
+  return !!metric && validateMetricDefinition(metric) && metric.acquisition_basis === "selected_verified_platform"
+    && ["cohort_size", "active_installations_over_cohort"].includes(metric.definition.calculation)
+    && typeof replay.evaluation?.grouping?.cohort_date === "string";
 }
 
 export async function selectLateMetricInputs(
@@ -133,7 +143,7 @@ export async function selectLateMetricInputs(
     else {
       const metric = row.replay.metric_definition;
       const impacted = await client.query(
-        `WITH acquisition AS (SELECT * FROM (${selectedAcquisitionSql}) AS selected WHERE $7::boolean)
+        `WITH acquisition AS (SELECT * FROM (${metricAcquisitionSql(metric.acquisition_basis === "selected_verified_platform")}) AS selected WHERE $7::boolean)
          SELECT DISTINCT changed.record_id FROM jsonb_to_recordset($4::jsonb)
            AS changed(record_id text,event_name text,installation_id text,received_at text,occurred_at text,refund_reversal boolean)
          JOIN ledger.install_facts AS install ON install.tenant_id=$1 AND install.app_id=$2
@@ -145,17 +155,18 @@ export async function selectLateMetricInputs(
            WHERE candidate.tenant_id=install.tenant_id AND candidate.app_id=install.app_id
              AND candidate.subject_scope='installation_level' AND candidate.subject_ref=install.installation_id
            ORDER BY candidate.decided_at DESC,candidate.attribution_id DESC LIMIT 1) AS attribution ON true
-         ${selectedClickJoinSql("$7", "$8")}
+         ${metricAcquisitionJoinSql("$7", "$8", metric.acquisition_basis === "selected_verified_platform")}
          WHERE ($14::boolean OR changed.received_at>$12) AND raw.received_at<=$3 AND raw.payload_lifecycle_status='available'
            AND (NOT changed.refund_reversal OR $13::boolean)
+           ${metric.acquisition_basis === "selected_verified_platform" ? "AND acquisition_source.network IS NOT NULL" : ""}
            AND ($11='total_net_revenue'
              OR ($11='purchase_net_revenue' AND changed.event_name IN ('purchase','refund'))
              OR ($11='revenue' AND changed.event_name='ad_revenue'))
            AND control.canonical_timestamp_value(changed.occurred_at)>=install.occurred_at_ts
            AND control.canonical_timestamp_value(changed.occurred_at)<install.occurred_at_ts+(($6+1)*interval '1 day')
            AND timezone($9,install.occurred_at_ts)::date::text=$5::jsonb->>'cohort_date'
-           AND ($5::jsonb->>'campaign_id' IS NULL OR coalesce(install.campaign_id,acquisition_source.campaign_id)=$5::jsonb->>'campaign_id')
-           AND ($5::jsonb->>'network' IS NULL OR coalesce(install.network,acquisition_source.network)=$5::jsonb->>'network')
+           AND ($5::jsonb->>'campaign_id' IS NULL OR ${metricAcquisitionDimensionSql("campaign_id", metric.acquisition_basis === "selected_verified_platform")}=$5::jsonb->>'campaign_id')
+           AND ($5::jsonb->>'network' IS NULL OR ${metricAcquisitionDimensionSql("network", metric.acquisition_basis === "selected_verified_platform")}=$5::jsonb->>'network')
            AND ($5::jsonb->>'ad_group_id' IS NULL OR acquisition_source.ad_group_id=$5::jsonb->>'ad_group_id')
            AND ($5::jsonb->>'creative_id' IS NULL OR acquisition_source.creative_id=$5::jsonb->>'creative_id')
            AND ($5::jsonb->>'country' IS NULL OR install.country=$5::jsonb->>'country')
@@ -164,7 +175,7 @@ export async function selectLateMetricInputs(
            AND ($10='gross' OR (CASE WHEN $7 THEN acquisition.reason_code ELSE attribution.reason_code END) IS DISTINCT FROM 'fraud_excluded')
          LIMIT 101`, [scope.tenantId, scope.appId, request.watermark, JSON.stringify(eligible),
           JSON.stringify(row.replay.evaluation.grouping), metric.definition.window.day,
-          metric.acquisition_basis === "selected_first_party_click", "after", metric.aggregation_time_zone,
+          !!metric.acquisition_basis, "after", metric.aggregation_time_zone,
           metric.fraud_policy ?? "gross", metric.definition.numerator, row.watermark,
           metric.refund_reversal_policy === "cancel_target_refund_at_watermark", committedReceipt]);
       if (!impacted.rowCount) continue;

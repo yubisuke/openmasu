@@ -20,9 +20,9 @@ they name.
 | `v0.2.0-rc.4` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Previously published prerelease and frozen exact-commit evidence |
 | `v0.2.0` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Published non-prerelease at green commit `68b8c48`; frozen exact-commit evidence |
 | `v0.3.0-rc.1` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Current published prerelease at green commit `90a0f5f`; eight SDK assets and exact-commit synthetic evidence |
-| Current development source | through v0.4.18 | 65 fixtures / 845 golden artifacts | Adds selected acquisition and daily native counts, safe cost denominators, commerce cohorts, explicit custom conversion and opt-in targeted refund cancellation; not included in the published SDK release |
+| Current development source | through v0.4.19 | 66 fixtures / 858 golden artifacts | Adds independent verified-platform and first-party acquisition profiles, daily native counts, safe costs and commerce cohorts; not included in the published SDK release |
 
-The Contract wire and package identity remains `0.4.0`; v0.4.18 is the latest
+The Contract wire and package identity remains `0.4.0`; v0.4.19 is the latest
 additive patch ledger entry. The published SDK version is `0.3.0-rc.1`.
 Its [distribution guide](sdk-distribution.md) separates compiled Android
 modules from source-distributed Swift and Unity. Publication has a matching
@@ -51,7 +51,7 @@ MMP.
 
 | Capability | Repository state | Open operational evidence |
 | --- | --- | --- |
-| Contract and deterministic evaluator | Implemented and synthetically verified across 28 schemas, 8 registries, 65 fixtures, and 845 goldens | Real input representativeness and external implementation adoption |
+| Contract and deterministic evaluator | Implemented and synthetically verified across 28 schemas, 8 registries, 66 fixtures, and 858 goldens | Real input representativeness and external implementation adoption |
 | Shadow ledger and imports | Implemented for raw events, manual/bounded provider cost, and advertising or verified-commerce revenue | Authorized real export compatibility, account permissions, completeness, latency, and reconciliation |
 | Server-to-server events | Implemented for selected first-party backend events with app-scoped rotatable HMAC keys, durable inbox admission, contract rejection, replay controls, and deletion-race enforcement | Production TLS, secret custody, sustained load, backend integration, and operator acceptance |
 | Operator event webhooks | Implemented as a default-off, app-scoped export of selected accepted events with exact-origin egress policy, destination-scoped references, exact-body HMAC, durable retry, deletion-race enforcement, and bounded reader-safe delivery health | Production receiver, DNS/TLS, capacity, alerting, secret custody, downstream retention/deletion, and operator acceptance |
@@ -199,7 +199,16 @@ selected acquisition-source projection, overlapping cost-grain safety,
 late-input correction and daily campaign discovery (#182-#185). The acquisition
 gap is reproduced and addressed by explicit v0.4.11 definitions, fixture 58 and
 native-inbox/SQL tests; see [selected acquisition metrics](selected-acquisition-metrics.md).
-Historical definitions and saved runs retain their meaning. Explicit v0.4.12
+Historical definitions and saved runs retain their meaning.
+
+The opt-in [verified platform acquisition profile](verified-platform-acquisition.md)
+connects selected server lookup/decrypted evidence to separately named cohort
+count, retention, advertising-revenue LTV and ROAS. Source-local campaign/ad-group
+IDs remain namespaced; late context uses existing schedule/correction jobs and
+does not rewrite old runs. Evidence is synthetic, not live provider or device
+qualification. The first-party basis and Apple aggregate series remain separate.
+
+Explicit v0.4.12
 [safe cost selection](cost-selection.md) refuses overlapping-cost denominators
 and preserves disjoint siblings and dated revisions (#183). Explicit v0.4.13
 definitions also connect selected acquisition to purchase/total-net cohorts

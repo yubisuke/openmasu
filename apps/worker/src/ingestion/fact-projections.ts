@@ -19,6 +19,23 @@ export function acquisitionDimensions(payload: Any): {
   };
 }
 
+/** Keep only the bounded server-decryption projection, never ciphertext or raw referrer data. */
+export function platformInstallEvidence(payload: Any): Any {
+  if (payload.meta_referrer_status !== "decrypted" || !payload.extensions?.meta_decryption_key_id
+      || !payload.protected_referrer_evidence_ref || !payload.meta_referrer_context) return {};
+  const context = payload.meta_referrer_context;
+  return {
+    meta_referrer_status: "decrypted",
+    meta_referrer_context: {
+      attribution_model: context.attribution_model,
+      ...(context.campaign_id ? { campaign_id: context.campaign_id } : {}),
+      ...(context.adgroup_id ? { adgroup_id: context.adgroup_id } : {}),
+    },
+    protected_referrer_evidence_ref: payload.protected_referrer_evidence_ref,
+    extensions: { meta_decryption_key_id: payload.extensions.meta_decryption_key_id },
+  };
+}
+
 export async function persistProjectionWithClient(
   client: PoolClient,
   logical: LogicalEvent,
@@ -90,6 +107,7 @@ export async function persistProjectionWithClient(
             campaign_id: campaignId,
             network,
             country,
+            ...platformInstallEvidence(payload),
           }),
         ],
       );
@@ -305,6 +323,7 @@ export function bulkProjectionRows(
           installation_id: payload.installation_id, prior_installation_id: payload.prior_installation_id ?? null,
           install_type: payload.install_type, occurred_at: attempt.record.occurred_at,
           campaign_id: campaignId, network, country,
+          ...platformInstallEvidence(payload),
         },
       });
     } else if (logical.event_name === "session_start") {

@@ -9,7 +9,7 @@ export type ExternalRoasDeclaration = {
   aggregation: "cumulative"; time_zone: "UTC" | "Asia/Tokyo";
   window: { type: "elapsed"; day: number; boundary: "half_open" };
   population: "accepted_installation_cohort";
-  acquisition_basis: "recorded_dimensions" | "selected_first_party_click";
+  acquisition_basis: "recorded_dimensions" | "selected_first_party_click" | "selected_verified_platform";
   cost_basis: "cohort_acquisition_day_current_snapshot";
   cost_selection_policy: "legacy_dimension_digest_latest" | "reject_overlapping_grains";
   grouping_dimensions: GroupingDimension[];
@@ -20,7 +20,7 @@ export type ExternalRoasDeclaration = {
   final_rounding: Rounding;
 };
 export type ExternalCalculation = { declaration: ExternalRoasDeclaration; declaration_sha256: string };
-const dimensions = ["cohort_date", "campaign_id", "network", "country", "attribution_status"];
+const dimensions = ["cohort_date", "campaign_id", "network", "country", "attribution_status", "ad_group_id"];
 const fields = ["version", "profile", "anchor_event", "calculation", "numerator", "denominator", "aggregation", "time_zone",
   "window", "population", "acquisition_basis", "cost_basis", "cost_selection_policy", "grouping_dimensions", "fraud_policy",
   "privacy_state", "value_type", "ratio_scale", "fx", "final_rounding"];
@@ -40,7 +40,7 @@ export function parseExternalDeclaration(input: unknown): ExternalRoasDeclaratio
     calculation: "revenue_over_cost", numerator: "revenue", denominator: "cost", aggregation: "cumulative",
     population: "accepted_installation_cohort", cost_basis: "cohort_acquisition_day_current_snapshot", value_type: "ratio" })) choice(input[key], [value]);
   choice(input.time_zone, ["UTC", "Asia/Tokyo"]);
-  choice(input.acquisition_basis, ["recorded_dimensions", "selected_first_party_click"]);
+  choice(input.acquisition_basis, ["recorded_dimensions", "selected_first_party_click", "selected_verified_platform"]);
   choice(input.cost_selection_policy, ["legacy_dimension_digest_latest", "reject_overlapping_grains"]);
   choice(input.fraud_policy, ["gross", "net"]); choice(input.privacy_state, ["before", "after"]);
   choice(input.final_rounding, ["half_even", "half_up", "truncate"]); scale(input.ratio_scale);

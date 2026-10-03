@@ -1,7 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
 import { acquirePrivacyTenantXactFence, correctionCutoff, metricCostScopePredicate, normalizeMetricCorrectionPolicy,
-  selectedAcquisitionSql, selectedClickJoinSql, selectLateMetricInputs, supportsLateMetric, withTenant,
+  metricAcquisitionSql, metricAcquisitionJoinSql, metricAcquisitionDimensionSql, selectLateMetricInputs, supportsLateMetric, supportsAttributionMetric, withTenant,
   type MetricCorrectionPolicy } from "@openmasu/runtime";
 
 type Any = Record<string, any>;
@@ -42,17 +42,19 @@ async function attributionMatches(client: PoolClient, scope: Scope, row: Any, ar
   const replay=row.replay, metric=replay.metric_definition, grouping=replay.evaluation.grouping;
   // Test both the saved and revised membership: a move OUT of a cohort needs correction too.
   for (const [cutoff,previous] of [[row.input_received_at_watermark,artifact.supersedes_attribution_id],[watermark,null]]) {
-    const acquisition=previous ? `SELECT * FROM ledger.attribution_results WHERE tenant_id=$1 AND app_id=$2 AND attribution_id=$9::text`
-      : `SELECT * FROM (${selectedAcquisitionSql}) AS selected WHERE ($9::text IS NULL OR selected.attribution_id=$9::text)`;
+    const platform=metric.acquisition_basis === "selected_verified_platform";
+    const acquisition=previous && !platform ? `SELECT * FROM ledger.attribution_results WHERE tenant_id=$1 AND app_id=$2 AND attribution_id=$9::text`
+      : `SELECT * FROM (${metricAcquisitionSql(platform)}) AS selected WHERE ($9::text IS NULL OR selected.attribution_id=$9::text)`;
     const match=await client.query(`WITH acquisition AS (${acquisition})
       SELECT 1 FROM ledger.install_facts AS install JOIN ledger.logical_events AS logical USING (logical_event_id)
       JOIN ledger.raw_records_current AS raw ON raw.tenant_id=logical.tenant_id AND raw.app_id=logical.app_id AND raw.record_id=logical.record_id
-      ${selectedClickJoinSql("$7","$8")}
+      ${metricAcquisitionJoinSql("$7","$8",platform)}
       WHERE install.tenant_id=$1 AND install.app_id=$2 AND install.installation_id=$4
         AND raw.received_at<=$3 AND raw.payload_lifecycle_status='available'
+        ${platform ? "AND acquisition_source.network IS NOT NULL" : ""}
         AND timezone($6,install.occurred_at_ts)::date::text=$5::jsonb->>'cohort_date'
-        AND ($5::jsonb->>'campaign_id' IS NULL OR coalesce(install.campaign_id,acquisition_source.campaign_id)=$5::jsonb->>'campaign_id')
-        AND ($5::jsonb->>'network' IS NULL OR coalesce(install.network,acquisition_source.network)=$5::jsonb->>'network')
+        AND ($5::jsonb->>'campaign_id' IS NULL OR ${metricAcquisitionDimensionSql("campaign_id",platform)}=$5::jsonb->>'campaign_id')
+        AND ($5::jsonb->>'network' IS NULL OR ${metricAcquisitionDimensionSql("network",platform)}=$5::jsonb->>'network')
         AND ($5::jsonb->>'ad_group_id' IS NULL OR acquisition_source.ad_group_id=$5::jsonb->>'ad_group_id')
         AND ($5::jsonb->>'creative_id' IS NULL OR acquisition_source.creative_id=$5::jsonb->>'creative_id')
         AND ($5::jsonb->>'country' IS NULL OR install.country=$5::jsonb->>'country')
@@ -105,7 +107,7 @@ async function enqueuePage(client: PoolClient, r: Receipt, policy: MetricCorrect
       safe_reason:row.replay?.version===1 && supportsLateMetric(row.replay) ? null : "unsupported_definition"}));
   } else if (r.source_kind === "attribution_revision") {
     for (const row of current) {
-      if (row.replay?.version!==1 || !supportsLateMetric(row.replay) || row.replay.metric_definition.acquisition_basis!=="selected_first_party_click") {
+      if (row.replay?.version!==1 || !supportsAttributionMetric(row.replay) || !["selected_first_party_click","selected_verified_platform"].includes(row.replay.metric_definition.acquisition_basis)) {
         selected.push({metric_run_id:row.metric_run_id,replay:row.replay,safe_reason:"unsupported_definition"});
       } else if (await attributionMatches(client,scope,row,revision.artifact,watermark)) {
         selected.push({metric_run_id:row.metric_run_id,replay:row.replay,safe_reason:null});

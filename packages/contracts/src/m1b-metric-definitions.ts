@@ -244,6 +244,18 @@ export const SELECTED_ACQUISITION_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetr
       rule_bundle_hash: nonFraudBundleHash("metric-selected-acquisition"),
     }));
 
+/** Separate meaning and names: neither recorded dimensions nor first-party clicks supply platform credit. */
+export const VERIFIED_PLATFORM_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricDefinitionV04> =
+  SELECTED_ACQUISITION_METRIC_DEFINITIONS.map(definition => ({
+    ...definition, metric_name: `platform_${definition.metric_name}`, metric_definition_version: "0.4.19",
+    acquisition_basis: "selected_verified_platform",
+    grouping_dimensions: [...METRIC_GROUPING_DIMENSIONS, "ad_group_id"],
+    ...(definition.definition.calculation === "revenue_over_cost"
+      ? { cost_selection_policy: "reject_overlapping_grains" as const } : {}),
+    rule_bundle_id: "metric-verified-platform-acquisition", rule_bundle_version: "0.4.19",
+    rule_bundle_hash: nonFraudBundleHash("metric-verified-platform-acquisition"),
+  }));
+
 /** Explicit safe denominators. Legacy saved definitions remain replayable. */
 export const DISJOINT_COST_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricDefinitionV04> = [
   ...SELECTED_ACQUISITION_METRIC_DEFINITIONS.filter((d) => d.definition.calculation === "revenue_over_cost"),

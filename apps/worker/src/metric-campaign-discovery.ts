@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { sha256Jcs } from "@openmasu/fraud-rules";
-import { selectedAcquisitionSql, selectedClickJoinSql } from "@openmasu/runtime";
+import { metricAcquisitionSql, metricAcquisitionJoinSql, metricAcquisitionDimensionSql } from "@openmasu/runtime";
 
 type Any = Record<string, any>;
 export type CampaignTarget = { evaluation: number; grouping: Record<string, string> };
@@ -36,14 +36,16 @@ export async function freezeCampaignTargets(
       continue;
     }
     const metric = schedule.definition.metric_definitions.find((value: Any) => value.metric_name === evaluation.metric_names[0]);
+    const platform = metric.acquisition_basis === "selected_verified_platform";
     const result = await client.query<{ grouping: Record<string, string> | null; reason: string; count: string; cost_only: boolean }>(
-      `WITH acquisition AS (${selectedAcquisitionSql}),
+      `WITH acquisition AS (${metricAcquisitionSql(metric.acquisition_basis === "selected_verified_platform")}),
        cohort_sources AS (
-         SELECT coalesce(install.campaign_id,acquisition_source.campaign_id) AS campaign_id,
-           coalesce(install.network,acquisition_source.network) AS network,
+         SELECT ${metricAcquisitionDimensionSql("campaign_id", metric.acquisition_basis === "selected_verified_platform")} AS campaign_id,
+           ${metricAcquisitionDimensionSql("network", metric.acquisition_basis === "selected_verified_platform")} AS network,
            install.country,acquisition.reason_code,
            coalesce(acquisition.status,'unattributed') AS status,
-           (raw.payload_lifecycle_status<>'available' OR EXISTS (
+           (raw.payload_lifecycle_status<>'available'
+             ${platform ? "OR coalesce(acquisition.lifecycle_status<>'available',false)" : ""} OR EXISTS (
              SELECT 1 FROM jsonb_array_elements(coalesce(acquisition.artifact->'evidence_refs','[]'::jsonb)) AS ref
              JOIN ledger.raw_records_current AS evidence ON evidence.tenant_id=$1 AND evidence.app_id=$2
                AND evidence.record_id=ref->>'ref' WHERE evidence.payload_lifecycle_status<>'available'
@@ -53,12 +55,14 @@ export async function freezeCampaignTargets(
            AND logical.tenant_id=install.tenant_id AND logical.app_id=install.app_id
          JOIN ledger.raw_records_current AS raw ON raw.tenant_id=logical.tenant_id AND raw.app_id=logical.app_id
            AND raw.record_id=logical.record_id
-         ${selectedClickJoinSql("$7", "$8")}
+         ${metricAcquisitionJoinSql("$7", "$8", metric.acquisition_basis === "selected_verified_platform")}
          WHERE install.tenant_id=$1 AND install.app_id=$2 AND raw.received_at<=$3
            AND timezone($5::text,install.occurred_at_ts)::date=$4::date
+           ${platform ? "AND acquisition.source IS NOT NULL" : ""}
        ), current_cost AS (
          SELECT DISTINCT ON (network,cost_date,campaign_id,ad_group_id,country) campaign_id,network
          FROM ledger.cost_records WHERE tenant_id=$1 AND app_id=$2 AND as_of<=$3 AND cost_date=$4::date
+           ${platform ? "AND network IN ('apple_adservices','meta_install_referrer')" : ""}
            AND ($6::jsonb->>'network' IS NULL OR network=$6::jsonb->>'network')
            AND ($6::jsonb->>'country' IS NULL OR country=$6::jsonb->>'country')
            AND ($6::jsonb->>'attribution_status' IS NULL OR $6::jsonb->>'attribution_status'='non_organic')
@@ -67,8 +71,8 @@ export async function freezeCampaignTargets(
          SELECT CASE WHEN unavailable THEN 'privacy_unavailable'
                   WHEN status='non_organic' AND (campaign_id IS NULL OR network IS NULL) THEN 'unknown_nonorganic'
                   ELSE 'target' END AS reason,
-           CASE WHEN status='non_organic' THEN jsonb_build_object('campaign_id',campaign_id,'network',network,'attribution_status',status)
-                ELSE jsonb_build_object('attribution_status',status) END AS grouping, false AS from_cost
+           ${platform ? "jsonb_strip_nulls(jsonb_build_object('campaign_id',campaign_id,'network',network,'attribution_status',status))"
+             : "CASE WHEN status='non_organic' THEN jsonb_build_object('campaign_id',campaign_id,'network',network,'attribution_status',status) ELSE jsonb_build_object('attribution_status',status) END"} AS grouping, false AS from_cost
          FROM cohort_sources
          WHERE unavailable OR (
            ($6::jsonb->>'network' IS NULL OR network=$6::jsonb->>'network')

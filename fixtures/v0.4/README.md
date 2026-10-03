@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 65 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 66 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -485,6 +485,25 @@ The final position is `2026-08-12T00:00:00.000Z|install-65-unknown`; each groupi
 digest hashes its declared dimension object. The candidate evaluators matched
 at JCS output digest `443afae13be906b8e12a5e86cf456c08e832ddc45ec626ea00f779d22251c114`.
 All existing 64 fixtures and their 832 golden files are unchanged.
+
+## Fixture 66: verified platform acquisition
+
+[The fixture's derivation](66-verified-platform-acquisition/README.md) records
+all thirteen manually constructed output families and eighteen metric runs.
+Eight accepted records provide one canonical server-decrypted Meta install,
+two native iOS installs, two revenue events, two D1 sessions and a first-party
+click. Meta's verified priority does not turn its campaign into first-party
+credit. Apple campaign context is visible only after its later lookup revision;
+a negative lookup is unattributed, never an invented organic campaign.
+
+Independent arithmetic fixes Meta LTV USD 2 / ROAS 2.0, late Apple LTV USD 5 /
+ROAS 0.5, both D1 retention values 1.0, empty early Apple cohorts, absent ad-group
+cost and unchanged first-party count zero. Namespaced campaigns stay separate.
+Snapshots independently hash canonical records, selected costs, attribution
+ID/artifact tuples and trusted projection tuples. All thirteen families match
+TypeScript and Python JCS at combined SHA-256
+`5a97c353d0479a9fd0b288dcb269f493869cb744277698abd3c752911ea0491a`.
+No existing 65 fixture inputs or 845 golden artifacts changed.
 
 ## Adding a fixture procedure
 

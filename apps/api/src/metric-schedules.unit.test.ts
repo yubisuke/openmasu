@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { ACQUISITION_DETAIL_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS, SELECTED_COMMERCE_METRIC_DEFINITIONS, REFUND_REVERSAL_METRIC_DEFINITIONS, customConversionMetricDefinitions } from "@openmasu/contracts";
 import { metricScheduleTargetDate, normalizeMetricScheduleRequest } from "./metric-schedules.js";
 import { engagementMetricDefinitions, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import { VERIFIED_PLATFORM_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 
 const body = {
   lag_days: 2,
@@ -26,6 +27,19 @@ const body = {
 };
 
 describe("scheduled metric configuration", () => {
+  it("requires an independent platform profile and source namespace while reusing bounded discovery", () => {
+    const normalize = (value: any) => normalizeMetricScheduleRequest(value,new Date("2026-10-01T12:00:00.000Z"));
+    const request = {...body,metric_definitions:structuredClone(VERIFIED_PLATFORM_METRIC_DEFINITIONS),
+      evaluations:[{metric_names:["platform_d0_roas"],date_dimension:"cohort_date",grouping:{network:"apple_adservices",campaign_id:"2066",ad_group_id:"3066"}}]};
+    assert.equal(normalize(request).definition.metric_definitions[0].acquisition_basis,"selected_verified_platform");
+    assert.deepEqual(normalize(request).definition.evaluations[0].grouping,request.evaluations[0].grouping);
+    assert.throws(() => normalize({...request,evaluations:[{...request.evaluations[0],grouping:{campaign_id:"2066"}}]}),/platform_acquisition_source_required/);
+    assert.throws(() => normalize({...request,evaluations:[{...request.evaluations[0],grouping:{network:"apple_adservices",creative_id:"synthetic-creative"}}]}),/detail_profile_required/);
+    const discovery = {...request.evaluations[0],grouping:{},campaign_discovery:{policy:"selected_acquisition_and_cost_v1",max_targets:10}};
+    assert.equal(normalize({...request,evaluations:[discovery]}).definition.evaluations[0].campaign_discovery?.max_targets,10);
+    assert.throws(() => normalize({...request,metric_definitions:[...request.metric_definitions,...DISJOINT_COST_METRIC_DEFINITIONS],
+      evaluations:[{...discovery,metric_names:["platform_d0_roas","d0_roas"]}]}),/discovery_mixed_basis/);
+  });
   it("daily_acquisition_schedule_is_explicit_and_cannot_reinterpret_a_legacy_date_or_group", () => {
     const request = { ...body, metric_definitions: SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS,
       evaluations: [{ metric_names: ["daily_selected_install_count"], date_dimension: "metric_date",

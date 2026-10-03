@@ -1,0 +1,98 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:redirector:event:click-66",
+    "record_id": "click-66",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "redirector",
+    "event_id": "event:click-66",
+    "event_name": "click",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:meta-66",
+    "record_id": "meta-66",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:meta-66",
+    "event_name": "install",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:meta-revenue-66",
+    "record_id": "meta-revenue-66",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:meta-revenue-66",
+    "event_name": "ad_revenue",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:meta-session-66",
+    "record_id": "meta-session-66",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:meta-session-66",
+    "event_name": "session_start",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-ios:event:apple-66",
+    "record_id": "apple-66",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-ios",
+    "event_id": "event:apple-66",
+    "event_name": "install",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-ios:event:apple-revenue-66",
+    "record_id": "apple-revenue-66",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-ios",
+    "event_id": "event:apple-revenue-66",
+    "event_name": "ad_revenue",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-ios:event:apple-session-66",
+    "record_id": "apple-session-66",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-ios",
+    "event_id": "event:apple-session-66",
+    "event_name": "session_start",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-ios:event:negative-66",
+    "record_id": "negative-66",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-ios",
+    "event_id": "event:negative-66",
+    "event_name": "install",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  }
+]

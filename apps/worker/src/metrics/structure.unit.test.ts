@@ -9,7 +9,7 @@ import { buildMetricDefinitionsInput } from "./run.js";
 import { computeSqlMetricRuns, computeSqlMetricRunsWithClient } from "./cohort.js";
 import { metricScopeForInput, prepareMetricCalculation } from "./input.js";
 import { metricReplayArtifact } from "./persistence.js";
-import { scanSnapshotRecords, snapshotRecordFromRow } from "./snapshot.js";
+import { currentCosts, scanSnapshotRecords, snapshotRecordFromRow } from "./snapshot.js";
 import type { MetricCalculationInput, MetricClient, MetricEvaluation, MetricScope } from "./model.js";
 
 const fixture: MetricCalculationInput = JSON.parse(readFileSync("fixtures/v0.4/33-stage-b-cohort-metrics/input.json", "utf8"));
@@ -31,6 +31,20 @@ function queryDouble(answer: (text: string, values: readonly unknown[]) => unkno
 }
 
 describe("SQL metric application boundaries", () => {
+  it("keeps current cost snapshot evidence at the requested source-local ad-group grain", async () => {
+    const { client, calls } = queryDouble();
+    await currentCosts(client, scope, watermark, {
+      network: "meta_install_referrer", campaign_id: "synthetic-campaign",
+      ad_group_id: "synthetic-ad-group", cohort_date: day,
+    });
+    await currentCosts(client, scope, watermark, { campaign_id: "synthetic-campaign" });
+    assert.match(calls[0].text, /\(\$8::text IS NULL OR ad_group_id=\$8\)/);
+    assert.deepEqual(calls[0].values, [scope.tenant_id, scope.app_id, watermark,
+      "synthetic-campaign", "meta_install_referrer", null, day, "synthetic-ad-group"]);
+    assert.equal(calls[1].values[7], null);
+    assert.ok(!calls[0].text.includes("synthetic-ad-group"));
+  });
+
   it("metric_entrypoints_share_replay_contract", async () => {
     const config = { ...scope, fx_policy: fixture.fx_policy, metric_definitions: [definition],
       evaluations: [{ metric_names: [definition.metric_name], grouping: evaluation.grouping }] };

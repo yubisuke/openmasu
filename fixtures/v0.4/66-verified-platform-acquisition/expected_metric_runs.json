@@ -1,0 +1,1654 @@
+[
+  {
+    "metric_run_id": "platform66-adgroup:platform_cohort_install_count",
+    "metric_name": "platform_cohort_install_count",
+    "metric_definition_version": "0.4.19",
+    "input_snapshot_id": "c40ef86bcb83cd2d64520b259ce3bda318e2aadae5f050b771c10b91cdcbc75e",
+    "input_received_at_watermark": "2026-10-01T00:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-10-01T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-platform-acquisition",
+    "rule_bundle_version": "0.4.19",
+    "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "campaign_id": "synthetic-platform-66",
+        "network": "meta_install_referrer",
+        "attribution_status": "non_organic",
+        "ad_group_id": "synthetic-adgroup-66"
+      },
+      "dimension_digest": "3d3138aab36d1b3299403627376991fd67f7c526a9c4b1d6f6a5d2d006305c2f"
+    },
+    "value_unscaled": "1"
+  },
+  {
+    "metric_run_id": "platform66-adgroup:platform_cohort_ltv_d1_usd",
+    "metric_name": "platform_cohort_ltv_d1_usd",
+    "metric_definition_version": "0.4.19",
+    "input_snapshot_id": "c40ef86bcb83cd2d64520b259ce3bda318e2aadae5f050b771c10b91cdcbc75e",
+    "input_received_at_watermark": "2026-10-01T00:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-10-01T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-platform-acquisition",
+    "rule_bundle_version": "0.4.19",
+    "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "campaign_id": "synthetic-platform-66",
+        "network": "meta_install_referrer",
+        "attribution_status": "non_organic",
+        "ad_group_id": "synthetic-adgroup-66"
+      },
+      "dimension_digest": "3d3138aab36d1b3299403627376991fd67f7c526a9c4b1d6f6a5d2d006305c2f"
+    },
+    "value_unscaled": "2000000",
+    "fx_rate_unscaled": "1",
+    "fx_rate_scale": 0,
+    "fx_rate_source": "synthetic-fixture-rate",
+    "fx_rate_as_of": "2026-09-28T00:00:00.000Z",
+    "fx_rate_snapshot_id": "141e235a613be64691b643a646ddd51d68f8c4448491109b538f7025afd57e2f",
+    "fx_policy_version": "synthetic-fx-66",
+    "currency": "USD",
+    "amount_scale": 6
+  },
+  {
+    "metric_run_id": "platform66-adgroup:platform_d1_roas",
+    "metric_name": "platform_d1_roas",
+    "metric_definition_version": "0.4.19",
+    "input_snapshot_id": "c40ef86bcb83cd2d64520b259ce3bda318e2aadae5f050b771c10b91cdcbc75e",
+    "input_received_at_watermark": "2026-10-01T00:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-10-01T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-platform-acquisition",
+    "rule_bundle_version": "0.4.19",
+    "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "campaign_id": "synthetic-platform-66",
+        "network": "meta_install_referrer",
+        "attribution_status": "non_organic",
+        "ad_group_id": "synthetic-adgroup-66"
+      },
+      "dimension_digest": "3d3138aab36d1b3299403627376991fd67f7c526a9c4b1d6f6a5d2d006305c2f"
+    },
+    "value_state": "undefined",
+    "undefined_reason": "no_attributed_cost",
+    "ratio_scale": 6
+  },
+  {
+    "metric_run_id": "platform66-adgroup:platform_retention_d1",
+    "metric_name": "platform_retention_d1",
+    "metric_definition_version": "0.4.19",
+    "input_snapshot_id": "c40ef86bcb83cd2d64520b259ce3bda318e2aadae5f050b771c10b91cdcbc75e",
+    "input_received_at_watermark": "2026-10-01T00:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-10-01T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-platform-acquisition",
+    "rule_bundle_version": "0.4.19",
+    "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "campaign_id": "synthetic-platform-66",
+        "network": "meta_install_referrer",
+        "attribution_status": "non_organic",
+        "ad_group_id": "synthetic-adgroup-66"
+      },
+      "dimension_digest": "3d3138aab36d1b3299403627376991fd67f7c526a9c4b1d6f6a5d2d006305c2f"
+    },
+    "value_unscaled": "1000000",
+    "ratio_scale": 6
+  },
+  {
+    "metric_run_id": "platform66-early:platform_cohort_install_count",
+    "metric_name": "platform_cohort_install_count",
+    "metric_definition_version": "0.4.19",
+    "input_snapshot_id": "2827f295b3884f7f4e749889714dd853d0099c9f9d8b970741b22f90da9a9a18",
+    "input_received_at_watermark": "2026-09-29T12:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-09-29T12:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-platform-acquisition",
+    "rule_bundle_version": "0.4.19",
+    "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost:apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "campaign_id": "2066",
+        "network": "apple_adservices",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "0412a56024f89405b30a2e34ddf90a2375558a5f13622841a6a477bf4af34f8e"
+    },
+    "value_unscaled": "0"
+  },
+  {
+    "metric_run_id": "platform66-early:platform_cohort_ltv_d1_usd",
+    "metric_name": "platform_cohort_ltv_d1_usd",
+    "metric_definition_version": "0.4.19",
+    "input_snapshot_id": "2827f295b3884f7f4e749889714dd853d0099c9f9d8b970741b22f90da9a9a18",
+    "input_received_at_watermark": "2026-09-29T12:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-09-29T12:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-platform-acquisition",
+    "rule_bundle_version": "0.4.19",
+    "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost:apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "campaign_id": "2066",
+        "network": "apple_adservices",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "0412a56024f89405b30a2e34ddf90a2375558a5f13622841a6a477bf4af34f8e"
+    },
+    "value_state": "undefined",
+    "undefined_reason": "empty_cohort"
+  },
+  {
+    "metric_run_id": "platform66-early:platform_d1_roas",
+    "metric_name": "platform_d1_roas",
+    "metric_definition_version": "0.4.19",
+    "input_snapshot_id": "2827f295b3884f7f4e749889714dd853d0099c9f9d8b970741b22f90da9a9a18",
+    "input_received_at_watermark": "2026-09-29T12:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-09-29T12:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-platform-acquisition",
+    "rule_bundle_version": "0.4.19",
+    "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost:apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "campaign_id": "2066",
+        "network": "apple_adservices",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "0412a56024f89405b30a2e34ddf90a2375558a5f13622841a6a477bf4af34f8e"
+    },
+    "value_unscaled": "0",
+    "ratio_scale": 6
+  },
+  {
+    "metric_run_id": "platform66-early:platform_retention_d1",
+    "metric_name": "platform_retention_d1",
+    "metric_definition_version": "0.4.19",
+    "input_snapshot_id": "2827f295b3884f7f4e749889714dd853d0099c9f9d8b970741b22f90da9a9a18",
+    "input_received_at_watermark": "2026-09-29T12:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-09-29T12:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-platform-acquisition",
+    "rule_bundle_version": "0.4.19",
+    "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost:apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "campaign_id": "2066",
+        "network": "apple_adservices",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "0412a56024f89405b30a2e34ddf90a2375558a5f13622841a6a477bf4af34f8e"
+    },
+    "value_state": "undefined",
+    "undefined_reason": "empty_cohort",
+    "ratio_scale": 6
+  },
+  {
+    "metric_run_id": "platform66-first-party:cohort_install_count",
+    "metric_name": "cohort_install_count",
+    "metric_definition_version": "0.4.11",
+    "input_snapshot_id": "155f0329e677195628eb22d19204073e7f82f74c9d99c817d694156365af7501",
+    "input_received_at_watermark": "2026-10-01T00:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-10-01T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-selected-acquisition",
+    "rule_bundle_version": "0.4.11",
+    "rule_bundle_hash": "6fd998246bb092f81d8539b8e2c04a1abe421a1916480b63dfd018d11c7bccc5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "campaign_id": "synthetic-first-party-66",
+        "network": "synthetic-first-party",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "bef5ef9349004c36bdcc41d783899f19ebbcb257f3b328664cd4ed43d76f5b4e"
+    },
+    "value_unscaled": "0"
+  },
+  {
+    "metric_run_id": "platform66-late:platform_cohort_install_count",
+    "metric_name": "platform_cohort_install_count",
+    "metric_definition_version": "0.4.19",
+    "input_snapshot_id": "d9dac69a3345d008bb44bc30f18b7a5ef50db01ebff2b7d7084150f744eec57a",
+    "input_received_at_watermark": "2026-10-01T00:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-10-01T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-platform-acquisition",
+    "rule_bundle_version": "0.4.19",
+    "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost:apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "campaign_id": "2066",
+        "network": "apple_adservices",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "0412a56024f89405b30a2e34ddf90a2375558a5f13622841a6a477bf4af34f8e"
+    },
+    "value_unscaled": "1"
+  },
+  {
+    "metric_run_id": "platform66-late:platform_cohort_ltv_d1_usd",
+    "metric_name": "platform_cohort_ltv_d1_usd",
+    "metric_definition_version": "0.4.19",
+    "input_snapshot_id": "d9dac69a3345d008bb44bc30f18b7a5ef50db01ebff2b7d7084150f744eec57a",
+    "input_received_at_watermark": "2026-10-01T00:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-10-01T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-platform-acquisition",
+    "rule_bundle_version": "0.4.19",
+    "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost:apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "campaign_id": "2066",
+        "network": "apple_adservices",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "0412a56024f89405b30a2e34ddf90a2375558a5f13622841a6a477bf4af34f8e"
+    },
+    "value_unscaled": "5000000",
+    "fx_rate_unscaled": "1",
+    "fx_rate_scale": 0,
+    "fx_rate_source": "synthetic-fixture-rate",
+    "fx_rate_as_of": "2026-09-28T00:00:00.000Z",
+    "fx_rate_snapshot_id": "141e235a613be64691b643a646ddd51d68f8c4448491109b538f7025afd57e2f",
+    "fx_policy_version": "synthetic-fx-66",
+    "currency": "USD",
+    "amount_scale": 6
+  },
+  {
+    "metric_run_id": "platform66-late:platform_d1_roas",
+    "metric_name": "platform_d1_roas",
+    "metric_definition_version": "0.4.19",
+    "input_snapshot_id": "d9dac69a3345d008bb44bc30f18b7a5ef50db01ebff2b7d7084150f744eec57a",
+    "input_received_at_watermark": "2026-10-01T00:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-10-01T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-platform-acquisition",
+    "rule_bundle_version": "0.4.19",
+    "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost:apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "campaign_id": "2066",
+        "network": "apple_adservices",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "0412a56024f89405b30a2e34ddf90a2375558a5f13622841a6a477bf4af34f8e"
+    },
+    "value_unscaled": "500000",
+    "ratio_scale": 6
+  },
+  {
+    "metric_run_id": "platform66-late:platform_retention_d1",
+    "metric_name": "platform_retention_d1",
+    "metric_definition_version": "0.4.19",
+    "input_snapshot_id": "d9dac69a3345d008bb44bc30f18b7a5ef50db01ebff2b7d7084150f744eec57a",
+    "input_received_at_watermark": "2026-10-01T00:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-10-01T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-platform-acquisition",
+    "rule_bundle_version": "0.4.19",
+    "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost:apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "campaign_id": "2066",
+        "network": "apple_adservices",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "0412a56024f89405b30a2e34ddf90a2375558a5f13622841a6a477bf4af34f8e"
+    },
+    "value_unscaled": "1000000",
+    "ratio_scale": 6
+  },
+  {
+    "metric_run_id": "platform66-meta:platform_cohort_install_count",
+    "metric_name": "platform_cohort_install_count",
+    "metric_definition_version": "0.4.19",
+    "input_snapshot_id": "aa6201e84b809cdb9f324ad6e9444662be5ea65b4cc7c17d9f852a6318e973cc",
+    "input_received_at_watermark": "2026-10-01T00:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-10-01T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-platform-acquisition",
+    "rule_bundle_version": "0.4.19",
+    "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost:meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "campaign_id": "synthetic-platform-66",
+        "network": "meta_install_referrer",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "394cdda52b0ca08415dce2763a1b2c6bcb89f608efd75d30879c1173ae07dbda"
+    },
+    "value_unscaled": "1"
+  },
+  {
+    "metric_run_id": "platform66-meta:platform_cohort_ltv_d1_usd",
+    "metric_name": "platform_cohort_ltv_d1_usd",
+    "metric_definition_version": "0.4.19",
+    "input_snapshot_id": "aa6201e84b809cdb9f324ad6e9444662be5ea65b4cc7c17d9f852a6318e973cc",
+    "input_received_at_watermark": "2026-10-01T00:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-10-01T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-platform-acquisition",
+    "rule_bundle_version": "0.4.19",
+    "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost:meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "campaign_id": "synthetic-platform-66",
+        "network": "meta_install_referrer",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "394cdda52b0ca08415dce2763a1b2c6bcb89f608efd75d30879c1173ae07dbda"
+    },
+    "value_unscaled": "2000000",
+    "fx_rate_unscaled": "1",
+    "fx_rate_scale": 0,
+    "fx_rate_source": "synthetic-fixture-rate",
+    "fx_rate_as_of": "2026-09-28T00:00:00.000Z",
+    "fx_rate_snapshot_id": "141e235a613be64691b643a646ddd51d68f8c4448491109b538f7025afd57e2f",
+    "fx_policy_version": "synthetic-fx-66",
+    "currency": "USD",
+    "amount_scale": 6
+  },
+  {
+    "metric_run_id": "platform66-meta:platform_d1_roas",
+    "metric_name": "platform_d1_roas",
+    "metric_definition_version": "0.4.19",
+    "input_snapshot_id": "aa6201e84b809cdb9f324ad6e9444662be5ea65b4cc7c17d9f852a6318e973cc",
+    "input_received_at_watermark": "2026-10-01T00:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-10-01T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-platform-acquisition",
+    "rule_bundle_version": "0.4.19",
+    "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost:meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "campaign_id": "synthetic-platform-66",
+        "network": "meta_install_referrer",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "394cdda52b0ca08415dce2763a1b2c6bcb89f608efd75d30879c1173ae07dbda"
+    },
+    "value_unscaled": "2000000",
+    "ratio_scale": 6
+  },
+  {
+    "metric_run_id": "platform66-meta:platform_retention_d1",
+    "metric_name": "platform_retention_d1",
+    "metric_definition_version": "0.4.19",
+    "input_snapshot_id": "aa6201e84b809cdb9f324ad6e9444662be5ea65b4cc7c17d9f852a6318e973cc",
+    "input_received_at_watermark": "2026-10-01T00:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-10-01T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-platform-acquisition",
+    "rule_bundle_version": "0.4.19",
+    "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "cost:meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "campaign_id": "synthetic-platform-66",
+        "network": "meta_install_referrer",
+        "attribution_status": "non_organic"
+      },
+      "dimension_digest": "394cdda52b0ca08415dce2763a1b2c6bcb89f608efd75d30879c1173ae07dbda"
+    },
+    "value_unscaled": "1000000",
+    "ratio_scale": 6
+  },
+  {
+    "metric_run_id": "platform66-negative:platform_cohort_install_count",
+    "metric_name": "platform_cohort_install_count",
+    "metric_definition_version": "0.4.19",
+    "input_snapshot_id": "c40ef86bcb83cd2d64520b259ce3bda318e2aadae5f050b771c10b91cdcbc75e",
+    "input_received_at_watermark": "2026-10-01T00:00:00.000Z",
+    "input_ledger_position": "2026-09-29T02:01:01.000Z|apple-session-66",
+    "computed_at": "2026-10-01T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-platform-acquisition",
+    "rule_bundle_version": "0.4.19",
+    "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "apple-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "click-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-revenue-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "meta-session-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "negative-66",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-09-28",
+        "network": "apple_adservices",
+        "attribution_status": "unattributed"
+      },
+      "dimension_digest": "7efaab1ed1776781fcab5e2e0ec31386473eed3a3f97eb1b2993bbf106bf03ef"
+    },
+    "value_unscaled": "1"
+  }
+]

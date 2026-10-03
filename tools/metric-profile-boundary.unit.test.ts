@@ -6,6 +6,7 @@ import {
   M1B_METRIC_DEFINITIONS, M3_METRIC_DEFINITIONS, REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
   REFUND_REVERSAL_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS,
   SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS,
+  VERIFIED_PLATFORM_METRIC_DEFINITIONS,
   SELECTED_COMMERCE_METRIC_DEFINITIONS, customConversionMetricDefinitions, engagementMetricDefinitions,
   METRIC_PROFILE_METADATA, metricProfileMetadata,
 } from "@openmasu/contracts/definitions";
@@ -81,8 +82,9 @@ async function boundaryResult(name: string, definition: Definition): Promise<Bou
 describe("metric profile entry boundaries", () => {
   it("metric_profile_schema_consistency distinguishes registered identities from legacy and external declarations", () => {
     const valid = [...metricProfileBoundaryCases().filter(entry => entry.name.endsWith("/valid")),
-      ...SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS.map(definition => ({ name: "daily_acquisition/valid", definition }))];
-    assert.equal(valid.length, 101);
+      ...SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS.map(definition => ({ name: "daily_acquisition/valid", definition })),
+      ...VERIFIED_PLATFORM_METRIC_DEFINITIONS.map(definition => ({ name: "platform/valid", definition }))];
+    assert.equal(valid.length, 112);
     const exercised = new Set<string>();
     for (const { name, definition } of valid) {
       assert.ok(validateMetricDefinition(definition), name);
