@@ -4,6 +4,8 @@ import { measurementNotices } from "../measurement-notices.js";
 import { metricValueLabel } from "./metric-value.js";
 import { reportFields, reportSelectionParams } from "./report-controls.js";
 import { renderComparisonExport } from "./comparison-export.js";
+import { freshnessOfReportRow } from "../metric-freshness.js";
+import { metricFreshnessLabels } from "./metric-freshness.js";
 
 import { escapeHtml } from "./html.js";
 export { escapeHtml } from "./html.js";
@@ -169,15 +171,8 @@ function metricTable(caption: string, rows: DashboardView["rows"], appId?: strin
       : row.value_state === "undefined"
       ? `<span class="undefined-value">—</span><small>${escapeHtml(row.undefined_reason)}</small>`
       : `<span data-metric-run-id="${escapeHtml(row.metric_run_id)}" data-value-unscaled="${escapeHtml(row.value_unscaled)}">${escapeHtml(metricValueLabel(row))}</span>`;
-    const costState = row.cost_update_state === "recalculation_pending" ? "Cost input revised; recalculation pending."
-      : row.cost_update_state === "input_revised" ? "Cost input revised; this saved value has not been recalculated."
-      : row.cost_update_state === "no_recorded_revision" ? "No newer matching cost input recorded (not proof of source completeness)."
-      : "Cost revision state unknown.";
-    const lateState = row.late_input_update_state === "recalculation_pending" ? "Late revenue or commerce input; recalculation pending."
-      : row.late_input_update_state === "unavailable" ? "Late-input recalculation unavailable; inspect the request's safe reason."
-      : row.late_input_update_state === "completed" ? "Late-input recalculation completed; the original run is preserved."
-      : "No late-input request recorded (not proof of source completeness).";
-    return `<tr><th scope="row">${escapeHtml(row.metric_name)}</th><td>${escapeHtml(grouping(row.grouping))}<small>Window: see saved run details. Cohort maturity: unknown.</small><small>Run watermark: ${escapeHtml(row.input_received_at_watermark)}</small></td><td>${value}${details}</td><td>${escapeHtml(row.data_freshness)}<small>${escapeHtml(costState)}</small><small>${escapeHtml(lateState)}</small></td><td>${escapeHtml(row.computed_at)}</td><td>${escapeHtml(row.rule_bundle_id)} / ${escapeHtml(row.metric_definition_version)}</td><td>${escapeHtml(row.reproducibility_status)}${row.superseded ? " (superseded)" : ""}</td></tr>`;
+    const freshness = metricFreshnessLabels(freshnessOfReportRow(row));
+    return `<tr><th scope="row">${escapeHtml(row.metric_name)}</th><td>${escapeHtml(grouping(row.grouping))}<small>Window: see saved run details.</small><small>Run watermark: ${escapeHtml(row.input_received_at_watermark)}</small></td><td>${value}${details}</td><td>${escapeHtml(row.data_freshness)}<small>Stored run label, not completeness.</small>${Object.entries(freshness).map(([field, label]) => `<small data-freshness-field="${field}">${escapeHtml(label)}</small>`).join("")}</td><td>${escapeHtml(row.computed_at)}</td><td>${escapeHtml(row.rule_bundle_id)} / ${escapeHtml(row.metric_definition_version)}</td><td>${escapeHtml(row.reproducibility_status)}${row.superseded ? " (superseded)" : ""}</td></tr>`;
   }).join("")}</tbody></table>`;
 }
 

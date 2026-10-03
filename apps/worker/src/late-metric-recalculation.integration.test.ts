@@ -61,6 +61,8 @@ describe("bounded late revenue and commerce recalculation", { concurrency: false
     assert.equal(firstJob.selected_runs, 2);
     const pending = await metricReport(reader, identity, { tenantId: identity.tenantId, appId: identity.appId, limit: 100, supersession: "all" });
     assert.equal(pending.data.find(r => r.metric_run_id === old[0].metric_run_id)?.late_input_update_state, "recalculation_pending");
+    assert.equal(pending.data.find(r => r.metric_run_id === old[0].metric_run_id)?.recalculation_state?.state, "pending");
+    assert.equal(pending.data.find(r => r.metric_run_id === old[0].metric_run_id)?.value_unscaled, old[0].value_unscaled);
     assert.notEqual(pending.data.find(r => r.metric_run_id === old[0].metric_run_id)?.cost_update_state, "recalculation_pending");
     assert.equal((await processMetricRecalculations(app, identity.tenantId)).completed, 2);
     const firstRuns = (await saved()).filter(r => r.supersedes_metric_run_id);

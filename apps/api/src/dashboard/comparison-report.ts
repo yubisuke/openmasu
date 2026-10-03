@@ -1,5 +1,6 @@
 import type { compareSnapshots } from "../cohort-comparison.js";
 import { jcs } from "@openmasu/attribution-core/canonical";
+import { metricFreshnessLabels } from "./metric-freshness.js";
 
 type Comparison = ReturnType<typeof compareSnapshots>;
 const escape = (value: unknown) => String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
@@ -24,7 +25,10 @@ export function renderComparisonContent(result: Comparison): string {
   const mismatches = result.mismatches.map(key => `<li>${escape(key)}</li>`).join("");
   const provenanceDetails = (["left", "right"] as const).map(side => {
     const p = result.provenance[side];
-    return `<h3>${side} evidence references</h3>${p.saved_report ? `<p>Saved report: ${escape(JSON.stringify(p.saved_report))}</p>` : ""}${p.mapping_provenance ? `<p>Operator-declared CSV mapping: ${escape(JSON.stringify(p.mapping_provenance))}</p>` : ""}${p.external_calculation ? `<p>EXTERNAL DECLARATION: not captured execution, provider authentication, or independent verification.</p><p>Declaration SHA-256: ${escape(p.external_calculation.declaration_sha256)}</p><p>${escape(JSON.stringify(p.external_calculation.declaration))}</p>` : ""}`;
+    const observations = p.freshness_observations?.length
+      ? `<table><caption>${side} saved operational observations</caption><thead><tr><th scope="col">Key</th><th scope="col">Time window</th><th scope="col">Source observation</th><th scope="col">Import completion</th><th scope="col">Recalculation</th></tr></thead><tbody>${p.freshness_observations.map(row => `<tr><th scope="row">${escape(row.key)}</th>${Object.entries(metricFreshnessLabels(row.observations)).map(([field, label]) => `<td data-freshness-field="${field}">${escape(label)}</td>`).join("")}</tr>`).join("")}</tbody></table>`
+      : "<p>No saved operational receipt metadata. Source observation, import completion and recalculation are unknown; temporal maturity is shown separately in the comparison basis.</p>";
+    return `<h3>${side} evidence references</h3>${p.saved_report ? `<p>Saved report: ${escape(JSON.stringify(p.saved_report))}</p>` : ""}${observations}${p.mapping_provenance ? `<p>Operator-declared CSV mapping: ${escape(JSON.stringify(p.mapping_provenance))}</p>` : ""}${p.external_calculation ? `<p>EXTERNAL DECLARATION: not captured execution, provider authentication, or independent verification.</p><p>Declaration SHA-256: ${escape(p.external_calculation.declaration_sha256)}</p><p>${escape(JSON.stringify(p.external_calculation.declaration))}</p>` : ""}`;
   }).join("");
   const assurance = (["left", "right"] as const).map(side => {
     const a = result.assurance[side];
@@ -40,7 +44,7 @@ ${result.status === "incomparable" ? `<h2>Incompatible or unknown conditions</h2
 <dl><dt>Left source</dt><dd>${escape(result.provenance.left.source)}</dd><dt>Left normalized SHA-256</dt><dd>${escape(result.provenance.left.sha256)}</dd>
 <dt>Right source</dt><dd>${escape(result.provenance.right.source)}</dd><dt>Right normalized SHA-256</dt><dd>${escape(result.provenance.right.sha256)}</dd></dl>
 ${provenanceDetails}
-<p>Retain the input snapshots to reproduce this report. Definition-backed means agreement under the saved implementation profile, not authentication of the producer or independent verification of completeness. Declared conditions are not independently verified. This file contains aggregate input values; share it only with intended recipients.</p>
+<p>Retain the input snapshots to reproduce this report. Local receipt observations describe retained app import history at capture, not the selected metric population or a provider SLA. They do not change comparison meaning or authenticate a supplied file. Definition-backed means agreement under the saved implementation profile, not authentication of the producer or independent verification of completeness. Declared conditions are not independently verified. This file contains aggregate input values; share it only with intended recipients.</p>
 `;
 }
 

@@ -4,7 +4,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { ensureAdminKeys } from "../../api/src/admin-auth.js";
-import { metricColumns } from "../../api/src/reporting.js";
+import { metricColumns, metricReport, encodeMetricReport } from "../../api/src/reporting.js";
+import { freshnessFields } from "../../api/src/metric-freshness.js";
+import { metricFreshnessLabels } from "../../api/src/dashboard/metric-freshness.js";
+import { buildDashboardView } from "../../api/src/dashboard/view.js";
+import { renderDashboard } from "../../api/src/dashboard/render.js";
+import { runMmpImportSource } from "./import/runner.js";
+import { parseMapping } from "./import/mapping.js";
 import { createRequestHandler } from "../../api/src/router.js";
 import type { MaxReceiverConfig } from "../../api/src/max-receiver.js";
 import type { PayloadStore } from "@openmasu/runtime";
@@ -195,6 +201,70 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
         : typeof expected === "object" ? JSON.stringify(expected) : String(expected);
       assert.equal(csvSelected[column], expectedText, `CSV mismatch for ${column}`);
     }
+  });
+
+  it("projects scoped empty and partially rejected import receipts separately from identical saved zero values", async () => {
+    const identity = { tenantId: "tenant-a", appId: "app-freshness-223", keyId: "synthetic-freshness", role: "admin" as const };
+    await withTenant(appPool, identity.tenantId, client => client.query(
+      "INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ($1,$2,'2026-08-09T00:00:00.000Z') ON CONFLICT DO NOTHING", [identity.tenantId, identity.appId]));
+    const input = fixture("33-stage-b-cohort-metrics");
+    const evaluation = { ...input.metric_evaluations[0], metric_names: ["cohort_install_count"],
+      metric_run_id_prefix: "synthetic-freshness-mature", grouping: { cohort_date: "2026-08-01" } };
+    await computeSqlMetricRuns(appPool, { ...input, records: [], metric_evaluations: [evaluation,
+      { ...evaluation, metric_run_id_prefix: "synthetic-freshness-immature", grouping: { cohort_date: "2026-08-09" } }] },
+    true, { tenant_id: identity.tenantId, app_id: identity.appId });
+    const query = { tenantId: identity.tenantId, appId: identity.appId, supersession: "latest" as const, limit: 100 };
+    const read = () => metricReport(readerPool, identity, query);
+    const checkSurfaces = (page: Awaited<ReturnType<typeof read>>) => {
+      assert.equal(page.data.length, 2);
+      for (const row of page.data) {
+        assert.equal(row.value_unscaled, "0");
+        const csv = csvRow(encodeMetricReport({ data: [row] }, "csv").body);
+        const html = renderDashboard(buildDashboardView({ apps: [], metrics: { data: [row] }, csrfToken: "synthetic" }));
+        for (const field of freshnessFields) {
+          assert.deepEqual(JSON.parse(csv[field]), row[field]);
+          assert.ok(html.includes(metricFreshnessLabels(row as Required<Pick<typeof row, typeof freshnessFields[number]>>)[field]));
+        }
+        assert.equal(row.source_observation?.input_snapshot, "empty");
+        assert.equal(row.source_observation?.upstream_freshness, "unknown");
+      }
+    };
+    const original = await read(); checkSurfaces(original);
+    assert.ok(original.data.every(row => row.source_observation?.state === "not_observed"));
+    assert.ok(original.data.every(row => row.import_completion?.state === "not_observed"));
+    assert.equal(original.data.find(row => row.grouping.cohort_date === "2026-08-01")?.time_window_maturity?.state, "window_elapsed");
+    assert.equal(original.data.find(row => row.grouping.cohort_date === "2026-08-09")?.time_window_maturity?.state, "window_not_elapsed");
+    const mapping = parseMapping({ version: "1.0.0", kind: "mmp_raw", source_id: "synthetic-freshness-source",
+      tenant_id: identity.tenantId, app_id: identity.appId, provider: "synthetic-provider", format: "json", rules: [
+        { target: "event_name", expression: { const: "click" } },
+        { target: "event_id", expression: { source: "event_id" } },
+        { target: "occurred_at", expression: { const: "2026-08-01T00:00:00.000Z" } },
+        { target: "payload", expression: { object: { click_id: { source: "click_id" },
+          tracking_link_id: { const: "synthetic-freshness-link" }, campaign_id: { source: "campaign_id" },
+          redirector_time_status: { const: "missing" } } } },
+      ] });
+    const importRows = (rows: unknown[], time: string) => runMmpImportSource({ pool: appPool, mapping,
+      sourceBytes: Buffer.from(JSON.stringify(rows)), now: new Date(time) });
+    await importRows([], "2026-08-10T00:00:00.000Z");
+    const empty = await read(); checkSurfaces(empty);
+    assert.ok(empty.data.every(row => row.source_observation?.state === "known_empty" && row.import_completion?.state === "completed"));
+    const otherMapping = { ...mapping, app_id: "app-freshness-other" };
+    await runMmpImportSource({ pool: appPool, mapping: otherMapping,
+      sourceBytes: Buffer.from(JSON.stringify([{ event_id: "synthetic-other-event", click_id: "synthetic_click_ref_0223_other", campaign_id: "synthetic-other" }])),
+      now: new Date("2026-08-11T00:00:00.000Z") });
+    assert.deepEqual(await read(), empty, "another app's receipt must not change this report");
+    const mixed = await importRows([
+      { event_id: "synthetic-freshness-valid", click_id: "synthetic_click_ref_0223_valid", campaign_id: "synthetic-campaign" },
+      { event_id: "synthetic-freshness-invalid", click_id: "synthetic_click_ref_0223_invalid", campaign_id: "" },
+    ], "2026-08-11T00:00:00.000Z");
+    assert.equal(mixed.accepted, 1); assert.equal(mixed.rejected, 1);
+    const partial = await read(); checkSurfaces(partial);
+    assert.ok(partial.data.every(row => row.import_completion?.state === "partial_failure" && row.import_completion.with_row_rejections === "1"));
+    assert.ok(partial.data.every(row => row.source_observation?.state === "observed"));
+    const replay = await importRows([], "2026-08-12T00:00:00.000Z");
+    assert.equal(replay.status, "skipped");
+    const skipped = await read(); checkSurfaces(skipped);
+    assert.ok(skipped.data.every(row => row.source_observation?.state === "known_empty" && row.import_completion?.state === "completed"));
   });
 
   it("daily_selected_acquisition_HTTP_JSON_CSV_and_raw_filter_boundary_agree", async () => {

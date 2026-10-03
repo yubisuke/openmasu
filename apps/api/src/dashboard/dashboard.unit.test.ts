@@ -168,7 +168,7 @@ describe("M3 zero-JavaScript dashboard", () => {
     for (const state of ["input_revised", "recalculation_pending"] as const) {
       const row = metric({ cost_update_state: state });
       const html = renderDashboard(buildDashboardView({ apps: [], metrics: { data: [row] }, csrfToken: "synthetic" }));
-      assert.match(html, /Cost input revised/);
+      assert.match(html, state === "input_revised" ? /Cost input revised/ : /Recalculation pending; saved value remains unchanged/);
       assert.match(html, /data-value-unscaled="1250000"/);
       assert.equal(row.data_freshness, "complete");
     }
@@ -188,7 +188,7 @@ describe("M3 zero-JavaScript dashboard", () => {
     exported.delete("export");
     assert.deepEqual(parse(exported).query, query);
     assert.match(html, /form method="get"/);
-    assert.match(html, /Cohort maturity: unknown/);
+    assert.match(html, /Time-window maturity unknown/);
   });
 
   it("separates chart dimensions, currencies, history and ambiguous snapshots with honest gaps", () => {

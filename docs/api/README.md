@@ -62,10 +62,18 @@ Schema-invalid payloads can be admitted then rejected without worker crash.
 Stored metric queries additionally accept `metric_schedule_id` to select an
 explicit saved schedule series and its recalculation descendants. Use
 `supersession=all` for the replaced series' retained history. This is not a
-metric-name/latest heuristic and does not change CSV columns. Raw-record and
+metric-name/latest heuristic and does not alter existing CSV meanings. Raw-record and
 difference-audit endpoints reject the filter because they have no schedule
 provenance. The administrative replacement preview/confirmation remains outside
 this limited OpenAPI surface; see [Scheduled metrics](../scheduled-metrics.md).
+
+Metric rows also append four aggregate-only [freshness objects](../metric-freshness.md):
+`time_window_maturity`, `source_observation`, `import_completion` and
+`recalculation_state`. CSV appends the same objects as JSON-text cells. These
+are report projections, not changes to the metric-run contract. App-scoped
+local receipts do not establish campaign/cohort coverage or provider arrival;
+`upstream_freshness` remains `unknown`. Missing legacy evidence stays unknown,
+and no viewing/export path makes provider requests.
 
 There is no automatic example-client retry. Correct 400/401/403 configuration
 first. Back off on 429, then use a fresh timestamp/nonce/signature. On timeout,

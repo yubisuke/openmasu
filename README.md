@@ -43,6 +43,11 @@ Explicit replacement previews distinguish same-meaning source-run handoffs from
 new meanings; API and dashboard reports can select a saved schedule series. See
 [Scheduled metric runs](docs/scheduled-metrics.md).
 
+Metric reports separate [time-window maturity, local source receipts, import
+completion and recalculation state](docs/metric-freshness.md). An elapsed
+window or a successful empty import is not proof of complete upstream arrival
+and never turns a missing denominator into zero.
+
 ## What OpenMasu does not claim
 
 - It is not production-ready.

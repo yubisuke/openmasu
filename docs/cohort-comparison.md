@@ -147,6 +147,15 @@ snapshot: hashes are reproducibility references, not authentication proofs.
 Legacy snapshots without that optional field still parse; their meaning does
 not become definition-backed just because declarations or hashes match.
 
+Optional `freshness_observations` retain the four closed [metric freshness
+objects](metric-freshness.md) for each provenance-bound row key. HTML shows
+the same labels as the ordinary metric table. These saved local observations
+are not another comparability condition or proof of upstream completeness;
+they do not change the value or semantic equivalence calculation. Older files
+without the field remain byte-shape compatible and show missing operational
+metadata as unknown. Conservative time maturity is still evaluated separately
+from the captured definition, including for older definition-backed files.
+
 ## Save from the dashboard
 
 Sign in, open an application, and select one metric in **Analyze metrics**.

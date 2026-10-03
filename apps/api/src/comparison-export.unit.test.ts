@@ -9,6 +9,7 @@ import { renderComparisonExport } from "./dashboard/comparison-export.js";
 import { buildDashboardView } from "./dashboard/view.js";
 import type { MetricQuery } from "./report-query.js";
 import type { MetricReportRow } from "./reporting.js";
+import { metricFreshness } from "./metric-freshness.js";
 
 const query: MetricQuery = { tenantId: "tenant-synthetic", appId: "app-synthetic", metricNames: ["revenue_d1"],
   dateFrom: "2026-01-01", dateTo: "2026-01-02", watermarkAtMost: "2026-01-10T00:00:00Z",
@@ -39,6 +40,26 @@ it("exports a complete selection through the shared exact comparison and HTML pi
   assert.equal(snapshot.conditions.maturity, "window_elapsed");
   assert.equal(result.status, "compared"); assert.equal(result.rows[0].status, "equal");
   assert.match(renderComparison(result), /9007199254740993\.01/);
+});
+it("retains aggregate freshness observations without promoting completeness or changing old snapshot shape", () => {
+  const legacy = parseSnapshot(JSON.parse(comparisonExport({ data: [row()] }, query)));
+  assert.equal("freshness_observations" in legacy, false);
+  assert.deepEqual(parseSnapshot(legacy), legacy);
+  const observations = metricFreshness({ ...row(), late_input_update_state: "recalculation_pending" }, {
+    receipts: "1", completed: "1", running: "0", failed: "0", with_row_rejections: "0",
+    empty_receipts: "1", nonempty_receipts: "0", latest_receipt_at: "2026-01-11T00:00:00.000Z",
+  }, 0);
+  const observed = { ...row(), ...observations };
+  const snapshot = parseSnapshot(JSON.parse(comparisonExport({ data: [observed] }, query)));
+  assert.deepEqual(snapshot.freshness_observations?.[0].observations, observations);
+  const result = compareSnapshots(snapshot, legacy);
+  assert.equal(result.status, "compared"); assert.equal(result.rows[0].status, "equal");
+  const html = renderComparison(result);
+  assert.match(html, /Known-empty local receipt recorded; not a zero cohort/);
+  assert.match(html, /Recalculation pending; saved value remains unchanged/);
+  assert.match(html, /upstream|Upstream/);
+  assert.throws(() => parseSnapshot({ ...snapshot, freshness_observations: [{ ...snapshot.freshness_observations![0], key: "not-a-row" }] }));
+  assert.throws(() => parseSnapshot({ ...snapshot, freshness_observations: Array(2).fill(snapshot.freshness_observations![0]) }));
 });
 it("refuses incomplete, historical, missing-condition and mismatched selections without partial output", () => {
   const page = { data: [row()] };

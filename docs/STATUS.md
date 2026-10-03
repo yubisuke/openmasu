@@ -59,6 +59,7 @@ MMP.
 | Attribution and difference audit | Implemented for supported deterministic and aggregate evidence families | Same-cohort comparison with an existing MMP under frozen definitions |
 | Cohort metrics and exports | Implemented for versioned revenue, cost, FX, retention, ROAS, LTV, JSON, CSV, dashboard output, and app-scoped durable daily schedules with exact replay | Real currency/time-zone coverage, source-dashboard reconciliation, schedule/alert operation, and operator acceptance |
 | Explicit schedule replacement | Atomic disable/register with reader-only preview, same/different meaning modes, explicit full-key source handoffs, claim fencing, idempotent confirmation and API/SSR schedule-series selection | Larger than 10,000 candidate historical runs, unknown legacy provenance/meaning, live operational acceptance; old downloaded comparison files are not current live values |
+| Metric freshness observations | Shared JSON/CSV/HTML and saved-comparison projection of conservative time-window maturity, retained app source receipts, import completion and existing recalculation state | App receipts are not cohort/provider coverage; unknown upstream arrival, partial retained history and real-provider completeness remain unverified |
 | Selected cost correction | Implemented through bounded app/import/date/watermark requests, SSR condition review and reader-visible jobs, saved-definition replay, input-revision/pending labels and atomic old/new run supersession | Live revision completeness, unavailable legacy meaning, production load and operator acceptance; value differences do not prove causes |
 | Android, iOS, and Unity SDKs | Implemented with JVM, emulator, Swift, simulator, reproducible packaging, standalone UPM dependency resolution, and a synthetic Unity 6 Android export/APK gate | Physical devices, Unity 2022.3, iOS Unity export, store delivery, and live provider signals |
 | Dashboard and management API | Implemented with server-rendered HTML, RBAC, sessions, RLS, and shared report encoders | Production TLS, browser/operator acceptance, and deployment-specific identity integration |
@@ -125,8 +126,12 @@ permissions, timezone, token validity and source completeness remain unverified.
 Current source also includes [readable dashboard analysis](dashboard-analysis.md):
 exact money/ratio/count labels, shareable server-rendered filters, selection-preserving
 CSV exports and separated chart groups. Audited API/CSV integers are unchanged.
-Window/maturity remain explicitly unknown rather than inferred from freshness or
-metric names. This work is outside the frozen v0.2.0 release evidence.
+Supported saved definitions now establish a conservative temporal bound;
+missing/unsupported maturity remains unknown rather than inferred from freshness
+or metric names. [Four separate freshness observations](metric-freshness.md)
+distinguish that bound, local import receipts and existing recalculation work.
+Local acquisition completion is not upstream completeness or a zero cohort.
+These additions are outside the frozen published release evidence.
 
 Current `main` adds [measurement health](measurement-health.md): an app-scoped,
 reader-only view of SDK/backend batches, file imports, safe rejection counts,

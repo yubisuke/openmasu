@@ -2,17 +2,20 @@ import { createHash } from "node:crypto";
 import { jcs } from "@openmasu/attribution-core/canonical";
 import { parseSnapshot, parseComparisonContext, snapshotAssurance, canonicalComparisonCutoff } from "./cohort-comparison.js";
 import type { MetricComparisonContext } from "@openmasu/runtime";
+import { freshnessFields, parseMetricFreshness } from "./metric-freshness.js";
+import type { FreshnessRow } from "./comparison-model.js";
 
 function object(v: unknown): asserts v is Record<string, unknown> {
   if (!v || typeof v !== "object" || Array.isArray(v)) throw Error("invalid_report");
 }
 export function reportToSnapshot(report: unknown, template: unknown) {
   const base = parseSnapshot(template);
-  if (base.rows.length || base.provenance || base.comparison_contexts || base.external_calculation || base.mapping_provenance || base.acquisition) throw Error("template_must_be_empty");
+  if (base.rows.length || base.provenance || base.comparison_contexts || base.freshness_observations || base.external_calculation || base.mapping_provenance || base.acquisition) throw Error("template_must_be_empty");
   object(report);
   if (Object.keys(report).some(k => k !== "data") || !Array.isArray(report.data) || report.data.length > 10000) throw Error("incomplete_or_invalid_report");
   const runs: { key: string; metric_run_id: string; input_snapshot_id: string }[] = [];
   const contexts: { key: string; context: MetricComparisonContext }[] = [];
+  const freshness: FreshnessRow[] = [];
   const ids = new Set<string>();
   let valueType: unknown;
   const rows = report.data.map(r => {
@@ -42,6 +45,9 @@ export function reportToSnapshot(report: unknown, template: unknown) {
       if (r.value_type === "count" && r.ratio_scale != null) throw Error("invalid_scale");
     }
     const key = jcs(r.grouping);
+    if (freshnessFields.some(field => field in r)) {
+      freshness.push({ key, observations: parseMetricFreshness(Object.fromEntries(freshnessFields.map(field => [field, r[field]]))) });
+    }
     if (context) {
       const d = context.definition;
       if (context.metric_run_id !== r.metric_run_id || context.input_snapshot_id !== r.input_snapshot_id
@@ -65,7 +71,7 @@ export function reportToSnapshot(report: unknown, template: unknown) {
     return { key, currency, scale, state: "present", value: r.value_unscaled };
   });
   const sorted = [...report.data].sort((a, b) => a.metric_run_id < b.metric_run_id ? -1 : a.metric_run_id > b.metric_run_id ? 1 : 0);
-  const output = parseSnapshot({ ...base, rows, provenance: { report_sha256: createHash("sha256").update(jcs({ data: sorted })).digest("hex"), runs }, ...(contexts.length ? { comparison_contexts: contexts } : {}) });
+  const output = parseSnapshot({ ...base, rows, provenance: { report_sha256: createHash("sha256").update(jcs({ data: sorted })).digest("hex"), runs }, ...(contexts.length ? { comparison_contexts: contexts } : {}), ...(freshness.length ? { freshness_observations: freshness } : {}) });
   const { assurance } = snapshotAssurance(output);
   if (contexts.length === rows.length && rows.length) {
     for (const field of ["aggregation", "maturity"] as const) {

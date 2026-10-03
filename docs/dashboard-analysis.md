@@ -28,6 +28,12 @@ split campaign totals or extend the raw daily record-count projection.
   supersession evidence. Freshness does not prove cohort maturity.
 
 The main table does not infer maturity from metric names or freshness.
+Its four [freshness observations](metric-freshness.md) separately show the
+definition-backed conservative window, local app receipt state, import
+completion and recorded recalculation state. Missing evidence stays unknown;
+an empty receipt is not a zero cohort. JSON, CSV and saved comparisons preserve
+the same objects. Local receipt counts are not the report's population, and
+upstream completeness remains unknown.
 Follow **Saved run details** for [recorded ROAS operands and windows](metric-explanations.md).
 New elapsed-window ad-revenue ROAS runs record their window boundary and whether
 the watermark reached it. Legacy and unsupported runs show unavailable evidence;
