@@ -22,6 +22,7 @@ export const METRIC_PROFILE_BINDINGS = {
   imported: binding("metric-imported-provider-acquisition"),
   calendar: binding("metric-calendar-acquisition"),
   daily_acquisition: binding("metric-selected-daily-acquisition"),
+  acquisition_kpis: binding("metric-acquisition-kpis"),
   commerce: binding("metric-selected-commerce"), refund: binding("metric-refund-reversal"),
   detail: binding("metric-acquisition-detail"), custom: binding("metric-custom-conversion"),
   engagement: binding("metric-first-party-engagement"),
@@ -70,6 +71,7 @@ const labels: Record<MetricProfileKey, string> = {
   safe_cost: "Disjoint cost", commerce: "Selected commerce", refund: "Refund reversal",
   detail: "Acquisition detail", custom: "Custom conversion", engagement: "First-party engagement",
   daily_acquisition: "Daily selected acquisition",
+  acquisition_kpis: "Saved first-party acquisition KPIs",
   platform: "Verified platform acquisition",
   imported: "Imported provider acquisition",
   calendar: "Calendar acquisition cohorts",
@@ -81,9 +83,9 @@ export const METRIC_PROFILE_METADATA: readonly MetricProfileMetadata[] =
       rule_bundle_version: METRIC_PROFILE_BINDINGS[key].rule_bundle_version,
       rule_bundle_hash: METRIC_PROFILE_BINDINGS[key].rule_bundle_hash,
     },
-    scheduleValidation: ["detail", "engagement", "daily_acquisition", "platform", "imported", "calendar"].includes(key) ? "schema_profile"
+    scheduleValidation: ["detail", "engagement", "daily_acquisition", "platform", "imported", "calendar", "acquisition_kpis"].includes(key) ? "schema_profile"
       : ["selected", "safe_cost", "commerce", "refund", "custom"].includes(key) ? "manual_profile" : "legacy_operation",
-    evaluationValidation: ["refund", "detail", "custom", "engagement", "daily_acquisition", "platform", "imported", "calendar"].includes(key) ? "schema_profile"
+    evaluationValidation: ["refund", "detail", "custom", "engagement", "daily_acquisition", "platform", "imported", "calendar", "acquisition_kpis"].includes(key) ? "schema_profile"
       : ["purchase", "purchase_horizon", "total", "commerce"].includes(key) ? "named_series"
       : ["selected", "safe_cost"].includes(key) ? "manual_profile" : "operation",
   }));

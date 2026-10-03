@@ -11,6 +11,7 @@ export type NonFraudRuleBundleId =
   | "metric-imported-provider-acquisition"
   | "metric-calendar-acquisition"
   | "metric-selected-daily-acquisition"
+  | "metric-acquisition-kpis"
   | "metric-disjoint-cost"
   | "metric-selected-commerce"
   | "metric-refund-reversal"
@@ -32,6 +33,15 @@ export type NonFraudRuleBundleDefinition = {
 };
 
 export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonFraudRuleBundleDefinition>> = {
+  "metric-acquisition-kpis": {
+    id: "metric-acquisition-kpis", version: "0.4.23", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["saved-first-party-d7-cohort-set", "selected-first-party-click-dimensions",
+      "same-input-cost-and-attribution-snapshot", "cohort-acquisition-day-current-snapshot",
+      "reject-overlapping-cost-grains", "cost-sum-and-half-even-cost-over-cohort",
+      "missing-cost-and-empty-cohort-are-not-zero-cpi", "separate-ad-purchase-net-and-total-net",
+      "captured-fx-and-watermark", "preserve-current-privacy-and-fraud"],
+  },
   "attribution-default": {
     id: "attribution-default", version: "0.3.0", kind: "attribution",
     implementation: "reference-evaluator-v0.4",

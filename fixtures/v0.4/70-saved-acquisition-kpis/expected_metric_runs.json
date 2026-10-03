@@ -1,0 +1,5529 @@
+[
+  {
+    "metric_run_id": "kpi70-a:acquisition_d7_ad_revenue",
+    "metric_name": "acquisition_d7_ad_revenue",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "f5b226b3d3f71be7b4569913cb170375d61d026ed70856eea0bf3e5d4de15099",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "6000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-a",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "d2f50500652b64ee81a4e501b1c5272efee9667edba91f47b5fecfa266b570ec"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-a:acquisition_d7_ad_roas",
+    "metric_name": "acquisition_d7_ad_roas",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "f5b226b3d3f71be7b4569913cb170375d61d026ed70856eea0bf3e5d4de15099",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "value_unscaled": "600000",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "ratio_scale": 6,
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-a",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "d2f50500652b64ee81a4e501b1c5272efee9667edba91f47b5fecfa266b570ec"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-a:acquisition_d7_cost",
+    "metric_name": "acquisition_d7_cost",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "f5b226b3d3f71be7b4569913cb170375d61d026ed70856eea0bf3e5d4de15099",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "10000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-a",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "d2f50500652b64ee81a4e501b1c5272efee9667edba91f47b5fecfa266b570ec"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-a:acquisition_d7_cpi",
+    "metric_name": "acquisition_d7_cpi",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "f5b226b3d3f71be7b4569913cb170375d61d026ed70856eea0bf3e5d4de15099",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "3333333",
+    "amount_scale": 6,
+    "currency": "USD",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-a",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "d2f50500652b64ee81a4e501b1c5272efee9667edba91f47b5fecfa266b570ec"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-a:acquisition_d7_installs",
+    "metric_name": "acquisition_d7_installs",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "f5b226b3d3f71be7b4569913cb170375d61d026ed70856eea0bf3e5d4de15099",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "value_unscaled": "3",
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-a",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "d2f50500652b64ee81a4e501b1c5272efee9667edba91f47b5fecfa266b570ec"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-a:acquisition_d7_purchase_net",
+    "metric_name": "acquisition_d7_purchase_net",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "f5b226b3d3f71be7b4569913cb170375d61d026ed70856eea0bf3e5d4de15099",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "6000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-a",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "d2f50500652b64ee81a4e501b1c5272efee9667edba91f47b5fecfa266b570ec"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-a:acquisition_d7_total_net",
+    "metric_name": "acquisition_d7_total_net",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "f5b226b3d3f71be7b4569913cb170375d61d026ed70856eea0bf3e5d4de15099",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "12000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-a",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "d2f50500652b64ee81a4e501b1c5272efee9667edba91f47b5fecfa266b570ec"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-a:acquisition_d7_total_roas",
+    "metric_name": "acquisition_d7_total_roas",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "f5b226b3d3f71be7b4569913cb170375d61d026ed70856eea0bf3e5d4de15099",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "value_unscaled": "1200000",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "ratio_scale": 6,
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-a",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "d2f50500652b64ee81a4e501b1c5272efee9667edba91f47b5fecfa266b570ec"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-b:acquisition_d7_ad_revenue",
+    "metric_name": "acquisition_d7_ad_revenue",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "27f7ef9b7d14c23d43c398d063e93b8a1db96f11544b0510e55e0b5d67a57edb",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "4000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-b",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "543dccbf6fb082b2a838ed13d4d8b7d14d4c24c24645034124d65be5e12a4a76"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-b:acquisition_d7_ad_roas",
+    "metric_name": "acquisition_d7_ad_roas",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "27f7ef9b7d14c23d43c398d063e93b8a1db96f11544b0510e55e0b5d67a57edb",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "value_unscaled": "1000000",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "ratio_scale": 6,
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-b",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "543dccbf6fb082b2a838ed13d4d8b7d14d4c24c24645034124d65be5e12a4a76"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-b:acquisition_d7_cost",
+    "metric_name": "acquisition_d7_cost",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "27f7ef9b7d14c23d43c398d063e93b8a1db96f11544b0510e55e0b5d67a57edb",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "4000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-b",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "543dccbf6fb082b2a838ed13d4d8b7d14d4c24c24645034124d65be5e12a4a76"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-b:acquisition_d7_cpi",
+    "metric_name": "acquisition_d7_cpi",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "27f7ef9b7d14c23d43c398d063e93b8a1db96f11544b0510e55e0b5d67a57edb",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "2000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-b",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "543dccbf6fb082b2a838ed13d4d8b7d14d4c24c24645034124d65be5e12a4a76"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-b:acquisition_d7_installs",
+    "metric_name": "acquisition_d7_installs",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "27f7ef9b7d14c23d43c398d063e93b8a1db96f11544b0510e55e0b5d67a57edb",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "value_unscaled": "2",
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-b",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "543dccbf6fb082b2a838ed13d4d8b7d14d4c24c24645034124d65be5e12a4a76"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-b:acquisition_d7_purchase_net",
+    "metric_name": "acquisition_d7_purchase_net",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "27f7ef9b7d14c23d43c398d063e93b8a1db96f11544b0510e55e0b5d67a57edb",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "2000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-b",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "543dccbf6fb082b2a838ed13d4d8b7d14d4c24c24645034124d65be5e12a4a76"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-b:acquisition_d7_total_net",
+    "metric_name": "acquisition_d7_total_net",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "27f7ef9b7d14c23d43c398d063e93b8a1db96f11544b0510e55e0b5d67a57edb",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "6000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-b",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "543dccbf6fb082b2a838ed13d4d8b7d14d4c24c24645034124d65be5e12a4a76"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-b:acquisition_d7_total_roas",
+    "metric_name": "acquisition_d7_total_roas",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "27f7ef9b7d14c23d43c398d063e93b8a1db96f11544b0510e55e0b5d67a57edb",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "value_unscaled": "1500000",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "ratio_scale": 6,
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-b",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "543dccbf6fb082b2a838ed13d4d8b7d14d4c24c24645034124d65be5e12a4a76"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-cost-only:acquisition_d7_ad_revenue",
+    "metric_name": "acquisition_d7_ad_revenue",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "7d4192fd2ed9dcccf6be5609c12ded5805f1878263a35c137eb8a1e9238d2117",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "0",
+    "amount_scale": 6,
+    "currency": "USD",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-cost-only",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "0d7807bb22f1cddc26c2a93878e87348e7d28d6f2c4a7a05b980f7ff80000f17"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-cost-only",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-cost-only:acquisition_d7_ad_roas",
+    "metric_name": "acquisition_d7_ad_roas",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "7d4192fd2ed9dcccf6be5609c12ded5805f1878263a35c137eb8a1e9238d2117",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "value_unscaled": "0",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "ratio_scale": 6,
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-cost-only",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "0d7807bb22f1cddc26c2a93878e87348e7d28d6f2c4a7a05b980f7ff80000f17"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-cost-only",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-cost-only:acquisition_d7_cost",
+    "metric_name": "acquisition_d7_cost",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "7d4192fd2ed9dcccf6be5609c12ded5805f1878263a35c137eb8a1e9238d2117",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "2000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-cost-only",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "0d7807bb22f1cddc26c2a93878e87348e7d28d6f2c4a7a05b980f7ff80000f17"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-cost-only",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-cost-only:acquisition_d7_cpi",
+    "metric_name": "acquisition_d7_cpi",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "7d4192fd2ed9dcccf6be5609c12ded5805f1878263a35c137eb8a1e9238d2117",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_state": "undefined",
+    "undefined_reason": "empty_cohort",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-cost-only",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "0d7807bb22f1cddc26c2a93878e87348e7d28d6f2c4a7a05b980f7ff80000f17"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-cost-only",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-cost-only:acquisition_d7_installs",
+    "metric_name": "acquisition_d7_installs",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "7d4192fd2ed9dcccf6be5609c12ded5805f1878263a35c137eb8a1e9238d2117",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "value_unscaled": "0",
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-cost-only",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "0d7807bb22f1cddc26c2a93878e87348e7d28d6f2c4a7a05b980f7ff80000f17"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-cost-only",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-cost-only:acquisition_d7_purchase_net",
+    "metric_name": "acquisition_d7_purchase_net",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "7d4192fd2ed9dcccf6be5609c12ded5805f1878263a35c137eb8a1e9238d2117",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "0",
+    "amount_scale": 6,
+    "currency": "USD",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-cost-only",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "0d7807bb22f1cddc26c2a93878e87348e7d28d6f2c4a7a05b980f7ff80000f17"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-cost-only",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-cost-only:acquisition_d7_total_net",
+    "metric_name": "acquisition_d7_total_net",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "7d4192fd2ed9dcccf6be5609c12ded5805f1878263a35c137eb8a1e9238d2117",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "0",
+    "amount_scale": 6,
+    "currency": "USD",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-cost-only",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "0d7807bb22f1cddc26c2a93878e87348e7d28d6f2c4a7a05b980f7ff80000f17"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-cost-only",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-cost-only:acquisition_d7_total_roas",
+    "metric_name": "acquisition_d7_total_roas",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "7d4192fd2ed9dcccf6be5609c12ded5805f1878263a35c137eb8a1e9238d2117",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "value_unscaled": "0",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "ratio_scale": 6,
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-cost-only",
+        "network": "synthetic-network"
+      },
+      "dimension_digest": "0d7807bb22f1cddc26c2a93878e87348e7d28d6f2c4a7a05b980f7ff80000f17"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-cost-cost-only",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-organic:acquisition_d7_ad_revenue",
+    "metric_name": "acquisition_d7_ad_revenue",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "edc66f764c3d3e20041549b8234327999ae624c65ddf4cd87b143299907cb0e7",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "1000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "organic"
+      },
+      "dimension_digest": "3d5edc61762da85c468a58ba2297710dc47a8d48bdbb9055fce685bad0489f86"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-organic:acquisition_d7_ad_roas",
+    "metric_name": "acquisition_d7_ad_roas",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "edc66f764c3d3e20041549b8234327999ae624c65ddf4cd87b143299907cb0e7",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "value_state": "undefined",
+    "undefined_reason": "no_attributed_cost",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "ratio_scale": 6,
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "organic"
+      },
+      "dimension_digest": "3d5edc61762da85c468a58ba2297710dc47a8d48bdbb9055fce685bad0489f86"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-organic:acquisition_d7_cost",
+    "metric_name": "acquisition_d7_cost",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "edc66f764c3d3e20041549b8234327999ae624c65ddf4cd87b143299907cb0e7",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_state": "undefined",
+    "undefined_reason": "no_attributed_cost",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "organic"
+      },
+      "dimension_digest": "3d5edc61762da85c468a58ba2297710dc47a8d48bdbb9055fce685bad0489f86"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-organic:acquisition_d7_cpi",
+    "metric_name": "acquisition_d7_cpi",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "edc66f764c3d3e20041549b8234327999ae624c65ddf4cd87b143299907cb0e7",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_state": "undefined",
+    "undefined_reason": "no_attributed_cost",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "organic"
+      },
+      "dimension_digest": "3d5edc61762da85c468a58ba2297710dc47a8d48bdbb9055fce685bad0489f86"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-organic:acquisition_d7_installs",
+    "metric_name": "acquisition_d7_installs",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "edc66f764c3d3e20041549b8234327999ae624c65ddf4cd87b143299907cb0e7",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "value_unscaled": "1",
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "organic"
+      },
+      "dimension_digest": "3d5edc61762da85c468a58ba2297710dc47a8d48bdbb9055fce685bad0489f86"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-organic:acquisition_d7_purchase_net",
+    "metric_name": "acquisition_d7_purchase_net",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "edc66f764c3d3e20041549b8234327999ae624c65ddf4cd87b143299907cb0e7",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "2000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "organic"
+      },
+      "dimension_digest": "3d5edc61762da85c468a58ba2297710dc47a8d48bdbb9055fce685bad0489f86"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-organic:acquisition_d7_total_net",
+    "metric_name": "acquisition_d7_total_net",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "edc66f764c3d3e20041549b8234327999ae624c65ddf4cd87b143299907cb0e7",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "3000000",
+    "amount_scale": 6,
+    "currency": "USD",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "organic"
+      },
+      "dimension_digest": "3d5edc61762da85c468a58ba2297710dc47a8d48bdbb9055fce685bad0489f86"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "kpi70-organic:acquisition_d7_total_roas",
+    "metric_name": "acquisition_d7_total_roas",
+    "metric_definition_version": "0.4.23",
+    "input_snapshot_id": "edc66f764c3d3e20041549b8234327999ae624c65ddf4cd87b143299907cb0e7",
+    "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+    "input_ledger_position": "2026-08-12T00:00:00.000Z|kpi70-refund-b",
+    "computed_at": "2026-08-16T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-acquisition-kpis",
+    "rule_bundle_version": "0.4.23",
+    "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "value_state": "undefined",
+    "undefined_reason": "no_attributed_cost",
+    "fx_conversion_snapshot": {
+      "policy": {
+        "policy_version": "0.4.22",
+        "rate_selection": "utc_event_date_and_cost_date",
+        "target_currency": "USD",
+        "target_scale": 6,
+        "rounding_mode": "half_even",
+        "rates": [
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-06",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          },
+          {
+            "currency": "USD",
+            "rate_unscaled": "1",
+            "rate_scale": 0,
+            "effective_date": "2026-08-07",
+            "as_of": "2026-08-12T00:00:00.000Z",
+            "source": "synthetic-identity-snapshot-70"
+          }
+        ]
+      },
+      "snapshot_id": "a13348daa41ba1aadcf53f3812e2a807d72c4b28f7eb72be1d44a240b810ecf2"
+    },
+    "ratio_scale": 6,
+    "grouping": {
+      "dimensions": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "organic"
+      },
+      "dimension_digest": "3d5edc61762da85c468a58ba2297710dc47a8d48bdbb9055fce685bad0489f86"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-ad-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-click-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-a-2",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-b-1",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-install-organic-0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-purchase-organic",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "kpi70-refund-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  }
+]

@@ -11,6 +11,7 @@ import type { OperatorDeliveryHealth } from "../operator-delivery-health.js";
 import type { MeasurementHealth } from "../measurement-health.js";
 import { metricCharts } from "./metric-charts.js";
 import type { buildRetentionMatrices } from "./retention-matrix.js";
+import type { buildAcquisitionKpiSets } from "../acquisition-kpis.js";
 import { metricSeries } from "../metric-series.js";
 
 export type DashboardApp = {
@@ -87,6 +88,7 @@ export type DashboardView = {
   readonly undefinedCount: number;
   readonly charts: readonly DashboardChart[];
   readonly retention: ReturnType<typeof buildRetentionMatrices>;
+  readonly acquisition: ReturnType<typeof buildAcquisitionKpiSets>;
   readonly deterministicCharts: readonly DashboardChart[];
   readonly appleAggregateCharts: readonly DashboardChart[];
   readonly engagementCharts: readonly DashboardChart[];
@@ -147,7 +149,7 @@ export function presentDashboardView(input: {
   readonly csrfToken: string;
   readonly canOperate?: boolean;
   readonly canAdminister?: boolean;
-}, projection: { readonly rows: readonly MetricReportRow[]; readonly retention: ReturnType<typeof buildRetentionMatrices> }): DashboardView {
+}, projection: { readonly rows: readonly MetricReportRow[]; readonly retention: ReturnType<typeof buildRetentionMatrices>; readonly acquisition: ReturnType<typeof buildAcquisitionKpiSets> }): DashboardView {
   const rows = projection.rows;
   const deterministicRows = rows.filter((row) => metricSeries(row.metric_name) === "cohort_or_activity");
   const appleAggregateRows = rows.filter((row) => metricSeries(row.metric_name) === "apple_aggregate");
@@ -166,6 +168,7 @@ export function presentDashboardView(input: {
     undefinedCount: rows.filter((row) => row.value_state === "undefined").length,
     charts,
     retention: projection.retention,
+    acquisition: projection.acquisition,
     deterministicCharts: charts.filter((chart) => metricSeries(chart.metric_name) === "cohort_or_activity"),
     appleAggregateCharts: charts.filter((chart) => metricSeries(chart.metric_name) === "apple_aggregate"),
     engagementCharts: charts.filter((chart) => metricSeries(chart.metric_name) === "first_party_engagement"),

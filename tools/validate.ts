@@ -16,7 +16,8 @@ import { syntheticPlatformAcquisitionCases } from "./synthetic-platform-acquisit
 import { syntheticImportedAcquisitionCases, importedAcquisitionCaseRuns, importedAcquisitionPythonProbe } from "./synthetic-imported-acquisition-cases.js";
 import { syntheticCalendarCohortCases, calendarCohortValues } from "./synthetic-calendar-cohort-cases.js";
 import { syntheticFxCases, syntheticEngagementFxCases, datedFxFixtureValues } from "./synthetic-fx-cases.js";
-import { validDatedFxPolicy, canonicalDatedFxPolicy } from "@openmasu/contracts/definitions";
+import { validDatedFxPolicy, canonicalDatedFxPolicy, ACQUISITION_KPI_VERSION } from "@openmasu/contracts/definitions";
+import { syntheticAcquisitionKpiCases, acquisitionKpiExpected } from "./synthetic-acquisition-kpi-cases.js";
 
 type Any = Record<string, any>;
 type Captured<T> = { ok: true; value: T } | { ok: false; error: unknown };
@@ -342,7 +343,8 @@ function validateRegistryReferences(output: Any, label: string): void {
       "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
       "aak_attributed_reengagements",
     ]);
-    const expectedVersion = definition.rule_bundle_id === "metric-calendar-acquisition" ? "0.4.21"
+    const expectedVersion = definition.rule_bundle_id === "metric-acquisition-kpis" ? ACQUISITION_KPI_VERSION
+      : definition.rule_bundle_id === "metric-calendar-acquisition" ? "0.4.21"
       : definition.rule_bundle_id === "metric-imported-provider-acquisition" ? "0.4.20"
       : definition.rule_bundle_id === "metric-verified-platform-acquisition" ? "0.4.19"
       : definition.rule_bundle_id === "metric-selected-daily-acquisition" ? "0.4.18"
@@ -602,7 +604,7 @@ if (!summaryOnly) {
       });
     }
     it("contains 69 fixture directories", () => {
-      check(fixtureDirs.length === 69, `expected 69 fixture directories, found ${fixtureDirs.length}`);
+      check(fixtureDirs.length === 70, `expected 70 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -1106,12 +1108,18 @@ const scenarios: Array<[string, () => void]> = [
     check(equal(state.output.metric_runs.map((run: Any)=>run.value_unscaled ?? run.undefined_reason),datedFxFixtureValues),"scenario 69 independent exact arithmetic and watermark eligibility");
     check(state.output.metric_runs.filter((run: Any)=>run.fx_conversion_snapshot).length === 6,"scenario 69 mixed money never claims a singular rate");
   }],
+  ["70 acquisition KPIs share a saved population with independent cost CPI and revenue arithmetic", () => {
+    const state = fixture("70-saved-acquisition-kpis");
+    check(state.output.raw_records.length === 16 && state.output.metric_runs.length === 32, "scenario 70 exact bounded synthetic population");
+    check(equal(state.output.metric_runs.map((run: Any) => run.value_unscaled ?? run.undefined_reason), acquisitionKpiExpected(state.input)), "scenario 70 independent eight-role money and count arithmetic");
+    for (const evaluation of state.input.metric_evaluations) check(new Set(state.output.metric_runs.filter((run: Any) => run.metric_run_id.startsWith(`${evaluation.metric_run_id_prefix}:`)).map((run: Any) => run.input_snapshot_id)).size === 1, "scenario 70 same selected snapshot");
+  }],
 ];
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 69 scenario assertions", () => {
-      check(scenarios.length === 69, "scenario assertion inventory must contain 69 entries");
+    it("contains 70 scenario assertions", () => {
+      check(scenarios.length === 70, "scenario assertion inventory must contain 70 entries");
     });
   });
 
@@ -1680,7 +1688,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 69 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 70 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1720,7 +1728,7 @@ const acceptance: Array<[string, () => void]> = [
     for (const forbidden of ["threshold", "model_weight", "watchlist", "ip_address", "user_agent", "response_timing"]) check(!schemaText.includes(forbidden), `AC20 ${forbidden}`);
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
-  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 69 && outputArtifactCount === 69 * 13, "AC21")],
+  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 70 && outputArtifactCount === 70 * 13, "AC21")],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {
     for (const { output, python } of results.values()) check(equal(output, python), "AC22 evaluator mismatch");
     const vector = { numbers: [333333333.33333329, 1e30, 4.50, 2e-3, 1e-27, -0], string: "€$\u000f\nA'B\"\\\"/" };
@@ -2169,6 +2177,15 @@ const validRevenue = {
 };
 if (!summaryOnly) {
   describe("semantic mutations", () => {
+    it("acquisition_KPIs_preserve_empty_missing_zero_overlap_and_cost_only_FX_in_independent_TS_Python_parity", () => {
+      const cases = syntheticAcquisitionKpiCases(fixture("70-saved-acquisition-kpis").input);
+      const python = pythonOutputs(cases.map(entry => entry.input));
+      for (const [index, entry] of cases.entries()) {
+        const output = evaluate(entry.input);
+        check(equal(output.metric_runs.map(run => run.value_unscaled ?? run.undefined_reason), entry.expected), `${entry.name}: independent arithmetic`);
+        check(equal(output, python[index]), `${entry.name}: independent artifact parity`);
+      }
+    });
     it("dated_FX_keeps_multi_currency_cost_ties_huge_integers_missing_dates_commerce_and_engagement_in_independent_TS_Python_parity", () => {
       const cases=[...syntheticFxCases(fixture("69-dated-fx-cohorts").input),...syntheticEngagementFxCases(fixture("64-first-party-engagement").input)];
       const python=pythonOutputs(cases.map(entry=>entry.input));

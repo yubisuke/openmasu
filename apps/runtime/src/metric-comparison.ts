@@ -71,6 +71,7 @@ export function captureMetricComparisonContext(
 export function comparisonMeaning(context: MetricComparisonContext) {
   const d = context.definition, calculation = d.definition.calculation, window = d.definition.window;
   const revenue = ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(calculation);
+  const cost = ["cost_sum", "cost_over_cohort"].includes(calculation);
   const conversion = ["converted_installations", "converted_installations_over_cohort"].includes(calculation);
   if (d.engagement_credit_policy) {
     if (d.anchor_event !== "deep_link_open" || d.engagement_credit_policy !== "latest_eligible_open_before_outcome"
@@ -94,6 +95,9 @@ export function comparisonMeaning(context: MetricComparisonContext) {
   }
   const supported = d.anchor_event === (calculation === "event_count" ? "calendar_day" : "install")
     && (revenue ? (window.type === "elapsed" || !!d.calendar_cohort_policy && window.type === "calendar_day") && ["revenue", "purchase_net_revenue", "total_net_revenue"].includes(d.definition.numerator)
+      : cost ? window.type === "elapsed" && d.definition.numerator === "cost"
+        && d.definition.cost_basis === "cohort_acquisition_day_current_snapshot"
+        && (calculation !== "cost_over_cohort" || d.definition.denominator === "cohort_size")
       : calculation === "active_installations_over_cohort" ? (window.type === "activity_day" || !!d.calendar_cohort_policy && window.type === "calendar_day") && d.definition.numerator === "active_installations"
       : calculation === "event_count" ? window.type === "calendar_day" && window.day === 0 && d.definition.numerator === "events"
       : conversion ? window.type === "elapsed" && window.day === 7 && d.definition.numerator === "converted_installations"
@@ -104,7 +108,7 @@ export function comparisonMeaning(context: MetricComparisonContext) {
     && (calculation !== "active_installations_over_cohort" || (d.activity_events ?? ["session_start"]).every(name => name === "session_start"))
     && (calculation !== "revenue_over_cost" || (d.definition.denominator === "cost" && d.definition.cost_basis === "cohort_acquisition_day_current_snapshot"))
     && (!["active_installations_over_cohort", "revenue_over_cohort", "converted_installations_over_cohort"].includes(calculation) || d.definition.denominator === "cohort_size")
-    && (!revenue || context.fx.target_currency === (d.currency ?? context.fx.target_currency))
+    && (!(revenue || cost) || context.fx.target_currency === (d.currency ?? context.fx.target_currency))
     && (d.value_type !== "money" || d.amount_scale === context.fx.target_scale);
   if (!supported) return undefined;
   const aggregation = calculation === "event_count" || calculation === "active_installations_over_cohort" ? "on_day" : "cumulative";
@@ -131,8 +135,8 @@ export function comparisonMeaning(context: MetricComparisonContext) {
     fraud_policy: d.fraud_policy ?? "gross", privacy_state: context.privacy_state,
     value_type: d.value_type, currency: d.currency ?? null,
     amount_scale: d.amount_scale ?? null, ratio_scale: d.ratio_scale ?? null,
-    fx: revenue ? { target_currency: context.fx.target_currency, target_scale: context.fx.target_scale,
-      rounding_mode: context.fx.rounding_mode, conversion: "per_event_round_then_sum",
+    fx: revenue || cost ? { target_currency: context.fx.target_currency, target_scale: context.fx.target_scale,
+      rounding_mode: context.fx.rounding_mode, conversion: cost ? "per_cost_row_round_then_sum" : "per_event_round_then_sum",
       ...(context.fx.rate_selection ? { rate_selection: context.fx.rate_selection, cost_conversion: "per_cost_row_round_then_sum" } : {}),
       rates: context.fx.rate_selection ? context.fx.rates : context.fx.rates.map(({ currency, rate_unscaled, rate_scale, as_of }) => ({ currency, rate_unscaled, rate_scale, as_of })) } : null,
   };

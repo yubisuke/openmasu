@@ -36,7 +36,7 @@ in [Project plan](project-plan.md).
 | Operator-owned bulk event exports | Synthetic complete | Default-off S3-compatible destinations, deterministic gzip NDJSON, SigV4 conditional writes, durable keyset cursors, and destination-scoped deletion notices |
 
 The current contract gate preserves parity across 28 schemas, 8 registries,
-and 69 reviewed synthetic fixtures, including explicitly versioned calendar-zone, imported-provider, first-party and verified-platform acquisition cohorts, daily counts, safe cost selection, custom conversions and targeted refund cancellation.
+and 70 reviewed synthetic fixtures, including explicitly versioned same-set first-party acquisition KPIs, calendar-zone, imported-provider and verified-platform cohorts, daily counts, safe costs, custom conversions and targeted refund cancellation.
 
 ## Completed milestone: integration and release coherence
 
@@ -211,6 +211,11 @@ is [issue #218](https://github.com/yubisuke/openmasu/issues/218).
 | Source implemented | Shared profile validation; separate SQL selection/calculation/persistence and pure evaluator responsibilities | #257, #258, #259 |
 | Source implemented | Feature controllers over the existing authentication and typed view-model boundaries | #256 |
 | Source implemented | Runtime ingestion separated from privileged seed support, preserving atomic bulk writes | #260 |
+
+The [saved acquisition KPI set](acquisition-kpis.md) adds count, cost/CPI and
+separate revenue/ROAS on these same calculation and view boundaries (#228).
+Its first-party D7 scope and refusal gates are recorded in the project-plan
+crosswalk; no new analysis service or cross-population calculator is introduced.
 
 Unrelated SDK and operational work does not wait for every structural item.
 Use bounded PRs and existing regression suites. The matching

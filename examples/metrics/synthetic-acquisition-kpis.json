@@ -1,0 +1,342 @@
+{
+  "tenant_id": "tenant-a",
+  "app_id": "app-a",
+  "fx_policy": {
+    "policy_version": "0.4.22",
+    "rate_selection": "utc_event_date_and_cost_date",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "1",
+        "rate_scale": 0,
+        "effective_date": "2026-08-06",
+        "as_of": "2026-08-12T00:00:00.000Z",
+        "source": "synthetic-identity-snapshot-70"
+      },
+      {
+        "currency": "USD",
+        "rate_unscaled": "1",
+        "rate_scale": 0,
+        "effective_date": "2026-08-07",
+        "as_of": "2026-08-12T00:00:00.000Z",
+        "source": "synthetic-identity-snapshot-70"
+      }
+    ]
+  },
+  "metric_definitions": [
+    {
+      "metric_name": "acquisition_d7_installs",
+      "metric_definition_version": "0.4.23",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "acquisition_basis": "selected_first_party_click",
+      "value_type": "count",
+      "definition": {
+        "calculation": "cohort_size",
+        "numerator": "cohort_size",
+        "window": {
+          "type": "elapsed",
+          "day": 7
+        }
+      },
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "cost_selection_policy": "reject_overlapping_grains",
+      "rule_bundle_id": "metric-acquisition-kpis",
+      "rule_bundle_version": "0.4.23",
+      "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2"
+    },
+    {
+      "metric_name": "acquisition_d7_cost",
+      "metric_definition_version": "0.4.23",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "acquisition_basis": "selected_first_party_click",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "cost_sum",
+        "numerator": "cost",
+        "window": {
+          "type": "elapsed",
+          "day": 7
+        },
+        "cost_basis": "cohort_acquisition_day_current_snapshot"
+      },
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "cost_selection_policy": "reject_overlapping_grains",
+      "rule_bundle_id": "metric-acquisition-kpis",
+      "rule_bundle_version": "0.4.23",
+      "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2"
+    },
+    {
+      "metric_name": "acquisition_d7_cpi",
+      "metric_definition_version": "0.4.23",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "acquisition_basis": "selected_first_party_click",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "cost_over_cohort",
+        "numerator": "cost",
+        "window": {
+          "type": "elapsed",
+          "day": 7
+        },
+        "cost_basis": "cohort_acquisition_day_current_snapshot",
+        "denominator": "cohort_size"
+      },
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "cost_selection_policy": "reject_overlapping_grains",
+      "rule_bundle_id": "metric-acquisition-kpis",
+      "rule_bundle_version": "0.4.23",
+      "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2"
+    },
+    {
+      "metric_name": "acquisition_d7_ad_revenue",
+      "metric_definition_version": "0.4.23",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "acquisition_basis": "selected_first_party_click",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "revenue_sum",
+        "numerator": "revenue",
+        "window": {
+          "type": "elapsed",
+          "day": 7
+        }
+      },
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "cost_selection_policy": "reject_overlapping_grains",
+      "rule_bundle_id": "metric-acquisition-kpis",
+      "rule_bundle_version": "0.4.23",
+      "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2"
+    },
+    {
+      "metric_name": "acquisition_d7_purchase_net",
+      "metric_definition_version": "0.4.23",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "acquisition_basis": "selected_first_party_click",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "revenue_sum",
+        "numerator": "purchase_net_revenue",
+        "window": {
+          "type": "elapsed",
+          "day": 7
+        }
+      },
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "cost_selection_policy": "reject_overlapping_grains",
+      "rule_bundle_id": "metric-acquisition-kpis",
+      "rule_bundle_version": "0.4.23",
+      "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2"
+    },
+    {
+      "metric_name": "acquisition_d7_total_net",
+      "metric_definition_version": "0.4.23",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "acquisition_basis": "selected_first_party_click",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "revenue_sum",
+        "numerator": "total_net_revenue",
+        "window": {
+          "type": "elapsed",
+          "day": 7
+        }
+      },
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "cost_selection_policy": "reject_overlapping_grains",
+      "rule_bundle_id": "metric-acquisition-kpis",
+      "rule_bundle_version": "0.4.23",
+      "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2"
+    },
+    {
+      "metric_name": "acquisition_d7_ad_roas",
+      "metric_definition_version": "0.4.23",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "acquisition_basis": "selected_first_party_click",
+      "value_type": "ratio",
+      "ratio_scale": 6,
+      "definition": {
+        "calculation": "revenue_over_cost",
+        "numerator": "revenue",
+        "window": {
+          "type": "elapsed",
+          "day": 7
+        },
+        "cost_basis": "cohort_acquisition_day_current_snapshot",
+        "denominator": "cost"
+      },
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "cost_selection_policy": "reject_overlapping_grains",
+      "rule_bundle_id": "metric-acquisition-kpis",
+      "rule_bundle_version": "0.4.23",
+      "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2"
+    },
+    {
+      "metric_name": "acquisition_d7_total_roas",
+      "metric_definition_version": "0.4.23",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "acquisition_basis": "selected_first_party_click",
+      "value_type": "ratio",
+      "ratio_scale": 6,
+      "definition": {
+        "calculation": "revenue_over_cost",
+        "numerator": "total_net_revenue",
+        "window": {
+          "type": "elapsed",
+          "day": 7
+        },
+        "cost_basis": "cohort_acquisition_day_current_snapshot",
+        "denominator": "cost"
+      },
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "cost_selection_policy": "reject_overlapping_grains",
+      "rule_bundle_id": "metric-acquisition-kpis",
+      "rule_bundle_version": "0.4.23",
+      "rule_bundle_hash": "950d30940ef4bee257dfcd8e10e47dccec422dad4fc15d6d15f658d0fb7a04c2"
+    }
+  ],
+  "evaluations": [
+    {
+      "metric_names": [
+        "acquisition_d7_installs",
+        "acquisition_d7_cost",
+        "acquisition_d7_cpi",
+        "acquisition_d7_ad_revenue",
+        "acquisition_d7_purchase_net",
+        "acquisition_d7_total_net",
+        "acquisition_d7_ad_roas",
+        "acquisition_d7_total_roas"
+      ],
+      "grouping": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-a",
+        "network": "synthetic-network"
+      }
+    },
+    {
+      "metric_names": [
+        "acquisition_d7_installs",
+        "acquisition_d7_cost",
+        "acquisition_d7_cpi",
+        "acquisition_d7_ad_revenue",
+        "acquisition_d7_purchase_net",
+        "acquisition_d7_total_net",
+        "acquisition_d7_ad_roas",
+        "acquisition_d7_total_roas"
+      ],
+      "grouping": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-b",
+        "network": "synthetic-network"
+      }
+    },
+    {
+      "metric_names": [
+        "acquisition_d7_installs",
+        "acquisition_d7_cost",
+        "acquisition_d7_cpi",
+        "acquisition_d7_ad_revenue",
+        "acquisition_d7_purchase_net",
+        "acquisition_d7_total_net",
+        "acquisition_d7_ad_roas",
+        "acquisition_d7_total_roas"
+      ],
+      "grouping": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "organic"
+      }
+    },
+    {
+      "metric_names": [
+        "acquisition_d7_installs",
+        "acquisition_d7_cost",
+        "acquisition_d7_cpi",
+        "acquisition_d7_ad_revenue",
+        "acquisition_d7_purchase_net",
+        "acquisition_d7_total_net",
+        "acquisition_d7_ad_roas",
+        "acquisition_d7_total_roas"
+      ],
+      "grouping": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-cost-only",
+        "network": "synthetic-network"
+      }
+    }
+  ]
+}

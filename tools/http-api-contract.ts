@@ -24,6 +24,7 @@ export function buildHttpApiContract(): Json {
     policy_versions: { type: "array", items: { type: "string" } }, grouping: group,
     grouping_digest: metric.properties.grouping.properties.dimension_digest, superseded: { type: "boolean" },
     comparison_context: { type: ["object", "null"], description: "Saved aggregate-only meaning; null/unknown is not reconstructed." },
+    acquisition_kpi_set_key: nullable({ type: "string", pattern: "^[a-f0-9]{64}$", description: "Definition-backed acquisition calculation-set identity; not a run ID or permission to divide arbitrary rows. Null for unknown/legacy profiles." }),
     cost_update_state: { type: "string", description: "Current persisted recalculation/input-revision state." },
     late_input_update_state: { type: "string", description: "Explicit late-input request state; not proof of upstream completeness." },
     attribution_update_state: { enum: ["recalculation_pending","unavailable","completed","no_recorded_request"], description: "Recorded selected-attribution correction state; separate from late-event and privacy correction." },

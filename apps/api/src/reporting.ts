@@ -2,6 +2,7 @@ import type { Pool, PoolClient } from "pg";
 import { withTenant } from "@openmasu/runtime";
 import type { MetricComparisonContext } from "@openmasu/runtime";
 import { projectDatedFxSnapshot } from "@openmasu/contracts/definitions";
+import { acquisitionKpiSetKey } from "./acquisition-kpis.js";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { metricSeries } from "./metric-series.js";
 import { metricFreshness, type ImportReceiptObservation, type MetricFreshness } from "./metric-freshness.js";
@@ -31,7 +32,7 @@ export const metricColumns = [
   "privacy_update_state", "unavailable_reason",
   "time_window_maturity", "source_observation", "import_completion", "recalculation_state",
   "attribution_update_state",
-  "fx_conversion_snapshot",
+  "fx_conversion_snapshot", "acquisition_kpi_set_key",
 ] as const;
 
 export const differenceColumns = [
@@ -79,6 +80,7 @@ export type MetricReportRow = {
   readonly import_completion?: MetricFreshness["import_completion"];
   readonly recalculation_state?: MetricFreshness["recalculation_state"];
   readonly fx_conversion_snapshot?: ReturnType<typeof projectDatedFxSnapshot>;
+  readonly acquisition_kpi_set_key?: string | null;
 };
 
 export type MetricReportPage = {
@@ -215,7 +217,7 @@ export async function metricReportOnClient(client: PoolClient, query: MetricQuer
         row.privacy_changed,
         row.privacy_update_state,
       );
-      return { ...result, attribution_update_state:row.attribution_update_state??"no_recorded_request", ...metricFreshness({...result,attribution_update_state:row.attribution_update_state??"no_recorded_request"}, row.import_receipt_observation,
+      return { ...result, acquisition_kpi_set_key: acquisitionKpiSetKey(result, { tenantId: query.tenantId, appId: query.appId }), attribution_update_state:row.attribution_update_state??"no_recorded_request", ...metricFreshness({...result,attribution_update_state:row.attribution_update_state??"no_recorded_request"}, row.import_receipt_observation,
         Array.isArray(row.artifact.evidence_refs) ? row.artifact.evidence_refs.length : undefined) };
     });
     const last = rows.at(-1);

@@ -342,10 +342,12 @@ export async function metricValue(
   if (["converted_installations", "converted_installations_over_cohort"].includes(calculation)) {
     return customConversionValue(client, scope, watermark, grouping, definition, privacyState);
   }
-  if (!fxPolicy.rate_selection && calculation === "revenue_over_cost" && selectedCosts?.rows.some((cost) => cost.currency !== fxPolicy.target_currency)) {
+  const costCalculation = ["cost_sum", "cost_over_cohort"].includes(calculation);
+  const usesCost = costCalculation || calculation === "revenue_over_cost";
+  if (!fxPolicy.rate_selection && usesCost && selectedCosts?.rows.some((cost) => cost.currency !== fxPolicy.target_currency)) {
     throw new Error(`cost currency mismatch for ${definition.metric_name}`);
   }
-  if (calculation === "revenue_over_cost" && selectedCosts?.overlapping) {
+  if (usesCost && selectedCosts?.overlapping) {
     return { value_state: "undefined", undefined_reason: "overlapping_cost_grains" };
   }
   if (definition.definition.numerator === "total_net_revenue") {
@@ -527,6 +529,10 @@ export async function metricValue(
        )
      SELECT CASE $10
               WHEN 'revenue_sum' THEN revenue_value
+              WHEN 'cost_sum' THEN CASE WHEN cost_row_count=0 THEN NULL ELSE cost_value END
+              WHEN 'cost_over_cohort' THEN
+                CASE WHEN cohort_size=0 OR cost_row_count=0 THEN NULL
+                     ELSE ledger.half_even_div(cost_value, cohort_size) END
               WHEN 'revenue_over_cost' THEN
                 CASE WHEN cost_value=0 THEN NULL
                      ELSE ledger.half_even_div(revenue_value * power(10::numeric, $14), cost_value) END
@@ -572,12 +578,12 @@ export async function metricValue(
     ],
   );
   const row = result.rows[0];
-  const usesFx = ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(calculation);
+  const usesFx = costCalculation || ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(calculation);
   if (fxPolicy.rate_selection) {
-    if (usesFx && (row.missing_fx_count !== "0" || calculation === "revenue_over_cost" && row.missing_cost_fx_count !== "0")) {
+    if (usesFx && (!costCalculation && row.missing_fx_count !== "0" || usesCost && row.missing_cost_fx_count !== "0")) {
       return { value_state: "undefined", undefined_reason: "missing_fx_rate" };
     }
-  } else if (row.missing_fx_count !== "0") throw new Error(`missing FX rate for ${definition.metric_name}`);
+  } else if (!costCalculation && row.missing_fx_count !== "0") throw new Error(`missing FX rate for ${definition.metric_name}`);
   if (row.mismatched_cost_currency_count !== "0") {
     throw new Error(`cost currency mismatch for ${definition.metric_name}`);
   }
@@ -592,7 +598,8 @@ export async function metricValue(
     ...(operands ? { operands } : {}), ...(aggregates ? { revenueAggregates: aggregates } : {}) };
   return {
     value_state: "undefined",
-    undefined_reason: calculation === "revenue_over_cost" ? "no_attributed_cost" : "empty_cohort",
+    undefined_reason: calculation === "revenue_over_cost" || calculation === "cost_sum"
+      || calculation === "cost_over_cohort" && row.cohort_size !== "0" ? "no_attributed_cost" : "empty_cohort",
     ...(operands ? { operands } : {}),
   };
 }

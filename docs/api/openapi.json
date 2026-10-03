@@ -547,7 +547,8 @@
                   "import_completion",
                   "recalculation_state",
                   "attribution_update_state",
-                  "fx_conversion_snapshot"
+                  "fx_conversion_snapshot",
+                  "acquisition_kpi_set_key"
                 ]
               }
             }
@@ -2112,6 +2113,18 @@
           },
           "fx_conversion_snapshot": {
             "$ref": "#/components/schemas/Common/$defs/fxConversionSnapshot"
+          },
+          "acquisition_kpi_set_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$",
+                "description": "Definition-backed acquisition calculation-set identity; not a run ID or permission to divide arbitrary rows. Null for unknown/legacy profiles."
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,

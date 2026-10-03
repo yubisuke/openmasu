@@ -11,6 +11,11 @@ Use the manual `npm run metrics:run` command for an operator-controlled one-off
 calculation or a deliberately selected historical backfill. Use a durable
 schedule when the worker should calculate a stable metric set every day.
 
+For count, cost, CPI, separate revenue and ROAS in one saved population, use the
+complete [acquisition KPI set](acquisition-kpis.md) and its synthetic schedule.
+Its explicit eight-definition first-party D7 profile needs no extra worker or
+report calculator; keep all roles on the same target and correction cutoff.
+
 For independently named `platform_*` cohort metrics, supply the full
 [verified platform profile](verified-platform-acquisition.md). Source namespaces
 stay explicit and cannot be blended with first-party campaign discovery.
