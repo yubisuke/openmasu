@@ -38,6 +38,16 @@ const goldenBefore = readFileSync(goldenPath);
 const golden: Any[] = JSON.parse(goldenBefore.toString("utf8"));
 const oracle = evaluate(input).metric_runs;
 
+function assertPlatformRunParity(actual: readonly Any[], expected: readonly Any[], label: string): void {
+  assert.equal(actual.length, expected.length, `${label}: run count`);
+  for (const [index, run] of actual.entries()) {
+    // Keep failures actionable: a whole cohort's JCS string exceeds node:test's
+    // diagnostic limit and hides the field that differs.
+    assert.deepEqual(run, expected[index], `${label}: ${run.metric_run_id}`);
+    assert.equal(jcs(run), jcs(expected[index]), `${label}: ${run.metric_run_id} canonical bytes`);
+  }
+}
+
 describe("verified platform acquisition SQL parity", { concurrency: false }, () => {
   const app = createAppPool(), seed = createSeedPool(), reader = createReaderPool();
   after(async () => { await Promise.all([app.end(),seed.end(),reader.end()]); });
@@ -52,15 +62,16 @@ describe("verified platform acquisition SQL parity", { concurrency: false }, () 
       await persistSyntheticPlatformResults(app,entry.input);
       const actual = await computeSqlMetricRuns(app,entry.input,false);
       assert.deepEqual(actual.map(run => run.value_unscaled ?? run.undefined_reason),entry.expected);
-      assert.equal(jcs(actual),jcs(evaluate(entry.input).metric_runs));
-      if (index === 0) assert.equal(jcs(actual),jcs(JSON.parse(readFileSync(
-        "fixtures/v0.4/66-verified-platform-acquisition/expected_metric_runs.json","utf8"))));
+      assertPlatformRunParity(actual,evaluate(entry.input).metric_runs,entry.name);
+      if (index === 0) assertPlatformRunParity(actual,JSON.parse(readFileSync(
+        "fixtures/v0.4/66-verified-platform-acquisition/expected_metric_runs.json","utf8")),"reviewed golden");
     });
   }
   it("saves distinct platform meaning and keeps JSON CSV and source-local ad-group cost absence exact", async () => {
     await ingestFixture("platform66-saved",source,app,seed);
     await persistSyntheticPlatformResults(app,source);
     const actual = await computeSqlMetricRuns(app,source,true);
+    assertPlatformRunParity(actual,evaluate(source).metric_runs,"saved platform profile");
     const identity = { keyId:"synthetic-platform66",tenantId:"tenant-a",appId:"app-a",role:"admin" as const };
     const page = await metricReport(reader,identity,{tenantId:identity.tenantId,appId:identity.appId,supersession:"all",limit:200});
     for (const run of actual) {
@@ -80,7 +91,7 @@ describe("verified platform acquisition SQL parity", { concurrency: false }, () 
   for (const installId of ["apple-66","meta-66"]) it(`reads ${installId} protected-context purge tombstones without restoring an older campaign`, async () => {
     const value = structuredClone(source);
     const proof = value.platform_acquisition_inputs.find((entry: Any) => entry.install_record_id === installId);
-    const oldRef = proof.evidence_ref, encryptedRef = "encrypted:synthetic-platform66-purged";
+    const oldRef = proof.evidence_ref, encryptedRef = `encrypted:synthetic-platform66-purged-${installId}`;
     proof.evidence_ref = installId === "meta-66" ? `payload:${encryptedRef}` : encryptedRef;
     if (installId === "apple-66") proof.attribution.evidence_refs.find((ref: Any) => ref.ref === oldRef).ref = proof.evidence_ref;
     else {
@@ -91,7 +102,7 @@ describe("verified platform acquisition SQL parity", { concurrency: false }, () 
     proof.lifecycle_status = "redacted";
     await ingestFixture("platform66-purged",value,app,seed);
     await persistSyntheticPlatformResults(app,value);
-    const at = "2026-10-01T00:00:00.000Z", request = "privacy-platform66-context";
+    const at = "2026-10-01T00:00:00.000Z", request = `privacy-platform66-context-${installId}`;
     await withTenant(app,"tenant-a",async client => {
       await client.query(`INSERT INTO control.privacy_deletion_jobs
         (privacy_request_id,tenant_id,app_id,status,requested_at,completed_at,artifact_template,actor_type,actor_ref,request_digest,updated_at)
@@ -101,7 +112,7 @@ describe("verified platform acquisition SQL parity", { concurrency: false }, () 
         VALUES ($1,'tenant-a','app-a',$2,$3,'purged',$4)`,[request,sha256(encryptedRef),encryptedRef,at]);
     });
     const actual = await computeSqlMetricRuns(app,value,false);
-    assert.equal(jcs(actual),jcs(evaluate(value).metric_runs));
+    assertPlatformRunParity(actual,evaluate(value).metric_runs,`${installId} protected-context purge`);
     const prefix = installId === "apple-66" ? "platform66-late" : "platform66-meta";
     assert.equal(actual.find(run => run.metric_run_id === `${prefix}:platform_cohort_install_count`)?.value_unscaled,"0");
     assert.ok(actual.filter(run => run.metric_name.startsWith("platform_") && run.input_received_at_watermark===at)

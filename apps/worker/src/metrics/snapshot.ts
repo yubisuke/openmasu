@@ -105,6 +105,7 @@ export async function currentCosts(
          AND ($5::text IS NULL OR network=$5)
          AND ($6::text IS NULL OR country=$6)
          AND ($7::date IS NULL OR cost_date=$7::date)
+         AND ($8::text IS NULL OR ad_group_id=$8)
        ORDER BY cost_key_digest, as_of DESC, cost_record_id COLLATE "C" DESC
      ) AS current
      ORDER BY as_of, cost_record_id`,
@@ -116,6 +117,7 @@ export async function currentCosts(
       grouping?.network ?? null,
       grouping?.country ?? null,
       grouping?.cohort_date ?? null,
+      grouping?.ad_group_id ?? null,
     ],
   );
   // Snapshot order follows the contract's UTF-16 text order, not database locale.
