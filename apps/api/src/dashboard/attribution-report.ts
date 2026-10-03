@@ -1,5 +1,5 @@
 import type { AttributionReport, AttributionQuery } from "../attribution-reporting.js";
-import { escapeHtml as escape } from "./render.js";
+import { escapeHtml as escape } from "./html.js";
 
 export function renderAttributionReport(appId: string, report?: AttributionReport): string {
   const app = encodeURIComponent(appId), query = report?.selection;

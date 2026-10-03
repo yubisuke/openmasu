@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { it } from "node:test";
 import { normalizeMetricRecalculationRequest } from "@openmasu/runtime";
 import { matchRoute } from "../routes.js";
-import { metricRecalculationFormRequest, renderMetricRecalculations } from "./metric-recalculations.js";
+import { renderMetricRecalculations } from "./metric-recalculations.js";
+import { metricRecalculationFormRequest } from "../metric-recalculation-form.js";
 
 const request = { cost_import_run_id: "01800000-0000-7000-8000-000000000000",
   date_from: "2026-08-01", date_to: "2026-08-31", watermark: "2026-09-01T00:00:00.000Z" };

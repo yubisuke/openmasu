@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import type { IncomingMessage } from "node:http";
 import { describe, it } from "node:test";
+import type { Pool } from "pg";
+import { dashboardSessionFor } from "./http-security.js";
 import {
   APPLE_AAK_POSTBACK_PATH,
   APPLE_SKAN_POSTBACK_PATH,
@@ -21,13 +24,15 @@ describe("declarative API route security", () => {
     }
   });
 
-  it("C04 keeps the dashboard handler group independent of authorization headers", () => {
-    const routerSource = readFileSync(new URL("./router.ts", import.meta.url), "utf8");
-    const start = routerSource.indexOf('if (route.handler === "dashboard_css")');
-    const end = routerSource.indexOf("const identity = await adminIdentity", start);
-    assert.ok(start >= 0 && end > start, "dashboard handler group must remain identifiable");
-    const dashboardHandlers = routerSource.slice(start, end);
-    assert.doesNotMatch(dashboardHandlers, /authorization\s*\(\s*request\s*\)|headers\.authorization/);
+  it("C04 keeps the dashboard handler group independent of authorization headers", async () => {
+    const request = { headers: {
+      get authorization(): never { throw new Error("dashboard_read_bearer_header"); },
+    } } as unknown as IncomingMessage;
+    const readerPool = { connect(): never { throw new Error("missing_cookie_read_database"); } } as unknown as Pool;
+    assert.equal(await dashboardSessionFor({ readerPool, dashboard: {
+      enabled: true, tenantId: "tenant-synthetic", publicBaseUrl: "http://localhost:8080",
+      sessionTtlSeconds: 43200,
+    } }, request), undefined);
   });
 
   it("C03 declares every read-only route without mutation authority", () => {

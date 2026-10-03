@@ -1,5 +1,5 @@
 import type { DashboardView } from "./view.js";
-import { escapeHtml } from "./render.js";
+import { escapeHtml } from "./html.js";
 import { reportSelectionParams } from "./report-controls.js";
 
 export function renderComparisonExport(view: DashboardView): string {

@@ -12,12 +12,22 @@ export type Workspace = {
 export type ModuleImport = { specifier: string; target?: string; typeOnly: boolean };
 export type BoundaryModule = { path: string; imports: readonly ModuleImport[]; performsIO?: boolean };
 const executableApps = new Set(["@openmasu/api", "@openmasu/worker", "@openmasu/redirector"]);
-const forbiddenPureImport = /^(?:pg(?:\/|$)|node:(?:fs|http|https|net|dns|child_process|worker_threads)(?:\/|$))/;
+const forbiddenPureImport = /^(?:pg(?:\/|$)|ajv(?:-formats)?(?:\/|$)|@openmasu\/contracts\/validation(?:\/|$)|node:(?:fs|http|https|net|dns|child_process|worker_threads)(?:\/|$))/;
 export const pureEntrypoints = [
   "packages/attribution-core/src/canonical.ts",
   "apps/runtime/src/import-normalization.ts",
   "packages/contracts/src/definitions.ts",
   "packages/contracts/src/types.ts",
+  "apps/runtime/src/metric-comparison.ts",
+  "apps/api/src/dashboard/presenter.ts",
+  "apps/api/src/dashboard/render.ts",
+  "apps/api/src/dashboard/action-pages.ts",
+  "apps/api/src/dashboard/comparison-workflow.ts",
+  "apps/api/src/dashboard/comparison-report.ts",
+  "apps/api/src/dashboard/metric-schedules.ts",
+  "apps/api/src/dashboard/metric-recalculations.ts",
+  "apps/api/src/dashboard/metric-explanation.ts",
+  "apps/api/src/dashboard/attribution-report.ts",
 ];
 
 /** Check production imports, not test fixtures or generated declarations. */

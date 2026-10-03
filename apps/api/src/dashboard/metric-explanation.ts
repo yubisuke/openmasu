@@ -1,6 +1,6 @@
 import type { MetricExplanation } from "../metric-explanation.js";
 import { exactDecimal } from "./metric-value.js";
-import { escapeHtml } from "./render.js";
+import { escapeHtml } from "./html.js";
 
 export function renderMetricExplanation(appId: string, value: MetricExplanation): string {
   const run = value.run;
