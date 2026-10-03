@@ -1147,6 +1147,27 @@ def metric_definitions(value: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def validate_metric_definition_series(definition: dict[str, Any]) -> None:
+    if (definition.get("metric_name") == "daily_selected_install_count"
+            or definition.get("rule_bundle_id") == "metric-selected-daily-acquisition"
+            or "acquisition_campaign_state" in definition.get("grouping_dimensions", [])):
+        groups = definition.get("grouping_dimensions", [])
+        required = {
+            "metric_name": "daily_selected_install_count", "metric_definition_version": "0.4.18",
+            "anchor_event": "calendar_day", "aggregation_time_zone": "UTC", "value_type": "count",
+            "acquisition_basis": "selected_first_party_click", "event_names": ["install"],
+            "rule_bundle_id": "metric-selected-daily-acquisition", "rule_bundle_version": "0.4.18",
+            "rule_bundle_hash": "ce996e1de4060947faa76fad369571941bbdd120ad5c1ddf9697531813543c8d",
+            "definition": {"calculation": "event_count", "window": {"type": "calendar_day", "day": 0}, "numerator": "events"},
+        }
+        if (any(definition.get(key) != value for key, value in required.items())
+                or not isinstance(groups, list) or not groups or "metric_date" not in groups
+                or len(set(groups)) != len(groups)
+                or any(key not in ("metric_date", "cohort_date", "campaign_id", "network", "country",
+                                   "attribution_status", "acquisition_campaign_state") for key in groups)
+                or set(definition) - (set(required) | {"grouping_dimensions", "fraud_policy"})
+                or definition.get("fraud_policy", "gross") not in ("gross", "net")):
+            raise ValueError("selected_daily_acquisition_profile_invalid")
+        return
     if ("engagement_credit_policy" in definition or definition.get("anchor_event") == "deep_link_open"
             or definition.get("metric_name") in ("engagement_custom_event_converters_24h", "engagement_ad_revenue_24h_usd")
             or definition.get("rule_bundle_id") == "metric-first-party-engagement"):
@@ -1663,13 +1684,18 @@ def metric_runs(
             if not definition.get("acquisition_dimension_policy") and any(field in evaluation.get("grouping", {}) for field in ("ad_group_id", "creative_id")):
                 raise ValueError(f"unsupported detail grouping for {metric_name}")
             selected_installs = acquisition_installs if definition.get("acquisition_basis") else installs
+            selected_daily = definition.get("rule_bundle_id") == "metric-selected-daily-acquisition"
+            if selected_daily and evaluation.get("grouping", {}).get("acquisition_campaign_state", "known") not in ("known", "unknown"):
+                raise ValueError("daily_acquisition_campaign_state_invalid")
+            if not selected_daily and "acquisition_campaign_state" in evaluation.get("grouping", {}):
+                raise ValueError(f"unsupported acquisition campaign state for {metric_name}")
             cohort_scopes = {
                 (install["server"]["tenant_id"], install["server"]["app_id"])
                 for install in selected_installs
             }
             grouped_costs = [
                 cost for cost in costs
-                if not definition.get("engagement_credit_policy") and cost["as_of"] <= evaluation["input_received_at_watermark"]
+                if not definition.get("engagement_credit_policy") and not selected_daily and cost["as_of"] <= evaluation["input_received_at_watermark"]
                 and ("creative_id" not in cost or definition.get("acquisition_dimension_policy"))
                 and evaluation.get("grouping", {}).get("attribution_status", "non_organic") == "non_organic"
                 and (not cohort_scopes or (cost["tenant_id"], cost["app_id"]) in cohort_scopes)
@@ -1832,7 +1858,15 @@ def metric_runs(
                 }:
                     raise ValueError(f"event_count requires exactly one supported event name: {metric_name}")
                 aggregate_postback = event_name in {"skan_postback", "adattributionkit_postback"}
-                if aggregate_postback:
+                if selected_daily:
+                    requested_state = evaluation.get("grouping", {}).get("acquisition_campaign_state")
+                    amount = sum(1 for item in eligible_installs
+                                 if not item["record"]["producer"].startswith("import:")
+                                 and day(item["record"]["occurred_at"], "UTC", "occurred_at") == metric_date
+                                 and (requested_state is None or requested_state == (
+                                     "known" if selected_acquisition_dimensions(item, visible, acquisition_attributions).get("campaign_id") is not None
+                                     else "unknown")))
+                elif aggregate_postback:
                     if definition["aggregation_time_zone"] != "UTC":
                         raise ValueError(f"aggregate event_count requires UTC aggregation: {metric_name}")
                     if evaluation.get("grouping", {}).get("attribution_status") is not None:

@@ -202,6 +202,37 @@ independently exercise boundaries, deduplication, latest-open filtering, removed
 anchors/outcomes, different installations and per-event half-even rounding in
 TypeScript, Python and SQL. Operational scheduling/reporting is a separate step.
 
+## Explicit selected daily native acquisition (0.4.18)
+
+New registered definition/bundle `metric-selected-daily-acquisition` binds
+`daily_selected_install_count` to the selected cohort's attribution, received
+evidence cutoff, supersession and tie rules. Optional grouping
+`acquisition_campaign_state=known|unknown` is admitted only for that profile.
+The native install's UTC occurrence day is `metric_date`; optional cohort day
+is an intersection, while server receipts determine watermark visibility.
+Imported installs and Apple aggregate postbacks do not enter the population.
+No cost row enters this count's snapshot. API, CSV, HTML, explicit CLI and
+schedule registration all expose the same definition and filters.
+
+This is an additive, opt-in semantic profile. Every existing schema URN,
+wire/package version, metric definition, schedule and saved run keeps its
+identity and meaning. `daily_install_count` and raw recorded-dimension counts
+are neither renamed nor reinterpreted. No new dependencies, registry values,
+tables or migrations are needed. CLI selected runs use current privacy state;
+saved history is not automatically upgraded.
+
+Complete golden inventory: new `65-selected-daily-acquisition/input.json`,
+all 13 new `expected_*.json` files and the shared fixture README.
+**No existing numbered input or golden changes.** Check
+`git diff --name-status 584828f2bf500152d6a997008f0f842852d51ad1 -- fixtures/v0.4/`:
+only directory 65 and the README may differ. The README records each output
+family's manual derivation, nine independent counts and normative hashes.
+Candidate TS/Python JCS output was compared without promoting evaluator output;
+expected files are committed separately from calculation/schema changes.
+Synthetic mutations cover late evidence, occurrence/receipt/cohort dates,
+unknown campaigns, native/imported/Apple populations, fraud gross/net,
+deduplication, privacy-after removal, saved revisions and same-time ties.
+
 ## Explicit selected acquisition detail (0.4.16)
 
 The operator workflow for this profile is also implemented: explicit detail

@@ -1,0 +1,88 @@
+{
+  "tenant_id": "tenant-a",
+  "app_id": "app-a",
+  "fx_policy": {
+    "policy_version": "fx-v0.1",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "100000000",
+        "rate_scale": 8,
+        "source": "synthetic-fixture-rate",
+        "as_of": "2026-08-12T00:00:00.000Z"
+      }
+    ]
+  },
+  "metric_definitions": [
+    {
+      "metric_name": "daily_selected_install_count",
+      "metric_definition_version": "0.4.18",
+      "anchor_event": "calendar_day",
+      "aggregation_time_zone": "UTC",
+      "value_type": "count",
+      "definition": {
+        "calculation": "event_count",
+        "window": {
+          "type": "calendar_day",
+          "day": 0
+        },
+        "numerator": "events"
+      },
+      "event_names": [
+        "install"
+      ],
+      "grouping_dimensions": [
+        "metric_date",
+        "cohort_date",
+        "campaign_id",
+        "network",
+        "country",
+        "attribution_status",
+        "acquisition_campaign_state"
+      ],
+      "acquisition_basis": "selected_first_party_click",
+      "rule_bundle_id": "metric-selected-daily-acquisition",
+      "rule_bundle_version": "0.4.18",
+      "rule_bundle_hash": "ce996e1de4060947faa76fad369571941bbdd120ad5c1ddf9697531813543c8d"
+    }
+  ],
+  "evaluations": [
+    {
+      "metric_names": [
+        "daily_selected_install_count"
+      ],
+      "grouping": {
+        "metric_date": "2026-08-06",
+        "cohort_date": "2026-08-06",
+        "campaign_id": "campaign-a",
+        "network": "synthetic-network",
+        "country": "US",
+        "attribution_status": "non_organic",
+        "acquisition_campaign_state": "known"
+      }
+    },
+    {
+      "metric_names": [
+        "daily_selected_install_count"
+      ],
+      "grouping": {
+        "metric_date": "2026-08-06",
+        "attribution_status": "organic",
+        "acquisition_campaign_state": "unknown"
+      }
+    },
+    {
+      "metric_names": [
+        "daily_selected_install_count"
+      ],
+      "grouping": {
+        "metric_date": "2026-08-06",
+        "attribution_status": "unattributed",
+        "acquisition_campaign_state": "unknown"
+      }
+    }
+  ]
+}

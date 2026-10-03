@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { ACQUISITION_DETAIL_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS, SELECTED_COMMERCE_METRIC_DEFINITIONS, REFUND_REVERSAL_METRIC_DEFINITIONS, customConversionMetricDefinitions } from "@openmasu/contracts";
 import { metricScheduleTargetDate, normalizeMetricScheduleRequest } from "./metric-schedules.js";
-import { engagementMetricDefinitions } from "@openmasu/contracts";
+import { engagementMetricDefinitions, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
 
 const body = {
   lag_days: 2,
@@ -26,6 +26,17 @@ const body = {
 };
 
 describe("scheduled metric configuration", () => {
+  it("daily_acquisition_schedule_is_explicit_and_cannot_reinterpret_a_legacy_date_or_group", () => {
+    const request = { ...body, metric_definitions: SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS,
+      evaluations: [{ metric_names: ["daily_selected_install_count"], date_dimension: "metric_date",
+        grouping: { acquisition_campaign_state: "unknown", attribution_status: "organic" } }] };
+    const normalize = (value: any) => normalizeMetricScheduleRequest(value, new Date("2026-08-23T12:00:00.000Z"));
+    assert.deepEqual(normalize(request).definition.metric_definitions, request.metric_definitions);
+    assert.deepEqual(normalize(request).definition.evaluations, request.evaluations);
+    assert.throws(() => normalize({ ...request, evaluations: [{ ...request.evaluations[0], date_dimension: "cohort_date" }] }), /daily_acquisition_profile_required/);
+    assert.throws(() => normalize({ ...request, metric_definitions: [], evaluations: [{ ...request.evaluations[0], metric_names: ["daily_install_count"] }] }), /daily_acquisition_profile_required/);
+    assert.throws(() => normalize({ ...request, evaluations: [{ ...request.evaluations[0], grouping: { acquisition_campaign_state: "all" } }] }), /grouping_value_invalid/);
+  });
   it("requires explicit engagement definitions open-date grouping and a complete-window lag", () => {
     const request = { ...body, metric_definitions: engagementMetricDefinitions("tutorial_complete"),
       evaluations: [{ metric_names: ["engagement_custom_event_converters_24h", "engagement_ad_revenue_24h_usd"], date_dimension: "metric_date", grouping: {} }] };

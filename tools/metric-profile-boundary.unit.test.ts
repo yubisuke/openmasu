@@ -5,6 +5,7 @@ import {
   ACQUISITION_DETAIL_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS,
   M1B_METRIC_DEFINITIONS, M3_METRIC_DEFINITIONS, REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
   REFUND_REVERSAL_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS,
+  SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS,
   SELECTED_COMMERCE_METRIC_DEFINITIONS, customConversionMetricDefinitions, engagementMetricDefinitions,
   METRIC_PROFILE_METADATA, metricProfileMetadata,
 } from "@openmasu/contracts/definitions";
@@ -79,8 +80,9 @@ async function boundaryResult(name: string, definition: Definition): Promise<Bou
 
 describe("metric profile entry boundaries", () => {
   it("metric_profile_schema_consistency distinguishes registered identities from legacy and external declarations", () => {
-    const valid = metricProfileBoundaryCases().filter(entry => entry.name.endsWith("/valid"));
-    assert.equal(valid.length, 100);
+    const valid = [...metricProfileBoundaryCases().filter(entry => entry.name.endsWith("/valid")),
+      ...SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS.map(definition => ({ name: "daily_acquisition/valid", definition }))];
+    assert.equal(valid.length, 101);
     const exercised = new Set<string>();
     for (const { name, definition } of valid) {
       assert.ok(validateMetricDefinition(definition), name);
@@ -146,5 +148,22 @@ describe("metric profile entry boundaries", () => {
     assert.ok(results.filter(row => row.name.startsWith("selected/") && row.name.endsWith("/valid"))
       .every(row => row.schema && row.schedule && row.evaluator && row.sql));
     assert.equal(sha256(results), baselineDigest, JSON.stringify(summary));
+  });
+
+  it("daily_selected_acquisition_profile_is_explicit_and_closed_at_every_entry", async () => {
+    const daily = structuredClone(SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS[0]);
+    assert.deepEqual(await boundaryResult("daily_acquisition/valid", daily), {
+      name: "daily_acquisition/valid", schema: true, schedule: true, evaluator: true, sql: true,
+    });
+    for (const change of [
+      { metric_name: "daily_install_count" }, { rule_bundle_hash: "0".repeat(64) },
+      { metric_definition_version: "0.3.1" }, { event_names: ["click"] },
+      { grouping_dimensions: ["cohort_date"] }, { currency: "USD" },
+      { cost_selection_policy: "reject_overlapping_grains" },
+    ]) {
+      const value = await boundaryResult("daily_acquisition/invalid", { ...daily, ...change } as Definition);
+      assert.deepEqual(value, { name: "daily_acquisition/invalid", schema: false, schedule: false, evaluator: false, sql: false });
+    }
+    assert.equal(validateMetricDefinition({ ...M3_METRIC_DEFINITIONS[1], grouping_dimensions: ["metric_date", "acquisition_campaign_state"] }), false);
   });
 });

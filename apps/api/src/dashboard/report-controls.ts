@@ -5,6 +5,7 @@ export const reportFields = [
   ["grouping_campaign_id", "Campaign ID"], ["grouping_country", "Country (two uppercase letters)"],
   ["grouping_ad_group_id", "Ad group ID"], ["grouping_creative_id", "Creative ID"],
   ["grouping_attribution_status", "Attribution status (organic / non_organic / unattributed)"],
+  ["grouping_acquisition_campaign_state", "Selected daily campaign state (known / unknown)"],
   ["grouping_cohort_date", "Cohort date"], ["grouping_metric_date", "Metric date"],
   ["grouping_network", "Network"], ["grouping_apple_conversion_bucket", "Apple conversion bucket"],
   ["metric_definition_version", "Definition version"], ["watermark_at_most", "Watermark (UTC ISO timestamp)"],

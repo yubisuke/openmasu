@@ -41,6 +41,7 @@ const metricName = /^[a-z][a-z0-9_]{2,127}$/;
 const datePattern = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 const groupingKeys = new Set([
   "campaign_id", "ad_group_id", "creative_id", "network", "country", "attribution_status", "apple_conversion_bucket",
+  "acquisition_campaign_state",
 ]);
 
 function object(value: unknown, error: string): JsonObject {
@@ -112,6 +113,9 @@ function normalizedGrouping(value: unknown): JsonObject {
     if (key === "attribution_status" && !["organic", "non_organic", "unattributed"].includes(candidate)) {
       throw new Error("metric_schedule_grouping_value_invalid");
     }
+    if (key === "acquisition_campaign_state" && !["known", "unknown"].includes(candidate)) {
+      throw new Error("metric_schedule_grouping_value_invalid");
+    }
     if (key === "apple_conversion_bucket" && !/^(fine:([0-9]|[1-5][0-9]|6[0-3])|coarse:(low|medium|high))$/.test(candidate)) {
       throw new Error("metric_schedule_grouping_value_invalid");
     }
@@ -169,6 +173,13 @@ export function normalizeMetricScheduleRequest(
     }
     const dateDimension: "cohort_date" | "metric_date" = evaluation.date_dimension;
     const grouping = normalizedGrouping(evaluation.grouping);
+    const dailyAcquisition = evaluation.metric_names.some(name =>
+      suppliedDefinitions.find(definition => definition.metric_name === name)?.rule_bundle_id === "metric-selected-daily-acquisition");
+    if ((dailyAcquisition || grouping.acquisition_campaign_state !== undefined)
+        && (dateDimension !== "metric_date" || evaluation.metric_names.some(name =>
+          suppliedDefinitions.find(definition => definition.metric_name === name)?.rule_bundle_id !== "metric-selected-daily-acquisition"))) {
+      throw new Error("metric_schedule_daily_acquisition_profile_required");
+    }
     const engagement = evaluation.metric_names.some(name =>
       suppliedDefinitions.find(definition => definition.metric_name === name)?.engagement_credit_policy
       || ENGAGEMENT_METRIC_NAMES.has(name));

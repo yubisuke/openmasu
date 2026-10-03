@@ -45,7 +45,7 @@
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "items": { "enum": ["campaign_id", "ad_group_id", "creative_id", "network", "country", "cohort_date", "metric_date", "attribution_status", "apple_conversion_bucket"] }
+      "items": { "enum": ["campaign_id", "ad_group_id", "creative_id", "network", "country", "cohort_date", "metric_date", "attribution_status", "apple_conversion_bucket", "acquisition_campaign_state"] }
     },
     "fraud_policy": { "enum": ["gross", "net"], "default": "gross" },
     "acquisition_basis": { "const": "selected_first_party_click" },
@@ -59,6 +59,39 @@
     "rule_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
   },
   "allOf": [
+    {
+      "if": { "anyOf": [
+        { "properties": { "metric_name": { "const": "daily_selected_install_count" } }, "required": ["metric_name"] },
+        { "properties": { "rule_bundle_id": { "const": "metric-selected-daily-acquisition" } }, "required": ["rule_bundle_id"] },
+        { "properties": { "grouping_dimensions": { "type": "array", "contains": { "const": "acquisition_campaign_state" } } }, "required": ["grouping_dimensions"] }
+      ] },
+      "then": {
+        "required": ["acquisition_basis", "event_names", "grouping_dimensions"],
+        "properties": {
+          "metric_name": { "const": "daily_selected_install_count" },
+          "metric_definition_version": { "const": "0.4.18" },
+          "anchor_event": { "const": "calendar_day" }, "aggregation_time_zone": { "const": "UTC" },
+          "value_type": { "const": "count" }, "acquisition_basis": { "const": "selected_first_party_click" },
+          "rule_bundle_id": { "const": "metric-selected-daily-acquisition" },
+          "rule_bundle_version": { "const": "0.4.18" },
+          "rule_bundle_hash": { "const": "ce996e1de4060947faa76fad369571941bbdd120ad5c1ddf9697531813543c8d" },
+          "event_names": { "const": ["install"] },
+          "grouping_dimensions": { "type": "array", "contains": { "const": "metric_date" },
+            "items": { "enum": ["metric_date", "cohort_date", "campaign_id", "network", "country", "attribution_status", "acquisition_campaign_state"] } },
+          "definition": { "const": { "calculation": "event_count", "window": { "type": "calendar_day", "day": 0 }, "numerator": "events" } }
+        },
+        "not": { "anyOf": [
+          { "properties": { "activity_events": {} }, "required": ["activity_events"] },
+          { "properties": { "currency": {} }, "required": ["currency"] },
+          { "properties": { "amount_scale": {} }, "required": ["amount_scale"] },
+          { "properties": { "ratio_scale": {} }, "required": ["ratio_scale"] },
+          { "properties": { "cost_selection_policy": {} }, "required": ["cost_selection_policy"] },
+          { "properties": { "conversion_event_key": {} }, "required": ["conversion_event_key"] },
+          { "properties": { "refund_reversal_policy": {} }, "required": ["refund_reversal_policy"] },
+          { "properties": { "acquisition_dimension_policy": {} }, "required": ["acquisition_dimension_policy"] }
+        ] }
+      }
+    },
     {
       "if": { "anyOf": [
         { "properties": { "anchor_event": { "const": "deep_link_open" } }, "required": ["anchor_event"] },
@@ -254,7 +287,7 @@
       }
     },
     {
-      "if": { "properties": { "acquisition_basis": {}, "cost_selection_policy": {}, "rule_bundle_id": { "not": { "enum": ["metric-selected-commerce", "metric-custom-conversion", "metric-refund-reversal", "metric-acquisition-detail"] } } }, "required": ["acquisition_basis", "rule_bundle_id"], "not": { "required": ["cost_selection_policy"] } },
+      "if": { "properties": { "acquisition_basis": {}, "cost_selection_policy": {}, "rule_bundle_id": { "not": { "enum": ["metric-selected-commerce", "metric-custom-conversion", "metric-refund-reversal", "metric-acquisition-detail", "metric-selected-daily-acquisition"] } } }, "required": ["acquisition_basis", "rule_bundle_id"], "not": { "required": ["cost_selection_policy"] } },
       "then": {
         "properties": {
           "anchor_event": { "const": "install" },

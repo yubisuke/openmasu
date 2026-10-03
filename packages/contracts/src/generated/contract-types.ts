@@ -219,6 +219,7 @@ export type OpenMasuMetricDefinitionV04 = {
     | "metric_date"
     | "attribution_status"
     | "apple_conversion_bucket"
+    | "acquisition_campaign_state"
   )[];
   fraud_policy?: "gross" | "net";
   acquisition_basis?: "selected_first_party_click";
@@ -275,6 +276,7 @@ export type OpenMasuMetricRunV04 = {
       cohort_date?: string;
       metric_date?: string;
       attribution_status?: "organic" | "non_organic" | "unattributed";
+      acquisition_campaign_state?: "known" | "unknown";
       apple_conversion_bucket?: string;
     };
     dimension_digest: string;

@@ -7,6 +7,7 @@ export type NonFraudRuleBundleId =
   | "metric-default"
   | "metric-stage-b"
   | "metric-selected-acquisition"
+  | "metric-selected-daily-acquisition"
   | "metric-disjoint-cost"
   | "metric-selected-commerce"
   | "metric-refund-reversal"
@@ -56,6 +57,14 @@ export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonF
     implementation: "reference-metric-v0.4",
     rules: ["cohort-roas", "cohort-retention", "cohort-ltv", "cohort-install-count",
       "selected-first-party-click-dimensions", "attribution-and-evidence-as-of-watermark"],
+  },
+  "metric-selected-daily-acquisition": {
+    id: "metric-selected-daily-acquisition", version: "0.4.18", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["daily-native-install-occurrence-day-utc", "selected-first-party-click-dimensions",
+      "attribution-and-evidence-as-of-watermark", "reuse-cohort-attribution-revision-selection",
+      "unknown-campaign-is-distinct-from-all-campaigns", "current-privacy-evidence",
+      "no-imported-or-apple-aggregate-events", "gross-and-net-install-populations"],
   },
   "metric-disjoint-cost": {
     id: "metric-disjoint-cost", version: "0.4.12", kind: "metric",

@@ -19,6 +19,9 @@ export async function eventCountValue(
   if (typeof grouping?.metric_date !== "string") {
     throw new Error("SQL event_count requires grouping.metric_date");
   }
+  if (definition.rule_bundle_id === "metric-selected-daily-acquisition") {
+    return selectedDailyAcquisitionValue(client, scope, watermark, grouping, definition, privacyState);
+  }
   const aggregatePostback = eventName === "skan_postback" || eventName === "adattributionkit_postback";
   if (aggregatePostback) {
     if (definition.aggregation_time_zone !== "UTC") {
@@ -180,6 +183,39 @@ export async function eventCountValue(
   );
   return { value_state: "present", value_unscaled: result.rows[0].value_unscaled };
 }
+
+async function selectedDailyAcquisitionValue(
+  client: MetricClient, scope: MetricScope, watermark: string, grouping: MetricGrouping,
+  definition: MetricDefinition, privacyState: "before" | "after",
+): Promise<{ value_state: "present"; value_unscaled: string }> {
+  // Reuse the cohort's chosen-revision and click-evidence eligibility, not raw
+  // recorded dimensions. The day is occurrence time; receipt time is a cutoff.
+  const result = await client.query<{ value_unscaled: string }>(
+    `WITH acquisition AS (${selectedAcquisitionSql})
+     SELECT count(*)::text AS value_unscaled
+     FROM ledger.install_facts AS install
+     JOIN ledger.logical_events AS logical USING (logical_event_id)
+     JOIN ledger.raw_records_current AS raw
+       ON raw.tenant_id=logical.tenant_id AND raw.app_id=logical.app_id AND raw.record_id=logical.record_id
+     ${selectedClickJoinSql("$7", "$8")}
+     WHERE install.tenant_id=$1 AND install.app_id=$2 AND logical.producer NOT LIKE 'import:%'
+       AND raw.received_at <= $3 AND ($8='before' OR raw.payload_lifecycle_status='available')
+       AND install.occurred_at_ts >= ($13::date::timestamp AT TIME ZONE 'UTC')
+       AND install.occurred_at_ts < (($13::date + 1)::timestamp AT TIME ZONE 'UTC')
+       AND ($4::text IS NULL OR acquisition_source.campaign_id=$4)
+       AND ($5::text IS NULL OR acquisition_source.network=$5)
+       AND ($6::text IS NULL OR install.country=$6)
+       AND ($9::text IS NULL OR timezone('UTC', install.occurred_at_ts)::date::text=$9)
+       AND ($10::text IS NULL OR coalesce(acquisition.status, 'unattributed')=$10)
+       AND ($11::text='gross' OR acquisition.reason_code IS DISTINCT FROM 'fraud_excluded')
+       AND ($12::text IS NULL OR (CASE WHEN acquisition_source.campaign_id IS NULL THEN 'unknown' ELSE 'known' END)=$12)`,
+    [scope.tenant_id, scope.app_id, watermark, grouping.campaign_id ?? null, grouping.network ?? null,
+      grouping.country ?? null, true, privacyState, grouping.cohort_date ?? null, grouping.attribution_status ?? null,
+      definition.fraud_policy ?? "gross", grouping.acquisition_campaign_state ?? null, grouping.metric_date],
+  );
+  return { value_state: "present", value_unscaled: result.rows[0].value_unscaled };
+}
+
 export async function customConversionValue(
   client: MetricClient, scope: MetricScope, watermark: string, grouping: MetricGrouping | undefined, definition: MetricDefinition,
   privacyState: "before" | "after",

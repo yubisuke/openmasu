@@ -70,7 +70,7 @@ Its annotated tag and
 point to green `main` commit `90a0f5f`, with eight verified SDK download assets.
 The release retains Contract v0.4 identity with patches through v0.4.10
 (57 fixtures / 741 goldens). Current development retains that wire/package
-identity and adds patches through v0.4.17 (64 fixtures / 832 goldens), including
+identity and adds patches through v0.4.18 (65 fixtures / 845 goldens), including
 [explicit custom-event conversion](docs/custom-conversion-metrics.md) and an opt-in
 [targeted refund-cancellation profile](docs/design/verified-commerce-lifecycle.md#explicit-refund-cancellation-metrics).
 An explicit [ad-group/creative calculation profile](docs/acquisition-detail-metrics.md)
@@ -193,8 +193,8 @@ The main contract gate is:
 npm run validate
 ```
 
-It checks 28 schemas, 8 registries, 64 reviewed synthetic fixtures, 832 golden
-output artifacts, 64 scenario assertions, 27 acceptance criteria,
+It checks 28 schemas, 8 registries, 65 reviewed synthetic fixtures, 845 golden
+output artifacts, 65 scenario assertions, 27 acceptance criteria,
 deterministic TypeScript, the independent Python evaluator, release identity,
 documentation drift, fraud artifacts, and RFC 8785 canonicalization.
 
