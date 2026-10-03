@@ -22,6 +22,7 @@ private provider material.
 | Deliver deterministic event files to operator storage | [Operator bulk event exports](operator-bulk-exports.md) |
 | Run daily cohort or calendar metrics | [Scheduled metric runs](scheduled-metrics.md) |
 | Refresh cost and recalculate selected affected cohorts | [Cost refresh](cost-refresh.md) and [Metric corrections](metric-corrections.md) |
+| Distinguish mature windows, empty receipts and pending calculations | [Metric freshness](metric-freshness.md) |
 | Operate or release a deployment | [Operator documentation](#operator-documentation) and [Release records](releases/README.md) |
 
 For a complete newcomer reading path, use this order:
@@ -48,6 +49,7 @@ For a complete newcomer reading path, use this order:
 - [Bounded cost refresh](cost-refresh.md)
 - [Selected metric corrections](metric-corrections.md)
 - [Measurement health and missing results](measurement-health.md)
+- [Metric maturity, local acquisition and recalculation observations](metric-freshness.md)
 - [Recorded attribution reason counts](attribution-reasons.md)
 - [Reading and filtering dashboard metrics](dashboard-analysis.md)
 - [Selected ad-group and creative metrics](acquisition-detail-metrics.md)

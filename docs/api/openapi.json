@@ -541,7 +541,11 @@
                   "measurement_series",
                   "engagement_evidence_trust",
                   "privacy_update_state",
-                  "unavailable_reason"
+                  "unavailable_reason",
+                  "time_window_maturity",
+                  "source_observation",
+                  "import_completion",
+                  "recalculation_state"
                 ]
               }
             }
@@ -1982,6 +1986,22 @@
               "privacy_deletion",
               null
             ]
+          },
+          "time_window_maturity": {
+            "type": "object",
+            "description": "Closed report-only observation of the conservative captured-definition end at the saved watermark; missing evidence is unknown, not provider completeness. See metric-freshness.md."
+          },
+          "source_observation": {
+            "type": "object",
+            "description": "Closed aggregate app_retained_import_receipts scope and saved input-snapshot observation; never the report population or provider coverage. upstream_freshness is always unknown."
+          },
+          "import_completion": {
+            "type": "object",
+            "description": "Closed aggregate receipt-channel completion/running/failure/rejection counts; not unique events, cohorts or upstream completeness."
+          },
+          "recalculation_state": {
+            "type": "object",
+            "description": "Closed projection of existing cost, late-input and privacy update states; no calculation is initiated and no saved value is rewritten."
           }
         },
         "additionalProperties": false,

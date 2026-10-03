@@ -3,12 +3,14 @@ import { jcs } from "@openmasu/attribution-core/canonical";
 import { comparisonMeaning, comparisonMaturity, type MetricComparisonContext } from "@openmasu/runtime/metric-comparison";
 import type { GroupingDimension } from "./report-query-model.js";
 import { externalWindowMaturity, type ExternalCalculation } from "./external-calculation-declaration.js";
+import type { MetricFreshness } from "./metric-freshness.js";
 
 export const fields = ["date_from", "date_to", "time_zone", "maturity", "aggregation", "attribution_scope", "metric_definition", "source_cutoff"] as const;
 export type Conditions = Record<typeof fields[number], string>;
 export type Row = { key: string; currency: string; scale: number } & ({ state: "present"; value: string } | { state: "undefined"; reason: string });
 export type Provenance = { report_sha256: string; runs: { key: string; metric_run_id: string; input_snapshot_id: string }[] };
 export type ContextRow = { key: string; context: MetricComparisonContext };
+export type FreshnessRow = { key: string; observations: MetricFreshness };
 export type MappingProvenance = { version: 1; format: "csv"; interpretation: "operator_declared"; input_sha256: string; mapping_sha256: string; row_count: number };
 export type ComparisonAcquisition = {
   version: 1; state: "complete"; method: "postgres_repeatable_read";
@@ -16,7 +18,7 @@ export type ComparisonAcquisition = {
   filters: { metric_definition_version: string | null; grouping: Partial<Record<GroupingDimension, string>> };
   row_count: number; selection_sha256: string; query_sha256: string; upstream_completeness: "unknown";
 };
-export type Snapshot = { source: string; conditions: Conditions; rows: Row[]; provenance?: Provenance; comparison_contexts?: ContextRow[]; acquisition?: ComparisonAcquisition; mapping_provenance?: MappingProvenance; external_calculation?: ExternalCalculation };
+export type Snapshot = { source: string; conditions: Conditions; rows: Row[]; provenance?: Provenance; comparison_contexts?: ContextRow[]; freshness_observations?: FreshnessRow[]; acquisition?: ComparisonAcquisition; mapping_provenance?: MappingProvenance; external_calculation?: ExternalCalculation };
 export const comparisonDigest = (value: unknown) => createHash("sha256").update(jcs(value)).digest("hex");
 export function object(v: unknown): asserts v is Record<string, unknown> {
   if (!v || typeof v !== "object" || Array.isArray(v)) throw Error("expected_object");

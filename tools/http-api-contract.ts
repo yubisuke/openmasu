@@ -31,6 +31,10 @@ export function buildHttpApiContract(): Json {
     unavailable_reason: { enum: ["privacy_deletion", null] },
     measurement_series: { enum: ["cohort_or_activity", "first_party_engagement", "apple_aggregate"], description: "Separate reporting populations; do not add across series." },
     engagement_evidence_trust: { enum: ["device_reported_forgeable", null], description: "A first-party open is an SDK claim, not proof of human activity; null is not a verification claim for other series." },
+    time_window_maturity: { type: "object", description: "Closed report-only observation of the conservative captured-definition end at the saved watermark; missing evidence is unknown, not provider completeness. See metric-freshness.md." },
+    source_observation: { type: "object", description: "Closed aggregate app_retained_import_receipts scope and saved input-snapshot observation; never the report population or provider coverage. upstream_freshness is always unknown." },
+    import_completion: { type: "object", description: "Closed aggregate receipt-channel completion/running/failure/rejection counts; not unique events, cohorts or upstream completeness." },
+    recalculation_state: { type: "object", description: "Closed projection of existing cost, late-input and privacy update states; no calculation is initiated and no saved value is rewritten." },
   });
   for (const name of ["currency", "amount_scale", "ratio_scale", "undefined_reason", "supersedes_metric_run_id"]) metricProperties[name] = nullable(metricProperties[name]);
   const schemas: Json = {

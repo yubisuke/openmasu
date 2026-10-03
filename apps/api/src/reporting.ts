@@ -3,6 +3,7 @@ import { withTenant } from "@openmasu/runtime";
 import type { MetricComparisonContext } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { metricSeries } from "./metric-series.js";
+import { metricFreshness, type ImportReceiptObservation, type MetricFreshness } from "./metric-freshness.js";
 import {
   buildDifferenceQuery,
   buildMetricQuery,
@@ -27,6 +28,7 @@ export const metricColumns = [
   "grouping_digest", "superseded", "comparison_context", "cost_update_state", "late_input_update_state",
   "measurement_series", "engagement_evidence_trust",
   "privacy_update_state", "unavailable_reason",
+  "time_window_maturity", "source_observation", "import_completion", "recalculation_state",
 ] as const;
 
 export const differenceColumns = [
@@ -68,6 +70,10 @@ export type MetricReportRow = {
   readonly engagement_evidence_trust?: "device_reported_forgeable" | null;
   readonly privacy_update_state?: "not_affected" | "recalculation_pending" | "unavailable" | "completed";
   readonly unavailable_reason?: "privacy_deletion" | null;
+  readonly time_window_maturity?: MetricFreshness["time_window_maturity"];
+  readonly source_observation?: MetricFreshness["source_observation"];
+  readonly import_completion?: MetricFreshness["import_completion"];
+  readonly recalculation_state?: MetricFreshness["recalculation_state"];
 };
 
 export type MetricReportPage = {
@@ -184,22 +190,26 @@ export async function metricReport(
 /** Reuse the ordinary keyset projection inside a caller-owned consistent read. */
 export async function metricReportOnClient(client: PoolClient, query: MetricQuery, checkEvidence = false): Promise<MetricReportPage> {
     const statement = buildMetricQuery(query, checkEvidence);
-    const result = await client.query<{ artifact: Any; grouping_digest: string; superseded: boolean; comparison_context: MetricComparisonContext | null; cost_update_state: MetricReportRow["cost_update_state"]; late_input_update_state: MetricReportRow["late_input_update_state"]; privacy_changed: boolean; privacy_update_state: MetricReportRow["privacy_update_state"]; evidence_unavailable?: boolean }>(
+    const result = await client.query<{ artifact: Any; grouping_digest: string; superseded: boolean; comparison_context: MetricComparisonContext | null; cost_update_state: MetricReportRow["cost_update_state"]; late_input_update_state: MetricReportRow["late_input_update_state"]; privacy_changed: boolean; privacy_update_state: MetricReportRow["privacy_update_state"]; evidence_unavailable?: boolean; import_receipt_observation?: ImportReceiptObservation }>(
       statement.text,
       [...statement.values],
     );
     if (checkEvidence && result.rows.some(row => row.evidence_unavailable)) throw new ReportQueryError("comparison_evidence_unavailable");
     const hasNext = result.rows.length > query.limit;
-    const rows = result.rows.slice(0, query.limit).map((row) => metricRow(
-      row.artifact,
-      row.grouping_digest,
-      row.superseded,
-      row.comparison_context,
-      row.cost_update_state,
-      row.late_input_update_state,
-      row.privacy_changed,
-      row.privacy_update_state,
-    ));
+    const rows = result.rows.slice(0, query.limit).map((row) => {
+      const result = metricRow(
+        row.artifact,
+        row.grouping_digest,
+        row.superseded,
+        row.comparison_context,
+        row.cost_update_state,
+        row.late_input_update_state,
+        row.privacy_changed,
+        row.privacy_update_state,
+      );
+      return { ...result, ...metricFreshness(result, row.import_receipt_observation,
+        Array.isArray(row.artifact.evidence_refs) ? row.artifact.evidence_refs.length : undefined) };
+    });
     const last = rows.at(-1);
     return {
       data: rows,

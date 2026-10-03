@@ -1,5 +1,6 @@
 import { privacyMetricInvalidationSql, revisedMetricCostPredicate } from "@openmasu/runtime";
 import { ReportQueryError, type GroupingDimension, type MetricQuery, type ParameterizedQuery } from "./report-query-model.js";
+import { importReceiptObservationSql } from "./metric-freshness-query.js";
 export * from "./report-query-model.js";
 
 function push(values: unknown[], value: unknown): string {
@@ -44,6 +45,7 @@ export function buildMetricQuery(query: MetricQuery, checkEvidence = false): Par
   const limit = push(values, query.limit + 1);
   return {
     text: `SELECT mr.artifact, mr.grouping_digest, mr.comparison_context,
+      ${importReceiptObservationSql} AS import_receipt_observation,
       ${privacyMetricInvalidationSql("mr")} AS privacy_changed,
       (SELECT CASE WHEN item.state IN ('queued','processing','retry') THEN 'recalculation_pending'
           WHEN item.state='completed' THEN 'completed' ELSE 'unavailable' END

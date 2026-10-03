@@ -3,9 +3,10 @@ import { validateMetricDefinition } from "@openmasu/contracts/validation";
 import { comparisonMeaning, comparisonMaturity, type MetricComparisonContext } from "@openmasu/runtime/metric-comparison";
 import { groupingDimensionAllowlist, validateGrouping, type GroupingDimension } from "./report-query-model.js";
 import { parseExternalDeclaration, externalDeclarationMeaning, capturedRoasMeaning, externalWindowMaturity, type ExternalCalculation } from "./external-calculation-declaration.js";
+import { parseMetricFreshness } from "./metric-freshness.js";
 
 import { comparisonDigest, canonicalComparisonCutoff, snapshotAssurance, fields, object, keys, text, date, scale,
-  type Conditions, type Row, type Provenance, type ContextRow, type MappingProvenance, type ComparisonAcquisition, type Snapshot, type Assurance } from "./comparison-model.js";
+  type Conditions, type Row, type Provenance, type ContextRow, type FreshnessRow, type MappingProvenance, type ComparisonAcquisition, type Snapshot, type Assurance } from "./comparison-model.js";
 export { comparisonDigest, canonicalComparisonCutoff, snapshotAssurance } from "./comparison-model.js";
 export type { ComparisonAcquisition } from "./comparison-model.js";
 
@@ -30,7 +31,7 @@ export function parseComparisonContext(value: unknown): MetricComparisonContext 
   return structuredClone(value) as MetricComparisonContext;
 }
 export function parseSnapshot(input: unknown): Snapshot {
-  object(input); keys(input, ["source", "conditions", "rows", ...("provenance" in input ? ["provenance"] : []), ...("comparison_contexts" in input ? ["comparison_contexts"] : []), ...("acquisition" in input ? ["acquisition"] : []), ...("mapping_provenance" in input ? ["mapping_provenance"] : []), ...("external_calculation" in input ? ["external_calculation"] : [])]); text(input.source);
+  object(input); keys(input, ["source", "conditions", "rows", ...("provenance" in input ? ["provenance"] : []), ...("comparison_contexts" in input ? ["comparison_contexts"] : []), ...("freshness_observations" in input ? ["freshness_observations"] : []), ...("acquisition" in input ? ["acquisition"] : []), ...("mapping_provenance" in input ? ["mapping_provenance"] : []), ...("external_calculation" in input ? ["external_calculation"] : [])]); text(input.source);
   object(input.conditions); keys(input.conditions, fields);
   for (const key of fields) text(input.conditions[key]);
   const c = { ...input.conditions } as Conditions;
@@ -82,6 +83,17 @@ export function parseSnapshot(input: unknown): Snapshot {
     }).sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
   }
   let acquisition: ComparisonAcquisition | undefined;
+  let freshness: FreshnessRow[] | undefined;
+  if ("freshness_observations" in input) {
+    if (!provenance || !Array.isArray(input.freshness_observations) || input.freshness_observations.length > input.rows.length) throw Error("invalid_freshness_rows");
+    const used = new Set<string>();
+    freshness = input.freshness_observations.map(item => {
+      object(item); keys(item, ["key", "observations"]); text(item.key);
+      if (!seen.has(item.key) || used.has(item.key)) throw Error("freshness_binding_mismatch");
+      used.add(item.key);
+      return { key: item.key, observations: parseMetricFreshness(item.observations) };
+    }).sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+  }
   if ("acquisition" in input) {
     const a = input.acquisition; object(a);
     keys(a, ["version", "state", "method", "scope", "filters", "row_count", "selection_sha256", "query_sha256", "upstream_completeness"]);
@@ -136,10 +148,10 @@ export function parseSnapshot(input: unknown): Snapshot {
     }
     external = { declaration, declaration_sha256: e.declaration_sha256 as string };
   }
-  return { source: input.source, conditions: { ...c }, rows: [...input.rows].sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0), ...(provenance ? { provenance } : {}), ...(contexts ? { comparison_contexts: contexts } : {}), ...(acquisition ? { acquisition } : {}), ...(mappingProvenance ? { mapping_provenance: mappingProvenance } : {}), ...(external ? { external_calculation: external } : {}) } as Snapshot;
+  return { source: input.source, conditions: { ...c }, rows: [...input.rows].sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0), ...(provenance ? { provenance } : {}), ...(contexts ? { comparison_contexts: contexts } : {}), ...(freshness ? { freshness_observations: freshness } : {}), ...(acquisition ? { acquisition } : {}), ...(mappingProvenance ? { mapping_provenance: mappingProvenance } : {}), ...(external ? { external_calculation: external } : {}) } as Snapshot;
 }
 type ComparisonRow = { key: string; status: string; left: Row | null; right: Row | null; currency?: string; scale?: number; delta_right_minus_left?: string };
-type ResultProvenance = { source: string; sha256: string; saved_report?: Provenance; mapping_provenance?: MappingProvenance; external_calculation?: ExternalCalculation };
+type ResultProvenance = { source: string; sha256: string; saved_report?: Provenance; freshness_observations?: FreshnessRow[]; mapping_provenance?: MappingProvenance; external_calculation?: ExternalCalculation };
 export type ComparisonResult = { format: "cohort-comparison-v2"; provenance: { left: ResultProvenance; right: ResultProvenance };
   status: "compared" | "declared_comparison" | "external_declared_comparison" | "incomparable"; conditions: Conditions; mismatches: string[];
   assurance: { left: Assurance; right: Assurance }; rows: ComparisonRow[] };
@@ -183,7 +195,7 @@ export function compareSnapshots(left: unknown, right: unknown, options: { decla
     }
   }
   const provenance = (s: Snapshot): ResultProvenance => ({ source: s.source, sha256: comparisonDigest(s),
-    ...(s.provenance ? { saved_report: s.provenance } : {}), ...(s.mapping_provenance ? { mapping_provenance: s.mapping_provenance } : {}),
+    ...(s.provenance ? { saved_report: s.provenance } : {}), ...(s.freshness_observations ? { freshness_observations: s.freshness_observations } : {}), ...(s.mapping_provenance ? { mapping_provenance: s.mapping_provenance } : {}),
     ...(s.external_calculation ? { external_calculation: s.external_calculation } : {}) });
   const result: ComparisonResult = { format: "cohort-comparison-v2", provenance: { left: provenance(a), right: provenance(b) },
     conditions: a.conditions, status: "incomparable", mismatches: [...new Set(mismatches)].sort(), assurance: { left: la.assurance, right: ra.assurance }, rows: [] };
