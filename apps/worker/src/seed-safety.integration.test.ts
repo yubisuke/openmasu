@@ -3,7 +3,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { after, before, describe, it } from "node:test";
 import type { Pool } from "pg";
 import { createSeedPool } from "@openmasu/runtime";
-import { withSyntheticSeedLock } from "./seed-safety.js";
+import { withSyntheticSeedLock } from "./test-support/seed-safety.js";
 
 describe("WO13 synthetic seed serialization", { concurrency: false }, () => {
   let pool: Pool;

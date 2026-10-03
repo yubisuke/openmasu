@@ -2,9 +2,9 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { sha256 } from "@openmasu/attribution-core/canonical";
 import { createAppPool, createSeedPool } from "@openmasu/runtime";
-import { ingestFixture } from "./ingestion.js";
+import { ingestFixture } from "./test-support/fixture-ingestion.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
-import { withSyntheticSeedLock } from "./seed-safety.js";
+import { withSyntheticSeedLock } from "./test-support/seed-safety.js";
 
 type Any = Record<string, any>;
 

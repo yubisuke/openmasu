@@ -25,7 +25,7 @@ import { parseMetricQuery } from "../../api/src/report-query.js";
 import { metricReport } from "../../api/src/reporting.js";
 import { reportToSnapshot } from "../../api/src/report-snapshot.js";
 import { createRequestHandler } from "../../api/src/router.js";
-import { ingestFixture } from "./ingestion.js";
+import { ingestFixture } from "./test-support/fixture-ingestion.js";
 import { buildScheduledMetricInput, processMetricSchedules } from "./metric-schedule-worker.js";
 import { computeSqlMetricRuns, persistMetricRun } from "./metrics/cohort.js";
 

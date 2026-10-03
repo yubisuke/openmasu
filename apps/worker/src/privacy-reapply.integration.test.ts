@@ -18,7 +18,7 @@ import {
 import { executePrivacyRequest, privacySubjectDigest } from "../../api/src/privacy.js";
 import { encodeMetricReport, metricReport } from "../../api/src/reporting.js";
 import { parseMetricQuery } from "../../api/src/report-query.js";
-import { ingestFixture } from "./ingestion.js";
+import { ingestFixture } from "./test-support/fixture-ingestion.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
 import { reapplyCompletedPrivacyRequests } from "./privacy-reapply.js";
 import { migrateDatabase, readMigrations } from "../../runtime/src/migration-engine.js";
