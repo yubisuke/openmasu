@@ -21,6 +21,8 @@ it("privacy_metric_selection_preserves_each_run_identity_without_a_metric_name_l
   await requestPrivacyMetricRecalculations(client, request);
   const selected = calls[0];
   assert.doesNotMatch(selected.text, /metric_name IN|LIMIT|computed_at.*<=/);
+  assert.match(selected.text, /manifest\.source_metric_run_id IS NULL/);
+  assert.match(selected.text, /jsonb_array_length/);
   const job = calls.find(call => call.text.includes("INSERT INTO control.metric_recalculation_jobs"))!;
   assert.equal(job.values[4], "2026-06-01"); assert.equal(job.values[5], "2026-08-21");
   assert.deepEqual(calls.filter(call => call.text.includes("INSERT INTO control.metric_recalculation_items")).map(call => call.values[3]),
@@ -52,6 +54,8 @@ it("privacy_metric_withdrawal_is_scoped_to_available_saved_evidence_and_never_a_
   assert.match(sql, /privacy_state\.app_id=mr\.app_id/);
   assert.match(sql, /lifecycle_status','available'\)='available'/);
   assert.match(sql, /privacy_request_id IS NOT NULL/);
+  assert.match(sql, /privacy_item\.source_metric_run_id=mr\.metric_run_id/);
+  assert.match(sql, /privacy_job\.trigger_kind='privacy_deletion'/);
   assert.doesNotMatch(sql, /watermark|now\(/);
 });
 

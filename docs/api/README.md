@@ -78,6 +78,13 @@ or retries, `completed` once its actual successor commits, or `unavailable`
 when replay is not possible. Unaffected rows use `not_affected`. These are
 HTTP-report fields, not additions to the normative metric-run artifact enum.
 
+A legacy run with neither saved evidence references nor a replay manifest
+cannot prove that it is unaffected. It is conservatively withdrawn in the
+requested app/tenant scope and remains unavailable without a copied successor.
+A valid saved empty-input calculation is not withdrawn solely for having no
+input references. The report marks withdrawn runs as `redaction_affected`
+without changing their stored reproducibility metadata.
+
 An old run remains unavailable even after its successor completes and even
 when a caller requests an earlier watermark or `supersession=all`. Its stored
 artifact and original `data_freshness` remain immutable; they do not certify

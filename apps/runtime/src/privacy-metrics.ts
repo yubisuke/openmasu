@@ -42,17 +42,23 @@ function replayAvailable(replay: unknown): replay is ReplayArtifact {
 
 /** Fixed SQL aliases only. Redaction overrides historical report watermarks. */
 export function privacyMetricInvalidationSql(alias: "mr" | "run"): string {
-  return `EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(${alias}.artifact->'evidence_refs','[]'::jsonb)) AS privacy_ref
+  return `(EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(${alias}.artifact->'evidence_refs','[]'::jsonb)) AS privacy_ref
     JOIN ledger.raw_payload_states AS privacy_state ON privacy_state.tenant_id=${alias}.tenant_id
       AND privacy_state.app_id=${alias}.app_id AND privacy_state.record_id=privacy_ref->>'ref'
     WHERE coalesce(privacy_ref->>'lifecycle_status','available')='available'
-      AND privacy_state.lifecycle_status<>'available' AND privacy_state.privacy_request_id IS NOT NULL)`;
+      AND privacy_state.lifecycle_status<>'available' AND privacy_state.privacy_request_id IS NOT NULL)
+    OR EXISTS (SELECT 1 FROM control.metric_recalculation_items AS privacy_item
+      JOIN control.metric_recalculation_jobs AS privacy_job USING (tenant_id,app_id,recalculation_id)
+      WHERE privacy_item.tenant_id=${alias}.tenant_id AND privacy_item.app_id=${alias}.app_id
+        AND privacy_item.source_metric_run_id=${alias}.metric_run_id AND privacy_job.trigger_kind='privacy_deletion'))`;
 }
 
 /** Caller owns the tenant scope, privacy fence and transaction. No pool or commit here. */
 export async function requestPrivacyMetricRecalculations(client: PoolClient, request: PrivacyMetricRequest): Promise<void> {
   const records = [...new Set(request.affected_record_ids)].sort();
   // computed_at is replay metadata, not an insertion boundary. Select the current scoped snapshot.
+  // A legacy run with neither saved evidence nor a manifest cannot prove that it is unaffected.
+  // Withdraw it in the requested app/tenant scope rather than inventing a copied success.
   const selected = await client.query<{
     app_id: string; metric_run_id: string; cohort_date: string | null; watermark: string; replay: Artifact | null;
   }>(`SELECT run.app_id,run.metric_run_id,coalesce(run.grouping->>'cohort_date',run.grouping->>'metric_date') AS cohort_date,
@@ -61,8 +67,10 @@ export async function requestPrivacyMetricRecalculations(client: PoolClient, req
     LEFT JOIN control.metric_replay_manifests AS manifest ON manifest.tenant_id=run.tenant_id
       AND manifest.app_id=run.app_id AND manifest.source_metric_run_id=run.metric_run_id
     WHERE run.tenant_id=$1 AND ($2='tenant' OR run.app_id=$3)
-      AND EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(run.artifact->'evidence_refs','[]'::jsonb)) AS ref
+      AND (EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(run.artifact->'evidence_refs','[]'::jsonb)) AS ref
         WHERE ref->>'ref'=ANY($4::text[]) AND coalesce(ref->>'lifecycle_status','available')='available')
+        OR (manifest.source_metric_run_id IS NULL
+          AND jsonb_array_length(coalesce(run.artifact->'evidence_refs','[]'::jsonb))=0))
       AND NOT EXISTS (SELECT 1 FROM ledger.metric_runs AS replacement WHERE replacement.tenant_id=run.tenant_id
         AND replacement.app_id=run.app_id AND replacement.supersedes_metric_run_id=run.metric_run_id)
     ORDER BY run.app_id COLLATE "C",run.metric_run_id COLLATE "C"`,

@@ -144,7 +144,7 @@ function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, c
     rule_bundle_hash: artifact.rule_bundle_hash,
     aggregation_time_zone: artifact.aggregation_time_zone,
     computed_at: artifact.computed_at,
-    reproducibility_status: artifact.reproducibility_status,
+    reproducibility_status: privacyChanged ? "redaction_affected" : artifact.reproducibility_status,
     supersedes_metric_run_id: artifact.supersedes_metric_run_id ?? null,
     input_ledger_position: artifact.input_ledger_position,
     grouping_digest: groupingDigest,

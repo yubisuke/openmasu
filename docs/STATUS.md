@@ -249,6 +249,8 @@ the actual saved-manifest replay; pending or unreplayable values are withdrawn
 from API, CSV, dashboard, and saved-detail projections even at historical
 watermarks. Stored originals remain immutable. This selection is conservative
 over saved input-snapshot evidence, not a claim of minimal numeric influence.
+Legacy runs with neither saved evidence nor a replay manifest are conservatively
+withdrawn in the requested app/tenant scope; no copied successor is published.
 Automatic discovery and automatic old-date late-input supersession are not
 supplied for this opt-in series.
 The [policy guide](engagement-outcomes.md) records the device-reported trust

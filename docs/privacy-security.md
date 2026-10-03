@@ -190,6 +190,10 @@ through `raw_records_current`.
   boundaries and do not exclude an already stored affected run from deletion.
   Saved evidence describes an input snapshot, so withdrawal can conservatively
   include a run even when the deleted record was not a numerical contributor.
+- A legacy run with neither evidence references nor a replay manifest cannot
+  prove that it is unaffected. Deletion conservatively withdraws its value in
+  the requested app or tenant scope and records `replay_unavailable`. A valid
+  saved empty-input calculation is not selected merely because it has no input.
 - Online recalculation uses the existing durable metric queue and waits for
   protected-payload purge to complete. The worker holds the tenant privacy
   barrier, replays the actual SQL calculation, and atomically publishes the

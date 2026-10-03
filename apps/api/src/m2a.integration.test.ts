@@ -3030,7 +3030,16 @@ describe("M2a signed SDK ingestion", () => {
     assert.equal(await withTenant(pool, tenantId, async (client) => (await client.query(
       `SELECT metric_run_id FROM ledger.metric_runs
        WHERE tenant_id=$1 AND app_id=$2 AND supersedes_metric_run_id=$3`, [tenantId, appId, priorMetricId],
-    )).rowCount), 1);
+    )).rowCount), 0, "a legacy run without replay inputs must not receive a copied successor");
+    const legacyState = await withTenant(pool, tenantId, async (client) => (await client.query(
+      `SELECT state,safe_reason FROM control.metric_recalculation_items
+       WHERE tenant_id=$1 AND app_id=$2 AND source_metric_run_id=$3`, [tenantId, appId, priorMetricId],
+    )).rows);
+    assert.deepEqual(legacyState, [{ state: "unavailable", safe_reason: "replay_unavailable" }]);
+    assert.deepEqual(await withTenant(pool, tenantId, async (client) => (await client.query(
+      "SELECT artifact FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2 AND metric_run_id=$3",
+      [tenantId, appId, priorMetricId],
+    )).rows[0].artifact), priorMetric, "withdrawal must not rewrite the stored legacy artifact");
     const parsed = parseMetricQuery({
       tenantId,
       appId,
@@ -3044,7 +3053,10 @@ describe("M2a signed SDK ingestion", () => {
     }, parsed.query);
     assert.equal(page.data.length, 1);
     assert.equal(page.data[0].reproducibility_status, "redaction_affected");
-    assert.notEqual(page.data[0].metric_run_id, priorMetricId);
+    assert.equal(page.data[0].metric_run_id, priorMetricId);
+    assert.equal(page.data[0].value_state, "unavailable");
+    assert.equal(Object.hasOwn(page.data[0], "value_unscaled"), false);
+    assert.equal(page.data[0].privacy_update_state, "unavailable");
     for (const body of [
       encodeMetricReport(page, "json").body,
       encodeMetricReport(page, "csv").body,

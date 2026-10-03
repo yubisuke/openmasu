@@ -80,7 +80,8 @@ describe("privacy metric correction through the existing durable worker", { conc
     originals = [];
     for (const [fxPolicy, group] of [[base.fx_policy, evaluations], [custom.fx_policy, custom.metric_evaluations],
       [engagement.fx_policy, engagement.metric_evaluations]] as [Any, Any[]][]) {
-      originals.push(...await computeSqlMetricRuns(app, { ...input, fx_policy: fxPolicy, metric_evaluations: group }, true));
+      originals.push(...await computeSqlMetricRuns(app, { ...input, fx_policy: fxPolicy, metric_evaluations: group }, true,
+        { tenant_id: tenantId, app_id: "app-a" }));
     }
     foreign = await computeSqlMetricRuns(app, { ...base, metric_evaluations: [{ ...base.metric_evaluations[0],
       metric_run_id_prefix: "synthetic-unrelated", metric_names: ["cohort_install_count"],
@@ -224,7 +225,7 @@ describe("privacy metric correction through the existing durable worker", { conc
   });
 
   it("privacy_missing_manifest_is_unavailable_not_a_copied_success_and_tenant_scope_includes_other_apps", async () => {
-    const legacy = { ...originals[0], metric_run_id: "synthetic-legacy-no-manifest", value_unscaled: "999",
+    const legacy = { ...originals[0], metric_run_id: "synthetic-legacy-no-manifest", value_unscaled: "999", evidence_refs: [],
       computed_at: "2026-09-01T00:00:00.000Z",
       grouping: { dimensions: { cohort_date: "2026-06-01" }, dimension_digest: sha256({ cohort_date: "2026-06-01" }) } };
     const legacyCount = 102;

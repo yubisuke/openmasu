@@ -1061,7 +1061,7 @@ describe("MAX receiver integration", () => {
 });
 
 describe("admin privacy integration", () => {
-  it("A9 authenticates, deletes through append-only artifacts, supersedes D0, and rejects the device path", async () => {
+  it("A9 authenticates, deletes through append-only artifacts, withdraws unreplayable D0, and rejects the device path", async () => {
     const adminKey = "synthetic-admin-key-00000000000000000000000000000001";
     const previousKey = "synthetic-admin-key-previous-000000000000000000000001";
     const privacyDigestKey = "synthetic-private-digest-key";
@@ -1127,6 +1127,15 @@ describe("admin privacy integration", () => {
       assert.notEqual(artifact.deletion_subject_digest, sha256([
         base.tenant_id, base.app_id, base.deletion_scope, base.deletion_subject_ref,
       ]));
+      const report = await fetch(`http://127.0.0.1:${address.port}/v1/reports/metrics?app_id=app-local&metric_name=${metric.metric_name}`,
+        { headers: { authorization: `Bearer ${previousKey}` } });
+      assert.equal(report.status, 200);
+      const page = await report.json() as { data: Array<Record<string, unknown>> };
+      const legacy = page.data.find(row => row.metric_run_id === metric.metric_run_id);
+      assert.ok(legacy);
+      assert.equal(legacy.value_state, "unavailable");
+      assert.equal(Object.hasOwn(legacy, "value_unscaled"), false);
+      assert.equal(legacy.privacy_update_state, "unavailable");
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }
@@ -1135,11 +1144,17 @@ describe("admin privacy integration", () => {
         (SELECT count(*) FROM ledger.privacy_tombstones)::int AS tombstones,
         (SELECT count(*) FROM ledger.corrections)::int AS corrections,
         (SELECT count(*) FROM ledger.metric_runs WHERE supersedes_metric_run_id='metric:privacy-baseline')::int AS superseding,
+        (SELECT count(*) FROM control.metric_recalculation_items WHERE app_id='app-local'
+          AND source_metric_run_id='metric:privacy-baseline' AND state='unavailable'
+          AND safe_reason='replay_unavailable')::int AS unavailable,
         (SELECT count(*) FROM ledger.audit_logs WHERE actor_type='admin_key' AND outcome='succeeded')::int AS audits`);
       assert.ok(counts.rows[0].tombstones > 0);
       assert.ok(counts.rows[0].corrections > 0);
-      assert.equal(counts.rows[0].superseding, 1);
+      assert.equal(counts.rows[0].superseding, 0);
+      assert.equal(counts.rows[0].unavailable, 1);
       assert.equal(counts.rows[0].audits, 1);
+      assert.deepEqual((await client.query("SELECT artifact FROM ledger.metric_runs WHERE metric_run_id=$1",
+        [metric.metric_run_id])).rows[0].artifact, metric);
     });
     await assert.rejects(payloadStore.read(payloadReference));
   });
