@@ -41,6 +41,14 @@ function schedule(dateDimension: "cohort_date" | "metric_date") {
 }
 
 describe("scheduled metric worker input", () => {
+  it("calendar_schedule_watermark_is_local_midnight_not_an_added_24_hours", () => {
+    assert.deepEqual(scheduledMetricBoundary(new Date("2026-03-09T05:00:00.000Z"),2,"America/New_York"),
+      {targetDate:"2026-03-07",watermark:"2026-03-09T04:00:00.000Z"});
+    assert.deepEqual(scheduledMetricBoundary(new Date("2026-11-02T05:30:00.000Z"),2,"America/New_York"),
+      {targetDate:"2026-10-31",watermark:"2026-11-02T05:00:00.000Z"});
+    assert.deepEqual(scheduledMetricBoundary(new Date("2026-08-06T23:59:00.000Z"),2,"Asia/Tokyo"),
+      {targetDate:"2026-08-05",watermark:"2026-08-06T15:00:00.000Z"});
+  });
   it("keeps discovered campaign identities stable under retry and distinct from manual totals", () => {
     const value = schedule("cohort_date") as any;
     value.definition.evaluations[0].campaign_discovery = { policy: "selected_acquisition_and_cost_v1", max_targets: 10 };

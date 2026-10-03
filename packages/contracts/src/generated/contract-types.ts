@@ -154,6 +154,7 @@ export type OpenMasuCostRecordV04 = Money & {
   creative_id?: string;
   country?: string;
   date: string;
+  reporting_time_zone?: "UTC" | "Asia/Tokyo" | "America/New_York";
   amount_unscaled: unknown;
   amount_scale: unknown;
   currency: unknown;
@@ -168,7 +169,7 @@ export type OpenMasuMetricDefinitionV04 = {
   metric_name: string;
   metric_definition_version: string;
   anchor_event: "install" | "calendar_day" | "deep_link_open";
-  aggregation_time_zone: "UTC" | "Asia/Tokyo";
+  aggregation_time_zone: "UTC" | "Asia/Tokyo" | "America/New_York";
   value_type: "money" | "ratio" | "count";
   currency?: string;
   amount_scale?: number;
@@ -224,6 +225,7 @@ export type OpenMasuMetricDefinitionV04 = {
   fraud_policy?: "gross" | "net";
   acquisition_basis?: "selected_first_party_click" | "selected_verified_platform" | "selected_imported_provider";
   import_provider?: string;
+  calendar_cohort_policy?: "cumulative_revenue_on_day_activity";
   acquisition_dimension_policy?: "selected_link_ad_group_creative";
   conversion_event_key?: string;
   engagement_credit_policy?: "latest_eligible_open_before_outcome";
@@ -244,7 +246,7 @@ export type OpenMasuMetricRunV04 = {
   input_received_at_watermark: string;
   computed_at: string;
   data_freshness: "complete" | "late_excluded" | "recalculated";
-  aggregation_time_zone: "UTC" | "Asia/Tokyo";
+  aggregation_time_zone: "UTC" | "Asia/Tokyo" | "America/New_York";
   rule_bundle_id: string;
   rule_bundle_version: string;
   rule_bundle_hash: string;

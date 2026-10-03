@@ -29,6 +29,7 @@ function publicEvidence(value: RoasCalculationEvidence): RoasCalculationEvidence
     metric_definition_version: value.metric_definition_version, definition_digest: value.definition_digest,
     anchor_event: value.anchor_event,
     window: { type: value.window.type, day: value.window.day, boundary: value.window.boundary },
+    ...(value.calendar_cohort_policy ? { calendar_cohort_policy: value.calendar_cohort_policy } : {}),
     aggregation_time_zone: value.aggregation_time_zone, fraud_policy: value.fraud_policy,
     cost_basis: value.cost_basis, cost_selection_digest: value.cost_selection_digest,
     fx_policy_version: value.fx_policy_version, fx_snapshot_id: value.fx_snapshot_id,

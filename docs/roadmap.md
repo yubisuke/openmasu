@@ -36,7 +36,7 @@ in [Project plan](project-plan.md).
 | Operator-owned bulk event exports | Synthetic complete | Default-off S3-compatible destinations, deterministic gzip NDJSON, SigV4 conditional writes, durable keyset cursors, and destination-scoped deletion notices |
 
 The current contract gate preserves parity across 28 schemas, 8 registries,
-and 67 reviewed synthetic fixtures, including explicitly versioned first-party and verified-platform acquisition cohorts, daily counts, safe cost selection, custom conversions and targeted refund cancellation.
+and 68 reviewed synthetic fixtures, including explicitly versioned calendar-zone, imported-provider, first-party and verified-platform acquisition cohorts, daily counts, safe cost selection, custom conversions and targeted refund cancellation.
 
 ## Completed milestone: integration and release coherence
 
@@ -190,6 +190,12 @@ bounded corrections retain provider/revision meaning. Fixture 67 and existing
 TS/Python/SQL gates cover synthetic evidence; external budget ownership, live
 provider completeness and automatic imported campaign discovery remain unproven
 or unsupported. The matching project-plan row records the same scope.
+The [qualified calendar profile](calendar-cohort-metrics.md) adds explicit local
+cohort dates, cumulative calendar revenue, on-day retention, same-zone costs and
+local schedule boundaries without relabeling elapsed definitions. Fixture 68
+and existing parity gates cover UTC/Tokyo/New York, DST and month rollover;
+arbitrary zones and unqualified engine time-zone data upgrades are outside this
+evidence. Its matching project-plan row retains those boundaries.
 
 The current source has the dependency, calculation, HTTP/presentation and
 ingestion boundaries needed for the next supported MMP workflows, together with

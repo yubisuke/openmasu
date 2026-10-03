@@ -39,6 +39,15 @@ export async function executeMetricCalculation(
     const legacyCosts = onlyDailyAcquisition ? [] : await currentCosts(client, scope, evaluation.input_received_at_watermark, grouping);
     const needsDisjoint = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.cost_selection_policy);
     const safeCosts = needsDisjoint ? await disjointCosts(client, scope, evaluation.input_received_at_watermark, grouping) : undefined;
+    const calendarCosts = new Map<string, Awaited<ReturnType<typeof disjointCosts>>>();
+    for (const name of evaluation.metric_names ?? []) {
+      const definition = definitions.get(name);
+      if (definition?.calendar_cohort_policy && !calendarCosts.has(definition.aggregation_time_zone)) {
+        if (!grouping?.cohort_date) throw new Error("calendar_cohort_date_required");
+        calendarCosts.set(definition.aggregation_time_zone, await disjointCosts(client, scope,
+          evaluation.input_received_at_watermark, grouping, false, definition.aggregation_time_zone));
+      }
+    }
     const needsDetail = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.acquisition_dimension_policy);
     const detailCosts = needsDetail ? await disjointCosts(client, scope, evaluation.input_received_at_watermark, grouping, true) : undefined;
     const usesAcquisition = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.acquisition_basis);
@@ -92,7 +101,8 @@ export async function executeMetricCalculation(
       if (!definition.acquisition_dimension_policy && !(["selected_verified_platform", "selected_imported_provider"].includes(definition.acquisition_basis ?? "") && grouping?.creative_id === undefined) && (grouping?.ad_group_id !== undefined || grouping?.creative_id !== undefined)) {
         throw new Error(`unsupported detail grouping for ${metricName}`);
       }
-      const selectedCosts = definition.acquisition_dimension_policy ? detailCosts : definition.cost_selection_policy ? safeCosts : undefined;
+      const selectedCosts = definition.calendar_cohort_policy ? calendarCosts.get(definition.aggregation_time_zone)
+        : definition.acquisition_dimension_policy ? detailCosts : definition.cost_selection_policy ? safeCosts : undefined;
       const costs = definition.engagement_credit_policy || selectedDaily ? [] : selectedCosts?.rows ?? legacyCosts;
       const inputSnapshotId = snapshot.finish(costs.map((cost) => [
         "cost", cost.as_of, cost.cost_record_id, cost.report_snapshot_digest, cost.dimension_digest,
@@ -197,7 +207,9 @@ export async function executeMetricCalculation(
             metric_run_id: artifact.metric_run_id, input_snapshot_id: artifact.input_snapshot_id,
             metric_definition_version: definition.metric_definition_version, definition_digest: sha256(definition),
             anchor_event: definition.anchor_event,
-            window: { type: "elapsed", day: definition.definition.window.day, boundary: "half_open" },
+            window: { type: definition.calendar_cohort_policy ? "calendar_day" : "elapsed",
+              day: definition.definition.window.day, boundary: "half_open" },
+            ...(definition.calendar_cohort_policy ? { calendar_cohort_policy: definition.calendar_cohort_policy } : {}),
             aggregation_time_zone: definition.aggregation_time_zone,
             fraud_policy: definition.fraud_policy ?? "gross", cost_basis: "cohort_acquisition_day_current_snapshot",
             cost_selection_digest: sha256(costs), fx_policy_version: fxPolicy.policy_version,

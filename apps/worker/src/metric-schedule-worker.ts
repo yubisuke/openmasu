@@ -5,6 +5,7 @@ import { acquirePrivacyTenantSessionReadFence, recordJobOutcome, runWithTerminal
 import { computeSqlMetricRuns, computeSqlMetricRunsWithClient, type MetricScope } from "./metrics/cohort.js";
 import { buildMetricDefinitionsInput } from "./metrics/run.js";
 import { freezeCampaignTargets, schedulePrivacyEpoch, type CampaignTargetSet } from "./metric-campaign-discovery.js";
+import { cohortLocalDate, cohortDayStart, addCalendarDays, type CohortTimeZone } from "@openmasu/contracts/definitions";
 
 type Any = Record<string, any>;
 
@@ -83,7 +84,7 @@ function nextDate(value: string): string {
   return new Date(Date.parse(`${exactDate(value)}T00:00:00.000Z`) + 86_400_000).toISOString().slice(0, 10);
 }
 
-export function scheduledMetricBoundary(now: Date, lagDays: number): Readonly<{
+export function scheduledMetricBoundary(now: Date, lagDays: number, zone: CohortTimeZone = "UTC"): Readonly<{
   targetDate: string;
   watermark: string;
 }> {
@@ -91,10 +92,10 @@ export function scheduledMetricBoundary(now: Date, lagDays: number): Readonly<{
   if (!Number.isSafeInteger(lagDays) || lagDays < 1 || lagDays > 365) {
     throw new Error("metric_schedule_lag_days_invalid");
   }
-  const midnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const day = cohortLocalDate(now, zone);
   return {
-    targetDate: new Date(midnight - lagDays * 86_400_000).toISOString().slice(0, 10),
-    watermark: new Date(midnight).toISOString(),
+    targetDate: addCalendarDays(day, -lagDays),
+    watermark: cohortDayStart(day, zone),
   };
 }
 
@@ -164,7 +165,7 @@ export async function claimNextScheduledDate(
   schedule: MetricScheduleRow,
   now: Date,
 ): Promise<PendingRun | undefined> {
-  const boundary = scheduledMetricBoundary(now, schedule.lag_days);
+  const boundary = scheduledMetricBoundary(now, schedule.lag_days, schedule.definition.cohort_time_zone ?? "UTC");
   const claim = async (client: PoolClient): Promise<PendingRun | undefined> => {
     await client.query(
       "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",

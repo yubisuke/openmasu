@@ -30,6 +30,7 @@ import { parseSnapshot } from "../../api/src/cohort-comparison.js";
 import { jcs } from "@openmasu/attribution-core/canonical";
 import { createRequestHandler } from "../../api/src/router.js";
 import { ingestFixture } from "./test-support/fixture-ingestion.js";
+import { persistSyntheticPlatformResults } from "./test-support/platform-acquisition.js";
 import { buildScheduledMetricInput, claimNextScheduledDate, processMetricSchedules } from "./metric-schedule-worker.js";
 import { computeSqlMetricRuns, persistMetricRun } from "./metrics/cohort.js";
 
@@ -707,5 +708,36 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
       assert.deepEqual((await metricReport(readerPool, reportIdentity, report(source.metric_schedule_id, "all"))).data.map(row => row.metric_run_id), [run.metric_run_id]);
       assert.equal(jcs(await stored(run.metric_run_id)), jcs(run));
     });
+  });
+
+  it("calendar_schedule_captures_local_cohort_date_and_midnight_watermark_and_replays_without_changes", async () => {
+    const scope = { tenantId: "tenant-calendar", appId: "app-calendar", keyId: "synthetic-calendar-schedule", role: "admin" as const };
+    const source = JSON.parse(readFileSync("fixtures/v0.4/68-calendar-acquisition-cohorts/input.json","utf8"),
+      (key,value) => key === "tenant_id" ? scope.tenantId : key === "app_id" ? scope.appId : value);
+    await ingestFixture("calendar68-schedule",source,appPool,seedPool);
+    await persistSyntheticPlatformResults(appPool,source);
+    const body = JSON.parse(readFileSync("examples/synthetic/metric-calendar-schedule.json","utf8"));
+    body.lag_days = 11;
+    const now = new Date("2026-08-17T06:00:00.000Z");
+    const registered = await registerMetricSchedule({pool:appPool,identity:scope,body,now});
+    assert.equal(registered.definition.cohort_time_zone,"America/New_York");
+    assert.deepEqual(await processMetricSchedules(appPool,scope.tenantId,{now,maximumCatchupDates:1}),
+      {schedules:1,completedDates:1,replayedDates:0,failedSchedules:0});
+    const query = {tenantId:scope.tenantId,appId:scope.appId,metricScheduleId:registered.metric_schedule_id,
+      supersession:"all" as const,limit:200};
+    const report = await metricReport(readerPool,scope,query);
+    assert.equal(report.data.length,3);
+    assert.deepEqual(Object.fromEntries(report.data.map(row=>[row.metric_name,row.value_unscaled])),{
+      calendar_ny_d7_roas:"15500000",calendar_ny_cohort_ltv_d7_usd:"31000000",calendar_ny_retention_d7:"1000000",
+    });
+    for (const row of report.data) {
+      assert.equal(row.aggregation_time_zone,"America/New_York");
+      assert.equal(row.grouping?.cohort_date,"2026-08-06");
+      assert.equal(row.input_received_at_watermark,"2026-08-17T04:00:00.000Z");
+    }
+    const before = jcs(report);
+    assert.equal((await processMetricSchedules(appPool,scope.tenantId,{now,maximumCatchupDates:1})).completedDates,0);
+    assert.equal(jcs(await metricReport(readerPool,scope,query)),before);
+    await disableMetricSchedule({pool:appPool,identity:scope,metricScheduleId:registered.metric_schedule_id,now});
   });
 });

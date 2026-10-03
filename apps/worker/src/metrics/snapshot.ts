@@ -125,7 +125,7 @@ export async function currentCosts(
     || compareMetricText(left.cost_record_id, right.cost_record_id));
 }
 
-export async function disjointCosts(client: MetricClient, scope: MetricScope, watermark: string, grouping: MetricGrouping | undefined, detail = false): Promise<CostSelection> {
+export async function disjointCosts(client: MetricClient, scope: MetricScope, watermark: string, grouping: MetricGrouping | undefined, detail = false, reportingZone?: string): Promise<CostSelection> {
   if (grouping?.attribution_status !== undefined && grouping.attribution_status !== "non_organic") return { rows: [], overlapping: false };
   const result = await client.query<DisjointCost>(
     `SELECT DISTINCT ON (network, cost_date, campaign_id, ad_group_id, country, (artifact->>'creative_id'))
@@ -137,9 +137,10 @@ export async function disjointCosts(client: MetricClient, scope: MetricScope, wa
        AND ($6::text IS NULL OR country=$6) AND ($7::date IS NULL OR cost_date=$7::date)
        AND ($8::boolean OR NOT (artifact ? 'creative_id'))
        AND ($9::text IS NULL OR ad_group_id=$9) AND ($10::text IS NULL OR artifact->>'creative_id'=$10)
+       AND ($11::text IS NULL OR artifact->>'reporting_time_zone'=$11)
      ORDER BY network, cost_date, campaign_id, ad_group_id, country, (artifact->>'creative_id'), as_of DESC, cost_record_id COLLATE "C" DESC`,
     [scope.tenant_id, scope.app_id, watermark, grouping?.campaign_id ?? null, grouping?.network ?? null,
-      grouping?.country ?? null, grouping?.cohort_date ?? null, detail, grouping?.ad_group_id ?? null, grouping?.creative_id ?? null],
+      grouping?.country ?? null, grouping?.cohort_date ?? null, detail, grouping?.ad_group_id ?? null, grouping?.creative_id ?? null, reportingZone ?? null],
   );
   return selectDisjointCosts(result.rows, detail);
 }

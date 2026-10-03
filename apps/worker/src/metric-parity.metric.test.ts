@@ -29,6 +29,7 @@ import { runCostImportFile } from "./import/cost-cli.js";
 import { syntheticPlatformAcquisitionCases } from "../../../tools/synthetic-platform-acquisition-cases.js";
 import { persistSyntheticPlatformResults } from "./test-support/platform-acquisition.js";
 import { syntheticImportedAcquisitionCases, importedAcquisitionCaseRuns } from "../../../tools/synthetic-imported-acquisition-cases.js";
+import { syntheticCalendarCohortCases, syntheticCalendarCostCsv } from "../../../tools/synthetic-calendar-cohort-cases.js";
 import { selectLateMetricInputs } from "@openmasu/runtime";
 import { saveMetricCorrectionPolicy } from "../../api/src/metric-correction-policy.js";
 import { planAutomaticMetricCorrections } from "./automatic-metric-corrections.js";
@@ -52,6 +53,87 @@ function assertPlatformRunParity(actual: readonly Any[], expected: readonly Any[
     assert.equal(jcs(run), jcs(expected[index]), `${label}: ${run.metric_run_id} canonical bytes`);
   }
 }
+
+describe("explicit calendar cohort SQL parity", { concurrency: false }, () => {
+  const app = createAppPool(), seed = createSeedPool(), reader = createReaderPool();
+  after(async()=>{await Promise.all([app.end(),seed.end(),reader.end()]);});
+  const source = JSON.parse(readFileSync("fixtures/v0.4/68-calendar-acquisition-cohorts/input.json","utf8"));
+  for (const entry of syntheticCalendarCohortCases(source)) it(entry.name,async()=>{
+    await ingestFixture(`calendar68-${entry.name}`,entry.input,app,seed);
+    await persistSyntheticPlatformResults(app,entry.input);
+    const actual = await computeSqlMetricRuns(app,entry.input,false);
+    assert.deepEqual(actual.map(run=>run.value_unscaled ?? run.undefined_reason),entry.expected);
+    assertPlatformRunParity(actual,evaluate(entry.input).metric_runs,entry.name);
+    if (entry.name === "calendar_three_zones_three_bases_cumulative_money_and_on_day_retention")
+      assertPlatformRunParity(actual,JSON.parse(readFileSync("fixtures/v0.4/68-calendar-acquisition-cohorts/expected_metric_runs.json","utf8")),"independent calendar golden");
+  });
+  it("calendar_saved_report_and_explanation_keep_zone_window_and_cost_policy_visible",async()=>{
+    await ingestFixture("calendar68-stored",source,app,seed);
+    await persistSyntheticPlatformResults(app,source);
+    const actual = await computeSqlMetricRuns(app,source,true);
+    const identity = {keyId:"synthetic-calendar68",tenantId:"tenant-a",appId:"app-a",role:"admin" as const};
+    const page = await metricReport(reader,identity,{tenantId:"tenant-a",appId:"app-a",supersession:"all",limit:200});
+    for (const run of actual) {
+      const row = page.data.find(value=>value.metric_run_id === run.metric_run_id)!;
+      assert.equal(row.value_unscaled,run.value_unscaled);
+      assert.equal(row.aggregation_time_zone,run.aggregation_time_zone);
+      const csv = parseCsv(encodeMetricReport({data:[row]},"csv").body)[0];
+      assert.equal(csv.value_unscaled,run.value_unscaled);
+      assert.equal(csv.aggregation_time_zone,run.aggregation_time_zone);
+      if (!row.metric_name.startsWith("calendar_") && !row.metric_name.includes("_calendar_")) continue;
+      assert.equal(row.comparison_context?.definition.calendar_cohort_policy,"cumulative_revenue_on_day_activity");
+    }
+    const explanation = await metricExplanation(reader,identity,"calendar68-native-ny:calendar_ny_d7_roas");
+    assert.equal(explanation?.calculation?.window.type,"calendar_day");
+    assert.equal(explanation?.calculation?.calendar_cohort_policy,"cumulative_revenue_on_day_activity");
+    assert.equal(explanation?.calculation?.operands.last_window_end,"2026-08-14T04:00:00.000000Z");
+    const html = renderMetricExplanation("app-a",explanation!);
+    assert.match(html,/local midnight after cohort day 7/);
+    assert.match(html,/America\/New_York/);
+    assert.doesNotMatch(html,/install time \+ 8 days/);
+  });
+  it("calendar_manual_cost_csv_reaches_an_exact_same_zone_present_ROAS_without_inferred_allocation",async()=>{
+    const value = structuredClone(source); value.cost_records = [];
+    value.metric_evaluations = value.metric_evaluations.filter((row: Any)=>row.metric_run_id_prefix === "calendar68-native-ny");
+    value.metric_evaluations[0].metric_names = ["calendar_ny_d7_roas"];
+    await ingestFixture("calendar68-cost-cli",value,app,seed);
+    await persistSyntheticPlatformResults(app,value);
+    assert.equal((await computeSqlMetricRuns(app,value,false))[0].undefined_reason,"no_attributed_cost");
+    const directory = mkdtempSync(join(tmpdir(),"openmasu-calendar-cost-"));
+    try {
+      const filePath = join(directory,"synthetic-cost.csv");
+      writeFileSync(filePath,syntheticCalendarCostCsv);
+      const imported = await runCostImportFile({pool:app,mappingPath:"examples/mappings/synthetic-calendar-cost.json",filePath});
+      assert.equal(imported.rows,1);
+    } finally { rmSync(directory,{recursive:true,force:true}); }
+    const run = (await computeSqlMetricRuns(app,value,true))[0];
+    assert.equal(run.value_state ?? "present","present"); assert.equal(run.value_unscaled,"15500000");
+    const cost = await withTenant(reader,"tenant-a",client=>client.query("SELECT artifact FROM ledger.cost_records WHERE tenant_id=$1 AND app_id=$2",["tenant-a","app-a"]));
+    assert.equal(cost.rows.length,1); assert.equal(cost.rows[0].artifact.reporting_time_zone,"America/New_York");
+  });
+  it("calendar_late_selector_uses_the_saved_local_exclusive_end_not_eight_elapsed_days",async()=>{
+    const before = structuredClone(source);
+    before.records = before.records.filter((row: Any)=>!["revenue-68-native-5","revenue-68-native-6"].includes(row.record_id));
+    before.metric_evaluations = before.metric_evaluations.filter((row: Any)=>["calendar68-native-utc","calendar68-native-ny"].includes(row.metric_run_id_prefix));
+    for (const ev of before.metric_evaluations) {
+      ev.metric_names = ev.metric_names.filter((name: string)=>name.endsWith("d7_roas") || name.endsWith("ltv_d7_usd"));
+      ev.input_received_at_watermark = "2026-08-16T01:00:00.000Z";
+    }
+    await ingestFixture("calendar68-late",before,app,seed);
+    await persistSyntheticPlatformResults(app,before);
+    await computeSqlMetricRuns(app,before,true);
+    const late = source.records.filter((row: Any)=>["revenue-68-native-5","revenue-68-native-6"].includes(row.record_id))
+      .map((row: Any)=>({server:{...source.server_context,received_at:"2026-08-16T02:00:00.000Z"},
+        record:{...row,received_at:"2026-08-16T02:00:00.000Z"},batch_id:"calendar68-late"}));
+    await ingestRuntimeBatch(late,app);
+    for (const record_id of ["revenue-68-native-5","revenue-68-native-6"]) {
+      const selected = await withTenant(app,"tenant-a",client=>selectLateMetricInputs(client,{tenantId:"tenant-a",appId:"app-a"},
+        {trigger_kind:"late_events",source_record_ids:[record_id],date_from:"2026-08-06",date_to:"2026-08-06",watermark:"2026-08-17T00:00:00.000Z"}));
+      assert.equal(selected.rows.length,record_id.endsWith("-5") ? 2 : 0);
+      assert.ok(selected.rows.every(row=>row.metric_run_id.includes("native-ny") && row.safe_reason === null));
+    }
+  });
+});
 
 describe("imported provider acquisition SQL parity", { concurrency: false }, () => {
   const app = createAppPool(), seed = createSeedPool(), reader = createReaderPool();

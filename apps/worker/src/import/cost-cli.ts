@@ -47,6 +47,9 @@ function canonicalDay(value: unknown): string {
 }
 
 export function normalizeCostInput(mapping: ReturnType<typeof loadMapping>, mapped: Any): CostInput {
+  if (mapped.reporting_time_zone !== undefined && !["UTC", "Asia/Tokyo", "America/New_York"].includes(mapped.reporting_time_zone)) {
+    throw new CostInputError("cost_field_invalid", ["reporting_time_zone"], "mapped cost reporting time zone is unsupported");
+  }
   const money = mapped.money;
   if (!money || typeof money !== "object" || Array.isArray(money)) {
     throw new CostInputError("cost_money_invalid", ["money"], "mapped money is required");
@@ -80,6 +83,7 @@ export function normalizeCostInput(mapping: ReturnType<typeof loadMapping>, mapp
     ...(mapped.creative_id === undefined ? {} : { creative_id: requiredText(mapped.creative_id, "creative_id") }),
     country,
     date,
+    ...(mapped.reporting_time_zone === undefined ? {} : { reporting_time_zone: mapped.reporting_time_zone }),
     amount_unscaled: amountUnscaled,
     amount_scale: money.amount_scale,
     currency,

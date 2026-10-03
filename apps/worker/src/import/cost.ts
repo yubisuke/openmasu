@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import { jcs, sha256 } from "@openmasu/attribution-core/canonical";
 import { uuidV7, withTenant } from "@openmasu/runtime";
+import type { CohortTimeZone } from "@openmasu/contracts/definitions";
 
 export type CostInput = {
   tenant_id: string;
@@ -11,6 +12,7 @@ export type CostInput = {
   creative_id?: string | null;
   country?: string | null;
   date: string;
+  reporting_time_zone?: CohortTimeZone;
   amount_unscaled: string;
   amount_scale: number;
   currency: string;
@@ -32,6 +34,7 @@ function dimensionObject(row: CostInput): Record<string, unknown> {
     ...(row.creative_id != null ? { creative_id: row.creative_id } : {}),
     country: row.country ?? null,
     date: row.date,
+    ...(row.reporting_time_zone ? { reporting_time_zone: row.reporting_time_zone } : {}),
   }).sort(([left], [right]) => left.localeCompare(right)));
 }
 
@@ -59,6 +62,7 @@ export function costArtifact(row: CostInput, reportSnapshotDigest: string): Reco
     ...(row.creative_id ? { creative_id: row.creative_id } : {}),
     ...(row.country ? { country: row.country } : {}),
     date: row.date,
+    ...(row.reporting_time_zone ? { reporting_time_zone: row.reporting_time_zone } : {}),
     amount_unscaled: row.amount_unscaled,
     amount_scale: row.amount_scale,
     currency: row.currency.toUpperCase(),

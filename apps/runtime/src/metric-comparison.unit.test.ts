@@ -5,10 +5,24 @@ import { sha256 } from "@openmasu/attribution-core";
 import { captureMetricComparisonContext, comparisonMeaning, comparisonMaturity } from "./metric-comparison.js";
 import { engagementMetricDefinitions } from "@openmasu/contracts";
 import { importedAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
+import { calendarAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
 
 const fx = { policy_version: "synthetic", target_currency: "USD", target_scale: 6, rounding_mode: "half_even" as const,
   rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0, as_of: "2026-01-01T00:00:00.000Z", source: "not-in-reader-projection" }] };
 const run = { metric_run_id: "synthetic", input_snapshot_id: "a".repeat(64) };
+it("calendar_comparison_freezes_local_day_meaning_and_DST_maturity_separately_from_elapsed", () => {
+  const definition = calendarAcquisitionMetricDefinitions("America/New_York").find(d=>d.metric_name === "calendar_ny_cohort_ltv_d1_usd")!;
+  const context = captureMetricComparisonContext(run,definition,fx,"after",sha256);
+  const elapsed = captureMetricComparisonContext(run,SELECTED_ACQUISITION_METRIC_DEFINITIONS.find(d=>d.metric_name === "cohort_ltv_d1_usd")!,fx,"after",sha256);
+  assert.notDeepEqual(comparisonMeaning(context),comparisonMeaning(elapsed));
+  const meaning = comparisonMeaning(context);
+  assert.ok(meaning && "calendar_cohort_policy" in meaning);
+  assert.equal(meaning.calendar_cohort_policy,"cumulative_revenue_on_day_activity");
+  assert.deepEqual(comparisonMaturity(context,{cohort_date:"2026-03-07"},"2026-03-09T03:59:59.999Z"),
+    {state:"unknown",closes_at:"2026-03-09T04:00:00.000Z"});
+  assert.equal(comparisonMaturity(context,{cohort_date:"2026-03-07"},"2026-03-09T04:00:00.000Z").state,"window_elapsed");
+  assert.equal(comparisonMaturity(context,{cohort_date:"2026-10-31"},"2026-11-02T05:00:00.000Z").closes_at,"2026-11-02T05:00:00.000Z");
+});
 it("keeps import provider revision outcome binding and native meaning incomparable", () => {
   const first = captureMetricComparisonContext(run,importedAcquisitionMetricDefinitions("synthetic-export")[0],fx,"after",sha256);
   const second = captureMetricComparisonContext(run,importedAcquisitionMetricDefinitions("synthetic-second")[0],fx,"after",sha256);

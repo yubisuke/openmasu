@@ -1603,7 +1603,8 @@
           "aggregationTimeZone": {
             "enum": [
               "UTC",
-              "Asia/Tokyo"
+              "Asia/Tokyo",
+              "America/New_York"
             ]
           },
           "importContext": {

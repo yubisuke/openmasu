@@ -27,7 +27,11 @@ export function renderMetricExplanation(appId: string, value: MetricExplanation)
     item("Accepted ad revenue events", evidence.operands.revenue_event_count), item("Selected cost rows", evidence.operands.cost_row_count),
     item("Cohort installations", evidence.operands.cohort_size),
     item("Definition digest", evidence.definition_digest), item("Anchor", evidence.anchor_event),
-    item("Revenue window", `[install time, install time + ${evidence.window.day + 1} days)`),
+    item("Revenue window", evidence.calendar_cohort_policy
+      ? `[install time, local midnight after cohort day ${evidence.window.day})`
+      : `[install time, install time + ${evidence.window.day + 1} days)`),
+    ...(evidence.calendar_cohort_policy ? [item("Calendar policy", "Cumulative revenue through the named local cohort day; activity on that local day only"),
+      item("Cost reporting time zone", "Must explicitly match the aggregation time zone; unknown or different zones are not allocated")] : []),
     item("Aggregation time zone", evidence.aggregation_time_zone), item("Window state at run watermark", value.window_state),
     item("Last cohort window end", evidence.operands.last_window_end ?? "unknown"),
     item("Fraud policy", evidence.fraud_policy), item("Cost basis", evidence.cost_basis),
@@ -40,7 +44,7 @@ export function renderMetricExplanation(appId: string, value: MetricExplanation)
     ...(evidence.version === 3 ? [item("Refund cancellation policy", "Explicit targets cancel their original refund contribution once as of the watermark, using the refund's window and rounded amount, not a new purchase")] : []),
     item("Formula", evidence.operands.cost_unscaled === "0" ? "undefined: no_attributed_cost"
       : `half_even(${evidence.operands.revenue_unscaled} × 10^${evidence.ratio_scale} / ${evidence.operands.cost_unscaled})`),
-  ].join("")}</dl><p>An elapsed window does not prove all delayed inputs have arrived. Revenue uses accepted installation-level events in the recorded window. Cost uses one latest row per acquisition-day cost key at the watermark. Exclusion reasons were not recorded individually and are unavailable.</p>`
+  ].join("")}</dl><p>A closed occurrence-time window does not prove all delayed inputs have arrived. Revenue uses accepted installation-level events in the recorded window. Cost uses one latest row per acquisition-day cost key at the watermark. Exclusion reasons were not recorded individually and are unavailable.</p>`
     : `<h2>Calculation evidence unavailable</h2><p>${escapeHtml(value.evidence_state)}. Only saved run provenance is shown. Missing operands are not zero.</p>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Metric explanation — OpenMasu</title><link rel="stylesheet" href="/dashboard/app.css"></head><body><main><h1>${escapeHtml(run.metric_name)}</h1><p>${escapeHtml(result)}</p><p><a href="/dashboard/apps/${encodeURIComponent(appId)}">Return to app metrics</a></p><h2>Saved run</h2><dl>${[
     item("Run", run.metric_run_id), item("Definition version", run.metric_definition_version),

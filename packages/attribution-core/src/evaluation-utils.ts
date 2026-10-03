@@ -1,4 +1,5 @@
 import { sha256 } from "./canonical.js";
+import { cohortLocalDate } from "@openmasu/contracts/definitions";
 
 export const DAY_MS = 86_400_000;
 
@@ -40,7 +41,8 @@ export function time(value: string | undefined, field: string): number {
   return parsed.getTime();
 }
 
-export function dateAt(value: string, zone: "UTC" | "Asia/Tokyo", field: string): string {
+export function dateAt(value: string, zone: "UTC" | "Asia/Tokyo" | "America/New_York", field: string): string {
+  if (zone === "America/New_York") return cohortLocalDate(new Date(time(value, field)), zone);
   const offset = zone === "Asia/Tokyo" ? 9 * 3_600_000 : 0;
   return new Date(time(value, field) + offset).toISOString().slice(0, 10);
 }

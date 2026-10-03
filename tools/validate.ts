@@ -14,6 +14,7 @@ import { syntheticEngagementCases } from "./synthetic-engagement-cases.js";
 import { syntheticDailyAcquisitionCases, dailyAcquisitionCaseRuns, dailyAcquisitionPythonProbe } from "./synthetic-daily-acquisition-cases.js";
 import { syntheticPlatformAcquisitionCases } from "./synthetic-platform-acquisition-cases.js";
 import { syntheticImportedAcquisitionCases, importedAcquisitionCaseRuns, importedAcquisitionPythonProbe } from "./synthetic-imported-acquisition-cases.js";
+import { syntheticCalendarCohortCases, calendarCohortValues } from "./synthetic-calendar-cohort-cases.js";
 
 type Any = Record<string, any>;
 type Captured<T> = { ok: true; value: T } | { ok: false; error: unknown };
@@ -320,7 +321,7 @@ function validateRegistryReferences(output: Any, label: string): void {
   }
   for (const cost of output.cost_records) {
     const dimensions = Object.fromEntries(
-      ["network", "campaign_id", "ad_group_id", "creative_id", "country"]
+      ["network", "campaign_id", "ad_group_id", "creative_id", "country", "reporting_time_zone"]
         .filter((field) => cost[field] !== undefined)
         .map((field) => [field, cost[field]]),
     );
@@ -331,7 +332,8 @@ function validateRegistryReferences(output: Any, label: string): void {
       "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
       "aak_attributed_reengagements",
     ]);
-    const expectedVersion = definition.rule_bundle_id === "metric-imported-provider-acquisition" ? "0.4.20"
+    const expectedVersion = definition.rule_bundle_id === "metric-calendar-acquisition" ? "0.4.21"
+      : definition.rule_bundle_id === "metric-imported-provider-acquisition" ? "0.4.20"
       : definition.rule_bundle_id === "metric-verified-platform-acquisition" ? "0.4.19"
       : definition.rule_bundle_id === "metric-selected-daily-acquisition" ? "0.4.18"
       : definition.rule_bundle_id === "metric-first-party-engagement" ? "0.4.17"
@@ -356,7 +358,7 @@ function validateRegistryReferences(output: Any, label: string): void {
       ? "0.3.3"
       : definition.definition.calculation === "event_count" ? "0.3.1" : "0.3.0";
     check(definition.metric_definition_version === expectedVersion, `wrong metric definition version in ${label}`);
-    check(["UTC", "Asia/Tokyo"].includes(definition.aggregation_time_zone), `unknown metric definition time zone in ${label}`);
+    check(["UTC", "Asia/Tokyo", "America/New_York"].includes(definition.aggregation_time_zone), `unknown metric definition time zone in ${label}`);
   }
   for (const rejection of output.rejections) {
     check(rejectionReasons.has(rejection.reason_code), `unknown rejection reason in ${label}`);
@@ -589,8 +591,8 @@ if (!summaryOnly) {
         }
       });
     }
-    it("contains 67 fixture directories", () => {
-      check(fixtureDirs.length === 67, `expected 67 fixture directories, found ${fixtureDirs.length}`);
+    it("contains 68 fixture directories", () => {
+      check(fixtureDirs.length === 68, `expected 68 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -1083,12 +1085,17 @@ const scenarios: Array<[string, () => void]> = [
       syntheticImportedAcquisitionCases(state.input)[0].expected), "scenario 67 independently counted and calculated import profile");
     check(state.output.attributions.length === 5 && state.output.reconciliation.length === 4, "scenario 67 imported reported attribution and reconciliation remain stored facts");
   }],
+  ["68 calendar cohorts freeze local dates cumulative money and on-day activity without changing elapsed profiles", () => {
+    const state = fixture("68-calendar-acquisition-cohorts");
+    check(state.output.raw_records.length === 40 && state.output.metric_runs.length === 101, "scenario 68 synthetic evidence and registered calendar series");
+    check(equal(state.output.metric_runs.map((run: Any)=>run.value_unscaled),calendarCohortValues(state.input)), "scenario 68 independent UTC Tokyo and DST-zone arithmetic");
+  }],
 ];
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 67 scenario assertions", () => {
-      check(scenarios.length === 67, "scenario assertion inventory must contain 67 entries");
+    it("contains 68 scenario assertions", () => {
+      check(scenarios.length === 68, "scenario assertion inventory must contain 68 entries");
     });
   });
 
@@ -1657,7 +1664,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 67 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 68 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1697,7 +1704,7 @@ const acceptance: Array<[string, () => void]> = [
     for (const forbidden of ["threshold", "model_weight", "watchlist", "ip_address", "user_agent", "response_timing"]) check(!schemaText.includes(forbidden), `AC20 ${forbidden}`);
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
-  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 67 && outputArtifactCount === 67 * 13, "AC21")],
+  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 68 && outputArtifactCount === 68 * 13, "AC21")],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {
     for (const { output, python } of results.values()) check(equal(output, python), "AC22 evaluator mismatch");
     const vector = { numbers: [333333333.33333329, 1e30, 4.50, 2e-3, 1e-27, -0], string: "€$\u000f\nA'B\"\\\"/" };
@@ -2146,6 +2153,15 @@ const validRevenue = {
 };
 if (!summaryOnly) {
   describe("semantic mutations", () => {
+    it("calendar_cohorts_keep_DST_month_end_cost_zone_receipt_and_source_meaning_in_independent_TS_Python_parity", () => {
+      const cases = syntheticCalendarCohortCases(fixture("68-calendar-acquisition-cohorts").input);
+      const python = pythonOutputs(cases.map(entry=>entry.input));
+      for (const [index, entry] of cases.entries()) {
+        const output = evaluate(entry.input);
+        check(equal(output.metric_runs.map(run=>run.value_unscaled ?? run.undefined_reason),entry.expected),`${entry.name}: independent local-day arithmetic`);
+        check(equal(output,python[index]),`${entry.name}: independent calendar artifact parity`);
+      }
+    });
     it("keeps provider context revision cutoff outcomes privacy native isolation and gross-net in independent TS/Python parity", () => {
       const cases = syntheticImportedAcquisitionCases(fixture("67-imported-provider-acquisition").input);
       const python: Any[][] = JSON.parse(execFileSync("python", ["-c", importedAcquisitionPythonProbe], {

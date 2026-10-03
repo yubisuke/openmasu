@@ -2,8 +2,10 @@
 
 OpenMasu can run versioned metric definitions from the durable worker instead
 of relying on an external cron command. A schedule belongs to one application,
-stores an immutable definition and its RFC 8785 digest, and advances one UTC
-target date at a time.
+stores an immutable definition and its RFC 8785 digest, and advances one target
+date at a time. Existing schedules use UTC; explicit
+[calendar cohort schedules](calendar-cohort-metrics.md) use their captured
+qualified zone for both local date and receipt-watermark midnight.
 
 Use the manual `npm run metrics:run` command for an operator-controlled one-off
 calculation or a deliberately selected historical backfill. Use a durable
@@ -261,8 +263,9 @@ Privacy withdrawal rules still apply to every live report/history/detail route.
 
 For each active schedule, the worker:
 
-1. derives the eligible target date as `current UTC date - lag_days`;
-2. fixes the input watermark to the current UTC midnight;
+1. derives the eligible target date as `current date in the captured zone - lag_days`
+   (UTC for historical schedules);
+2. fixes the input watermark to that date's local midnight converted to UTC;
 3. persists the pending target date, watermark, and definition digest before
    metric evaluation;
 4. writes each metric run through the ordinary repeatable-read cohort engine;
