@@ -44,7 +44,8 @@ export async function freezeCampaignTargets(
            ${metricAcquisitionDimensionSql("network", metric.acquisition_basis === "selected_verified_platform")} AS network,
            install.country,acquisition.reason_code,
            coalesce(acquisition.status,'unattributed') AS status,
-           (raw.payload_lifecycle_status<>'available' OR EXISTS (
+           (raw.payload_lifecycle_status<>'available'
+             ${platform ? "OR coalesce(acquisition.lifecycle_status<>'available',false)" : ""} OR EXISTS (
              SELECT 1 FROM jsonb_array_elements(coalesce(acquisition.artifact->'evidence_refs','[]'::jsonb)) AS ref
              JOIN ledger.raw_records_current AS evidence ON evidence.tenant_id=$1 AND evidence.app_id=$2
                AND evidence.record_id=ref->>'ref' WHERE evidence.payload_lifecycle_status<>'available'

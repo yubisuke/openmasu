@@ -87,6 +87,7 @@ export function metricAcquisitionJoinSql(enabled: "$7" | "$15" | "$18", privacy:
       SELECT acquisition.context->>'campaign_id' AS campaign_id,acquisition.source AS network,
         acquisition.context->>'ad_group_id' AS ad_group_id,NULL::text AS creative_id
       WHERE ${enabled}::boolean AND acquisition.source IS NOT NULL AND acquisition.lifecycle_status='available'
+        AND ${privacy}::text IN ('before','after')
         AND logical.producer NOT LIKE 'import:%'
     ) AS acquisition_source ON true`;
 }

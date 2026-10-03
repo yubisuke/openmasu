@@ -154,8 +154,12 @@ function prepareMetaRecord(row: InboxRow, sourceRecord: Any, keys: readonly Meta
   if (record.event_name !== "install") return record;
   const raw = record.payload?.extensions?.meta_install_referrer_protected;
   if (typeof raw !== "string") {
+    const claimsDecryptedMeta = record.payload?.meta_referrer_context !== undefined
+      || record.payload?.meta_referrer_status === "decrypted"
+      || record.payload?.extensions?.meta_decryption_key_id !== undefined;
     delete record.payload?.meta_referrer_context;
-    delete record.payload?.protected_referrer_evidence_ref;
+    // A legacy first-party referrer reference is not a server-decryption proof.
+    if (claimsDecryptedMeta) delete record.payload?.protected_referrer_evidence_ref;
     if (record.payload?.meta_referrer_status === "decrypted") record.payload.meta_referrer_status = "decrypt_failed";
     if (record.payload?.extensions) delete record.payload.extensions.meta_decryption_key_id;
     return record;

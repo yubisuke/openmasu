@@ -88,7 +88,7 @@ function normalizedRecord(
     throw new Error("device_adservices_claim_forbidden");
   }
   if (payload.meta_referrer_context !== undefined || payload.meta_referrer_status === "decrypted"
-      || payload.protected_referrer_evidence_ref !== undefined || payload.extensions?.meta_decryption_key_id !== undefined
+      || payload.extensions?.meta_decryption_key_id !== undefined
       || payload.extensions?.meta_referrer_context !== undefined || source.platform_acquisition_inputs !== undefined) {
     throw new Error("device_platform_attribution_claim_forbidden");
   }

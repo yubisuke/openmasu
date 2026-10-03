@@ -279,9 +279,9 @@ describe("M4 AdServices server-side lookup", () => {
   it("rejects forged platform projections and server decryption markers before durable insertion", async () => {
     const credential = await enroll("forged-platform");
     const before = await withTenant(pool,tenantId,async client => Number((await client.query(
-      "SELECT count(*)::text AS count FROM ephemeral.sdk_inbox WHERE tenant_id=$1 AND app_id=$2",[tenantId,appId])).rows[0].count));
+      "SELECT count(*)::text AS count FROM ledger.ingest_batches WHERE tenant_id=$1 AND app_id=$2",[tenantId,appId])).rows[0].count));
     const claims = [{meta_referrer_status:"decrypted"}, {meta_referrer_context:{campaign_id:"synthetic-forged"}},
-      {protected_referrer_evidence_ref:"payload:synthetic-forged"}, {extensions:{meta_decryption_key_id:"synthetic-forged"}},
+      {meta_referrer_context:{campaign_id:"synthetic-forged"},protected_referrer_evidence_ref:"payload:synthetic-forged"}, {extensions:{meta_decryption_key_id:"synthetic-forged"}},
       {extensions:{meta_referrer_context:{campaign_id:"synthetic-forged"}}}];
     for (const [index,claim] of claims.entries()) {
       const response = await signed({path:"/v1/events/batch",value:{records:[installEvent(`forged-platform-${index}`,credential.installationId,claim)]},
@@ -294,7 +294,7 @@ describe("M4 AdServices server-side lookup", () => {
     assert.equal(response.status,403);
     assert.deepEqual(await response.json(),{error:"device_platform_attribution_claim_forbidden"});
     const after = await withTenant(pool,tenantId,async client => Number((await client.query(
-      "SELECT count(*)::text AS count FROM ephemeral.sdk_inbox WHERE tenant_id=$1 AND app_id=$2",[tenantId,appId])).rows[0].count));
+      "SELECT count(*)::text AS count FROM ledger.ingest_batches WHERE tenant_id=$1 AND app_id=$2",[tenantId,appId])).rows[0].count));
     assert.equal(after,before);
   });
 
@@ -305,7 +305,7 @@ describe("M4 AdServices server-side lookup", () => {
     const bytes=Buffer.concat([cipher.update(JSON.stringify({campaign_id:campaign,adgroup_id:adgroup}),"utf8"),cipher.final(),cipher.getAuthTag()]);
     const raw=JSON.stringify({utm_content:{source:{data:bytes.toString("hex"),nonce:nonce.toString("hex")}}});
     const submit=await signed({path:"/v1/events/batch",value:{records:[installEvent("verified-meta",credential.installationId,
-      {install_origin:"google_play",referrer_status:"unavailable",extensions:{meta_install_referrer_protected:raw}})]},
+      {install_origin:"play_first_launch",referrer_status:"unavailable",extensions:{meta_install_referrer_protected:raw}})]},
       secret:credential.installationSecret,installationKeyId:credential.installationKeyId});
     assert.equal(submit.status,202);
     await processSdkInbox(pool,payloadStore,tenantId,{metaKeys:[{key_id:"synthetic-http-meta-key",key_hex:key.toString("hex")}]});

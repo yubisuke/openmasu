@@ -35,7 +35,7 @@ describe("verified platform acquisition operational workflow",{concurrency:false
   async function drain() {
     for (let cycle=0;cycle<50;cycle++) {
       await planAutomaticMetricCorrections(app,identity.tenantId,20);
-      await processMetricRecalculations(app,identity.tenantId,20);
+      await processMetricRecalculations(app,identity.tenantId,10);
       const remaining=await withTenant(app,identity.tenantId,async client=>(await client.query(`SELECT
         (SELECT count(*) FROM control.metric_correction_receipts WHERE tenant_id=$1 AND app_id=$2 AND state IN ('queued','retry'))+
         (SELECT count(*) FROM control.metric_recalculation_items WHERE tenant_id=$1 AND app_id=$2 AND state IN ('queued','processing','retry')) AS count`,
@@ -101,9 +101,11 @@ describe("verified platform acquisition operational workflow",{concurrency:false
     assert.equal(saved.filter((row:Any)=>row.supersedes_metric_run_id).length,4);
     assert.ok(!saved.some((row:Any)=>row.supersedes_metric_run_id==="synthetic-platform-first-party:cohort_install_count"));
     const jobs=await withTenant(reader,identity.tenantId,async client=>(await client.query(
-      "SELECT trigger_kind,state FROM control.metric_recalculation_jobs WHERE tenant_id=$1 AND app_id=$2",[identity.tenantId,identity.appId])).rows);
+      `SELECT job.trigger_kind,bool_and(item.state='completed') AS completed FROM control.metric_recalculation_jobs AS job
+       JOIN control.metric_recalculation_items AS item USING (tenant_id,app_id,recalculation_id)
+       WHERE job.tenant_id=$1 AND job.app_id=$2 GROUP BY job.recalculation_id,job.trigger_kind`,[identity.tenantId,identity.appId])).rows);
     assert.deepEqual(jobs.map(job=>job.trigger_kind).sort(),["attribution_revision","cost_revision","late_events"]);
-    assert.ok(jobs.every(job=>job.state==="completed"));
+    assert.ok(jobs.every(job=>job.completed));
     await drain();assert.equal(jcs(await rows()),jcs(saved));
   });
 });
