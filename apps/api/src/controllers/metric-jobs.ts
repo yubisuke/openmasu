@@ -1,8 +1,9 @@
 import { AppNotFoundError, requireRegisteredApp } from "../apps-admin.js";
 import { roleAllows } from "../authorization.js";
-import { metricScheduleFormRequest, renderMetricSchedules } from "../dashboard/metric-schedules.js";
+import { metricScheduleFormRequest, metricScheduleReplacementFormRequest, renderMetricScheduleReplacement, renderMetricSchedules } from "../dashboard/metric-schedules.js";
 import { csrfToken, recordDashboardAudit } from "../session.js";
 import { disableMetricSchedule, listMetricSchedules, registerMetricSchedule } from "../metric-schedules.js";
+import { previewMetricScheduleReplacement, replaceMetricSchedule } from "../metric-schedule-replacements.js";
 import { disableCostSchedule, listCostSchedules, registerCostSchedule } from "../cost-schedules.js";
 import { listMetricRecalculations, requestMetricRecalculation } from "../metric-recalculations.js";
 import { renderMetricRecalculations } from "../dashboard/metric-recalculations.js";
@@ -14,6 +15,11 @@ import { adminAppId, decodedPathPart, metricScheduleId, publicReason } from "../
 import { authorizeDashboardForm } from "../http-security.js";
 import { dashboardHeaders } from "../http-responses.js";
 import { renderRecalculationRequestRejected, renderMetricScheduleOperationFailed } from "../dashboard/action-pages.js";
+
+const scheduleConflict = (reason: string): boolean => ["metric_schedule_not_active", "metric_schedule_metric_overlap",
+  "metric_schedule_date_in_flight", "metric_schedule_preview_stale", "metric_schedule_source_key_conflict",
+  "metric_schedule_source_key_unavailable",
+  "metric_schedule_supersession_target_conflict"].includes(reason);
 
 export function createMetricJobsControllers(dependencies: Pick<RequestHandlerDependencies, "readerPool" | "pool" | "dashboard">) {
   const dashboardMetricRecalculationsList = async ({ response, session, appId, appIdentity }: DashboardAppContext): Promise<void> => {
@@ -71,10 +77,33 @@ export function createMetricJobsControllers(dependencies: Pick<RequestHandlerDep
         action: "metric_schedule_lifecycle", targetScope: "metric_schedule",
         targetRef: scheduleId ?? "metric_schedule:new", outcome: "failed", reasonCode: reason,
       });
-      const status = notFound ? 404 : ["metric_schedule_not_active", "metric_schedule_metric_overlap"].includes(reason) ? 409 : 400;
+      const status = notFound ? 404 : scheduleConflict(reason) ? 409 : 400;
       dashboardHtml(response, status, renderMetricScheduleOperationFailed({ reason: notFound ? "not_found" : reason, appId: appId }));
     }
     return;
+  };
+
+  const dashboardMetricSchedulesReplacement = async ({ request, response, target, route, session, appId, appIdentity, decoder }: DashboardAppContext): Promise<void> => {
+    const form = await decoder.form();
+    if (!await authorizeDashboardForm(dependencies, { request, response, session }, form,
+      "dashboard_metric_schedule_replacement", "app", appId)) return;
+    try {
+      const id = metricScheduleId(target.pathname);
+      if (!id) throw new Error("metric_schedule_not_found");
+      const body = metricScheduleReplacementFormRequest(form);
+      if (route.handler === "dashboard_metric_schedules_preview_replacement") {
+        const preview = await previewMetricScheduleReplacement(dependencies.readerPool, appIdentity, id, body);
+        dashboardHtml(response, 200, renderMetricScheduleReplacement(appId, preview, csrfToken(session.token)));
+      } else {
+        const saved = await replaceMetricSchedule(dependencies.pool, appIdentity, id, body);
+        response.writeHead(303, { ...dashboardHeaders,
+          location: `/dashboard/apps/${encodeURIComponent(appId)}?metric_schedule_id=${encodeURIComponent(saved.metric_schedule_id)}` }).end();
+      }
+    } catch (error) {
+      const reason = publicReason(error, "metric_schedule_replacement_failed");
+      dashboardHtml(response, reason === "metric_schedule_not_found" ? 404 : scheduleConflict(reason) ? 409 : 400,
+        renderMetricScheduleOperationFailed({ reason: reason === "metric_schedule_not_found" ? "not_found" : reason, appId }));
+    }
   };
 
   const adminMetricSchedulesList = async ({ request, response, target, route, pool, identity, decoder }: AdminRequestContext): Promise<void> => {
@@ -95,6 +124,14 @@ export function createMetricJobsControllers(dependencies: Pick<RequestHandlerDep
       }
       const scheduleId = metricScheduleId(target.pathname);
       if (!scheduleId) throw new Error("metric_schedule_not_found");
+      if (route.handler === "admin_metric_schedules_preview_replacement") {
+        json(response, 200, await previewMetricScheduleReplacement(pool, appIdentity, scheduleId, await decoder.json()));
+        return;
+      }
+      if (route.handler === "admin_metric_schedules_replace") {
+        json(response, 200, await replaceMetricSchedule(dependencies.pool, appIdentity, scheduleId, await decoder.json()));
+        return;
+      }
       json(response, 200, await disableMetricSchedule({
         pool: dependencies.pool,
         identity: appIdentity,
@@ -105,7 +142,7 @@ export function createMetricJobsControllers(dependencies: Pick<RequestHandlerDep
       if (error instanceof AppNotFoundError || reason === "metric_schedule_not_found") {
         json(response, 404, { error: "not_found" });
       } else {
-        await recordDashboardAudit(dependencies.pool, {
+        if (route.handler !== "admin_metric_schedules_preview_replacement") await recordDashboardAudit(dependencies.pool, {
           tenantId: identity.tenantId,
           appId,
           actorRef: `admin_key:${identity.keyId}`,
@@ -115,7 +152,7 @@ export function createMetricJobsControllers(dependencies: Pick<RequestHandlerDep
           outcome: "failed",
           reasonCode: reason,
         });
-        json(response, ["metric_schedule_not_active", "metric_schedule_metric_overlap"].includes(reason)
+        json(response, scheduleConflict(reason)
           ? 409 : 400, { error: reason });
       }
     }
@@ -166,9 +203,13 @@ export function createMetricJobsControllers(dependencies: Pick<RequestHandlerDep
     dashboard_metric_schedules_list: { boundary: "dashboard_app", handle: dashboardMetricSchedulesList },
     dashboard_metric_schedules_register: { boundary: "dashboard_app", handle: dashboardMetricSchedulesRegister },
     dashboard_metric_schedules_disable: { boundary: "dashboard_app", handle: dashboardMetricSchedulesRegister },
+    dashboard_metric_schedules_preview_replacement: { boundary: "dashboard_app", handle: dashboardMetricSchedulesReplacement },
+    dashboard_metric_schedules_replace: { boundary: "dashboard_app", handle: dashboardMetricSchedulesReplacement },
     admin_metric_schedules_list: { boundary: "admin", handle: adminMetricSchedulesList },
     admin_metric_schedules_register: { boundary: "admin", handle: adminMetricSchedulesList },
     admin_metric_schedules_disable: { boundary: "admin", handle: adminMetricSchedulesList },
+    admin_metric_schedules_preview_replacement: { boundary: "admin", handle: adminMetricSchedulesList },
+    admin_metric_schedules_replace: { boundary: "admin", handle: adminMetricSchedulesList },
     admin_cost_schedules_list: { boundary: "admin", handle: adminCostSchedulesList },
     admin_cost_schedules_register: { boundary: "admin", handle: adminCostSchedulesList },
     admin_cost_schedules_disable: { boundary: "admin", handle: adminCostSchedulesList },

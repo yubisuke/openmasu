@@ -33,9 +33,13 @@ export type RouteHandler =
   | "admin_metric_schedules_list"
   | "admin_metric_schedules_register"
   | "admin_metric_schedules_disable"
+  | "admin_metric_schedules_preview_replacement"
+  | "admin_metric_schedules_replace"
   | "dashboard_metric_schedules_list"
   | "dashboard_metric_schedules_register"
   | "dashboard_metric_schedules_disable"
+  | "dashboard_metric_schedules_preview_replacement"
+  | "dashboard_metric_schedules_replace"
   | "admin_cost_schedules_list"
   | "admin_cost_schedules_register"
   | "admin_cost_schedules_disable"
@@ -150,6 +154,8 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "admin_metric_schedules_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-schedules$/, auth: "admin_bearer", mutates: false, capability: "administer" },
   { handler: "admin_metric_schedules_register", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-schedules$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_metric_schedules_disable", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-schedules\/[^/]+\/disable$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "admin_metric_schedules_preview_replacement", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-schedules\/[^/]+\/preview-replacement$/, auth: "admin_bearer", mutates: false, capability: "administer" },
+  { handler: "admin_metric_schedules_replace", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-schedules\/[^/]+\/replace$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_cost_schedules_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/cost-schedules$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_cost_schedules_register", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/cost-schedules$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_cost_schedules_disable", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/cost-schedules\/[^/]+\/disable$/, auth: "admin_bearer", mutates: true, capability: "operate" },
@@ -189,6 +195,8 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_metric_schedules_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules$/, auth: "dashboard_session", mutates: false, capability: "administer" },
   { handler: "dashboard_metric_schedules_register", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_metric_schedules_disable", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules\/[^/]+\/disable$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_metric_schedules_preview_replacement", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules\/[^/]+\/preview-replacement$/, auth: "dashboard_session", mutates: false, capability: "administer" },
+  { handler: "dashboard_metric_schedules_replace", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules\/[^/]+\/replace$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_tracking_links_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/tracking-links$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_tracking_links_create", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/tracking-links$/, auth: "dashboard_session", mutates: true, capability: "operate" },
   { handler: "dashboard_tracking_link_transition", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/tracking-links\/[^/]+\/(?:pause|archive)$/, auth: "dashboard_session", mutates: true, capability: "operate" },

@@ -1,5 +1,5 @@
 import { privacyMetricInvalidationSql, revisedMetricCostPredicate } from "@openmasu/runtime";
-import type { GroupingDimension, MetricQuery, ParameterizedQuery } from "./report-query-model.js";
+import { ReportQueryError, type GroupingDimension, type MetricQuery, type ParameterizedQuery } from "./report-query-model.js";
 export * from "./report-query-model.js";
 
 function push(values: unknown[], value: unknown): string {
@@ -16,6 +16,10 @@ export function buildMetricQuery(query: MetricQuery, checkEvidence = false): Par
   const predicates = ["mr.tenant_id=$1", "mr.app_id=$2"];
   if (query.metricNames) predicates.push(`mr.metric_name=ANY(${push(values, query.metricNames)}::text[])`);
   if (query.metricDefinitionVersion) predicates.push(`mr.metric_definition_version=${push(values, query.metricDefinitionVersion)}`);
+  if (query.metricScheduleId) predicates.push(`EXISTS (
+    SELECT 1 FROM control.metric_schedule_runs AS series WHERE series.tenant_id=mr.tenant_id
+      AND series.app_id=mr.app_id AND series.metric_run_id=mr.metric_run_id
+      AND series.metric_schedule_id=${push(values, query.metricScheduleId)})`);
   for (const [dimension, value] of Object.entries(query.grouping ?? {}) as [GroupingDimension, string][]) {
     predicates.push(`mr.grouping->>'${dimension}'=${push(values, value)}`);
   }
@@ -92,6 +96,7 @@ export function buildMetricQuery(query: MetricQuery, checkEvidence = false): Par
 }
 
 export function buildDifferenceQuery(query: MetricQuery): ParameterizedQuery {
+  if (query.metricScheduleId) throw new ReportQueryError("metric_schedule_filter_unsupported");
   const values: unknown[] = [query.tenantId, query.appId];
   const selection = query.differenceAfter?.selectionSequence;
   const selectionQuery = selection === undefined

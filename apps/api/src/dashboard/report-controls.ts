@@ -9,6 +9,7 @@ export const reportFields = [
   ["grouping_cohort_date", "Cohort date"], ["grouping_metric_date", "Metric date"],
   ["grouping_network", "Network"], ["grouping_apple_conversion_bucket", "Apple conversion bucket"],
   ["metric_definition_version", "Definition version"], ["watermark_at_most", "Watermark (UTC ISO timestamp)"],
+  ["metric_schedule_id", "Schedule series (stored metrics only)"],
   ["difference_reason_code", "Difference reason"],
 ] as const;
 
@@ -27,6 +28,7 @@ export function reportSelectionParams(query: MetricQuery): URLSearchParams {
   const params = new URLSearchParams();
   for (const name of query.metricNames ?? []) params.append("metric_name", name);
   if (query.metricDefinitionVersion) params.set("metric_definition_version", query.metricDefinitionVersion);
+  if (query.metricScheduleId) params.set("metric_schedule_id", query.metricScheduleId);
   for (const dimension of Object.keys(groupingDimensionAllowlist)) {
     const value = query.grouping?.[dimension as keyof typeof groupingDimensionAllowlist];
     if (value !== undefined) params.set(`grouping_${dimension}`, value);

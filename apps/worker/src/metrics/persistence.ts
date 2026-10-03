@@ -8,11 +8,12 @@ export function metricReplayArtifact(
   evaluation: MetricEvaluation,
   fxPolicy: MetricFxPolicy,
 ): MetricReplayArtifact {
+  const { schedule_supersessions: _oneTimeHandoff, ...replayEvaluation } = evaluation;
   return {
     version: 1,
     source_metric_run_id: artifact.metric_run_id,
     metric_definition: definition,
-    evaluation: { ...evaluation, metric_names: [artifact.metric_name] },
+    evaluation: { ...replayEvaluation, metric_names: [artifact.metric_name] },
     fx_policy: fxPolicy,
   };
 }
@@ -80,6 +81,23 @@ export async function persistMetricReplayManifest(
       JSON.stringify(replayArtifact),
     ],
   );
+}
+
+export async function persistMetricScheduleMembership(client: MetricClient, scope: MetricScope, artifact: MetricRun, evaluation: MetricEvaluation): Promise<void> {
+  const provenance = evaluation.metric_schedule;
+  if (provenance) {
+    await client.query(`INSERT INTO control.metric_schedule_runs
+      (tenant_id,app_id,metric_run_id,metric_schedule_id,target_date,evaluation,definition_digest)
+      VALUES ($1,$2,$3,$4,$5::date,$6,$7)`, [scope.tenant_id, scope.app_id, artifact.metric_run_id,
+      provenance.metric_schedule_id, provenance.target_date, provenance.evaluation, provenance.definition_digest]);
+  } else if (artifact.supersedes_metric_run_id) {
+    // Legacy manifests can inherit already indexed provenance via their explicit source.
+    await client.query(`INSERT INTO control.metric_schedule_runs
+      (tenant_id,app_id,metric_run_id,metric_schedule_id,target_date,evaluation,definition_digest)
+      SELECT tenant_id,app_id,$3,metric_schedule_id,target_date,evaluation,definition_digest
+      FROM control.metric_schedule_runs WHERE tenant_id=$1 AND app_id=$2 AND metric_run_id=$4`,
+    [scope.tenant_id, scope.app_id, artifact.metric_run_id, artifact.supersedes_metric_run_id]);
+  }
 }
 
 export async function persistMetricCalculationEvidence(

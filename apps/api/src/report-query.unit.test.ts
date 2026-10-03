@@ -237,4 +237,18 @@ describe("M3 typed reporting query", () => {
     assert.match(statement.text, /selection_fence\.selection_seq::text AS selection_seq/);
     assert.equal(/\bOFFSET\b/i.test(statement.text), false);
   });
+
+  it("binds an exact stored schedule series and rejects its use for unrelated report populations", () => {
+    const params = new URLSearchParams("metric_schedule_id=metric-schedule%3Asynthetic-bound&supersession=all");
+    const query = parseMetricQuery({ ...scope, searchParams: params }).query;
+    const sql = buildMetricQuery(query);
+    assert.equal(query.metricScheduleId, "metric-schedule:synthetic-bound");
+    assert.ok(sql.values.includes(query.metricScheduleId)); assert.ok(!sql.text.includes(query.metricScheduleId));
+    assert.match(sql.text, /control\.metric_schedule_runs/);
+    assert.throws(() => parseMetricQuery({ ...scope, searchParams: params, cursorKind: "difference" }), /filter_unsupported/);
+    assert.throws(() => parseMetricQuery({ ...scope, searchParams: params, cursorKind: "record" }), /filter_unsupported/);
+    assert.throws(() => buildDifferenceQuery(query), /filter_unsupported/);
+    params.set("metric_schedule_id", "<invalid>");
+    assert.throws(() => parseMetricQuery({ ...scope, searchParams: params }), /metric_schedule_id_invalid/);
+  });
 });

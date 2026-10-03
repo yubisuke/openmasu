@@ -154,8 +154,9 @@ curl --fail-with-body --silent --show-error \
 ```
 
 Definitions are immutable. To change a lag, grouping, metric definition, or FX
-snapshot, disable the old schedule and register a new one. Existing metric runs
-remain reproducible under the old definition digest.
+snapshot, use the explicit replacement preview below, or disable the old
+schedule and register an independent one. Existing metric artifacts keep their
+old definition digest; deletion/retention may still limit reproducibility.
 
 Re-registering the same selection creates a distinct schedule and distinct run
 identifiers, even when its input snapshot and numeric result are unchanged.
@@ -174,6 +175,84 @@ silently added together or resolved by picking an arbitrary run. Use an explicit
 [correction request](metric-corrections.md) when a result should supersede a
 specific prior calculation. Never delete evidence to resolve a duplicate series.
 
+## Explicit replacement and report-series selection
+
+Use `POST /v1/admin/apps/:app/metric-schedules/:schedule/preview-replacement`
+with `{ "mode": "same_meaning" | "new_series", "schedule": <complete registration request> }`.
+The preview reads through the reader role; it does not register, disable, claim,
+or calculate anything. It returns the normalized `schedule`, effective start
+date, field-by-field definition/scheduling differences, pending target date,
+and `preview_digest`. `in_flight.policy` is `wait_for_claimed_date`: a replacement
+must wait for a pending date to complete. It never cancels a claimed date or
+deletes its checkpoint. Refresh the preview after progress changes or a UTC
+midnight; an old digest is not permission to replace newly changed state.
+
+`same_meaning` requires exact equality of the complete normalized definition,
+including FX, metric definitions and evaluation/grouping/discovery policy.
+Changing lag or start date alone can preserve meaning. Reordering definition
+arrays or changing a descriptive FX source still requires `new_series`; this
+is deliberately conservative, not a numeric equivalence inference.
+`new_series` preserves every old run and never supersedes it, even if metric
+names match. The series must be selected separately, not added together.
+
+To confirm, POST the same mode and normalized schedule to
+`/v1/admin/apps/:app/metric-schedules/:schedule/replace`, with the acknowledged
+`preview_digest`. For same-meaning recalculation, explicitly supply at most 100
+`supersessions`, each containing a `source_metric_run_id` and its
+`calculation_key_digest` from an eligible preview `source_runs` entry. The
+preview shows the full keys: tenant/app, complete definition and FX snapshots,
+grouping, input snapshot, receipt watermark, bundle identity, privacy state and
+value type. There is no metric-name-only or automatic all-runs selection.
+No selected sources means no supersession. Different meaning forbids source
+handoffs entirely.
+
+The operation atomically disables the source and registers one successor.
+Repeated identical confirmations return the same schedule with `replayed: true`
+instead of another schedule/audit/state row. A changed definition under
+`same_meaning` is 400; in-flight work, stale previews, unavailable/mismatched
+source keys, competing successors and disabled sources fail closed (409).
+Unknown or out-of-scope schedules use the same 404. Existing overlap validation
+still prevents a name from being owned by another active schedule in the app.
+
+The worker revalidates explicit source keys, grouping, complete meaning,
+watermark and privacy before publishing a successor. It shares the source-run
+fence with cost/late/privacy recalculation and acquires it before a
+repeatable-read snapshot. A competing correction is not silently overridden.
+Artifacts, series membership and checkpoint finalization commit together for
+replacement dates. A one-time handoff is excluded from later replay manifests;
+ordinary later corrections supersede their actual source, not an earlier ancestor.
+
+In the dashboard's **Daily metric schedules** page, expand a schedule's
+replacement form, choose the mode in its JSON and preview it. Review the same
+API conditions; eligible source checkboxes are initially unchecked. Confirm
+only the intended sources. The page redirects to the new schedule's report
+selection. This uses forms and server-rendered HTML, not browser JavaScript.
+
+API and dashboard metric queries share `metric_schedule_id=<saved schedule ID>`.
+That filter uses append-only, scoped runtime provenance, not an inferred latest
+name. Use `supersession=all` to read a replaced series' history and saved detail
+pages for its original artifacts. Unfiltered `latest` retains every explicitly
+unsuperseded run, including different meanings. Raw record counts and stored
+reconciliation rows do not have schedule provenance: they reject this filter,
+and the dashboard marks these sections as unavailable for a schedule selection.
+CSV columns and contract metric-run fields are unchanged.
+
+Forward migration `065_metric_schedule_series.sql` adds only runtime membership
+and replacement idempotency constraints. New scheduled runs and explicit replay
+descendants record their membership with their artifact. During confirmation,
+historical runs without membership are indexed only when the complete original
+deterministic schedule key (including frozen discovery targets, if applicable)
+or an explicit source lineage proves ownership. Their artifact bytes are never
+rewritten. Before that adoption, old unindexed runs remain available in ordinary
+reports/details, but a schedule-only query cannot claim them. A preview refuses
+more than 10,000 candidate historical runs; larger administrative migrations
+are not claimed as supported by this bounded operation.
+
+Previously downloaded comparison JSON remains unchanged and can still be read
+as the original file. A new live `latest` comparison export is a new selection:
+it does not resurrect a superseded value or assert that the old number is current.
+Privacy withdrawal rules still apply to every live report/history/detail route.
+
 ## Execution and recovery model
 
 For each active schedule, the worker:
@@ -186,7 +265,7 @@ For each active schedule, the worker:
 5. advances the checkpoint only after all expected artifacts and replay
    manifests commit.
 
-For discovery schedules, metric artifacts and checkpoint advancement are one
+For discovery and replacement schedules, metric artifacts and checkpoint advancement are one
 transaction under the schedule lock. An interrupted calculation retries the
 same immutable target receipt. Previously committed runs must still reproduce
 byte-for-byte before a replayed checkpoint advances; conflicting late/backdated
@@ -233,3 +312,7 @@ Re-registration cases also preserve old and new run bytes and replay manifests,
 recover a checkpoint interruption without inserting another run, distinguish
 cutoffs and FX definitions over identical inputs, enforce the run-ID key, and
 verify reader pagination, duplicate-comparison refusal and explicit supersession.
+Replacement cases additionally cover same/different meanings, idempotent
+confirmations, stale/full-key refusal, claim/disable races, legacy ownership,
+immutable old comparison files and API/dashboard CSV identity for a selected
+series. These are synthetic PostgreSQL gates, not live operational acceptance.

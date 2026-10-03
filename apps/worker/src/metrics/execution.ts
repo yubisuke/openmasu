@@ -1,6 +1,7 @@
 import { sha256 } from "@openmasu/attribution-core/canonical";
 import type { OpenMasuAttributionResultV04 } from "@openmasu/contracts/types";
-import { captureMetricComparisonContext, type RoasCalculationEvidence } from "@openmasu/runtime";
+import { captureMetricComparisonContext, metricScheduleCalculationKey, privacyMetricInvalidationSql,
+  type MetricComparisonContext, type RoasCalculationEvidence } from "@openmasu/runtime";
 import { metricScopeForInput, prepareMetricCalculation } from "./input.js";
 import { compareMetricText } from "./model.js";
 import type { MetricClient, MetricRun, MetricScope } from "./model.js";
@@ -8,7 +9,7 @@ import { currentCosts, disjointCosts, scanSnapshotRecords } from "./snapshot.js"
 import { selectedAcquisitionSql } from "./selected-acquisition.js";
 import { engagementSnapshotRows } from "./engagement.js";
 import { metricValue } from "./cohort-values.js";
-import { persistCalculatedMetricRun, persistMetricCalculationEvidence, persistMetricReplayManifest } from "./persistence.js";
+import { persistCalculatedMetricRun, persistMetricCalculationEvidence, persistMetricReplayManifest, persistMetricScheduleMembership } from "./persistence.js";
 
 // This application coordinator borrows its caller's client. It owns neither a
 // pool, a transaction, nor a privacy fence.
@@ -109,6 +110,8 @@ export async function executeMetricCalculation(
         amount_scale: definition.amount_scale,
         currency: definition.currency,
       } : {};
+      const handoff = evaluation.supersedes_metric_run_id || evaluation.supersedes_metric_run_id_prefix
+        ? undefined : evaluation.schedule_supersessions?.[metricName];
       const artifact: MetricRun = {
         metric_run_id: `${evaluation.metric_run_id_prefix}:${metricName}`,
         metric_name: metricName,
@@ -139,14 +142,34 @@ export async function executeMetricCalculation(
           grouping: { dimensions: grouping, dimension_digest: sha256(grouping) },
         } : {}),
         evidence_refs: evidenceRefs,
-        ...(evaluation.supersedes_metric_run_id || evaluation.supersedes_metric_run_id_prefix ? {
-          supersedes_metric_run_id: evaluation.supersedes_metric_run_id ?? `${evaluation.supersedes_metric_run_id_prefix}:${metricName}`,
+        ...(handoff || evaluation.supersedes_metric_run_id || evaluation.supersedes_metric_run_id_prefix ? {
+          supersedes_metric_run_id: handoff?.source_metric_run_id ?? evaluation.supersedes_metric_run_id ?? `${evaluation.supersedes_metric_run_id_prefix}:${metricName}`,
         } : {}),
       };
+      const comparisonContext = captureMetricComparisonContext(artifact, definition, fxPolicy, evaluation.privacy_state, sha256);
+      if (handoff) {
+        const source = (await client.query<{ artifact: MetricRun; comparison_context: MetricComparisonContext | null;
+          privacy_changed: boolean; conflicting_successor: boolean }>(
+          `SELECT mr.artifact,mr.comparison_context,${privacyMetricInvalidationSql("mr")} AS privacy_changed,
+            EXISTS (SELECT 1 FROM ledger.metric_runs AS successor WHERE successor.tenant_id=mr.tenant_id
+              AND successor.app_id=mr.app_id AND successor.supersedes_metric_run_id=mr.metric_run_id
+              AND successor.metric_run_id<>$4) AS conflicting_successor
+            FROM ledger.metric_runs AS mr WHERE mr.tenant_id=$1 AND mr.app_id=$2 AND mr.metric_run_id=$3`,
+          [scope.tenant_id, scope.app_id, handoff.source_metric_run_id, artifact.metric_run_id],
+        )).rows[0];
+        if (!source || source.privacy_changed || source.conflicting_successor
+            || sha256(metricScheduleCalculationKey(scope, source.artifact, source.comparison_context)) !== handoff.calculation_key_digest
+            || source.comparison_context?.definition_digest !== comparisonContext.definition_digest
+            || source.comparison_context?.fx_digest !== comparisonContext.fx_digest
+            || source.comparison_context?.privacy_state !== comparisonContext.privacy_state
+            || sha256(source.artifact.grouping?.dimensions ?? {}) !== sha256(grouping ?? {})
+            || source.artifact.input_received_at_watermark > evaluation.input_received_at_watermark) {
+          throw new Error("metric_schedule_source_key_conflict");
+        }
+      }
       if (persist) {
-        await persistCalculatedMetricRun(client, scope, artifact, captureMetricComparisonContext(
-          artifact, definition, fxPolicy, evaluation.privacy_state, sha256,
-        ));
+        await persistCalculatedMetricRun(client, scope, artifact, comparisonContext);
+        await persistMetricScheduleMembership(client, scope, artifact, evaluation);
         await persistMetricReplayManifest(client, scope, artifact, definition, evaluation, fxPolicy);
         if (value.operands || value.totalNetOperands) {
           const evidence: RoasCalculationEvidence = {

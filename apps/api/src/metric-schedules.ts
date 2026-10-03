@@ -1,6 +1,6 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { sha256Jcs } from "@openmasu/fraud-rules";
-import { uuidV7, withTenant } from "@openmasu/runtime";
+import { uuidV7, withTenant, type MetricScheduleReplacement } from "@openmasu/runtime";
 import { ENGAGEMENT_METRIC_NAMES } from "@openmasu/contracts/definitions";
 import { validateScheduledMetricDefinition as validMetricDefinition, type ScheduledMetricDefinition } from "@openmasu/contracts/validation";
 import type { AppAdminIdentity } from "./admin-auth.js";
@@ -34,6 +34,7 @@ export type MetricScheduleRecord = Readonly<{
   pending_target_date?: string | null;
   safe_reason?: string | null;
   latest_discovery?: JsonObject | null;
+  replacement?: MetricScheduleReplacement | null;
 }>;
 
 const identifier = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -244,17 +245,28 @@ export async function registerMetricSchedule(input: Readonly<{
 }>): Promise<MetricScheduleRecord> {
   const now = input.now ?? new Date();
   const normalized = normalizeMetricScheduleRequest(input.body, now);
+  return withTenant(input.pool, input.identity.tenantId, client =>
+    saveMetricScheduleWithClient(client, input.identity, normalized, now));
+}
+
+/** Caller owns the transaction; also used for atomic disable-and-replace. */
+export async function saveMetricScheduleWithClient(
+  client: PoolClient,
+  identity: AppAdminIdentity,
+  normalized: ReturnType<typeof normalizeMetricScheduleRequest>,
+  now: Date,
+  replacement?: MetricScheduleReplacement,
+): Promise<MetricScheduleRecord> {
   const createdAt = now.toISOString();
   const scheduleId = `metric-schedule:${uuidV7(now.valueOf())}`;
-  return withTenant(input.pool, input.identity.tenantId, async (client) => {
     await client.query(
       "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
-      [JSON.stringify([input.identity.tenantId, input.identity.appId, "metric-schedules"])],
+      [JSON.stringify([identity.tenantId, identity.appId, "metric-schedules"])],
     );
     const active = await client.query<{ definition: MetricScheduleDefinition }>(
       `SELECT definition FROM control.metric_schedules_current
         WHERE tenant_id=$1 AND app_id=$2 AND status='active'`,
-      [input.identity.tenantId, input.identity.appId],
+      [identity.tenantId, identity.appId],
     );
     const requestedNames = scheduledMetricNames(normalized.definition);
     if (active.rows.some((row) => [...scheduledMetricNames(row.definition)].some((name) => requestedNames.has(name)))) {
@@ -262,20 +274,21 @@ export async function registerMetricSchedule(input: Readonly<{
     }
     const artifact = {
       metric_schedule_id: scheduleId,
-      tenant_id: input.identity.tenantId,
-      app_id: input.identity.appId,
+      tenant_id: identity.tenantId,
+      app_id: identity.appId,
       lag_days: normalized.lagDays,
       start_date: normalized.startDate,
       definition: normalized.definition,
       definition_digest: normalized.definitionDigest,
       created_at: createdAt,
+      ...(replacement ? { replacement } : {}),
     };
     await client.query(
       `INSERT INTO control.metric_schedules (
          metric_schedule_id,tenant_id,app_id,lag_days,start_date,definition,
          definition_digest,created_at,artifact
        ) VALUES ($1,$2,$3,$4,$5::date,$6::jsonb,$7,$8,$9::jsonb)`,
-      [scheduleId, input.identity.tenantId, input.identity.appId, normalized.lagDays,
+      [scheduleId, identity.tenantId, identity.appId, normalized.lagDays,
         normalized.startDate, JSON.stringify(normalized.definition), normalized.definitionDigest,
         createdAt, JSON.stringify(artifact)],
     );
@@ -283,7 +296,7 @@ export async function registerMetricSchedule(input: Readonly<{
       `INSERT INTO control.metric_schedule_states (
          metric_schedule_id,tenant_id,app_id,status,changed_at,artifact
        ) VALUES ($1,$2,$3,'active',$4,$5::jsonb)`,
-      [scheduleId, input.identity.tenantId, input.identity.appId, createdAt,
+      [scheduleId, identity.tenantId, identity.appId, createdAt,
         JSON.stringify({ metric_schedule_id: scheduleId, status: "active", changed_at: createdAt })],
     );
     await client.query(
@@ -291,12 +304,12 @@ export async function registerMetricSchedule(input: Readonly<{
          metric_schedule_id,tenant_id,app_id,last_target_date,pending_target_date,
          pending_watermark,pending_definition_digest,updated_at
        ) VALUES ($1,$2,$3,NULL,NULL,NULL,NULL,$4)`,
-      [scheduleId, input.identity.tenantId, input.identity.appId, createdAt],
+      [scheduleId, identity.tenantId, identity.appId, createdAt],
     );
     await recordDashboardAuditWithClient(client, {
-      tenantId: input.identity.tenantId,
-      appId: input.identity.appId,
-      actorRef: `admin_key:${input.identity.keyId}`,
+      tenantId: identity.tenantId,
+      appId: identity.appId,
+      actorRef: `admin_key:${identity.keyId}`,
       action: "metric_schedule_registered",
       targetScope: "metric_schedule",
       targetRef: scheduleId,
@@ -309,7 +322,6 @@ export async function registerMetricSchedule(input: Readonly<{
       status_changed_at: createdAt,
       last_target_date: null,
     };
-  });
 }
 
 export async function listMetricSchedules(
@@ -321,7 +333,8 @@ export async function listMetricSchedules(
             schedule.start_date::text,schedule.definition,schedule.definition_digest,
             schedule.status,schedule.created_at,
             schedule.status_changed_at,checkpoint.last_target_date::text,checkpoint.pending_target_date::text,
-            checkpoint.safe_reason,discovery.summary AS latest_discovery
+            checkpoint.safe_reason,discovery.summary AS latest_discovery,
+            schedule.artifact->'replacement' AS replacement
        FROM control.metric_schedules_current AS schedule
        JOIN control.metric_schedule_checkpoints AS checkpoint
          USING (metric_schedule_id,tenant_id,app_id)

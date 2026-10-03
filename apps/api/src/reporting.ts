@@ -109,7 +109,7 @@ const recordCountMetricNames = new Set([
 ]);
 
 export function supportsRecordCounts(query: MetricQuery): boolean {
-  return Object.keys(query.grouping ?? {}).every(key => key in dimensionSql)
+  return !query.metricScheduleId && Object.keys(query.grouping ?? {}).every(key => key in dimensionSql)
     && (query.metricNames === undefined || query.metricNames.every((name) => recordCountMetricNames.has(name)));
 }
 

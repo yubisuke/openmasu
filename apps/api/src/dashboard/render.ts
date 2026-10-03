@@ -30,6 +30,7 @@ function continuation(view: DashboardView, suffix: string, cursor: string | unde
 }
 
 function differences(view: DashboardView): string {
+  if (view.query?.metricScheduleId) return "<p>Difference audits have no schedule provenance. Clear the schedule-series selection to read them; no empty-data claim is made here.</p>";
   if (view.differences.length === 0) return "<p>No stored difference-audit rows match this filter.</p>";
   return `<table><caption>Stored difference audit</caption><thead><tr><th scope="col">Reason</th><th scope="col">Input snapshot</th><th scope="col">External snapshot</th><th scope="col">Matching keys</th><th scope="col">Candidates</th><th scope="col">Exclusions</th><th scope="col">Windows</th><th scope="col">Joins</th><th scope="col">Freshness</th></tr></thead><tbody>${view.differences.map((row) => `<tr><td>${escapeHtml(row.difference_reason_code)}</td><td>${escapeHtml(row.input_snapshot_id)}</td><td>${escapeHtml(row.external_snapshot_id)}</td><td>${escapeHtml(JSON.stringify(row.matching_keys ?? []))}</td><td>${escapeHtml(JSON.stringify(row.candidates ?? []))}</td><td>${escapeHtml(JSON.stringify(row.exclusions ?? []))}</td><td>${escapeHtml(JSON.stringify(row.windows ?? []))}</td><td>${escapeHtml(JSON.stringify(row.joins ?? []))}</td><td>${escapeHtml(row.freshness)}</td></tr>`).join("")}</tbody></table>${continuation(view, "/differences", view.differenceNextCursor, "Next difference-audit page")}`;
 }

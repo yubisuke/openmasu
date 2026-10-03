@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { sha256Jcs } from "@openmasu/fraud-rules";
 import { buildScheduledMetricInput, scheduledMetricBoundary } from "./metric-schedule-worker.js";
+import { metricReplayArtifact } from "./metrics/persistence.js";
+import { M1B_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 
 const fxPolicy = {
   policy_version: "synthetic-scheduled-fx-v1",
@@ -70,6 +72,10 @@ describe("scheduled metric worker input", () => {
     const cohort = buildScheduledMetricInput(schedule("cohort_date"), pending);
     assert.deepEqual(cohort.metric_evaluations[0].grouping, { cohort_date: "2026-08-01", country: "JP" });
     assert.match(cohort.metric_evaluations[0].metric_run_id_prefix, /^scheduled:[a-f0-9]{48}$/);
+    assert.equal(cohort.metric_evaluations[0].metric_run_id_prefix, `scheduled:${sha256Jcs({
+      metric_schedule_id: schedule("cohort_date").metric_schedule_id, target_date: pending.targetDate,
+      watermark: pending.watermark, definition_digest: pending.definitionDigest, evaluation: 0,
+    }).slice(0, 48)}`, "the pre-series scheduled identity remains byte-identical");
     assert.deepEqual(buildScheduledMetricInput(schedule("cohort_date"), pending), cohort);
 
     const metricSchedule = schedule("metric_date");
@@ -89,5 +95,24 @@ describe("scheduled metric worker input", () => {
       watermark: "2026-08-10T00:00:00.000Z",
       definitionDigest: "0".repeat(64),
     }), /definition_digest_mismatch/);
+  });
+
+  it("binds handoffs to the exact target and grouping and strips them from later replay manifests", () => {
+    const value = schedule("cohort_date");
+    const source = { metric_schedule_id: "metric-schedule:old", target_date: "2026-08-01", evaluation: 0,
+      definition_digest: value.definition_digest, source_metric_run_id: "scheduled:old:cohort_install_count",
+      calculation_key_digest: "a".repeat(64), metric_name: "cohort_install_count",
+      grouping: { cohort_date: "2026-08-01", country: "JP" } };
+    const replacement = { source_metric_schedule_id: "metric-schedule:old", mode: "same_meaning" as const,
+      request_digest: "b".repeat(64), preview_digest: "c".repeat(64), in_flight_policy: "wait_for_claimed_date" as const,
+      supersessions: [source] };
+    const pending = { targetDate: "2026-08-01", watermark: "2026-08-10T00:00:00.000Z", definitionDigest: value.definition_digest };
+    const evaluation = buildScheduledMetricInput({ ...value, replacement }, pending).metric_evaluations[0];
+    assert.deepEqual(evaluation.schedule_supersessions, { cohort_install_count: source });
+    const manifest = metricReplayArtifact({ metric_run_id: "scheduled:new:cohort_install_count", metric_name: "cohort_install_count" },
+      M1B_METRIC_DEFINITIONS.find(row => row.metric_name === "cohort_install_count")!, evaluation, fxPolicy as any);
+    assert.equal(manifest.evaluation.schedule_supersessions, undefined);
+    assert.equal(manifest.evaluation.metric_schedule?.metric_schedule_id, value.metric_schedule_id);
+    assert.throws(() => buildScheduledMetricInput({ ...value, replacement: { ...replacement, supersessions: [{ ...source, grouping: { country: "US" } }] } }, pending), /target_mismatch/);
   });
 });

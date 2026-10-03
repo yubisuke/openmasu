@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import { sha256Jcs } from "@openmasu/fraud-rules";
-import { acquirePrivacyTenantSessionReadFence, recordJobOutcome, runWithTerminalJobOutcome, withTenant } from "@openmasu/runtime";
+import { acquirePrivacyTenantSessionReadFence, recordJobOutcome, runWithTerminalJobOutcome, scheduledMetricPrefix,
+  withTenant, type MetricScheduleReplacement } from "@openmasu/runtime";
 import { computeSqlMetricRuns, computeSqlMetricRunsWithClient, type MetricScope } from "./metrics/cohort.js";
 import { buildMetricDefinitionsInput } from "./metrics/run.js";
 import { freezeCampaignTargets, schedulePrivacyEpoch, type CampaignTargetSet } from "./metric-campaign-discovery.js";
@@ -15,6 +16,7 @@ type MetricScheduleRow = Readonly<{
   start_date: string;
   definition: Any;
   definition_digest: string;
+  replacement?: MetricScheduleReplacement | null;
 }>;
 
 type PendingRun = Readonly<{
@@ -38,11 +40,17 @@ async function discoveryTransaction<T>(pool: Pool, schedule: MetricScheduleRow, 
   const client = await pool.connect();
   const key = JSON.stringify([schedule.tenant_id, schedule.app_id, schedule.metric_schedule_id]);
   let releaseFence: (() => Promise<void>) | undefined, locked = false, begun = false, priorTimeout: string | undefined;
+  const sourceLocks: string[] = [];
   try {
     priorTimeout = (await client.query("SELECT current_setting('statement_timeout') AS value")).rows[0].value;
     await client.query("SELECT set_config('statement_timeout','60000',false)");
     releaseFence = await acquirePrivacyTenantSessionReadFence(client, schedule.tenant_id);
     await client.query("SELECT pg_advisory_lock(hashtextextended($1,0))", [key]); locked = true;
+    // Same source-run fence as cost/late/privacy replay, acquired before the snapshot.
+    for (const sourceId of [...new Set(schedule.replacement?.supersessions.map(row => row.source_metric_run_id) ?? [])].sort()) {
+      const sourceKey = JSON.stringify([schedule.tenant_id, schedule.app_id, "metric-recalculation", sourceId]);
+      await client.query("SELECT pg_advisory_lock(hashtextextended($1,0))", [sourceKey]); sourceLocks.push(sourceKey);
+    }
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ"); begun = true;
     await client.query("SELECT set_config('openmasu.tenant_id',$1,true)", [schedule.tenant_id]);
     const backlog = await client.query("SELECT pending_count FROM control.privacy_deletion_backlog()");
@@ -54,6 +62,7 @@ async function discoveryTransaction<T>(pool: Pool, schedule: MetricScheduleRow, 
     let cleanupError: Error | undefined;
     try {
       if (begun) await client.query("ROLLBACK");
+      for (const sourceKey of sourceLocks.reverse()) await client.query("SELECT pg_advisory_unlock(hashtextextended($1,0))", [sourceKey]);
       if (locked) await client.query("SELECT pg_advisory_unlock(hashtextextended($1,0))", [key]);
       if (releaseFence) await releaseFence();
       if (priorTimeout !== undefined) await client.query("SELECT set_config('statement_timeout',$1,false)", [priorTimeout]);
@@ -121,20 +130,32 @@ export function buildScheduledMetricInput(
     }),
   };
   const input = buildMetricDefinitionsInput(config, pending.targetDate, pending.watermark);
-  input.metric_evaluations = input.metric_evaluations.map((evaluation: Any, index: number) => ({
-    ...evaluation,
-    grouping: selected[index].date_dimension === "metric_date"
+  input.metric_evaluations = input.metric_evaluations.map((evaluation: Any, index: number) => {
+    const grouping = selected[index].date_dimension === "metric_date"
       ? Object.fromEntries(Object.entries(evaluation.grouping).filter(([key]) => key !== "cohort_date"))
-      : evaluation.grouping,
-    metric_run_id_prefix: `scheduled:${sha256Jcs({
+      : evaluation.grouping;
+    const provenance = { metric_schedule_id: schedule.metric_schedule_id, target_date: pending.targetDate,
+      definition_digest: pending.definitionDigest, evaluation: selected[index].sourceIndex };
+    const handoffs = schedule.replacement?.supersessions.filter(row => row.target_date === pending.targetDate
+      && row.evaluation === selected[index].sourceIndex && sha256Jcs(row.grouping) === sha256Jcs(grouping)) ?? [];
+    return {
+    ...evaluation, grouping, metric_schedule: provenance,
+    ...(handoffs.length ? { schedule_supersessions: Object.fromEntries(handoffs.map(row => [row.metric_name, row])) } : {}),
+    metric_run_id_prefix: scheduledMetricPrefix({
       metric_schedule_id: schedule.metric_schedule_id,
       target_date: pending.targetDate,
       watermark: pending.watermark,
       definition_digest: pending.definitionDigest,
       evaluation: selected[index].sourceIndex,
       ...(pending.targetSet ? { target: selected[index].grouping, target_digest: pending.targetSet.target_digest } : {}),
-    }).slice(0, 48)}`,
-  }));
+    }),
+    };
+  });
+  for (const handoff of schedule.replacement?.supersessions.filter(row => row.target_date === pending.targetDate) ?? []) {
+    if (!input.metric_evaluations.some((evaluation: Any) => evaluation.schedule_supersessions?.[handoff.metric_name]?.source_metric_run_id === handoff.source_metric_run_id)) {
+      throw new Error("metric_schedule_target_mismatch");
+    }
+  }
   return input;
 }
 
@@ -214,15 +235,15 @@ async function runPendingDate(
   schedule: MetricScheduleRow,
   pending: PendingRun,
 ): Promise<"computed" | "replayed"> {
-  if (pending.targetSet) return discoveryTransaction(pool, schedule, async client => {
+  if (pending.targetSet || schedule.replacement) return discoveryTransaction(pool, schedule, async client => {
     const checkpoint = (await client.query(`SELECT pending_target_date::text FROM control.metric_schedule_checkpoints
       WHERE tenant_id=$1 AND app_id=$2 AND metric_schedule_id=$3 FOR UPDATE`,
     [schedule.tenant_id, schedule.app_id, schedule.metric_schedule_id])).rows[0];
     if (checkpoint?.pending_target_date !== pending.targetDate) return "replayed";
-    if (await schedulePrivacyEpoch(client, schedule.tenant_id, schedule.app_id) !== pending.targetSet!.privacy_epoch) {
+    if (pending.targetSet && await schedulePrivacyEpoch(client, schedule.tenant_id, schedule.app_id) !== pending.targetSet.privacy_epoch) {
       throw new Error("metric_schedule_privacy_unavailable");
     }
-    if (!pending.targetSet!.targets.length) {
+    if (pending.targetSet && !pending.targetSet.targets.length) {
       await finalizeDateWithClient(client, schedule, pending);
       return "computed";
     }
@@ -283,7 +304,8 @@ export async function processMetricSchedules(
     throw new Error("metric_schedule_catchup_limit_invalid");
   }
   const schedules = await withTenant(pool, tenantId, async (client) => (await client.query<MetricScheduleRow>(
-    `SELECT metric_schedule_id,tenant_id,app_id,lag_days,start_date::text,definition,definition_digest
+    `SELECT metric_schedule_id,tenant_id,app_id,lag_days,start_date::text,definition,definition_digest,
+            artifact->'replacement' AS replacement
        FROM control.metric_schedules_current
       WHERE tenant_id=$1 AND status='active'
       ORDER BY app_id COLLATE "C",metric_schedule_id COLLATE "C"`,
@@ -314,7 +336,7 @@ export async function processMetricSchedules(
         now,
       }));
     } catch (error) {
-      if (discoversCampaigns(schedule)) {
+      if (discoversCampaigns(schedule) || schedule.replacement) {
         const name = error instanceof Error ? error.message.replace(/^metric_schedule_/, "") : "";
         const safeReason = ["target_limit", "privacy_unavailable", "privacy_pending", "target_mismatch"].includes(name) ? name : "calculation_unavailable";
         await withTenant(pool, schedule.tenant_id, client => client.query(`UPDATE control.metric_schedule_checkpoints

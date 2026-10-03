@@ -38,7 +38,9 @@ allowlisted, operator-owned S3-compatible storage.
 
 App-scoped durable metric schedules can calculate disjoint daily metric sets
 with fixed UTC dates and watermarks. They reuse the same cohort engine as the
-manual metric command and fail closed on partial or non-identical replay. See
+manual metric command and fail closed on partial or non-identical replay.
+Explicit replacement previews distinguish same-meaning source-run handoffs from
+new meanings; API and dashboard reports can select a saved schedule series. See
 [Scheduled metric runs](docs/scheduled-metrics.md).
 
 ## What OpenMasu does not claim
