@@ -11,6 +11,7 @@ export {
   ACQUISITION_DETAIL_METRIC_DEFINITIONS,
   acquisitionDetailBase,
   customConversionMetricDefinitions,
+  keyedCustomConversionMetricDefinitions,
   engagementMetricDefinitions,
   REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
 } from "./m1b-metric-definitions.js";

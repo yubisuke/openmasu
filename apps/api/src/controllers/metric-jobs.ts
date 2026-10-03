@@ -2,7 +2,7 @@ import { AppNotFoundError, requireRegisteredApp } from "../apps-admin.js";
 import { roleAllows } from "../authorization.js";
 import { metricScheduleFormRequest, metricScheduleReplacementFormRequest, renderMetricScheduleReplacement, renderMetricSchedules } from "../dashboard/metric-schedules.js";
 import { csrfToken, recordDashboardAudit } from "../session.js";
-import { disableMetricSchedule, listMetricSchedules, registerMetricSchedule } from "../metric-schedules.js";
+import { disableMetricSchedule, listMetricSchedules, listCustomConversionKeys, registerMetricSchedule } from "../metric-schedules.js";
 import { previewMetricScheduleReplacement, replaceMetricSchedule } from "../metric-schedule-replacements.js";
 import { disableCostSchedule, listCostSchedules, registerCostSchedule } from "../cost-schedules.js";
 import { listMetricRecalculations, requestMetricRecalculation } from "../metric-recalculations.js";
@@ -18,6 +18,7 @@ import { dashboardHeaders } from "../http-responses.js";
 import { renderRecalculationRequestRejected, renderMetricScheduleOperationFailed } from "../dashboard/action-pages.js";
 
 const scheduleConflict = (reason: string): boolean => ["metric_schedule_not_active", "metric_schedule_metric_overlap",
+  "metric_schedule_conversion_overlap",
   "metric_schedule_date_in_flight", "metric_schedule_preview_stale", "metric_schedule_source_key_conflict",
   "metric_schedule_source_key_unavailable",
   "metric_schedule_supersession_target_conflict"].includes(reason);
@@ -52,8 +53,10 @@ export function createMetricJobsControllers(dependencies: Pick<RequestHandlerDep
   };
 
   const dashboardMetricSchedulesList = async ({ response, session, appId, appIdentity }: DashboardAppContext): Promise<void> => {
+    const [schedules, keys] = await Promise.all([listMetricSchedules(dependencies.readerPool, appIdentity),
+      listCustomConversionKeys(dependencies.readerPool, appIdentity)]);
     dashboardHtml(response, 200, renderMetricSchedules(appId,
-      await listMetricSchedules(dependencies.readerPool, appIdentity), csrfToken(session.token)));
+      schedules, csrfToken(session.token), keys));
     return;
   };
 
@@ -113,7 +116,8 @@ export function createMetricJobsControllers(dependencies: Pick<RequestHandlerDep
     try {
       const appIdentity = await requireRegisteredApp(pool, identity, appId);
       if (route.handler === "admin_metric_schedules_list") {
-        json(response, 200, { data: await listMetricSchedules(pool, appIdentity) });
+        json(response, 200, { data: await listMetricSchedules(pool, appIdentity),
+          custom_conversion_event_keys: await listCustomConversionKeys(pool, appIdentity) });
         return;
       }
       if (route.handler === "admin_metric_schedules_register") {

@@ -21,6 +21,11 @@ it("decodes schedule forms without changing the API request and rejects ambiguou
   assert.throws(() => metricScheduleFormRequest(new URLSearchParams("tenant_id=other&request_json=%7B%7D")), /metric_schedule_form_invalid/);
   assert.throws(() => metricScheduleFormRequest(form, true), /metric_schedule_form_invalid/);
   assert.deepEqual(metricScheduleFormRequest(new URLSearchParams("csrf_token=synthetic"), true), {});
+  const selection = new URLSearchParams("csrf_token=synthetic&custom_conversion_event_keys=tutorial_complete&custom_conversion_event_keys=signup_complete&lag_days=9&start_date=2026-08-06");
+  assert.deepEqual(metricScheduleFormRequest(selection), { custom_conversion_event_keys: ["tutorial_complete", "signup_complete"],
+    lag_days: 9, start_date: "2026-08-06" });
+  selection.append("request_json", "{}");
+  assert.throws(() => metricScheduleFormRequest(selection), /metric_schedule_form_invalid/);
 });
 
 it("renders immutable schedule state and checkpoints with administer-only routes and escaped evidence", () => {
@@ -51,6 +56,10 @@ it("renders immutable schedule state and checkpoints with administer-only routes
   assert.ok(profiles.includes("Selected acquisition"));
   assert.ok(profiles.includes("Unregistered bundle identity (legacy or external declaration)"));
   assert.doesNotMatch(profiles, /<script\b|javascript:|\son[a-z]+=/i);
+  const conversionForm = renderMetricSchedules("app-synthetic", [], "csrf<&", ["signup_complete", "tutorial_complete"]);
+  assert.match(conversionForm, /name="custom_conversion_event_keys" value="signup_complete"/);
+  assert.match(conversionForm, /value="csrf&lt;&amp;"/);
+  assert.doesNotMatch(conversionForm, /<script\b|javascript:|\son[a-z]+=/i);
   for (const [method, suffix, mutates] of [["GET", "", false], ["POST", "", true], ["POST", "/metric-schedule%3Asynthetic/disable", true]] as const) {
     const route = matchRoute(method, `/dashboard/apps/app-synthetic/metric-schedules${suffix}`)!;
     assert.equal(route.auth, "dashboard_session"); assert.equal(route.capability, "administer"); assert.equal(route.mutates, mutates);

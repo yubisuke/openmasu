@@ -33,6 +33,14 @@ import { ingestFixture } from "./test-support/fixture-ingestion.js";
 import { persistSyntheticPlatformResults } from "./test-support/platform-acquisition.js";
 import { buildScheduledMetricInput, claimNextScheduledDate, processMetricSchedules } from "./metric-schedule-worker.js";
 import { computeSqlMetricRuns, persistMetricRun } from "./metrics/cohort.js";
+import { syntheticConversionCases } from "../../../tools/synthetic-conversion-cases.js";
+import { keyedCustomConversionMetricDefinitions, customConversionMetricDefinitions } from "@openmasu/contracts/definitions";
+import { listCustomConversionKeys } from "../../api/src/metric-schedules.js";
+import { ingestRuntimeBatch } from "./ingestion.js";
+import { requestMetricRecalculation } from "../../api/src/metric-recalculations.js";
+import { processMetricRecalculations } from "./metric-recalculation-worker.js";
+import { encodeMetricReport } from "../../api/src/reporting.js";
+import { parseCsv } from "@openmasu/runtime/import-normalization";
 
 type Any = Record<string, any>;
 
@@ -525,6 +533,84 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     await withTenant(readerPool, tenantId, async client => {
       const stored = await client.query<{ artifact: Any }>("SELECT artifact FROM ledger.metric_runs WHERE metric_run_id=$1", [later.metric_run_id]);
       assert.equal(sha256Jcs(stored.rows[0]!.artifact), sha256Jcs(later));
+    });
+  });
+
+  describe("per-key custom-conversion schedules on the existing engine", () => {
+    const legacy = JSON.parse(readFileSync("fixtures/v0.4/61-custom-conversion/input.json", "utf8"));
+    const native = JSON.parse(readFileSync("fixtures/v0.4/58-selected-native-acquisition/input.json", "utf8"));
+    const source = syntheticConversionCases(legacy, native).find(entry => entry.name === "two-key-D7-series-reuse-existing-arithmetic")!.input;
+    const clock = new Date("2026-08-15T00:00:00.000Z");
+    const schedule = (key: string) => ({ custom_conversion_event_keys: [key], start_date: "2026-08-06", lag_days: 9 });
+    const query = { tenantId, appId, supersession: "latest" as const, limit: 200 };
+    beforeEach(async () => {
+      await seedPool.query("TRUNCATE control.metric_schedules,control.metric_schedule_states,control.metric_schedule_checkpoints CASCADE");
+      await ingestFixture(`two-key-schedules-${randomBytes(6).toString("hex")}`, source, appPool, seedPool);
+    });
+    it("two_keys_register_compute_correct_and_export_without_mixing_or_rewriting_the_other_key", async () => {
+      for (const key of ["signup_complete", "tutorial_complete"]) {
+        const registered = await admin(`/v1/admin/apps/${appId}/metric-schedules`, {
+          method: "POST", body: JSON.stringify(schedule(key)) });
+        assert.equal(registered.status, 201);
+      }
+      assert.equal((await processMetricSchedules(appPool, tenantId, { now: clock })).completedDates, 2);
+      const before = await metricReport(readerPool, reportIdentity, query);
+      assert.equal(before.data.length, 4);
+      assert.deepEqual(before.data.map(row => row.value_unscaled), ["2", "200000", "3", "300000"]);
+      const signup = before.data.filter(row => row.metric_name.includes("signup_complete"));
+      const saved = async (id: string) => withTenant(readerPool, tenantId, async client =>
+        jcs((await client.query("SELECT artifact FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2 AND metric_run_id=$3", [tenantId, appId, id])).rows[0].artifact));
+      const signupBytes = await Promise.all(signup.map(row => saved(row.metric_run_id)));
+      const original = source.records.find((row: Any) => row.event_name === "custom_event");
+      const late = { ...structuredClone(original), record_id: "two-key-late-tutorial", delivery_id: "delivery:two-key-late-tutorial",
+        event_id: "event:two-key-late-tutorial", received_at: "2026-08-16T00:00:00.000Z",
+        payload: { installation_id: "installation:install-conversion-04", event_key: "tutorial_complete" } };
+      await ingestRuntimeBatch([{ server: { ...source.server_context, received_at: late.received_at }, record: late,
+        batch_id: "two-key-late-tutorial" }], appPool);
+      const correction = await requestMetricRecalculation(appPool, reportIdentity, { trigger_kind: "late_events",
+        source_record_ids: [late.record_id], date_from: "2026-08-06", date_to: "2026-08-06", watermark: "2026-08-17T00:00:00.000Z" });
+      assert.equal(correction.selected_runs, 2, "only the tutorial count and rate are selected");
+      await processMetricRecalculations(appPool, tenantId);
+      const after = await metricReport(readerPool, reportIdentity, query);
+      assert.deepEqual(after.data.map(row => row.value_unscaled), ["2", "200000", "4", "400000"]);
+      assert.deepEqual(await Promise.all(signup.map(row => saved(row.metric_run_id))), signupBytes);
+      const csv = parseCsv(encodeMetricReport(after, "csv").body);
+      for (const row of after.data) {
+        const key = row.metric_name.includes("signup_complete") ? "signup_complete" : "tutorial_complete";
+        const context = row.comparison_context as Any;
+        assert.equal(context.definition.conversion_event_key, key);
+        const csvRow = csv.find(value => value.metric_run_id === row.metric_run_id)!;
+        assert.equal(csvRow.value_unscaled, row.value_unscaled);
+        assert.equal(JSON.parse(csvRow.comparison_context).definition.conversion_event_key, key);
+      }
+      assert.deepEqual(after.data.filter(row => row.metric_name.includes("signup_complete")).map(row => row.metric_run_id), signup.map(row => row.metric_run_id));
+    });
+    it("closed_key_selection_rejects_alias_ownership_unknown_keys_and_cross_scope_in_API_and_SSR", async () => {
+      const list = await admin(`/v1/admin/apps/${appId}/metric-schedules`);
+      assert.equal(list.status, 200);
+      assert.deepEqual((await list.json() as Any).custom_conversion_event_keys, ["signup_complete", "tutorial_complete"]);
+      const form = new URLSearchParams({ csrf_token: csrfToken(session.token), lag_days: "9", start_date: "2026-08-06" });
+      form.append("custom_conversion_event_keys", "tutorial_complete");
+      const registered = await fetch(`${baseUrl}/dashboard/apps/${appId}/metric-schedules`, { method: "POST", redirect: "manual",
+        headers: { cookie: `openmasu_dashboard=${session.token}`, origin: "http://localhost:8080", "content-type": "application/x-www-form-urlencoded" }, body: form });
+      assert.equal(registered.status, 303);
+      const keyed = keyedCustomConversionMetricDefinitions("tutorial_complete");
+      for (const definitions of [customConversionMetricDefinitions("tutorial_complete"),
+        keyed.map(definition => ({ ...definition, metric_name: `${definition.metric_name}_renamed` }))]) {
+        const response = await admin(`/v1/admin/apps/${appId}/metric-schedules`, { method: "POST", body: JSON.stringify({
+          lag_days: 9, start_date: "2026-08-06", fx_policy: legacy.fx_policy, metric_definitions: definitions,
+          evaluations: [{ metric_names: definitions.map(definition => definition.metric_name), date_dimension: "cohort_date", grouping: {} }] }) });
+        assert.equal(response.status, 409); assert.equal((await response.json() as Any).error, "metric_schedule_conversion_overlap");
+      }
+      for (const body of [schedule("unknown_outcome"), { ...schedule("signup_complete"), tenant_id: "foreign-tenant" },
+        { ...schedule("signup_complete"), custom_conversion_event_keys: ["signup_complete", "signup_complete"] }]) {
+        assert.equal((await admin(`/v1/admin/apps/${appId}/metric-schedules`, { method: "POST", body: JSON.stringify(body) })).status, 400);
+      }
+      assert.equal((await admin("/v1/admin/apps/foreign-app/metric-schedules", { method: "POST", body: JSON.stringify(schedule("signup_complete")) })).status, 404);
+      assert.deepEqual(await listCustomConversionKeys(readerPool, { ...reportIdentity, appId: "foreign-app" }), []);
+      assert.deepEqual(await listCustomConversionKeys(readerPool, { ...reportIdentity, tenantId: "foreign-tenant" }), []);
+      const html = await fetch(`${baseUrl}/dashboard/apps/${appId}/metric-schedules`, { headers: { cookie: `openmasu_dashboard=${session.token}` } });
+      assert.equal(html.status, 200); assert.match(await html.text(), /name="custom_conversion_event_keys" value="signup_complete"/);
     });
   });
 

@@ -347,6 +347,13 @@ export function customConversionMetricDefinitions(eventKey: string): OpenMasuMet
   ];
 }
 
+/** Stable per-key names reuse the existing D7 meaning and bundle, not a new calculator. */
+export function keyedCustomConversionMetricDefinitions(eventKey: string): OpenMasuMetricDefinitionV04[] {
+  return customConversionMetricDefinitions(eventKey).map(definition => ({ ...definition,
+    metric_name: `conversion_d7_${eventKey}_${definition.value_type === "count" ? "count" : "rate"}`,
+  }));
+}
+
 /** Device-reported first-party engagement, never install or Apple aggregate credit. */
 export function engagementMetricDefinitions(eventKey: string): OpenMasuMetricDefinitionV04[] {
   if (!/^[a-z][a-z0-9_]{0,63}$/.test(eventKey)) throw new Error("conversion_event_key_invalid");
