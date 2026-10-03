@@ -35,6 +35,7 @@ import {
 import { processMetricSchedules } from "./metric-schedule-worker.js";
 import { processCostRefreshes } from "./cost-refresh-worker.js";
 import { processMetricRecalculations } from "./metric-recalculation-worker.js";
+import { planAutomaticMetricCorrections } from "./automatic-metric-corrections.js";
 import { appleLeafKeyFromChain, verifyCompactJws } from "@openmasu/commerce-lifecycle";
 import {
   TenantWorkCoordinator,
@@ -313,7 +314,11 @@ async function processTenantCycle(tenantId: string): Promise<void> {
       }
     });
   }
-  // Explicit correction requests have their own durable row claims, not the
+  const automaticCorrections=await planAutomaticMetricCorrections(pool,tenantId);
+  if (Object.values(automaticCorrections).some(count=>count>0)) {
+    process.stdout.write(`${JSON.stringify({event:"automatic_metric_correction_cycle",component:"worker",...automaticCorrections})}\n`);
+  }
+  // Correction requests have their own durable row claims, not the
   // daily metric scheduler's day-long lease. Check them each tenant cycle.
   const recalculations = await processMetricRecalculations(pool, tenantId);
   if (Object.values(recalculations).some(count => count > 0)) {

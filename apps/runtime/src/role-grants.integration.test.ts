@@ -16,6 +16,7 @@ type Row = {
 
 const privileges: Privilege[] = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"];
 const readerNoTableSelect = new Set([
+  "control.metric_correction_receipts",
   "control.apple_purchase_evidence",
   "control.apple_purchase_intents",
   "control.cost_schedules",
@@ -45,6 +46,8 @@ const readerNoTableSelect = new Set([
   "ephemeral.operator_bulk_export_batches",
 ]);
 const seedControlTruncate = new Set([
+  "control.metric_correction_policies",
+  "control.metric_correction_receipts",
   "control.apple_purchase_evidence",
   "control.apple_purchase_intents",
   "control.metric_recalculation_jobs",
@@ -126,6 +129,7 @@ function expected(row: Row): Privilege[] {
     return row.role_name === "openmasu_seed" ? ["SELECT", "INSERT", "UPDATE", "DELETE"] : [];
   }
   if (row.role_name === "openmasu_app") {
+    if (["control.metric_correction_policies","control.metric_correction_receipts"].includes(qualified)) return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.apple_purchase_intents") return ["SELECT", "INSERT", "DELETE"];
     if (qualified === "control.google_play_order_digests") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.google_data_manager_destinations") return ["SELECT", "INSERT", "UPDATE"];
@@ -327,6 +331,12 @@ try {
     FROM information_schema.columns WHERE table_schema='control' AND table_name='cost_schedules'
   `);
   for (const row of costColumns.rows) assert.equal(row.allowed, row.column_name !== "definition", `cost refresh reader column drift: ${row.column_name}`);
+  const correctionColumns=await pool.query<{column_name:string;allowed:boolean}>(`SELECT column_name,
+    has_column_privilege('openmasu_reader','control.metric_correction_receipts',column_name,'SELECT') AS allowed
+    FROM information_schema.columns WHERE table_schema='control' AND table_name='metric_correction_receipts'`);
+  const privateCorrectionColumns=new Set(["source_ref","definition","definition_digest","targets"]);
+  for (const row of correctionColumns.rows) assert.equal(row.allowed,!privateCorrectionColumns.has(row.column_name),
+    `automatic correction reader column drift: ${row.column_name}`);
   const scheduleView = await pool.query<{ role_name: Role; allowed: boolean }>(`
     SELECT role_name,
            has_table_privilege(role_name, 'control.metric_schedules_current', 'SELECT') AS allowed

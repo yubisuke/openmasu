@@ -545,7 +545,8 @@
                   "time_window_maturity",
                   "source_observation",
                   "import_completion",
-                  "recalculation_state"
+                  "recalculation_state",
+                  "attribution_update_state"
                 ]
               }
             }
@@ -2002,6 +2003,15 @@
           "recalculation_state": {
             "type": "object",
             "description": "Closed projection of existing cost, late-input and privacy update states; no calculation is initiated and no saved value is rewritten."
+          },
+          "attribution_update_state": {
+            "enum": [
+              "recalculation_pending",
+              "unavailable",
+              "completed",
+              "no_recorded_request"
+            ],
+            "description": "Recorded selected-attribution correction state; separate from late-event and privacy correction."
           }
         },
         "additionalProperties": false,

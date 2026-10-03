@@ -26,6 +26,7 @@ export function buildHttpApiContract(): Json {
     comparison_context: { type: ["object", "null"], description: "Saved aggregate-only meaning; null/unknown is not reconstructed." },
     cost_update_state: { type: "string", description: "Current persisted recalculation/input-revision state." },
     late_input_update_state: { type: "string", description: "Explicit late-input request state; not proof of upstream completeness." },
+    attribution_update_state: { enum: ["recalculation_pending","unavailable","completed","no_recorded_request"], description: "Recorded selected-attribution correction state; separate from late-event and privacy correction." },
     value_state: { enum: ["present", "undefined", "unavailable"], description: "Report-only unavailable withdraws a privacy-invalidated saved value; it is not a new metric-run contract state." },
     privacy_update_state: { enum: ["not_affected", "recalculation_pending", "unavailable", "completed"], description: "Deletion replay state. A completed successor never makes its invalidated original value public again." },
     unavailable_reason: { enum: ["privacy_deletion", null] },

@@ -1,5 +1,9 @@
 # Documentation
 
+For opt-in refresh of saved cohort results from retained input receipts, see
+[Automatic metric corrections](automatic-metric-corrections.md). Upstream
+arrival/completeness remains unknown.
+
 This directory describes the current OpenMasu product and how to work with it.
 No document assumes access to project conversations, review sessions, or
 private provider material.
