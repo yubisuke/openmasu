@@ -1,0 +1,3236 @@
+[
+  {
+    "metric_name": "calendar_jst_cohort_install_count",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "count",
+    "definition": {
+      "calculation": "cohort_size",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_jst_cohort_ltv_d0_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_jst_cohort_ltv_d1_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_jst_cohort_ltv_d3_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_jst_cohort_ltv_d7_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_jst_d0_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity",
+    "cost_selection_policy": "reject_overlapping_grains"
+  },
+  {
+    "metric_name": "calendar_jst_d1_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity",
+    "cost_selection_policy": "reject_overlapping_grains"
+  },
+  {
+    "metric_name": "calendar_jst_d3_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity",
+    "cost_selection_policy": "reject_overlapping_grains"
+  },
+  {
+    "metric_name": "calendar_jst_d7_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity",
+    "cost_selection_policy": "reject_overlapping_grains"
+  },
+  {
+    "metric_name": "calendar_jst_retention_d1",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_jst_retention_d7",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_ny_cohort_install_count",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "count",
+    "definition": {
+      "calculation": "cohort_size",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_ny_cohort_ltv_d0_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_ny_cohort_ltv_d1_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_ny_cohort_ltv_d3_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_ny_cohort_ltv_d7_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_ny_d0_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity",
+    "cost_selection_policy": "reject_overlapping_grains"
+  },
+  {
+    "metric_name": "calendar_ny_d1_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity",
+    "cost_selection_policy": "reject_overlapping_grains"
+  },
+  {
+    "metric_name": "calendar_ny_d3_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity",
+    "cost_selection_policy": "reject_overlapping_grains"
+  },
+  {
+    "metric_name": "calendar_ny_d7_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity",
+    "cost_selection_policy": "reject_overlapping_grains"
+  },
+  {
+    "metric_name": "calendar_ny_retention_d1",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_ny_retention_d7",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_utc_cohort_install_count",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "count",
+    "definition": {
+      "calculation": "cohort_size",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_utc_cohort_ltv_d0_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_utc_cohort_ltv_d1_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_utc_cohort_ltv_d3_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_utc_cohort_ltv_d7_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_utc_d0_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity",
+    "cost_selection_policy": "reject_overlapping_grains"
+  },
+  {
+    "metric_name": "calendar_utc_d1_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity",
+    "cost_selection_policy": "reject_overlapping_grains"
+  },
+  {
+    "metric_name": "calendar_utc_d3_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity",
+    "cost_selection_policy": "reject_overlapping_grains"
+  },
+  {
+    "metric_name": "calendar_utc_d7_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity",
+    "cost_selection_policy": "reject_overlapping_grains"
+  },
+  {
+    "metric_name": "calendar_utc_retention_d1",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "calendar_utc_retention_d7",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "cohort_ltv_d7_usd",
+    "metric_definition_version": "0.4.11",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "elapsed",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-selected-acquisition",
+    "rule_bundle_version": "0.4.11",
+    "rule_bundle_hash": "6fd998246bb092f81d8539b8e2c04a1abe421a1916480b63dfd018d11c7bccc5",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click"
+  },
+  {
+    "metric_name": "d0_install_to_24h_ad_revenue_usd",
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": {
+        "type": "elapsed",
+        "day": 0
+      },
+      "numerator": "revenue"
+    },
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
+  },
+  {
+    "metric_name": "d0_jst_install_calendar_ad_revenue_usd",
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue"
+    },
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
+  },
+  {
+    "metric_name": "d0_utc_install_calendar_ad_revenue_usd",
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue"
+    },
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
+  },
+  {
+    "metric_name": "imported_calendar_jst_cohort_install_count",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "count",
+    "definition": {
+      "calculation": "cohort_size",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_jst_cohort_ltv_d0_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_jst_cohort_ltv_d1_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_jst_cohort_ltv_d3_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_jst_cohort_ltv_d7_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_jst_d0_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_jst_d1_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_jst_d3_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_jst_d7_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_jst_retention_d1",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_jst_retention_d7",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_ny_cohort_install_count",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "count",
+    "definition": {
+      "calculation": "cohort_size",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_ny_cohort_ltv_d0_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_ny_cohort_ltv_d1_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_ny_cohort_ltv_d3_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_ny_cohort_ltv_d7_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_ny_d0_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_ny_d1_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_ny_d3_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_ny_d7_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_ny_retention_d1",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_ny_retention_d7",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_utc_cohort_install_count",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "count",
+    "definition": {
+      "calculation": "cohort_size",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_utc_cohort_ltv_d0_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_utc_cohort_ltv_d1_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_utc_cohort_ltv_d3_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_utc_cohort_ltv_d7_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_utc_d0_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_utc_d1_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_utc_d3_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_utc_d7_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_utc_retention_d1",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "imported_calendar_utc_retention_d7",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_imported_provider",
+    "import_provider": "synthetic-export",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_jst_cohort_install_count",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "count",
+    "definition": {
+      "calculation": "cohort_size",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_jst_cohort_ltv_d0_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_jst_cohort_ltv_d1_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_jst_cohort_ltv_d3_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_jst_cohort_ltv_d7_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_jst_d0_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_jst_d1_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_jst_d3_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_jst_d7_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_jst_retention_d1",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_jst_retention_d7",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_ny_cohort_install_count",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "count",
+    "definition": {
+      "calculation": "cohort_size",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_ny_cohort_ltv_d0_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_ny_cohort_ltv_d1_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_ny_cohort_ltv_d3_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_ny_cohort_ltv_d7_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_ny_d0_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_ny_d1_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_ny_d3_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_ny_d7_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_ny_retention_d1",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_ny_retention_d7",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "America/New_York",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_utc_cohort_install_count",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "count",
+    "definition": {
+      "calculation": "cohort_size",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_utc_cohort_ltv_d0_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_utc_cohort_ltv_d1_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_utc_cohort_ltv_d3_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_utc_cohort_ltv_d7_usd",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cohort_size"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_utc_d0_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_utc_d1_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_utc_d3_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 3
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_utc_d7_roas",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_cost",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "revenue",
+      "denominator": "cost",
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "cost_selection_policy": "reject_overlapping_grains",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_utc_retention_d1",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 1
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "platform_calendar_utc_retention_d7",
+    "metric_definition_version": "0.4.21",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "calendar_day",
+        "day": 7
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-calendar-acquisition",
+    "rule_bundle_version": "0.4.21",
+    "rule_bundle_hash": "1613dc733b7a6ee6b669cb845789bc3c9d5f784780922e86cd73d7b69165bccb",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status",
+      "ad_group_id"
+    ],
+    "acquisition_basis": "selected_verified_platform",
+    "calendar_cohort_policy": "cumulative_revenue_on_day_activity"
+  },
+  {
+    "metric_name": "retention_d7",
+    "metric_definition_version": "0.4.11",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "active_installations_over_cohort",
+      "window": {
+        "type": "activity_day",
+        "day": 7
+      },
+      "numerator": "active_installations",
+      "denominator": "cohort_size"
+    },
+    "activity_events": [
+      "session_start"
+    ],
+    "rule_bundle_id": "metric-selected-acquisition",
+    "rule_bundle_version": "0.4.11",
+    "rule_bundle_hash": "6fd998246bb092f81d8539b8e2c04a1abe421a1916480b63dfd018d11c7bccc5",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click"
+  }
+]
