@@ -214,6 +214,11 @@ is [issue #218](https://github.com/yubisuke/openmasu/issues/218).
 
 The [saved acquisition KPI set](acquisition-kpis.md) adds count, cost/CPI and
 separate revenue/ROAS on these same calculation and view boundaries (#228).
+The [multiple custom outcomes](custom-conversion-metrics.md) workflow adds stable
+per-key D7 names, closed app-scoped SSR/API selection and alias-safe schedule
+ownership on the same existing engine (#230). Its project-plan crosswalk is
+**Multiple custom outcomes**; two-key corrections and exports remain isolated,
+with no schema, arithmetic, table or scheduler replacement.
 Its first-party D7 scope and refusal gates are recorded in the project-plan
 crosswalk; no new analysis service or cross-population calculator is introduced.
 

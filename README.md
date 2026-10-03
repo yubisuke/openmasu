@@ -83,7 +83,7 @@ the [same-set acquisition KPI table](docs/acquisition-kpis.md) with saved cost/C
 the explicit [local-calendar cohort profile](docs/calendar-cohort-metrics.md),
 the separate [imported provider cohort profile](docs/imported-acquisition-metrics.md),
 [independent verified-platform acquisition cohorts](docs/verified-platform-acquisition.md),
-[explicit custom-event conversion](docs/custom-conversion-metrics.md) and an opt-in
+[multiple named custom-event outcomes and their schedule selection form](docs/custom-conversion-metrics.md) and an opt-in
 [targeted refund-cancellation profile](docs/design/verified-commerce-lifecycle.md#explicit-refund-cancellation-metrics).
 An explicit [ad-group/creative calculation profile](docs/acquisition-detail-metrics.md)
 connects same-grain CLI calculation, dashboard filters, schedules and bounded corrections.

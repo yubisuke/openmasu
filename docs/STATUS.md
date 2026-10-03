@@ -222,7 +222,7 @@ Explicit v0.4.12
 and preserves disjoint siblings and dated revisions (#183). Explicit v0.4.13
 definitions also connect selected acquisition to purchase/total-net cohorts
 (#191), with fixture 60 fixing purchase net 6, total net 26 and ROAS 2.6.
-Explicit bounded [late-input requests](metric-corrections.md#late-advertising-revenue-purchases-and-refunds)
+Explicit bounded [late-input requests](metric-corrections.md#late-advertising-revenue-purchases-refunds-and-custom-outcomes)
 connect accepted revenue/commerce arrivals to immutable corrections (#184).
 Input discovery is requested through the API; only accepted jobs execute automatically.
 Opt-in [daily campaign discovery](scheduled-metrics.md#discover-campaign-targets-automatically)
@@ -242,7 +242,10 @@ and cutoff, with current privacy and no inferred causes (#175).
 now connect SSR registration, checkpoint inspection and disablement to the
 existing immutable schedule service and worker (#176), with admin-only access.
 Explicit [custom-event conversion](custom-conversion-metrics.md) now counts
-distinct D7 cohort converters and their rate for one saved event key (#177).
+distinct D7 cohort converters and their rate per saved event key. Multiple keys
+can own simultaneous schedules through an app-scoped selection form and stable
+per-key names; aliases cannot bypass meaning ownership. The existing v0.4.14
+calculator, bundle, wire schemas and legacy names are unchanged.
 Fixture 61 fixes 3/10; boundary, receipt, privacy and gross/net cases share
 independent reference and SQL arithmetic. No new service or event payload.
 [D30 total-net ROAS details](metric-explanations.md) retain advertising, purchase,

@@ -16,6 +16,12 @@ complete [acquisition KPI set](acquisition-kpis.md) and its synthetic schedule.
 Its explicit eight-definition first-party D7 profile needs no extra worker or
 report calculator; keep all roles on the same target and correction cutoff.
 
+For multiple custom outcomes, use the dashboard's closed key selection or the
+[custom-outcome selection request](custom-conversion-metrics.md#choose-outcomes-without-copying-metric-definitions).
+Each key gets stable count/rate names in the existing D7 profile, without copying
+JSON definitions or adding a scheduler. The convenience selection is app-wide
+and requires nine days of lag; advanced grouping still uses the ordinary request.
+
 For independently named `platform_*` cohort metrics, supply the full
 [verified platform profile](verified-platform-acquisition.md). Source namespaces
 stay explicit and cannot be blended with first-party campaign discovery.
@@ -82,9 +88,11 @@ The registration API rejects:
 - static `cohort_date` or `metric_date` values in the grouping;
 - identifying grouping fields;
 - a metric name already owned by another active schedule for the same app.
+- an aliased custom-conversion calculation with the same saved key and meaning
+  already owned by an active schedule, or duplicated within the request.
 
 Multiple active schedules are allowed only when their metric-name sets are
-disjoint. This prevents duplicate report series while allowing cohort and
+disjoint and custom-conversion meanings have no duplicate owner. This prevents duplicate report series while allowing cohort and
 calendar-day metrics to use different lags.
 
 ## Discover campaign targets automatically

@@ -6,6 +6,7 @@ import { ENGAGEMENT_METRIC_NAMES, M1B_METRIC_DEFINITIONS, REFERENCE_AD_REVENUE_M
 import { validateScheduledMetricDefinition as validMetricDefinition, type ScheduledMetricDefinition } from "@openmasu/contracts/validation";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
+import { observedConversionKeys, expandConversionScheduleRequest, conversionCalculationKey } from "./custom-conversion-schedules.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -89,6 +90,12 @@ function validFxPolicy(value: JsonObject): boolean {
 
 function scheduledMetricNames(definition: MetricScheduleDefinition): Set<string> {
   return new Set(definition.evaluations.flatMap((evaluation) => evaluation.metric_names));
+}
+
+function scheduledConversionKeys(definition: MetricScheduleDefinition): string[] {
+  const names = scheduledMetricNames(definition);
+  return definition.metric_definitions.filter(value => names.has(value.metric_name))
+    .map(conversionCalculationKey).filter((key): key is string => key !== undefined);
 }
 
 export function metricScheduleTargetDate(now: Date, lagDays: number, zone: CohortTimeZone = "UTC"): string {
@@ -260,6 +267,8 @@ export function normalizeMetricScheduleRequest(
     metric_definitions: suppliedDefinitions,
     evaluations,
   };
+  const conversionKeys = scheduledConversionKeys(definition);
+  if (new Set(conversionKeys).size !== conversionKeys.length) throw new Error("metric_schedule_conversion_overlap");
   const definitionDigest = sha256Jcs(definition);
   return { lagDays, startDate, definition, definitionDigest };
 }
@@ -271,9 +280,15 @@ export async function registerMetricSchedule(input: Readonly<{
   now?: Date;
 }>): Promise<MetricScheduleRecord> {
   const now = input.now ?? new Date();
-  const normalized = normalizeMetricScheduleRequest(input.body, now);
-  return withTenant(input.pool, input.identity.tenantId, client =>
-    saveMetricScheduleWithClient(client, input.identity, normalized, now));
+  return withTenant(input.pool, input.identity.tenantId, async client => {
+    const body = input.body.custom_conversion_event_keys !== undefined
+      ? expandConversionScheduleRequest(input.body, await observedConversionKeys(client, input.identity)) : input.body;
+    return saveMetricScheduleWithClient(client, input.identity, normalizeMetricScheduleRequest(body, now), now);
+  });
+}
+
+export function listCustomConversionKeys(pool: Pool, identity: AppAdminIdentity): Promise<string[]> {
+  return withTenant(pool, identity.tenantId, client => observedConversionKeys(client, identity));
 }
 
 /** Caller owns the transaction; also used for atomic disable-and-replace. */
@@ -298,6 +313,10 @@ export async function saveMetricScheduleWithClient(
     const requestedNames = scheduledMetricNames(normalized.definition);
     if (active.rows.some((row) => [...scheduledMetricNames(row.definition)].some((name) => requestedNames.has(name)))) {
       throw new Error("metric_schedule_metric_overlap");
+    }
+    const requestedConversions = new Set(scheduledConversionKeys(normalized.definition));
+    if (active.rows.some(row => scheduledConversionKeys(row.definition).some(key => requestedConversions.has(key)))) {
+      throw new Error("metric_schedule_conversion_overlap");
     }
     const artifact = {
       metric_schedule_id: scheduleId,

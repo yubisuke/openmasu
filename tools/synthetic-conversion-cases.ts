@@ -1,4 +1,4 @@
-import { customConversionMetricDefinitions } from "@openmasu/contracts/definitions";
+import { customConversionMetricDefinitions, keyedCustomConversionMetricDefinitions } from "@openmasu/contracts/definitions";
 import { syntheticRetentionCases } from "./synthetic-retention-cases.js";
 
 type Any = Record<string, any>;
@@ -11,6 +11,28 @@ export function syntheticConversionCases(baseline: Any, native: Any): Conversion
     const input = structuredClone(baseline); change(input); cases.push({ name, input, expected });
   };
   add("three-of-ten", ["300000", "3"]);
+  const twoKeys = (input: Any) => {
+    const original = input.records.find((row: Any) => row.event_name === "custom_event");
+    for (const installation of ["01", "04"]) {
+      const id = `signup-${installation}`;
+      input.records.push({ ...structuredClone(original), record_id: id, delivery_id: `delivery:${id}`,
+        event_id: `event:${id}`, payload: { installation_id: `installation:install-conversion-${installation}`, event_key: "signup_complete" } });
+    }
+    input.metric_definitions = ["signup_complete", "tutorial_complete"].flatMap(keyedCustomConversionMetricDefinitions);
+    input.metric_evaluations[0].metric_names = input.metric_definitions.map((definition: Any) => definition.metric_name);
+  };
+  add("two-key-D7-series-reuse-existing-arithmetic", ["2", "200000", "3", "300000"], twoKeys);
+  add("two-key-D7-privacy-recalculation-keeps-outcomes-isolated", ["1", "111111", "2", "222222"], input => {
+    twoKeys(input);
+    input.privacy_requests = [{ contract_version: "0.4.0", tenant_id: "tenant-a", app_id: "app-a",
+      privacy_request_id: "privacy-two-key", deletion_subject_digest: "7".repeat(64), deletion_scope: "installation",
+      requested_via: "tenant_admin_api", requester_auth_ref: "admin_key:synthetic-two-key",
+      requested_at: "2026-08-16T00:00:00.000Z", completed_at: "2026-08-16T00:01:00.000Z", status: "completed",
+      reason_code: "privacy_deletion", policy_version: "privacy-v0.4", affected_records: input.records
+        .filter((row: Any) => row.payload.installation_id === "installation:install-conversion-01")
+        .map((row: Any) => ({ record_id: row.record_id, lifecycle_status: "redacted" })) }];
+    input.metric_evaluations[0].privacy_state = "after";
+  });
   add("without-grouping", ["300000", "3"], input => { delete input.metric_evaluations[0].grouping; });
   add("irrelevant-duplicate-and-half-open-boundaries", ["300000", "3"], input => {
     const original = input.records.find((row: Any) => row.event_name === "custom_event");

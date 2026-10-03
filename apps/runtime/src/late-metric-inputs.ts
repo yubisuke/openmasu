@@ -9,6 +9,7 @@ type InputRow = {
   record_id: string; payload_sha256: string; event_name: string; received_at: string;
   lifecycle: string; logical_event_id: string | null; installation_id: string | null;
   occurred_at: string | null; financial_status: string | null; target_available: boolean; refund_reversal: boolean; producer: string;
+  event_key: string | null;
 };
 export type LateSelection = {
   rows: { metric_run_id: string; replay: Any | null; safe_reason: string | null }[];
@@ -21,8 +22,10 @@ export type LateSelection = {
 export function supportsLateMetric(replay: Any): boolean {
   const metric = replay.metric_definition, definition = metric?.definition;
   return !!metric && validateMetricDefinition(metric) && metric.anchor_event === "install"
-    && ["revenue_sum", "revenue_over_cohort", "revenue_over_cost"].includes(definition?.calculation)
-    && ["revenue", "purchase_net_revenue", "total_net_revenue"].includes(definition.numerator)
+    && ((["revenue_sum", "revenue_over_cohort", "revenue_over_cost"].includes(definition?.calculation)
+      && ["revenue", "purchase_net_revenue", "total_net_revenue"].includes(definition.numerator))
+      || (metric.rule_bundle_id === "metric-custom-conversion" && typeof metric.conversion_event_key === "string"
+        && ["converted_installations", "converted_installations_over_cohort"].includes(definition?.calculation)))
     && (definition.window?.type === "elapsed" || (metric.calendar_cohort_policy === "cumulative_revenue_on_day_activity"
       && definition.window?.type === "calendar_day")) && Number.isSafeInteger(definition.window.day)
     && definition.window.day >= 0 && definition.window.day <= 90
@@ -52,9 +55,10 @@ export async function selectLateMetricInputs(
     `SELECT raw.record_id,raw.payload_sha256,raw.event_name,raw.received_at,
        raw.payload_lifecycle_status AS lifecycle,logical.logical_event_id,logical.producer,
        CASE raw.event_name WHEN 'ad_revenue' THEN revenue.installation_id
-         WHEN 'purchase' THEN purchase.installation_id WHEN 'refund' THEN target.installation_id END AS installation_id,
-       coalesce(revenue.occurred_at,purchase.occurred_at,
-         CASE WHEN refund.artifact ? 'reverses_refund_record_id' THEN cancelled.occurred_at ELSE refund.occurred_at END) AS occurred_at,
+         WHEN 'purchase' THEN purchase.installation_id WHEN 'refund' THEN target.installation_id
+         WHEN 'custom_event' THEN custom.installation_id END AS installation_id,custom.event_key,
+       CASE WHEN raw.event_name='custom_event' THEN raw.occurred_at ELSE coalesce(revenue.occurred_at,purchase.occurred_at,
+         CASE WHEN refund.artifact ? 'reverses_refund_record_id' THEN cancelled.occurred_at ELSE refund.occurred_at END) END AS occurred_at,
        coalesce(refund.financial_status='reversed' AND refund.artifact ? 'reverses_refund_record_id',false) AS refund_reversal,
        coalesce(purchase.financial_status,refund.financial_status) AS financial_status,
        (raw.event_name<>'refund' OR (target.financial_status='settled'
@@ -76,6 +80,7 @@ export async function selectLateMetricInputs(
      LEFT JOIN ledger.ad_revenue_facts AS revenue USING (logical_event_id)
      LEFT JOIN ledger.purchase_facts AS purchase USING (logical_event_id)
      LEFT JOIN ledger.refund_facts AS refund USING (logical_event_id)
+     LEFT JOIN ledger.custom_event_facts AS custom USING (logical_event_id)
      LEFT JOIN ledger.purchase_facts AS target ON target.tenant_id=raw.tenant_id AND target.app_id=raw.app_id
        AND target.record_id=refund.correction_target_record_id
      LEFT JOIN ledger.raw_records_current AS target_raw ON target_raw.tenant_id=target.tenant_id
@@ -88,7 +93,7 @@ export async function selectLateMetricInputs(
        AND cancelled_raw.app_id=raw.app_id AND cancelled_raw.record_id=cancelled_logical.record_id
      WHERE raw.tenant_id=$1 AND raw.app_id=$2
        AND (($4::text[] IS NOT NULL AND raw.record_id=ANY($4::text[]))
-         OR ($4::text[] IS NULL AND raw.event_name IN ('ad_revenue','purchase','refund')
+         OR ($4::text[] IS NULL AND raw.event_name IN ('ad_revenue','purchase','refund','custom_event')
            AND raw.received_at>$5 AND raw.received_at<=$6))
      ORDER BY raw.record_id COLLATE "C" LIMIT 101`, [scope.tenantId, scope.appId, request.watermark,
       request.source_record_ids ?? null, request.source_received_from ?? null, request.source_received_to ?? null]);
@@ -98,10 +103,10 @@ export async function selectLateMetricInputs(
   const eligible = result.rows.filter(row => {
     const reason = row.lifecycle !== "available" ? "unavailable"
       : !row.logical_event_id ? "non_canonical"
-      : !["ad_revenue", "purchase", "refund"].includes(row.event_name) ? "unsupported_input"
+      : !["ad_revenue", "purchase", "refund", "custom_event"].includes(row.event_name) ? "unsupported_input"
       : row.received_at > request.watermark ? "after_watermark"
       : !row.installation_id || !row.occurred_at || !row.target_available
-        || (row.event_name !== "ad_revenue" && row.financial_status !== "settled" && !row.refund_reversal) ? "non_contributing" : "eligible";
+        || (!["ad_revenue", "custom_event"].includes(row.event_name) && row.financial_status !== "settled" && !row.refund_reversal) ? "non_contributing" : "eligible";
     counts[reason] = (counts[reason] ?? 0) + 1;
     return reason === "eligible";
   });
@@ -129,7 +134,7 @@ export async function selectLateMetricInputs(
        AND ($6::text[] IS NULL OR mr.metric_name=ANY($6::text[]))
        AND ($7::text[] IS NULL OR mr.metric_run_id=ANY($7::text[]))
        AND (mr.comparison_context IS NULL OR mr.comparison_context->'definition'->'definition'->>'calculation'
-         IN ('revenue_sum','revenue_over_cohort','revenue_over_cost'))
+         IN ('revenue_sum','revenue_over_cohort','revenue_over_cost','converted_installations','converted_installations_over_cohort'))
        AND NOT EXISTS (SELECT 1 FROM ledger.metric_runs AS newer WHERE newer.tenant_id=mr.tenant_id
          AND newer.app_id=mr.app_id AND newer.supersedes_metric_run_id=mr.metric_run_id)
      ORDER BY mr.metric_run_id COLLATE "C" LIMIT 101`,
@@ -153,7 +158,7 @@ export async function selectLateMetricInputs(
       const impacted = await client.query(
         `WITH acquisition AS (SELECT * FROM (${metricAcquisitionSql(mode,"$15")}) AS selected WHERE $7::boolean)
          SELECT DISTINCT changed.record_id FROM jsonb_to_recordset($4::jsonb)
-           AS changed(record_id text,event_name text,installation_id text,received_at text,occurred_at text,refund_reversal boolean,producer text)
+           AS changed(record_id text,event_name text,installation_id text,received_at text,occurred_at text,refund_reversal boolean,producer text,event_key text)
          JOIN ledger.install_facts AS install ON install.tenant_id=$1 AND install.app_id=$2
            AND install.installation_id=changed.installation_id
          JOIN ledger.logical_events AS logical ON logical.logical_event_id=install.logical_event_id
@@ -170,9 +175,10 @@ export async function selectLateMetricInputs(
            ${imported ? "AND acquisition_source.import_provider IS NOT NULL" : ""}
            ${metric.acquisition_basis === "selected_first_party_click" ? "AND logical.producer NOT LIKE 'import:%'" : ""}
            AND ($15::text IS NULL OR changed.producer='import:'||$15::text)
-           AND ($11='total_net_revenue'
+           AND (($11='total_net_revenue' AND changed.event_name IN ('ad_revenue','purchase','refund'))
              OR ($11='purchase_net_revenue' AND changed.event_name IN ('purchase','refund'))
-             OR ($11='revenue' AND changed.event_name='ad_revenue'))
+             OR ($11='revenue' AND changed.event_name='ad_revenue')
+             OR ($11='converted_installations' AND changed.event_name='custom_event' AND changed.event_key=$16::text))
            AND control.canonical_timestamp_value(changed.occurred_at)>=install.occurred_at_ts
            AND control.canonical_timestamp_value(changed.occurred_at)<${windowEnd}
            AND timezone($9,install.occurred_at_ts)::date::text=$5::jsonb->>'cohort_date'
@@ -188,7 +194,8 @@ export async function selectLateMetricInputs(
           JSON.stringify(row.replay.evaluation.grouping), metric.definition.window.day,
           !!metric.acquisition_basis, "after", metric.aggregation_time_zone,
           metric.fraud_policy ?? "gross", metric.definition.numerator, row.watermark,
-          metric.refund_reversal_policy === "cancel_target_refund_at_watermark", committedReceipt, metric.import_provider ?? null]);
+          metric.refund_reversal_policy === "cancel_target_refund_at_watermark", committedReceipt, metric.import_provider ?? null,
+          metric.conversion_event_key ?? null]);
       if (!impacted.rowCount) continue;
       for (const match of impacted.rows) matchedRecords.add(match.record_id);
       if (row.pending) reason = "already_pending";
