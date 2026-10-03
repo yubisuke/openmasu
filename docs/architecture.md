@@ -41,6 +41,13 @@ conversion. Both entrypoints are free of database, file, and network IO.
 `@openmasu/contracts/validation` explicitly loads the closed schemas and compiles
 their validators. The original package exports remain compatible.
 
+Metric profile identity, named series and admission checks live in the existing
+contracts package. The API keeps schedule-only constraints, the dashboard reads
+presentation metadata, and independent TypeScript and SQL calculators share
+profile checks rather than calculation code. Legacy operation admission is not
+closed-schema validation. See [metric profile boundaries](development-metric-profiles.md)
+for the intentional entry differences and the fixed compatibility table.
+
 Feature modules stay in their existing workspace. Add a small interface or
 function parameter at an IO boundary when a caller needs it; do not create a
 package, generic repository, or framework for each function. Keep independent

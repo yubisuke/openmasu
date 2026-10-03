@@ -14,6 +14,13 @@ export {
 } from "./m1b-metric-definitions.js";
 export { M3_METRIC_DEFINITIONS } from "./m3-metric-definitions.js";
 export {
+  METRIC_PROFILE_METADATA,
+  ENGAGEMENT_METRIC_NAMES,
+  metricProfileMetadata,
+  type MetricProfileKey,
+  type MetricProfileMetadata,
+} from "./metric-profiles.js";
+export {
   NON_FRAUD_RULE_BUNDLES,
   nonFraudBundleHash,
   validateNonFraudBundleDefinition,

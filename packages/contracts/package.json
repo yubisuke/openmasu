@@ -26,8 +26,8 @@
       "default": "./src/definitions.ts"
     },
     "./validation": {
-      "types": "./src/event-validation.ts",
-      "default": "./src/event-validation.ts"
+      "types": "./src/validation.ts",
+      "default": "./src/validation.ts"
     }
   },
   "scripts": {

@@ -1,7 +1,8 @@
 import type { Pool, PoolClient } from "pg";
 import { createHash } from "node:crypto";
-import { M1B_METRIC_DEFINITIONS, REFERENCE_AD_REVENUE_METRIC_DEFINITIONS, acquisitionDetailBase, nonFraudBundleHash } from "@openmasu/contracts/definitions";
-import { validateMetricDefinition } from "@openmasu/contracts/validation";
+import { M1B_METRIC_DEFINITIONS, REFERENCE_AD_REVENUE_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
+import type { OpenMasuMetricDefinitionV04 } from "@openmasu/contracts/types";
+import { assertMetricDefinitionSeries } from "@openmasu/contracts/validation";
 import { jcs, sha256 } from "@openmasu/attribution-core/canonical";
 import { selectDisjointCosts, type ScopedCost } from "@openmasu/attribution-core";
 import type { RoasCalculationEvidence, RoasOperands, TotalNetRoasOperands } from "@openmasu/runtime";
@@ -1038,7 +1039,7 @@ export async function computeSqlMetricRunsWithClient(
   if (!fxPolicy || fxPolicy.rates?.length !== 1) {
     throw new Error("v0.2 SQL metric runs require exactly one structured FX rate");
   }
-  const definitions = new Map<string, Any>(
+const definitions = new Map<string, OpenMasuMetricDefinitionV04>(
     [...REFERENCE_AD_REVENUE_METRIC_DEFINITIONS, ...M1B_METRIC_DEFINITIONS]
       .map((definition) => [definition.metric_name, definition]),
   );
@@ -1175,7 +1176,8 @@ export async function computeSqlMetricRunsWithClient(
             target_scale: fxPolicy.target_scale,
             rates: fxPolicy.rates.map((rate: Any) => ({ currency: rate.currency,
               rate_unscaled: rate.rate_unscaled, rate_scale: rate.rate_scale })),
-            rounding_mode: "half_even", ratio_scale: definition.ratio_scale,
+            // Ratio profiles require this field; retain the legacy value without inventing a default.
+            rounding_mode: "half_even", ratio_scale: definition.ratio_scale!,
             ...(value.totalNetOperands
               ? definition.refund_reversal_policy
                 ? { version: 3, numerator: "total_net_revenue", refund_reversal_policy: "cancel_target_refund_at_watermark",
@@ -1200,141 +1202,6 @@ export async function computeSqlMetricRunsWithClient(
   return output.sort((left, right) => compareText(left.metric_run_id, right.metric_run_id));
 }
 
-function assertMetricDefinitionSeries(definition: Any): void {
-  if (definition.engagement_credit_policy !== undefined || definition.anchor_event === "deep_link_open"
-      || ["engagement_custom_event_converters_24h", "engagement_ad_revenue_24h_usd"].includes(definition.metric_name)
-      || definition.rule_bundle_id === "metric-first-party-engagement") {
-    if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`);
-    return;
-  }
-  if (definition.acquisition_dimension_policy !== undefined || definition.rule_bundle_id === "metric-acquisition-detail") {
-    if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`);
-    assertMetricDefinitionSeries(acquisitionDetailBase(definition as Parameters<typeof acquisitionDetailBase>[0]));
-    return;
-  }
-  if (definition.refund_reversal_policy !== undefined || definition.rule_bundle_id === "metric-refund-reversal") {
-    if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`);
-    const base: Any = { ...definition, metric_definition_version: "0.4.13", rule_bundle_id: "metric-selected-commerce",
-      rule_bundle_version: "0.4.13", rule_bundle_hash: nonFraudBundleHash("metric-selected-commerce") };
-    delete base.refund_reversal_policy;
-    assertMetricDefinitionSeries(base);
-    return;
-  }
-  if (definition.conversion_event_key !== undefined || definition.rule_bundle_id === "metric-custom-conversion"
-      || definition.definition?.numerator === "converted_installations"
-      || ["converted_installations", "converted_installations_over_cohort"].includes(definition.definition?.calculation)) {
-    if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`);
-    return;
-  }
-  const purchaseNetDays = new Map<string, number>([
-    ["cohort_purchase_net_revenue_d0_usd", 0],
-    ["cohort_purchase_net_revenue_d1_usd", 1],
-    ["cohort_purchase_net_revenue_d3_usd", 3],
-    ["cohort_purchase_net_revenue_d7_usd", 7],
-    ["cohort_purchase_net_revenue_d30_usd", 30],
-    ["cohort_purchase_net_revenue_d90_usd", 90],
-  ]);
-  const totalNetSeries = new Map<string, { day: number; calculation: string; valueType: string }>([
-    ["cohort_total_net_revenue_d30_usd", { day: 30, calculation: "revenue_sum", valueType: "money" }],
-    ["cohort_total_net_revenue_d90_usd", { day: 90, calculation: "revenue_sum", valueType: "money" }],
-    ["d30_total_net_roas", { day: 30, calculation: "revenue_over_cost", valueType: "ratio" }],
-    ["d90_total_net_roas", { day: 90, calculation: "revenue_over_cost", valueType: "ratio" }],
-    ["cohort_total_net_ltv_d30_usd", { day: 30, calculation: "revenue_over_cohort", valueType: "money" }],
-    ["cohort_total_net_ltv_d90_usd", { day: 90, calculation: "revenue_over_cohort", valueType: "money" }],
-  ]);
-  const aggregateNames = new Set([
-    "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
-    "aak_attributed_reengagements",
-  ]);
-  const eventNames = definition.event_names ?? [];
-  const grouping = definition.grouping_dimensions ?? [];
-  const fail = () => { throw new Error(`metric_definition_series_mismatch:${definition.metric_name}`); };
-  const strictCosts = definition.cost_selection_policy !== undefined;
-  const selectedCommerce = definition.rule_bundle_id === "metric-selected-commerce";
-  if (selectedCommerce) {
-    if (definition.acquisition_basis !== "selected_first_party_click" || definition.anchor_event !== "install"
-        || definition.aggregation_time_zone !== "UTC" || definition.metric_definition_version !== "0.4.13"
-        || definition.rule_bundle_version !== "0.4.13"
-        || definition.rule_bundle_hash !== nonFraudBundleHash("metric-selected-commerce")
-        || !["purchase_net_revenue", "total_net_revenue"].includes(definition.definition.numerator)
-        || (definition.definition.calculation === "revenue_over_cost"
-          ? definition.cost_selection_policy !== "reject_overlapping_grains" : strictCosts)) fail();
-  }
-  if (!selectedCommerce && (strictCosts || definition.rule_bundle_id === "metric-disjoint-cost")) {
-    if (definition.cost_selection_policy !== "reject_overlapping_grains" || definition.anchor_event !== "install"
-        || definition.aggregation_time_zone !== "UTC" || definition.metric_definition_version !== "0.4.12"
-        || definition.rule_bundle_id !== "metric-disjoint-cost" || definition.rule_bundle_version !== "0.4.12"
-        || definition.rule_bundle_hash !== nonFraudBundleHash("metric-disjoint-cost")
-        || definition.definition.calculation !== "revenue_over_cost" || definition.definition.window.type !== "elapsed"
-        || !["revenue", "total_net_revenue"].includes(definition.definition.numerator)) fail();
-    if (definition.acquisition_basis !== undefined && (definition.acquisition_basis !== "selected_first_party_click"
-        || definition.definition.numerator !== "revenue")) fail();
-  }
-  if (!selectedCommerce && !strictCosts && (definition.acquisition_basis !== undefined || definition.rule_bundle_id === "metric-selected-acquisition")) {
-    if (definition.acquisition_basis !== "selected_first_party_click" || definition.anchor_event !== "install"
-        || definition.metric_definition_version !== "0.4.11" || definition.rule_bundle_id !== "metric-selected-acquisition"
-        || definition.rule_bundle_version !== "0.4.11" || definition.rule_bundle_hash !== nonFraudBundleHash("metric-selected-acquisition")
-        || !["revenue", "active_installations", "cohort_size"].includes(definition.definition.numerator)) fail();
-  }
-  if (definition.definition?.numerator === "purchase_net_revenue" || purchaseNetDays.has(definition.metric_name)) {
-    const expectedDay = purchaseNetDays.get(definition.metric_name);
-    const expectedVersion = selectedCommerce ? "0.4.13" : expectedDay === 30 || expectedDay === 90 ? "0.4.9" : "0.4.8";
-    const expectedHash = selectedCommerce ? nonFraudBundleHash("metric-selected-commerce") : expectedVersion === "0.4.9"
-      ? nonFraudBundleHash("metric-purchase-net-v0.4.9") : nonFraudBundleHash("metric-purchase-net");
-    if (expectedDay === undefined || definition.metric_definition_version !== expectedVersion
-        || definition.anchor_event !== "install" || definition.aggregation_time_zone !== "UTC"
-        || definition.value_type !== "money" || definition.currency !== "USD"
-        || definition.amount_scale !== 6 || definition.rule_bundle_id !== (selectedCommerce ? "metric-selected-commerce" : "metric-purchase-net")
-        || definition.rule_bundle_version !== expectedVersion || definition.rule_bundle_hash !== expectedHash
-        || definition.definition?.calculation !== "revenue_sum"
-        || definition.definition?.numerator !== "purchase_net_revenue"
-        || definition.definition?.window?.type !== "elapsed"
-        || definition.definition?.window?.day !== expectedDay) fail();
-    return;
-  }
-  if (definition.definition?.numerator === "total_net_revenue" || totalNetSeries.has(definition.metric_name)) {
-    const expected = totalNetSeries.get(definition.metric_name);
-    if (!expected || definition.metric_definition_version !== (selectedCommerce ? "0.4.13" : strictCosts ? "0.4.12" : "0.4.9")
-        || definition.anchor_event !== "install" || definition.aggregation_time_zone !== "UTC"
-        || definition.value_type !== expected.valueType
-        || (expected.valueType === "money" && (definition.currency !== "USD" || definition.amount_scale !== 6))
-        || (expected.valueType === "ratio" && definition.ratio_scale !== 6)
-        || definition.rule_bundle_id !== (selectedCommerce ? "metric-selected-commerce" : strictCosts ? "metric-disjoint-cost" : "metric-total-net")
-        || definition.rule_bundle_version !== (selectedCommerce ? "0.4.13" : strictCosts ? "0.4.12" : "0.4.9")
-        || definition.rule_bundle_hash !== nonFraudBundleHash(selectedCommerce ? "metric-selected-commerce" : strictCosts ? "metric-disjoint-cost" : "metric-total-net")
-        || definition.definition?.calculation !== expected.calculation
-        || definition.definition?.numerator !== "total_net_revenue"
-        || definition.definition?.window?.type !== "elapsed"
-        || definition.definition?.window?.day !== expected.day
-        || (expected.calculation === "revenue_over_cost"
-          && (definition.definition?.denominator !== "cost"
-            || definition.definition?.cost_basis !== "cohort_acquisition_day_current_snapshot"))
-        || (expected.calculation === "revenue_over_cohort"
-          && definition.definition?.denominator !== "cohort_size")) fail();
-    return;
-  }
-  if (aggregateNames.has(definition.metric_name)) {
-    const expectedEvent = definition.metric_name.startsWith("aak_attributed_")
-      ? "adattributionkit_postback" : "skan_postback";
-    const expectedGrouping = definition.metric_name === "skan_conversion_value_distribution"
-      ? ["metric_date", "apple_conversion_bucket"] : ["metric_date"];
-    if (definition.definition?.calculation !== "event_count" || definition.definition?.numerator !== "events" ||
-        definition.aggregation_time_zone !== "UTC" || eventNames.length !== 1 || eventNames[0] !== expectedEvent ||
-        grouping.length !== expectedGrouping.length || expectedGrouping.some((value) => !grouping.includes(value))) fail();
-    return;
-  }
-  if (["daily_deep_link_opens", "daily_deep_link_opens_by_status"].includes(definition.metric_name)) {
-    const expectedGrouping = definition.metric_name === "daily_deep_link_opens_by_status"
-      ? ["metric_date", "campaign_id", "attribution_status"]
-      : ["metric_date", "campaign_id"];
-    if (definition.definition?.calculation !== "event_count" || definition.definition?.numerator !== "events" ||
-        eventNames.length !== 1 || eventNames[0] !== "deep_link_open" ||
-        grouping.length !== expectedGrouping.length || expectedGrouping.some((value) => !grouping.includes(value))) fail();
-    return;
-  }
-  if (eventNames.some((value: string) => value === "skan_postback" || value === "adattributionkit_postback") ||
-      grouping.includes("apple_conversion_bucket")) fail();
-}
 
 export async function computeSqlMetricRuns(
   pool: Pool,
