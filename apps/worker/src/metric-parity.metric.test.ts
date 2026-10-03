@@ -96,7 +96,17 @@ describe("dated FX snapshot SQL parity and replay", { concurrency: false }, () =
         aggregation: "cumulative", attribution_scope: "all", metric_definition: `${row.metric_name}@${row.metric_definition_version}`,
         source_cutoff: row.input_received_at_watermark }, rows: [] });
       assert.deepEqual(snapshot.comparison_contexts![0].context.fx, run.fx_conversion_snapshot.policy);
-      assert.equal(compareSnapshots(snapshot, snapshot).status, "compared");
+      const comparison = compareSnapshots(snapshot, snapshot);
+      // Both saved cutoffs precede the conservative end of D7 (August 15).
+      // A captured FX policy does not make an immature cohort comparable.
+      if (row.metric_name === "d7_roas") {
+        assert.equal(comparison.status, "incomparable", row.metric_run_id);
+        assert.ok(comparison.assurance.left.missing.includes("window_maturity"));
+        assert.deepEqual(comparison.rows, []);
+      } else {
+        assert.equal(comparison.status, "compared", row.metric_run_id);
+        assert.equal(comparison.rows[0].status, run.undefined_reason ? "undefined" : "equal");
+      }
     }
     const detail = await metricExplanation(reader, identity, "fx69-late:d7_roas");
     assert.equal(detail?.evidence_state, "available");

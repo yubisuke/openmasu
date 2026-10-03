@@ -45,6 +45,26 @@ it("dated_FX_report_snapshot_requires_the_same_saved_policy_and_exposes_changed_
     comparison_context: captureMetricComparisonContext(r as any, r.comparison_context.definition, changedPolicy, "after", sha256) };
   const comparison = compareSnapshots(saved, reportToSnapshot({ data: [changed] }, template()));
   assert.equal(comparison.status, "incomparable"); assert.ok(comparison.mismatches.includes("meaning.fx"));
+  const reviewedRuns = JSON.parse(readFileSync("fixtures/v0.4/69-dated-fx-cohorts/expected_metric_runs.json", "utf8")) as Record<string, any>[];
+  for (const run of reviewedRuns.filter(value => value.fx_conversion_snapshot)) {
+    const definition = fixture.metric_definitions.find((value: Record<string, any>) => value.metric_name === run.metric_name);
+    const reportRow = { ...run, grouping: run.grouping.dimensions, value_state: run.value_state ?? "present", superseded: false,
+      undefined_reason: run.undefined_reason ?? null, currency: run.currency ?? null, amount_scale: run.amount_scale ?? null,
+      ratio_scale: run.ratio_scale ?? null, policy_versions: [`rule_bundle:${run.rule_bundle_version}`, "fx:0.4.22"],
+      comparison_context: captureMetricComparisonContext(run as any, definition, fixture.fx_policy, "before", sha256) };
+    const datedTemplate = { source: "synthetic-fx69", conditions: { ...template().conditions,
+      date_from: "2026-08-06", date_to: "2026-08-07", attribution_scope: "all", maturity: "unknown",
+      metric_definition: `${run.metric_name}@${run.metric_definition_version}`, source_cutoff: run.input_received_at_watermark }, rows: [] };
+    const current = reportToSnapshot({ data: [reportRow] }, datedTemplate);
+    const result = compareSnapshots(current, current);
+    if (run.metric_name === "d7_roas") {
+      assert.equal(result.status, "incomparable", run.metric_run_id);
+      assert.ok(result.assurance.left.missing.includes("window_maturity"));
+    } else {
+      assert.equal(result.status, "compared", run.metric_run_id);
+      assert.equal(result.rows[0].status, run.undefined_reason ? "undefined" : "equal");
+    }
+  }
 });
 it("checks saved execution policy and displays definition-backed, declared and unknown bases distinctly", () => {
   const r = backedRow(), output = reportToSnapshot({ data: [r] }, template());
