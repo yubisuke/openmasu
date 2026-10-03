@@ -1,7 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { jcs } from "@openmasu/attribution-core";
+import { jcs } from "@openmasu/attribution-core/canonical";
 import { compareSnapshots } from "../apps/api/src/cohort-comparison.js";
 import { renderComparison } from "../apps/api/src/dashboard/comparison-report.js";
 export * from "../apps/api/src/cohort-comparison.js";

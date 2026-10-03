@@ -8,6 +8,18 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./import-normalization": {
+      "types": "./src/import-normalization.ts",
+      "default": "./src/import-normalization.ts"
+    },
+    "./privacy-fence": {
+      "types": "./src/privacy-fence.ts",
+      "default": "./src/privacy-fence.ts"
+    },
+    "./apple-purchase-binding": {
+      "types": "./src/apple-purchase-binding.ts",
+      "default": "./src/apple-purchase-binding.ts"
     }
   },
   "scripts": {
@@ -20,6 +32,7 @@
     "pg": "8.23.0"
   },
   "devDependencies": {
-    "@types/pg": "8.23.1"
+    "@types/pg": "8.23.1",
+    "@openmasu/contracts": "0.4.0"
   }
 }

@@ -1,9 +1,8 @@
 import { createHash } from "node:crypto";
-import { jcs } from "@openmasu/attribution-core";
+import { jcs } from "@openmasu/attribution-core/canonical";
 import { parseSnapshot, comparisonDigest } from "./cohort-comparison.js";
 import { groupingDimensionAllowlist, validateGrouping, type GroupingDimension } from "./report-query.js";
-import { parseCsv, CsvFormatError } from "../../worker/src/import/source.js";
-import { decimalToUnscaled } from "../../worker/src/import/cost.js";
+import { parseCsv, CsvFormatError, decimalToUnscaled } from "@openmasu/runtime/import-normalization";
 import { parseExternalDeclaration, type ExternalRoasDeclaration } from "./external-calculation-declaration.js";
 
 type Binding = { column: string; omit_if_empty?: true } | { constant: string };

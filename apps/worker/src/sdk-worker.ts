@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
-import { sha256, type CandidateAttempt } from "@openmasu/attribution-core";
+import { sha256 } from "@openmasu/attribution-core/canonical";
+import { type CandidateAttempt } from "@openmasu/attribution-core";
 import { decryptMetaInstallReferrer, type MetaKey } from "@openmasu/meta-install-referrer";
 import {
   acquirePrivacyProjectionSessionFence,

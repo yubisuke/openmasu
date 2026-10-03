@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { sha256 } from "@openmasu/attribution-core";
+import { sha256 } from "@openmasu/attribution-core/canonical";
 import { createAppPool, createSeedPool } from "@openmasu/runtime";
 import { ingestFixture } from "./ingestion.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";

@@ -1,4 +1,4 @@
-import { jcs } from "@openmasu/attribution-core";
+import { jcs } from "@openmasu/attribution-core/canonical";
 import { comparisonMeaning } from "@openmasu/runtime";
 import type { MetricQuery } from "./report-query.js";
 import type { MetricReportPage } from "./reporting.js";

@@ -1,13 +1,9 @@
 import type { Pool, PoolClient } from "pg";
 import { createHash } from "node:crypto";
-import {
-  M1B_METRIC_DEFINITIONS,
-  REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
-  acquisitionDetailBase,
-  nonFraudBundleHash,
-  validateMetricDefinition,
-} from "@openmasu/contracts";
-import { jcs, sha256, selectDisjointCosts, type ScopedCost } from "@openmasu/attribution-core";
+import { M1B_METRIC_DEFINITIONS, REFERENCE_AD_REVENUE_METRIC_DEFINITIONS, acquisitionDetailBase, nonFraudBundleHash } from "@openmasu/contracts/definitions";
+import { validateMetricDefinition } from "@openmasu/contracts/validation";
+import { jcs, sha256 } from "@openmasu/attribution-core/canonical";
+import { selectDisjointCosts, type ScopedCost } from "@openmasu/attribution-core";
 import type { RoasCalculationEvidence, RoasOperands, TotalNetRoasOperands } from "@openmasu/runtime";
 import { captureMetricComparisonContext, type MetricComparisonContext } from "@openmasu/runtime";
 import { selectedAcquisitionSql, selectedClickJoinSql } from "./selected-acquisition.js";

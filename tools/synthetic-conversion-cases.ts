@@ -1,4 +1,4 @@
-import { customConversionMetricDefinitions } from "@openmasu/contracts";
+import { customConversionMetricDefinitions } from "@openmasu/contracts/definitions";
 import { syntheticRetentionCases } from "./synthetic-retention-cases.js";
 
 type Any = Record<string, any>;

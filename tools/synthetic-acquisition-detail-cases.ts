@@ -1,5 +1,5 @@
-import { REFUND_REVERSAL_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
-import { sha256 } from "@openmasu/attribution-core";
+import { REFUND_REVERSAL_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
+import { sha256 } from "@openmasu/attribution-core/canonical";
 
 type Any = Record<string, any>;
 export type AcquisitionDetailCase = { name: string; input: Any; expected: string[] };

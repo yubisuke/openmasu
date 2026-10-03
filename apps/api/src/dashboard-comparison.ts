@@ -1,5 +1,5 @@
 import type { IncomingMessage } from "node:http";
-import { jcs } from "@openmasu/attribution-core";
+import { jcs } from "@openmasu/attribution-core/canonical";
 import { aggregateCsvToSnapshot, AggregateCsvError, csvLimits } from "./aggregate-csv-snapshot.js";
 import { parseSnapshot } from "./cohort-comparison.js";
 import { readRawBody, RequestBodyError } from "./raw-body.js";

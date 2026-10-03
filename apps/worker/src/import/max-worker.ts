@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
-import { sha256, type CandidateAttempt } from "@openmasu/attribution-core";
+import { sha256 } from "@openmasu/attribution-core/canonical";
+import { type CandidateAttempt } from "@openmasu/attribution-core";
 import { decimalToUnscaled } from "./cost.js";
 import { ingestRuntimeBatch } from "../ingestion.js";
 import { uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";

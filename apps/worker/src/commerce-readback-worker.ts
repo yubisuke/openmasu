@@ -19,7 +19,7 @@ import { ingestRuntimeBatch } from "./ingestion.js";
 import { googleServiceAccountAccessToken } from "./google-service-account.js";
 import { callAppleStoreApi, type AppleStoreApiCredentials } from "./apple-store-api.js";
 import type { CandidateAttempt } from "@openmasu/attribution-core";
-import { activeApplePurchaseAnchor, readApplePurchaseIntent } from "../../runtime/src/apple-purchase-binding.js";
+import { activeApplePurchaseAnchor, readApplePurchaseIntent } from "@openmasu/runtime/apple-purchase-binding";
 import { projectAppleTransaction, type AppleRefundReversal } from "./apple-financial-projection.js";
 
 type JsonObject = Record<string, unknown>;

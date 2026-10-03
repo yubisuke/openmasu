@@ -16,6 +16,18 @@
     "./validation-tooling": {
       "types": "./src/validation-tooling.ts",
       "default": "./src/validation-tooling.ts"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "default": "./src/types.ts"
+    },
+    "./definitions": {
+      "types": "./src/definitions.ts",
+      "default": "./src/definitions.ts"
+    },
+    "./validation": {
+      "types": "./src/event-validation.ts",
+      "default": "./src/event-validation.ts"
     }
   },
   "scripts": {
@@ -26,11 +38,13 @@
   },
   "devDependencies": {
     "@types/node": "22.20.1",
-    "ajv": "8.20.0",
-    "ajv-formats": "3.0.1",
-    "json-canonicalize": "2.0.0",
     "json-schema-to-typescript": "15.0.4",
     "tsx": "4.23.12",
     "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "json-canonicalize": "2.0.0"
   }
 }

@@ -7,6 +7,45 @@ so that a historical result can be reproduced and audited. PostgreSQL is the
 default durable store. Pure TypeScript and independent Python evaluators define
 contract behavior; runtime SQL must match them.
 
+## Source ownership and dependency direction
+
+HTTP routes, CLI commands, and scheduled jobs are entry adapters. They validate
+input and call feature functions that own the operation, tenant scope, and
+transaction. Domain calculations live in `packages/`; PostgreSQL queries,
+payload storage, and provider transport belong to runtime adapters. Reporting
+results become typed dashboard view models before HTML rendering.
+
+| Source | Responsibility and public boundary |
+| --- | --- |
+| `apps/api/src` | HTTP authentication, feature operations, report queries and encoders |
+| `apps/api/src/dashboard` | Typed view models, presenters, escaped HTML, local CSS and SVG |
+| `apps/worker/src` | Durable jobs, ingestion orchestration, provider adapters and SQL metric execution |
+| `apps/redirector/src` | Redirect HTTP boundary over the redirector domain package |
+| `apps/runtime/src` | Shared PostgreSQL, privacy, payload and operational adapters; exported as `@openmasu/runtime` |
+| `packages/attribution-core` | Deterministic evaluation and candidate interfaces |
+| `packages/contracts` | Contract types, definition metadata and explicit schema validation |
+| Other domain packages | Cohesive platform, commerce, fraud and association rules |
+
+Production modules must use another workspace's declared public entrypoint.
+The API, worker, and redirector do not import each other's implementation files.
+The runtime directory remains a shared library despite its location in `apps/`.
+Type-only dependencies may be declared as development dependencies; executable
+dependencies must be declared as runtime dependencies. Runtime workspace cycles
+are rejected by `npm run check:module-boundaries`.
+
+Use `@openmasu/attribution-core/canonical` for JCS and hashing, and
+`@openmasu/runtime/import-normalization` for CSV parsing and exact decimal
+conversion. Both entrypoints are free of database, file, and network IO.
+`@openmasu/contracts/types` contains declarations;
+`@openmasu/contracts/definitions` contains metadata without schema loading;
+`@openmasu/contracts/validation` explicitly loads the closed schemas and compiles
+their validators. The original package exports remain compatible.
+
+Feature modules stay in their existing workspace. Add a small interface or
+function parameter at an IO boundary when a caller needs it; do not create a
+package, generic repository, or framework for each function. Keep independent
+TypeScript, Python, and SQL calculation implementations so parity remains useful.
+
 ## Deployment shape
 
 ```text

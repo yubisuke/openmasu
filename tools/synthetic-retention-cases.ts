@@ -1,4 +1,4 @@
-import { M1B_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import { M1B_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 
 type Any = Record<string, any>;
 

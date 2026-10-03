@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import type { Pool } from "pg";
-import { sha256, type CandidateAttempt } from "@openmasu/attribution-core";
-import { validateEventPayload } from "@openmasu/contracts";
+import { sha256 } from "@openmasu/attribution-core/canonical";
+import { type CandidateAttempt } from "@openmasu/attribution-core";
+import { validateEventPayload } from "@openmasu/contracts/validation";
 import {
   createAppPool,
   recordJobOutcome,

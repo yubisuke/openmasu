@@ -12,6 +12,34 @@ change. Repository instructions in `AGENTS.md` remain authoritative.
    documentation, or release packaging.
 5. Read the corresponding current design and validation documents.
 
+## Placing a change
+
+- HTTP and dashboard behavior starts in `apps/api/src/routes.ts` and its feature
+  handler. Keep authentication and response parsing at that boundary. Build a
+  typed view model before calling a dashboard renderer; rendering does not query
+  PostgreSQL or read environment variables.
+- A metric definition belongs in `packages/contracts/src`; its closed shape is
+  validated through `@openmasu/contracts/validation`. Calculation changes require
+  the reference evaluator, independent Python implementation, and SQL engine in
+  `apps/worker/src/metrics` to agree. Use the existing metric-parity suite.
+- A provider adapter belongs in the corresponding worker import/job module and
+  receives bounded synthetic responses in tests. Reuse the existing ingestion,
+  privacy fence, and job lifecycle rather than introducing another queue.
+- Shared IO belongs in an explicit `@openmasu/runtime` export. Shared pure CSV
+  and decimal operations use `@openmasu/runtime/import-normalization`; hashes use
+  `@openmasu/attribution-core/canonical`. Do not import a sibling application's
+  private source just to reuse a helper.
+- Use `@openmasu/contracts/types` for type-only imports and
+  `@openmasu/contracts/definitions` for metadata. Import the validation subpath
+  when validation is required; a metadata import must not compile schemas.
+
+Declare each imported workspace dependency in its own `package.json` and update
+the lockfile. Runtime imports require runtime dependencies. Review SBOM component
+changes explicitly, including newly declared dependencies that code already
+used. `npm run check:module-boundaries` checks production import declarations,
+cross-workspace boundaries, the pure entrypoints, and runtime workspace cycles.
+Tests and generated declarations are outside the production import graph.
+
 ## Common gates
 
 Install the pinned toolchains and dependencies described in

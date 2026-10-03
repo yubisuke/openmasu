@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { acquirePrivacyTenantXactFence, withTenant, type PayloadStore } from "@openmasu/runtime";
-import { privacyProjectionIsBlocked } from "../../runtime/src/privacy-fence.js";
+import { privacyProjectionIsBlocked } from "@openmasu/runtime/privacy-fence";
 import { installationIdDigest, type SdkAuthConfig, type VerifiedSdkRequest } from "./sdk-auth.js";
 
 export type ApplePurchaseEnvironment = "Sandbox" | "Production";

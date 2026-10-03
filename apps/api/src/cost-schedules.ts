@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { sha256 } from "@openmasu/attribution-core";
+import { sha256 } from "@openmasu/attribution-core/canonical";
 import { normalizeCostRefreshDefinition, uuidV7, withTenant } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
