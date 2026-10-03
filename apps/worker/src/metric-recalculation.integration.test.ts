@@ -66,7 +66,8 @@ describe("bounded cost correction recalculation", { concurrency: false }, () => 
     const pending = await report();
     assert.equal(pending.data.find(row => row.metric_run_id === oldId)?.cost_update_state, "recalculation_pending");
     const html = renderDashboard(buildDashboardView({ apps: [], selectedAppId: "app-a", metrics: pending, csrfToken: "synthetic" }));
-    assert.match(html, /Cost input revised; recalculation pending/);
+    assert.match(html, /Recalculation pending; saved value remains unchanged/);
+    assert.equal(pending.data.find(row => row.grouping.country === "JP")?.recalculation_state?.cost, "recalculation_pending");
     assert.deepEqual(await processMetricRecalculations(app, tenantId), { completed: 1, skipped: 0, fenced: 0, failed: 0 });
     const history = await report(), changed = history.data.find(row => row.supersedes_metric_run_id === oldId)!;
     assert.equal(changed.value_unscaled, "750000");

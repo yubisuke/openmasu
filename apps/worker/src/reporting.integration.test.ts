@@ -206,7 +206,7 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
   it("projects scoped empty and partially rejected import receipts separately from identical saved zero values", async () => {
     const identity = { tenantId: "tenant-a", appId: "app-freshness-223", keyId: "synthetic-freshness", role: "admin" as const };
     await withTenant(appPool, identity.tenantId, client => client.query(
-      "INSERT INTO control.apps (tenant_id,app_id) VALUES ($1,$2) ON CONFLICT DO NOTHING", [identity.tenantId, identity.appId]));
+      "INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ($1,$2,'2026-08-09T00:00:00.000Z') ON CONFLICT DO NOTHING", [identity.tenantId, identity.appId]));
     const input = fixture("33-stage-b-cohort-metrics");
     const evaluation = { ...input.metric_evaluations[0], metric_names: ["cohort_install_count"],
       metric_run_id_prefix: "synthetic-freshness-mature", grouping: { cohort_date: "2026-08-01" } };
