@@ -43,23 +43,28 @@ async function attributionMatches(client: PoolClient, scope: Scope, row: Any, ar
   // Test both the saved and revised membership: a move OUT of a cohort needs correction too.
   for (const [cutoff,previous] of [[row.input_received_at_watermark,artifact.supersedes_attribution_id],[watermark,null]]) {
     const platform=metric.acquisition_basis === "selected_verified_platform";
-    const acquisition=previous && !platform ? `SELECT * FROM ledger.attribution_results WHERE tenant_id=$1 AND app_id=$2 AND attribution_id=$9::text`
-      : `SELECT * FROM (${metricAcquisitionSql(platform)}) AS selected WHERE ($9::text IS NULL OR selected.attribution_id=$9::text)`;
+    const imported=metric.acquisition_basis === "selected_imported_provider";
+    const mode=imported ? "selected_imported_provider" : platform;
+    const acquisition=previous && !platform && !imported ? `SELECT * FROM ledger.attribution_results WHERE tenant_id=$1 AND app_id=$2 AND attribution_id=$9::text`
+      : `SELECT * FROM (${metricAcquisitionSql(mode,"$10")}) AS selected WHERE ($9::text IS NULL OR selected.attribution_id=$9::text)`;
     const match=await client.query(`WITH acquisition AS (${acquisition})
       SELECT 1 FROM ledger.install_facts AS install JOIN ledger.logical_events AS logical USING (logical_event_id)
       JOIN ledger.raw_records_current AS raw ON raw.tenant_id=logical.tenant_id AND raw.app_id=logical.app_id AND raw.record_id=logical.record_id
-      ${metricAcquisitionJoinSql("$7","$8",platform)}
+      ${metricAcquisitionJoinSql("$7","$8",mode,"$10")}
       WHERE install.tenant_id=$1 AND install.app_id=$2 AND install.installation_id=$4
         AND raw.received_at<=$3 AND raw.payload_lifecycle_status='available'
         ${platform ? "AND acquisition_source.network IS NOT NULL" : ""}
+        ${imported ? "AND acquisition_source.import_provider IS NOT NULL" : ""}
+        ${metric.acquisition_basis === "selected_first_party_click" ? "AND logical.producer NOT LIKE 'import:%'" : ""}
+        AND ($10::text IS NULL OR logical.producer='import:'||$10::text)
         AND timezone($6,install.occurred_at_ts)::date::text=$5::jsonb->>'cohort_date'
-        AND ($5::jsonb->>'campaign_id' IS NULL OR ${metricAcquisitionDimensionSql("campaign_id",platform)}=$5::jsonb->>'campaign_id')
-        AND ($5::jsonb->>'network' IS NULL OR ${metricAcquisitionDimensionSql("network",platform)}=$5::jsonb->>'network')
+        AND ($5::jsonb->>'campaign_id' IS NULL OR ${metricAcquisitionDimensionSql("campaign_id",platform || imported)}=$5::jsonb->>'campaign_id')
+        AND ($5::jsonb->>'network' IS NULL OR ${metricAcquisitionDimensionSql("network",platform || imported)}=$5::jsonb->>'network')
         AND ($5::jsonb->>'ad_group_id' IS NULL OR acquisition_source.ad_group_id=$5::jsonb->>'ad_group_id')
         AND ($5::jsonb->>'creative_id' IS NULL OR acquisition_source.creative_id=$5::jsonb->>'creative_id')
-        AND ($5::jsonb->>'country' IS NULL OR install.country=$5::jsonb->>'country')
+        AND ($5::jsonb->>'country' IS NULL OR ${imported ? "acquisition_source.country" : "install.country"}=$5::jsonb->>'country')
         AND ($5::jsonb->>'attribution_status' IS NULL OR coalesce(acquisition.status,'unattributed')=$5::jsonb->>'attribution_status') LIMIT 1`,
-    [scope.tenantId,scope.appId,cutoff,artifact.subject_ref,JSON.stringify(grouping),metric.aggregation_time_zone,true,"after",previous]);
+    [scope.tenantId,scope.appId,cutoff,artifact.subject_ref,JSON.stringify(grouping),metric.aggregation_time_zone,true,"after",previous,metric.import_provider ?? null]);
     if (match.rowCount) return true;
   }
   return false;
@@ -107,7 +112,7 @@ async function enqueuePage(client: PoolClient, r: Receipt, policy: MetricCorrect
       safe_reason:row.replay?.version===1 && supportsLateMetric(row.replay) ? null : "unsupported_definition"}));
   } else if (r.source_kind === "attribution_revision") {
     for (const row of current) {
-      if (row.replay?.version!==1 || !supportsAttributionMetric(row.replay) || !["selected_first_party_click","selected_verified_platform"].includes(row.replay.metric_definition.acquisition_basis)) {
+      if (row.replay?.version!==1 || !supportsAttributionMetric(row.replay) || !["selected_first_party_click","selected_verified_platform","selected_imported_provider"].includes(row.replay.metric_definition.acquisition_basis)) {
         selected.push({metric_run_id:row.metric_run_id,replay:row.replay,safe_reason:"unsupported_definition"});
       } else if (await attributionMatches(client,scope,row,revision.artifact,watermark)) {
         selected.push({metric_run_id:row.metric_run_id,replay:row.replay,safe_reason:null});

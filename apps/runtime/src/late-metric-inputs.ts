@@ -8,7 +8,7 @@ type Any = Record<string, any>;
 type InputRow = {
   record_id: string; payload_sha256: string; event_name: string; received_at: string;
   lifecycle: string; logical_event_id: string | null; installation_id: string | null;
-  occurred_at: string | null; financial_status: string | null; target_available: boolean; refund_reversal: boolean;
+  occurred_at: string | null; financial_status: string | null; target_available: boolean; refund_reversal: boolean; producer: string;
 };
 export type LateSelection = {
   rows: { metric_run_id: string; replay: Any | null; safe_reason: string | null }[];
@@ -29,14 +29,14 @@ export function supportsLateMetric(replay: Any): boolean {
     && Object.keys(replay.evaluation.grouping).every(key =>
       ["campaign_id", "network", "country", "cohort_date", "attribution_status"].includes(key)
         || (metric.acquisition_dimension_policy === "selected_link_ad_group_creative" && ["ad_group_id", "creative_id"].includes(key))
-        || (metric.acquisition_basis === "selected_verified_platform" && key === "ad_group_id"));
+        || (["selected_verified_platform","selected_imported_provider"].includes(metric.acquisition_basis ?? "") && key === "ad_group_id"));
 }
 
 /** Attribution membership can change counts and retention as well as revenue. */
 export function supportsAttributionMetric(replay: Any): boolean {
   if (supportsLateMetric(replay)) return true;
   const metric = replay.metric_definition;
-  return !!metric && validateMetricDefinition(metric) && metric.acquisition_basis === "selected_verified_platform"
+  return !!metric && validateMetricDefinition(metric) && ["selected_verified_platform","selected_imported_provider"].includes(metric.acquisition_basis ?? "")
     && ["cohort_size", "active_installations_over_cohort"].includes(metric.definition.calculation)
     && typeof replay.evaluation?.grouping?.cohort_date === "string";
 }
@@ -48,7 +48,7 @@ export async function selectLateMetricInputs(
 ): Promise<LateSelection> {
   const result = await client.query<InputRow>(
     `SELECT raw.record_id,raw.payload_sha256,raw.event_name,raw.received_at,
-       raw.payload_lifecycle_status AS lifecycle,logical.logical_event_id,
+       raw.payload_lifecycle_status AS lifecycle,logical.logical_event_id,logical.producer,
        CASE raw.event_name WHEN 'ad_revenue' THEN revenue.installation_id
          WHEN 'purchase' THEN purchase.installation_id WHEN 'refund' THEN target.installation_id END AS installation_id,
        coalesce(revenue.occurred_at,purchase.occurred_at,
@@ -142,10 +142,13 @@ export async function selectLateMetricInputs(
     else if (row.evidence_unavailable) reason = "input_unavailable";
     else {
       const metric = row.replay.metric_definition;
+      const imported = metric.acquisition_basis === "selected_imported_provider";
+      const contextDimensions = imported || metric.acquisition_basis === "selected_verified_platform";
+      const mode = imported ? "selected_imported_provider" : metric.acquisition_basis === "selected_verified_platform";
       const impacted = await client.query(
-        `WITH acquisition AS (SELECT * FROM (${metricAcquisitionSql(metric.acquisition_basis === "selected_verified_platform")}) AS selected WHERE $7::boolean)
+        `WITH acquisition AS (SELECT * FROM (${metricAcquisitionSql(mode,"$15")}) AS selected WHERE $7::boolean)
          SELECT DISTINCT changed.record_id FROM jsonb_to_recordset($4::jsonb)
-           AS changed(record_id text,event_name text,installation_id text,received_at text,occurred_at text,refund_reversal boolean)
+           AS changed(record_id text,event_name text,installation_id text,received_at text,occurred_at text,refund_reversal boolean,producer text)
          JOIN ledger.install_facts AS install ON install.tenant_id=$1 AND install.app_id=$2
            AND install.installation_id=changed.installation_id
          JOIN ledger.logical_events AS logical ON logical.logical_event_id=install.logical_event_id
@@ -155,21 +158,24 @@ export async function selectLateMetricInputs(
            WHERE candidate.tenant_id=install.tenant_id AND candidate.app_id=install.app_id
              AND candidate.subject_scope='installation_level' AND candidate.subject_ref=install.installation_id
            ORDER BY candidate.decided_at DESC,candidate.attribution_id DESC LIMIT 1) AS attribution ON true
-         ${metricAcquisitionJoinSql("$7", "$8", metric.acquisition_basis === "selected_verified_platform")}
+         ${metricAcquisitionJoinSql("$7", "$8", mode,"$15")}
          WHERE ($14::boolean OR changed.received_at>$12) AND raw.received_at<=$3 AND raw.payload_lifecycle_status='available'
            AND (NOT changed.refund_reversal OR $13::boolean)
            ${metric.acquisition_basis === "selected_verified_platform" ? "AND acquisition_source.network IS NOT NULL" : ""}
+           ${imported ? "AND acquisition_source.import_provider IS NOT NULL" : ""}
+           ${metric.acquisition_basis === "selected_first_party_click" ? "AND logical.producer NOT LIKE 'import:%'" : ""}
+           AND ($15::text IS NULL OR changed.producer='import:'||$15::text)
            AND ($11='total_net_revenue'
              OR ($11='purchase_net_revenue' AND changed.event_name IN ('purchase','refund'))
              OR ($11='revenue' AND changed.event_name='ad_revenue'))
            AND control.canonical_timestamp_value(changed.occurred_at)>=install.occurred_at_ts
            AND control.canonical_timestamp_value(changed.occurred_at)<install.occurred_at_ts+(($6+1)*interval '1 day')
            AND timezone($9,install.occurred_at_ts)::date::text=$5::jsonb->>'cohort_date'
-           AND ($5::jsonb->>'campaign_id' IS NULL OR ${metricAcquisitionDimensionSql("campaign_id", metric.acquisition_basis === "selected_verified_platform")}=$5::jsonb->>'campaign_id')
-           AND ($5::jsonb->>'network' IS NULL OR ${metricAcquisitionDimensionSql("network", metric.acquisition_basis === "selected_verified_platform")}=$5::jsonb->>'network')
+           AND ($5::jsonb->>'campaign_id' IS NULL OR ${metricAcquisitionDimensionSql("campaign_id", contextDimensions)}=$5::jsonb->>'campaign_id')
+           AND ($5::jsonb->>'network' IS NULL OR ${metricAcquisitionDimensionSql("network", contextDimensions)}=$5::jsonb->>'network')
            AND ($5::jsonb->>'ad_group_id' IS NULL OR acquisition_source.ad_group_id=$5::jsonb->>'ad_group_id')
            AND ($5::jsonb->>'creative_id' IS NULL OR acquisition_source.creative_id=$5::jsonb->>'creative_id')
-           AND ($5::jsonb->>'country' IS NULL OR install.country=$5::jsonb->>'country')
+           AND ($5::jsonb->>'country' IS NULL OR ${imported ? "acquisition_source.country" : "install.country"}=$5::jsonb->>'country')
            AND ($5::jsonb->>'attribution_status' IS NULL OR
              (CASE WHEN $7 THEN coalesce(acquisition.status,'unattributed') ELSE attribution.status END)=$5::jsonb->>'attribution_status')
            AND ($10='gross' OR (CASE WHEN $7 THEN acquisition.reason_code ELSE attribution.reason_code END) IS DISTINCT FROM 'fraud_excluded')
@@ -177,7 +183,7 @@ export async function selectLateMetricInputs(
           JSON.stringify(row.replay.evaluation.grouping), metric.definition.window.day,
           !!metric.acquisition_basis, "after", metric.aggregation_time_zone,
           metric.fraud_policy ?? "gross", metric.definition.numerator, row.watermark,
-          metric.refund_reversal_policy === "cancel_target_refund_at_watermark", committedReceipt]);
+          metric.refund_reversal_policy === "cancel_target_refund_at_watermark", committedReceipt, metric.import_provider ?? null]);
       if (!impacted.rowCount) continue;
       for (const match of impacted.rows) matchedRecords.add(match.record_id);
       if (row.pending) reason = "already_pending";

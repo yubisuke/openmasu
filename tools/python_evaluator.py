@@ -1147,30 +1147,42 @@ def metric_definitions(value: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def validate_metric_definition_series(definition: dict[str, Any]) -> None:
+    imported = ("import_provider" in definition or definition.get("acquisition_basis") == "selected_imported_provider"
+                or definition.get("rule_bundle_id") == "metric-imported-provider-acquisition"
+                or definition["metric_name"].startswith("imported_"))
     if (definition.get("acquisition_basis") == "selected_verified_platform"
             or definition.get("rule_bundle_id") == "metric-verified-platform-acquisition"
-            or definition["metric_name"].startswith("platform_")):
+            or definition["metric_name"].startswith("platform_") or imported):
         name = definition["metric_name"]
+        prefix = "imported" if imported else "platform"
         common = {"metric_definition_version": "0.4.19", "anchor_event": "install",
                   "aggregation_time_zone": "UTC", "acquisition_basis": "selected_verified_platform",
                   "rule_bundle_id": "metric-verified-platform-acquisition", "rule_bundle_version": "0.4.19",
                   "rule_bundle_hash": "be94f7b32af424eaf9b93718a0a929c9b8d4b4c6eb2d07e7bc5547b022514cb5",
                   "grouping_dimensions": ["campaign_id", "network", "country", "cohort_date", "attribution_status", "ad_group_id"]}
+        if imported:
+            provider = definition.get("import_provider")
+            if not isinstance(provider, str) or re.fullmatch(r"[a-z0-9-]{1,64}", provider) is None:
+                raise ValueError(f"metric_definition_series_mismatch:{name}")
+            common.update({"metric_definition_version": "0.4.20", "acquisition_basis": "selected_imported_provider",
+                           "rule_bundle_id": "metric-imported-provider-acquisition", "rule_bundle_version": "0.4.20",
+                           "rule_bundle_hash": "8e26dc304ddfdccdbd5375ed1251d0e6fb2819bc9ace3c4ba23fa5a6c60fcb25",
+                           "import_provider": provider})
         series = {}
         for horizon in (0, 1, 3, 7):
             window = {"type": "elapsed", "day": horizon}
-            series[f"platform_d{horizon}_roas"] = {"value_type": "ratio", "ratio_scale": 6,
+            series[f"{prefix}_d{horizon}_roas"] = {"value_type": "ratio", "ratio_scale": 6,
                 "cost_selection_policy": "reject_overlapping_grains", "definition": {
                     "calculation": "revenue_over_cost", "window": window, "numerator": "revenue",
                     "denominator": "cost", "cost_basis": "cohort_acquisition_day_current_snapshot"}}
-            series[f"platform_cohort_ltv_d{horizon}_usd"] = {"value_type": "money", "currency": "USD", "amount_scale": 6,
+            series[f"{prefix}_cohort_ltv_d{horizon}_usd"] = {"value_type": "money", "currency": "USD", "amount_scale": 6,
                 "definition": {"calculation": "revenue_over_cohort", "window": window,
                                "numerator": "revenue", "denominator": "cohort_size"}}
         for horizon in (1, 7):
-            series[f"platform_retention_d{horizon}"] = {"value_type": "ratio", "ratio_scale": 6,
+            series[f"{prefix}_retention_d{horizon}"] = {"value_type": "ratio", "ratio_scale": 6,
                 "activity_events": ["session_start"], "definition": {"calculation": "active_installations_over_cohort",
                     "window": {"type": "activity_day", "day": horizon}, "numerator": "active_installations", "denominator": "cohort_size"}}
-        series["platform_cohort_install_count"] = {"value_type": "count", "definition": {
+        series[f"{prefix}_cohort_install_count"] = {"value_type": "count", "definition": {
             "calculation": "cohort_size", "window": {"type": "elapsed", "day": 0}, "numerator": "cohort_size"}}
         expected = {**common, "metric_name": name, **series.get(name, {})}
         if (name not in series or {key: value for key, value in definition.items() if key != "fraud_policy"} != expected
@@ -1459,6 +1471,7 @@ def matches_grouping(
     attribution_statuses: dict[tuple[str, str, str], str],
     acquisition: dict[str, Any] | None = None,
     authoritative_acquisition: bool = False,
+    authoritative_country: bool = False,
 ) -> bool:
     if not grouping:
         return True
@@ -1475,7 +1488,8 @@ def matches_grouping(
         return False
     if any(grouping.get(field) is not None and acquisition.get(field) != grouping[field] for field in ("ad_group_id", "creative_id")):
         return False
-    if grouping.get("country") is not None and payload.get("country", context.get("provider_country")) != grouping["country"]:
+    country = acquisition.get("country") if authoritative_country else payload.get("country", context.get("provider_country"))
+    if grouping.get("country") is not None and country != grouping["country"]:
         return False
     if grouping.get("cohort_date") is not None and attempt["record"]["event_name"] == "install" and day(attempt["record"]["occurred_at"], "UTC", "occurred_at") != grouping["cohort_date"]:
         return False
@@ -1543,6 +1557,38 @@ def selected_acquisition_dimensions(install, visible, attributions):
               and item["record"]["payload"].get("click_id") == install["record"]["payload"].get("click_id")
               and (tenant, app, item["record"]["record_id"]) in refs]
     return clicks[0]["record"]["payload"] if len(clicks) == 1 else {}
+
+
+def imported_install(attempt, provider):
+    return (attempt["record"]["event_name"] == "install" and attempt["record"]["producer"] == f"import:{provider}"
+            and attempt["record"]["payload"].get("import_context", {}).get("provider") == provider)
+
+
+def selected_imported_attributions(attributions, included, provider, watermark):
+    anchors = [item for item in included if imported_install(item, provider)]
+    eligible = [row for row in attributions if row["method"] == "imported" and row["model"] == "provider_reported"
+                and any(item["server"]["tenant_id"] == row["tenant_id"] and item["server"]["app_id"] == row["app_id"]
+                        and item["record"]["payload"]["installation_id"] == row["subject_ref"]
+                        and any(ref["tenant_id"] == item["server"]["tenant_id"] and ref["app_id"] == item["server"]["app_id"]
+                                and ref["ref"] == item["record"]["record_id"] for ref in row["evidence_refs"])
+                        for item in anchors)]
+    return selected_acquisition_attributions(eligible, included, watermark)
+
+
+def imported_context_rows(included, provider):
+    anchors = sort_by_key([item for item in included if imported_install(item, provider)],
+                          lambda item: (item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["record_id"]))
+    return [[item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["record_id"], item["record"]["producer"],
+             digest(item["record"]["payload"]["import_context"])] for item in anchors]
+
+
+def imported_dimensions(install, attributions):
+    context = install["record"]["payload"]["import_context"]
+    row = attributions.get((install["server"]["tenant_id"], install["server"]["app_id"], install["record"]["payload"]["installation_id"]), {})
+    return {"country": context.get("provider_country"), **({
+        "campaign_id": context.get("provider_campaign_ref"), "network": context.get("provider_network"),
+        "ad_group_id": context.get("provider_adgroup_ref"),
+    } if row.get("status") == "non_organic" else {})}
 
 
 def selected_platform_acquisition(attributions, included, inputs, watermark):
@@ -1742,7 +1788,7 @@ def metric_runs(
         acquisition_statuses = {(item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["payload"]["installation_id"]): "unattributed"
                                 for item in included if item["record"]["event_name"] == "install"}
         acquisition_statuses.update({key: item["status"] for key, item in acquisition_attributions.items()})
-        acquisition_installs = [item for item in visible if item["record"]["event_name"] == "install"
+        acquisition_installs = [item for item in visible if item["record"]["event_name"] == "install" and not item["record"]["producer"].startswith("import:")
                                and matches_grouping(item, evaluation.get("grouping"), acquisition_statuses,
                                    selected_acquisition_dimensions(item, visible, acquisition_attributions))]
         installs = [
@@ -1800,10 +1846,20 @@ def metric_runs(
                     and not evaluation.get("grouping", {}).get("network")):
                 raise ValueError("platform_acquisition_source_required")
             if (not definition.get("acquisition_dimension_policy")
-                    and not (definition.get("acquisition_basis") == "selected_verified_platform" and "creative_id" not in evaluation.get("grouping", {}))
+                    and not (definition.get("acquisition_basis") in ("selected_verified_platform", "selected_imported_provider") and "creative_id" not in evaluation.get("grouping", {}))
                     and any(field in evaluation.get("grouping", {}) for field in ("ad_group_id", "creative_id"))):
                 raise ValueError(f"unsupported detail grouping for {metric_name}")
             selected_installs = platform_installs if definition.get("acquisition_basis") == "selected_verified_platform" else acquisition_installs if definition.get("acquisition_basis") else installs
+            provider = definition.get("import_provider")
+            imported_attributions = selected_imported_attributions(attributions, included, provider, evaluation["input_received_at_watermark"]) if provider else None
+            if imported_attributions is not None:
+                statuses = {(item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["payload"]["installation_id"]): "unattributed"
+                            for item in included if imported_install(item, provider)}
+                statuses.update({key: row["status"] for key, row in imported_attributions.items()})
+                selected_installs = [item for item in visible if imported_install(item, provider)
+                                    and matches_grouping(item, evaluation.get("grouping"), statuses, imported_dimensions(item, imported_attributions), True, True)
+                                    and (definition.get("fraud_policy") != "net" or imported_attributions.get((item["server"]["tenant_id"],
+                                        item["server"]["app_id"], item["record"]["payload"]["installation_id"]), {}).get("reason_code") != "fraud_excluded")]
             if definition.get("acquisition_basis") == "selected_verified_platform" and definition.get("fraud_policy") == "net":
                 selected_installs = [item for item in selected_installs if platform[0].get((item["server"]["tenant_id"], item["server"]["app_id"],
                     item["record"]["payload"]["installation_id"]), {}).get("reason_code") != "fraud_excluded"]
@@ -1859,6 +1915,8 @@ def metric_runs(
                 raise ValueError(f"unsupported grouping for {metric_name}: {','.join(unsupported)}")
             revenue_value = 0
             for item in ([] if definition.get("engagement_credit_policy") or "conversion_event_key" in definition else revenue):
+                if provider and item["record"]["producer"] != f"import:{provider}":
+                    continue
                 installation = next(
                     (
                         candidate for candidate in eligible_installs
@@ -1953,6 +2011,8 @@ def metric_runs(
                     event_names = set(definition.get("activity_events", ["session_start"]))
                     active: set[str] = set()
                     for activity in (item for item in activities if item["record"]["event_name"] in event_names):
+                        if provider and activity["record"]["producer"] != f"import:{provider}":
+                            continue
                         installation = next((candidate for candidate in eligible_installs
                                              if candidate["server"]["tenant_id"] == activity["server"]["tenant_id"]
                                              and candidate["server"]["app_id"] == activity["server"]["app_id"]
@@ -2066,6 +2126,9 @@ def metric_runs(
                 "metric_definition_version": definition["metric_definition_version"],
                 "input_snapshot_id": digest({"record_snapshot_id": digest(snapshot_rows), "engagement_inputs": engagement_snapshot_rows(engagement)})
                                      if definition.get("engagement_credit_policy") else digest({"record_and_cost_snapshot_id": digest(snapshot_rows),
+                                             "acquisition_attributions": acquisition_attribution_rows(imported_attributions.values()),
+                                             "imported_acquisition_contexts": imported_context_rows(included, provider)})
+                                     if imported_attributions is not None else digest({"record_and_cost_snapshot_id": digest(snapshot_rows),
                                              "acquisition_attributions": acquisition_attribution_rows(platform[0].values()),
                                              "platform_acquisition_inputs": platform_proof_rows(platform)})
                                      if definition.get("acquisition_basis") == "selected_verified_platform" else digest({"record_and_cost_snapshot_id": digest(snapshot_rows),

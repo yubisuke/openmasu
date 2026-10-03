@@ -58,6 +58,7 @@ For a complete newcomer reading path, use this order:
 - [Reading and filtering dashboard metrics](dashboard-analysis.md)
 - [Selected ad-group and creative metrics](acquisition-detail-metrics.md)
 - [Verified platform acquisition cohorts](verified-platform-acquisition.md)
+- [Imported provider acquisition cohorts](imported-acquisition-metrics.md)
 - [First-party re-engagement outcomes](engagement-outcomes.md)
 - [Explaining a saved ROAS result](metric-explanations.md)
 - [Privacy and security](privacy-security.md)

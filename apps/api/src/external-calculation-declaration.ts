@@ -71,6 +71,9 @@ export function externalDeclarationMeaning(declaration: ExternalRoasDeclaration)
 }
 /** Only this narrow implemented profile can be compared to an external claim. */
 export function capturedRoasMeaning(context: MetricComparisonContext) {
+  // The legacy external declaration cannot express a provider-specific binding.
+  // Keep it unsupported rather than dropping the saved provider meaning.
+  if (context.definition.acquisition_basis === "selected_imported_provider") return undefined;
   const meaning = comparisonMeaning(context);
   if (!meaning || meaning.anchor_event !== "install" || meaning.window.type !== "elapsed"
       || meaning.calculation !== "revenue_over_cost" || meaning.numerator !== "revenue"

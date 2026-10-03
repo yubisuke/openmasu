@@ -73,6 +73,37 @@ function acquisitionAttributionRows(attributions: Attribution[]): string[][] {
     .map((item) => [item.tenant_id, item.app_id, item.attribution_id, sha256(item)]);
 }
 
+function importedInstall(attempt: Attempt, provider: string): boolean {
+  return attempt.record.event_name === "install" && attempt.record.producer === `import:${provider}`
+    && attempt.record.payload.import_context?.provider === provider;
+}
+
+function importedAcquisitionAttributions(attributions: Attribution[], included: Attempt[], provider: string, watermark: string) {
+  const anchors = included.filter(attempt => importedInstall(attempt, provider));
+  return selectedAcquisitionAttributions(attributions.filter(attribution => attribution.method === "imported"
+    && attribution.model === "provider_reported" && anchors.some(install =>
+      install.server.tenant_id === attribution.tenant_id && install.server.app_id === attribution.app_id
+      && install.record.payload.installation_id === attribution.subject_ref
+      && attribution.evidence_refs.some(ref => ref.tenant_id === install.server.tenant_id
+        && ref.app_id === install.server.app_id && ref.ref === install.record.record_id))), included, watermark);
+}
+
+function importedContextRows(included: Attempt[], provider: string): string[][] {
+  return sortByKey(included.filter(attempt => importedInstall(attempt, provider)), attempt =>
+    [attempt.server.tenant_id, attempt.server.app_id, attempt.record.record_id]).map(attempt =>
+    [attempt.server.tenant_id, attempt.server.app_id, attempt.record.record_id, attempt.record.producer,
+      sha256(attempt.record.payload.import_context)]);
+}
+
+function importedDimensions(install: Attempt, attributions: Map<string, Attribution>) {
+  const context = install.record.payload.import_context;
+  const attribution = attributions.get(compositeKey([install.server.tenant_id, install.server.app_id,
+    install.record.payload.installation_id]));
+  return { country: context.provider_country, ...(attribution?.status === "non_organic" ? {
+    campaign_id: context.provider_campaign_ref, network: context.provider_network, ad_group_id: context.provider_adgroup_ref,
+  } : {}) };
+}
+
 function selectedAcquisitionDimensions(
   install: Attempt, visible: Attempt[], attributions: Map<string, Attribution>,
 ): { campaign_id?: string; network?: string; ad_group_id?: string; creative_id?: string } {
@@ -146,7 +177,7 @@ export function metricRuns(
       .map((attempt) => [compositeKey([attempt.server.tenant_id, attempt.server.app_id,
         attempt.record.payload.installation_id]), "unattributed"]));
     for (const [key, attribution] of acquisitionAttributions) acquisitionStatuses.set(key, attribution.status);
-    const acquisitionInstalls = visible.filter((attempt) => attempt.record.event_name === "install" &&
+    const acquisitionInstalls = visible.filter((attempt) => attempt.record.event_name === "install" && !attempt.record.producer.startsWith("import:") &&
       matchesGrouping(attempt, evaluation.grouping, acquisitionStatuses,
         selectedAcquisitionDimensions(attempt, visible, acquisitionAttributions)));
     const installs = visible.filter((attempt) => attempt.record.event_name === "install" &&
@@ -182,10 +213,20 @@ export function metricRuns(
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
       if (definition.acquisition_basis === "selected_verified_platform" && (evaluation.grouping?.campaign_id || evaluation.grouping?.ad_group_id)
           && !evaluation.grouping?.network) throw new Error("platform_acquisition_source_required");
-      if (!definition.acquisition_dimension_policy && !(definition.acquisition_basis === "selected_verified_platform" && evaluation.grouping?.creative_id === undefined) && (evaluation.grouping?.ad_group_id !== undefined || evaluation.grouping?.creative_id !== undefined)) {
+      if (!definition.acquisition_dimension_policy && !(["selected_verified_platform", "selected_imported_provider"].includes(definition.acquisition_basis ?? "") && evaluation.grouping?.creative_id === undefined) && (evaluation.grouping?.ad_group_id !== undefined || evaluation.grouping?.creative_id !== undefined)) {
         throw new Error(`unsupported detail grouping for ${metricName}`);
       }
-      const selectedInstalls = definition.acquisition_basis === "selected_verified_platform" ? platformInstalls.filter(install => definition.fraud_policy !== "net"
+      const imported = definition.import_provider ? importedAcquisitionAttributions(attributions, included, definition.import_provider, evaluation.input_received_at_watermark) : undefined;
+      const importedStatuses = imported ? new Map([...imported].map(([key, item]) => [key, item.status])) : undefined;
+      if (importedStatuses) for (const install of included.filter(attempt => importedInstall(attempt, definition.import_provider!))) {
+        const key = compositeKey([install.server.tenant_id, install.server.app_id, install.record.payload.installation_id]);
+        if (!importedStatuses.has(key)) importedStatuses.set(key, "unattributed");
+      }
+      const selectedInstalls = imported ? visible.filter(install => importedInstall(install, definition.import_provider!)
+        && matchesGrouping(install, evaluation.grouping, importedStatuses!, importedDimensions(install, imported), true, true)
+        && (definition.fraud_policy !== "net" || imported.get(compositeKey([install.server.tenant_id, install.server.app_id,
+          install.record.payload.installation_id]))?.reason_code !== "fraud_excluded"))
+        : definition.acquisition_basis === "selected_verified_platform" ? platformInstalls.filter(install => definition.fraud_policy !== "net"
         || platform.attributions.get(compositeKey([install.server.tenant_id, install.server.app_id, install.record.payload.installation_id]))?.reason_code !== "fraud_excluded")
         : definition.acquisition_basis ? acquisitionInstalls : installs;
       const selectedDaily = definition.rule_bundle_id === "metric-selected-daily-acquisition";
@@ -235,6 +276,7 @@ export function metricRuns(
         ? selectedInstalls.filter((candidate) => !excludedInstallationIds.has(candidate.record.payload.installation_id))
         : selectedInstalls;
       const revenueValue = definition.engagement_credit_policy || definition.conversion_event_key !== undefined ? 0n : revenue.reduce((sum, item) => {
+        if (definition.import_provider && item.record.producer !== `import:${definition.import_provider}`) return sum;
         const installation = eligibleInstalls.find((candidate) =>
           candidate.server.tenant_id === item.server.tenant_id && candidate.server.app_id === item.server.app_id &&
           candidate.record.payload.installation_id === item.record.payload.installation_id,
@@ -325,6 +367,7 @@ export function metricRuns(
           const activityEvents = new Set(definition.activity_events ?? ["session_start"]);
           const active = new Set<string>();
           for (const session of activities.filter((item) => activityEvents.has(item.record.event_name))) {
+            if (definition.import_provider && session.record.producer !== `import:${definition.import_provider}`) continue;
             const installation = eligibleInstalls.find((candidate) =>
               candidate.server.tenant_id === session.server.tenant_id && candidate.server.app_id === session.server.app_id &&
               candidate.record.payload.installation_id === session.record.payload.installation_id,
@@ -445,6 +488,9 @@ export function metricRuns(
         metric_definition_version: definition.metric_definition_version,
         input_snapshot_id: definition.engagement_credit_policy ? sha256({
           record_snapshot_id: sha256(snapshotRows), engagement_inputs: engagementSnapshotRows(engagement, sha256),
+        }) : imported ? sha256({
+          record_and_cost_snapshot_id: sha256(snapshotRows), acquisition_attributions: acquisitionAttributionRows([...imported.values()]),
+          imported_acquisition_contexts: importedContextRows(included, definition.import_provider!),
         }) : definition.acquisition_basis === "selected_verified_platform" ? sha256({
           record_and_cost_snapshot_id: sha256(snapshotRows),
           acquisition_attributions: acquisitionAttributionRows([...platform.attributions.values()]),
@@ -493,14 +539,15 @@ function matchesGrouping(
   attempt: Attempt,
   grouping: Any,
   attributionStatuses: Map<string, Attribution["status"]>,
-  acquisition?: { campaign_id?: string; network?: string; ad_group_id?: string; creative_id?: string },
+  acquisition?: { campaign_id?: string; network?: string; ad_group_id?: string; creative_id?: string; country?: string },
   authoritativeAcquisition = false,
+  authoritativeCountry = false,
 ): boolean {
   if (!grouping) return true;
   const payload = attempt.record.payload;
   const campaign = authoritativeAcquisition ? acquisition?.campaign_id : payload.campaign_id ?? attempt.server.deep_link_resolution?.campaign_id ?? payload.import_context?.provider_campaign_ref ?? acquisition?.campaign_id;
   const network = authoritativeAcquisition ? acquisition?.network : payload.network ?? payload.ad_network ?? payload.import_context?.provider_network ?? acquisition?.network;
-  const country = payload.country ?? payload.import_context?.provider_country;
+  const country = authoritativeCountry ? acquisition?.country : payload.country ?? payload.import_context?.provider_country;
   if (grouping.campaign_id !== undefined && campaign !== grouping.campaign_id) return false;
   if (grouping.network !== undefined && network !== grouping.network) return false;
   for (const field of ["ad_group_id", "creative_id"] as const) {

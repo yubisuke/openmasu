@@ -7,6 +7,7 @@ import {
   REFUND_REVERSAL_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS,
   SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS,
   VERIFIED_PLATFORM_METRIC_DEFINITIONS,
+  importedAcquisitionMetricDefinitions,
   SELECTED_COMMERCE_METRIC_DEFINITIONS, customConversionMetricDefinitions, engagementMetricDefinitions,
   METRIC_PROFILE_METADATA, metricProfileMetadata,
 } from "@openmasu/contracts/definitions";
@@ -83,8 +84,9 @@ describe("metric profile entry boundaries", () => {
   it("metric_profile_schema_consistency distinguishes registered identities from legacy and external declarations", () => {
     const valid = [...metricProfileBoundaryCases().filter(entry => entry.name.endsWith("/valid")),
       ...SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS.map(definition => ({ name: "daily_acquisition/valid", definition })),
-      ...VERIFIED_PLATFORM_METRIC_DEFINITIONS.map(definition => ({ name: "platform/valid", definition }))];
-    assert.equal(valid.length, 112);
+      ...VERIFIED_PLATFORM_METRIC_DEFINITIONS.map(definition => ({ name: "platform/valid", definition })),
+      ...importedAcquisitionMetricDefinitions("synthetic-export").map(definition => ({ name: "imported/valid", definition }))];
+    assert.equal(valid.length, 123);
     const exercised = new Set<string>();
     for (const { name, definition } of valid) {
       assert.ok(validateMetricDefinition(definition), name);
@@ -167,5 +169,22 @@ describe("metric profile entry boundaries", () => {
       assert.deepEqual(value, { name: "daily_acquisition/invalid", schema: false, schedule: false, evaluator: false, sql: false });
     }
     assert.equal(validateMetricDefinition({ ...M3_METRIC_DEFINITIONS[1], grouping_dimensions: ["metric_date", "acquisition_campaign_state"] }), false);
+  });
+  it("imported_provider_profile_is_closed_and_does_not_relabel_native_or_platform_definitions", async () => {
+    const imported = importedAcquisitionMetricDefinitions("synthetic-export")[0];
+    assert.deepEqual(await boundaryResult("imported/valid", imported), {
+      name: "imported/valid", schema: true, schedule: true, evaluator: true, sql: true,
+    });
+    for (const change of [{ import_provider: undefined }, { import_provider: "invalid provider" },
+      { rule_bundle_hash: "0".repeat(64) }, { metric_definition_version: "0.4.19" },
+      { acquisition_basis: "selected_first_party_click" }, { metric_name: "platform_d0_roas" },
+      { grouping_dimensions: ["campaign_id"] }, { conversion_event_key: "synthetic" }]) {
+      const candidate = JSON.parse(JSON.stringify({ ...imported, ...change }));
+      assert.deepEqual(await boundaryResult("imported/invalid", candidate), {
+        name: "imported/invalid", schema: false, schedule: false, evaluator: false, sql: false,
+      });
+    }
+    assert.equal(validateScheduledMetricDefinition({ ...SELECTED_ACQUISITION_METRIC_DEFINITIONS[0], import_provider: "synthetic-export" }), false);
+    assert.equal(validateMetricDefinition({ ...VERIFIED_PLATFORM_METRIC_DEFINITIONS[0], import_provider: "synthetic-export" }), false);
   });
 });

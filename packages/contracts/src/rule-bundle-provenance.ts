@@ -8,6 +8,7 @@ export type NonFraudRuleBundleId =
   | "metric-stage-b"
   | "metric-selected-acquisition"
   | "metric-verified-platform-acquisition"
+  | "metric-imported-provider-acquisition"
   | "metric-selected-daily-acquisition"
   | "metric-disjoint-cost"
   | "metric-selected-commerce"
@@ -68,6 +69,17 @@ export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonF
       "platform-source-namespaced-campaign-ad-group", "never-fall-back-to-device-or-click-dimensions",
       "explicit-dated-cost-revision-key", "reject-overlapping-cost-grains",
       "never-allocate-parent-cost-to-ad-group", "preserve-current-privacy-and-fraud"],
+  },
+  "metric-imported-provider-acquisition": {
+    id: "metric-imported-provider-acquisition", version: "0.4.20", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["installation-cohort-install-retention-ad-revenue-ltv-roas",
+      "explicit-import-provider-and-installation-binding", "provider-revision-as-of-watermark",
+      "canonical-import-context-dimensions", "same-provider-same-tenant-app-outcomes-only",
+      "freeze-import-context-and-attribution-snapshot", "never-infer-subject-from-external-id",
+      "separate-native-platform-and-imported-series", "explicit-dated-cost-revision-key",
+      "reject-overlapping-cost-grains", "never-allocate-parent-cost-to-ad-group",
+      "preserve-current-privacy-and-fraud"],
   },
   "metric-selected-daily-acquisition": {
     id: "metric-selected-daily-acquisition", version: "0.4.18", kind: "metric",

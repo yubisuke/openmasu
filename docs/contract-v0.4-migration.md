@@ -202,6 +202,42 @@ independently exercise boundaries, deduplication, latest-open filtering, removed
 anchors/outcomes, different installations and per-event half-even rounding in
 TypeScript, Python and SQL. Operational scheduling/reporting is a separate step.
 
+## Imported provider acquisition (0.4.20)
+
+Add optional metric-definition `import_provider` and acquisition basis
+`selected_imported_provider`, restricted to eleven closed independent imported
+definitions and bundle `metric-imported-provider-acquisition` v0.4.20. Existing
+wire/package versions, schema URNs, registries and saved definitions remain
+unchanged. This opt-in admission is additive, not a reinterpretation of native
+or verified-platform attribution. Same-named native cohorts explicitly exclude
+imported installations, consistent with their documented population; all previous
+fixture outputs remain byte-identical.
+
+Row and bulk install projection retain the closed canonical import context in
+their existing protected artifact. Old facts lacking it stay unknown. Provider,
+selected attribution revision, canonical context hashes, explicit outcomes,
+gross/net, FX, windows and cost grain are captured; no new table or dependency
+is added. Explicit schedules and bounded late-input/attribution correction reuse
+the existing selectors. Automatic imported campaign discovery is unsupported.
+The older external-v1 ROAS declaration cannot represent provider binding and
+must not be treated as equivalent. See [the guide](imported-acquisition-metrics.md).
+
+Complete new inventory in `67-imported-provider-acquisition`: `input.json`,
+`README.md`, `expected_raw_records.json`, `expected_deliveries.json`,
+`expected_logical_events.json`, `expected_attributions.json`,
+`expected_metric_definitions.json`, `expected_metric_runs.json`,
+`expected_cost_records.json`, `expected_corrections.json`,
+`expected_privacy_requests.json`, `expected_privacy_tombstones.json`,
+`expected_fraud_decisions.json`, `expected_rejections.json`,
+`expected_reconciliation.json`; plus the shared fixture README.
+No existing 66 inputs or 858 expected files change. Verify with
+`git diff --name-status 74a516f6 -- fixtures/v0.4/`: only fixture 67 and the shared
+README may differ. Calculation/schema and expected files are separate commits.
+The fixture README records every family's derivation, sixteen hand values and
+canonical hash inputs. The independently constructed thirteen-family JCS digest
+is `b2ee5bdcac34a41c91051a99c249f35c9ec2ad72db8a175338bb932b0133ec6a`.
+Validation remains read-only; no evaluator output was promoted as a golden.
+
 ## Verified platform acquisition (0.4.19)
 
 Optional `acquisition_basis=selected_verified_platform` and trusted fixture

@@ -3,6 +3,7 @@ import type { OpenMasuAttributionResultV04 } from "@openmasu/contracts/types";
 import { captureMetricComparisonContext, metricScheduleCalculationKey, privacyMetricInvalidationSql,
   type MetricComparisonContext, type RoasCalculationEvidence } from "@openmasu/runtime";
 import { platformAcquisitionSnapshot } from "@openmasu/runtime";
+import { importedAcquisitionSnapshot } from "@openmasu/runtime";
 import { metricScopeForInput, prepareMetricCalculation } from "./input.js";
 import { compareMetricText } from "./model.js";
 import type { MetricClient, MetricRun, MetricScope } from "./model.js";
@@ -43,6 +44,12 @@ export async function executeMetricCalculation(
     const usesAcquisition = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.acquisition_basis);
     const usesPlatform = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.acquisition_basis === "selected_verified_platform");
     const platformSnapshot = usesPlatform ? await platformAcquisitionSnapshot(client, scope.tenant_id, scope.app_id, evaluation.input_received_at_watermark) : undefined;
+    const importSnapshots = new Map<string, Awaited<ReturnType<typeof importedAcquisitionSnapshot>>>();
+    for (const name of evaluation.metric_names ?? []) {
+      const provider = definitions.get(name)?.import_provider;
+      if (provider && !importSnapshots.has(provider)) importSnapshots.set(provider, await importedAcquisitionSnapshot(client,
+        scope.tenant_id, scope.app_id, evaluation.input_received_at_watermark, provider));
+    }
     const usesEngagement = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.engagement_credit_policy);
     const engagementRows = usesEngagement ? await engagementSnapshotRows(client, scope, evaluation.input_received_at_watermark) : [];
     const acquisitionRows = usesAcquisition ? (await client.query<{ artifact: OpenMasuAttributionResultV04 }>(
@@ -82,7 +89,7 @@ export async function executeMetricCalculation(
       if (selectedDaily && Object.keys(grouping ?? {}).some((key) => !new Set<string>(definition.grouping_dimensions).has(key))) {
         throw new Error(`unsupported grouping for ${metricName}`);
       }
-      if (!definition.acquisition_dimension_policy && !(definition.acquisition_basis === "selected_verified_platform" && grouping?.creative_id === undefined) && (grouping?.ad_group_id !== undefined || grouping?.creative_id !== undefined)) {
+      if (!definition.acquisition_dimension_policy && !(["selected_verified_platform", "selected_imported_provider"].includes(definition.acquisition_basis ?? "") && grouping?.creative_id === undefined) && (grouping?.ad_group_id !== undefined || grouping?.creative_id !== undefined)) {
         throw new Error(`unsupported detail grouping for ${metricName}`);
       }
       const selectedCosts = definition.acquisition_dimension_policy ? detailCosts : definition.cost_selection_policy ? safeCosts : undefined;
@@ -123,6 +130,8 @@ export async function executeMetricCalculation(
         metric_definition_version: definition.metric_definition_version,
         input_snapshot_id: definition.engagement_credit_policy ? sha256({
           record_snapshot_id: inputSnapshotId, engagement_inputs: engagementRows,
+        }) : definition.import_provider ? sha256({
+          record_and_cost_snapshot_id: inputSnapshotId, ...importSnapshots.get(definition.import_provider)!,
         }) : definition.acquisition_basis === "selected_verified_platform" ? sha256({
           record_and_cost_snapshot_id: inputSnapshotId,
           acquisition_attributions: platformSnapshot!.acquisition_attributions,
