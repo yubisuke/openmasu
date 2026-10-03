@@ -197,6 +197,31 @@ describe("M1b reporting and difference audit", { concurrency: false }, () => {
     }
   });
 
+  it("daily_selected_acquisition_HTTP_JSON_CSV_and_raw_filter_boundary_agree", async () => {
+    const source = fixture("65-selected-daily-acquisition");
+    const headers = { authorization: `Bearer ${adminKey}` };
+    try {
+      await registerAndIngest("daily65-http", source);
+      await computeSqlMetricRuns(appPool, source, true);
+      const query = "app_id=app-a&metric_name=daily_selected_install_count&grouping_campaign_id=campaign-a&grouping_acquisition_campaign_state=known&grouping_metric_date=2026-08-06";
+      const json = await fetch(`${baseUrl}/v1/reports/metrics?${query}`, { headers });
+      const csv = await fetch(`${baseUrl}/v1/reports/metrics?${query}&format=csv`, { headers });
+      assert.equal(json.status, 200); assert.equal(csv.status, 200);
+      const data = (await json.json()).data;
+      assert.equal(data.length, 1);
+      assert.equal(data[0].value_unscaled, "1");
+      const encoded = csvRow(await csv.text());
+      assert.equal(encoded.value_unscaled, data[0].value_unscaled);
+      assert.deepEqual(JSON.parse(encoded.grouping), data[0].grouping);
+      const raw = await fetch(`${baseUrl}/v1/reports/records?app_id=app-a&grouping_acquisition_campaign_state=known&watermark_at_most=2026-08-12T00%3A00%3A00.000Z`, { headers });
+      assert.equal(raw.status, 400);
+    } finally {
+      const original = fixture("33-stage-b-cohort-metrics");
+      await registerAndIngest("33-stage-b-cohort-metrics", original);
+      await computeSqlMetricRuns(appPool, original, true);
+    }
+  });
+
   it("saves a dashboard comparison through reader scope without GET writes or incomplete downloads", async () => {
     await withTenant(appPool, "tenant-synthetic-other", async client => client.query(
       "INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ('tenant-synthetic-other','app-synthetic-other','2026-08-01T00:00:00.000Z') ON CONFLICT DO NOTHING"));

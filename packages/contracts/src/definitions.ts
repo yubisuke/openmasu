@@ -12,7 +12,7 @@ export {
   engagementMetricDefinitions,
   REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
 } from "./m1b-metric-definitions.js";
-export { M3_METRIC_DEFINITIONS } from "./m3-metric-definitions.js";
+export { M3_METRIC_DEFINITIONS, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "./m3-metric-definitions.js";
 export {
   METRIC_PROFILE_METADATA,
   ENGAGEMENT_METRIC_NAMES,

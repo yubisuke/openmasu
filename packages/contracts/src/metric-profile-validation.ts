@@ -37,6 +37,9 @@ function validStringArray(value: unknown, allowed?: ReadonlySet<string>): boolea
 export function validateScheduledMetricDefinition(input: unknown): input is ScheduledMetricDefinition {
   if (!input || typeof input !== "object" || Array.isArray(input)) return false;
   const value = input as JsonObject;
+  if (value.metric_name === "daily_selected_install_count" || value.rule_bundle_id === METRIC_PROFILE_BINDINGS.daily_acquisition.rule_bundle_id) {
+    return validateMetricDefinition(value);
+  }
   if (value.engagement_credit_policy !== undefined || value.anchor_event === "deep_link_open"
       || value.rule_bundle_id === METRIC_PROFILE_BINDINGS.engagement.rule_bundle_id
       || ENGAGEMENT_METRIC_NAMES.has(String(value.metric_name))) {
@@ -134,6 +137,10 @@ export function validateScheduledMetricDefinition(input: unknown): input is Sche
 /** Independent calculators share profile constraints, not their calculation implementation. */
 export function assertMetricDefinitionSeries(definition: Definition, entry: "reference" | "sql" = "sql"): void {
   const metricName = definition.metric_name;
+  if (metricName === "daily_selected_install_count" || definition.rule_bundle_id === METRIC_PROFILE_BINDINGS.daily_acquisition.rule_bundle_id) {
+    if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${metricName}`);
+    return;
+  }
   if (definition.engagement_credit_policy !== undefined || definition.anchor_event === "deep_link_open"
       || ENGAGEMENT_METRIC_NAMES.has(definition.metric_name)
       || definition.rule_bundle_id === METRIC_PROFILE_BINDINGS.engagement.rule_bundle_id) {

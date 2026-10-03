@@ -31,7 +31,9 @@ export async function executeMetricCalculation(
     );
     const records = snapshot.records;
     const grouping = evaluation.grouping;
-    const legacyCosts = await currentCosts(client, scope, evaluation.input_received_at_watermark, grouping);
+    const onlyDailyAcquisition = evaluation.metric_names?.length && evaluation.metric_names.every((name: string) =>
+      definitions.get(name)?.rule_bundle_id === "metric-selected-daily-acquisition");
+    const legacyCosts = onlyDailyAcquisition ? [] : await currentCosts(client, scope, evaluation.input_received_at_watermark, grouping);
     const needsDisjoint = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.cost_selection_policy);
     const safeCosts = needsDisjoint ? await disjointCosts(client, scope, evaluation.input_received_at_watermark, grouping) : undefined;
     const needsDetail = (evaluation.metric_names ?? []).some((name: string) => definitions.get(name)?.acquisition_dimension_policy);
@@ -63,11 +65,22 @@ export async function executeMetricCalculation(
     for (const metricName of evaluation.metric_names ?? []) {
       const definition = definitions.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
+      const selectedDaily = definition.rule_bundle_id === "metric-selected-daily-acquisition";
+      if (selectedDaily && grouping?.acquisition_campaign_state !== undefined &&
+          !["known", "unknown"].includes(grouping.acquisition_campaign_state)) {
+        throw new Error("daily_acquisition_campaign_state_invalid");
+      }
+      if (!selectedDaily && grouping?.acquisition_campaign_state !== undefined) {
+        throw new Error(`unsupported acquisition campaign state for ${metricName}`);
+      }
+      if (selectedDaily && Object.keys(grouping ?? {}).some((key) => !new Set<string>(definition.grouping_dimensions).has(key))) {
+        throw new Error(`unsupported grouping for ${metricName}`);
+      }
       if (!definition.acquisition_dimension_policy && (grouping?.ad_group_id !== undefined || grouping?.creative_id !== undefined)) {
         throw new Error(`unsupported detail grouping for ${metricName}`);
       }
       const selectedCosts = definition.acquisition_dimension_policy ? detailCosts : definition.cost_selection_policy ? safeCosts : undefined;
-      const costs = definition.engagement_credit_policy ? [] : selectedCosts?.rows ?? legacyCosts;
+      const costs = definition.engagement_credit_policy || selectedDaily ? [] : selectedCosts?.rows ?? legacyCosts;
       const inputSnapshotId = snapshot.finish(costs.map((cost) => [
         "cost", cost.as_of, cost.cost_record_id, cost.report_snapshot_digest, cost.dimension_digest,
       ]));

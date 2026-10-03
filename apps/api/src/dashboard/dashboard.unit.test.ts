@@ -75,6 +75,15 @@ function savedRetention(date: string, day: number, overrides: Partial<MetricRepo
 }
 
 describe("M3 zero-JavaScript dashboard", () => {
+  it("daily_acquisition_HTML_states_occurrence_receipt_cohort_and_raw_meanings", () => {
+    const row = metric({ metric_name: "daily_selected_install_count", metric_definition_version: "0.4.18",
+      value_type: "count", value_unscaled: "1", ratio_scale: null,
+      grouping: { metric_date: "2026-08-06", acquisition_campaign_state: "known" } });
+    const html = renderDashboard(buildDashboardView({ apps: [], selectedAppId: "app-a", metrics: { data: [row] }, csrfToken: "synthetic" }));
+    for (const phrase of ["UTC occurrence day", "receipt watermark", "Cohort date", "unknown campaign states", "raw record counts retain recorded dimensions"]) assert.ok(html.includes(phrase), phrase);
+    assert.ok(html.includes('data-value-unscaled="1"'));
+    assert.ok(!html.includes("<script"));
+  });
   it("separates forgeable first-party engagement from install and Apple aggregate tables and charts", () => {
     const names = ["d7_roas", "engagement_ad_revenue_24h_usd", "aak_attributed_reengagements"];
     const view = buildDashboardView({ apps: [], selectedAppId: "app-one", csrfToken: "synthetic",

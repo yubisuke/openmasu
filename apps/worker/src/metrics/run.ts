@@ -82,6 +82,10 @@ export function buildMetricDefinitionsInput(config: Any, requestedDate: string, 
       const selectedDefinitions = evaluation.metric_names.map((name: string) =>
         (config.metric_definitions ?? []).find((definition: Any) => definition.metric_name === name));
       const engagement = selectedDefinitions.some((definition: Any) => definition?.engagement_credit_policy);
+      const dailyAcquisition = selectedDefinitions.some((definition: Any) => definition?.rule_bundle_id === "metric-selected-daily-acquisition");
+      if (dailyAcquisition && selectedDefinitions.some((definition: Any) => definition?.rule_bundle_id !== "metric-selected-daily-acquisition")) {
+        throw new Error("daily_acquisition_cli_requires_separate_anchor_evaluation");
+      }
       if (engagement && (selectedDefinitions.some((definition: Any) => !definition?.engagement_credit_policy)
           || Object.keys(evaluation.grouping).some(key => !["campaign_id", "metric_date"].includes(key)))) {
         throw new Error("engagement_cli_requires_separate_anchor_evaluation");
@@ -99,7 +103,7 @@ export function buildMetricDefinitionsInput(config: Any, requestedDate: string, 
           evaluation.metric_names.includes(definition.metric_name) && (definition.acquisition_basis || definition.cost_selection_policy || definition.engagement_credit_policy))
           ? "after" : "before",
         metric_names: evaluation.metric_names,
-        grouping: { [engagement ? "metric_date" : "cohort_date"]: date.day, ...evaluation.grouping },
+        grouping: { [engagement || dailyAcquisition ? "metric_date" : "cohort_date"]: date.day, ...evaluation.grouping },
       };
     }),
   };

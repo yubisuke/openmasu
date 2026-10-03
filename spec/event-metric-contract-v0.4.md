@@ -331,7 +331,7 @@ Production signals, IP or User-Agent values, live thresholds, model weights, wat
 
 The validation gate compiles 28 schemas and validates 8 registries. The 64 fixture directories contain synthetic input plus 13 committed golden output classes: raw records, deliveries, logical events, corrections, privacy requests, privacy tombstones, attributions, metric definitions, metric runs, cost records, public fraud decisions, rejections, and reconciliation. Fixture 10 demonstrates both paid reinstall attribution and no-referrer redownload attribution. Fixtures 28 through 32 exercise imported attribution, automatically derived reconciliation, every registered producer form, and stale-evidence rejection. Fixture 33 exercises reporting dimensions, advertiser-side ad views, installation and aggregate revenue, default-currency provenance, append-only cost revisions, per-event half-even FX, attribution-status-separated ROAS, retention, and cohort LTV/count. Fixture 34 exercises the supported platform method/model rows, both Apple aggregate event names, their versioned reasons, synthetic postback producers, and typed Meta evidence. Fixture 35 exercises authenticated tenant-admin and on-device privacy-request provenance plus same-installation scope enforcement. Fixture 36 exercises the child-directed audience boundary without adding an advertising identifier to the canonical event vocabulary. Fixture 37 proves that an organic cohort without attributed cost emits an undefined ROAS rather than zero or infinity. Fixture 38 classifies a modeled external row without an internal candidate as `provider_modeled_conversion`. Fixture 39 classifies a foreign third-party referrer. Fixture 40 validates the closed custom-event envelope plus wrapper provenance. Fixture 41 derives the public click-injection category from server CTIT. Fixture 42 exercises the v0.3.1 `metric_date` dimension with deterministic daily click and organic-install event counts. Fixture 43 exercises the v0.3.2 iOS first-launch, platform-referrer, AdServices outcome, AAK signing-environment, and SKAN minor-version vocabulary. Fixture 44 exercises the v0.3.3 qualified SKAN/AAK postback counts and fine/coarse SKAN conversion buckets. Fixture 45 exercises the v0.3.4 iOS conversion-schema provenance pair and the opt-in conversion-value lifecycle event. Fixture 46 reserves server-assigned Play Integrity and App Attest evidence without making it an attribution or metric input. Fixture 47 exercises the non-identifying payload-schema rejection boundary without storing the rejected payload. Fixtures 48 through 52 exercise deterministic fraud controls and protected integrity-provider normalization. Fixture 53 exercises the negative-CTIT clock diagnostic and day-wide provisional guard. Fixture 54 exercises deep-link opens, engagement-scope attribution, double-count prevention, and separated daily metrics. Fixture 55 exercises settled purchase/refund net revenue, canonical refund targeting, refund-time windows, per-target caps, and unchanged ad revenue. Fixture 56 exercises D30/D90 purchase-net, total-net revenue, ROAS, and LTV with exact D31/D91 boundaries. Fixture 57 accepts current AdAttributionKit re-engagement postbacks and proves they remain aggregate while reporting separately from install postbacks. Fixtures 25, 33, and 34 collectively exercise every registered processing purpose. Validation also exercises invalid calendar timestamps, reconciliation reasons, attribution supersession, replay suspicion, retention expiry, impression-to-revenue evidence, reorder invariance, install-type evidence dominance, record-ID collision, click ambiguity, millisecond normalization boundaries, scoped-reference mutations, child-directed advertising-identifier rejection, CTIT boundaries, custom-event bounds, platform-integrity closure, Apple aggregate qualification and receipt-date authority, refund-target ambiguity/temporal stability/caps, business-transaction conflicts, and unknown-purpose rejection; golden files remain committed human-reviewed artifacts.
 
-The literal validation summary is: `Validated 28 schemas, 8 registries, 64 reviewed fixtures, 832 golden output artifacts, 64 scenario assertions, 27 acceptance criteria, deterministic TypeScript, independent Python, and RFC 8785 conformance.`
+The literal validation summary is: `Validated 28 schemas, 8 registries, 65 reviewed fixtures, 845 golden output artifacts, 65 scenario assertions, 27 acceptance criteria, deterministic TypeScript, independent Python, and RFC 8785 conformance.`
 
 The validation command never writes fixture files. `npm run validate`:
 
@@ -339,8 +339,8 @@ The validation command never writes fixture files. `npm run validate`:
 2. compiles every Draft 2020-12 schema;
 3. validates registry shape, uniqueness, and cross-references;
 4. validates every input event through its event schema;
-5. validates all 832 golden output artifacts;
-6. runs named assertions for all 64 scenarios and 27 acceptance criteria (AC01-AC27);
+5. validates all 845 golden output artifacts;
+6. runs named assertions for all 65 scenarios and 27 acceptance criteria (AC01-AC27);
 7. runs deliberate negative mutations;
 8. runs the TypeScript evaluator twice;
 9. runs the independently implemented Python evaluator;
@@ -349,6 +349,42 @@ The validation command never writes fixture files. `npm run validate`:
 Environment setup is `npm ci` and `python -m pip install --require-hashes --requirement requirements-contract.txt`.
 
 ## Version history
+
+### v0.4.18 patch release: selected daily native acquisition
+
+The opt-in `daily_selected_install_count` definition uses bundle
+`metric-selected-daily-acquisition`, definition/bundle version `0.4.18`, hash
+`ce996e1de4060947faa76fad369571941bbdd120ad5c1ddf9697531813543c8d`.
+It counts accepted, deduplicated native installs on `grouping.metric_date`,
+the UTC **occurrence day**, not the server receipt day. Optional `cohort_date`
+is the install's UTC occurrence day and intersects, rather than replaces, that
+daily filter. Server `received_at` controls visibility at the fixed input
+watermark. Late/backfilled records can therefore contribute to an earlier
+occurrence day only at a later explicitly selected watermark.
+
+Use the selected-acquisition cohort's eligible installation-level attribution:
+`decided_at` and `input_cutoff_at` must not exceed the watermark, all scoped
+evidence must have arrived, eligible supersession replaces its predecessor,
+and same-time survivors choose the greatest attribution ID in UTF-16 order.
+Only a unique, available first-party click referenced by a selected valid
+Install Referrer attribution can supply campaign/network. Country stays install
+evidence. Current privacy-after visibility removes unavailable installs and
+click semantics. Optional `fraud_policy` retains the gross/net distinction.
+Imported installs and Apple aggregate postbacks are excluded, not blended.
+
+Optional grouping `acquisition_campaign_state` (`known` / `unknown`) belongs
+only to this profile. Known means the selected click supplies a campaign;
+unknown is not all campaigns and is independent of organic/non-organic/
+unattributed status. Absent state/campaign filters include both populations;
+missing campaign evidence is never represented by an invented campaign ID.
+This profile has no cost input: its snapshot wraps the ordered record/lifecycle
+snapshot and selected attribution ID/artifact-digest tuples. Saved API, JSON,
+CSV and HTML values retain this identity and explicit date semantics.
+
+Legacy `daily_install_count` (`0.3.1`) and raw record reports retain recorded
+dimensions and their existing snapshots. The raw endpoint rejects this new
+state filter rather than silently ignoring it. No schedule, replay manifest,
+saved run, existing schema URN or wire/package version is implicitly changed.
 
 ### v0.4.17 patch release: first-party engagement outcomes
 

@@ -1,0 +1,147 @@
+[
+  {
+    "metric_name": "cohort_install_count",
+    "metric_definition_version": "0.4.11",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "count",
+    "definition": {
+      "calculation": "cohort_size",
+      "window": {
+        "type": "elapsed",
+        "day": 0
+      },
+      "numerator": "cohort_size"
+    },
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "rule_bundle_id": "metric-selected-acquisition",
+    "rule_bundle_version": "0.4.11",
+    "rule_bundle_hash": "6fd998246bb092f81d8539b8e2c04a1abe421a1916480b63dfd018d11c7bccc5"
+  },
+  {
+    "metric_name": "d0_install_to_24h_ad_revenue_usd",
+    "aggregation_time_zone": "UTC",
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": {
+        "type": "elapsed",
+        "day": 0
+      },
+      "numerator": "revenue"
+    },
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
+  },
+  {
+    "metric_name": "d0_jst_install_calendar_ad_revenue_usd",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue"
+    },
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
+  },
+  {
+    "metric_name": "d0_utc_install_calendar_ad_revenue_usd",
+    "aggregation_time_zone": "UTC",
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue"
+    },
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
+  },
+  {
+    "metric_name": "daily_install_count",
+    "metric_definition_version": "0.3.1",
+    "anchor_event": "calendar_day",
+    "aggregation_time_zone": "UTC",
+    "value_type": "count",
+    "definition": {
+      "calculation": "event_count",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "events"
+    },
+    "event_names": [
+      "install"
+    ],
+    "grouping_dimensions": [
+      "metric_date",
+      "campaign_id",
+      "network",
+      "country",
+      "attribution_status"
+    ],
+    "rule_bundle_id": "metric-stage-m3",
+    "rule_bundle_version": "0.3.1",
+    "rule_bundle_hash": "7239025186e4e679b4ab044aa34b02e4df52b3698641ef1e47f4d49f918e902f"
+  },
+  {
+    "metric_name": "daily_selected_install_count",
+    "metric_definition_version": "0.4.18",
+    "anchor_event": "calendar_day",
+    "aggregation_time_zone": "UTC",
+    "value_type": "count",
+    "definition": {
+      "calculation": "event_count",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "events"
+    },
+    "event_names": [
+      "install"
+    ],
+    "grouping_dimensions": [
+      "metric_date",
+      "cohort_date",
+      "campaign_id",
+      "network",
+      "country",
+      "attribution_status",
+      "acquisition_campaign_state"
+    ],
+    "acquisition_basis": "selected_first_party_click",
+    "rule_bundle_id": "metric-selected-daily-acquisition",
+    "rule_bundle_version": "0.4.18",
+    "rule_bundle_hash": "ce996e1de4060947faa76fad369571941bbdd120ad5c1ddf9697531813543c8d"
+  }
+]

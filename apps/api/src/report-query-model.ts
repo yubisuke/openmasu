@@ -12,6 +12,7 @@ export const groupingDimensionAllowlist: Readonly<Record<GroupingDimension, true
   cohort_date: true,
   metric_date: true,
   attribution_status: true,
+  acquisition_campaign_state: true,
   apple_conversion_bucket: true,
 };
 
@@ -204,6 +205,8 @@ export function validateGrouping(dimension: GroupingDimension, value: string): v
       ? canonicalDate(value)
       : dimension === "attribution_status"
         ? new Set(["organic", "non_organic", "unattributed"]).has(value)
+        : dimension === "acquisition_campaign_state"
+          ? value === "known" || value === "unknown"
         : dimension === "apple_conversion_bucket"
           ? /^(fine:([0-9]|[1-5][0-9]|6[0-3])|coarse:(low|medium|high))$/.test(value)
         : identifierPattern.test(value);

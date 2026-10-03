@@ -412,6 +412,18 @@
             }
           },
           {
+            "name": "grouping_acquisition_campaign_state",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "enum": [
+                "known",
+                "unknown"
+              ]
+            }
+          },
+          {
             "name": "grouping_apple_conversion_bucket",
             "in": "query",
             "required": false,
@@ -444,6 +456,7 @@
           "grouping_cohort_date",
           "grouping_metric_date",
           "grouping_attribution_status",
+          "grouping_acquisition_campaign_state",
           "grouping_apple_conversion_bucket"
         ],
         "responses": {
@@ -808,6 +821,18 @@
             }
           },
           {
+            "name": "grouping_acquisition_campaign_state",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "enum": [
+                "known",
+                "unknown"
+              ]
+            }
+          },
+          {
             "name": "grouping_apple_conversion_bucket",
             "in": "query",
             "required": false,
@@ -840,6 +865,7 @@
           "grouping_cohort_date",
           "grouping_metric_date",
           "grouping_attribution_status",
+          "grouping_acquisition_campaign_state",
           "grouping_apple_conversion_bucket"
         ],
         "responses": {
@@ -1176,6 +1202,18 @@
             }
           },
           {
+            "name": "grouping_acquisition_campaign_state",
+            "in": "query",
+            "required": false,
+            "description": "Declared non-identifying dimension; deterministic and Apple aggregate series stay distinct.",
+            "schema": {
+              "enum": [
+                "known",
+                "unknown"
+              ]
+            }
+          },
+          {
             "name": "grouping_apple_conversion_bucket",
             "in": "query",
             "required": false,
@@ -1208,6 +1246,7 @@
           "grouping_cohort_date",
           "grouping_metric_date",
           "grouping_attribution_status",
+          "grouping_acquisition_campaign_state",
           "grouping_apple_conversion_bucket"
         ],
         "responses": {
@@ -1816,6 +1855,12 @@
                   "unattributed"
                 ]
               },
+              "acquisition_campaign_state": {
+                "enum": [
+                  "known",
+                  "unknown"
+                ]
+              },
               "apple_conversion_bucket": {
                 "type": "string",
                 "pattern": "^(fine:([0-9]|[1-5][0-9]|6[0-3])|coarse:(low|medium|high))$"
@@ -2214,6 +2259,12 @@
                   "organic",
                   "non_organic",
                   "unattributed"
+                ]
+              },
+              "acquisition_campaign_state": {
+                "enum": [
+                  "known",
+                  "unknown"
                 ]
               },
               "apple_conversion_bucket": {

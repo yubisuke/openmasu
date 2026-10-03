@@ -35,6 +35,14 @@ function rejectsKind(query: string, cursorKind: "difference" | "record", code: s
 }
 
 describe("M3 typed reporting query", () => {
+  it("daily_acquisition_campaign_state_is_bounded_and_parameterized", () => {
+    const query = parse("metric_name=daily_selected_install_count&grouping_acquisition_campaign_state=unknown&grouping_metric_date=2026-08-06").query;
+    assert.equal(query.grouping?.acquisition_campaign_state, "unknown");
+    const sql = buildMetricQuery(query);
+    assert.ok(sql.values.includes("unknown"));
+    assert.ok(sql.text.includes(`mr.grouping->>'acquisition_campaign_state'=$${sql.values.indexOf("unknown") + 1}`));
+    rejects("grouping_acquisition_campaign_state=all", "grouping_value_invalid");
+  });
   it("keeps explicit engagement filters at open-date campaign grain", () => {
     const prefix = "metric_name=engagement_ad_revenue_24h_usd&grouping_metric_date=2026-08-21";
     assert.deepEqual(parse(`${prefix}&grouping_campaign_id=synthetic-return`).query.grouping,

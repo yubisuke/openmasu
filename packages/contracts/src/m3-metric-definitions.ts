@@ -41,3 +41,14 @@ export const M3_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricDefinitionV04> =
     metric_definition_version: "0.4.7",
   },
 ];
+
+/** Opt-in acquisition counts; never reinterpret the historical recorded-dimension daily series. */
+export const SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS: ReadonlyArray<OpenMasuMetricDefinitionV04> = [{
+  ...dailyEventCount("daily_selected_install_count", "install",
+    ["metric_date", "cohort_date", "campaign_id", "network", "country", "attribution_status", "acquisition_campaign_state"]),
+  metric_definition_version: "0.4.18",
+  acquisition_basis: "selected_first_party_click",
+  rule_bundle_id: "metric-selected-daily-acquisition",
+  rule_bundle_version: "0.4.18",
+  rule_bundle_hash: nonFraudBundleHash("metric-selected-daily-acquisition"),
+}];

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { buildMetricDefinitionsInput } from "./run.js";
-import { engagementMetricDefinitions } from "@openmasu/contracts";
+import { engagementMetricDefinitions, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
 
 const config = (grouping: Record<string, string> = {}) => ({
   tenant_id: "tenant-synthetic",
@@ -16,6 +16,18 @@ const config = (grouping: Record<string, string> = {}) => ({
 });
 
 describe("WO16 metric backfill CLI", () => {
+  it("daily_acquisition_CLI_defaults_to_occurrence_day_and_preserves_explicit_backfill_dates", () => {
+    const source = { ...config(), metric_definitions: SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS,
+      evaluations: [{ metric_names: ["daily_selected_install_count"], grouping: { acquisition_campaign_state: "known" } }] };
+    const input = buildMetricDefinitionsInput(source, "2026-08-06", "2026-08-12T00:00:00.000Z");
+    assert.deepEqual(input.metric_evaluations[0].grouping, { metric_date: "2026-08-06", acquisition_campaign_state: "known" });
+    assert.equal(input.metric_evaluations[0].privacy_state, "after");
+    const explicit = { ...source, evaluations: [{ ...source.evaluations[0], grouping: { metric_date: "2026-08-05", cohort_date: "2026-08-05" } }] };
+    assert.deepEqual(buildMetricDefinitionsInput(explicit, "2026-08-06").metric_evaluations[0].grouping,
+      { metric_date: "2026-08-05", cohort_date: "2026-08-05" });
+    assert.throws(() => buildMetricDefinitionsInput({ ...source, evaluations: [{ ...source.evaluations[0],
+      metric_names: ["daily_selected_install_count", "daily_install_count"] }] }, "2026-08-06"), /separate_anchor_evaluation/);
+  });
   it("uses the engagement open date and current privacy state without injecting an install cohort", () => {
     const definitions = engagementMetricDefinitions("tutorial_complete");
     const source = { ...config(), metric_definitions: definitions,

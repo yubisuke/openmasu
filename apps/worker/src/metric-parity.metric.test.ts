@@ -20,6 +20,10 @@ import { syntheticConversionCases } from "../../../tools/synthetic-conversion-ca
 import { syntheticRefundReversalCases } from "../../../tools/synthetic-refund-reversal-cases.js";
 import { syntheticAcquisitionDetailCases } from "../../../tools/synthetic-acquisition-detail-cases.js";
 import { syntheticEngagementCases } from "../../../tools/synthetic-engagement-cases.js";
+import { syntheticDailyAcquisitionCases, dailyAcquisitionCaseRuns } from "../../../tools/synthetic-daily-acquisition-cases.js";
+import { persistAttribution } from "./ingestion/application.js";
+import { encodeMetricReport, supportsRecordCounts } from "../../api/src/reporting.js";
+import { parseCsv } from "@openmasu/runtime/import-normalization";
 import { persistCostImport, type CostInput } from "./import/cost.js";
 import { runCostImportFile } from "./import/cost-cli.js";
 
@@ -31,6 +35,45 @@ const goldenPath = join(fixtureDirectory, "expected_metric_runs.json");
 const goldenBefore = readFileSync(goldenPath);
 const golden: Any[] = JSON.parse(goldenBefore.toString("utf8"));
 const oracle = evaluate(input).metric_runs;
+
+describe("selected daily acquisition SQL and reporting parity", { concurrency: false }, () => {
+  let app: Pool, seed: Pool, reader: Pool;
+  before(() => { app = createAppPool(); seed = createSeedPool(); reader = createReaderPool(); });
+  after(async () => { await app?.end(); await seed?.end(); await reader?.end(); });
+  const source = JSON.parse(readFileSync("fixtures/v0.4/65-selected-daily-acquisition/input.json", "utf8"));
+  for (const entry of syntheticDailyAcquisitionCases(source)) it(entry.name, async () => {
+    await ingestFixture(`daily65-${entry.name}`, entry.input, app, seed);
+    for (const revision of entry.revisions ?? []) await persistAttribution(app, revision as Parameters<typeof persistAttribution>[1]);
+    const expected = dailyAcquisitionCaseRuns(entry);
+    const actual = await computeSqlMetricRuns(app, entry.input, true);
+    assert.deepEqual(actual.map(run => run.value_unscaled), entry.expected);
+    assert.equal(jcs(actual), jcs(expected));
+    const query = { tenantId: "tenant-a", appId: "app-a", supersession: "all" as const, limit: 200 };
+    const page = await metricReport(reader, { keyId: "synthetic-daily65", tenantId: "tenant-a", appId: "app-a", role: "admin" }, query);
+    const rows = new Map(page.data.map(row => [row.metric_run_id, row]));
+    for (const run of expected) {
+      const row = rows.get(run.metric_run_id)!;
+      // The old recorded profile evaluates before deletion. Its stored artifact
+      // still matches the oracle, but the existing public privacy gate must hide it.
+      const withheld = run.metric_name === "daily_install_count" && Boolean(entry.input.privacy_requests?.length);
+      assert.equal(row.value_state, withheld ? "unavailable" : "present");
+      assert.equal(row.value_unscaled, withheld ? undefined : run.value_unscaled);
+      assert.equal(row.unavailable_reason, withheld ? "privacy_deletion" : null);
+      assert.deepEqual(row.grouping, run.grouping?.dimensions);
+      const encoded = encodeMetricReport({ data: [row] }, "csv");
+      const csv = parseCsv(encoded.body)[0];
+      assert.equal(csv.value_unscaled, withheld ? "" : run.value_unscaled);
+      assert.equal(csv.value_state, row.value_state);
+      assert.equal(csv.unavailable_reason, row.unavailable_reason ?? "");
+      assert.deepEqual(JSON.parse(csv.grouping), run.grouping?.dimensions);
+    }
+    const facts = await withTenant(app, "tenant-a", async client => (await client.query(
+      "SELECT campaign_id, network FROM ledger.install_facts WHERE installation_id='installation:install-1'",
+    )).rows);
+    assert.deepEqual(facts, [{ campaign_id: null, network: null }]);
+    assert.equal(supportsRecordCounts({ ...query, grouping: { acquisition_campaign_state: "unknown" } }), false);
+  });
+});
 
 describe("first-party engagement SQL parity", { concurrency: false }, () => {
   let app: Pool;

@@ -61,6 +61,7 @@
             "cohort_date": { "type": "string", "format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
             "metric_date": { "type": "string", "format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
             "attribution_status": { "enum": ["organic", "non_organic", "unattributed"] },
+            "acquisition_campaign_state": { "enum": ["known", "unknown"] },
             "apple_conversion_bucket": { "type": "string", "pattern": "^(fine:([0-9]|[1-5][0-9]|6[0-3])|coarse:(low|medium|high))$" }
           }
         },
@@ -71,6 +72,16 @@
     "evidence_refs": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/evidenceRef" } }
   },
   "allOf": [
+    {
+      "if": { "properties": { "grouping": { "type": "object", "additionalProperties": true, "properties": { "dimensions": {
+        "type": "object", "additionalProperties": true, "properties": { "acquisition_campaign_state": {} }, "required": ["acquisition_campaign_state"]
+      } }, "required": ["dimensions"] } }, "required": ["grouping"] },
+      "then": { "properties": {
+        "metric_name": { "const": "daily_selected_install_count" }, "metric_definition_version": { "const": "0.4.18" },
+        "rule_bundle_id": { "const": "metric-selected-daily-acquisition" }, "rule_bundle_version": { "const": "0.4.18" },
+        "rule_bundle_hash": { "const": "ce996e1de4060947faa76fad369571941bbdd120ad5c1ddf9697531813543c8d" }
+      } }
+    },
     {
       "if": {
         "properties": { "value_state": { "const": "undefined" } },

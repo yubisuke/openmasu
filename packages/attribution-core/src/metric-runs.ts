@@ -170,9 +170,17 @@ export function metricRuns(
         throw new Error(`unsupported detail grouping for ${metricName}`);
       }
       const selectedInstalls = definition.acquisition_basis ? acquisitionInstalls : installs;
+      const selectedDaily = definition.rule_bundle_id === "metric-selected-daily-acquisition";
+      if (selectedDaily && evaluation.grouping?.acquisition_campaign_state !== undefined &&
+          !["known", "unknown"].includes(evaluation.grouping.acquisition_campaign_state)) {
+        throw new Error("daily_acquisition_campaign_state_invalid");
+      }
+      if (!selectedDaily && evaluation.grouping?.acquisition_campaign_state !== undefined) {
+        throw new Error(`unsupported acquisition campaign state for ${metricName}`);
+      }
     const cohortScopes = new Set(selectedInstalls.map((install) => compositeKey([install.server.tenant_id, install.server.app_id])));
     const groupedCosts = cost_records.filter((cost) => {
-      if (definition.engagement_credit_policy) return false;
+      if (definition.engagement_credit_policy || selectedDaily) return false;
       const grouping = evaluation.grouping;
       if (cost.creative_id !== undefined && !definition.acquisition_dimension_policy) return false;
       if (grouping?.attribution_status !== undefined && grouping.attribution_status !== "non_organic") return false;
@@ -326,7 +334,16 @@ export function metricRuns(
           throw new Error(`event_count requires exactly one supported event name: ${metricName}`);
         }
         const aggregatePostback = eventName === "skan_postback" || eventName === "adattributionkit_postback";
-        if (aggregatePostback) {
+        if (selectedDaily) {
+          value = BigInt(eligibleInstalls.filter((attempt) => {
+            if (attempt.record.producer.startsWith("import:") ||
+                dateAt(attempt.record.occurred_at, "UTC", "occurred_at") !== metricDate) return false;
+            const campaign = selectedAcquisitionDimensions(attempt, visible, acquisitionAttributions).campaign_id;
+            const state = campaign === undefined ? "unknown" : "known";
+            return evaluation.grouping?.acquisition_campaign_state === undefined ||
+              evaluation.grouping.acquisition_campaign_state === state;
+          }).length);
+        } else if (aggregatePostback) {
           if (definition.aggregation_time_zone !== "UTC") {
             throw new Error(`aggregate event_count requires UTC aggregation: ${metricName}`);
           }

@@ -74,6 +74,7 @@ The v0.4 line adds independently exercised optional vocabulary and definitions:
 | 0.4.15 | optional exact refund-cancellation target and independent opt-in commerce definitions |
 | 0.4.16 | optional selected ad-group/creative metric dimensions and creative-grain costs in an explicit profile |
 | 0.4.17 | opt-in first-party deep-link outcome metrics with a fixed 24h latest-open credit policy, separate from install and Apple aggregate series |
+| 0.4.18 | opt-in native daily acquisition count with cohort-selected click evidence and explicit known/unknown campaign grouping; recorded raw daily semantics stay unchanged |
 
 Existing schema `$id` values remain on `v0.4`; existing event artifact version
 fields remain `0.4.0` where their schema did not change.

@@ -50,9 +50,41 @@ compare or supersede prior runs deliberately.
 
 The advertising family covers D0/D1/D3/D7 ROAS and LTV, D1/D7 retention, and
 installation count. The explicit commerce family below extends the same source
-selection to purchase-net and total-net. Platform-assigned acquisition, daily
-event counts, creative granularity and Apple aggregate metrics are not expanded.
+selection to purchase-net and total-net. The daily native profile below is
+separate from historical recorded-dimension daily counts. Platform-assigned
+acquisition and Apple aggregate metrics are not expanded by this family.
 No live provider, real-device or production-delivery evidence is claimed.
+
+## Daily native acquisition
+
+Use [`synthetic-daily-acquisition.json`](../examples/metrics/synthetic-daily-acquisition.json)
+to explicitly select `daily_selected_install_count` version `0.4.18`:
+
+```bash
+npm run metrics:run -- --date=2026-08-06 --watermark=2026-08-12T00:00:00.000Z --definitions=examples/metrics/synthetic-daily-acquisition.json
+```
+
+The example has separate known paid, organic unknown and unattributed unknown
+evaluations. These are filters on saved evidence, not claims of source
+completeness. A blank campaign/state filter includes all native installs;
+unknown campaign does not imply organic. The explicit daily profile excludes
+imported installs and Apple aggregate postbacks and has no cost denominator.
+
+`--date` defaults `metric_date` only when it is not already declared.
+That is the native install's UTC **occurrence day**. The install's UTC cohort
+day is a separate optional intersection filter. The server **receipt timestamp**
+limits evidence at the fixed watermark; it does not move an install to another
+occurrence day. Set a later watermark deliberately for backfill.
+Campaign/network use exactly the selected cohort attribution/click rules,
+including cutoff, supersession, deterministic ties and current privacy.
+
+Register a new schedule with this exact definition and
+`date_dimension=metric_date`; select campaign/status/state filters explicitly.
+Existing `daily_install_count` and raw reports retain recorded dimensions and
+remain readable without upgrading schedules or rewriting earlier results.
+The raw endpoint refuses `acquisition_campaign_state`, because raw rows do not
+resolve a chosen acquisition campaign. Use the metric endpoint/CSV/dashboard
+for the selected profile. All three date meanings are shown in the dashboard.
 
 Retention joins activity back to the same eligible installation set used for
 the denominator, after acquisition grouping and the chosen gross/net policy.
