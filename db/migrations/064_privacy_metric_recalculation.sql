@@ -1,8 +1,9 @@
 -- Privacy corrections reuse the durable metric queue, not cost/late-input semantics.
+-- The legacy date range references two columns, so PostgreSQL named it table_check.
 ALTER TABLE control.metric_recalculation_jobs
   ADD COLUMN privacy_request_id control.identifier,
   DROP CONSTRAINT metric_recalculation_jobs_trigger_kind_check,
-  DROP CONSTRAINT metric_recalculation_jobs_date_to_check,
+  DROP CONSTRAINT metric_recalculation_jobs_check,
   DROP CONSTRAINT metric_recalculation_source_check,
   ADD CONSTRAINT metric_recalculation_trigger_kind_check
     CHECK (trigger_kind IN ('cost_revision','late_events','privacy_deletion')),
