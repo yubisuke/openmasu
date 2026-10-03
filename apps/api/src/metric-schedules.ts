@@ -1,7 +1,8 @@
 import type { Pool, PoolClient } from "pg";
 import { sha256Jcs } from "@openmasu/fraud-rules";
 import { uuidV7, withTenant, type MetricScheduleReplacement } from "@openmasu/runtime";
-import { ENGAGEMENT_METRIC_NAMES, cohortLocalDate, addCalendarDays, type CohortTimeZone } from "@openmasu/contracts/definitions";
+import { ENGAGEMENT_METRIC_NAMES, M1B_METRIC_DEFINITIONS, REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
+  cohortLocalDate, addCalendarDays, validDatedFxPolicy, canonicalDatedFxPolicy, type CohortTimeZone } from "@openmasu/contracts/definitions";
 import { validateScheduledMetricDefinition as validMetricDefinition, type ScheduledMetricDefinition } from "@openmasu/contracts/validation";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
@@ -63,6 +64,7 @@ function boundedText(value: unknown, maximum: number): value is string {
 }
 
 function validFxPolicy(value: JsonObject): boolean {
+  if (value.rate_selection !== undefined) return validDatedFxPolicy(value);
   if (Object.keys(value).some((key) => !["policy_version", "target_currency", "target_scale", "rounding_mode", "rates"].includes(key))
       || !boundedText(value.policy_version, 64)
       || typeof value.target_currency !== "string" || !/^[A-Z]{3}$/.test(value.target_currency)
@@ -139,10 +141,11 @@ export function normalizeMetricScheduleRequest(
     ? defaultStart
     : exactDate(body.start_date, "metric_schedule_start_date_invalid");
 
-  const fxPolicy = object(body.fx_policy, "metric_schedule_fx_policy_invalid");
+  let fxPolicy = object(body.fx_policy, "metric_schedule_fx_policy_invalid");
   if (!validFxPolicy(fxPolicy)) {
     throw new Error("metric_schedule_fx_policy_invalid");
   }
+  if (fxPolicy.rate_selection !== undefined) fxPolicy = canonicalDatedFxPolicy(fxPolicy);
   const candidates = body.metric_definitions ?? [];
   if (!Array.isArray(candidates)) throw new Error("metric_schedule_definitions_invalid");
   const suppliedDefinitions: ScheduledMetricDefinition[] = [];
@@ -181,6 +184,11 @@ export function normalizeMetricScheduleRequest(
       throw new Error("metric_schedule_date_dimension_invalid");
     }
     const dateDimension: "cohort_date" | "metric_date" = evaluation.date_dimension;
+    if (fxPolicy.rate_selection && evaluation.metric_names.some(name => {
+      const definition = [...suppliedDefinitions,...M1B_METRIC_DEFINITIONS,...REFERENCE_AD_REVENUE_METRIC_DEFINITIONS]
+        .find(definition => definition.metric_name === name);
+      return definition?.value_type === "money" && (definition.currency !== fxPolicy.target_currency || definition.amount_scale !== fxPolicy.target_scale);
+    })) throw new Error("metric_schedule_fx_target_mismatch");
     if (cohortTimeZone && (dateDimension !== "cohort_date" || evaluation.campaign_discovery !== undefined
         || evaluation.metric_names.some(name => !calendarDefinitions.some(definition => definition.metric_name === name)))) {
       throw new Error("metric_schedule_calendar_profile_required");

@@ -1087,9 +1087,45 @@ def round_half_even(numerator: int, denominator: int) -> int:
     return -quotient if negative else quotient
 
 
-def convert_money(payload: dict[str, Any], policy: dict[str, Any]) -> int:
-    rate = next((candidate for candidate in policy["rates"] if candidate["currency"] == payload["currency"]), None)
+class MissingFxRate(ValueError):
+    pass
+
+
+def canonical_dated_fx_policy(value: dict[str, Any]) -> dict[str, Any]:
+    required = {"policy_version", "target_currency", "target_scale", "rounding_mode", "rate_selection", "rates"}
+    if (not isinstance(value, dict) or set(value) != required or value["policy_version"] != "0.4.22"
+            or value["rate_selection"] != "utc_event_date_and_cost_date" or value["rounding_mode"] != "half_even"
+            or not isinstance(value["target_currency"], str) or not re.fullmatch(r"[A-Z]{3}", value["target_currency"])
+            or type(value["target_scale"]) is not int or not 0 <= value["target_scale"] <= 18
+            or not isinstance(value["rates"], list) or not 1 <= len(value["rates"]) <= 128):
+        raise ValueError("dated_fx_policy_invalid")
+    keys: set[tuple[str, str]] = set()
+    for rate in value["rates"]:
+        if (not isinstance(rate, dict) or set(rate) != {"currency", "effective_date", "rate_unscaled", "rate_scale", "source", "as_of"}
+                or not isinstance(rate["currency"], str) or not re.fullmatch(r"[A-Z]{3}", rate["currency"])
+                or not isinstance(rate["effective_date"], str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", rate["effective_date"])
+                or not isinstance(rate["rate_unscaled"], str) or not re.fullmatch(r"[1-9][0-9]{0,77}", rate["rate_unscaled"])
+                or type(rate["rate_scale"]) is not int or not 0 <= rate["rate_scale"] <= 18
+                or not isinstance(rate["source"], str) or not 1 <= len(rate["source"]) <= 128
+                or not isinstance(rate["as_of"], str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z", rate["as_of"])):
+            raise ValueError("dated_fx_policy_invalid")
+        timestamp(rate["as_of"], "fx.as_of")
+        if datetime.strptime(rate["effective_date"], "%Y-%m-%d").date().isoformat() != rate["effective_date"]:
+            raise ValueError("dated_fx_policy_invalid")
+        key = (rate["currency"], rate["effective_date"])
+        if key in keys or rate["currency"] == value["target_currency"] and int(rate["rate_unscaled"]) != 10 ** rate["rate_scale"]:
+            raise ValueError("dated_fx_policy_invalid")
+        keys.add(key)
+    return {**value, "rates": sorted([dict(rate) for rate in value["rates"]], key=lambda rate: (rate["currency"], rate["effective_date"]))}
+
+
+def convert_money(payload: dict[str, Any], policy: dict[str, Any], date: str | None = None, watermark: str | None = None) -> int:
+    rate = next((candidate for candidate in policy["rates"] if candidate["currency"] == payload["currency"]
+                 and (not policy.get("rate_selection") or candidate["effective_date"] == date
+                      and timestamp(candidate["as_of"], "fx.as_of") <= timestamp(watermark, "watermark"))), None)
     if rate is None:
+        if policy.get("rate_selection"):
+            raise MissingFxRate(payload["currency"])
         raise ValueError(f"missing FX rate for {payload['currency']}")
     numerator = int(payload["amount_unscaled"]) * int(rate["rate_unscaled"]) * 10 ** int(policy["target_scale"])
     denominator = 10 ** (int(payload["amount_scale"]) + int(rate["rate_scale"]))
@@ -1734,7 +1770,8 @@ def engagement_snapshot_rows(opens: list[dict[str, Any]]) -> list[list[Any]]:
 
 
 def engagement_value(opens: list[dict[str, Any]], visible: list[dict[str, Any]], definition: dict[str, Any],
-                     evaluation: dict[str, Any], lifecycle: dict[tuple[str, str, str], str], policy: dict[str, Any]) -> int | None:
+                     evaluation: dict[str, Any], lifecycle: dict[tuple[str, str, str], str], policy: dict[str, Any],
+                     money: Callable[[dict[str, Any], str], int] | None = None) -> int | None:
     grouping = evaluation.get("grouping", {})
     if not isinstance(grouping.get("metric_date"), str) or set(grouping) - {"metric_date", "campaign_id"}:
         raise ValueError("engagement_metric_requires_anchor_date")
@@ -1771,7 +1808,7 @@ def engagement_value(opens: list[dict[str, Any]], visible: list[dict[str, Any]],
         if count:
             converted.add(scope)
         else:
-            revenue += convert_money(record["payload"], policy)
+            revenue += money(record["payload"], day(record["occurred_at"], "UTC", "occurred_at")) if money else convert_money(record["payload"], policy)
     return len(converted) if count else revenue
 
 
@@ -1785,6 +1822,8 @@ def metric_runs(
 ) -> list[dict[str, Any]]:
     excluded_installation_ids = excluded_installation_ids or set()
     policy = value["fx_policy"]
+    if "rate_selection" in policy:
+        policy = canonical_dated_fx_policy(policy)
     definitions = metric_definitions(value)
     definitions_by_name = {definition["metric_name"]: definition for definition in definitions}
     costs = cost_records(value)
@@ -1875,7 +1914,7 @@ def metric_runs(
             for attempt in included
         ]
         ledger = record_snapshot_rows[-1] if record_snapshot_rows else None
-        if len(policy["rates"]) != 1:
+        if not policy.get("rate_selection") and len(policy["rates"]) != 1:
             raise ValueError("v0.2 metric runs require exactly one structured FX rate")
         only_rate = policy["rates"][0]
         selected_names = evaluation.get("metric_names", [
@@ -1887,6 +1926,20 @@ def metric_runs(
             if metric_name not in definitions_by_name:
                 raise ValueError(f"unknown metric definition: {metric_name}")
             definition = definitions_by_name[metric_name]
+            uses_fx = definition["definition"]["calculation"] in ("revenue_sum", "revenue_over_cost", "revenue_over_cohort")
+            if (policy.get("rate_selection") and definition["value_type"] == "money"
+                    and (definition["currency"] != policy["target_currency"] or definition["amount_scale"] != policy["target_scale"])):
+                raise ValueError("dated_fx_target_mismatch")
+            missing_fx = False
+
+            def money(payload: dict[str, Any], date: str) -> int:
+                nonlocal missing_fx
+                try:
+                    return convert_money(payload, policy, date, evaluation["input_received_at_watermark"])
+                except MissingFxRate:
+                    missing_fx = True
+                    return 0
+
             if (definition.get("acquisition_basis") == "selected_verified_platform"
                     and (evaluation.get("grouping", {}).get("campaign_id") or evaluation.get("grouping", {}).get("ad_group_id"))
                     and not evaluation.get("grouping", {}).get("network")):
@@ -1974,7 +2027,8 @@ def metric_runs(
             if unsupported:
                 raise ValueError(f"unsupported grouping for {metric_name}: {','.join(unsupported)}")
             revenue_value = 0
-            for item in ([] if definition.get("engagement_credit_policy") or "conversion_event_key" in definition else revenue):
+            for item in ([] if definition.get("engagement_credit_policy") or "conversion_event_key" in definition
+                         or policy.get("rate_selection") and (not uses_fx or definition["definition"]["numerator"] == "purchase_net_revenue") else revenue):
                 if provider and item["record"]["producer"] != f"import:{provider}":
                     continue
                 installation = next(
@@ -1987,7 +2041,7 @@ def metric_runs(
                     None,
                 )
                 if installation and eligible_revenue(definition, installation["record"], item["record"]):
-                    revenue_value += convert_money(item["record"]["payload"], policy)
+                    revenue_value += money(item["record"]["payload"], day(item["record"]["occurred_at"], "UTC", "occurred_at"))
             purchase_net_revenue_value = 0
             if definition["definition"]["numerator"] in {"purchase_net_revenue", "total_net_revenue"}:
                 for item in purchases:
@@ -1998,7 +2052,7 @@ def metric_runs(
                         and candidate["record"]["payload"]["installation_id"] == item["record"]["payload"].get("installation_id")
                     ), None)
                     if installation and eligible_revenue(definition, installation["record"], item["record"]):
-                        purchase_net_revenue_value += convert_money(item["record"]["payload"], policy)
+                        purchase_net_revenue_value += money(item["record"]["payload"], day(item["record"]["occurred_at"], "UTC", "occurred_at"))
                 for item in refunds:
                     target = resolve_refund_target(item, visible)
                     if target is None or target["record"]["payload"]["financial_status"] != "settled":
@@ -2019,7 +2073,7 @@ def metric_runs(
                         and candidate["record"]["payload"]["installation_id"] == target["record"]["payload"].get("installation_id")
                     ), None)
                     if installation and eligible_revenue(definition, installation["record"], item["record"]):
-                        purchase_net_revenue_value -= convert_money(item["record"]["payload"], policy)
+                        purchase_net_revenue_value -= money(item["record"]["payload"], day(item["record"]["occurred_at"], "UTC", "occurred_at"))
             selected_revenue_value = (
                 purchase_net_revenue_value
                 if definition["definition"]["numerator"] == "purchase_net_revenue"
@@ -2033,7 +2087,7 @@ def metric_runs(
             amount: int | None = None
             undefined_reason: str | None = None
             if definition.get("engagement_credit_policy"):
-                amount = engagement_value(engagement, visible, definition, evaluation, lifecycle, policy)
+                amount = engagement_value(engagement, visible, definition, evaluation, lifecycle, policy, money)
                 if amount is None:
                     undefined_reason = "empty_cohort"
             elif calculation == "revenue_sum":
@@ -2041,6 +2095,9 @@ def metric_runs(
             elif calculation == "revenue_over_cost":
                 cost_value = 0
                 for cost in current_costs:
+                    if policy.get("rate_selection"):
+                        cost_value += money(cost, cost["date"])
+                        continue
                     if cost["currency"] != policy["target_currency"]:
                         raise ValueError(f"cost currency mismatch: {cost['cost_record_id']}")
                     cost_value += scale_money(cost, int(policy["target_scale"]))
@@ -2180,6 +2237,8 @@ def metric_runs(
                     )
             else:
                 raise ValueError(f"unsupported metric calculation: {calculation}")
+            if missing_fx and uses_fx and undefined_reason != "overlapping_cost_grains":
+                amount, undefined_reason = None, "missing_fx_rate"
             if not definition.get("engagement_credit_policy") and calculation != "event_count" and evaluation.get("grouping", {}).get("metric_date") is not None:
                 raise ValueError(f"metric_date grouping is reserved for event_count: {metric_name}")
             run = {
@@ -2218,7 +2277,9 @@ def metric_runs(
             else:
                 run["value_unscaled"] = str(amount)
             if definition["value_type"] == "money" and amount is not None:
-                run |= {
+                run |= {"amount_scale": definition["amount_scale"], "currency": definition["currency"]}
+                if not policy.get("rate_selection"):
+                    run |= {
                     "fx_rate_unscaled": only_rate["rate_unscaled"],
                     "fx_rate_scale": only_rate["rate_scale"],
                     "fx_rate_source": only_rate["source"],
@@ -2228,6 +2289,8 @@ def metric_runs(
                     "amount_scale": definition["amount_scale"],
                     "currency": definition["currency"],
                 }
+            if policy.get("rate_selection") and uses_fx:
+                run["fx_conversion_snapshot"] = {"policy": policy, "snapshot_id": digest(policy)}
             if definition["value_type"] == "ratio":
                 run["ratio_scale"] = definition["ratio_scale"]
             if evaluation.get("grouping"):

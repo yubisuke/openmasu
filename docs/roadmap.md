@@ -36,7 +36,7 @@ in [Project plan](project-plan.md).
 | Operator-owned bulk event exports | Synthetic complete | Default-off S3-compatible destinations, deterministic gzip NDJSON, SigV4 conditional writes, durable keyset cursors, and destination-scoped deletion notices |
 
 The current contract gate preserves parity across 28 schemas, 8 registries,
-and 68 reviewed synthetic fixtures, including explicitly versioned calendar-zone, imported-provider, first-party and verified-platform acquisition cohorts, daily counts, safe cost selection, custom conversions and targeted refund cancellation.
+and 69 reviewed synthetic fixtures, including explicitly versioned calendar-zone, imported-provider, first-party and verified-platform acquisition cohorts, daily counts, safe cost selection, custom conversions and targeted refund cancellation.
 
 ## Completed milestone: integration and release coherence
 
@@ -219,6 +219,11 @@ the same source state and acceptance boundaries. These structural changes do not
 complete the functional backlog or prove live-provider or production readiness.
 
 ## Optional operator evidence
+
+The opt-in [dated FX snapshot](fx-snapshots.md) extends the existing metric
+engine, replay and report paths without a live FX service. Currency/date
+selection and per-event/per-cost rounding have synthetic evidence; live-rate
+provenance, coverage and accounting acceptance remain separate operator work.
 
 These gates remain useful but require separate authorization and private
 infrastructure:

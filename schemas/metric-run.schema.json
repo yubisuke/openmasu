@@ -29,6 +29,7 @@
     "fx_rate_as_of": { "$ref": "common.schema.json#/$defs/dateTime" },
     "fx_rate_snapshot_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "fx_policy_version": { "type": "string", "minLength": 1 },
+    "fx_conversion_snapshot": { "$ref": "common.schema.json#/$defs/fxConversionSnapshot" },
     "rounding_mode": { "const": "half_even" },
     "reproducibility_status": { "enum": ["fully_reproducible", "redaction_affected", "retention_affected"] },
     "value_type": { "enum": ["money", "ratio", "count"] },
@@ -37,7 +38,7 @@
       "default": "present",
       "description": "Absence is semantically present for v0.2.0 compatibility."
     },
-    "undefined_reason": { "enum": ["no_attributed_cost", "no_activity_events", "empty_cohort", "overlapping_cost_grains"] },
+    "undefined_reason": { "enum": ["no_attributed_cost", "no_activity_events", "empty_cohort", "overlapping_cost_grains", "missing_fx_rate"] },
     "value_unscaled": { "type": "string", "pattern": "^-?[0-9]+$" },
     "fraud_policy": { "enum": ["gross", "net"], "default": "gross" },
     "amount_scale": { "type": "integer", "minimum": 0, "maximum": 18 },
@@ -72,6 +73,18 @@
     "evidence_refs": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/evidenceRef" } }
   },
   "allOf": [
+    {
+      "if": { "properties": { "fx_conversion_snapshot": {} }, "required": ["fx_conversion_snapshot"] },
+      "then": {
+        "properties": { "value_type": { "enum": ["money", "ratio"] } },
+        "not": { "anyOf": [
+          { "properties": { "fx_rate_unscaled": {} }, "required": ["fx_rate_unscaled"] },
+          { "properties": { "fx_rate_scale": {} }, "required": ["fx_rate_scale"] },
+          { "properties": { "fx_rate_source": {} }, "required": ["fx_rate_source"] },
+          { "properties": { "fx_rate_as_of": {} }, "required": ["fx_rate_as_of"] }
+        ] }
+      }
+    },
     {
       "if": { "properties": { "grouping": { "type": "object", "additionalProperties": true, "properties": { "dimensions": {
         "type": "object", "additionalProperties": true, "properties": { "acquisition_campaign_state": {} }, "required": ["acquisition_campaign_state"]
@@ -112,6 +125,12 @@
           "required": ["value_state"]
         },
         "else": {
+          "if": { "properties": { "fx_conversion_snapshot": {} }, "required": ["fx_conversion_snapshot"] },
+          "then": {
+            "properties": { "amount_scale": {}, "currency": {} },
+            "required": ["amount_scale", "currency"]
+          },
+          "else": {
           "properties": {
             "amount_scale": {}, "currency": {}, "fx_rate_unscaled": {}, "fx_rate_scale": {},
             "fx_rate_source": {}, "fx_rate_as_of": {}, "fx_rate_snapshot_id": {}, "fx_policy_version": {}
@@ -120,6 +139,7 @@
             "amount_scale", "currency", "fx_rate_unscaled", "fx_rate_scale", "fx_rate_source",
             "fx_rate_as_of", "fx_rate_snapshot_id", "fx_policy_version"
           ]
+          }
         }
       },
       "else": {

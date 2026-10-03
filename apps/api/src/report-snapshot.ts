@@ -4,6 +4,7 @@ import { parseSnapshot, parseComparisonContext, snapshotAssurance, canonicalComp
 import type { MetricComparisonContext } from "@openmasu/runtime";
 import { freshnessFields, parseMetricFreshness } from "./metric-freshness.js";
 import type { FreshnessRow } from "./comparison-model.js";
+import { projectDatedFxSnapshot } from "@openmasu/contracts/definitions";
 
 function object(v: unknown): asserts v is Record<string, unknown> {
   if (!v || typeof v !== "object" || Array.isArray(v)) throw Error("invalid_report");
@@ -50,6 +51,10 @@ export function reportToSnapshot(report: unknown, template: unknown) {
     }
     if (context) {
       const d = context.definition;
+      if (context.fx.rate_selection && ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(d.definition.calculation)) {
+        const fx = projectDatedFxSnapshot(r.fx_conversion_snapshot);
+        if (!fx || fx.snapshot_id !== context.fx_digest || jcs(fx.policy) !== jcs(context.fx)) throw Error("fx_snapshot_binding_mismatch");
+      }
       if (context.metric_run_id !== r.metric_run_id || context.input_snapshot_id !== r.input_snapshot_id
           || d.metric_name !== r.metric_name || d.metric_definition_version !== r.metric_definition_version
           || d.value_type !== r.value_type

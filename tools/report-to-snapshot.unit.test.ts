@@ -1,6 +1,6 @@
 import { it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -24,6 +24,24 @@ const backedRow = () => {
     comparison_context: captureMetricComparisonContext(r as any, d, { policy_version: "synthetic", target_currency: "USD", target_scale: 2,
       rounding_mode: "half_even", rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0, as_of: "2026-01-01T00:00:00.000Z" }] }, "after", sha256) };
 };
+it("dated_FX_report_snapshot_requires_the_same_saved_policy_and_exposes_changed_rate_meaning", () => {
+  const fixture = JSON.parse(readFileSync("fixtures/v0.4/69-dated-fx-cohorts/input.json", "utf8"));
+  const r = backedRow();
+  const policy = { ...fixture.fx_policy, target_scale: 2 };
+  r.comparison_context = captureMetricComparisonContext(r as any, r.comparison_context.definition, policy, "after", sha256);
+  r.policy_versions = ["rule_bundle:v1", "fx:0.4.22"];
+  const dated = { ...r, fx_conversion_snapshot: { policy, snapshot_id: sha256(policy) } };
+  const saved = reportToSnapshot({ data: [dated] }, template());
+  assert.equal(compareSnapshots(saved, saved).status, "compared");
+  assert.deepEqual(parseSnapshot(saved), saved);
+  assert.throws(() => reportToSnapshot({ data: [r] }, template()), /fx_snapshot_binding_mismatch/);
+  assert.throws(() => reportToSnapshot({ data: [{ ...dated, fx_conversion_snapshot: { policy, snapshot_id: "f".repeat(64) } }] }, template()), /fx_snapshot_binding_mismatch/);
+  const changedPolicy = structuredClone(policy); changedPolicy.rates[0].rate_unscaled = "24";
+  const changed = { ...dated, fx_conversion_snapshot: { policy: changedPolicy, snapshot_id: sha256(changedPolicy) },
+    comparison_context: captureMetricComparisonContext(r as any, r.comparison_context.definition, changedPolicy, "after", sha256) };
+  const comparison = compareSnapshots(saved, reportToSnapshot({ data: [changed] }, template()));
+  assert.equal(comparison.status, "incomparable"); assert.ok(comparison.mismatches.includes("meaning.fx"));
+});
 it("checks saved execution policy and displays definition-backed, declared and unknown bases distinctly", () => {
   const r = backedRow(), output = reportToSnapshot({ data: [r] }, template());
   assert.equal(output.conditions.maturity, "window_elapsed");

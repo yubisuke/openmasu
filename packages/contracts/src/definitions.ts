@@ -16,6 +16,8 @@ export {
 } from "./m1b-metric-definitions.js";
 export { M3_METRIC_DEFINITIONS, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "./m3-metric-definitions.js";
 export { calendarAcquisitionMetricDefinitions } from "./calendar-metric-definitions.js";
+export { DATED_FX_POLICY_VERSION, DATED_FX_RATE_SELECTION, validDatedFxPolicy, canonicalDatedFxPolicy,
+  selectDatedFxRate, projectDatedFxSnapshot, type DatedFxPolicyInput, type DatedFxRate } from "./fx-policy.js";
 export { COHORT_TIME_ZONES, cohortLocalDate, cohortDayStart, addCalendarDays, cohortCalendarDayIndex,
   type CohortTimeZone } from "./calendar-time.js";
 export {

@@ -299,6 +299,14 @@ does not configure an external alert receiver.
 
 ## Evidence boundary
 
+For mixed-currency money, register the explicit
+[dated FX schedule example](../examples/synthetic/metric-dated-fx-schedule.json)
+with its bounded snapshot. The worker uses its immutable currency/date rates
+at the saved cutoff, and replay retains them. A later date outside the snapshot
+is `missing_fx_rate`, not an inferred previous rate. Register a new schedule to
+change FX meaning; old runs and downloaded comparisons keep their policy.
+See [FX snapshots](fx-snapshots.md) for exact date, cost and rounding rules.
+
 Explicit [selected acquisition detail profiles](acquisition-detail-metrics.md)
 can also schedule ad-group/creative selections. Use the v0.4.16 definitions and
 `date_dimension: "cohort_date"`; the schedule supplies the date. Legacy

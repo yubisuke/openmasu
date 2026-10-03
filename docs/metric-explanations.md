@@ -49,6 +49,13 @@ append-only and binds to the run ID, input snapshot and definition version.
 It includes a definition digest, cost-selection digest and FX snapshot digest.
 No second calculation engine or HTTP-time recalculation is used.
 
+The opt-in [dated FX policy](fx-snapshots.md) captures the whole currency/date
+snapshot, source labels and known-as-of timestamps. It converts each revenue
+event and selected cost row at that row's declared date before summation.
+Saved-run details show this snapshot even when `missing_fx_rate` leaves the
+result undefined and no complete operands were persisted. Historical singular
+FX evidence is unchanged; neither shape means today's market-rate lookup.
+
 For example, three synthetic EUR inputs of `100000001` at scale 6 converted
 at rate 0.5 each round to USD `50000000`. Their numerator is `150000000`, not
 the result of rounding the combined EUR total. With USD `100000000` of selected

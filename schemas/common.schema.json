@@ -63,6 +63,41 @@
       ]
     },
     "aggregationTimeZone": { "enum": ["UTC", "Asia/Tokyo", "America/New_York"] },
+    "datedFxPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy_version", "target_currency", "target_scale", "rounding_mode", "rate_selection", "rates"],
+      "properties": {
+        "policy_version": { "const": "0.4.22" },
+        "target_currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "target_scale": { "type": "integer", "minimum": 0, "maximum": 18 },
+        "rounding_mode": { "const": "half_even" },
+        "rate_selection": { "const": "utc_event_date_and_cost_date" },
+        "rates": {
+          "type": "array", "minItems": 1, "maxItems": 128,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["currency", "effective_date", "rate_unscaled", "rate_scale", "source", "as_of"],
+            "properties": {
+              "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+              "effective_date": { "type": "string", "format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+              "rate_unscaled": { "type": "string", "pattern": "^[1-9][0-9]{0,77}$" },
+              "rate_scale": { "type": "integer", "minimum": 0, "maximum": 18 },
+              "source": { "type": "string", "minLength": 1, "maxLength": 128 },
+              "as_of": { "$ref": "#/$defs/dateTime" }
+            }
+          }
+        }
+      }
+    },
+    "fxConversionSnapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["policy", "snapshot_id"],
+      "properties": {
+        "policy": { "$ref": "#/$defs/datedFxPolicy" },
+        "snapshot_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
     "importContext": {
       "type": "object",
       "additionalProperties": false,

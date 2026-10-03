@@ -1,5 +1,5 @@
 import type { OpenMasuMetricDefinitionV04 as MetricDefinition } from "../../../packages/contracts/src/generated/contract-types.js";
-import { cohortDayStart, addCalendarDays } from "@openmasu/contracts/definitions";
+import { cohortDayStart, addCalendarDays, canonicalDatedFxPolicy, type DatedFxPolicyInput } from "@openmasu/contracts/definitions";
 
 /** Aggregate-only metadata. Never store a replay manifest or evidence IDs here. */
 export type ComparisonFx = {
@@ -7,7 +7,8 @@ export type ComparisonFx = {
   target_currency: string;
   target_scale: number;
   rounding_mode: "half_even";
-  rates: { currency: string; rate_unscaled: string; rate_scale: number; as_of: string }[];
+  rate_selection?: DatedFxPolicyInput["rate_selection"];
+  rates: { currency: string; rate_unscaled: string; rate_scale: number; as_of: string; effective_date?: string; source?: string }[];
 };
 export type MetricComparisonContext = {
   version: 1;
@@ -55,7 +56,7 @@ export function captureMetricComparisonContext(
     rule_bundle_id: definition.rule_bundle_id, rule_bundle_version: definition.rule_bundle_version,
     rule_bundle_hash: definition.rule_bundle_hash,
   };
-  const fx: ComparisonFx = {
+  const fx: ComparisonFx = fxPolicy.rate_selection ? canonicalDatedFxPolicy(fxPolicy) : {
     policy_version: fxPolicy.policy_version, target_currency: fxPolicy.target_currency,
     target_scale: fxPolicy.target_scale, rounding_mode: fxPolicy.rounding_mode,
     rates: fxPolicy.rates.map(rate => ({ currency: rate.currency, rate_unscaled: rate.rate_unscaled,
@@ -87,6 +88,7 @@ export function comparisonMeaning(context: MetricComparisonContext) {
       grouping_dimensions: [...(d.grouping_dimensions ?? [])].sort(), privacy_state: context.privacy_state,
       value_type: d.value_type, currency: d.currency ?? null, amount_scale: d.amount_scale ?? null, ratio_scale: null,
       fx: revenue ? { target_currency: context.fx.target_currency, target_scale: context.fx.target_scale,
+        ...(context.fx.rate_selection ? { rate_selection: context.fx.rate_selection } : {}),
         rounding_mode: context.fx.rounding_mode, conversion: "per_event_round_then_sum", rates: context.fx.rates } : null,
     };
   }
@@ -131,7 +133,8 @@ export function comparisonMeaning(context: MetricComparisonContext) {
     amount_scale: d.amount_scale ?? null, ratio_scale: d.ratio_scale ?? null,
     fx: revenue ? { target_currency: context.fx.target_currency, target_scale: context.fx.target_scale,
       rounding_mode: context.fx.rounding_mode, conversion: "per_event_round_then_sum",
-      rates: context.fx.rates.map(({ currency, rate_unscaled, rate_scale, as_of }) => ({ currency, rate_unscaled, rate_scale, as_of })) } : null,
+      ...(context.fx.rate_selection ? { rate_selection: context.fx.rate_selection, cost_conversion: "per_cost_row_round_then_sum" } : {}),
+      rates: context.fx.rate_selection ? context.fx.rates : context.fx.rates.map(({ currency, rate_unscaled, rate_scale, as_of }) => ({ currency, rate_unscaled, rate_scale, as_of })) } : null,
   };
 }
 

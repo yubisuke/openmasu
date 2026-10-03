@@ -30,6 +30,19 @@ const body = {
 };
 
 describe("scheduled metric configuration", () => {
+  it("dated_FX_schedule_captures_a_canonical_bounded_snapshot_and_rejects_target_mismatch", () => {
+    const fixture=JSON.parse(readFileSync("fixtures/v0.4/69-dated-fx-cohorts/input.json","utf8"));
+    const request={...body,fx_policy:fixture.fx_policy,metric_definitions:fixture.metric_definitions,
+      evaluations:[{metric_names:["d0_roas","cohort_ltv_d1_usd"],date_dimension:"cohort_date",grouping:{campaign_id:"fx69-campaign"}}]};
+    const result=normalizeMetricScheduleRequest(request,new Date("2026-10-04T00:00:00.000Z"));
+    const permuted=structuredClone(request); permuted.fx_policy.rates.reverse();
+    assert.deepEqual(normalizeMetricScheduleRequest(permuted,new Date("2026-10-04T00:00:00.000Z")),result);
+    assert.deepEqual(result.definition.fx_policy,fixture.fx_policy);
+    const invalid=structuredClone(request); invalid.fx_policy.rates.push({...invalid.fx_policy.rates[0],rate_unscaled:"13"});
+    assert.throws(()=>normalizeMetricScheduleRequest(invalid),/fx_policy_invalid/);
+    assert.throws(()=>normalizeMetricScheduleRequest({...request,fx_policy:{...fixture.fx_policy,target_scale:3}}),/fx_target_mismatch/);
+    assert.throws(()=>normalizeMetricScheduleRequest({...request,fx_policy:{...fixture.fx_policy,rate_selection:undefined}}),/fx_policy_invalid/);
+  });
   it("calendar_schedule_captures_one_local_zone_and_rejects_mixed_or_implicitly_discovered_dates", () => {
     const request = {...body,metric_definitions:calendarAcquisitionMetricDefinitions("America/New_York"),
       evaluations:[{metric_names:["calendar_ny_d0_roas"],date_dimension:"cohort_date",grouping:{campaign_id:"synthetic-campaign"}}]};

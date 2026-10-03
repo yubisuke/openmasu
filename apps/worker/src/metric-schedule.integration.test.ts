@@ -710,6 +710,38 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     });
   });
 
+  it("dated_FX_schedule_executes_captured_multi_currency_rates_and_checkpoint_replay_without_latest_lookup", async () => {
+    const scope = { tenantId: "tenant-fx-schedule", appId: "app-fx-schedule", keyId: "synthetic-fx-schedule", role: "admin" as const };
+    const source = JSON.parse(readFileSync("fixtures/v0.4/69-dated-fx-cohorts/input.json", "utf8"),
+      (key, value) => key === "tenant_id" ? scope.tenantId : key === "app_id" ? scope.appId : value);
+    await ingestFixture("fx69-schedule", source, appPool, seedPool);
+    const body = JSON.parse(readFileSync("examples/synthetic/metric-dated-fx-schedule.json", "utf8"));
+    const now = new Date("2026-08-13T06:00:00.000Z");
+    const registered = await registerMetricSchedule({ pool: appPool, identity: scope, body, now });
+    assert.deepEqual(registered.definition.fx_policy, source.fx_policy);
+    assert.deepEqual(await processMetricSchedules(appPool, scope.tenantId, { now, maximumCatchupDates: 1 }),
+      { schedules: 1, completedDates: 1, replayedDates: 0, failedSchedules: 0 });
+    const query = { tenantId: scope.tenantId, appId: scope.appId, metricScheduleId: registered.metric_schedule_id,
+      supersession: "all" as const, limit: 200 };
+    const page = await metricReport(readerPool, scope, query);
+    assert.deepEqual(Object.fromEntries(page.data.map(row => [row.metric_name, row.value_unscaled])), {
+      d0_roas: "1000000", d7_roas: "1681819", cohort_ltv_d1_usd: "3700004", retention_d1: "1000000", cohort_install_count: "1",
+    });
+    for (const row of page.data) {
+      assert.equal(row.input_received_at_watermark, "2026-08-13T00:00:00.000Z");
+      assert.equal(row.grouping?.cohort_date, "2026-08-06");
+      if (row.fx_conversion_snapshot) {
+        assert.equal(row.fx_conversion_snapshot.snapshot_id, sha256Jcs(source.fx_policy));
+        assert.deepEqual(row.comparison_context!.fx, source.fx_policy);
+      }
+    }
+    // A later caller mutation is not a replacement of the registered immutable schedule.
+    body.fx_policy.rates[0].rate_unscaled = "24";
+    assert.equal((await processMetricSchedules(appPool, scope.tenantId, { now, maximumCatchupDates: 1 })).completedDates, 0);
+    assert.equal(jcs(await metricReport(readerPool, scope, query)), jcs(page));
+    await disableMetricSchedule({ pool: appPool, identity: scope, metricScheduleId: registered.metric_schedule_id, now });
+  });
+
   it("calendar_schedule_captures_local_cohort_date_and_midnight_watermark_and_replays_without_changes", async () => {
     const scope = { tenantId: "tenant-calendar", appId: "app-calendar", keyId: "synthetic-calendar-schedule", role: "admin" as const };
     const source = JSON.parse(readFileSync("fixtures/v0.4/68-calendar-acquisition-cohorts/input.json","utf8"),

@@ -62,7 +62,12 @@ New SQL metric runs capture `comparison_context` in the same transaction as the
 result. It contains a closed, aggregate-only copy of the definition, the actual
 FX target, rate, timestamp and rounding policy, the privacy evaluation mode,
 definition/FX digests, and run/snapshot references. It has no installation/event
-IDs, raw payload, private replay manifest or free-text FX source. Reader JSON
+IDs, raw payload or private replay manifest. Historical one-rate contexts omit
+source text. The opt-in [dated FX profile](fx-snapshots.md) instead retains its
+bounded, non-identifying source labels, exact currency/date rates, known-as-of
+timestamps and full policy digest; different snapshots are not equivalent.
+Report-to-snapshot checks that the run and comparison context bind the same FX
+policy. It never substitutes a current configuration into an old saved run. Reader JSON
 and CSV append this field without changing the contract artifact or existing
 CSV column positions. Migration 053 is additive; existing runs remain `NULL`.
 Never recover an older run's missing context from today's configuration.

@@ -77,7 +77,8 @@ Its annotated tag and
 point to green `main` commit `90a0f5f`, with eight verified SDK download assets.
 The release retains Contract v0.4 identity with patches through v0.4.10
 (57 fixtures / 741 goldens). Current development retains that wire/package
-identity and adds patches through v0.4.21 (68 fixtures / 884 goldens), including
+identity and adds patches through v0.4.22 (69 fixtures / 897 goldens), including
+the opt-in [fixed dated FX snapshot](docs/fx-snapshots.md),
 the explicit [local-calendar cohort profile](docs/calendar-cohort-metrics.md),
 the separate [imported provider cohort profile](docs/imported-acquisition-metrics.md),
 [independent verified-platform acquisition cohorts](docs/verified-platform-acquisition.md),
@@ -207,8 +208,8 @@ The main contract gate is:
 npm run validate
 ```
 
-It checks 28 schemas, 8 registries, 68 reviewed synthetic fixtures, 884 golden
-output artifacts, 68 scenario assertions, 27 acceptance criteria,
+It checks 28 schemas, 8 registries, 69 reviewed synthetic fixtures, 897 golden
+output artifacts, 69 scenario assertions, 27 acceptance criteria,
 deterministic TypeScript, the independent Python evaluator, release identity,
 documentation drift, fraud artifacts, and RFC 8785 canonicalization.
 

@@ -545,6 +545,7 @@
         "target_currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
         "target_scale": { "type": "integer", "minimum": 0, "maximum": 18 },
         "rounding_mode": { "const": "half_even" },
+        "rate_selection": { "const": "utc_event_date_and_cost_date" },
         "rates": {
           "type": "array",
           "minItems": 1,
@@ -554,6 +555,7 @@
             "required": ["currency", "rate_unscaled", "rate_scale", "source", "as_of"],
             "properties": {
               "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+              "effective_date": { "type": "string", "format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
               "rate_unscaled": { "type": "string", "pattern": "^[0-9]+$" },
               "rate_scale": { "type": "integer", "minimum": 0, "maximum": 18 },
               "source": { "type": "string", "minLength": 1 },
@@ -561,7 +563,11 @@
             }
           }
         }
-      }
+      },
+      "allOf": [{
+        "if": { "properties": { "rate_selection": {} }, "required": ["rate_selection"] },
+        "then": { "$ref": "common.schema.json#/$defs/datedFxPolicy" }
+      }]
     }
   }
 }

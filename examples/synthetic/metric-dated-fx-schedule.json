@@ -1,0 +1,217 @@
+{
+  "lag_days": 7,
+  "start_date": "2026-08-06",
+  "fx_policy": {
+    "policy_version": "0.4.22",
+    "rate_selection": "utc_event_date_and_cost_date",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "EUR",
+        "effective_date": "2026-08-06",
+        "rate_unscaled": "12",
+        "rate_scale": 1,
+        "as_of": "2026-08-12T00:00:00.000Z",
+        "source": "synthetic-fx-snapshot-69"
+      },
+      {
+        "currency": "EUR",
+        "effective_date": "2026-08-07",
+        "rate_unscaled": "15",
+        "rate_scale": 1,
+        "as_of": "2026-08-13T00:00:00.000Z",
+        "source": "synthetic-fx-snapshot-69"
+      },
+      {
+        "currency": "JPY",
+        "effective_date": "2026-08-06",
+        "rate_unscaled": "5",
+        "rate_scale": 7,
+        "as_of": "2026-08-12T00:00:00.000Z",
+        "source": "synthetic-fx-snapshot-69"
+      },
+      {
+        "currency": "JPY",
+        "effective_date": "2026-08-07",
+        "rate_unscaled": "75",
+        "rate_scale": 8,
+        "as_of": "2026-08-12T00:00:00.000Z",
+        "source": "synthetic-fx-snapshot-69"
+      },
+      {
+        "currency": "USD",
+        "effective_date": "2026-08-06",
+        "rate_unscaled": "1",
+        "rate_scale": 0,
+        "as_of": "2026-08-12T00:00:00.000Z",
+        "source": "synthetic-fx-snapshot-69"
+      }
+    ]
+  },
+  "metric_definitions": [
+    {
+      "metric_name": "d0_roas",
+      "metric_definition_version": "0.4.12",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "value_type": "ratio",
+      "ratio_scale": 6,
+      "definition": {
+        "calculation": "revenue_over_cost",
+        "window": {
+          "type": "elapsed",
+          "day": 0
+        },
+        "numerator": "revenue",
+        "denominator": "cost",
+        "cost_basis": "cohort_acquisition_day_current_snapshot"
+      },
+      "rule_bundle_id": "metric-disjoint-cost",
+      "rule_bundle_version": "0.4.12",
+      "rule_bundle_hash": "3ec3e50fc8b9180b55e888895d793739028fdd20abfc34f20110e6ce96e8b053",
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "acquisition_basis": "selected_first_party_click",
+      "cost_selection_policy": "reject_overlapping_grains"
+    },
+    {
+      "metric_name": "d7_roas",
+      "metric_definition_version": "0.4.12",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "value_type": "ratio",
+      "ratio_scale": 6,
+      "definition": {
+        "calculation": "revenue_over_cost",
+        "window": {
+          "type": "elapsed",
+          "day": 7
+        },
+        "numerator": "revenue",
+        "denominator": "cost",
+        "cost_basis": "cohort_acquisition_day_current_snapshot"
+      },
+      "rule_bundle_id": "metric-disjoint-cost",
+      "rule_bundle_version": "0.4.12",
+      "rule_bundle_hash": "3ec3e50fc8b9180b55e888895d793739028fdd20abfc34f20110e6ce96e8b053",
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "acquisition_basis": "selected_first_party_click",
+      "cost_selection_policy": "reject_overlapping_grains"
+    },
+    {
+      "metric_name": "retention_d1",
+      "metric_definition_version": "0.4.11",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "value_type": "ratio",
+      "ratio_scale": 6,
+      "definition": {
+        "calculation": "active_installations_over_cohort",
+        "window": {
+          "type": "activity_day",
+          "day": 1
+        },
+        "numerator": "active_installations",
+        "denominator": "cohort_size"
+      },
+      "activity_events": [
+        "session_start"
+      ],
+      "rule_bundle_id": "metric-selected-acquisition",
+      "rule_bundle_version": "0.4.11",
+      "rule_bundle_hash": "6fd998246bb092f81d8539b8e2c04a1abe421a1916480b63dfd018d11c7bccc5",
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "acquisition_basis": "selected_first_party_click"
+    },
+    {
+      "metric_name": "cohort_ltv_d1_usd",
+      "metric_definition_version": "0.4.11",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "revenue_over_cohort",
+        "window": {
+          "type": "elapsed",
+          "day": 1
+        },
+        "numerator": "revenue",
+        "denominator": "cohort_size"
+      },
+      "rule_bundle_id": "metric-selected-acquisition",
+      "rule_bundle_version": "0.4.11",
+      "rule_bundle_hash": "6fd998246bb092f81d8539b8e2c04a1abe421a1916480b63dfd018d11c7bccc5",
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "acquisition_basis": "selected_first_party_click"
+    },
+    {
+      "metric_name": "cohort_install_count",
+      "metric_definition_version": "0.4.11",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "value_type": "count",
+      "definition": {
+        "calculation": "cohort_size",
+        "window": {
+          "type": "elapsed",
+          "day": 0
+        },
+        "numerator": "cohort_size"
+      },
+      "rule_bundle_id": "metric-selected-acquisition",
+      "rule_bundle_version": "0.4.11",
+      "rule_bundle_hash": "6fd998246bb092f81d8539b8e2c04a1abe421a1916480b63dfd018d11c7bccc5",
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "acquisition_basis": "selected_first_party_click"
+    }
+  ],
+  "evaluations": [
+    {
+      "metric_names": [
+        "d0_roas",
+        "d7_roas",
+        "cohort_ltv_d1_usd",
+        "retention_d1",
+        "cohort_install_count"
+      ],
+      "date_dimension": "cohort_date",
+      "grouping": {
+        "campaign_id": "fx69-campaign",
+        "network": "synthetic-network"
+      }
+    }
+  ]
+}

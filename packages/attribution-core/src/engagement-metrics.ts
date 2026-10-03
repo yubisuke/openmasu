@@ -25,7 +25,7 @@ export function engagementSnapshotRows(inputs: readonly EngagementInput[], diges
 
 export function engagementValue(input: {
   opens: readonly EngagementInput[]; visible: readonly Any[]; definition: Any; grouping: Any;
-  available: (attempt: Any) => boolean; money: (payload: Any) => bigint;
+  available: (attempt: Any) => boolean; money: (payload: Any, occurredAt: string) => bigint;
 }): bigint | undefined {
   const { opens, definition, grouping } = input;
   if (typeof grouping?.metric_date !== "string" || Object.keys(grouping).some(key => !["metric_date", "campaign_id"].includes(key))) {
@@ -50,7 +50,7 @@ export function engagementValue(input: {
       && Date.parse(candidate.attempt.record.occurred_at) <= at);
     if (!open || at >= Date.parse(open.attempt.record.occurred_at) + 86_400_000 || !selected(open)) continue;
     if (count) converted.add(scope(outcome));
-    else revenue += input.money(outcome.record.payload);
+    else revenue += input.money(outcome.record.payload, outcome.record.occurred_at);
   }
   return definition.definition.calculation === "converted_installations" ? BigInt(converted.size) : revenue;
 }

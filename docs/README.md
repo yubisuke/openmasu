@@ -60,6 +60,7 @@ For a complete newcomer reading path, use this order:
 - [Verified platform acquisition cohorts](verified-platform-acquisition.md)
 - [Imported provider acquisition cohorts](imported-acquisition-metrics.md)
 - [Explicit local-calendar cohorts](calendar-cohort-metrics.md)
+- [Fixed dated FX snapshots and multi-currency money](fx-snapshots.md)
 - [First-party re-engagement outcomes](engagement-outcomes.md)
 - [Explaining a saved ROAS result](metric-explanations.md)
 - [Privacy and security](privacy-security.md)

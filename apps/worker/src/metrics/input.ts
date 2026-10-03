@@ -1,4 +1,4 @@
-import { M1B_METRIC_DEFINITIONS, REFERENCE_AD_REVENUE_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
+import { M1B_METRIC_DEFINITIONS, REFERENCE_AD_REVENUE_METRIC_DEFINITIONS, canonicalDatedFxPolicy } from "@openmasu/contracts/definitions";
 import { assertMetricDefinitionSeries } from "@openmasu/contracts/validation";
 import type { MetricCalculationInput, MetricDefinition, MetricScope, PreparedMetricCalculation } from "./model.js";
 
@@ -35,8 +35,9 @@ export function prepareMetricCalculation(raw: unknown): PreparedMetricCalculatio
   // This adapter retains the existing admission rules. It does not introduce a
   // closed JSON-schema gate for legacy replay inputs or strip saved properties.
   const input = raw as MetricCalculationInput;
-  const fxPolicy = input.fx_policy;
-  if (!fxPolicy || fxPolicy.rates?.length !== 1) {
+  let fxPolicy = input.fx_policy;
+  if (fxPolicy?.rate_selection !== undefined) fxPolicy = canonicalDatedFxPolicy(fxPolicy);
+  else if (!fxPolicy || fxPolicy.rates?.length !== 1) {
     throw new Error("v0.2 SQL metric runs require exactly one structured FX rate");
   }
   const definitions = new Map<string, MetricDefinition>(

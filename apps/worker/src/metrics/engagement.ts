@@ -39,7 +39,7 @@ export async function engagementSnapshotRows(client: Queryable, scope: Scope, wa
 export async function engagementMetricValue(
   client: Queryable, scope: Scope, watermark: string, grouping: MetricGrouping | undefined,
   definition: MetricDefinition, fxPolicy: MetricFxPolicy, privacyState: "before" | "after",
-): Promise<{ value_state: "present"; value_unscaled: string } | { value_state: "undefined"; undefined_reason: "empty_cohort" }> {
+): Promise<{ value_state: "present"; value_unscaled: string } | { value_state: "undefined"; undefined_reason: "empty_cohort" | "missing_fx_rate" }> {
   if (typeof grouping?.metric_date !== "string" || Object.keys(grouping).some(key => !["metric_date", "campaign_id"].includes(key))) {
     throw new Error("engagement_metric_requires_anchor_date");
   }
@@ -82,14 +82,20 @@ export async function engagementMetricValue(
          ELSE coalesce(sum(ledger.half_even_div(credited.amount_unscaled::numeric * rate.rate_unscaled::numeric * power(10::numeric,$10::int),
            power(10::numeric,credited.amount_scale+rate.rate_scale))),0) END::text AS value_unscaled,
          count(*) FILTER (WHERE $7::text='revenue_sum' AND rate.rate_unscaled IS NULL)::text AS missing_fx
-       FROM credited LEFT JOIN jsonb_to_recordset($9::jsonb) AS rate(currency text,rate_unscaled text,rate_scale integer)
+       FROM credited LEFT JOIN jsonb_to_recordset($9::jsonb) AS rate(currency text,rate_unscaled text,rate_scale integer,effective_date date,as_of text)
          ON credited.currency=rate.currency
+           AND (NOT $11::boolean OR (rate.effective_date=timezone('UTC',credited.occurred_at)::date
+             AND control.canonical_timestamp_value(rate.as_of) <= control.canonical_timestamp_value($3)))
      ) SELECT population.count AS population,totals.* FROM population CROSS JOIN totals`,
     [scope.tenant_id, scope.app_id, watermark, grouping.metric_date, grouping.campaign_id ?? null, privacyState,
-      definition.definition.calculation, definition.conversion_event_key ?? null, JSON.stringify(fxPolicy.rates), fxPolicy.target_scale],
+      definition.definition.calculation, definition.conversion_event_key ?? null, JSON.stringify(fxPolicy.rates), fxPolicy.target_scale,
+      !!fxPolicy.rate_selection],
   );
   const row = result.rows[0];
-  if (row.missing_fx !== "0") throw new Error("engagement_metric_fx_rate_missing");
+  if (row.missing_fx !== "0") {
+    if (fxPolicy.rate_selection) return { value_state: "undefined", undefined_reason: "missing_fx_rate" };
+    throw new Error("engagement_metric_fx_rate_missing");
+  }
   return row.population === "0" ? { value_state: "undefined", undefined_reason: "empty_cohort" }
     : { value_state: "present", value_unscaled: row.value_unscaled };
 }

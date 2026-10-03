@@ -37,10 +37,16 @@ instead. Neither family silently changes saved runs from the other.
 4. If any current grains overlap, emit `value_state=undefined` with
    `undefined_reason=overlapping_cost_grains` and no `value_unscaled`. Keep all
    current candidate references. This is not zero cost, zero ROAS, or fraud.
-5. Otherwise apply existing per-cost scale conversion and half-even ratio
+5. Otherwise apply per-cost conversion and half-even ratio
    arithmetic. Disjoint 40+60 is 100; the matching campaign parent100 plus those
    details is ambiguous, not 200. Intersecting ad-group and country cuts are
    also ambiguous unless their known dimensions prove separation.
+
+The historical profile requires already-target-currency cost and retains its
+scale conversion. An explicit [dated FX snapshot](fx-snapshots.md) instead
+converts each disjoint selected cost row at its report date. A missing required
+rate makes ROAS `undefined / missing_fx_rate`; it does not invalidate a cost-free
+revenue/LTV result. Round per row, never after combining source-currency cost.
 
 Snapshots include the selected dated revisions, including candidates that
 cause an undefined result. Replay manifests save the exact definition and
