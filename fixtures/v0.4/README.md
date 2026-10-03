@@ -507,6 +507,11 @@ No existing 65 fixture inputs or 845 golden artifacts changed.
 
 ## Adding a fixture procedure
 
+Fixture 67 is the independent [imported provider cohort derivation](67-imported-provider-acquisition/README.md).
+Its thirteen manually constructed families match both evaluators at combined
+JCS SHA-256 `b2ee5bdcac34a41c91051a99c249f35c9ec2ad72db8a175338bb932b0133ec6a`.
+Existing 66 inputs and 858 golden files are unchanged.
+
 `fixtures/.candidates/` is a gitignored working area for proposed synthetic inputs. It is outside `fixtures/v0.4/` and is not discovered by `npm run validate`.
 
 1. Create `fixtures/.candidates/<NN-name>/input.json`. Use only synthetic data and keep the proposed number and name stable during review.
