@@ -222,7 +222,7 @@ Explicit v0.4.12
 and preserves disjoint siblings and dated revisions (#183). Explicit v0.4.13
 definitions also connect selected acquisition to purchase/total-net cohorts
 (#191), with fixture 60 fixing purchase net 6, total net 26 and ROAS 2.6.
-Explicit bounded [late-input requests](metric-corrections.md#late-advertising-revenue-purchases-and-refunds)
+Explicit bounded [late-input requests](metric-corrections.md#late-advertising-revenue-purchases-refunds-and-custom-outcomes)
 connect accepted revenue/commerce arrivals to immutable corrections (#184).
 Input discovery is requested through the API; only accepted jobs execute automatically.
 Opt-in [daily campaign discovery](scheduled-metrics.md#discover-campaign-targets-automatically)
