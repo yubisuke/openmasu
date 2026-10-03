@@ -14,15 +14,20 @@ they name.
 
 ## Release snapshot
 
+The current development [dated FX profile](fx-snapshots.md) adds explicit
+currency/date conversion for revenue and costs, missing-rate undefined results,
+saved snapshot replay and shared comparison/report provenance. Its rate values
+and tests are synthetic; no live FX feed or accounting treatment is claimed.
+
 | Source line | Contract patch ledger | Reviewed inventory | Release meaning |
 | --- | --- | --- | --- |
 | `v0.2.0-rc.3` tag | through v0.4.9 | 56 fixtures / 728 golden artifacts | Previously published prerelease and frozen historical evidence |
 | `v0.2.0-rc.4` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Previously published prerelease and frozen exact-commit evidence |
 | `v0.2.0` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Published non-prerelease at green commit `68b8c48`; frozen exact-commit evidence |
 | `v0.3.0-rc.1` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Current published prerelease at green commit `90a0f5f`; eight SDK assets and exact-commit synthetic evidence |
-| Current development source | through v0.4.21 | 68 fixtures / 884 golden artifacts | Adds explicit calendar-zone, imported-provider, verified-platform and first-party acquisition profiles, daily native counts, safe costs and commerce cohorts; not included in the published SDK release |
+| Current development source | through v0.4.22 | 69 fixtures / 897 golden artifacts | Adds explicit calendar-zone, imported-provider, verified-platform and first-party acquisition profiles, daily native counts, safe costs and commerce cohorts; not included in the published SDK release |
 
-The Contract wire and package identity remains `0.4.0`; v0.4.21 is the latest
+The Contract wire and package identity remains `0.4.0`; v0.4.22 is the latest
 additive patch ledger entry. The published SDK version is `0.3.0-rc.1`.
 Its [distribution guide](sdk-distribution.md) separates compiled Android
 modules from source-distributed Swift and Unity. Publication has a matching
@@ -51,7 +56,7 @@ MMP.
 
 | Capability | Repository state | Open operational evidence |
 | --- | --- | --- |
-| Contract and deterministic evaluator | Implemented and synthetically verified across 28 schemas, 8 registries, 68 fixtures, and 884 goldens | Real input representativeness and external implementation adoption; calendar zones qualified only for UTC/Tokyo/New York, engine time-zone data upgrades require boundary requalification |
+| Contract and deterministic evaluator | Implemented and synthetically verified across 28 schemas, 8 registries, 69 fixtures, and 897 goldens | Real input representativeness and external implementation adoption; calendar zones qualified only for UTC/Tokyo/New York, engine time-zone data upgrades require boundary requalification |
 | Shadow ledger and imports | Implemented for raw events, manual/bounded provider cost, and advertising or verified-commerce revenue | Authorized real export compatibility, account permissions, completeness, latency, and reconciliation |
 | Server-to-server events | Implemented for selected first-party backend events with app-scoped rotatable HMAC keys, durable inbox admission, contract rejection, replay controls, and deletion-race enforcement | Production TLS, secret custody, sustained load, backend integration, and operator acceptance |
 | Operator event webhooks | Implemented as a default-off, app-scoped export of selected accepted events with exact-origin egress policy, destination-scoped references, exact-body HMAC, durable retry, deletion-race enforcement, and bounded reader-safe delivery health | Production receiver, DNS/TLS, capacity, alerting, secret custody, downstream retention/deletion, and operator acceptance |

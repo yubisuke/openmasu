@@ -256,6 +256,7 @@ export type OpenMasuMetricRunV04 = {
   fx_rate_as_of?: string;
   fx_rate_snapshot_id?: string;
   fx_policy_version?: string;
+  fx_conversion_snapshot?: FxConversionSnapshot;
   rounding_mode: "half_even";
   reproducibility_status: "fully_reproducible" | "redaction_affected" | "retention_affected";
   value_type: "money" | "ratio" | "count";
@@ -263,7 +264,8 @@ export type OpenMasuMetricRunV04 = {
    * Absence is semantically present for v0.2.0 compatibility.
    */
   value_state?: "present" | "undefined";
-  undefined_reason?: "no_attributed_cost" | "no_activity_events" | "empty_cohort" | "overlapping_cost_grains";
+  undefined_reason?:
+    "no_attributed_cost" | "no_activity_events" | "empty_cohort" | "overlapping_cost_grains" | "missing_fx_rate";
   value_unscaled?: string;
   fraud_policy?: "gross" | "net";
   amount_scale?: number;
@@ -502,4 +504,27 @@ export interface Money {
   amount_scale: number;
   currency: string;
   [k: string]: unknown;
+}
+export interface FxConversionSnapshot {
+  policy: DatedFxPolicy;
+  snapshot_id: string;
+}
+export interface DatedFxPolicy {
+  policy_version: "0.4.22";
+  target_currency: string;
+  target_scale: number;
+  rounding_mode: "half_even";
+  rate_selection: "utc_event_date_and_cost_date";
+  /**
+   * @minItems 1
+   * @maxItems 128
+   */
+  rates: {
+    currency: string;
+    effective_date: string;
+    rate_unscaled: string;
+    rate_scale: number;
+    source: string;
+    as_of: string;
+  }[];
 }

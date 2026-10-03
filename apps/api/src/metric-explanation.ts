@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import { privacyMetricInvalidationSql, withTenant, type RoasCalculationEvidence } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { groupingDimensionAllowlist } from "./report-query.js";
+import { projectDatedFxSnapshot } from "@openmasu/contracts/definitions";
 
 type Artifact = Record<string, any>;
 export type MetricExplanation = {
@@ -13,6 +14,8 @@ export type MetricExplanation = {
     readonly value_state: "present" | "undefined" | "unavailable"; readonly value_unscaled?: string;
     readonly unavailable_reason?: "privacy_deletion";
     readonly undefined_reason?: string; readonly ratio_scale?: number;
+    readonly currency?: string; readonly amount_scale?: number;
+    readonly fx_conversion_snapshot?: ReturnType<typeof projectDatedFxSnapshot>;
     readonly rule_bundle_id: string; readonly rule_bundle_version: string; readonly rule_bundle_hash: string;
     readonly superseded: boolean; readonly supersedes_metric_run_id?: string;
   };
@@ -34,7 +37,10 @@ function publicEvidence(value: RoasCalculationEvidence): RoasCalculationEvidence
     cost_basis: value.cost_basis, cost_selection_digest: value.cost_selection_digest,
     fx_policy_version: value.fx_policy_version, fx_snapshot_id: value.fx_snapshot_id,
     target_currency: value.target_currency, target_scale: value.target_scale,
-    rates: value.rates.map((rate) => ({ currency: rate.currency, rate_unscaled: rate.rate_unscaled, rate_scale: rate.rate_scale })),
+    rates: value.rates.map((rate) => ({ currency: rate.currency, rate_unscaled: rate.rate_unscaled, rate_scale: rate.rate_scale,
+      ...(value.fx_conversion_snapshot ? { effective_date: rate.effective_date, source: rate.source, as_of: rate.as_of } : {}) })),
+    ...(projectDatedFxSnapshot(value.fx_conversion_snapshot)
+      ? { fx_conversion_snapshot: projectDatedFxSnapshot(value.fx_conversion_snapshot) } : {}),
     rounding_mode: value.rounding_mode, ratio_scale: value.ratio_scale,
     operands: { revenue_unscaled: value.operands.revenue_unscaled, cost_unscaled: value.operands.cost_unscaled,
       revenue_event_count: value.operands.revenue_event_count, cost_row_count: value.operands.cost_row_count,
@@ -98,6 +104,9 @@ export async function metricExplanation(pool: Pool, identity: AppAdminIdentity, 
       ...(!row.privacy_changed && artifact.value_unscaled !== undefined ? { value_unscaled: artifact.value_unscaled } : {}),
       ...(!row.privacy_changed && artifact.undefined_reason ? { undefined_reason: artifact.undefined_reason } : {}),
       ...(artifact.ratio_scale !== undefined ? { ratio_scale: artifact.ratio_scale } : {}),
+      ...(artifact.currency !== undefined ? { currency: artifact.currency, amount_scale: artifact.amount_scale } : {}),
+      ...(projectDatedFxSnapshot(artifact.fx_conversion_snapshot)
+        ? { fx_conversion_snapshot: projectDatedFxSnapshot(artifact.fx_conversion_snapshot) } : {}),
       rule_bundle_id: artifact.rule_bundle_id, rule_bundle_version: artifact.rule_bundle_version, rule_bundle_hash: artifact.rule_bundle_hash,
       superseded: row.superseded,
       ...(artifact.supersedes_metric_run_id ? { supersedes_metric_run_id: artifact.supersedes_metric_run_id } : {}),
@@ -106,7 +115,10 @@ export async function metricExplanation(pool: Pool, identity: AppAdminIdentity, 
     const evidenceState: MetricExplanation["evidence_state"] = row.privacy_changed ? "redaction_affected"
       : row.retention_changed ? "retention_affected" : !value ? "not_recorded"
         : value.metric_run_id !== run.metric_run_id || value.input_snapshot_id !== run.input_snapshot_id
-          || value.metric_definition_version !== run.metric_definition_version ? "binding_mismatch" : "available";
+          || value.metric_definition_version !== run.metric_definition_version
+          || run.fx_conversion_snapshot && (value.fx_snapshot_id !== run.fx_conversion_snapshot.snapshot_id
+            || value.fx_conversion_snapshot?.snapshot_id !== run.fx_conversion_snapshot.snapshot_id)
+          ? "binding_mismatch" : "available";
     if (evidenceState !== "available" || !value) return { run, evidence_state: evidenceState, window_state: "unknown" };
     const calculation = publicEvidence(value);
     return { run, evidence_state: "available", calculation,

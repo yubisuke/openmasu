@@ -5,6 +5,49 @@ Contract v0.4.0 completed the identity migration from the immutable
 contract identity but did not change field meaning, attribution behavior, metric
 arithmetic, ordering, hashing, privacy, or fraud semantics.
 
+## Fixed dated FX snapshots (0.4.22)
+
+An explicit closed `utc_event_date_and_cost_date` policy captures 1–128 unique
+currency/date rates, target units, source and known-as-of provenance. Revenue,
+purchase/refund and engagement money use their own UTC occurrence date; cost
+uses its declared report date. Every contributing row is half-even converted
+before summation. An unavailable exact-date or future-known rate produces the
+new `missing_fx_rate` undefined reason, not partial money. Counts and retention
+are independent. Same-currency conversion requires an explicit identity rate.
+
+Common/fixture schemas add the optional opt-in policy. Metric-run adds optional
+`fx_conversion_snapshot`, the undefined enum entry and a conditional relaxation
+of singular FX fields only for a captured multi-rate snapshot. No existing URN,
+wire/package version, registry entry, legacy admission or saved result changes.
+Forward-only migration 067 admits the new undefined reason. It introduces no
+table, dependency or service. Saved replay, schedules, explanation, comparison
+context and JSON/CSV preserve the same canonical policy/digest. The historical
+one-rate projection is not reinterpreted. See [FX snapshots](fx-snapshots.md).
+
+Complete golden addition inventory for `69-dated-fx-cohorts/`:
+
+- `expected_raw_records.json`, `expected_deliveries.json`,
+  `expected_logical_events.json`, `expected_corrections.json`;
+- `expected_privacy_requests.json`, `expected_privacy_tombstones.json`,
+  `expected_attributions.json`, `expected_metric_definitions.json`;
+- `expected_metric_runs.json`, `expected_cost_records.json`,
+  `expected_fraud_decisions.json`, `expected_rejections.json`,
+  `expected_reconciliation.json`.
+
+The new input and derivation README, plus the shared README, are the only other
+fixture changes. **None of the earlier 68 inputs or 884 goldens changed.** Check
+`git diff --name-status 157afd0ba714045165ab6dbe9ed777dd99392394 -- fixtures/v0.4/`:
+only directory 69 and the shared README may differ. Expected files are committed
+separately from behavior changes. Validation never regenerates them.
+
+The derivation hand-constructs all thirteen families from explicit inputs and
+integer arithmetic, then independently compares them against TypeScript and
+Python; combined canonical SHA-256 is
+`7bf8aeaefbaafe0425f5ee96ea4aca7df156a52c680b31b5bf601e81302df091`.
+The existing SQL suite checks those bytes and synthetic missing-rate, huge
+integer, per-cost tie, commerce/engagement dates, saved replay and correction
+cases. Live rates and operational completeness are not claimed.
+
 ## Complete-set migration
 
 Consumers must move the complete contract set together:

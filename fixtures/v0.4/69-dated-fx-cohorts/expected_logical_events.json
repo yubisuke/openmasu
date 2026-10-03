@@ -1,0 +1,110 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:redirector:event:fx69-click",
+    "record_id": "fx69-click",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "redirector",
+    "event_id": "event:fx69-click",
+    "event_name": "click",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:fx69-install",
+    "record_id": "fx69-install",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:fx69-install",
+    "event_name": "install",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:fx69-revenue-eur",
+    "record_id": "fx69-revenue-eur",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:fx69-revenue-eur",
+    "event_name": "ad_revenue",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:fx69-revenue-eur-next",
+    "record_id": "fx69-revenue-eur-next",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:fx69-revenue-eur-next",
+    "event_name": "ad_revenue",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:fx69-revenue-jpy-even",
+    "record_id": "fx69-revenue-jpy-even",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:fx69-revenue-jpy-even",
+    "event_name": "ad_revenue",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:fx69-revenue-jpy-next",
+    "record_id": "fx69-revenue-jpy-next",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:fx69-revenue-jpy-next",
+    "event_name": "ad_revenue",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:fx69-revenue-jpy-odd",
+    "record_id": "fx69-revenue-jpy-odd",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:fx69-revenue-jpy-odd",
+    "event_name": "ad_revenue",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:fx69-revenue-usd",
+    "record_id": "fx69-revenue-usd",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:fx69-revenue-usd",
+    "event_name": "ad_revenue",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:fx69-session",
+    "record_id": "fx69-session",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:fx69-session",
+    "event_name": "session_start",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  }
+]

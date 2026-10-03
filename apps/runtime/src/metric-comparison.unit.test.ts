@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { it } from "node:test";
 import { M1B_METRIC_DEFINITIONS, M3_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS, SELECTED_COMMERCE_METRIC_DEFINITIONS, REFUND_REVERSAL_METRIC_DEFINITIONS, customConversionMetricDefinitions } from "@openmasu/contracts";
 import { sha256 } from "@openmasu/attribution-core";
@@ -10,6 +11,22 @@ import { calendarAcquisitionMetricDefinitions } from "@openmasu/contracts/defini
 const fx = { policy_version: "synthetic", target_currency: "USD", target_scale: 6, rounding_mode: "half_even" as const,
   rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0, as_of: "2026-01-01T00:00:00.000Z", source: "not-in-reader-projection" }] };
 const run = { metric_run_id: "synthetic", input_snapshot_id: "a".repeat(64) };
+it("dated_FX_comparison_freezes_currency_date_source_as_of_and_digest_without_legacy_reinterpretation", () => {
+  const fixture = JSON.parse(readFileSync("fixtures/v0.4/69-dated-fx-cohorts/input.json", "utf8"));
+  const definition = DISJOINT_COST_METRIC_DEFINITIONS.find(d => d.metric_name === "d7_roas")!;
+  const context = captureMetricComparisonContext(run, definition, fixture.fx_policy, "before", sha256);
+  assert.equal(context.fx_digest, sha256(fixture.fx_policy));
+  assert.deepEqual(context.fx, fixture.fx_policy);
+  const shuffled = structuredClone(fixture.fx_policy); shuffled.rates.reverse();
+  assert.deepEqual(captureMetricComparisonContext(run, definition, shuffled, "before", sha256), context);
+  const later = structuredClone(fixture.fx_policy); later.rates[0].source = "synthetic-revised-source";
+  const changed = captureMetricComparisonContext(run, definition, later, "before", sha256);
+  assert.notEqual(changed.fx_digest, context.fx_digest);
+  assert.notDeepEqual(comparisonMeaning(changed), comparisonMeaning(context));
+  assert.notDeepEqual(comparisonMeaning(captureMetricComparisonContext(run, definition, fx, "before", sha256)), comparisonMeaning(context));
+  fixture.fx_policy.rates[0].rate_unscaled = "999";
+  assert.notDeepEqual(context.fx, fixture.fx_policy);
+});
 it("calendar_comparison_freezes_local_day_meaning_and_DST_maturity_separately_from_elapsed", () => {
   const definition = calendarAcquisitionMetricDefinitions("America/New_York").find(d=>d.metric_name === "calendar_ny_cohort_ltv_d1_usd")!;
   const context = captureMetricComparisonContext(run,definition,fx,"after",sha256);

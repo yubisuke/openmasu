@@ -4,6 +4,7 @@ import { comparisonMeaning, comparisonMaturity, type MetricComparisonContext } f
 import { groupingDimensionAllowlist, validateGrouping, type GroupingDimension } from "./report-query-model.js";
 import { parseExternalDeclaration, externalDeclarationMeaning, capturedRoasMeaning, externalWindowMaturity, type ExternalCalculation } from "./external-calculation-declaration.js";
 import { parseMetricFreshness } from "./metric-freshness.js";
+import { validDatedFxPolicy, canonicalDatedFxPolicy } from "@openmasu/contracts/definitions";
 
 import { comparisonDigest, canonicalComparisonCutoff, snapshotAssurance, fields, object, keys, text, date, scale,
   type Conditions, type Row, type Provenance, type ContextRow, type FreshnessRow, type MappingProvenance, type ComparisonAcquisition, type Snapshot, type Assurance } from "./comparison-model.js";
@@ -16,7 +17,13 @@ export function parseComparisonContext(value: unknown): MetricComparisonContext 
   text(value.metric_run_id);
   if (typeof value.input_snapshot_id !== "string" || !/^[a-f0-9]{64}$/.test(value.input_snapshot_id)
       || !validateMetricDefinition(value.definition) || comparisonDigest(value.definition) !== value.definition_digest) throw Error("invalid_definition_context");
-  object(value.fx); keys(value.fx, ["policy_version", "target_currency", "target_scale", "rounding_mode", "rates"]);
+  object(value.fx);
+  if (value.fx.rate_selection !== undefined) {
+    if (!validDatedFxPolicy(value.fx) || jcs(canonicalDatedFxPolicy(value.fx)) !== jcs(value.fx)) throw Error("invalid_fx_context");
+    if (comparisonDigest(value.fx) !== value.fx_digest) throw Error("invalid_fx_digest");
+    return structuredClone(value) as MetricComparisonContext;
+  }
+  keys(value.fx, ["policy_version", "target_currency", "target_scale", "rounding_mode", "rates"]);
   text(value.fx.policy_version); scale(value.fx.target_scale);
   if (!/^[A-Z]{3}$/.test(String(value.fx.target_currency)) || value.fx.rounding_mode !== "half_even"
       || !Array.isArray(value.fx.rates) || value.fx.rates.length !== 1) throw Error("invalid_fx_context");

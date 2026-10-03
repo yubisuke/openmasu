@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 68 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 69 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -513,6 +513,17 @@ unchanged elapsed controls. Local date, exclusive midnight, on-day retention and
 explicit same-zone cost stay distinct. Three source bases never blend. Combined
 JCS SHA-256 is `84800e44dcd47d150e7234d08078fb08206b7573dd706c60850ef82a66ff95d2`.
 Existing 67 inputs and 871 expected files are unchanged.
+
+## Fixture 69: fixed dated currency snapshots
+
+[The independent derivation](69-dated-fx-cohorts/README.md) constructs all
+thirteen families without either evaluator as its oracle. Nine accepted records,
+three disjoint cost rows and five captured JPY/USD/EUR rates give ten runs at
+two cutoffs. D0 ROAS is `1000000`; later D7 ROAS is `1681819` and LTV `3700004`.
+The earlier missing EUR rate yields `missing_fx_rate`, not a partial money sum;
+count and retention remain defined. Combined JCS SHA-256 is
+`7bf8aeaefbaafe0425f5ee96ea4aca7df156a52c680b31b5bf601e81302df091`.
+Existing 68 inputs and 884 expected artifacts are unchanged.
 
 ## Adding a fixture procedure
 

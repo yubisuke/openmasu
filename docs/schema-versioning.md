@@ -78,6 +78,7 @@ The v0.4 line adds independently exercised optional vocabulary and definitions:
 | 0.4.19 | opt-in verified-platform acquisition cohorts, trusted source projection and namespaced campaign/ad-group dimensions; recorded and first-party profiles retain their meaning |
 | 0.4.20 | opt-in imported-provider cohorts with explicit provider binding, canonical context and selected imported revisions; no implicit native or aggregate outcome join |
 | 0.4.21 | opt-in qualified-zone calendar cohorts with cumulative revenue/on-day activity, explicit local cohort date and same-zone cost metadata; historical elapsed and one-day definitions unchanged |
+| 0.4.22 | opt-in bounded currency/date FX snapshots, per-event/per-cost conversion, saved provenance and `missing_fx_rate`; optional metric snapshot and conditional money-field relaxation preserve historical one-rate artifacts |
 
 Existing schema `$id` values remain on `v0.4`; existing event artifact version
 fields remain `0.4.0` where their schema did not change.

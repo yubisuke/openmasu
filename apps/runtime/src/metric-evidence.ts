@@ -36,7 +36,9 @@ type RoasEvidenceBase = {
   readonly fx_snapshot_id: string;
   readonly target_currency: string;
   readonly target_scale: number;
-  readonly rates: readonly { readonly currency: string; readonly rate_unscaled: string; readonly rate_scale: number }[];
+  readonly rates: readonly { readonly currency: string; readonly rate_unscaled: string; readonly rate_scale: number;
+    readonly effective_date?: string; readonly source?: string; readonly as_of?: string }[];
+  readonly fx_conversion_snapshot?: import("@openmasu/contracts/types").OpenMasuMetricRunV04["fx_conversion_snapshot"];
   readonly rounding_mode: "half_even";
   readonly ratio_scale: number;
 };

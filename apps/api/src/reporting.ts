@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import { withTenant } from "@openmasu/runtime";
 import type { MetricComparisonContext } from "@openmasu/runtime";
+import { projectDatedFxSnapshot } from "@openmasu/contracts/definitions";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { metricSeries } from "./metric-series.js";
 import { metricFreshness, type ImportReceiptObservation, type MetricFreshness } from "./metric-freshness.js";
@@ -30,6 +31,7 @@ export const metricColumns = [
   "privacy_update_state", "unavailable_reason",
   "time_window_maturity", "source_observation", "import_completion", "recalculation_state",
   "attribution_update_state",
+  "fx_conversion_snapshot",
 ] as const;
 
 export const differenceColumns = [
@@ -76,6 +78,7 @@ export type MetricReportRow = {
   readonly source_observation?: MetricFreshness["source_observation"];
   readonly import_completion?: MetricFreshness["import_completion"];
   readonly recalculation_state?: MetricFreshness["recalculation_state"];
+  readonly fx_conversion_snapshot?: ReturnType<typeof projectDatedFxSnapshot>;
 };
 
 export type MetricReportPage = {
@@ -135,7 +138,8 @@ function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, c
     metric_definition_version: artifact.metric_definition_version,
     policy_versions: [
       `rule_bundle:${artifact.rule_bundle_version}`,
-      ...(artifact.fx_policy_version ? [`fx:${artifact.fx_policy_version}`] : []),
+      ...(artifact.fx_policy_version || artifact.fx_conversion_snapshot?.policy?.policy_version
+        ? [`fx:${artifact.fx_policy_version ?? artifact.fx_conversion_snapshot.policy.policy_version}`] : []),
     ],
     input_received_at_watermark: artifact.input_received_at_watermark,
     input_snapshot_id: artifact.input_snapshot_id,
@@ -164,6 +168,8 @@ function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, c
     engagement_evidence_trust: metricSeries(artifact.metric_name) === "first_party_engagement" ? "device_reported_forgeable" : null,
     privacy_update_state: privacyChanged ? privacyUpdateState ?? "unavailable" : "not_affected",
     unavailable_reason: privacyChanged ? "privacy_deletion" : null,
+    ...(projectDatedFxSnapshot(artifact.fx_conversion_snapshot)
+      ? { fx_conversion_snapshot: projectDatedFxSnapshot(artifact.fx_conversion_snapshot) } : {}),
   };
 }
 

@@ -18,7 +18,7 @@ async function purchaseNetRevenueValue(
   purchase_revenue_unscaled: string; refund_deduction_unscaled: string;
   purchase_event_count: string; refund_event_count: string;
   refund_reversal_unscaled?: string; refund_reversal_event_count?: string;
-} }> {
+} } | { value_state: "undefined"; undefined_reason: "missing_fx_rate" }> {
   if (definition.definition.calculation !== "revenue_sum"
       || definition.definition.window?.type !== "elapsed") {
     throw new Error(`SQL purchase net revenue definition is invalid: ${definition.metric_name}`);
@@ -30,9 +30,9 @@ async function purchaseNetRevenueValue(
     `WITH
        acquisition AS (SELECT * FROM (${metricAcquisitionSql(definition.acquisition_basis === "selected_verified_platform")}) AS selected WHERE $15::boolean),
        rates AS (
-         SELECT currency, rate_unscaled::numeric AS rate_unscaled, rate_scale
+         SELECT currency, rate_unscaled::numeric AS rate_unscaled, rate_scale, effective_date, as_of
          FROM jsonb_to_recordset($10::jsonb)
-           AS rate(currency text, rate_unscaled text, rate_scale integer)
+           AS rate(currency text, rate_unscaled text, rate_scale integer, effective_date date, as_of text)
        ),
        cohort AS (
          SELECT install.installation_id, install.occurred_at_ts AS installed_at
@@ -84,6 +84,8 @@ async function purchaseNetRevenueValue(
           AND raw.tenant_id=logical.tenant_id
           AND raw.app_id=logical.app_id
          LEFT JOIN rates AS rate ON rate.currency=purchase.currency
+           AND (NOT $19::boolean OR (rate.effective_date=timezone('UTC',purchase.occurred_at_ts)::date
+             AND control.canonical_timestamp_value(rate.as_of) <= control.canonical_timestamp_value($3)))
          WHERE purchase.tenant_id=$1 AND purchase.app_id=$2
            AND purchase.financial_status='settled'
            AND raw.received_at <= $3
@@ -135,6 +137,8 @@ async function purchaseNetRevenueValue(
           AND purchase_raw.app_id=target_logical.app_id
          JOIN cohort ON cohort.installation_id=purchase.installation_id
          LEFT JOIN rates AS rate ON rate.currency=refund.currency
+           AND (NOT $19::boolean OR (rate.effective_date=timezone('UTC',refund.occurred_at_ts)::date
+             AND control.canonical_timestamp_value(rate.as_of) <= control.canonical_timestamp_value($3)))
          WHERE refund.tenant_id=$1 AND refund.app_id=$2
            AND refund.financial_status='settled'
            AND purchase.financial_status='settled'
@@ -165,7 +169,7 @@ async function purchaseNetRevenueValue(
             count(*) FILTER (WHERE sign=-1)::text AS refund_event_count,
             trim_scale(coalesce(sum(amount) FILTER (WHERE reversed), 0::numeric))::text AS refund_reversal_unscaled,
             count(*) FILTER (WHERE reversed)::text AS refund_reversal_event_count,
-            count(*) FILTER (WHERE rate_unscaled IS NULL)::text AS missing_fx_count
+            count(*) FILTER (WHERE rate_unscaled IS NULL AND (NOT $19::boolean OR NOT reversed))::text AS missing_fx_count
      FROM converted`,
     [
       scope.tenant_id,
@@ -186,10 +190,14 @@ async function purchaseNetRevenueValue(
       definition.refund_reversal_policy === "cancel_target_refund_at_watermark",
       grouping?.ad_group_id ?? null,
       grouping?.creative_id ?? null,
+      !!fxPolicy.rate_selection,
     ],
   );
   const row = result.rows[0];
-  if (row.missing_fx_count !== "0") throw new Error(`missing FX rate for ${definition.metric_name}`);
+  if (row.missing_fx_count !== "0") {
+    if (fxPolicy.rate_selection) return { value_state: "undefined", undefined_reason: "missing_fx_rate" };
+    throw new Error(`missing FX rate for ${definition.metric_name}`);
+  }
   return { value_state: "present", value_unscaled: row.value_unscaled, commerce: {
     purchase_revenue_unscaled: row.purchase_revenue_unscaled, refund_deduction_unscaled: row.refund_deduction_unscaled,
     purchase_event_count: row.purchase_event_count, refund_event_count: row.refund_event_count,
@@ -226,6 +234,8 @@ async function totalNetRevenueValue(
   const purchaseNet = await purchaseNetRevenueValue(
     client, scope, watermark, grouping, purchaseDefinition, fxPolicy, privacyState,
   );
+  if (fxPolicy.rate_selection && adRevenue.value_state === "undefined") return adRevenue;
+  if (purchaseNet.value_state === "undefined") return purchaseNet;
   if (adRevenue.value_state !== "present") throw new Error(`unexpected ad revenue state: ${definition.metric_name}`);
   const total = BigInt(adRevenue.value_unscaled) + BigInt(purchaseNet.value_unscaled);
   const calculation = definition.definition.calculation;
@@ -252,10 +262,14 @@ async function totalNetRevenueValue(
     value_unscaled: string;
     mismatched_currency_count: string;
     cost_row_count: string;
+    missing_fx_count: string;
   }>(
-    `WITH current_cost AS (
+    `WITH rates AS (
+       SELECT * FROM jsonb_to_recordset($12::jsonb)
+         AS rate(currency text,rate_unscaled text,rate_scale integer,effective_date date,as_of text)
+     ), current_cost AS (
        SELECT * FROM (
-         SELECT DISTINCT ON (cost_key_digest) spend_unscaled, spend_scale, currency
+         SELECT DISTINCT ON (cost_key_digest) spend_unscaled, spend_scale, currency, cost_date AS date
          FROM ledger.cost_records
          WHERE $11::jsonb IS NULL AND tenant_id=$1 AND app_id=$2 AND as_of <= $3 AND NOT (artifact ? 'creative_id')
            AND ($8::text IS NULL OR $8='non_organic')
@@ -267,23 +281,31 @@ async function totalNetRevenueValue(
        ) AS selected
        UNION ALL
        SELECT * FROM jsonb_to_recordset($11::jsonb)
-         AS supplied(spend_unscaled text, spend_scale integer, currency text)
+         AS supplied(spend_unscaled text, spend_scale integer, currency text, date date)
      )
      SELECT trim_scale(coalesce(sum(
-       CASE WHEN spend_scale <= $10
+       CASE WHEN $13::boolean THEN ledger.half_even_div(spend_unscaled::numeric * rate.rate_unscaled::numeric * power(10::numeric,$10),
+         power(10::numeric,spend_scale+rate.rate_scale))
+       WHEN spend_scale <= $10
          THEN spend_unscaled::numeric * power(10::numeric, $10 - spend_scale)
          ELSE ledger.half_even_div(spend_unscaled::numeric, power(10::numeric, spend_scale - $10)) END
        ), 0::numeric))::text AS value_unscaled,
-       count(*) FILTER (WHERE currency <> $9)::text AS mismatched_currency_count,
+       count(*) FILTER (WHERE NOT $13::boolean AND current_cost.currency <> $9)::text AS mismatched_currency_count,
+       count(*) FILTER (WHERE $13::boolean AND rate.rate_unscaled IS NULL)::text AS missing_fx_count,
        count(*)::text AS cost_row_count
-     FROM current_cost`,
+     FROM current_cost LEFT JOIN rates AS rate ON $13::boolean AND rate.currency=current_cost.currency
+       AND rate.effective_date=current_cost.date
+       AND control.canonical_timestamp_value(rate.as_of) <= control.canonical_timestamp_value($3)`,
     [scope.tenant_id, scope.app_id, watermark, grouping?.campaign_id ?? null,
       grouping?.network ?? null, grouping?.country ?? null, grouping?.cohort_date ?? null,
       grouping?.attribution_status ?? null, fxPolicy.target_currency, fxPolicy.target_scale,
-      selectedCosts ? JSON.stringify(selectedCosts.rows) : null],
+      selectedCosts ? JSON.stringify(selectedCosts.rows) : null, JSON.stringify(fxPolicy.rates), !!fxPolicy.rate_selection],
   );
   if (cost.rows[0].mismatched_currency_count !== "0") {
     throw new Error(`cost currency mismatch for ${definition.metric_name}`);
+  }
+  if (fxPolicy.rate_selection && cost.rows[0].missing_fx_count !== "0") {
+    return { value_state: "undefined", undefined_reason: "missing_fx_rate" };
   }
   // Capture only the supported D30 total-net series, using the exact aggregates
   // already consumed above; never recalculate components when serving HTTP.
@@ -320,7 +342,7 @@ export async function metricValue(
   if (["converted_installations", "converted_installations_over_cohort"].includes(calculation)) {
     return customConversionValue(client, scope, watermark, grouping, definition, privacyState);
   }
-  if (calculation === "revenue_over_cost" && selectedCosts?.rows.some((cost) => cost.currency !== fxPolicy.target_currency)) {
+  if (!fxPolicy.rate_selection && calculation === "revenue_over_cost" && selectedCosts?.rows.some((cost) => cost.currency !== fxPolicy.target_currency)) {
     throw new Error(`cost currency mismatch for ${definition.metric_name}`);
   }
   if (calculation === "revenue_over_cost" && selectedCosts?.overlapping) {
@@ -357,6 +379,7 @@ export async function metricValue(
     value_unscaled: string | null;
     missing_fx_count: string;
     mismatched_cost_currency_count: string;
+    missing_cost_fx_count: string;
     revenue_value: string;
     cost_value: string;
     revenue_event_count: string;
@@ -368,9 +391,9 @@ export async function metricValue(
     `WITH
        acquisition AS (SELECT * FROM (${metricAcquisitionSql(acquisitionMode)}) AS selected WHERE $18::boolean),
        rates AS (
-         SELECT currency, rate_unscaled::numeric AS rate_unscaled, rate_scale
+         SELECT currency, rate_unscaled::numeric AS rate_unscaled, rate_scale, effective_date, as_of
          FROM jsonb_to_recordset($12::jsonb)
-           AS rate(currency text, rate_unscaled text, rate_scale integer)
+           AS rate(currency text, rate_unscaled text, rate_scale integer, effective_date date, as_of text)
        ),
        cohort AS (
          SELECT install.installation_id, install.occurred_at_ts AS installed_at
@@ -419,6 +442,8 @@ export async function metricValue(
           AND raw.tenant_id=logical.tenant_id
           AND raw.app_id=logical.app_id
          LEFT JOIN rates AS rate ON rate.currency=revenue.currency
+           AND (NOT $23::boolean OR (rate.effective_date=timezone('UTC',revenue.occurred_at_ts)::date
+             AND control.canonical_timestamp_value(rate.as_of) <= control.canonical_timestamp_value($3)))
          WHERE revenue.tenant_id=$1 AND revenue.app_id=$2
            AND ($22::text IS NULL OR logical.producer='import:'||$22)
            AND raw.received_at <= $3
@@ -453,7 +478,7 @@ export async function metricValue(
        ),
        current_cost AS (
          SELECT * FROM (
-           SELECT DISTINCT ON (cost_key_digest) spend_unscaled, spend_scale, currency
+           SELECT DISTINCT ON (cost_key_digest) spend_unscaled, spend_scale, currency, cost_date AS date
            FROM ledger.cost_records
            WHERE $19::jsonb IS NULL AND tenant_id=$1 AND app_id=$2 AND as_of <= $3 AND NOT (artifact ? 'creative_id')
              AND ($16::text IS NULL OR $16='non_organic')
@@ -465,19 +490,24 @@ export async function metricValue(
          ) AS selected
          UNION ALL
          SELECT * FROM jsonb_to_recordset($19::jsonb)
-           AS supplied(spend_unscaled text, spend_scale integer, currency text)
+           AS supplied(spend_unscaled text, spend_scale integer, currency text, date date)
        ),
        cost AS (
          SELECT coalesce(sum(
            CASE
+             WHEN $23::boolean THEN ledger.half_even_div(spend_unscaled::numeric * rate.rate_unscaled * power(10::numeric,$13),
+               power(10::numeric,spend_scale+rate.rate_scale))
              WHEN spend_scale <= $13
                THEN spend_unscaled::numeric * power(10::numeric, $13 - spend_scale)
              ELSE ledger.half_even_div(spend_unscaled::numeric, power(10::numeric, spend_scale - $13))
            END
          ), 0::numeric) AS value,
-         count(*) FILTER (WHERE currency <> $11)::bigint AS mismatched_currency_count,
+         count(*) FILTER (WHERE NOT $23::boolean AND current_cost.currency <> $11)::bigint AS mismatched_currency_count,
+         count(*) FILTER (WHERE $23::boolean AND rate.rate_unscaled IS NULL)::bigint AS missing_cost_fx_count,
          count(*)::bigint AS cost_row_count
-         FROM current_cost
+         FROM current_cost LEFT JOIN rates AS rate ON $23::boolean AND rate.currency=current_cost.currency
+           AND rate.effective_date=current_cost.date
+           AND control.canonical_timestamp_value(rate.as_of) <= control.canonical_timestamp_value($3)
        ),
        values AS (
          SELECT revenue.value AS revenue_value,
@@ -491,6 +521,7 @@ export async function metricValue(
                 (SELECT max(${finalWindowEnd})
                    <= control.canonical_timestamp_value($3) FROM cohort) AS window_elapsed,
                 revenue.missing_fx_count,
+                cost.missing_cost_fx_count,
                 cost.mismatched_currency_count
          FROM revenue, activities, cost
        )
@@ -508,6 +539,7 @@ export async function metricValue(
               WHEN 'cohort_size' THEN cohort_size
             END::text AS value_unscaled,
             missing_fx_count::text,
+            missing_cost_fx_count::text,
             mismatched_currency_count::text AS mismatched_cost_currency_count,
             trim_scale(revenue_value)::text AS revenue_value,
             trim_scale(cost_value)::text AS cost_value, revenue_event_count::text,
@@ -536,10 +568,16 @@ export async function metricValue(
       grouping?.ad_group_id ?? null,
       grouping?.creative_id ?? null,
       definition.import_provider ?? null,
+      !!fxPolicy.rate_selection,
     ],
   );
   const row = result.rows[0];
-  if (row.missing_fx_count !== "0") throw new Error(`missing FX rate for ${definition.metric_name}`);
+  const usesFx = ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(calculation);
+  if (fxPolicy.rate_selection) {
+    if (usesFx && (row.missing_fx_count !== "0" || calculation === "revenue_over_cost" && row.missing_cost_fx_count !== "0")) {
+      return { value_state: "undefined", undefined_reason: "missing_fx_rate" };
+    }
+  } else if (row.missing_fx_count !== "0") throw new Error(`missing FX rate for ${definition.metric_name}`);
   if (row.mismatched_cost_currency_count !== "0") {
     throw new Error(`cost currency mismatch for ${definition.metric_name}`);
   }

@@ -85,6 +85,11 @@ export async function executeMetricCalculation(
     for (const metricName of evaluation.metric_names ?? []) {
       const definition = definitions.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
+      const usesFx = ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(definition.definition.calculation);
+      if (fxPolicy.rate_selection && definition.value_type === "money"
+          && (definition.currency !== fxPolicy.target_currency || definition.amount_scale !== fxPolicy.target_scale)) {
+        throw new Error("dated_fx_target_mismatch");
+      }
       if (definition.acquisition_basis === "selected_verified_platform" && (grouping?.campaign_id || grouping?.ad_group_id)
           && !grouping?.network) throw new Error("platform_acquisition_source_required");
       const selectedDaily = definition.rule_bundle_id === "metric-selected-daily-acquisition";
@@ -122,7 +127,8 @@ export async function executeMetricCalculation(
         evaluation.privacy_state,
         selectedCosts,
       );
-      const moneyFields = definition.value_type === "money" && value.value_state === "present" ? {
+      const moneyFields = definition.value_type === "money" && value.value_state === "present" ? fxPolicy.rate_selection
+        ? { amount_scale: definition.amount_scale, currency: definition.currency } : {
         fx_rate_unscaled: fxRate.rate_unscaled,
         fx_rate_scale: fxRate.rate_scale,
         fx_rate_source: fxRate.source,
@@ -167,6 +173,9 @@ export async function executeMetricCalculation(
           ? { value_state: "undefined", undefined_reason: value.undefined_reason }
           : { value_unscaled: value.value_unscaled }),
         ...moneyFields,
+        ...(fxPolicy.rate_selection && usesFx ? { fx_conversion_snapshot: {
+          policy: fxPolicy as NonNullable<MetricRun["fx_conversion_snapshot"]>["policy"], snapshot_id: sha256(fxPolicy),
+        } } : {}),
         ...(definition.value_type === "ratio" ? { ratio_scale: definition.ratio_scale } : {}),
         ...(grouping ? {
           grouping: { dimensions: grouping, dimension_digest: sha256(grouping) },
@@ -213,10 +222,12 @@ export async function executeMetricCalculation(
             aggregation_time_zone: definition.aggregation_time_zone,
             fraud_policy: definition.fraud_policy ?? "gross", cost_basis: "cohort_acquisition_day_current_snapshot",
             cost_selection_digest: sha256(costs), fx_policy_version: fxPolicy.policy_version,
-            fx_snapshot_id: sha256(fxPolicy.rates), target_currency: fxPolicy.target_currency,
+            fx_snapshot_id: fxPolicy.rate_selection ? sha256(fxPolicy) : sha256(fxPolicy.rates), target_currency: fxPolicy.target_currency,
             target_scale: fxPolicy.target_scale,
             rates: fxPolicy.rates.map((rate) => ({ currency: rate.currency,
-              rate_unscaled: rate.rate_unscaled, rate_scale: rate.rate_scale })),
+              rate_unscaled: rate.rate_unscaled, rate_scale: rate.rate_scale,
+              ...(fxPolicy.rate_selection ? { effective_date: rate.effective_date!, source: rate.source, as_of: rate.as_of } : {}) })),
+            ...(fxPolicy.rate_selection ? { fx_conversion_snapshot: artifact.fx_conversion_snapshot } : {}),
             // Ratio profiles require this field; retain the legacy value without inventing a default.
             rounding_mode: "half_even", ratio_scale: definition.ratio_scale!,
             ...(value.totalNetOperands

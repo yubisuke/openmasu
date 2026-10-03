@@ -1,6 +1,6 @@
 import { sha256 } from "./canonical.js";
 import { selectDisjointCosts } from "./cost-selection.js";
-import { cohortCalendarDayIndex, type CohortTimeZone } from "@openmasu/contracts/definitions";
+import { cohortCalendarDayIndex, canonicalDatedFxPolicy, selectDatedFxRate, type CohortTimeZone, type DatedFxPolicyInput } from "@openmasu/contracts/definitions";
 import { selectPlatformAcquisition, platformAcquisitionDimensions, selectedPlatformProofRows } from "./platform-acquisition.js";
 import { engagementInputs, engagementSnapshotRows, engagementValue } from "./engagement-metrics.js";
 import { REFERENCE_AD_REVENUE_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
@@ -41,9 +41,13 @@ export function costRecords(input: Any): CostRecord[] {
   return sortByKey(records, (record) => [record.cost_record_id, record.tenant_id, record.app_id, record.as_of]);
 }
 
-function convertMoney(payload: Any, fxPolicy: Any): bigint {
-  const rate = (fxPolicy.rates ?? []).find((candidate: Any) => candidate.currency === payload.currency);
-  if (!rate) throw new Error(`missing FX rate for ${payload.currency}`);
+function convertMoney(payload: Any, fxPolicy: Any, date?: string, watermark?: string): bigint | undefined {
+  const rate = fxPolicy.rate_selection ? selectDatedFxRate(fxPolicy as DatedFxPolicyInput, payload.currency, date!, watermark!)
+    : (fxPolicy.rates ?? []).find((candidate: Any) => candidate.currency === payload.currency);
+  if (!rate) {
+    if (fxPolicy.rate_selection) return undefined;
+    throw new Error(`missing FX rate for ${payload.currency}`);
+  }
   const numerator = BigInt(payload.amount_unscaled) * BigInt(rate.rate_unscaled) * (10n ** BigInt(fxPolicy.target_scale));
   const denominator = 10n ** BigInt(Number(payload.amount_scale) + Number(rate.rate_scale));
   return roundHalfEven(numerator, denominator);
@@ -133,8 +137,8 @@ export function metricRuns(
   excludedInstallationIds: ReadonlySet<string> = new Set(),
 ): MetricRun[] {
   const evaluations = input.metric_evaluations ?? [];
+  const fxPolicy = input.fx_policy?.rate_selection !== undefined ? canonicalDatedFxPolicy(input.fx_policy) : input.fx_policy;
   if (!evaluations.length) return [];
-  const fxPolicy = input.fx_policy;
   const definitions = metricDefinitions(input);
   const definitionsByName = new Map(definitions.map((definition) => [definition.metric_name, definition]));
   const cost_records = costRecords(input);
@@ -204,7 +208,7 @@ export function metricRuns(
       lifecycle_status: evaluation.privacy_state === "after" ? (lifecycle.get(attemptEvidenceKey(attempt)) ?? "available") : "available",
       access_class: "protected",
     }));
-    if (fxPolicy.rates.length !== 1) throw new Error("v0.2 metric runs require exactly one structured FX rate");
+    if (!fxPolicy.rate_selection && fxPolicy.rates.length !== 1) throw new Error("v0.2 metric runs require exactly one structured FX rate");
     const fxRate = fxPolicy.rates[0];
     const selectedNames = evaluation.metric_names ?? [
       "d0_install_to_24h_ad_revenue_usd", "d0_utc_install_calendar_ad_revenue_usd", "d0_jst_install_calendar_ad_revenue_usd",
@@ -212,6 +216,17 @@ export function metricRuns(
     for (const metricName of selectedNames) {
       const definition = definitionsByName.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
+      const usesFx = ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(definition.definition.calculation);
+      if (fxPolicy.rate_selection && definition.value_type === "money"
+          && (definition.currency !== fxPolicy.target_currency || definition.amount_scale !== fxPolicy.target_scale)) {
+        throw new Error("dated_fx_target_mismatch");
+      }
+      let missingFx = false;
+      const money = (payload: Any, date: string): bigint => {
+        const amount = convertMoney(payload, fxPolicy, date, evaluation.input_received_at_watermark);
+        if (amount === undefined) { missingFx = true; return 0n; }
+        return amount;
+      };
       if (definition.acquisition_basis === "selected_verified_platform" && (evaluation.grouping?.campaign_id || evaluation.grouping?.ad_group_id)
           && !evaluation.grouping?.network) throw new Error("platform_acquisition_source_required");
       if (!definition.acquisition_dimension_policy && !(["selected_verified_platform", "selected_imported_provider"].includes(definition.acquisition_basis ?? "") && evaluation.grouping?.creative_id === undefined) && (evaluation.grouping?.ad_group_id !== undefined || evaluation.grouping?.creative_id !== undefined)) {
@@ -287,14 +302,15 @@ export function metricRuns(
       const eligibleInstalls = definition.fraud_policy === "net"
         ? selectedInstalls.filter((candidate) => !excludedInstallationIds.has(candidate.record.payload.installation_id))
         : selectedInstalls;
-      const revenueValue = definition.engagement_credit_policy || definition.conversion_event_key !== undefined ? 0n : revenue.reduce((sum, item) => {
+      const revenueValue = definition.engagement_credit_policy || definition.conversion_event_key !== undefined
+        || fxPolicy.rate_selection && (!usesFx || definition.definition.numerator === "purchase_net_revenue") ? 0n : revenue.reduce((sum, item) => {
         if (definition.import_provider && item.record.producer !== `import:${definition.import_provider}`) return sum;
         const installation = eligibleInstalls.find((candidate) =>
           candidate.server.tenant_id === item.server.tenant_id && candidate.server.app_id === item.server.app_id &&
           candidate.record.payload.installation_id === item.record.payload.installation_id,
         );
         return installation && eligibleRevenue(definition, installation.record, item.record)
-          ? sum + convertMoney(item.record.payload, fxPolicy)
+          ? sum + money(item.record.payload, dateAt(item.record.occurred_at, "UTC", "occurred_at"))
           : sum;
       }, 0n);
       const includesPurchaseNet = ["purchase_net_revenue", "total_net_revenue"].includes(
@@ -307,7 +323,7 @@ export function metricRuns(
           candidate.record.payload.installation_id === item.record.payload.installation_id,
         );
         return installation && eligibleRevenue(definition, installation.record, item.record)
-          ? sum + convertMoney(item.record.payload, fxPolicy)
+          ? sum + money(item.record.payload, dateAt(item.record.occurred_at, "UTC", "occurred_at"))
           : sum;
       }, 0n) - refunds.reduce((sum, item) => {
         const target = resolveRefundTarget(item, visible);
@@ -321,7 +337,7 @@ export function metricRuns(
           candidate.record.payload.installation_id === target.record.payload.installation_id,
         );
         return installation && eligibleRevenue(definition, installation.record, item.record)
-          ? sum + convertMoney(item.record.payload, fxPolicy)
+          ? sum + money(item.record.payload, dateAt(item.record.occurred_at, "UTC", "occurred_at"))
           : sum;
       }, 0n)
         : 0n;
@@ -332,19 +348,20 @@ export function metricRuns(
           : revenueValue;
       const cohortSize = BigInt(new Set(eligibleInstalls.map((install) => install.record.payload.installation_id)).size);
       let value: bigint | undefined;
-      let undefined_reason: "no_attributed_cost" | "no_activity_events" | "empty_cohort" | "overlapping_cost_grains" | undefined;
+      let undefined_reason: MetricRun["undefined_reason"];
       if (definition.engagement_credit_policy) {
         if (definition.value_type === "money" && (fxPolicy.target_currency !== definition.currency || fxPolicy.target_scale !== definition.amount_scale)) {
           throw new Error("engagement_metric_fx_target_mismatch");
         }
         value = engagementValue({ opens: engagement, visible, definition, grouping: evaluation.grouping,
           available: attempt => evaluation.privacy_state !== "after" || !lifecycle.has(attemptEvidenceKey(attempt as Attempt)),
-          money: payload => convertMoney(payload, fxPolicy) });
+          money: (payload, occurredAt) => money(payload, dateAt(occurredAt, "UTC", "occurred_at")) });
         if (value === undefined) undefined_reason = "empty_cohort";
       } else if (definition.definition.calculation === "revenue_sum") {
         value = selectedRevenueValue;
       } else if (definition.definition.calculation === "revenue_over_cost") {
         const cost = currentCosts.reduce((sum, item) => {
+          if (fxPolicy.rate_selection) return sum + money(item, item.date);
           if (item.currency !== fxPolicy.target_currency) throw new Error(`cost currency mismatch: ${item.cost_record_id}`);
           return sum + scaleMoney(item, fxPolicy.target_scale);
         }, 0n);
@@ -480,6 +497,10 @@ export function metricRuns(
       } else {
         throw new Error(`unsupported metric calculation: ${definition.definition.calculation}`);
       }
+      if (missingFx && usesFx && undefined_reason !== "overlapping_cost_grains") {
+        value = undefined;
+        undefined_reason = "missing_fx_rate";
+      }
       if (!definition.engagement_credit_policy && definition.definition.calculation !== "event_count" && evaluation.grouping?.metric_date !== undefined) {
         throw new Error(`metric_date grouping is reserved for event_count: ${metricName}`);
       }
@@ -487,7 +508,8 @@ export function metricRuns(
         dimensions: evaluation.grouping,
         dimension_digest: sha256(evaluation.grouping),
       } : undefined;
-      const moneyFields = definition.value_type === "money" && value !== undefined ? {
+      const moneyFields = definition.value_type === "money" && value !== undefined ? fxPolicy.rate_selection
+        ? { amount_scale: definition.amount_scale, currency: definition.currency } : {
         fx_rate_unscaled: fxRate.rate_unscaled,
         fx_rate_scale: fxRate.rate_scale,
         fx_rate_source: fxRate.source,
@@ -532,6 +554,9 @@ export function metricRuns(
           ? { value_state: "undefined" as const, undefined_reason }
           : { value_unscaled: value.toString() }),
         ...moneyFields,
+        ...(fxPolicy.rate_selection && usesFx ? { fx_conversion_snapshot: {
+          policy: fxPolicy, snapshot_id: sha256(fxPolicy),
+        } } : {}),
         ...(definition.value_type === "ratio" ? { ratio_scale: definition.ratio_scale } : {}),
         ...(grouping ? { grouping } : {}),
         evidence_refs,

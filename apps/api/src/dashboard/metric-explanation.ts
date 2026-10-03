@@ -4,8 +4,10 @@ import { escapeHtml } from "./html.js";
 
 export function renderMetricExplanation(appId: string, value: MetricExplanation): string {
   const run = value.run;
-  const result = run.value_state === "present" && run.value_unscaled !== undefined && run.ratio_scale !== undefined
-    ? `${exactDecimal(run.value_unscaled, run.ratio_scale)} ×` : `— (${run.unavailable_reason ?? run.undefined_reason ?? "value unavailable"})`;
+  const result = run.value_state === "present" && run.value_unscaled !== undefined
+    ? run.ratio_scale !== undefined ? `${exactDecimal(run.value_unscaled, run.ratio_scale)} ×`
+      : run.currency && run.amount_scale !== undefined ? `${run.currency} ${exactDecimal(run.value_unscaled, run.amount_scale)}` : run.value_unscaled
+    : `— (${run.unavailable_reason ?? run.undefined_reason ?? "value unavailable"})`;
   const item = (label: string, text: unknown) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(text)}</dd>`;
   const evidence = value.calculation;
   const components = evidence && evidence.version !== 1 ? [
@@ -38,8 +40,9 @@ export function renderMetricExplanation(appId: string, value: MetricExplanation)
     item("Cost selection digest", evidence.cost_selection_digest),
     item("FX policy", evidence.fx_policy_version), item("FX snapshot", evidence.fx_snapshot_id),
     item("Target currency / scale", `${evidence.target_currency} / ${evidence.target_scale}`),
-    item("Conversion rates", evidence.rates.map((rate) => `${rate.currency}: ${exactDecimal(rate.rate_unscaled, rate.rate_scale)}`).join("; ")),
-    item("Rounding", "half-even per revenue event before summation; half-even per cost row when scaling down; half-even after division"),
+    item("Conversion rates", evidence.rates.map((rate) => `${rate.currency}: ${exactDecimal(rate.rate_unscaled, rate.rate_scale)}${rate.effective_date ? ` on ${rate.effective_date}, ${rate.source}, as of ${rate.as_of}` : ""}`).join("; ")),
+    item("Rounding", evidence.fx_conversion_snapshot ? "half-even per revenue event and per selected cost row before summation; half-even after division"
+      : "half-even per revenue event before summation; half-even per cost row when scaling down; half-even after division"),
     ...(evidence.version !== 1 ? [item("Commerce policy", "Settled purchases minus settled refunds; each is independently converted and half-even rounded in its own occurrence-time window")] : []),
     ...(evidence.version === 3 ? [item("Refund cancellation policy", "Explicit targets cancel their original refund contribution once as of the watermark, using the refund's window and rounded amount, not a new purchase")] : []),
     item("Formula", evidence.operands.cost_unscaled === "0" ? "undefined: no_attributed_cost"
@@ -53,5 +56,10 @@ export function renderMetricExplanation(appId: string, value: MetricExplanation)
     item("Revision", run.superseded ? "superseded" : "current"), item("Replaces", run.supersedes_metric_run_id ?? "none"),
     item("Rule bundle", `${run.rule_bundle_id} / ${run.rule_bundle_version} / ${run.rule_bundle_hash}`),
     item("Unscaled result", run.value_unscaled ?? "undefined"), item("Ratio scale", run.ratio_scale ?? "unavailable"),
+    ...(run.fx_conversion_snapshot ? [item("FX snapshot", run.fx_conversion_snapshot.snapshot_id),
+      item("FX date selection", "UTC occurrence date for revenue; declared reporting date for cost; only captured rates known at the watermark"),
+      item("Target currency / scale", `${run.fx_conversion_snapshot.policy.target_currency} / ${run.fx_conversion_snapshot.policy.target_scale}`),
+      item("Captured rates", run.fx_conversion_snapshot.policy.rates.map(rate =>
+        `${rate.currency} on ${rate.effective_date}: ${exactDecimal(rate.rate_unscaled,rate.rate_scale)}; ${rate.source}; as of ${rate.as_of}`).join("; "))] : []),
   ].join("")}</dl>${detail}</main></body></html>`;
 }

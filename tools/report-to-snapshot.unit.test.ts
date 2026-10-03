@@ -1,6 +1,6 @@
 import { it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -10,6 +10,7 @@ import { compareSnapshots, parseSnapshot } from "./compare-cohorts.js";
 import { captureMetricComparisonContext } from "@openmasu/runtime";
 import { sha256 } from "@openmasu/attribution-core";
 import { renderComparison } from "./cohort-comparison-html.js";
+import { parseCsv } from "@openmasu/runtime/import-normalization";
 
 const template = () => ({ source: "synthetic-report", conditions: { date_from: "2026-01-01", date_to: "2026-01-02", time_zone: "UTC", maturity: "fully_elapsed_d7", aggregation: "cumulative", attribution_scope: "organic", metric_definition: "revenue_d7@v1", source_cutoff: "2026-01-10T00:00:00.000Z" }, rows: [] });
 const row = (): Record<string, any> => ({ metric_run_id: "synthetic-run", metric_name: "revenue_d7", metric_definition_version: "v1", input_snapshot_id: "a".repeat(64), input_received_at_watermark: "2026-01-10T00:00:00.000Z", aggregation_time_zone: "UTC", grouping: { cohort_date: "2026-01-01", attribution_status: "organic" }, value_type: "money", currency: "USD", amount_scale: 2, ratio_scale: null, value_state: "present", value_unscaled: "900719925474099301", undefined_reason: null, superseded: false, reproducibility_status: "fully_reproducible" });
@@ -24,6 +25,47 @@ const backedRow = () => {
     comparison_context: captureMetricComparisonContext(r as any, d, { policy_version: "synthetic", target_currency: "USD", target_scale: 2,
       rounding_mode: "half_even", rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0, as_of: "2026-01-01T00:00:00.000Z" }] }, "after", sha256) };
 };
+it("dated_FX_report_snapshot_requires_the_same_saved_policy_and_exposes_changed_rate_meaning", () => {
+  const fixture = JSON.parse(readFileSync("fixtures/v0.4/69-dated-fx-cohorts/input.json", "utf8"));
+  const r = backedRow();
+  const policy = { ...fixture.fx_policy, target_scale: 2 };
+  r.comparison_context = captureMetricComparisonContext(r as any, r.comparison_context.definition, policy, "after", sha256);
+  r.policy_versions = ["rule_bundle:v1", "fx:0.4.22"];
+  const dated = { ...r, fx_conversion_snapshot: { policy, snapshot_id: sha256(policy) } };
+  const saved = reportToSnapshot({ data: [dated] }, template());
+  const csv = parseCsv(encodeMetricReport({ data: [dated as unknown as MetricReportRow] }, "csv").body)[0];
+  // CSV embeds ordinary JSON; compare its decoded policy, not JCS key layout.
+  assert.deepEqual(JSON.parse(csv.fx_conversion_snapshot), dated.fx_conversion_snapshot);
+  assert.equal(compareSnapshots(saved, saved).status, "compared");
+  assert.deepEqual(parseSnapshot(saved), saved);
+  assert.throws(() => reportToSnapshot({ data: [r] }, template()), /fx_snapshot_binding_mismatch/);
+  assert.throws(() => reportToSnapshot({ data: [{ ...dated, fx_conversion_snapshot: { policy, snapshot_id: "f".repeat(64) } }] }, template()), /fx_snapshot_binding_mismatch/);
+  const changedPolicy = structuredClone(policy); changedPolicy.rates[0].rate_unscaled = "24";
+  const changed = { ...dated, fx_conversion_snapshot: { policy: changedPolicy, snapshot_id: sha256(changedPolicy) },
+    comparison_context: captureMetricComparisonContext(r as any, r.comparison_context.definition, changedPolicy, "after", sha256) };
+  const comparison = compareSnapshots(saved, reportToSnapshot({ data: [changed] }, template()));
+  assert.equal(comparison.status, "incomparable"); assert.ok(comparison.mismatches.includes("meaning.fx"));
+  const reviewedRuns = JSON.parse(readFileSync("fixtures/v0.4/69-dated-fx-cohorts/expected_metric_runs.json", "utf8")) as Record<string, any>[];
+  for (const run of reviewedRuns.filter(value => value.fx_conversion_snapshot)) {
+    const definition = fixture.metric_definitions.find((value: Record<string, any>) => value.metric_name === run.metric_name);
+    const reportRow = { ...run, grouping: run.grouping.dimensions, value_state: run.value_state ?? "present", superseded: false,
+      undefined_reason: run.undefined_reason ?? null, currency: run.currency ?? null, amount_scale: run.amount_scale ?? null,
+      ratio_scale: run.ratio_scale ?? null, policy_versions: [`rule_bundle:${run.rule_bundle_version}`, "fx:0.4.22"],
+      comparison_context: captureMetricComparisonContext(run as any, definition, fixture.fx_policy, "before", sha256) };
+    const datedTemplate = { source: "synthetic-fx69", conditions: { ...template().conditions,
+      date_from: "2026-08-06", date_to: "2026-08-07", attribution_scope: "all", maturity: "unknown",
+      metric_definition: `${run.metric_name}@${run.metric_definition_version}`, source_cutoff: run.input_received_at_watermark }, rows: [] };
+    const current = reportToSnapshot({ data: [reportRow] }, datedTemplate);
+    const result = compareSnapshots(current, current);
+    if (run.metric_name === "d7_roas") {
+      assert.equal(result.status, "incomparable", run.metric_run_id);
+      assert.ok(result.assurance.left.missing.includes("window_maturity"));
+    } else {
+      assert.equal(result.status, "compared", run.metric_run_id);
+      assert.equal(result.rows[0].status, run.undefined_reason ? "undefined" : "equal");
+    }
+  }
+});
 it("checks saved execution policy and displays definition-backed, declared and unknown bases distinctly", () => {
   const r = backedRow(), output = reportToSnapshot({ data: [r] }, template());
   assert.equal(output.conditions.maturity, "window_elapsed");

@@ -34,6 +34,8 @@ import { selectLateMetricInputs } from "@openmasu/runtime";
 import { saveMetricCorrectionPolicy } from "../../api/src/metric-correction-policy.js";
 import { planAutomaticMetricCorrections } from "./automatic-metric-corrections.js";
 import { processMetricRecalculations } from "./metric-recalculation-worker.js";
+import { syntheticFxCases, syntheticEngagementFxCases } from "../../../tools/synthetic-fx-cases.js";
+import { requestMetricRecalculation } from "../../api/src/metric-recalculations.js";
 
 type Any = Record<string, any>;
 const fixtureName = "33-stage-b-cohort-metrics";
@@ -43,6 +45,12 @@ const goldenPath = join(fixtureDirectory, "expected_metric_runs.json");
 const goldenBefore = readFileSync(goldenPath);
 const golden: Any[] = JSON.parse(goldenBefore.toString("utf8"));
 const oracle = evaluate(input).metric_runs;
+// Keep fixture/case registration outside describe: Node 22 can report a failed
+// empty suite but exit successfully when its registration callback throws.
+// A missing synthetic input must fail the module, never silently erase gates.
+const datedFxSource: Any = JSON.parse(readFileSync("fixtures/v0.4/69-dated-fx-cohorts/input.json", "utf8"));
+const datedEngagementFxSource: Any = JSON.parse(readFileSync("fixtures/v0.4/64-first-party-engagement/input.json", "utf8"));
+const datedFxCases = [...syntheticFxCases(datedFxSource), ...syntheticEngagementFxCases(datedEngagementFxSource)];
 
 function assertPlatformRunParity(actual: readonly Any[], expected: readonly Any[], label: string): void {
   assert.equal(actual.length, expected.length, `${label}: run count`);
@@ -53,6 +61,112 @@ function assertPlatformRunParity(actual: readonly Any[], expected: readonly Any[
     assert.equal(jcs(run), jcs(expected[index]), `${label}: ${run.metric_run_id} canonical bytes`);
   }
 }
+
+describe("dated FX snapshot SQL parity and replay", { concurrency: false }, () => {
+  const app = createAppPool(), seed = createSeedPool(), reader = createReaderPool();
+  after(async () => { await Promise.all([app.end(), seed.end(), reader.end()]); });
+  const source = datedFxSource;
+  const identity = { keyId: "synthetic-fx69", tenantId: "tenant-a", appId: "app-a", role: "admin" as const };
+  for (const entry of datedFxCases) it(entry.name, async () => {
+    await ingestFixture(`fx69-${entry.name}`, entry.input, app, seed);
+    const actual = await computeSqlMetricRuns(app, entry.input, false);
+    assert.deepEqual(actual.map(run => run.value_unscaled ?? run.undefined_reason), entry.expected, entry.name);
+    assertPlatformRunParity(actual, evaluate(entry.input).metric_runs, entry.name);
+    if (entry.name === "fx_dated_JPY_USD_EUR_half_even_and_watermark_snapshot")
+      assertPlatformRunParity(actual, JSON.parse(readFileSync("fixtures/v0.4/69-dated-fx-cohorts/expected_metric_runs.json", "utf8")), "independent dated FX golden");
+  });
+  it("fx_saved_JSON_CSV_comparison_and_SSR_keep_source_dates_and_undefined_money_bound", async () => {
+    await ingestFixture("fx69-reports", source, app, seed);
+    const actual = await computeSqlMetricRuns(app, source, true);
+    const page = await metricReport(reader, identity, { tenantId: "tenant-a", appId: "app-a", supersession: "all", limit: 200 });
+    for (const run of actual) {
+      const row = page.data.find(value => value.metric_run_id === run.metric_run_id)!;
+      assert.equal(row.value_unscaled, run.value_unscaled);
+      assert.equal(row.undefined_reason, run.undefined_reason ?? null);
+      assert.equal(jcs(row.fx_conversion_snapshot ?? null), jcs(run.fx_conversion_snapshot ?? null));
+      const csv = parseCsv(encodeMetricReport({ data: [row] }, "csv").body)[0];
+      assert.equal(csv.value_unscaled, run.value_unscaled ?? "");
+      if (run.fx_conversion_snapshot) assert.equal(jcs(JSON.parse(csv.fx_conversion_snapshot)), jcs(run.fx_conversion_snapshot));
+      else assert.equal(csv.fx_conversion_snapshot, "");
+      if (!run.fx_conversion_snapshot) continue;
+      assert.equal(row.comparison_context?.fx_digest, run.fx_conversion_snapshot.snapshot_id);
+      assert.equal(jcs(row.comparison_context!.fx), jcs(run.fx_conversion_snapshot.policy));
+      const snapshot = reportToSnapshot({ data: [row] }, { source: "synthetic-fx69", conditions: {
+        date_from: "2026-08-06", date_to: "2026-08-07", time_zone: "UTC", maturity: "unknown",
+        aggregation: "cumulative", attribution_scope: "all", metric_definition: `${row.metric_name}@${row.metric_definition_version}`,
+        source_cutoff: row.input_received_at_watermark }, rows: [] });
+      assert.deepEqual(snapshot.comparison_contexts![0].context.fx, run.fx_conversion_snapshot.policy);
+      const comparison = compareSnapshots(snapshot, snapshot);
+      // Both saved cutoffs precede the conservative end of D7 (August 15).
+      // A captured FX policy does not make an immature cohort comparable.
+      if (row.metric_name === "d7_roas") {
+        assert.equal(comparison.status, "incomparable", row.metric_run_id);
+        assert.ok(comparison.assurance.left.missing.includes("window_maturity"));
+        assert.deepEqual(comparison.rows, []);
+      } else {
+        assert.equal(comparison.status, "compared", row.metric_run_id);
+        assert.equal(comparison.rows[0].status, run.undefined_reason ? "undefined" : "equal");
+      }
+    }
+    const detail = await metricExplanation(reader, identity, "fx69-late:d7_roas");
+    assert.equal(detail?.evidence_state, "available");
+    assert.equal(detail!.calculation!.fx_snapshot_id, sha256(source.fx_policy));
+    assert.equal(detail!.calculation!.operands.revenue_unscaled, "3700004");
+    assert.equal(detail!.calculation!.operands.cost_unscaled, "2200001");
+    assert.match(renderMetricExplanation("app-a", detail!), /synthetic-fx-snapshot-69/);
+    assert.match(renderMetricExplanation("app-a", detail!), /2026-08-07/);
+    const missing = await metricExplanation(reader, identity, "fx69-early:d7_roas");
+    assert.equal(missing?.run.undefined_reason, "missing_fx_rate");
+    const html = renderMetricExplanation("app-a", missing!);
+    assert.match(html, /missing_fx_rate/); assert.match(html, /synthetic-fx-snapshot-69/);
+  });
+  it("fx_saved_manifest_replays_the_original_bytes_instead_of_a_later_rate_snapshot", async () => {
+    await ingestFixture("fx69-replay", source, app, seed);
+    const original = await computeSqlMetricRuns(app, source, true);
+    const saved = await withTenant(app, "tenant-a", async client => (await client.query(
+      `SELECT run.artifact,manifest.artifact AS replay FROM ledger.metric_runs AS run
+       JOIN control.metric_replay_manifests AS manifest ON manifest.tenant_id=run.tenant_id
+         AND manifest.app_id=run.app_id AND manifest.source_metric_run_id=run.metric_run_id
+       WHERE run.tenant_id=$1 AND run.app_id=$2 ORDER BY run.metric_run_id COLLATE "C"`, ["tenant-a", "app-a"],
+    )).rows);
+    const later = structuredClone(source);
+    later.fx_policy.rates.find((rate: Any) => rate.currency === "EUR" && rate.effective_date === "2026-08-06").rate_unscaled = "24";
+    const changed = await computeSqlMetricRuns(app, later, false);
+    assert.notEqual(changed.find(run => run.metric_run_id === "fx69-late:cohort_ltv_d1_usd")!.value_unscaled,
+      original.find(run => run.metric_run_id === "fx69-late:cohort_ltv_d1_usd")!.value_unscaled);
+    assert.notEqual(changed.find(run => run.fx_conversion_snapshot)!.fx_conversion_snapshot!.snapshot_id, sha256(source.fx_policy));
+    assert.equal(saved.length, original.length);
+    for (const row of saved) {
+      assert.equal(jcs(row.replay.fx_policy), jcs(source.fx_policy));
+      const replayed = await computeSqlMetricRuns(app, { metric_definitions: [row.replay.metric_definition],
+        metric_evaluations: [row.replay.evaluation], fx_policy: row.replay.fx_policy }, false,
+      { tenant_id: "tenant-a", app_id: "app-a" });
+      assertPlatformRunParity(replayed, [row.artifact], "captured FX replay");
+    }
+  });
+  it("fx_cost_correction_worker_retains_the_captured_rate_snapshot_and_original_artifact", async () => {
+    const value = structuredClone(source);
+    const originalCosts = value.cost_records; value.cost_records = [];
+    value.metric_evaluations = [value.metric_evaluations[1]];
+    value.metric_evaluations[0].metric_names = ["d0_roas"];
+    await ingestFixture("fx69-correction", value, app, seed);
+    await persistCostImport(app, "synthetic-fx-original", originalCosts);
+    const original = (await computeSqlMetricRuns(app, value, true))[0];
+    const revised = await persistCostImport(app, "synthetic-fx-revised", originalCosts.map((cost: Any) => ({ ...cost,
+      amount_unscaled: cost.currency === "EUR" ? "2" : cost.amount_unscaled, as_of: "2026-08-14T00:00:00.000Z" })));
+    const selected = await requestMetricRecalculation(app, identity, { cost_import_run_id: revised.import_run_id,
+      date_from: "2026-08-06", date_to: "2026-08-06", watermark: "2026-08-15T00:00:00.000Z", metric_names: ["d0_roas"] });
+    assert.equal(selected.selected_runs, 1);
+    assert.deepEqual(await processMetricRecalculations(app, "tenant-a"), { completed: 1, skipped: 0, fenced: 0, failed: 0 });
+    const stored = await withTenant(reader, "tenant-a", async client => (await client.query(
+      "SELECT artifact FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2 ORDER BY metric_run_id", ["tenant-a", "app-a"],
+    )).rows.map(row => row.artifact));
+    assert.equal(jcs(stored.find(run => run.metric_run_id === original.metric_run_id)), jcs(original));
+    const replacement = stored.find(run => run.supersedes_metric_run_id === original.metric_run_id)!;
+    assert.equal(replacement.value_unscaled, roundHalfEven(2200002n * 1000000n, 3400001n).toString());
+    assert.equal(jcs(replacement.fx_conversion_snapshot), jcs(original.fx_conversion_snapshot));
+  });
+});
 
 describe("explicit calendar cohort SQL parity", { concurrency: false }, () => {
   const app = createAppPool(), seed = createSeedPool(), reader = createReaderPool();
