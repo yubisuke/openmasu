@@ -45,6 +45,12 @@ const goldenPath = join(fixtureDirectory, "expected_metric_runs.json");
 const goldenBefore = readFileSync(goldenPath);
 const golden: Any[] = JSON.parse(goldenBefore.toString("utf8"));
 const oracle = evaluate(input).metric_runs;
+// Keep fixture/case registration outside describe: Node 22 can report a failed
+// empty suite but exit successfully when its registration callback throws.
+// A missing synthetic input must fail the module, never silently erase gates.
+const datedFxSource: Any = JSON.parse(readFileSync("fixtures/v0.4/69-dated-fx-cohorts/input.json", "utf8"));
+const datedEngagementFxSource: Any = JSON.parse(readFileSync("fixtures/v0.4/64-first-party-engagement/input.json", "utf8"));
+const datedFxCases = [...syntheticFxCases(datedFxSource), ...syntheticEngagementFxCases(datedEngagementFxSource)];
 
 function assertPlatformRunParity(actual: readonly Any[], expected: readonly Any[], label: string): void {
   assert.equal(actual.length, expected.length, `${label}: run count`);
@@ -59,10 +65,9 @@ function assertPlatformRunParity(actual: readonly Any[], expected: readonly Any[
 describe("dated FX snapshot SQL parity and replay", { concurrency: false }, () => {
   const app = createAppPool(), seed = createSeedPool(), reader = createReaderPool();
   after(async () => { await Promise.all([app.end(), seed.end(), reader.end()]); });
-  const source = JSON.parse(readFileSync("fixtures/v0.4/69-dated-fx-cohorts/input.json", "utf8"));
-  const engagement = JSON.parse(readFileSync("fixtures/v0.4/64-engagement-conversion-revenue/input.json", "utf8"));
+  const source = datedFxSource;
   const identity = { keyId: "synthetic-fx69", tenantId: "tenant-a", appId: "app-a", role: "admin" as const };
-  for (const entry of [...syntheticFxCases(source), ...syntheticEngagementFxCases(engagement)]) it(entry.name, async () => {
+  for (const entry of datedFxCases) it(entry.name, async () => {
     await ingestFixture(`fx69-${entry.name}`, entry.input, app, seed);
     const actual = await computeSqlMetricRuns(app, entry.input, false);
     assert.deepEqual(actual.map(run => run.value_unscaled ?? run.undefined_reason), entry.expected, entry.name);
