@@ -12,6 +12,15 @@ than rebuilding unrelated SDKs after every documentation or backend merge.
 Manual runs, missing revisions, empty/failed diffs and unknown paths retain all gates.
 Required jobs remain visible even when their expensive steps are not relevant.
 
+Backend unit-test-only edits under `apps/`, `packages/` and `tools/` run contract
+checks and Runtime's existing unit owner, without native SDK builds or throughput
+benchmarks. Runtime integration, PostgreSQL parity, role/privacy checks and the
+disposable Compose pilot still run. This applies to both pull requests and main
+pushes; optional documentation may accompany the tests. SDK test files use their
+native gates. Mixed production, tooling implementation, dependency or workflow
+changes take the full union; an unknown path still fails open. No new runner,
+test harness or required job context is introduced.
+
 ## One owner per correctness test
 
 Runtime executes `npm test` once for all unit files and `test:integration` once
@@ -22,6 +31,7 @@ for all application integration files. Do not repeat subsets afterwards:
 | `test:m2a` | Unit suite plus application integration suite |
 | `test:financial-parity` | Unit suite plus application integration suite |
 | `verify:consistency` / `test:dashboard-parity` | Application integration suite |
+| `test:privacy-e2e` | Application integration suite plus opt-in backup/restore step |
 
 Those aliases remain useful for a focused local edit; their test files and
 assertions remain unchanged. CI no longer repeats them. At the recorded baseline
@@ -35,6 +45,16 @@ longer run every unrelated application's unit test. Backup/restore repetition
 remains a regression check for repeated
 connection cleanup. PostgreSQL parity, role isolation, and disposable Compose
 tests cover different boundaries and are not replaced by evaluator unit tests.
+
+The module-boundary unit file scans the actual production graph once, then uses
+small invalid graphs to exercise its rejection behavior. It no longer scans the
+same checkout separately for each boundary. Two contract checks were removed:
+comparing a populated object with that object plus an empty array, and checking
+that the invented string `unknown_event` is absent from a registry. Neither
+exercised a rejection path. Per-fixture reviewed-golden comparisons, input event
+schema/registry validation, closed-schema mutations and every independent
+TypeScript/Python result remain. Fixture, schema, registry and acceptance
+inventories are unchanged; a smaller test count is not a weaker golden set.
 
 ## Keep contract validation single-pass
 
@@ -70,7 +90,8 @@ and the isolated Compose pilot, but omit its optional M5 load, the 100,000-row
 import benchmark and the metric performance floor in the PR. Mixed changes to
 worker/runtime/shared code, dependencies, schema, ingest paths or unknown files
 keep those floors. This is a small cold-path exception, not a second dependency
-graph. Main pushes with runtime changes and manual runs always keep load floors.
+graph. Main pushes with runtime implementation changes and manual runs keep load
+floors; backend unit-test-only changes do not benchmark unchanged products.
 
 The same baseline's import benchmark took 186 seconds; the core Compose pilot
 and load together took 165 seconds. The pilot stays, so its entire time cannot be

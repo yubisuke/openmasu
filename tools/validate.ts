@@ -2546,12 +2546,6 @@ if (!summaryOnly) {
       check(rawValidator(raw), `integrity raw-record baseline invalid: ${ajv.errorsText(rawValidator.errors)}`);
       check(!rawValidator({ ...raw, integrity_verdict: { ...raw.integrity_verdict, raw_token: "forbidden" } }), "integrity verdict accepted raw provider material");
     });
-    it("detects golden output removal", () => {
-      check(!equal(fixture("01-valid-install-referrer").output, { ...fixture("01-valid-install-referrer").output, raw_records: [] }), "mutation golden comparison did not fail");
-    });
-    it("keeps unknown events out of the registry", () => {
-      check(!eventNames.includes("unknown_event"), "mutation unknown event entered registry");
-    });
     it("rejects cross-tenant privacy references", () => {
       const crossTenantPrivacy = structuredClone(fixture("07-same-id-across-tenants").input);
       crossTenantPrivacy.privacy_requests.push({

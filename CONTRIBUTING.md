@@ -27,9 +27,13 @@ classifier in `tools/ci/changed-scope.mjs` skips expensive steps that cannot be
 affected by the changed paths; unknown paths and detection failures run every
 gate. Documentation runs contract and drift checks, runtime code runs the
 runtime gate, SDK sources run their native and packaging gates, and workflow,
-tooling, or dependency changes run everything. A newer commit to the same pull
+tooling implementation, or dependency changes run everything. Backend unit-test
+edits keep contract and runtime correctness without unrelated native builds or
+throughput floors; mixed implementation changes keep their full gates. A newer commit to the same pull
 request cancels its superseded run. Pushes to `main` and manual dispatches
-always run all gates and are never canceled by this policy.
+are never canceled by this policy. Main pushes use their complete change diff;
+manual dispatches always run all gates. See [CI scope](docs/ci-scope.md) for the
+single owner of each suite and the bounded cost exceptions.
 
 ## Real data never enters this repository
 

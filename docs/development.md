@@ -86,27 +86,25 @@ the final summary from that same run. Do not follow it with `check:doc-drift` or
 not another seed that yields an existing input, a source-text spelling, or a
 fixed test-count target.
 
-Runtime and database changes normally require:
+Choose a command for the boundary being changed, not every command in this table.
+These are local alternatives and CI ownership references, not a cumulative
+checklist:
 
-```bash
-npm run test:integration
-npm run test:db-invariants
-npm run verify:parity
-```
+| Change | Focused local check | Full CI owner |
+| --- | --- | --- |
+| Pure behavior or input parsing | `node --import tsx --test <affected.unit.test.ts>` | Runtime's single `npm test` run |
+| HTTP, ingestion, privacy or persistence | The affected `.integration.test.ts` file with a synthetic database | Runtime's single `test:integration` run |
+| Metric calculation | `npm run test:metric-parity` | SQL metric-parity step; do not copy its cases into a second suite |
+| Dashboard/report consistency | `npm run test:dashboard-parity` | Already inside `test:integration`; do not run both for the same edit |
+| Ledger constraints and role grants | `npm run test:db-invariants` | Separate database-invariant step |
+| Persisted contract artifacts | `npm run verify:parity` after synthetic seed | PostgreSQL golden-parity step |
+| Backup and restored privacy state | `npm run test:backup-restore` with its opt-in restore environment | Backup/restore step, including repeated connection cleanup |
 
-Reporting and metric changes normally require:
-
-```bash
-npm run test:metric-parity
-npm run test:dashboard-parity
-```
-
-Privacy and recovery changes normally require:
-
-```bash
-npm run test:privacy-e2e
-npm run test:backup-restore
-```
+`test:privacy-e2e`, `test:m2a` and `test:financial-parity` are convenience subsets.
+Do not run them after their containing suites have already passed. A database
+test skipped for lack of an environment is not evidence that it passed. Keep
+iteration focused; the applicable full gates belong at handoff and in CI, not
+after each edit.
 
 Android, iOS, and Unity gates are described in their SDK READMEs and pinned
 GitHub Actions workflows. A Windows or Linux contributor must not claim an iOS

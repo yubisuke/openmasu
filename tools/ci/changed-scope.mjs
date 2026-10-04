@@ -16,6 +16,15 @@ function normalized(path) {
   return path.replaceAll("\\", "/").replace(/^\.\//, "");
 }
 
+function isDocumentation(path) {
+  return ["README.md", "CONTRIBUTING.md", "SECURITY.md", "NOTICE", "LICENSE", "AGENTS.md"].includes(path)
+    || path.startsWith("docs/");
+}
+
+function isBackendUnitTest(path) {
+  return /^(?:apps|packages|tools)\/.+\.unit\.test\.ts$/.test(path);
+}
+
 export function classifyPaths(inputPaths, eventName = "pull_request") {
   const result = { contract: false, runtime: false, android: false, android_emulator: false, ios: false, runtime_performance: false };
   const markAll = () => Object.assign(result, ALL);
@@ -27,9 +36,15 @@ export function classifyPaths(inputPaths, eventName = "pull_request") {
       result.offline_unit = true;
       continue;
     }
+    // These files have one existing owner: npm test in Runtime. A test-only
+    // edit changes no native product, import path or performance implementation.
+    if (isBackendUnitTest(path)) {
+      result.contract = true;
+      result.runtime = true;
+      continue;
+    }
     let matched = false;
-    if (path === "README.md" || path === "CONTRIBUTING.md" || path === "SECURITY.md"
-      || path === "NOTICE" || path === "LICENSE" || path === "AGENTS.md" || path.startsWith("docs/")) {
+    if (isDocumentation(path)) {
       result.contract = true;
       matched = true;
     }
@@ -71,12 +86,17 @@ export function classifyPaths(inputPaths, eventName = "pull_request") {
     }
     if (!matched) markAll();
   }
-  // Pure SSR changes do not exercise the ingest throughput floors. Unknown,
-  // shared, worker or dependency changes fail open; trunk/manual retain floors.
-  result.runtime_performance = result.runtime && (eventName !== "pull_request" || inputPaths.some(rawPath => {
+  // Test-only edits keep correctness and Compose gates, but do not measure
+  // unchanged throughput. Mixed implementation changes retain the full union.
+  const unitOnly = inputPaths.every(rawPath => {
     const path = normalized(rawPath.trim());
-    return path && !path.startsWith("apps/api/src/dashboard/") && !path.startsWith("docs/")
-      && !["README.md","CONTRIBUTING.md","SECURITY.md","NOTICE","LICENSE","AGENTS.md"].includes(path);
+    return !path || isBackendUnitTest(path) || isDocumentation(path);
+  });
+  // Pure SSR pull requests retain their existing cold-path exception. Manual
+  // runs, unknown paths, shared implementation and dependencies fail open.
+  result.runtime_performance = result.runtime && !unitOnly && (eventName !== "pull_request" || inputPaths.some(rawPath => {
+    const path = normalized(rawPath.trim());
+    return path && !path.startsWith("apps/api/src/dashboard/") && !isDocumentation(path);
   }));
   return result;
 }

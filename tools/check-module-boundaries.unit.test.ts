@@ -39,7 +39,6 @@ describe("module_boundaries_reject_invalid_edges", () => {
       .some(error => error.includes("IO in")));
   });
   it("production_ingestion_excludes_seed_support", () => {
-    assert.deepEqual(inspectWorkspaceBoundaries(process.cwd()).errors, []);
     const root = "apps/worker/src/ingestion.ts";
     const owners = [workspace("@openmasu/worker", "apps/worker")];
     const entry = module(root, "./ingestion/application.js", "apps/worker/src/ingestion/application.ts");
