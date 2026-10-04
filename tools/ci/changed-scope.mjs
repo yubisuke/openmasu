@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 
-const ALL = Object.freeze({ contract: true, runtime: true, android: true, android_emulator: true, ios: true });
+const ALL = Object.freeze({ contract: true, runtime: true, android: true, android_emulator: true, ios: true, runtime_performance: true });
 // Explicit leaf tools only: shared code, dependencies, and unknown tools retain all gates.
 const OFFLINE_COMPARISON = new Set([
   "tools/compare-cohorts.ts", "tools/compare-cohorts.unit.test.ts",
@@ -16,8 +16,8 @@ function normalized(path) {
   return path.replaceAll("\\", "/").replace(/^\.\//, "");
 }
 
-export function classifyPaths(inputPaths) {
-  const result = { contract: false, runtime: false, android: false, android_emulator: false, ios: false };
+export function classifyPaths(inputPaths, eventName = "pull_request") {
+  const result = { contract: false, runtime: false, android: false, android_emulator: false, ios: false, runtime_performance: false };
   const markAll = () => Object.assign(result, ALL);
   for (const rawPath of inputPaths) {
     const path = normalized(rawPath.trim());
@@ -71,6 +71,13 @@ export function classifyPaths(inputPaths) {
     }
     if (!matched) markAll();
   }
+  // Pure SSR changes do not exercise the ingest throughput floors. Unknown,
+  // shared, worker or dependency changes fail open; trunk/manual retain floors.
+  result.runtime_performance = result.runtime && (eventName !== "pull_request" || inputPaths.some(rawPath => {
+    const path = normalized(rawPath.trim());
+    return path && !path.startsWith("apps/api/src/dashboard/") && !path.startsWith("docs/")
+      && !["README.md","CONTRIBUTING.md","SECURITY.md","NOTICE","LICENSE","AGENTS.md"].includes(path);
+  }));
   return result;
 }
 
@@ -81,21 +88,21 @@ function allScopes(reason) {
 
 function detect() {
   const eventName = process.env.GITHUB_EVENT_NAME ?? "local";
-  if (eventName !== "pull_request") return allScopes(`event=${eventName}`);
+  if (eventName !== "pull_request" && eventName !== "push") return allScopes(`event=${eventName}`);
   const base = process.env.OPENMASU_CI_BASE_SHA ?? "";
   const head = process.env.OPENMASU_CI_HEAD_SHA ?? "";
   if (!/^[0-9a-f]{40}$/i.test(base) || !/^[0-9a-f]{40}$/i.test(head)) {
-    return allScopes("pull request revisions are unavailable");
+    return allScopes("change revisions are unavailable");
   }
   try {
     const output = execFileSync(
       "git",
-      ["diff", "--name-only", "--no-renames", `${base}...${head}`],
+      ["diff", "--name-only", "--no-renames", `${base}${eventName === "pull_request" ? "..." : ".."}${head}`],
       { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
     const paths = output.split(/\r?\n/).filter(Boolean);
-    if (paths.length === 0) return allScopes("the pull request diff is empty");
-    return classifyPaths(paths);
+    if (paths.length === 0) return allScopes("the change diff is empty");
+    return classifyPaths(paths,eventName);
   } catch {
     return allScopes("git diff failed");
   }

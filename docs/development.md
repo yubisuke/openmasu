@@ -67,13 +67,19 @@ Install the pinned toolchains and dependencies described in
 [Getting started](getting-started.md).
 
 ```bash
+# While iterating: type-check or run the affected existing test file.
 npm run typecheck
-npm test
+# Before handoff: run the applicable full gate once.
 npm run validate
 ```
 
 `npm run validate` is read-only. It must not regenerate or rewrite fixture
 goldens.
+
+Use the narrowest existing command while implementing; do not stack focused
+aliases after their containing suite has already passed. `validate` already
+type-checks. CI owns the full unit/integration suites once; see
+[CI scope and test cost](ci-scope.md) for redundant subsets and load policy.
 
 Runtime and database changes normally require:
 

@@ -26,7 +26,7 @@ jobs:
       - name: Detect relevant changes
         id: scope
         env:
-          OPENMASU_CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          OPENMASU_CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           OPENMASU_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: node tools/ci/changed-scope.mjs
       - name: No contract-sensitive changes
@@ -66,4 +66,4 @@ jobs:
         run: npm run validate
       - name: Test offline tools without starting runtime or SDK stacks
         if: steps.scope.outputs.run_offline_unit == 'true' && steps.scope.outputs.run_runtime != 'true'
-        run: npm test
+        run: node --import tsx --test tools/compare-cohorts.unit.test.ts tools/cohort-comparison-html.unit.test.ts tools/report-to-snapshot.unit.test.ts

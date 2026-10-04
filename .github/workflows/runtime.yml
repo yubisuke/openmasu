@@ -49,7 +49,7 @@ jobs:
       - name: Detect relevant changes
         id: scope
         env:
-          OPENMASU_CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          OPENMASU_CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           OPENMASU_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: node tools/ci/changed-scope.mjs
       - name: No runtime-sensitive changes
@@ -87,35 +87,36 @@ jobs:
         run: |
           OPENMASU_M5_BACKUP_RESTORE=1 OPENMASU_M5_PG_TOOLS=docker npm run test:backup-restore
           OPENMASU_M5_BACKUP_RESTORE=1 OPENMASU_M5_PG_TOOLS=docker npm run test:backup-restore
-      - name: Run M2a redirector, signed-ingestion, replay, worker, and deletion gates
-        if: steps.scope.outputs.run_runtime == 'true'
-        run: npm run test:m2a
       - name: Reproduce contract goldens through PostgreSQL
         if: steps.scope.outputs.run_runtime == 'true'
         run: npm run seed && npm run verify:parity
       - name: Verify SQL cohort metrics against the contract evaluator
         if: steps.scope.outputs.run_runtime == 'true'
         run: npm run test:metric-parity
-      - name: Verify synthetic financial import and series separation
-        if: steps.scope.outputs.run_runtime == 'true'
-        run: npm run test:financial-parity
-      - name: Verify raw, API, dashboard-view, and HTML consistency
-        if: steps.scope.outputs.run_runtime == 'true'
-        run: npm run verify:consistency
+      # Signed ingestion, financial-import and dashboard-consistency tests are
+      # already included in npm test + test:integration above. Focused aliases
+      # remain available locally, but must not duplicate those suites in CI.
       - name: Run reduced synthetic metric performance floor
-        if: steps.scope.outputs.run_runtime == 'true'
+        if: steps.scope.outputs.run_runtime_performance == 'true'
         env:
-          OPENMASU_CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          OPENMASU_CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: OPENMASU_BENCHMARK_ROWS=100000 npm run benchmark:metric-floor --workspace @openmasu/worker -- --base-ref="$OPENMASU_CI_BASE_SHA"
       - name: Import 100,000 synthetic MMP rows within the pilot floor
-        if: steps.scope.outputs.run_runtime == 'true'
+        if: steps.scope.outputs.run_runtime_performance == 'true'
         run: npm run benchmark:import
       - name: Check threat-model coverage
         if: steps.scope.outputs.run_runtime == 'true'
         run: npm run check:threat-model
       - name: Run isolated disposable synthetic runtime pilot
         if: steps.scope.outputs.run_runtime == 'true'
-        run: npm run pilot:synthetic -- --disposable --load
+        env:
+          OPENMASU_CI_RUN_LOAD: ${{ steps.scope.outputs.run_runtime_performance }}
+        run: |
+          if [ "$OPENMASU_CI_RUN_LOAD" = "true" ]; then
+            npm run pilot:synthetic -- --disposable --load
+          else
+            npm run pilot:synthetic -- --disposable
+          fi
       - name: Upload synthetic runtime pilot evidence
         if: always() && steps.scope.outputs.run_runtime == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -127,7 +128,7 @@ jobs:
         if: always() && steps.scope.outputs.run_runtime == 'true'
         run: docker compose --project-name "$OPENMASU_PILOT_PROJECT" down --volumes --remove-orphans --timeout 30
       - name: Upload M5 load evidence
-        if: steps.scope.outputs.run_runtime == 'true'
+        if: steps.scope.outputs.run_runtime_performance == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: m5-synthetic-load
