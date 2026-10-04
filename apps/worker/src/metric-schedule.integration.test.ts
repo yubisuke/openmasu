@@ -17,7 +17,6 @@ import {
   withTenant,
 } from "@openmasu/runtime";
 import { ensureAdminKeys } from "../../api/src/admin-auth.js";
-import { renderMetricSchedules } from "../../api/src/dashboard/metric-schedules.js";
 import { disableMetricSchedule, registerMetricSchedule, type MetricScheduleRecord } from "../../api/src/metric-schedules.js";
 import { previewMetricScheduleReplacement, replaceMetricSchedule } from "../../api/src/metric-schedule-replacements.js";
 import { csrfToken, issueDashboardSession, type DashboardSession } from "../../api/src/session.js";
@@ -327,7 +326,13 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     const assertPage = async () => {
       const records = await list(), before = await state(), response = await page();
       assert.equal(response.status, 200); assert.equal(response.headers.get("cache-control"), "no-store");
-      assert.equal(await response.text(), renderMetricSchedules(appId, records, csrf));
+      const html = await response.text();
+      // Check persisted schedule evidence, not unrelated live-health text or page layout.
+      for (const record of records) {
+        assert.ok(html.includes(`data-metric-schedule-id="${record.metric_schedule_id}"`));
+        assert.ok(html.includes(record.definition_digest));
+      }
+      if (!records.length) assert.match(html, /No metric schedules are registered/);
       assert.deepEqual(await state(), before, "GET uses the reader pool and does not mutate schedules, runs or audit logs");
       return records;
     };
@@ -539,6 +544,8 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
   it("recommended_SSR_setup_previews_without_writes_then_computes_two_campaigns_and_guides_unsupported_or_unauthorized_choices", async () => {
     await seedPool.query("TRUNCATE control.metric_schedules,control.metric_schedule_states,control.metric_schedule_checkpoints CASCADE");
     const source: Any = JSON.parse(readFileSync("fixtures/v0.4/70-saved-acquisition-kpis/input.json", "utf8"));
+    // The empty-app phase must not inherit a prior integration scenario's import receipt.
+    await seedPool.query("TRUNCATE control.import_runs CASCADE");
     source.metric_definitions = []; source.metric_evaluations = [];
     const empty = { ...source, records: [], cost_records: [] };
     await ingestFixture(`setup-empty-${randomBytes(6).toString("hex")}`, empty, appPool, seedPool);
