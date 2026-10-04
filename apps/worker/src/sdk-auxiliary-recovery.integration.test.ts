@@ -278,7 +278,7 @@ describe("SDK auxiliary queue recovery", () => {
           `INSERT INTO ephemeral.integrity_verifications
             (verification_id,tenant_id,app_id,provider,token_ref,subject_record_id,attempts,next_attempt_at,challenge_digest)
             VALUES ($1::uuid,$2,$3,'play_integrity',$4,$5,1,$6,$7)`,
-          [id,input.tenantId,input.appId,`protected:synthetic-${id}`,value.record_id,next,"0".repeat(64)]) : client.query(
+          [id,input.tenantId,input.appId,tokenRef,value.record_id,next,"0".repeat(64)]) : client.query(
           `INSERT INTO ephemeral.google_play_product_verifications
             (verification_id,tenant_id,app_id,subject_record_id,token_ref,token_digest,product_id,verified_record_id,attempts,next_attempt_at,requested_at)
             VALUES ($1::uuid,$2,$3,$4,$5,$6,'synthetic-product',$7,1,$8,$9)`,
@@ -290,7 +290,7 @@ describe("SDK auxiliary queue recovery", () => {
         const table = kind === "integrity" ? "ephemeral.integrity_verifications" : "ephemeral.google_play_product_verifications";
         const unchanged = await withTenant(pool,input.tenantId,client => client.query(
           `SELECT token_ref,attempts${kind === "integrity" ? ",challenge_digest" : ""} FROM ${table} WHERE tenant_id=$1 AND verification_id=$2::uuid`,[input.tenantId,id]));
-        if (kind === "integrity") assert.deepEqual(unchanged.rows,[{token_ref:`protected:synthetic-${id}`,attempts:1,challenge_digest:"0".repeat(64)}]);
+        if (kind === "integrity") assert.deepEqual(unchanged.rows,[{token_ref:tokenRef,attempts:1,challenge_digest:"0".repeat(64)}]);
         else assert.deepEqual(unchanged.rows,[{token_ref:tokenRef,attempts:1}]);
         await withTenant(pool,input.tenantId,client => client.query(`UPDATE ${table} SET claim_token=$3::uuid,claimed_until=$4
           WHERE tenant_id=$1 AND verification_id=$2::uuid`,[input.tenantId,id,uuidV7(),new Date(Date.now()+60000)]));
