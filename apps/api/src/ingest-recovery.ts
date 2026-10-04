@@ -117,11 +117,13 @@ export async function requestIngestRecovery(pool: Pool, payloadStore: PayloadSto
     const receiptId = await recordDashboardAuditWithClient(client,{tenantId:identity.tenantId,appId:identity.appId,actorRef:`admin_key:${identity.keyId}`,
       action:"ingest_recovery_requested",targetScope:"app",targetRef:request.job_id,outcome:"succeeded",reasonCode:request.kind,now});
     if (request.kind === "sdk_batch") {
+      // The worker advisory lock serializes retries. Immutable ledger rows have
+      // no UPDATE privilege, including the privilege required by FOR UPDATE.
       const found = await client.query<Record<string,any>>(`SELECT batch.*,state.status,state.reason_code,state.ingest_batch_state_seq::text AS revision
         FROM ledger.ingest_batches AS batch JOIN LATERAL (SELECT * FROM ledger.ingest_batch_states AS history
           WHERE history.tenant_id=batch.tenant_id AND history.app_id=batch.app_id AND history.ingest_batch_id=batch.ingest_batch_id
           ORDER BY history.ingest_batch_state_seq DESC LIMIT 1) AS state ON true
-        WHERE batch.tenant_id=$1 AND batch.app_id=$2 AND batch.ingest_batch_id=$3::uuid FOR UPDATE OF batch`,
+        WHERE batch.tenant_id=$1 AND batch.app_id=$2 AND batch.ingest_batch_id=$3::uuid`,
       [identity.tenantId,identity.appId,request.job_id]);
       const row = found.rows[0];
       if (!row) throw new IngestRecoveryError("recovery_job_not_found",404);
