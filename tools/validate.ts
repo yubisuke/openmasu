@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join, relative } from "node:path";
-import { describe, it } from "node:test";
+import { after, describe, it } from "node:test";
+import { checkDocumentationDrift } from "./check-doc-drift.js";
 import { validateEventPayload } from "@openmasu/contracts/validation";
 import { Ajv2020Module, addFormatsModule, canonicalize } from "@openmasu/contracts/validation-tooling";
 import { sha256 } from "@openmasu/attribution-core/canonical";
@@ -1728,7 +1729,10 @@ const acceptance: Array<[string, () => void]> = [
     for (const forbidden of ["threshold", "model_weight", "watchlist", "ip_address", "user_agent", "response_timing"]) check(!schemaText.includes(forbidden), `AC20 ${forbidden}`);
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
-  ["AC21 one command validates every schema registry fixture and golden", () => check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 70 && outputArtifactCount === 70 * 13, "AC21")],
+  ["AC21 one command validates every schema registry fixture and golden", () => {
+    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 70 && outputArtifactCount === 70 * 13, "AC21");
+    checkDocumentationDrift(root, validationSummary());
+  }],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {
     for (const { output, python } of results.values()) check(equal(output, python), "AC22 evaluator mismatch");
     const vector = { numbers: [333333333.33333329, 1e30, 4.50, 2e-3, 1e-27, -0], string: "€$\u000f\nA'B\"\\\"/" };
@@ -2745,8 +2749,11 @@ function permutedInput(input: Any, seed: number): Any {
   return output;
 }
 
-const permutationCases = fixtureStates.flatMap((state, fixtureIndex) =>
-  Array.from({ length: 5 }, (_, permutationIndex) => {
+const permutationCases = fixtureStates.flatMap((state, fixtureIndex) => {
+  // The baseline already has a reviewed golden and independent Python comparison.
+  // Repeated seeds that produce that same input (or another retained order) add no coverage.
+  const seen = new Set(state.input.ok ? [canonicalize(state.input.value)] : []);
+  return Array.from({ length: 5 }, (_, permutationIndex) => {
     return {
       name: `${state.name} permutation ${permutationIndex + 1}`,
       expected: state.first,
@@ -2756,8 +2763,14 @@ const permutationCases = fixtureStates.flatMap((state, fixtureIndex) =>
       )),
       python: undefined as PythonBatchResult | undefined,
     };
-  }),
-);
+  }).filter((entry) => {
+    if (!entry.input.ok) return true; // Preserve preparation failures in the aggregated result.
+    const signature = canonicalize(entry.input.value);
+    if (seen.has(signature)) return false;
+    seen.add(signature);
+    return true;
+  });
+});
 const validPermutationCases = permutationCases.filter((entry) => entry.input.ok);
 const permutationPythonBatch = capture(() => pythonBatch(
   validPermutationCases.map((entry) => capturedValue(entry.input, entry.name)),
@@ -2791,3 +2804,4 @@ export function validationSummary(): string {
 }
 
 if (summaryOnly) console.log(validationSummary());
+else after(() => console.log(validationSummary()));

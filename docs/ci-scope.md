@@ -36,6 +36,33 @@ remains a regression check for repeated
 connection cleanup. PostgreSQL parity, role isolation, and disposable Compose
 tests cover different boundaries and are not replaced by evaluator unit tests.
 
+## Keep contract validation single-pass
+
+`npm run validate` obtains documentation inventory from the running contract
+tests, not a second evaluator process. The existing inventory acceptance check
+also checks documentation drift. Node's standard TAP reporter still lists each
+test; a small reporter adapter prints the measured inventory last only if the
+entire run succeeds. The independent fraud-artifact scan runs before the tests
+so a failed scan cannot be followed by a success summary.
+
+The standalone `check:doc-drift` and `validate:summary` commands remain available
+for focused inventory inspection. Inventory-only output is not passing test
+evidence, and neither command should be appended to a completed `validate` run.
+
+Input-order checks retain up to five deterministic seed candidates per fixture,
+but run only distinct canonical inputs that differ from the already-checked
+baseline. With 70 fixtures, the 350 seed candidates contain 142 unchanged inputs
+and 45 repeated changed orders. Removing those 187 redundant executions retains
+163 distinct changed orders, all compared in TypeScript and independent Python.
+Reviewed goldens, scenario assertions, acceptance criteria, schema mutations,
+timestamp and UTF-16 checks remain unchanged. This is input deduplication, not
+random sampling or a reduction in the number of reviewed scenarios.
+
+On the recorded Windows checkout, the previous inventory-only evaluator pass
+took 11.39 seconds. Full validation previously invoked it once for documentation
+and again for the final summary; both redundant passes are now absent. That
+single-process observation is not a controlled estimate of total CI savings.
+
 ## Keep expensive load checks relevant
 
 Pure server-rendered dashboard changes still run all runtime correctness tests
