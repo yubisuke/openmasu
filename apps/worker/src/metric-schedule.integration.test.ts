@@ -541,16 +541,16 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     });
   });
 
-  it("recommended_SSR_setup_previews_without_writes_then_computes_two_campaigns_and_guides_unsupported_or_unauthorized_choices", async () => {
-    await seedPool.query("TRUNCATE control.metric_schedules,control.metric_schedule_states,control.metric_schedule_checkpoints CASCADE");
+  it("recommended_SSR_setup_previews_without_writes_then_computes_two_campaigns_and_guides_unsupported_or_unauthorized_choices", async (context) => {
+    const tenantId = `tenant-setup-${randomBytes(6).toString("hex")}`;
     const appId = `app-setup-${randomBytes(6).toString("hex")}`;
     const reportIdentity = { tenantId, appId, keyId: "synthetic-recommended-setup", role: "admin" as const };
     await withTenant(appPool, tenantId, client => client.query(
       "INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ($1,$2,$3)",
       [tenantId, appId, "2026-08-15T00:00:00.000Z"]));
     const source: Any = JSON.parse(readFileSync("fixtures/v0.4/70-saved-acquisition-kpis/input.json", "utf8"));
-    source.server_context.app_id = appId;
-    for (const row of [...source.records, ...source.cost_records]) row.app_id = appId;
+    source.server_context.tenant_id = tenantId; source.server_context.app_id = appId;
+    for (const row of [...source.records, ...source.cost_records]) { row.tenant_id = tenantId; row.app_id = appId; }
     source.metric_definitions = []; source.metric_evaluations = [];
     const empty = { ...source, records: [], cost_records: [] };
     await ingestFixture(`setup-empty-${randomBytes(6).toString("hex")}`, empty, appPool, seedPool);
@@ -558,6 +558,15 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     const adminKey = `synthetic-setup-admin-${randomBytes(32).toString("base64url")}`;
     const [keyId] = await ensureAdminKeys(appPool, { tenantId, appId }, [adminKey]);
     const session = await issueDashboardSession(appPool, tenantId, keyId!, 43_200);
+    // The key overlap limit is tenant-wide; this journey must not consume another test's slots.
+    const api = createServer(createRequestHandler({ pool: appPool, readerPool, payloadStore,
+      maxConfig: { tenantId, appId, pathSecret: "synthetic-setup-path", eventKey: "synthetic-setup-event",
+        tokenMode: "all_with_event_fallback", maxParameters: 40, maxQueryBytes: 8192 },
+      publicBaseUrl: "http://localhost:8080", redirectorBaseUrl: "http://localhost:8090",
+      dashboard: { enabled: true, publicBaseUrl: "http://localhost:8080", tenantId, sessionTtlSeconds: 43_200 } }));
+    context.after(async () => { api.closeAllConnections(); await new Promise<void>(resolve => api.close(() => resolve())); });
+    api.listen(0, "127.0.0.1"); await once(api, "listening");
+    const baseUrl = `http://127.0.0.1:${(api.address() as AddressInfo).port}`;
     const admin = (path: string) => fetch(`${baseUrl}${path}`, { headers: { authorization: `Bearer ${adminKey}` } });
     const path = `/dashboard/apps/${appId}/metric-schedules`, cookie = `openmasu_dashboard=${session.token}`;
     const page = async () => (await fetch(`${baseUrl}${path}`, { headers: { cookie } })).text();
