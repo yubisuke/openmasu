@@ -261,7 +261,9 @@ describe("SDK auxiliary queue recovery", () => {
       await assert.rejects(requestIngestRecovery(pool,countingPayloadStore(reads),identity,{...request,job_id:deleted,revision:deletedItem.revision}),/privacy_subject_inactive/);
       assert.deepEqual(reads,[],"privacy must be checked before protected evidence is read");
       // Pending auxiliary retries keep their original immutable source and token.
-      const tokenRef = await payloadStore.write({tenantId:input.tenantId,appId:input.appId,objectId:`synthetic-operator-token-${run}`},Buffer.from("synthetic-operator-token"));
+      const tokenBody = { records:[{...value,payload:{...(value.payload as Any),
+        extensions:{adservices_attribution_token_protected:`synthetic-operator-token-${run}`}}}] };
+      const tokenRef = await payloadStore.write({tenantId:input.tenantId,appId:input.appId,objectId:`synthetic-operator-token-${run}`},Buffer.from(JSON.stringify(tokenBody)));
       await queueAdServicesLookup(pool,{tenantId:input.tenantId,appId:input.appId,installRecordId:String(value.record_id),tokenRef,tokenCreatedAt:input.receivedAt});
       await processAdServicesLookups(pool,payloadStore,input.tenantId,{client:async () => ({status:429,body:Buffer.from("synthetic temporary failure")})});
       const queued = (await listIngestRecovery(reader,identity)).items.find(item => item.kind === "adservices")!;
