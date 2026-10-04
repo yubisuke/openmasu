@@ -222,6 +222,14 @@ Explicit v0.4.12
 and preserves disjoint siblings and dated revisions (#183). Explicit v0.4.13
 definitions also connect selected acquisition to purchase/total-net cohorts
 (#191), with fixture 60 fixing purchase net 6, total net 26 and ROAS 2.6.
+A [recommended SSR setup](scheduled-metrics.md#manage-schedules-through-the-dashboard)
+selects existing native D7 KPIs, optional retention and observed custom keys
+without handwritten definition JSON (#241). Read-only preview shows the saved
+meaning and digest; confirmation reuses normal validation/ownership and the
+worker. It exposes separate SDK/ingestion/calculation/comparison observations.
+USD identity, UTC, gross first-party and 20 discovered targets per date are
+explicit limits, not claims of platform support or live FX completeness.
+
 Explicit bounded [late-input requests](metric-corrections.md#late-advertising-revenue-purchases-refunds-and-custom-outcomes)
 connect accepted revenue/commerce arrivals to immutable corrections (#184).
 Input discovery is requested through the API; only accepted jobs execute automatically.

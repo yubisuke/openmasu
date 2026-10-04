@@ -536,6 +536,73 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     });
   });
 
+  it("recommended_SSR_setup_previews_without_writes_then_computes_two_campaigns_and_guides_unsupported_or_unauthorized_choices", async () => {
+    await seedPool.query("TRUNCATE control.metric_schedules,control.metric_schedule_states,control.metric_schedule_checkpoints CASCADE");
+    const source: Any = JSON.parse(readFileSync("fixtures/v0.4/70-saved-acquisition-kpis/input.json", "utf8"));
+    source.metric_definitions = []; source.metric_evaluations = [];
+    const empty = { ...source, records: [], cost_records: [] };
+    await ingestFixture(`setup-empty-${randomBytes(6).toString("hex")}`, empty, appPool, seedPool);
+    const path = `/dashboard/apps/${appId}/metric-schedules`, cookie = `openmasu_dashboard=${session.token}`;
+    const page = async () => (await fetch(`${baseUrl}${path}`, { headers: { cookie } })).text();
+    const post = (form: URLSearchParams, suffix = "/preview-recommended", sessionCookie = cookie) => fetch(`${baseUrl}${path}${suffix}`, {
+      method: "POST", redirect: "manual", headers: { cookie: sessionCookie, origin: "http://localhost:8080",
+        "content-type": "application/x-www-form-urlencoded" }, body: form });
+    const schedules = async () => (await admin(`/v1/admin/apps/${appId}/metric-schedules`).then(response => response.json()) as Any).data;
+    const form = new URLSearchParams({ csrf_token: csrfToken(session.token), recommended_profile: "native_d7_v1",
+      acquisition_basis: "selected_first_party_click", target_currency: "USD", cutoff_policy: "utc_start_of_worker_day",
+      include_retention: "true", lag_days: "9", start_date: "2026-08-06" });
+    assert.match(await page(), /data-measurement-state="no_observations"/);
+    const preview = await post(form); assert.equal(preview.status, 200);
+    const previewHtml = await preview.text(); assert.match(previewHtml, /Confirm recommended schedule/);
+    assert.deepEqual(await schedules(), []);
+    assert.equal((await metricReport(readerPool, reportIdentity, { tenantId, appId, supersession: "latest", limit: 200 })).data.length, 0);
+    assert.doesNotMatch(previewHtml, /<script\b|javascript:|\son[a-z]+=/i);
+    for (const [name, value] of [["acquisition_basis", "selected_verified_platform"], ["target_currency", "EUR"],
+      ["custom_conversion_event_keys", "unknown_outcome"]]) {
+      const invalid = new URLSearchParams(form); invalid.set(name, value);
+      assert.equal((await post(invalid)).status, 400);
+    }
+    const readerKey = `synthetic-setup-reader-${randomBytes(32).toString("base64url")}`;
+    const [readerId] = await ensureAdminKeys(appPool, { tenantId, appId }, [{ key: readerKey, role: "read_only" }]);
+    const reader = await issueDashboardSession(appPool, tenantId, readerId!, 43_200);
+    const denied = new URLSearchParams(form); denied.set("csrf_token", csrfToken(reader.token));
+    assert.equal((await post(denied, "/preview-recommended", `openmasu_dashboard=${reader.token}`)).status, 403);
+    const confirmed = new URLSearchParams(form);
+    confirmed.set("preview_digest", /name="preview_digest" value="([a-f0-9]{64})"/.exec(previewHtml)![1]);
+    const altered = new URLSearchParams(confirmed); altered.set("lag_days", "10");
+    assert.equal((await post(altered, "")).status, 409);
+    assert.equal((await post(confirmed, "")).status, 303);
+    assert.equal((await schedules()).length, 1);
+    const id = (await schedules())[0].metric_schedule_id;
+    for (const [group, hour] of [["a", "00"], ["b", "03"]]) for (const day of ["07", "13"]) {
+      const recordId = `setup-session-${group}-${day}`, occurred = `2026-08-${day}T${hour}:30:00.000Z`;
+      const prototype = fixtureInput.records.find((record: Any) => record.event_name === "session_start");
+      source.records.push({ ...structuredClone(prototype), record_id: recordId, event_id: `event:${recordId}`,
+        delivery_id: `delivery:${recordId}`, occurred_at: occurred, received_at: `2026-08-${day}T${hour}:30:01.000Z`,
+        processing_sequence: source.records.length + 1,
+        payload: { installation_id: `installation:kpi70-install-${group}-0`, session_id: recordId } });
+    }
+    await ingestFixture(`setup-observed-${randomBytes(6).toString("hex")}`, source, appPool, seedPool);
+    assert.match(await page(), /data-measurement-state="not_computed"/);
+    assert.equal((await processMetricSchedules(appPool, tenantId, { now: new Date("2026-08-15T00:00:00.000Z") })).completedDates, 1);
+    const rows = (await metricReport(readerPool, reportIdentity, { tenantId, appId, metricScheduleId: id,
+      supersession: "latest", limit: 200 })).data;
+    for (const [campaign, installs, cost, roas, retention] of [["kpi70-a", "3", "10000000", "1200000", "333333"],
+      ["kpi70-b", "2", "4000000", "1500000", "500000"]]) {
+      const value = (name: string) => rows.find(row => row.grouping.campaign_id === campaign && row.metric_name === name)!.value_unscaled;
+      assert.equal(value("acquisition_d7_installs"), installs); assert.equal(value("acquisition_d7_cost"), cost);
+      assert.equal(value("acquisition_d7_total_roas"), roas); assert.equal(value("retention_d1"), retention);
+      assert.equal(value("retention_d7"), retention);
+    }
+    const organic = rows.find(row => row.grouping.attribution_status === "organic" && row.metric_name === "acquisition_d7_total_roas");
+    assert.equal(organic?.value_state, "undefined"); assert.equal(organic?.undefined_reason, "no_attributed_cost");
+    assert.match(await page(), /data-measurement-state="results_observed"/);
+    const dashboard = await fetch(`${baseUrl}/dashboard/apps/${appId}?metric_schedule_id=${encodeURIComponent(id)}`, { headers: { cookie } });
+    assert.equal(dashboard.status, 200); const html = await dashboard.text();
+    assert.match(html, /kpi70-a/); assert.match(html, /kpi70-b/); assert.match(html, /data-value-unscaled="1200000"/);
+    const before = await schedules(); await page(); assert.deepEqual(await schedules(), before, "GET does not claim or change a schedule");
+  });
+
   describe("per-key custom-conversion schedules on the existing engine", () => {
     const legacy = JSON.parse(readFileSync("fixtures/v0.4/61-custom-conversion/input.json", "utf8"));
     const native = JSON.parse(readFileSync("fixtures/v0.4/58-selected-native-acquisition/input.json", "utf8"));

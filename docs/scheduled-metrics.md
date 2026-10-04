@@ -28,6 +28,35 @@ stay explicit and cannot be blended with first-party campaign discovery.
 
 ## Manage schedules through the dashboard
 
+For a first native-acquisition setup, use **Enable a recommended measurement
+set** on this page. No handwritten definition JSON is required:
+
+1. Select the existing D7 installs/cost/CPI/revenue/ROAS set, native first-party
+   acquisition, USD identity currency and UTC claim-midnight cutoff. Choose a
+   lag of at least nine days and an optional initial cohort date.
+2. Keep D1/D7 session-start retention, or opt out. Optionally select up to 20
+   observed custom-event keys; the same existing per-key factories are used.
+3. Select **Preview recommended set**. Review the exact definitions, bundle
+   identities, immutable digest, resolved start date and boundaries. This POST
+   uses the reader pool and does not save a schedule or start a calculation.
+4. Select **Confirm recommended schedule**. The ordinary registration service
+   regenerates and validates the definitions, checks the preview digest and
+   active metric ownership, and registers one immutable schedule. The existing
+   worker discovers up to 20 campaign/status targets per date. Refresh to inspect
+   progress, then open reports or saved comparison from the progress section.
+
+The SDK, ingestion, calculation and comparison states are separate retained
+observations, not a conversion funnel or proof that an external source is
+complete. SDK keys do not prove device connectivity. Missing cost, FX or
+activity stays undefined with a reason; organic and unattributed stay separate.
+USD uses mathematical identity, not a fabricated or live FX rate. The form
+does not enable provider access. Platform/imported acquisition, other currencies,
+net fraud policies and other windows require explicit advanced definitions; they
+are never silently replaced by the native D7 profile. A changed preview, unknown
+key or active ownership overlap is rejected rather than modifying an old series.
+
+For advanced configurations, use the existing complete-request form below:
+
 1. Sign in with an admin-role key, open the app, and select **Manage daily metric
    schedules** under **App configuration**. The page is
    `/dashboard/apps/<app-id>/metric-schedules`; like the API, even its list
