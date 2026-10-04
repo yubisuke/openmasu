@@ -344,7 +344,8 @@ function validateRegistryReferences(output: Any, label: string): void {
       "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
       "aak_attributed_reengagements",
     ]);
-    const expectedVersion = definition.rule_bundle_id === "metric-acquisition-kpis" ? ACQUISITION_KPI_VERSION
+    const expectedVersion = definition.rule_bundle_id === "metric-standard-retention" ? "0.4.24"
+      : definition.rule_bundle_id === "metric-acquisition-kpis" ? ACQUISITION_KPI_VERSION
       : definition.rule_bundle_id === "metric-calendar-acquisition" ? "0.4.21"
       : definition.rule_bundle_id === "metric-imported-provider-acquisition" ? "0.4.20"
       : definition.rule_bundle_id === "metric-verified-platform-acquisition" ? "0.4.19"
@@ -604,8 +605,8 @@ if (!summaryOnly) {
         }
       });
     }
-    it("contains 69 fixture directories", () => {
-      check(fixtureDirs.length === 70, `expected 70 fixture directories, found ${fixtureDirs.length}`);
+    it("contains 71 fixture directories", () => {
+      check(fixtureDirs.length === 71, `expected 71 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -1115,12 +1116,18 @@ const scenarios: Array<[string, () => void]> = [
     check(equal(state.output.metric_runs.map((run: Any) => run.value_unscaled ?? run.undefined_reason), acquisitionKpiExpected(state.input)), "scenario 70 independent eight-role money and count arithmetic");
     for (const evaluation of state.input.metric_evaluations) check(new Set(state.output.metric_runs.filter((run: Any) => run.metric_run_id.startsWith(`${evaluation.metric_run_id_prefix}:`)).map((run: Any) => run.input_snapshot_id)).size === 1, "scenario 70 same selected snapshot");
   }],
+  ["71 standard retention distinguishes immature absence from an observed zero", () => {
+    const { output } = fixture("71-standard-retention");
+    check(output.metric_runs.length === 6, "scenario 71 two saved cutoffs and three activity days");
+    check(equal(output.metric_runs.map((run: Any) => run.value_unscaled ?? run.undefined_reason),
+      ["observation_window_not_elapsed", "0", "observation_window_not_elapsed", "0", "0", "0"]), "scenario 71 complete observation, never fabricated immature zero");
+  }],
 ];
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 70 scenario assertions", () => {
-      check(scenarios.length === 70, "scenario assertion inventory must contain 70 entries");
+    it("contains 71 scenario assertions", () => {
+      check(scenarios.length === 71, "scenario assertion inventory must contain 71 entries");
     });
   });
 
@@ -1689,7 +1696,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 70 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 71 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1730,7 +1737,7 @@ const acceptance: Array<[string, () => void]> = [
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
   ["AC21 one command validates every schema registry fixture and golden", () => {
-    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 70 && outputArtifactCount === 70 * 13, "AC21");
+    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 71 && outputArtifactCount === 71 * 13, "AC21");
     checkDocumentationDrift(root, validationSummary());
   }],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {
