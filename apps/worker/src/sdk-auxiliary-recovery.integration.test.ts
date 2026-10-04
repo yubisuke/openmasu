@@ -225,6 +225,9 @@ describe("SDK auxiliary queue recovery", () => {
       // A failure receipt after partial admission must not create a second logical event/fact.
       const canonical = await withTenant(pool,input.tenantId,client => client.query(
         "SELECT artifact FROM ledger.raw_records WHERE tenant_id=$1 AND app_id=$2 AND record_id=$3",[input.tenantId,input.appId,value.record_id]));
+      const originalFacts = await withTenant(pool,input.tenantId,client => client.query(
+        "SELECT artifact FROM ledger.install_facts WHERE tenant_id=$1 AND app_id=$2 AND record_id=$3",[input.tenantId,input.appId,value.record_id]));
+      assert.equal(originalFacts.rowCount,1);
       await markFailed(batch);
       const replay = (await listIngestRecovery(reader,identity)).items.find(item => item.job_id === batch)!;
       await requestIngestRecovery(pool,payloadStore,identity,{...request,revision:replay.revision});
@@ -232,6 +235,8 @@ describe("SDK auxiliary queue recovery", () => {
       assert.equal(await ledgerCount(input,String(value.record_id)),1);
       assert.deepEqual((await withTenant(pool,input.tenantId,client => client.query(
         "SELECT artifact FROM ledger.raw_records WHERE tenant_id=$1 AND app_id=$2 AND record_id=$3",[input.tenantId,input.appId,value.record_id]))).rows,canonical.rows);
+      assert.deepEqual((await withTenant(pool,input.tenantId,client => client.query(
+        "SELECT artifact FROM ledger.install_facts WHERE tenant_id=$1 AND app_id=$2 AND record_id=$3",[input.tenantId,input.appId,value.record_id]))).rows,originalFacts.rows);
       const invalid = await append(input,record(input,"operator-invalid","install",{install_type:"first_install",referrer_status:"unavailable"}));
       await markFailed(invalid);
       const invalidItem = (await listIngestRecovery(reader,identity)).items.find(item => item.job_id === invalid)!;
@@ -278,8 +283,9 @@ describe("SDK auxiliary queue recovery", () => {
         assert.equal(queuedResponse.status,202);
         const table = kind === "integrity" ? "ephemeral.integrity_verifications" : "ephemeral.google_play_product_verifications";
         const unchanged = await withTenant(pool,input.tenantId,client => client.query(
-          `SELECT token_ref,attempts,challenge_digest FROM ephemeral.integrity_verifications WHERE tenant_id=$1 AND verification_id=$2::uuid`,[input.tenantId,id]));
+          `SELECT token_ref,attempts${kind === "integrity" ? ",challenge_digest" : ""} FROM ${table} WHERE tenant_id=$1 AND verification_id=$2::uuid`,[input.tenantId,id]));
         if (kind === "integrity") assert.deepEqual(unchanged.rows,[{token_ref:`protected:synthetic-${id}`,attempts:1,challenge_digest:"0".repeat(64)}]);
+        else assert.deepEqual(unchanged.rows,[{token_ref:tokenRef,attempts:1}]);
         await withTenant(pool,input.tenantId,client => client.query(`UPDATE ${table} SET claim_token=$3::uuid,claimed_until=$4
           WHERE tenant_id=$1 AND verification_id=$2::uuid`,[input.tenantId,id,uuidV7(),new Date(Date.now()+60000)]));
         const active = (await listIngestRecovery(reader,identity)).items.find(item => item.job_id === id)!;

@@ -75,8 +75,9 @@ are append-only state sequence strings; auxiliary revisions are opaque 32-charac
 tokens, not evidence digests. No query parameters are accepted. A successful
 mutation returns 202 with a `receipt_id`, `kind`, `job_id` and `status: queued`.
 The receipt ID is the audit row ID; its target is the opaque job, scoped to the app.
-Stale/double submissions and active claims return 409; unknown or completed jobs
-return 404. Public failures use closed codes, never database/payload errors.
+Stale/double submissions, changed SDK states and active claims return 409.
+Unknown jobs and consumed/completed auxiliary jobs return 404. Public failures
+use closed codes, never database/payload errors.
 
 Dashboard GET/POST use `/dashboard/apps/:app/ingest-recovery`. GET is reader-only;
 POST additionally requires the existing synchronizer CSRF token, same-origin
