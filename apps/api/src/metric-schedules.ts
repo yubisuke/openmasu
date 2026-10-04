@@ -7,6 +7,7 @@ import { validateScheduledMetricDefinition as validMetricDefinition, type Schedu
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
 import { observedConversionKeys, expandConversionScheduleRequest, conversionCalculationKey } from "./custom-conversion-schedules.js";
+import { expandRecommendedMetricSchedule, recommendedSchedulePreviewDigest } from "./recommended-metric-schedules.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -281,6 +282,14 @@ export async function registerMetricSchedule(input: Readonly<{
 }>): Promise<MetricScheduleRecord> {
   const now = input.now ?? new Date();
   return withTenant(input.pool, input.identity.tenantId, async client => {
+    if (input.body.recommended_profile !== undefined) {
+      const body = expandRecommendedMetricSchedule(input.body, await observedConversionKeys(client, input.identity));
+      const normalized = normalizeMetricScheduleRequest(body, now);
+      if (input.body.preview_digest !== recommendedSchedulePreviewDigest(normalized)) {
+        throw new Error("metric_schedule_preview_stale");
+      }
+      return saveMetricScheduleWithClient(client, input.identity, normalized, now);
+    }
     const body = input.body.custom_conversion_event_keys !== undefined
       ? expandConversionScheduleRequest(input.body, await observedConversionKeys(client, input.identity)) : input.body;
     return saveMetricScheduleWithClient(client, input.identity, normalizeMetricScheduleRequest(body, now), now);
@@ -290,6 +299,18 @@ export async function registerMetricSchedule(input: Readonly<{
 export function listCustomConversionKeys(pool: Pool, identity: AppAdminIdentity): Promise<string[]> {
   return withTenant(pool, identity.tenantId, client => observedConversionKeys(client, identity));
 }
+
+export async function previewRecommendedMetricSchedule(pool: Pool, identity: AppAdminIdentity, body: JsonObject,
+  now = new Date()) {
+  return withTenant(pool, identity.tenantId, async client => {
+    const expanded = expandRecommendedMetricSchedule(body, await observedConversionKeys(client, identity));
+    const normalized = normalizeMetricScheduleRequest(expanded, now);
+    return { ...normalized, preview_digest: recommendedSchedulePreviewDigest(normalized),
+      selection: { ...body, start_date: normalized.startDate } };
+  });
+}
+
+export type RecommendedMetricSchedulePreview = Awaited<ReturnType<typeof previewRecommendedMetricSchedule>>;
 
 /** Caller owns the transaction; also used for atomic disable-and-replace. */
 export async function saveMetricScheduleWithClient(

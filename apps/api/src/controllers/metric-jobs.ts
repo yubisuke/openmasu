@@ -2,7 +2,9 @@ import { AppNotFoundError, requireRegisteredApp } from "../apps-admin.js";
 import { roleAllows } from "../authorization.js";
 import { metricScheduleFormRequest, metricScheduleReplacementFormRequest, renderMetricScheduleReplacement, renderMetricSchedules } from "../dashboard/metric-schedules.js";
 import { csrfToken, recordDashboardAudit } from "../session.js";
-import { disableMetricSchedule, listMetricSchedules, listCustomConversionKeys, registerMetricSchedule } from "../metric-schedules.js";
+import { disableMetricSchedule, listMetricSchedules, listCustomConversionKeys, registerMetricSchedule, previewRecommendedMetricSchedule } from "../metric-schedules.js";
+import { renderRecommendedMetricSchedulePreview } from "../dashboard/measurement-setup.js";
+import { measurementHealth } from "../measurement-health.js";
 import { previewMetricScheduleReplacement, replaceMetricSchedule } from "../metric-schedule-replacements.js";
 import { disableCostSchedule, listCostSchedules, registerCostSchedule } from "../cost-schedules.js";
 import { listMetricRecalculations, requestMetricRecalculation } from "../metric-recalculations.js";
@@ -53,11 +55,24 @@ export function createMetricJobsControllers(dependencies: Pick<RequestHandlerDep
   };
 
   const dashboardMetricSchedulesList = async ({ response, session, appId, appIdentity }: DashboardAppContext): Promise<void> => {
-    const [schedules, keys] = await Promise.all([listMetricSchedules(dependencies.readerPool, appIdentity),
-      listCustomConversionKeys(dependencies.readerPool, appIdentity)]);
+    const [schedules, keys, health] = await Promise.all([listMetricSchedules(dependencies.readerPool, appIdentity),
+      listCustomConversionKeys(dependencies.readerPool, appIdentity), measurementHealth(dependencies.readerPool, appIdentity)]);
     dashboardHtml(response, 200, renderMetricSchedules(appId,
-      schedules, csrfToken(session.token), keys));
+      schedules, csrfToken(session.token), keys, health));
     return;
+  };
+
+  const dashboardMetricSchedulesPreviewRecommended = async ({ request, response, pool, session, appId, appIdentity, decoder }: DashboardAppContext): Promise<void> => {
+    const form = await decoder.form();
+    if (!await authorizeDashboardForm(dependencies, { request, response, session }, form,
+      "dashboard_metric_schedule_preview", "app", appId)) return;
+    try {
+      const preview = await previewRecommendedMetricSchedule(pool, appIdentity, metricScheduleFormRequest(form));
+      dashboardHtml(response, 200, renderRecommendedMetricSchedulePreview(appId, preview, csrfToken(session.token)));
+    } catch (error) {
+      dashboardHtml(response, 400, renderMetricScheduleOperationFailed({
+        reason: publicReason(error, "recommended_schedule_failed"), appId }));
+    }
   };
 
   const dashboardMetricSchedulesRegister = async ({ request, response, target, route, pool, session, appId, appIdentity, decoder }: DashboardAppContext): Promise<void> => {
@@ -218,6 +233,7 @@ export function createMetricJobsControllers(dependencies: Pick<RequestHandlerDep
     dashboard_metric_recalculations_preview: { boundary: "dashboard_app", handle: dashboardMetricRecalculationsPreview },
     dashboard_metric_recalculations_request: { boundary: "dashboard_app", handle: dashboardMetricRecalculationsPreview },
     dashboard_metric_schedules_list: { boundary: "dashboard_app", handle: dashboardMetricSchedulesList },
+    dashboard_metric_schedules_preview_recommended: { boundary: "dashboard_app", handle: dashboardMetricSchedulesPreviewRecommended },
     dashboard_metric_schedules_register: { boundary: "dashboard_app", handle: dashboardMetricSchedulesRegister },
     dashboard_metric_schedules_disable: { boundary: "dashboard_app", handle: dashboardMetricSchedulesRegister },
     dashboard_metric_schedules_preview_replacement: { boundary: "dashboard_app", handle: dashboardMetricSchedulesReplacement },

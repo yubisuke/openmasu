@@ -193,6 +193,13 @@ need outbound callbacks should use the separate
 [operator event webhook guide](docs/operator-event-webhooks.md).
 Operators who need delayed files should use the separate
 [operator bulk export guide](docs/operator-bulk-exports.md).
+Before writing definition JSON, an administrator can open **Manage daily metric
+schedules** and preview the recommended native D7 measurement set: installs,
+cost/CPI, revenue/ROAS, optional retention and observed custom outcomes. The
+form reuses saved definitions and the existing worker; it starts no calculation
+on page reads. Its initial currency is USD identity, not an FX feed. See the
+[setup steps and explicit limits](docs/scheduled-metrics.md#manage-schedules-through-the-dashboard).
+
 Operators who need daily cohort or calendar metrics should use the
 [scheduled metric guide](docs/scheduled-metrics.md).
 

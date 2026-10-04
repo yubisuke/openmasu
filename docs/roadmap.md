@@ -219,6 +219,12 @@ per-key D7 names, closed app-scoped SSR/API selection and alias-safe schedule
 ownership on the same existing engine (#230). Its project-plan crosswalk is
 **Multiple custom outcomes**; two-key corrections and exports remain isolated,
 with no schema, arithmetic, table or scheduler replacement.
+The [recommended setup form](scheduled-metrics.md#manage-schedules-through-the-dashboard)
+connects these existing profiles through a read-only preview and normal schedule
+confirmation (#241). Its project-plan crosswalk is **Recommended measurement
+setup**. Separate SDK/ingestion/calculation/comparison observations and explicit
+native D7/USD limits replace handwritten JSON for this initial supported set;
+advanced definitions remain available without creating another calculation engine.
 Its first-party D7 scope and refusal gates are recorded in the project-plan
 crosswalk; no new analysis service or cross-population calculator is introduced.
 

@@ -527,7 +527,7 @@ export async function metricValue(
                 cost.mismatched_currency_count
          FROM revenue, activities, cost
        )
-     SELECT CASE $10
+     SELECT trim_scale(CASE $10
               WHEN 'revenue_sum' THEN revenue_value
               WHEN 'cost_sum' THEN CASE WHEN cost_row_count=0 THEN NULL ELSE cost_value END
               WHEN 'cost_over_cohort' THEN
@@ -543,7 +543,7 @@ export async function metricValue(
                 CASE WHEN cohort_size=0 THEN NULL
                      ELSE ledger.half_even_div(revenue_value, cohort_size) END
               WHEN 'cohort_size' THEN cohort_size
-            END::text AS value_unscaled,
+            END)::text AS value_unscaled,
             missing_fx_count::text,
             missing_cost_fx_count::text,
             mismatched_currency_count::text AS mismatched_cost_currency_count,
