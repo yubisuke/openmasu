@@ -226,7 +226,9 @@ describe("SDK auxiliary queue recovery", () => {
       const canonical = await withTenant(pool,input.tenantId,client => client.query(
         "SELECT artifact FROM ledger.raw_records WHERE tenant_id=$1 AND app_id=$2 AND record_id=$3",[input.tenantId,input.appId,value.record_id]));
       const originalFacts = await withTenant(pool,input.tenantId,client => client.query(
-        "SELECT artifact FROM ledger.install_facts WHERE tenant_id=$1 AND app_id=$2 AND record_id=$3",[input.tenantId,input.appId,value.record_id]));
+        `SELECT fact.artifact FROM ledger.install_facts AS fact JOIN ledger.logical_events AS event
+          USING (tenant_id,app_id,logical_event_id)
+          WHERE fact.tenant_id=$1 AND fact.app_id=$2 AND event.record_id=$3`,[input.tenantId,input.appId,value.record_id]));
       assert.equal(originalFacts.rowCount,1);
       await markFailed(batch);
       const replay = (await listIngestRecovery(reader,identity)).items.find(item => item.job_id === batch)!;
@@ -236,7 +238,9 @@ describe("SDK auxiliary queue recovery", () => {
       assert.deepEqual((await withTenant(pool,input.tenantId,client => client.query(
         "SELECT artifact FROM ledger.raw_records WHERE tenant_id=$1 AND app_id=$2 AND record_id=$3",[input.tenantId,input.appId,value.record_id]))).rows,canonical.rows);
       assert.deepEqual((await withTenant(pool,input.tenantId,client => client.query(
-        "SELECT artifact FROM ledger.install_facts WHERE tenant_id=$1 AND app_id=$2 AND record_id=$3",[input.tenantId,input.appId,value.record_id]))).rows,originalFacts.rows);
+        `SELECT fact.artifact FROM ledger.install_facts AS fact JOIN ledger.logical_events AS event
+          USING (tenant_id,app_id,logical_event_id)
+          WHERE fact.tenant_id=$1 AND fact.app_id=$2 AND event.record_id=$3`,[input.tenantId,input.appId,value.record_id]))).rows,originalFacts.rows);
       const invalid = await append(input,record(input,"operator-invalid","install",{install_type:"first_install",referrer_status:"unavailable"}));
       await markFailed(invalid);
       const invalidItem = (await listIngestRecovery(reader,identity)).items.find(item => item.job_id === invalid)!;
