@@ -229,6 +229,7 @@ export type OpenMasuMetricDefinitionV04 = {
   acquisition_basis?: "selected_first_party_click" | "selected_verified_platform" | "selected_imported_provider";
   import_provider?: string;
   calendar_cohort_policy?: "cumulative_revenue_on_day_activity";
+  retention_maturity_policy?: "complete_activity_window";
   acquisition_dimension_policy?: "selected_link_ad_group_creative";
   conversion_event_key?: string;
   engagement_credit_policy?: "latest_eligible_open_before_outcome";
@@ -268,7 +269,12 @@ export type OpenMasuMetricRunV04 = {
    */
   value_state?: "present" | "undefined";
   undefined_reason?:
-    "no_attributed_cost" | "no_activity_events" | "empty_cohort" | "overlapping_cost_grains" | "missing_fx_rate";
+    | "no_attributed_cost"
+    | "no_activity_events"
+    | "empty_cohort"
+    | "overlapping_cost_grains"
+    | "missing_fx_rate"
+    | "observation_window_not_elapsed";
   value_unscaled?: string;
   fraud_policy?: "gross" | "net";
   amount_scale?: number;

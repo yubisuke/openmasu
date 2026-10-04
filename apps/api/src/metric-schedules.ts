@@ -202,6 +202,13 @@ export function normalizeMetricScheduleRequest(
       throw new Error("metric_schedule_calendar_profile_required");
     }
     const grouping = normalizedGrouping(evaluation.grouping);
+    const retentionDays = evaluation.metric_names.flatMap(name => {
+      const metric = suppliedDefinitions.find(definition => definition.metric_name === name);
+      return metric?.retention_maturity_policy ? [Number(metric.definition.window && (metric.definition.window as JsonObject).day)] : [];
+    });
+    if (retentionDays.length && (dateDimension !== "cohort_date" || lagDays < Math.max(...retentionDays) + 2)) {
+      throw new Error("metric_schedule_retention_window_not_elapsed");
+    }
     if ((grouping.campaign_id !== undefined || grouping.ad_group_id !== undefined) && grouping.network === undefined
         && evaluation.metric_names.some(name => suppliedDefinitions.find(definition => definition.metric_name === name)
           ?.acquisition_basis === "selected_verified_platform")) throw new Error("platform_acquisition_source_required");

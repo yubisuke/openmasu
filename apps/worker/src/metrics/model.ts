@@ -40,7 +40,7 @@ export type PreparedMetricCalculation = {
   evaluations: readonly MetricEvaluation[];
 };
 export type MetricValue = ({ value_state: "present"; value_unscaled: string } | {
-  value_state: "undefined"; undefined_reason: "no_attributed_cost" | "empty_cohort" | "overlapping_cost_grains" | "missing_fx_rate";
+  value_state: "undefined"; undefined_reason: NonNullable<MetricRun["undefined_reason"]>;
 }) & { operands?: RoasOperands; revenueAggregates?: RoasOperands; totalNetOperands?: TotalNetRoasOperands };
 
 export type SnapshotRecord = {

@@ -51,6 +51,7 @@
     "acquisition_basis": { "enum": ["selected_first_party_click", "selected_verified_platform", "selected_imported_provider"] },
     "import_provider": { "type": "string", "pattern": "^[a-z0-9-]{1,64}$" },
     "calendar_cohort_policy": { "const": "cumulative_revenue_on_day_activity" },
+    "retention_maturity_policy": { "const": "complete_activity_window" },
     "acquisition_dimension_policy": { "const": "selected_link_ad_group_creative" },
     "conversion_event_key": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
     "engagement_credit_policy": { "const": "latest_eligible_open_before_outcome" },
@@ -61,6 +62,45 @@
     "rule_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
   },
   "$defs": {
+    "standardRetention": {
+      "type": "object", "additionalProperties": true,
+      "required": ["retention_maturity_policy", "acquisition_basis", "grouping_dimensions", "activity_events", "ratio_scale"],
+      "properties": {
+        "metric_definition_version": { "const": "0.4.24" },
+        "rule_bundle_id": { "const": "metric-standard-retention" },
+        "rule_bundle_version": { "const": "0.4.24" },
+        "rule_bundle_hash": { "const": "2513250a718d0ffb486c0ae33d09a4e88e31b17076b95ab998c211bb9ffda8de" },
+        "anchor_event": { "const": "install" }, "aggregation_time_zone": { "const": "UTC" },
+        "value_type": { "const": "ratio" }, "ratio_scale": { "const": 6 },
+        "retention_maturity_policy": { "const": "complete_activity_window" },
+        "activity_events": { "const": ["session_start"] },
+        "definition": {
+          "type": "object", "additionalProperties": true, "required": ["denominator"],
+          "properties": { "calculation": { "const": "active_installations_over_cohort" },
+            "numerator": { "const": "active_installations" }, "denominator": { "const": "cohort_size" },
+            "window": { "type": "object", "additionalProperties": true,
+              "properties": { "type": { "const": "activity_day" }, "day": { "enum": [3, 14, 30] } } }, "cost_basis": false }
+        },
+        "currency": false, "amount_scale": false, "event_names": false, "calendar_cohort_policy": false,
+        "acquisition_dimension_policy": false, "conversion_event_key": false,
+        "engagement_credit_policy": false, "cost_selection_policy": false, "refund_reversal_policy": false
+      },
+      "allOf": [
+        { "if": { "properties": { "acquisition_basis": { "const": "selected_first_party_click" } }, "required": ["acquisition_basis"] },
+          "then": { "properties": { "metric_name": { "type": "string", "pattern": "^retention_d(3|14|30)(_(gross|net))?$" },
+            "import_provider": false, "grouping_dimensions": { "const": ["campaign_id", "network", "country", "cohort_date", "attribution_status"] } } },
+          "else": { "properties": { "grouping_dimensions": { "const": ["campaign_id", "network", "country", "cohort_date", "attribution_status", "ad_group_id"] } },
+            "if": { "properties": { "acquisition_basis": { "const": "selected_verified_platform" } }, "required": ["acquisition_basis"] },
+            "then": { "properties": { "metric_name": { "type": "string", "pattern": "^platform_retention_d(3|14|30)(_(gross|net))?$" }, "import_provider": false } },
+            "else": { "required": ["import_provider"], "properties": { "acquisition_basis": { "const": "selected_imported_provider" },
+              "metric_name": { "type": "string", "pattern": "^imported_retention_d(3|14|30)(_(gross|net))?$" } } } } },
+        { "anyOf": [
+          { "properties": { "metric_name": { "type": "string", "pattern": "_d3(_|$)" }, "definition": { "type": "object", "additionalProperties": true, "properties": { "window": { "type": "object", "additionalProperties": true, "properties": { "day": { "const": 3 } } } } } } },
+          { "properties": { "metric_name": { "type": "string", "pattern": "_d14(_|$)" }, "definition": { "type": "object", "additionalProperties": true, "properties": { "window": { "type": "object", "additionalProperties": true, "properties": { "day": { "const": 14 } } } } } } },
+          { "properties": { "metric_name": { "type": "string", "pattern": "_d30(_|$)" }, "definition": { "type": "object", "additionalProperties": true, "properties": { "window": { "type": "object", "additionalProperties": true, "properties": { "day": { "const": 30 } } } } } } }
+        ] }
+      ]
+    },
     "acquisitionKpi": {
       "type": "object",
       "additionalProperties": true,
@@ -108,6 +148,12 @@
     }
   },
   "allOf": [{
+    "if": { "anyOf": [
+      { "properties": { "retention_maturity_policy": {} }, "required": ["retention_maturity_policy"] },
+      { "properties": { "rule_bundle_id": { "const": "metric-standard-retention" } }, "required": ["rule_bundle_id"] }
+    ] },
+    "then": { "$ref": "#/$defs/standardRetention" },
+    "else": { "allOf": [{
     "if": { "anyOf": [
       { "properties": { "rule_bundle_id": { "const": "metric-acquisition-kpis" } }, "required": ["rule_bundle_id"] },
       { "properties": { "metric_name": { "type": "string", "pattern": "^acquisition_d7_" } }, "required": ["metric_name"] },
@@ -2224,4 +2270,5 @@
     }
     ] }
   }]
+  } }]
 }

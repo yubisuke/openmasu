@@ -2299,7 +2299,8 @@ if (!summaryOnly) {
       }
     });
     it("joins retention activity to the same selected and fraud-filtered cohort in TypeScript and Python", () => {
-      const cases = syntheticRetentionCases(fixture("58-selected-native-acquisition").input);
+      const cases = syntheticRetentionCases(fixture("58-selected-native-acquisition").input,
+        fixture("66-verified-platform-acquisition").input, fixture("67-imported-provider-acquisition").input);
       const python = pythonOutputs(cases.map(entry => entry.input));
       for (const [index, entry] of cases.entries()) {
         const output = evaluate(entry.input);
@@ -2310,7 +2311,19 @@ if (!summaryOnly) {
         for (const [name, expected] of Object.entries(entry.expected)) {
           check(output.metric_runs.find(row => row.metric_name === name)?.value_unscaled === expected, `${entry.name}: ${name} must equal ${expected}`);
         }
+        for (const [name, reason] of Object.entries(entry.undefinedReasons ?? {})) {
+          const run = output.metric_runs.find(row => row.metric_name === name);
+          check(run?.value_state === "undefined" && run.value_unscaled === undefined && run.undefined_reason === reason, `${entry.name}: ${name} must be absent with ${reason}`);
+        }
         check(equal(output, python[index]), `${entry.name}: full artifact TS/Python parity`);
+      }
+      const standard = structuredClone(cases.find(entry => entry.name === "standard-multiple-sessions-one-installation")!.input);
+      for (const mutate of [(definition: Any) => { delete definition.retention_maturity_policy; },
+        (definition: Any) => { definition.definition.window.day = 4; }]) {
+        const invalid = structuredClone(standard); mutate(invalid.metric_definitions[0]);
+        check(!validatorFor("urn:openmasu:schema:metric-definition:v0.4")(invalid.metric_definitions[0]), "incomplete standard retention profile accepted");
+        check(!capture(() => evaluate(invalid)).ok, "TS accepted changed retention meaning");
+        check(!capture(() => pythonOutputs([invalid])).ok, "Python accepted changed retention meaning");
       }
     });
     it("keeps daily event counts bound to one date and one supported event", () => {

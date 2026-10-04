@@ -17,6 +17,8 @@ export {
 } from "./m1b-metric-definitions.js";
 export { M3_METRIC_DEFINITIONS, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "./m3-metric-definitions.js";
 export { calendarAcquisitionMetricDefinitions } from "./calendar-metric-definitions.js";
+export { STANDARD_RETENTION_DAYS, standardRetentionMetricDefinitions, standardRetentionClosesAt,
+  type StandardRetentionDay } from "./standard-retention-definitions.js";
 export { ACQUISITION_KPI_METRIC_DEFINITIONS, ACQUISITION_KPI_VERSION, ACQUISITION_KPI_BUNDLE,
   ACQUISITION_KPI_ROLES, acquisitionKpiRole, type AcquisitionKpiRole } from "./acquisition-kpi-definitions.js";
 export { DATED_FX_POLICY_VERSION, DATED_FX_RATE_SELECTION, validDatedFxPolicy, canonicalDatedFxPolicy,

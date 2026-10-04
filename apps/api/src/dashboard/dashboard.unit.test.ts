@@ -14,6 +14,7 @@ import { captureMetricComparisonContext } from "@openmasu/runtime";
 import { comparisonDigest } from "../cohort-comparison.js";
 import { buildRetentionMatrices } from "./retention-matrix.js";
 import { parseCsv } from "@openmasu/runtime/import-normalization";
+import { standardRetentionMetricDefinitions } from "@openmasu/contracts/definitions";
 
 function metric(overrides: Partial<MetricReportRow> = {}): MetricReportRow {
   return {
@@ -123,6 +124,38 @@ describe("M3 zero-JavaScript dashboard", () => {
     assert.match(html, /saved%3A2026-08-01%3A7\/explanation/);
     assert.match(html, /Conservative window end not reached/);
     assert.deepEqual(buildRetentionMatrices([...rows].reverse(), false), view.retention);
+  });
+
+  it("keeps standard retention maturity in saved comparison meaning and never renders immature cells as zero", () => {
+    const definitions = standardRetentionMetricDefinitions();
+    const fx = { policy_version: "synthetic-retention", target_currency: "USD", target_scale: 6,
+      rounding_mode: "half_even" as const, rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0, as_of: "1970-01-01T00:00:00.000Z" }] };
+    const rows = definitions.map(definition => {
+      const immature = definition.definition.window.day !== 3;
+      const row = metric({ metric_run_id: `standard:${definition.metric_name}`, metric_name: definition.metric_name,
+        metric_definition_version: definition.metric_definition_version, rule_bundle_id: definition.rule_bundle_id,
+        rule_bundle_hash: definition.rule_bundle_hash, policy_versions: [`rule_bundle:${definition.rule_bundle_version}`],
+        ratio_scale: 6, grouping: { cohort_date: "2026-08-06" }, input_received_at_watermark: "2026-08-12T00:00:00.000Z",
+        value_state: immature ? "undefined" : "present", value_unscaled: immature ? undefined : "0",
+        undefined_reason: immature ? "observation_window_not_elapsed" : undefined });
+      return { ...row, comparison_context: captureMetricComparisonContext(row, definition, fx, "before", comparisonDigest) };
+    });
+    const view = buildDashboardView({ apps: [], selectedAppId: "app-a", metrics: { data: rows }, csrfToken: "synthetic" });
+    assert.equal(view.retention.matrices.length, 1);
+    assert.deepEqual(view.retention.matrices[0].days, [3, 14, 30]);
+    const meaning = view.retention.matrices[0].meaning;
+    assert.ok("retention_maturity_policy" in meaning);
+    assert.equal(meaning.retention_maturity_policy, "complete_activity_window");
+    assert.equal(view.retention.matrices[0].cohorts[0].cells[2].observations[0].closesAt, "2026-09-07T00:00:00.000Z");
+    const html = renderDashboard(view);
+    assert.match(html, /— \(observation_window_not_elapsed\)/);
+    for (const name of ["retention_d14", "retention_d30"]) {
+      assert.doesNotMatch(html, new RegExp(`data-metric-run-id="standard:${name}"[^>]*data-value-unscaled=`));
+    }
+    const csv = parseCsv(encodeMetricReport({ data: rows }, "csv").body, true);
+    assert.deepEqual(csv.map(row => [row.metric_name, row.value_unscaled, row.undefined_reason]),
+      [["retention_d3", "0", ""], ["retention_d14", "", "observation_window_not_elapsed"], ["retention_d30", "", "observation_window_not_elapsed"]]);
+    assert.deepEqual(metricCharts(rows)[1].series, [undefined]);
   });
 
   it("never merges retention snapshots or incompatible saved populations policies grouping and cutoffs", () => {

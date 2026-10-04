@@ -1,6 +1,6 @@
 import { sha256 } from "./canonical.js";
 import { selectDisjointCosts } from "./cost-selection.js";
-import { cohortCalendarDayIndex, canonicalDatedFxPolicy, selectDatedFxRate, type CohortTimeZone, type DatedFxPolicyInput } from "@openmasu/contracts/definitions";
+import { cohortCalendarDayIndex, canonicalDatedFxPolicy, selectDatedFxRate, standardRetentionClosesAt, type CohortTimeZone, type DatedFxPolicyInput } from "@openmasu/contracts/definitions";
 import { selectPlatformAcquisition, platformAcquisitionDimensions, selectedPlatformProofRows } from "./platform-acquisition.js";
 import { engagementInputs, engagementSnapshotRows, engagementValue } from "./engagement-metrics.js";
 import { REFERENCE_AD_REVENUE_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
@@ -399,7 +399,10 @@ export function metricRuns(
             : roundHalfEven(BigInt(converted.size) * 1_000_000n, cohortSize);
         }
       } else if (definition.definition.calculation === "active_installations_over_cohort") {
-        if (cohortSize === 0n) {
+        const closesAt = standardRetentionClosesAt(definition, evaluation.grouping?.cohort_date);
+        if (closesAt && evaluation.input_received_at_watermark < closesAt) {
+          undefined_reason = "observation_window_not_elapsed";
+        } else if (cohortSize === 0n) {
           undefined_reason = "empty_cohort";
         } else {
           const activityEvents = new Set(definition.activity_events ?? ["session_start"]);

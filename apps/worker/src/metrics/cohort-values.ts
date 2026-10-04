@@ -1,4 +1,5 @@
 import type { RoasOperands, TotalNetRoasOperands } from "@openmasu/runtime";
+import { standardRetentionClosesAt } from "@openmasu/contracts/definitions";
 import { metricAcquisitionSql, metricAcquisitionJoinSql } from "./selected-acquisition.js";
 import { engagementMetricValue } from "./engagement.js";
 import { customConversionValue, eventCountValue } from "./event-values.js";
@@ -336,6 +337,8 @@ export async function metricValue(
   selectedCosts?: CostSelection,
 ): Promise<MetricValue> {
   const calculation = definition.definition.calculation;
+  const closesAt = standardRetentionClosesAt(definition, grouping?.cohort_date);
+  if (closesAt && watermark < closesAt) return { value_state: "undefined", undefined_reason: "observation_window_not_elapsed" };
   if (definition.engagement_credit_policy) {
     return engagementMetricValue(client, scope, watermark, grouping, definition, fxPolicy, privacyState);
   }

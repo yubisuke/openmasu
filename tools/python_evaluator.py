@@ -1202,6 +1202,34 @@ def metric_definitions(value: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def validate_metric_definition_series(definition: dict[str, Any]) -> None:
+    if ("retention_maturity_policy" in definition or definition.get("rule_bundle_id") == "metric-standard-retention"):
+        basis = definition.get("acquisition_basis")
+        prefix = {"selected_first_party_click": "", "selected_verified_platform": "platform_", "selected_imported_provider": "imported_"}.get(basis)
+        day = definition.get("definition", {}).get("window", {}).get("day")
+        expected = {
+            "metric_name": f"{prefix}retention_d{day}", "metric_definition_version": "0.4.24",
+            "anchor_event": "install", "aggregation_time_zone": "UTC", "value_type": "ratio", "ratio_scale": 6,
+            "definition": {"calculation": "active_installations_over_cohort", "numerator": "active_installations",
+                           "denominator": "cohort_size", "window": {"type": "activity_day", "day": day}},
+            "activity_events": ["session_start"], "acquisition_basis": basis,
+            "retention_maturity_policy": "complete_activity_window",
+            "grouping_dimensions": ["campaign_id", "network", "country", "cohort_date", "attribution_status"] + ([] if basis == "selected_first_party_click" else ["ad_group_id"]),
+            "rule_bundle_id": "metric-standard-retention", "rule_bundle_version": "0.4.24",
+            "rule_bundle_hash": "2513250a718d0ffb486c0ae33d09a4e88e31b17076b95ab998c211bb9ffda8de",
+        }
+        if basis == "selected_imported_provider":
+            provider = definition.get("import_provider")
+            if not isinstance(provider, str) or not re.fullmatch(r"[a-z0-9-]{1,64}", provider):
+                raise ValueError("standard_retention_basis_invalid")
+            expected["import_provider"] = provider
+        policy = definition.get("fraud_policy")
+        if policy is not None:
+            expected["fraud_policy"] = policy
+        if definition.get("metric_name") in (f"{prefix}retention_d{day}_gross", f"{prefix}retention_d{day}_net"):
+            expected["metric_name"] = definition["metric_name"]
+        if prefix is None or day not in (3, 14, 30) or isinstance(day, bool) or policy not in (None, "gross", "net") or definition != expected:
+            raise ValueError(f"metric_definition_series_mismatch:{definition['metric_name']}")
+        return
     if (definition.get("rule_bundle_id") == "metric-acquisition-kpis" or definition["metric_name"].startswith("acquisition_d7_")
             or definition["definition"]["calculation"] in {"cost_sum", "cost_over_cohort"}):
         operations = {"installs": ("cohort_size", "cohort_size", "count"), "cost": ("cost_sum", "cost", "money"),
@@ -2162,7 +2190,15 @@ def metric_runs(
                             converted.add(installation["record"]["payload"]["installation_id"])
                     amount = len(converted) if calculation == "converted_installations" else round_half_even(len(converted) * 1000000, cohort_size)
             elif calculation == "active_installations_over_cohort":
-                if cohort_size == 0:
+                closes_at = None
+                if definition.get("retention_maturity_policy"):
+                    cohort_date = evaluation.get("grouping", {}).get("cohort_date")
+                    if not isinstance(cohort_date, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", cohort_date):
+                        raise ValueError("standard_retention_cohort_date_required")
+                    closes_at = datetime.fromisoformat(cohort_date).replace(tzinfo=timezone.utc) + timedelta(days=definition["definition"]["window"]["day"] + 2)
+                if closes_at and timestamp(evaluation["input_received_at_watermark"], "input_received_at_watermark") < closes_at:
+                    undefined_reason = "observation_window_not_elapsed"
+                elif cohort_size == 0:
                     undefined_reason = "empty_cohort"
                 else:
                     event_names = set(definition.get("activity_events", ["session_start"]))
