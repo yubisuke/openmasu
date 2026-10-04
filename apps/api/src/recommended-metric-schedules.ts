@@ -29,7 +29,7 @@ export function expandRecommendedMetricSchedule(body: Json, observedKeys: readon
     ...[...keys].sort().flatMap(key => keyedCustomConversionMetricDefinitions(key)),
   ];
   return { lag_days: lag, ...(body.start_date !== undefined ? { start_date: body.start_date } : {}),
-    // Identity conversion, not an FX feed. Non-USD money is undefined, never relabelled USD.
+    // USD-only identity, not an FX feed; foreign money needs explicit advanced FX configuration.
     fx_policy: { policy_version: "recommended-usd-identity-v1", target_currency: "USD", target_scale: 6,
       rounding_mode: "half_even", rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0,
         source: "same-currency-identity-no-fx-feed", as_of: "1970-01-01T00:00:00.000Z" }] },

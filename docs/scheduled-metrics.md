@@ -47,8 +47,10 @@ set** on this page. No handwritten definition JSON is required:
 
 The SDK, ingestion, calculation and comparison states are separate retained
 observations, not a conversion funnel or proof that an external source is
-complete. SDK keys do not prove device connectivity. Missing cost, FX or
-activity stays undefined with a reason; organic and unattributed stay separate.
+complete. SDK keys do not prove device connectivity. Missing cost yields
+undefined with a reason; organic and unattributed stay separate. Currency/FX
+mismatches fail the calculation and require an explicit advanced configuration.
+Zero observed sessions is not proof of complete activity delivery.
 USD uses mathematical identity, not a fabricated or live FX rate. The form
 does not enable provider access. Platform/imported acquisition, other currencies,
 net fraud policies and other windows require explicit advanced definitions; they
