@@ -30,7 +30,7 @@
     "db:migrate": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/runtime/src/migrate.ts",
     "db:schema:dump": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/runtime/src/schema-snapshot.ts --write",
     "db:schema:check": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/runtime/src/schema-snapshot.ts --check",
-    "test:db-invariants": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/runtime/src/db-invariants.test.ts && node --env-file-if-exists=.env --import tsx apps/runtime/src/role-grants.integration.test.ts"
+    "test:db-invariants": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/runtime/src/db-invariants.test.ts && node --env-file-if-exists=.env --import tsx apps/runtime/src/role-grants.db.test.ts"
   },
   "dependencies": {
     "@openmasu/attribution-core": "0.4.0",

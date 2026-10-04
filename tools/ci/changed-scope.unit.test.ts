@@ -70,8 +70,19 @@ describe("CI changed-scope classifier", () => {
     }
     const scripts = JSON.parse(readFileSync("package.json","utf8")).scripts as Record<string,string>;
     const runtime = readFileSync(".github/workflows/runtime.yml","utf8");
-    assert.match(runtime,/^\s+npm test$/m);
-    assert.match(runtime,/^\s+npm run test:integration$/m);
+    for (const command of ["npm test", "npm run test:integration", "npm run test:db-invariants"]) {
+      assert.equal(runtime.split(/\r?\n/).filter(line => line.trim() === command).length, 1, `${command} must have one CI owner`);
+    }
+    assert.equal((runtime.match(/\bnpm run test:backup-restore\b/g) ?? []).length, 1, "backup/restore must not repeat its entire suite");
+    const databaseScripts = JSON.parse(readFileSync("apps/runtime/package.json", "utf8")).scripts as Record<string,string>;
+    for (const command of [scripts["test:backup-restore"], databaseScripts["test:db-invariants"]]) {
+      const files = command.match(/apps\/[^\s"]+\.ts/g) ?? [];
+      assert.ok(files.length > 0, "dedicated database suites retain their test files");
+      for (const file of files) {
+        assert.ok(!file.endsWith(".integration.test.ts") && !file.endsWith(".unit.test.ts"), `${file} is duplicated by a bulk suite`);
+        readFileSync(file, "utf8");
+      }
+    }
     for (const alias of ["test:m2a","test:financial-parity","test:dashboard-parity"]) {
       const files = scripts[alias].match(/(?:apps|packages)\/[^\s"]+\.ts/g) ?? [];
       assert.ok(files.length > 0,alias);

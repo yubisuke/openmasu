@@ -31,7 +31,7 @@ for all application integration files. Do not repeat subsets afterwards:
 | `test:m2a` | Unit suite plus application integration suite |
 | `test:financial-parity` | Unit suite plus application integration suite |
 | `verify:consistency` / `test:dashboard-parity` | Application integration suite |
-| `test:privacy-e2e` | Application integration suite plus opt-in backup/restore step |
+| `test:privacy-e2e` | Application integration suite plus dedicated backup/restore suite |
 
 Those aliases remain useful for a focused local edit; their test files and
 assertions remain unchanged. CI no longer repeats them. At the recorded baseline
@@ -41,10 +41,20 @@ consumed 20 seconds. This is not a promised runtime reduction on every runner.
 Windows/Linux contract validation
 remains; known offline comparison edits run only their three existing tool test
 files on both OSes when Runtime is not already running the unit suite. They no
-longer run every unrelated application's unit test. Backup/restore repetition
-remains a regression check for repeated
-connection cleanup. PostgreSQL parity, role isolation, and disposable Compose
+longer run every unrelated application's unit test. Database privileges use
+`role-grants.db.test.ts` inside `test:db-invariants`, not the integration glob.
+Restored privacy and release upgrades use `privacy-reapply.backup.test.ts` inside
+`test:backup-restore`, also outside that glob. CI runs that suite once with its
+restore environment enabled. Its four existing cases retain idempotent
+reapplication, real dump/restore, frozen-release upgrade, pool shutdown and
+connection-drain assertions; a second identical command adds no new scenario.
+PostgreSQL parity, role isolation, and disposable Compose
 tests cover different boundaries and are not replaced by evaluator unit tests.
+
+The pilot's source-spelling check was removed. The disposable Compose pilot
+still creates a tracking link and checks its public redirector URL and actual
+redirect response. Reading the spelling of that smoke command or its error
+message does not add behavioral evidence.
 
 The module-boundary unit file scans the actual production graph once, then uses
 small invalid graphs to exercise its rejection behavior. It no longer scans the

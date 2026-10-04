@@ -84,9 +84,7 @@ jobs:
           npm run check:fraud-artifacts
       - name: Verify backup restore and completed privacy reapplication
         if: steps.scope.outputs.run_runtime == 'true'
-        run: |
-          OPENMASU_M5_BACKUP_RESTORE=1 OPENMASU_M5_PG_TOOLS=docker npm run test:backup-restore
-          OPENMASU_M5_BACKUP_RESTORE=1 OPENMASU_M5_PG_TOOLS=docker npm run test:backup-restore
+        run: OPENMASU_M5_BACKUP_RESTORE=1 OPENMASU_M5_PG_TOOLS=docker npm run test:backup-restore
       - name: Reproduce contract goldens through PostgreSQL
         if: steps.scope.outputs.run_runtime == 'true'
         run: npm run seed && npm run verify:parity

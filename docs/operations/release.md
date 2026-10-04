@@ -33,29 +33,28 @@ Use the pinned Node, npm, and Python versions:
 ```bash
 npm ci
 python -m pip install --require-hashes --requirement requirements-contract.txt
-npm run pilot:preflight
-npm run pilot:synthetic -- --disposable
 npm run validate
+npm run pilot:preflight
 ```
 
 The preflight records unavailable device/provider/production gates as `not_run`.
-The synthetic pilot proves the disposable runtime path. Neither is live-provider
-or production evidence.
+The synthetic pilot in Runtime CI proves the disposable runtime path. Neither
+preflight nor CI is live-provider or production evidence. For a local runtime
+investigation, `npm run pilot:synthetic -- --disposable` is available; do not
+repeat it just because the exact candidate's full Runtime job has passed.
 
-Run the relevant additional gates:
+Reuse the full workflow results at the exact candidate commit. Each correctness
+suite has one owner; do not stack its focused aliases or repeat it locally after
+that owner has passed:
 
-```bash
-npm test
-npm run test:integration
-npm run test:db-invariants
-npm run verify:parity
-npm run test:metric-parity
-npm run test:dashboard-parity
-npm run test:privacy-e2e
-npm run test:backup-restore
-npm run check:threat-model
-npm run check:operational-logs
-```
+| Evidence | Existing full CI owner |
+| --- | --- |
+| Schemas, goldens, TypeScript/Python parity, documentation, type checks and SDK packager unit tests | Contract validation on Windows and Linux |
+| Runtime unit and application integration behavior, including dashboard consistency and signed ingestion | Runtime's unit and integration suites |
+| RLS, role grants, schema idempotency, persisted golden parity and SQL calculations | Runtime's database and metric gates |
+| Backup/restore, deletion reapplication and frozen-release upgrade | Runtime's dedicated backup/restore suite, run once with restore enabled |
+| Disposable Compose startup, restart and HTTP smoke checks | Runtime's synthetic pilot |
+| Operational logging, runtime SBOMs and relevant synthetic performance floors | Runtime's remaining full gates |
 
 Run the pinned Android and iOS workflows at the exact candidate commit. Their
 jobs include the Unity package and bridge gates plus the Android emulator and
@@ -70,11 +69,10 @@ intentionally skipped.
 
 ## 3. Verify identities and documentation
 
-```bash
-npm run check:release-version
-npm run check:doc-drift
-npm run verify:contract-rename
-```
+Contract CI already checks release identity, documentation inventory and contract
+rename compatibility. Use their standalone commands only when investigating a
+specific mismatch; do not rerun them after full validation merely to produce a
+second receipt.
 
 Confirm:
 
@@ -89,14 +87,19 @@ Confirm:
 
 ## 4. Build reproducible SDK artifacts
 
+Android CI already performs the two-pass reproducibility check and standalone
+Unity package consumer gate. Acquire its bundle at the exact green candidate
+commit for publication. If investigating packaging locally before freezing the
+candidate, use the existing reproducibility command once:
+
 ```bash
-npm run sbom
-npm run test:sdk-release-tool
-npm run build:sdk-release
 python tools/build-sdk-release.py --reproducibility-check
-npm run check:sdk-release
-npm run test:unity-upm
 ```
+
+It builds both passes and verifies their manifest and bytes; do not precede it
+with another `build:sdk-release` run. Packager unit tests already belong to
+`validate`; the standalone Unity consumer test is a focused diagnostic, not a
+second release checklist after Android CI.
 
 The packager regenerates the ignored SDK SBOM and Android binary inputs from a
 clean checkout before it creates the bundle. It does not trust existing
