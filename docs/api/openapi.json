@@ -1895,7 +1895,8 @@
                   "no_activity_events",
                   "empty_cohort",
                   "overlapping_cost_grains",
-                  "missing_fx_rate"
+                  "missing_fx_rate",
+                  "observation_window_not_elapsed"
                 ]
               },
               {
@@ -2175,7 +2176,8 @@
                     "no_activity_events",
                     "empty_cohort",
                     "overlapping_cost_grains",
-                    "missing_fx_rate"
+                    "missing_fx_rate",
+                    "observation_window_not_elapsed"
                   ]
                 }
               }
