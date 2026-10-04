@@ -240,8 +240,9 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
       assert.deepEqual(result.deliveries.map(row => row.ingestion_status).sort(), ["accepted","accepted","rejected"], mode);
       assert.ok(result.deliveries.every(row => !("diagnostic_event_name" in row)), "operational metadata must not alter artifacts");
     }
-    const duplicate: CandidateAttempt = { ...accepted, record: { ...accepted.record,
-      record_id: `synthetic-recent-retry-${suffix}`, delivery_id: `delivery:synthetic-recent-retry-${suffix}` } };
+    const duplicateAt = at(0.25);
+    const duplicate: CandidateAttempt = { ...accepted, server: { ...accepted.server, received_at: duplicateAt }, record: { ...accepted.record,
+      record_id: `synthetic-recent-retry-${suffix}`, delivery_id: `delivery:synthetic-recent-retry-${suffix}`, received_at: duplicateAt } };
     const duplicateResult = await ingestRuntimeBatch([duplicate], appPool, [accepted]);
     assert.equal(duplicateResult.deliveries.length, 1);
     assert.equal(duplicateResult.deliveries[0].duplicate_resolution, "duplicate_delivery");
