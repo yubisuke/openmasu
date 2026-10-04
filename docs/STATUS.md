@@ -1,336 +1,82 @@
 # Project Status
 
-Status date: 2026-10-04.
-
-`v0.3.0-rc.1` is the current published source and SDK release (prerelease).
-Its annotated tag,
-[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.1),
-eight public SDK assets and every required full platform gate identify green
-commit `90a0f5f`. The [publication receipt](validation/v0.3.0-rc.1-publication.md)
-records public re-download verification. This document describes the
-current `main` source tree; tagged release notes
-and evidence manifests remain authoritative only for the exact source revision
-they name.
+Updated: 2026-10-04. This page describes the current `main` source tree.
+Implementation and synthetic verification are not live operational qualification.
 
 ## Release snapshot
 
-The current development [dated FX profile](fx-snapshots.md) adds explicit
-currency/date conversion for revenue and costs, missing-rate undefined results,
-saved snapshot replay and shared comparison/report provenance. Its rate values
-and tests are synthetic; no live FX feed or accounting treatment is claimed.
-The [acquisition KPI profile](acquisition-kpis.md) adds saved cost/CPI and
-side-by-side count, ad/purchase-net/total-net revenue and ROAS only for a
-complete matching native first-party D7 set. Partial, mixed or immature results
-are not promoted to a decision-ready panel.
-The opt-in [standard retention horizons](standard-retention.md) reuse the same
-eligible installation populations and elapsed activity days. D3/D14/D30 are
-absent before their complete-window cutoff, not 0%; old D1/D7 remains unchanged.
+| Line | Identity and evidence |
+| --- | --- |
+| Published prerelease | `v0.3.0-rc.1` at `90a0f5f`; eight SDK assets and exact-tag publication evidence |
+| Latest stable source release | `v0.2.0`; later features belong to newer source, not this tag |
+| Current source | Contract patch ledger through v0.4.24; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 71 fixtures, 923 golden artifacts |
 
-| Source line | Contract patch ledger | Reviewed inventory | Release meaning |
-| --- | --- | --- | --- |
-| `v0.2.0-rc.3` tag | through v0.4.9 | 56 fixtures / 728 golden artifacts | Previously published prerelease and frozen historical evidence |
-| `v0.2.0-rc.4` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Previously published prerelease and frozen exact-commit evidence |
-| `v0.2.0` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Published non-prerelease at green commit `68b8c48`; frozen exact-commit evidence |
-| `v0.3.0-rc.1` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Current published prerelease at green commit `90a0f5f`; eight SDK assets and exact-commit synthetic evidence |
-| Current development source | through v0.4.24 | 71 fixtures / 923 golden artifacts | Adds opt-in mature D3/D14/D30 retention, same-set first-party acquisition KPIs, dated FX, calendar-zone, imported-provider and verified-platform cohorts, daily native counts, safe costs and commerce; not included in the published SDK release |
+`v0.3.0-rc.1` is the current published source and SDK release, marked as a
+prerelease. Its [release page](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.1),
+[synthetic evidence](validation/v0.3.0-rc.1-synthetic-evidence.md) and
+[publication receipt](validation/v0.3.0-rc.1-publication.md) describe that exact tag.
+Configured SDK version remains `0.3.0-rc.1`; current source is not a newly
+published SDK. [Unreleased scope](releases/next.md) summarizes the difference.
 
-The Contract wire and package identity remains `0.4.0`; v0.4.24 is the latest
-additive patch ledger entry. The published SDK version is `0.3.0-rc.1`.
-Its [distribution guide](sdk-distribution.md) separates compiled Android
-modules from source-distributed Swift and Unity. Publication has a matching
-annotated tag, exact-commit full CI and verified Release assets; later `main`
-commits do not alter this record or substitute for its evidence.
-The rc.4 tag, GitHub prerelease, and exact-commit platform evidence remain
-frozen at `2a2f6b5`; the stable v0.2.0 record is independently frozen at
-`68b8c48`. A version string alone never proves publication or exact-commit
-validation.
+## What the status means
 
-## How to read status
+- **Implemented:** code exists.
+- **Synthetically verified:** the relevant repository or CI gate passed.
+- **Operator-verified:** a named private deployment/device/provider check passed.
+- **Unverified:** the required evidence has not been collected; it is not a pass.
 
-- **Implemented**: the code and public interfaces exist.
-- **Synthetically verified**: checked-in synthetic inputs pass the named local
-  or CI gate.
-- **Operator verification open**: a private deployment, device, domain,
-  provider account, or store environment is still required.
-- **Out of scope**: the project deliberately does not provide the capability.
+All capabilities below are implemented with synthetic evidence unless a narrower
+qualification is stated. No row establishes production readiness.
 
-A synthetic pass proves contract and code behavior only. It does not prove live
-provider connectivity, real-device or campaign delivery, platform approval,
-production capacity, operator acceptance, or metric equivalence with another
-MMP.
+## Current capabilities and limits
 
-## Current capability status
-
-| Capability | Repository state | Open operational evidence |
+| Capability | Current source | Residual boundary |
 | --- | --- | --- |
-| Contract and deterministic evaluator | Implemented and synthetically verified across 28 schemas, 8 registries, 69 fixtures, and 897 goldens | Real input representativeness and external implementation adoption; calendar zones qualified only for UTC/Tokyo/New York, engine time-zone data upgrades require boundary requalification |
-| Shadow ledger and imports | Implemented for raw events, manual/bounded provider cost, and advertising or verified-commerce revenue | Authorized real export compatibility, account permissions, completeness, latency, and reconciliation |
-| Server-to-server events | Implemented for selected first-party backend events with app-scoped rotatable HMAC keys, durable inbox admission, contract rejection, replay controls, and deletion-race enforcement | Production TLS, secret custody, sustained load, backend integration, and operator acceptance |
-| Operator event webhooks | Implemented as a default-off, app-scoped export of selected accepted events with exact-origin egress policy, destination-scoped references, exact-body HMAC, durable retry, deletion-race enforcement, and bounded reader-safe delivery health | Production receiver, DNS/TLS, capacity, alerting, secret custody, downstream retention/deletion, and operator acceptance |
-| Operator bulk event exports | Implemented as a default-off, app-scoped deterministic gzip NDJSON export to allowlisted S3-compatible operator storage, with SigV4, conditional create, digest-verified replay, durable keyset cursors, destination-scoped deletion rows, and bounded reader-safe batch health | Live Amazon S3/Cloudflare R2 account, IAM policy, DNS/TLS, lifecycle/replication, throughput, cost, alerting, downstream deletion, and operator acceptance |
-| Attribution and difference audit | Implemented for supported deterministic and aggregate evidence families | Same-cohort comparison with an existing MMP under frozen definitions |
-| Cohort metrics and exports | Implemented for versioned revenue, cost, FX, retention, ROAS, LTV, JSON, CSV, dashboard output, and app-scoped durable daily schedules with exact replay | Real currency/time-zone coverage, source-dashboard reconciliation, schedule/alert operation, and operator acceptance |
-| Explicit schedule replacement | Atomic disable/register with reader-only preview, same/different meaning modes, explicit full-key source handoffs, claim fencing, idempotent confirmation and API/SSR schedule-series selection | Larger than 10,000 candidate historical runs, unknown legacy provenance/meaning, live operational acceptance; old downloaded comparison files are not current live values |
-| Metric freshness observations | Shared JSON/CSV/HTML and saved-comparison projection of conservative time-window maturity, retained app source receipts, import completion and existing recalculation state | App receipts are not cohort/provider coverage; unknown upstream arrival, partial retained history and real-provider completeness remain unverified |
-| Selected cost correction | Implemented through bounded app/import/date/watermark requests, SSR condition review and reader-visible jobs, saved-definition replay, input-revision/pending labels and atomic old/new run supersession | Live revision completeness, unavailable legacy meaning, production load and operator acceptance; value differences do not prove causes |
-| Automatic metric correction | Opt-in finite-period policies, atomic late/cost/selected-attribution receipts, bounded frozen target pages, stop/resume and existing job/successor status | Narrow saved revenue LTV/ROAS selectors only; older pre-policy history, other profiles, provider completeness and production-scale concurrency remain outside the synthetic proof |
-| Android, iOS, and Unity SDKs | Implemented with JVM, emulator, Swift, simulator, reproducible packaging, standalone UPM dependency resolution, and a synthetic Unity 6 Android export/APK gate | Physical devices, Unity 2022.3, iOS Unity export, store delivery, and live provider signals |
-| Dashboard and management API | Implemented with server-rendered HTML, RBAC, sessions, RLS, and shared report encoders | Production TLS, browser/operator acceptance, and deployment-specific identity integration |
-| External HTTP usage contract | Limited OpenAPI description covers backend HMAC admission and three read-only report routes; generated schema/query/column references and one real-loopback client case reuse existing gates | Full API coverage, third-party generator/validator compatibility, real backend/network operation; no new gateway or SDK |
-| Fraud and integrity evidence | Implemented with deterministic public rules, bundle provenance, aggregates, and synthetic provider normalization | Live integrity projects, threshold calibration, false-positive measurement, and device-farm coverage |
-| Deep links and re-engagement | Implemented for direct Android/iOS and deferred Android flows plus separate aggregate AdAttributionKit re-engagement postbacks | Real domains, association propagation, devices, stores, Apple delivery, and long-running observation |
-| Verified commerce lifecycle | Implemented with authenticated synthetic Google and Apple lifecycle/read-back paths plus per-row claims and privacy-fenced completion | Live credentials, quotas, delivery, key rotation, unmatched App Store installation linkage, entitlement, tax, payout, and provider-side duplicate behavior |
-| Operations and release | Implemented for bootstrap, migration, scheduler state, metrics, DB-first durable privacy purge and restore reapplication, SBOMs, and release packaging | Production hosting, alerts, real backup recovery, incident response, and measured capacity |
-| Storage visibility | Read-only privileged CLI reports scoped/timestamped DB allocation and row estimates plus encrypted-object/key file metadata, with safe unavailable states and bounded reads | Host free space, remote/backup copies, actual growth and representative capacity/cost; no automatic retention/purge policy |
+| Contract and evaluator | Reviewed fixtures, deterministic TypeScript/Python, canonical artifacts and independent SQL metric parity | Real-input representativeness and external adoption |
+| Receipt and import | Durable SDK/backend admission; explicit raw-event, cost and revenue mappings; atomic records, schema rejection, idempotency and bounded bulk import | Real exports/credentials are not repository evidence; mappings remain explicit |
+| Attribution | First-party Install Referrer, verified platform evidence and imported provider judgments remain separate; recorded exclusions and reasons | No probabilistic identity, blanket partner coverage or external-equivalence claim |
+| Apple aggregate measurement | Signed synthetic SKAdNetwork/AdAttributionKit receiver, replay protection and separated aggregate series | Postbacks are not unique installs; richer window/suppression views and conversion semantics remain planned |
+| Acquisition and money | Selected native/platform/imported profiles; safe cost grain; purchase/refund/reversal, ROAS/LTV, saved FX and native D7 same-set KPIs | Profiles have explicit source, currency and window limits; no inferred cost ownership/allocation or live FX service |
+| Retention and outcomes | Opt-in D3/D14/D30 retained-installation horizons and multiple custom D7 outcome keys | Incomplete windows are not zero; native/platform/imported populations stay separate |
+| Calendar metrics | Explicit UTC, Tokyo and New York calendar definitions coexist with historical elapsed definitions | Other zones are not qualified; time-zone-data upgrades require boundary requalification |
+| Ongoing calculation | Durable daily schedules, bounded target discovery, cost refresh, saved replay and explicit/opt-in automatic corrections | Not every profile supports discovery or automatic correction; no implicit all-history scan |
+| Dashboard and comparison | Server-rendered, reader-only reports; saved operands, receipt freshness, bounded downloads and explicit offline/web comparisons | Unknown/missing/undefined/zero are distinct; saved views and broader comparison families remain planned |
+| Setup and diagnostics | Recommended measurement form, recent event/SDK-version classes and confirmation-bound ingest recovery | SDK versions are client-declared; absent receipts do not prove an outage; invalid/deleted/claimed evidence is not replayed |
+| SDKs and verified commerce | Android/iOS/Unity queues and bridges; native verified purchases and Swift submission; synthetic Unity 6 Android export | Real devices/stores/providers and Unity 2022.3 are unverified; Unity purchase helpers remain planned |
+| Deep links and re-engagement | Deterministic direct links on both OSes, Android deferred links, separate latest-open 24-hour outcome profiles | No iOS deferred links; no engagement ROAS/purchase model; device-reported opens can be forged |
+| Fraud controls | Recorded public rules, registered fraud bundle hashes, diagnostics and synthetic Integrity/App Attest verification | No physical-device-farm or reset-fraud guarantee; private threshold calibration and live platform projects unverified |
+| Privacy and recovery | Role isolation, protected payloads, deletion, saved-manifest metric replay, actual dump/restore and privacy reapplication | External recipients retain their own deletion duty; live recovery time and secret custody unverified |
+| Outbound delivery | Default-off signed webhooks, S3-compatible bulk exports and bounded Google conversion delivery with local fencing/health | Live quotas and permissions unverified; no provider-side exactly-once guarantee |
+| Runtime and operation | One-worker tenant fairness, bounded inbox slices, authenticated logs/metrics, upgrade and single-host procedures | Multi-replica tenant-wide ordering, packaged alert rules, scheduled backup and live capacity remain open |
 
-## Product direction
+Detailed limits belong to the [product guides](README.md), [product scope](product-scope.md),
+[privacy/security policy](privacy-security.md) and [threat model](threat-model.md).
 
-OpenMasu continues as an auditable Shadow MMP and first-party measurement
-toolkit. Its purpose is to explain evidence and measurement differences while
-running beside an existing provider. Replacing an existing MMP is not a project
-goal and must not be inferred from feature coverage.
+## Current development focus
 
-Compatibility results apply only to the supplied artifact and mapping. They do
-not score a provider, certify its product, or recommend migration.
+The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
+15 of 35 child issues complete; 20 remain as of this update. The earlier
+integration plan is complete, not a second backlog. The dependency, controller,
+presentation, evaluator and ingestion foundations are also implemented.
 
-## Current engineering focus
+Next: **minimal monitoring rules** ([#248](https://github.com/yubisuke/openmasu/issues/248)),
+then **scheduled backup and recovery evidence**
+([#250](https://github.com/yubisuke/openmasu/issues/250)). After that, prioritize
+bounded daily analysis/comparison, Apple aggregate usability and Unity purchase
+binding before promoting an integrated candidate. The [roadmap](roadmap.md)
+owns the sequence; the [project plan](project-plan.md) records its acceptance
+crosswalk. Optional expansions are not all release prerequisites.
 
-New elapsed-window ad-revenue ROAS and D30 total-net ROAS runs include
-[saved calculation evidence](metric-explanations.md) for their exact numerator,
-denominator, FX and window. D30 total-net retains advertising, settled purchases
-and refund deductions separately in version 2 evidence. Reader-only JSON/HTML details
-retain historical cost selection and withhold operands when source evidence is
-redacted or purged. Older and unsupported runs show unavailable evidence explicitly.
-This addition is outside the frozen v0.2.0 release evidence.
+Keep development simple: one bounded workflow per PR, existing services and
+test owners, focused iteration and one applicable full gate at handoff.
+Skipped native/runtime steps are not fresh platform evidence. Historical
+test counts and per-commit receipts belong to their PR/release records, not
+this current-state page.
 
-New SQL runs also capture [comparison meaning](cohort-comparison.md) from their
-actual definition and FX policy. Supported equivalence is separate from
-internal execution IDs; gross/net, window and conversion differences stop
-ordinary deltas. Old or unsupported runs remain unknown. Declaration-only
-compatibility requires an explicit flag and is never labeled definition-backed.
-Temporal window maturity is conservative and does not prove upstream
-completeness. This addition is outside the frozen v0.2.0 release evidence.
+## Separate operator evidence
 
-The dashboard can save a bounded all-page metric selection as comparison
-JSON through the existing session and reader role. The Web path and offline
-CLI share a pure converter. A repeatable-read transaction fixes scope and runs
-across pages; a receipt records selected count/digests and acquisition completion.
-Bounds, interruption, privacy/retention and missing/mismatched conditions are
-refused without a partial file. Unknown meaning and upstream completeness are
-retained, not approved by downloading. Neutral aggregate CSV conversion now
-maps explicit columns/units/undefined states into canonical comparison keys
-offline with input/mapping digests and value-free error codes. It does not
-invent saved definitions or certify external calculation equivalence.
-The [integrated first-use journey](getting-started.md) now connects existing
-receipt observations, units, saved-run evidence and comparison. The same offline
-demo derives equal/corrected-cost/incompatible-window/unknown CSV and HTML cases;
-its declaration-only results remain separate from the existing runtime pilot.
-[Bounded cost refresh](cost-refresh.md) now joins one existing adapter to
-default-off immutable app schedules, fixed lookback/configuration checkpoints,
-database-clock claims, bounded retry and stop. Complete acquisition publishes
-costs and its checkpoint atomically; empty results never become a zero
-denominator. Aggregate reader health excludes private configuration and secret
-references. [Selected metric correction](metric-corrections.md) fixes an explicit
-app/import/period/watermark request and reuses saved definitions in the existing
-engine; pending inputs and immutable old/new runs remain visible. These are
-later-source additions, not evidence for the frozen v0.2.0 release; live account
-permissions, timezone, token validity and source completeness remain unverified.
-
-Current source also includes [readable dashboard analysis](dashboard-analysis.md):
-exact money/ratio/count labels, shareable server-rendered filters, selection-preserving
-CSV exports and separated chart groups. Audited API/CSV integers are unchanged.
-Supported saved definitions now establish a conservative temporal bound;
-missing/unsupported maturity remains unknown rather than inferred from freshness
-or metric names. [Four separate freshness observations](metric-freshness.md)
-distinguish that bound, local import receipts and existing recalculation work.
-Local acquisition completion is not upstream completeness or a zero cohort.
-These additions are outside the frozen published release evidence.
-
-Current `main` adds [measurement health](measurement-health.md): an app-scoped,
-reader-only view of SDK/backend batches, file imports, safe rejection counts,
-and metric-run/schedule observations. It distinguishes absent observations,
-waiting work and recorded results without inferring live delivery or complete
-measurement. This addition is not part of the frozen v0.2.0 release evidence.
-
-The published v0.2.0 release consolidates the release-coherence work completed
-after rc.4. Provider-neutral backend event submission, outbound operator event
-webhooks, deterministic operator-owned bulk event exports, durable scheduled
-metrics, and the queue/privacy hardening below are implemented with synthetic
-evidence. Live provider and object-storage use remain operator gates. Current
-work remains integration hardening rather than another broad provider claim:
-
-Source-level synthetic tests now show that the worker admits independent tenant
-cycles through a bounded FIFO coordinator while preserving the existing serial
-job order inside each tenant in one worker process. The default is four
-concurrent tenants, with a
-documented rollback setting of one and a bounded shutdown drain. Multiple
-worker replicas do not provide tenant-wide ordering. SDK and MAX inboxes use
-bounded FIFO slices. Google conversion delivery and server-side AdServices
-lookup now claim one durable row immediately before provider I/O and fence
-completion by claim token. AdServices also rechecks source availability under
-the tenant privacy barrier before persisting its protected response. Platform
-integrity verification now applies the same local ownership and privacy
-boundary to its own queue, including protected result purge during deletion
-and backup restore reapplication. Google Play product verification now claims
-one due row, bounds provider waits, rejects stale completion, and prevents a
-deletion-raced result or settled purchase from becoming available again.
-Commerce read-back now applies the same local ownership boundary to Google
-lifecycle/refund and Apple history work, including transactional refund or
-cursor completion. Google Data Manager delivery additionally reserves a
-destination-scoped database request slot across worker replicas and propagates
-bounded `Retry-After` pauses. Its read-only admin API and server-rendered
-dashboard expose complete app-scoped state counts plus a bounded recent-row
-view without exposing request references, provider IDs, digests, payloads, or
-artifacts. Operator webhook and bulk-export queues expose the same bounded
-local-state pattern through one app-scoped API/dashboard section, while the
-reader role is limited to the exact metadata columns needed by destination
-lists, fixed-label metrics, and that health view. Lease expiry can still repeat a provider
-operation; live quota allocation and distributed pacing for other provider
-paths remain separate operational work.
-
-1. preserve each published version's notes, SDK identities, SBOMs, bundle
-   paths, tag and evidence as one immutable record, including v0.3.0-rc.1;
-2. preserve the server-event, operator-webhook, and bulk-export key, replay,
-   egress, privacy, and durable-queue invariants in future product changes;
-3. preserve bounded tenant concurrency, Google conversion distributed pacing
-   and operator-visible delivery health,
-   and the AdServices, integrity, Google Play, and commerce read-back claim-
-   fencing slices while continuing provider-quota hardening for other paths;
-4. preserve durable scheduled-metric checkpoints and exact replay, the
-   tenant-scoped SDK admission/projection privacy barrier, and deletion-state
-   rechecks while hardening the remaining provider-completion deletion races;
-5. ensure every durable runtime queue can independently make its tenant
-   discoverable to the worker before a tenant RLS context exists;
-6. preserve the current synthetic/operator evidence distinction.
-
-These are preservation requirements, not another automatic audit backlog.
-The published integration batch is complete. The next
-[planned product sequence](roadmap.md#next-product-sequence), tracked in
-[plan #172](https://github.com/yubisuke/openmasu/issues/172), now starts with
-selected acquisition-source projection, overlapping cost-grain safety,
-late-input correction and daily campaign discovery (#182-#185). The acquisition
-gap is reproduced and addressed by explicit v0.4.11 definitions, fixture 58 and
-native-inbox/SQL tests; see [selected acquisition metrics](selected-acquisition-metrics.md).
-Historical definitions and saved runs retain their meaning.
-
-The opt-in [verified platform acquisition profile](verified-platform-acquisition.md)
-connects selected server lookup/decrypted evidence to separately named cohort
-count, retention, advertising-revenue LTV and ROAS. Source-local campaign/ad-group
-IDs remain namespaced; late context uses existing schedule/correction jobs and
-does not rewrite old runs. Evidence is synthetic, not live provider or device
-qualification. The first-party basis and Apple aggregate series remain separate.
-
-Explicit v0.4.12
-[safe cost selection](cost-selection.md) refuses overlapping-cost denominators
-and preserves disjoint siblings and dated revisions (#183). Explicit v0.4.13
-definitions also connect selected acquisition to purchase/total-net cohorts
-(#191), with fixture 60 fixing purchase net 6, total net 26 and ROAS 2.6.
-A [recommended SSR setup](scheduled-metrics.md#manage-schedules-through-the-dashboard)
-selects existing native D7 KPIs, optional retention and observed custom keys
-without handwritten definition JSON (#241). Read-only preview shows the saved
-meaning and digest; confirmation reuses normal validation/ownership and the
-worker. It exposes separate SDK/ingestion/calculation/comparison observations.
-USD identity, UTC, gross first-party and 20 discovered targets per date are
-explicit limits, not claims of platform support or live FX completeness.
-
-Explicit bounded [late-input requests](metric-corrections.md#late-advertising-revenue-purchases-refunds-and-custom-outcomes)
-connect accepted revenue/commerce arrivals to immutable corrections (#184).
-Input discovery is requested through the API; only accepted jobs execute automatically.
-Opt-in [daily campaign discovery](scheduled-metrics.md#discover-campaign-targets-automatically)
-also freezes bounded acquisition/cost target sets before calculation (#185).
-Unknown and cost-only inputs are explicit; a frozen date is not expanded on retry.
-The [external calculation declaration bridge](cohort-comparison.md#compare-a-saved-roas-with-explicit-external-calculation-conditions)
-now compares saved ad-revenue ROAS with an explicitly declared external CSV
-calculation (#173). Matching conditions plus opt-in produce exact deltas while
-retaining `external_declared` evidence; this is not provider verification.
-The [bounded dashboard comparison flow](cohort-comparison.md#compare-through-the-dashboard)
-connects saved JSON and external CSV/mapping to condition review and identical
-CLI/Web JSON and HTML downloads without persisting inputs or history (#174).
-[Recorded attribution analysis](attribution-reasons.md) now reads one eligible
-stored acquisition decision per retained install at an explicit cohort period
-and cutoff, with current privacy and no inferred causes (#175).
-[Daily schedule controls](scheduled-metrics.md#manage-schedules-through-the-dashboard)
-now connect SSR registration, checkpoint inspection and disablement to the
-existing immutable schedule service and worker (#176), with admin-only access.
-Explicit [custom-event conversion](custom-conversion-metrics.md) now counts
-distinct D7 cohort converters and their rate per saved event key. Multiple keys
-can own simultaneous schedules through an app-scoped selection form and stable
-per-key names; aliases cannot bypass meaning ownership. The existing v0.4.14
-calculator, bundle, wire schemas and legacy names are unchanged.
-Fixture 61 fixes 3/10; boundary, receipt, privacy and gross/net cases share
-independent reference and SQL arithmetic. No new service or event payload.
-[D30 total-net ROAS details](metric-explanations.md) retain advertising, purchase,
-refund and cost operands from the saved calculation (#178). The dashboard connects
-bounded [cost-recalculation controls](metric-corrections.md) to existing jobs and
-original/replacement details (#179). A definition-backed [retention matrix](dashboard-analysis.md#saved-retention-matrix)
-aligns only comparable saved cohorts and horizons on the current page (#180).
-App Store purchase binding (#186) is source implemented: the opt-in
-[purchase-preparation API](design/verified-commerce-lifecycle.md#installation-bound-purchase-preparation)
-now issues protected installation-scoped tokens with retry and deletion safety.
-The signed-submission and history worker now connect verified purchaser-owned
-transaction-price bases and explicit full/prorated refunds to cohort revenue,
-LTV and ROAS with duplicate/privacy and late-recalculation synthetic gates.
-The public Swift preparation/submission APIs and compiled StoreKit sample connect
-the same path, with synthetic HMAC, retry and consent/reset race tests.
-Neither API admission nor this server
-connection proves StoreKit delivery, live roots or accounting proceeds.
-Finer advertising grain (#187) now has an opt-in v0.4.16 contract, three-engine
-calculation, creative cost input and an explicit CLI example. API/HTML/CSV
-filters, explicit schedules and bounded cost/late-input corrections preserve
-that grain and saved history; there is no automatic creative discovery or
-estimated allocation of parent cost. Separate re-engagement
-outcomes (#188) have an opt-in v0.4.17 latest-open 24h contract and reference/SQL
-calculation. Explicit CLI/schedules and separate API/HTML/CSV output connect
-that policy to operator workflows. Automatic privacy-deletion corrections now
-select all affected saved-run identities, including old dates, campaign groups,
-custom outcomes, and engagement. A durable worker and offline restore share
-the actual saved-manifest replay; pending or unreplayable values are withdrawn
-from API, CSV, dashboard, and saved-detail projections even at historical
-watermarks. Stored originals remain immutable. This selection is conservative
-over saved input-snapshot evidence, not a claim of minimal numeric influence.
-Legacy runs with neither saved evidence nor a replay manifest are conservatively
-withdrawn in the requested app/tenant scope; no copied successor is published.
-Automatic discovery and automatic old-date late-input supersession are not
-supplied for this opt-in series.
-The [policy guide](engagement-outcomes.md) records the device-reported trust
-boundary and lack of ROAS/purchase/cross-device claims. An additive contract and opt-in metric
-profile now link a cancellation to its previously admitted refund, preserving
-old definitions and saved runs. The verified App Store worker connects a
-uniquely identified prior refund to this profile and the existing late-correction
-job ([#209](https://github.com/yubisuke/openmasu/issues/209)). Missing targets retry;
-ambiguous partial-refund targets remain explicitly unavailable. An unlinked
-reversed row still does not undo a settled deduction. A forward-only runtime fix now permits
-schedule re-registration over identical inputs while preserving run-ID
-uniqueness, old evidence, exact replay and explicit-only supersession
-([#200](https://github.com/yubisuke/openmasu/issues/200)). The reference retention
-numerator now uses that metric's selected and fraud-filtered cohort, matching
-Python/SQL rather than counting a different population
-([#202](https://github.com/yubisuke/openmasu/issues/202)). Neither fix rewrites
-old saved runs. The planned acquisition-to-daily-report connections and narrow
-first-party engagement extension now have synthetic code gates. Existing
-component evidence and the published v0.3.0-rc.1 record remain unchanged;
-neither source implementation nor synthetic tests prove live delivery, full
-provider coverage, or production correctness.
-
-The [recent measurement view](measurement-health.md#recent-receipt-windows)
-adds bounded server-receipt windows and closed event/public SDK-version
-diagnostics (#242). It records safe header classes in existing delivery/inbox
-tables, including rejected and duplicate attempts, without changing canonical
-artifacts. Older rows remain unknown; protected payloads are not reconstructed.
-Current and preceding windows, pending submissions, late receipt and low-volume
-states are separate from retained history. Local queue-health diagnostics stay
-on the device. These observations do not attest devices, establish an outage,
-upload diagnostics, or extend frozen release evidence.
-
-Private real-data, real-device, and live-provider work is optional operator work
-and is not required to continue repository-only hardening.
-
-The [safe ingest recovery](operations/ingest-recovery.md) page (#243) adds
-reader-scoped failure diagnosis and explicitly confirmed recovery through
-existing inbox and auxiliary workers. New attempt/audit receipts preserve
-original failures and admitted facts; stale forms, active claims, invalid or
-deleted evidence are refused. Auxiliary operations only bring existing retries
-forward and never recreate completed verification or extend token lifetime.
-Synthetic processing/authorization evidence does not prove real-provider recovery,
-worker secret correctness, operational SLAs or production readiness. No dependency,
-service, queue table or contract/golden change is required.
+Live provider permissions/connections, real campaigns/data, physical devices,
+store approval, public domain associations, production TLS, alert delivery,
+backup custody and deployment capacity remain unverified. Such work requires
+separate authorization and private records; it is not required to continue
+synthetic repository development.

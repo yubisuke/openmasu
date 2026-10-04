@@ -25,7 +25,7 @@
   python -m pip install --require-hashes --requirement requirements-contract.txt
   ```
 
-- Full validation gate: `npm run validate`. It type-checks the TypeScript, compiles every schema, validates every registry and fixture, runs both the TypeScript and Python evaluators, and checks RFC 8785 canonical output. It normally completes in a few seconds. Run it after any change under `schemas/`, `registries/`, `fixtures/`, `spec/`, or `tools/`, and paste its final summary line into your report.
+- Full validation gate: `npm run validate`. It type-checks the TypeScript, compiles every schema, validates every registry and fixture, runs both the TypeScript and Python evaluators, and checks RFC 8785 canonical output. Use focused existing checks while editing, then run the applicable full gate once before handoff; do not rerun its standalone subsets. Changes under `schemas/`, `registries/`, `fixtures/`, `spec/`, or `tools/` require this gate. Paste its final summary line into your report; see `docs/development.md` for test ownership.
 - Type-check only (faster, partial signal): `npm run typecheck`.
 - Android/Unity synthetic gates: `./sdk/android/gradlew -p sdk/android androidAcceptance verifySdkSbom`, an API 36 emulator running `:sample:connectedDebugAndroidTest`, and `dotnet run --project sdk/unity/tests/UnityCompileProbe.csproj --configuration Release`.
 - iOS synthetic gates run on macOS: `swift test --package-path sdk/ios`, iOS Simulator builds of the shipping products and sample, the pinned AppLovin provider compile probe, `node tools/check-ios-sdk.mjs --built-root <DerivedData>`, and the Unity C# bridge probe. The pinned `sdk-ios` workflow is the Windows development environment's authoritative Xcode evidence.
