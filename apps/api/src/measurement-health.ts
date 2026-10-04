@@ -1,12 +1,15 @@
 import type { Pool } from "pg";
 import { SDK_POST_PROCESSING_PENDING_REASON } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
+import { recentMeasurementGroups, type MeasurementWindowHours } from "./recent-measurement-health.js";
 
 import type { MeasurementHealth } from "./measurement-notices.js";
 export { measurementNotices, type MeasurementHealth, type MeasurementNotice } from "./measurement-notices.js";
+export { parseMeasurementWindow, MeasurementHealthQueryError } from "./recent-measurement-health.js";
 
 /** A read-only, app-scoped snapshot. Counts use their own grains, never a conversion funnel. */
-export async function measurementHealth(pool: Pool, identity: AppAdminIdentity): Promise<MeasurementHealth> {
+export async function measurementHealth(pool: Pool, identity: AppAdminIdentity, hours: MeasurementWindowHours = 24): Promise<MeasurementHealth> {
+  if (![1,24,168].includes(hours)) throw new Error("health_window_invalid");
   const client = await pool.connect();
   try {
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
@@ -56,9 +59,16 @@ export async function measurementHealth(pool: Pool, identity: AppAdminIdentity):
         (SELECT count(*)::text FROM control.metric_schedule_checkpoints WHERE tenant_id=$1 AND app_id=$2 AND pending_target_date IS NOT NULL) AS pending_schedules
        FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2`, args,
     );
-    const observed = await client.query<{ observed_at: string }>("SELECT to_char(transaction_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS observed_at");
+    const recent = await recentMeasurementGroups(client, identity, hours);
+    const observed = await client.query<{ observed_at: string; received_from: string; previous_from: string }>(
+      `SELECT to_char(transaction_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS observed_at,
+        to_char((transaction_timestamp()-$1::int*interval '1 hour') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS received_from,
+        to_char((transaction_timestamp()-($1::int*2)*interval '1 hour') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS previous_from`, [hours]);
     await client.query("COMMIT");
-    return { observed_at: observed.rows[0].observed_at, scope: "retained_history", sdk: sdk.rows[0], imports: imports.rows[0], events: events.rows[0], rejections: rejections.rows, metrics: metrics.rows[0] };
+    return { observed_at: observed.rows[0].observed_at, scope: "retained_history", sdk: sdk.rows[0], imports: imports.rows[0], events: events.rows[0], rejections: rejections.rows, metrics: metrics.rows[0],
+      recent: { scope: "server_receipt_windows", window_hours: hours, unit: "delivery_attempts", ...recent,
+        received_from: observed.rows[0].received_from, received_to: observed.rows[0].observed_at, previous_from: observed.rows[0].previous_from,
+        pending_unit: "submitted_events", client_diagnostics: "on_device_only_not_received" } };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;

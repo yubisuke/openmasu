@@ -1,7 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import { compareCandidateAttempts, evaluate, IndexedCandidateProvider, sortCandidateAttempts, type CandidateAttempt } from "@openmasu/attribution-core";
 import { clickInjectionPolicyDigest, fraudNumberParameter } from "@openmasu/fraud-rules";
-import { withTenant } from "@openmasu/runtime";
+import { withTenant, measurementClasses } from "@openmasu/runtime";
 import { resolveActiveFraudBundle, serverBundleContext } from "../fraud-bundle-runtime.js";
 import { assertNonFraudArtifactBinding, nonFraudServerContext, resolveNonFraudBundle, type BoundNonFraudBundle } from "../non-fraud-bundle-runtime.js";
 import { inputAttempts, defaultTimestamp, policyDigestForRecord, refundProjectionTargets } from "./input.js";
@@ -244,7 +244,7 @@ export async function ingestRuntimeBatch(
           [raw.tenant_id, raw.app_id, raw.record_id, raw.received_at],
         );
       }
-      if (delivery) await persistDeliveryWithClient(client, delivery);
+      if (delivery) await persistDeliveryWithClient(client, delivery, measurementClasses(attempt.record));
       if (logical) {
         await persistLogicalWithClient(client, logical);
         await persistProjectionWithClient(client, logical, input, refundTargets);

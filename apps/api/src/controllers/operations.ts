@@ -2,7 +2,8 @@ import { AppNotFoundError, requireRegisteredApp } from "../apps-admin.js";
 import { renderOperationalMetrics } from "../operational-metrics.js";
 import { googleDeliveryHealth } from "../google-delivery-health.js";
 import { operatorDeliveryHealth } from "../operator-delivery-health.js";
-import { measurementHealth } from "../measurement-health.js";
+import { measurementHealth, parseMeasurementWindow, MeasurementHealthQueryError } from "../measurement-health.js";
+import { renderMeasurementHealthPage } from "../dashboard/recent-measurement-health.js";
 import { recordDashboardAudit } from "../session.js";
 import { disableOperatorWebhookDestination, listOperatorWebhookDestinations, registerOperatorWebhookDestination } from "../operator-webhooks-admin.js";
 import { disableOperatorBulkExportDestination, listOperatorBulkExportDestinations, registerOperatorBulkExportDestination } from "../operator-bulk-exports-admin.js";
@@ -155,12 +156,23 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
   const adminMeasurementHealth = async ({ response, target, pool, identity }: AdminRequestContext): Promise<void> => {
     try {
       const appIdentity = await requireRegisteredApp(pool, identity, adminAppId(target.pathname) ?? "");
-      json(response, 200, await measurementHealth(pool, appIdentity));
+      json(response, 200, await measurementHealth(pool, appIdentity, parseMeasurementWindow(target.searchParams)));
     } catch (error) {
       if (error instanceof AppNotFoundError) json(response, 404, { error: "app_not_found" });
+      else if (error instanceof MeasurementHealthQueryError) json(response, error.statusCode, { error: error.code });
       else throw error;
     }
     return;
+  };
+
+  const dashboardMeasurementHealth = async ({ response, target, pool, appIdentity }: DashboardAppContext): Promise<void> => {
+    try {
+      const health = await measurementHealth(pool, appIdentity, parseMeasurementWindow(target.searchParams));
+      dashboardHtml(response, 200, renderMeasurementHealthPage(health.recent!, appIdentity.appId));
+    } catch (error) {
+      if (error instanceof MeasurementHealthQueryError) json(response, error.statusCode, { error: error.code });
+      else throw error;
+    }
   };
 
   const adminOperatorDeliveryHealth = async ({ response, target, pool, identity }: AdminRequestContext): Promise<void> => {
@@ -282,6 +294,7 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
     operational_metrics: { boundary: "admin", handle: operationalMetrics },
     admin_google_delivery_health: { boundary: "admin", handle: adminGoogleDeliveryHealth },
     admin_measurement_health: { boundary: "admin", handle: adminMeasurementHealth },
+    dashboard_measurement_health: { boundary: "dashboard_app", handle: dashboardMeasurementHealth },
     admin_operator_delivery_health: { boundary: "admin", handle: adminOperatorDeliveryHealth },
     admin_operator_webhooks_list: { boundary: "admin", handle: adminOperatorWebhooksList },
     admin_operator_webhooks_register: { boundary: "admin", handle: adminOperatorWebhooksList },
