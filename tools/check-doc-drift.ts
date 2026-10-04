@@ -167,8 +167,8 @@ function currentMarkdownDocuments(root: string): Record<string, string> {
   return Object.fromEntries(paths.map((path) => [path, readFileSync(join(root, path), "utf8")]));
 }
 
-export function checkDocumentationDrift(root = process.cwd()): void {
-  const validationSummary = execFileSync(
+export function checkDocumentationDrift(root = process.cwd(), measuredSummary?: string): void {
+  const validationSummary = measuredSummary ?? execFileSync(
     process.execPath,
     ["--import", "tsx", "tools/validate.ts", "--summary"],
     { cwd: root, encoding: "utf8", env: process.env },
