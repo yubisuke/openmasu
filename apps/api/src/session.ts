@@ -160,8 +160,9 @@ export type DashboardAuditInput = {
 export async function recordDashboardAuditWithClient(
   client: PoolClient,
   input: DashboardAuditInput,
-): Promise<void> {
+): Promise<string> {
   const now = input.now ?? new Date();
+  const auditId = uuidV7(now.getTime());
   const requestDigest = digest([
     input.action,
     input.targetScope,
@@ -176,11 +177,12 @@ export async function recordDashboardAuditWithClient(
       outcome, reason_code
     ) VALUES ($1,$2,$3,$4,'admin_key',$5,$6,$7,$8,'dashboard-v1',$9,$10,$11)`,
     [
-      uuidV7(now.getTime()), input.tenantId, input.appId ?? null, now.toISOString(),
+      auditId, input.tenantId, input.appId ?? null, now.toISOString(),
       input.actorRef, input.action, input.targetScope, input.targetRef,
       requestDigest, input.outcome, input.reasonCode ?? null,
     ],
   );
+  return auditId;
 }
 
 export async function recordDashboardAudit(

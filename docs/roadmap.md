@@ -242,6 +242,13 @@ background history; absent receipts are not proof of an outage or device state.
 
 ## Optional operator evidence
 
+The [safe ingest recovery](operations/ingest-recovery.md) page (#243) exposes
+closed diagnostic states and confirmed, revision-checked recovery through the
+existing inbox/auxiliary workers. Its project-plan crosswalk is **Safe ingest
+recovery**. No new service, queue table or contract behavior is introduced;
+invalid/deleted evidence, active claims and completed verification are not
+replayed. Provider credentials and live recovery remain operator-only evidence.
+
 The opt-in [dated FX snapshot](fx-snapshots.md) extends the existing metric
 engine, replay and report paths without a live FX service. Currency/date
 selection and per-event/per-cost rounding have synthetic evidence; live-rate

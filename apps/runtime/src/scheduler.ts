@@ -19,6 +19,10 @@ export const SCHEDULED_WORKER_JOBS = [
 ] as const;
 
 export type ScheduledWorkerJob = typeof SCHEDULED_WORKER_JOBS[number];
+/** Shared by worker claims and bounded operator recovery; never force-unlock a worker. */
+export function workerJobLockKey(tenantId: string, job: ScheduledWorkerJob): string {
+  return `openmasu:worker-job:${tenantId}:${job}`;
+}
 export type ScheduledJobOutcome = "succeeded" | "failed";
 
 export type ScheduledJobClaim = {
@@ -65,7 +69,7 @@ export class PostgresSchedulerStore implements SchedulerStore {
   constructor(private readonly pool: Pool) {}
 
   private lockKey(tenantId: string, job: ScheduledWorkerJob): string {
-    return `openmasu:worker-job:${tenantId}:${job}`;
+    return workerJobLockKey(tenantId, job);
   }
 
   private async releaseLease(claim: ScheduledJobClaim): Promise<void> {
