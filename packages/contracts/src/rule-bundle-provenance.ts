@@ -12,6 +12,7 @@ export type NonFraudRuleBundleId =
   | "metric-calendar-acquisition"
   | "metric-selected-daily-acquisition"
   | "metric-acquisition-kpis"
+  | "metric-standard-retention"
   | "metric-disjoint-cost"
   | "metric-selected-commerce"
   | "metric-refund-reversal"
@@ -33,6 +34,15 @@ export type NonFraudRuleBundleDefinition = {
 };
 
 export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonFraudRuleBundleDefinition>> = {
+  "metric-standard-retention": {
+    id: "metric-standard-retention", version: "0.4.24", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["opt-in-d3-d14-d30-elapsed-activity-day", "distinct-active-eligible-installations",
+      "same-selected-native-platform-or-imported-cohort", "same-provider-outcomes-only",
+      "half-open-install-relative-session-window", "complete-cohort-date-window-before-value",
+      "immature-is-undefined-not-zero", "received-evidence-as-of-watermark",
+      "preserve-current-privacy-and-gross-net", "historical-d1-d7-unchanged"],
+  },
   "metric-acquisition-kpis": {
     id: "metric-acquisition-kpis", version: "0.4.23", kind: "metric",
     implementation: "reference-metric-v0.4",

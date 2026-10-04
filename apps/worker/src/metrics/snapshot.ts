@@ -44,10 +44,12 @@ export async function scanSnapshotRecords(
        LIMIT 1
      ) AS state ON true
      WHERE raw.tenant_id=$1 AND raw.app_id=$2 AND raw.received_at <= $3
-     ORDER BY raw.received_at, raw.record_id`,
+     ORDER BY raw.received_at COLLATE "C", raw.record_id COLLATE "C"`,
     [scope.tenant_id, scope.app_id, watermark, privacyState],
   );
   const records: SnapshotRecord[] = [];
+  // Contract IDs and canonical timestamps are ASCII: byte order is UTF-16
+  // order. Keep it in the cursor so ties cannot depend on the database locale.
   const hasher = createHash("sha256");
   let first = true;
   hasher.update("[");

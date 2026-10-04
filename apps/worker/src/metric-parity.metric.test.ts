@@ -897,11 +897,19 @@ describe("selected native acquisition SQL parity", { concurrency: false }, () =>
   const fixture58 = () => JSON.parse(readFileSync(join(process.cwd(), "fixtures/v0.4/58-selected-native-acquisition/input.json"), "utf8"));
 
   it("matches retained-install arithmetic for selected-source and gross/net retention without admitting late sessions", async () => {
-    for (const entry of syntheticRetentionCases(fixture58())) {
+    for (const entry of syntheticRetentionCases(fixture58(),
+      JSON.parse(readFileSync("fixtures/v0.4/66-verified-platform-acquisition/input.json", "utf8")),
+      JSON.parse(readFileSync("fixtures/v0.4/67-imported-provider-acquisition/input.json", "utf8")))) {
       await ingestFixture(`retention-${entry.name}`, entry.input, app, seed);
+      await persistSyntheticPlatformResults(app, entry.input);
       const runs = await computeSqlMetricRuns(app, entry.input, false);
       for (const [name, expected] of Object.entries(entry.expected)) {
         assert.equal(runs.find(run => run.metric_name === name)?.value_unscaled, expected, `${entry.name}: ${name}`);
+      }
+      for (const [name, reason] of Object.entries(entry.undefinedReasons ?? {})) {
+        const run = runs.find(run => run.metric_name === name);
+        assert.equal(run?.value_state, "undefined"); assert.equal(run?.value_unscaled, undefined);
+        assert.equal(run?.undefined_reason, reason, `${entry.name}: ${name}`);
       }
       assert.equal(jcs(runs), jcs(evaluate(entry.input).metric_runs), entry.name);
     }

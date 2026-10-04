@@ -36,7 +36,7 @@ in [Project plan](project-plan.md).
 | Operator-owned bulk event exports | Synthetic complete | Default-off S3-compatible destinations, deterministic gzip NDJSON, SigV4 conditional writes, durable keyset cursors, and destination-scoped deletion notices |
 
 The current contract gate preserves parity across 28 schemas, 8 registries,
-and 70 reviewed synthetic fixtures, including explicitly versioned same-set first-party acquisition KPIs, calendar-zone, imported-provider and verified-platform cohorts, daily counts, safe costs, custom conversions and targeted refund cancellation.
+and 71 reviewed synthetic fixtures, including opt-in D3/D14/D30 retained-installation horizons, explicitly versioned same-set first-party acquisition KPIs, calendar-zone, imported-provider and verified-platform cohorts, daily counts, safe costs, custom conversions and targeted refund cancellation.
 
 ## Completed milestone: integration and release coherence
 
@@ -214,6 +214,11 @@ is [issue #218](https://github.com/yubisuke/openmasu/issues/218).
 
 The [saved acquisition KPI set](acquisition-kpis.md) adds count, cost/CPI and
 separate revenue/ROAS on these same calculation and view boundaries (#228).
+The [standard retention horizons](standard-retention.md) add opt-in D3/D14/D30,
+complete-window maturity, bounded schedule lag and separate native/platform/
+imported populations on the same engine (#229). The project-plan crosswalk is
+**Standard retained-installation horizons**; old D1/D7 and saved runs keep their
+meaning. No uninstall or cross-device person inference is introduced.
 The [multiple custom outcomes](custom-conversion-metrics.md) workflow adds stable
 per-key D7 names, closed app-scoped SSR/API selection and alias-safe schedule
 ownership on the same existing engine (#230). Its project-plan crosswalk is

@@ -9,6 +9,7 @@ import {
   ACQUISITION_KPI_METRIC_DEFINITIONS,
   VERIFIED_PLATFORM_METRIC_DEFINITIONS,
   importedAcquisitionMetricDefinitions,
+  standardRetentionMetricDefinitions,
   calendarAcquisitionMetricDefinitions, COHORT_TIME_ZONES,
   SELECTED_COMMERCE_METRIC_DEFINITIONS, customConversionMetricDefinitions, engagementMetricDefinitions,
   METRIC_PROFILE_METADATA, metricProfileMetadata,
@@ -102,10 +103,14 @@ describe("metric profile entry boundaries", () => {
       ...SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS.map(definition => ({ name: "daily_acquisition/valid", definition })),
       ...VERIFIED_PLATFORM_METRIC_DEFINITIONS.map(definition => ({ name: "platform/valid", definition })),
       ...importedAcquisitionMetricDefinitions("synthetic-export").map(definition => ({ name: "imported/valid", definition })),
+      ...(["selected_first_party_click", "selected_verified_platform", "selected_imported_provider"] as const)
+        .flatMap(basis => standardRetentionMetricDefinitions(basis,
+          basis === "selected_imported_provider" ? "synthetic-export" : undefined)
+          .map(definition => ({ name: "standard_retention/valid", definition }))),
       ...COHORT_TIME_ZONES.flatMap(zone=>["selected_first_party_click","selected_verified_platform","selected_imported_provider"].flatMap(basis=>
         calendarAcquisitionMetricDefinitions(zone,basis as NonNullable<Definition["acquisition_basis"]>,basis === "selected_imported_provider" ? "synthetic-export" : undefined)
           .map(definition=>({name:"calendar/valid",definition}))))];
-    assert.equal(valid.length, 222 + ACQUISITION_KPI_METRIC_DEFINITIONS.length);
+    assert.equal(valid.length, 231 + ACQUISITION_KPI_METRIC_DEFINITIONS.length);
     const exercised = new Set<string>();
     for (const { name, definition } of valid) {
       assert.ok(validateMetricDefinition(definition), name);

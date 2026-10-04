@@ -22,6 +22,9 @@ The [acquisition KPI profile](acquisition-kpis.md) adds saved cost/CPI and
 side-by-side count, ad/purchase-net/total-net revenue and ROAS only for a
 complete matching native first-party D7 set. Partial, mixed or immature results
 are not promoted to a decision-ready panel.
+The opt-in [standard retention horizons](standard-retention.md) reuse the same
+eligible installation populations and elapsed activity days. D3/D14/D30 are
+absent before their complete-window cutoff, not 0%; old D1/D7 remains unchanged.
 
 | Source line | Contract patch ledger | Reviewed inventory | Release meaning |
 | --- | --- | --- | --- |
@@ -29,9 +32,9 @@ are not promoted to a decision-ready panel.
 | `v0.2.0-rc.4` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Previously published prerelease and frozen exact-commit evidence |
 | `v0.2.0` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Published non-prerelease at green commit `68b8c48`; frozen exact-commit evidence |
 | `v0.3.0-rc.1` tag | through v0.4.10 | 57 fixtures / 741 golden artifacts | Current published prerelease at green commit `90a0f5f`; eight SDK assets and exact-commit synthetic evidence |
-| Current development source | through v0.4.23 | 70 fixtures / 910 golden artifacts | Adds same-set first-party acquisition KPIs, dated FX, calendar-zone, imported-provider and verified-platform cohorts, daily native counts, safe costs and commerce; not included in the published SDK release |
+| Current development source | through v0.4.24 | 71 fixtures / 923 golden artifacts | Adds opt-in mature D3/D14/D30 retention, same-set first-party acquisition KPIs, dated FX, calendar-zone, imported-provider and verified-platform cohorts, daily native counts, safe costs and commerce; not included in the published SDK release |
 
-The Contract wire and package identity remains `0.4.0`; v0.4.23 is the latest
+The Contract wire and package identity remains `0.4.0`; v0.4.24 is the latest
 additive patch ledger entry. The published SDK version is `0.3.0-rc.1`.
 Its [distribution guide](sdk-distribution.md) separates compiled Android
 modules from source-distributed Swift and Unity. Publication has a matching

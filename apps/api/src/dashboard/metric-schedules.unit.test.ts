@@ -8,6 +8,32 @@ import { SELECTED_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts/def
 import { expandRecommendedMetricSchedule, recommendedSchedulePreviewDigest } from "../recommended-metric-schedules.js";
 import { renderRecommendedMetricSchedulePreview } from "./measurement-setup.js";
 
+it("opts into bounded standard retention days with separate populations and rejects immature schedule lags", () => {
+  const now = new Date("2026-10-04T00:00:00.000Z");
+  for (const basis of ["selected_first_party_click", "selected_verified_platform", "selected_imported_provider"]) {
+    const form = new URLSearchParams({ csrf_token: "synthetic-csrf", acquisition_basis: basis, fraud_policy: "net", lag_days: "32" });
+    for (const day of [3, 14, 30]) form.append("standard_retention_day", String(day));
+    if (basis === "selected_imported_provider") form.set("import_provider", "synthetic-export");
+    const request = metricScheduleFormRequest(form), normalized = normalizeMetricScheduleRequest(request, now);
+    assert.equal(normalized.lagDays, 32);
+    assert.deepEqual(normalized.definition.metric_definitions.map(definition => definition.acquisition_basis), [basis, basis, basis]);
+    assert.deepEqual(normalized.definition.metric_definitions.map(definition => definition.fraud_policy), ["net", "net", "net"]);
+    for (const lag_days of [1, 5, 16, 31]) assert.throws(() => normalizeMetricScheduleRequest({ ...request, lag_days }, now), /metric_schedule_retention_window_not_elapsed/);
+    form.set("standard_retention_day", "3"); form.set("lag_days", "5");
+    assert.equal(normalizeMetricScheduleRequest(metricScheduleFormRequest(form), now).lagDays, 5);
+    form.append("standard_retention_day", "3");
+    assert.throws(() => metricScheduleFormRequest(form), /standard_retention_selection_invalid/);
+  }
+  for (const field of ["tenant_id", "request_json"]) {
+    const form = new URLSearchParams({ standard_retention_day: "14", [field]: "synthetic" });
+    assert.throws(() => metricScheduleFormRequest(form), /metric_schedule_form_invalid/);
+  }
+  const html = renderMetricSchedules("app-synthetic", [], "synthetic-csrf");
+  assert.match(html, /Schedule D3 \/ D14 \/ D30 retention/);
+  assert.match(html, /undefined, not 0%/);
+  assert.doesNotMatch(html, /<script|javascript:|\son\w+=/i);
+});
+
 it("decodes schedule forms without changing the API request and rejects ambiguous transport", () => {
   const body = JSON.parse(readFileSync("examples/synthetic/metric-schedule.json", "utf8"));
   const form = new URLSearchParams({ csrf_token: "synthetic-csrf", request_json: JSON.stringify(body) });

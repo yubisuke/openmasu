@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 70 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 71 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -539,6 +539,52 @@ scoped IDs, snapshot hashes and the written integer arithmetic, separately from
 behavior changes. Combined RFC 8785 SHA-256 is
 `15df48518a3316738114f7c451bc17feae192e5c75a89f04d11c44b9468176cf`.
 The previous 69 inputs and 897 golden files are unchanged.
+
+## Fixture 71: standard retention maturity
+
+The input reuses fixture 01's exact two records, server context, privacy and
+reconciliation declarations. One eligible installation on 2026-08-06 has no
+session activity. Each numerator is therefore 0, denominator 1, and half-even
+`0 * 10^6 / 1 = 0`. Three new definitions keep elapsed D3/D14/D30 separate from
+unchanged D1/D7. Conservative closes are August 11, August 22 and September 7
+at UTC midnight. At August 12, D3 is observed zero and D14/D30 are
+`undefined/observation_window_not_elapsed`; at September 7, all three are zero.
+Maturity is evaluated from the saved cutoff, not `computed_at` or current time.
+
+All 13 expected families have an independent construction:
+
+- Raw records, deliveries, logical events, corrections, privacy requests,
+  tombstones, rejections, attributions, reconciliation, costs and fraud decisions
+  are the eleven unchanged reviewed fixture 01 families because their exact
+  source inputs and admission context are unchanged. This retains two admitted
+  records and one deterministic install attribution; it adds no session, money,
+  fraud, deletion or provider evidence.
+- Metric definitions contain the same three reference definitions plus the
+  three new declared ratio definitions, ordered by UTF-16 metric name. Their
+  registered bundle has JCS SHA-256
+  `2513250a718d0ffb486c0ae33d09a4e88e31b17076b95ab998c211bb9ffda8de`.
+- Six metric runs are ordered by run ID: the first cutoff has absent D14, zero
+  D3, absent D30; the second has zero D14/D3/D30. Each run retains ratio scale 6,
+  two protected evidence references, policy/freshness, its saved cutoff and
+  `2026-08-12T00:00:00.000Z|install-1` ledger position. Present state is omitted
+  as historically permitted; only immature runs carry explicit undefined state.
+
+The independent snapshot recipe hashes the rows
+`["2026-08-12T00:00:00.000Z","click-1","available","policy-v0.1"]` and
+`["2026-08-12T00:00:00.000Z","install-1","available","policy-v0.1"]` in that
+order. Their JCS SHA-256 is
+`16438d1281392c5353de5f6146b872be274508fa1be7338af46b3a6cf30fe141`.
+The unchanged attribution's digest is
+`9557f3943781ba7d489eeb5d940ecc76d5fc348e458cb3ce20441c2a4dfcf085`.
+The selected snapshot hashes
+`{record_and_cost_snapshot_id:<record digest>,acquisition_attributions:[["tenant-a","app-a","attr:install-1",<attribution digest>]]}`
+and yields `1b534fab2355d5d24c259b654d30fc0afe39e6caf2dd6430d680e74c991696b0`.
+The grouping `{cohort_date:"2026-08-06"}` hashes to
+`d84975d0d33db0c6cecf14486cfe7202f5909dfcccae87f0fd4100e3312219b1`.
+No ledger sequence or current clock enters either hash. The bundle hash is over
+the registered declarative rule object; the expected values are not sourced
+from evaluator output. Candidate TS/Python bytes matched before promotion.
+All previous 70 inputs and 910 golden files remain unchanged.
 
 ## Adding a fixture procedure
 

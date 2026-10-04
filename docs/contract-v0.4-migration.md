@@ -5,6 +5,36 @@ Contract v0.4.0 completed the identity migration from the immutable
 contract identity but did not change field meaning, attribution behavior, metric
 arithmetic, ordering, hashing, privacy, or fraud semantics.
 
+## Standard retention horizons (0.4.24)
+
+Optional metric-definition `retention_maturity_policy=complete_activity_window`
+and metric-run reason `observation_window_not_elapsed` belong to the independently
+bound opt-in D3/D14/D30 profile. Old schemas' URNs, wire/package `0.4.0`, D1/D7,
+bundle hashes, calendar profiles and saved runs retain their meaning. No registry,
+dependency, service or table is added. Forward-only migration 070 widens the
+existing saved-run reason check without rewriting any row. See
+[standard retained-installation horizons](standard-retention.md).
+
+Complete golden addition inventory: `71-standard-retention/input.json` and all
+13 `expected_*.json` files: raw_records, deliveries, logical_events, corrections,
+privacy_requests, privacy_tombstones, rejections, attributions, metric_definitions,
+metric_runs, reconciliation, cost_records and fraud_decisions. No existing numbered
+fixture input or expected file changes. Verify against pre-change main `c3f8f517`
+with `git diff --name-status c3f8f517 -- fixtures/v0.4/`: only directory 71 and the
+shared README differ.
+
+Fixture 71 reuses the identical input/admission of fixture 01. Eleven expected
+families are therefore its immutable reviewed families, not regenerated output.
+Three declared definitions and six runs are independently constructed; their
+arithmetic, canonical record/attribution/grouping/bundle hash inputs and every
+output-family derivation are in the fixture README. At the first cutoff D3 is
+observed zero while D14/D30 are absent; at the final cutoff all three are observed
+zero. Separate shared mutation cases supply positive, boundary, gross/net,
+late/corrected, privacy and alternative acquisition evidence. Candidate evaluators
+were compared before expected construction; approved files were not copied from
+either evaluator. Golden promotion is a separate commit from calculation/schema
+changes, and validation remains read-only.
+
 ## Saved acquisition KPI set (0.4.23)
 
 Metric-definition adds `cost_sum`, `cost_over_cohort` and the `cost` numerator

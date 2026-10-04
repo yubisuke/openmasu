@@ -16,6 +16,11 @@ complete [acquisition KPI set](acquisition-kpis.md) and its synthetic schedule.
 Its explicit eight-definition first-party D7 profile needs no extra worker or
 report calculator; keep all roles on the same target and correction cutoff.
 
+For opt-in D3/D14/D30 retained installations, use the dashboard's
+[standard retention schedule](standard-retention.md). Lag must cover the largest
+selected activity day plus two (5/16/32 days). Native, platform and imported
+populations are separate; historical D1/D7 schedules are not automatically changed.
+
 For multiple custom outcomes, use the dashboard's closed key selection or the
 [custom-outcome selection request](custom-conversion-metrics.md#choose-outcomes-without-copying-metric-definitions).
 Each key gets stable count/rate names in the existing D7 profile, without copying

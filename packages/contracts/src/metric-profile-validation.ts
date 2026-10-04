@@ -38,6 +38,9 @@ function validStringArray(value: unknown, allowed?: ReadonlySet<string>): boolea
 export function validateScheduledMetricDefinition(input: unknown): input is ScheduledMetricDefinition {
   if (!input || typeof input !== "object" || Array.isArray(input)) return false;
   const value = input as JsonObject;
+  if (value.retention_maturity_policy !== undefined || value.rule_bundle_id === METRIC_PROFILE_BINDINGS.standard_retention.rule_bundle_id) {
+    return validateMetricDefinition(value);
+  }
   if (value.rule_bundle_id === ACQUISITION_KPI_BUNDLE || String(value.metric_name).startsWith("acquisition_d7_")
       || ["cost_sum", "cost_over_cohort"].includes(String((value.definition as JsonObject | undefined)?.calculation))) {
     return validateMetricDefinition(value);
@@ -149,6 +152,10 @@ export function validateScheduledMetricDefinition(input: unknown): input is Sche
 /** Independent calculators share profile constraints, not their calculation implementation. */
 export function assertMetricDefinitionSeries(definition: Definition, entry: "reference" | "sql" = "sql"): void {
   const metricName = definition.metric_name;
+  if (definition.retention_maturity_policy !== undefined || definition.rule_bundle_id === METRIC_PROFILE_BINDINGS.standard_retention.rule_bundle_id) {
+    if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${metricName}`);
+    return;
+  }
   if (definition.rule_bundle_id === ACQUISITION_KPI_BUNDLE || metricName.startsWith("acquisition_d7_")
       || ["cost_sum", "cost_over_cohort"].includes(definition.definition.calculation)) {
     if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${metricName}`);
