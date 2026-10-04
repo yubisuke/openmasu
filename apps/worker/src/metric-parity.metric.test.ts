@@ -901,6 +901,7 @@ describe("selected native acquisition SQL parity", { concurrency: false }, () =>
       JSON.parse(readFileSync("fixtures/v0.4/66-verified-platform-acquisition/input.json", "utf8")),
       JSON.parse(readFileSync("fixtures/v0.4/67-imported-provider-acquisition/input.json", "utf8")))) {
       await ingestFixture(`retention-${entry.name}`, entry.input, app, seed);
+      await persistSyntheticPlatformResults(app, entry.input);
       const runs = await computeSqlMetricRuns(app, entry.input, false);
       for (const [name, expected] of Object.entries(entry.expected)) {
         assert.equal(runs.find(run => run.metric_name === name)?.value_unscaled, expected, `${entry.name}: ${name}`);
