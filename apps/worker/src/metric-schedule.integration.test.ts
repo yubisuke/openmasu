@@ -545,6 +545,9 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     await seedPool.query("TRUNCATE control.metric_schedules,control.metric_schedule_states,control.metric_schedule_checkpoints CASCADE");
     const appId = `app-setup-${randomBytes(6).toString("hex")}`;
     const reportIdentity = { tenantId, appId, keyId: "synthetic-recommended-setup", role: "admin" as const };
+    await withTenant(appPool, tenantId, client => client.query(
+      "INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ($1,$2,$3)",
+      [tenantId, appId, "2026-08-15T00:00:00.000Z"]));
     const source: Any = JSON.parse(readFileSync("fixtures/v0.4/70-saved-acquisition-kpis/input.json", "utf8"));
     source.server_context.app_id = appId;
     for (const row of [...source.records, ...source.cost_records]) row.app_id = appId;
