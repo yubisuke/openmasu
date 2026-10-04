@@ -33,7 +33,7 @@
   "scripts": {
     "generate:types": "cd ../.. && tsx tools/generate-contract-types.ts",
     "typecheck": "cd ../.. && tsc --noEmit",
-    "validate:test": "cd ../.. && tsx --test tools/validate.ts",
+    "validate:test": "cd ../.. && tsx --test --test-reporter ./tools/validation-reporter.ts tools/validate.ts",
     "validate:summary": "cd ../.. && tsx tools/validate.ts --summary"
   },
   "devDependencies": {

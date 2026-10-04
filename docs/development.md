@@ -80,6 +80,11 @@ Use the narrowest existing command while implementing; do not stack focused
 aliases after their containing suite has already passed. `validate` already
 type-checks. CI owns the full unit/integration suites once; see
 [CI scope and test cost](ci-scope.md) for redundant subsets and load policy.
+Contract validation checks documentation with its measured inventory and prints
+the final summary from that same run. Do not follow it with `check:doc-drift` or
+`validate:summary`. New tests should cover a distinct behavior or failure boundary,
+not another seed that yields an existing input, a source-text spelling, or a
+fixed test-count target.
 
 Runtime and database changes normally require:
 
