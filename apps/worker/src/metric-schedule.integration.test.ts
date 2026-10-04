@@ -543,12 +543,19 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
 
   it("recommended_SSR_setup_previews_without_writes_then_computes_two_campaigns_and_guides_unsupported_or_unauthorized_choices", async () => {
     await seedPool.query("TRUNCATE control.metric_schedules,control.metric_schedule_states,control.metric_schedule_checkpoints CASCADE");
+    const appId = `app-setup-${randomBytes(6).toString("hex")}`;
+    const reportIdentity = { tenantId, appId, keyId: "synthetic-recommended-setup", role: "admin" as const };
     const source: Any = JSON.parse(readFileSync("fixtures/v0.4/70-saved-acquisition-kpis/input.json", "utf8"));
-    // The empty-app phase must not inherit a prior integration scenario's import receipt.
-    await seedPool.query("TRUNCATE control.import_runs CASCADE");
+    source.server_context.app_id = appId;
+    for (const row of [...source.records, ...source.cost_records]) row.app_id = appId;
     source.metric_definitions = []; source.metric_evaluations = [];
     const empty = { ...source, records: [], cost_records: [] };
     await ingestFixture(`setup-empty-${randomBytes(6).toString("hex")}`, empty, appPool, seedPool);
+    // A new app has no prior import receipts; never widen seed permissions to clear them.
+    const adminKey = `synthetic-setup-admin-${randomBytes(32).toString("base64url")}`;
+    const [keyId] = await ensureAdminKeys(appPool, { tenantId, appId }, [adminKey]);
+    const session = await issueDashboardSession(appPool, tenantId, keyId!, 43_200);
+    const admin = (path: string) => fetch(`${baseUrl}${path}`, { headers: { authorization: `Bearer ${adminKey}` } });
     const path = `/dashboard/apps/${appId}/metric-schedules`, cookie = `openmasu_dashboard=${session.token}`;
     const page = async () => (await fetch(`${baseUrl}${path}`, { headers: { cookie } })).text();
     const post = (form: URLSearchParams, suffix = "/preview-recommended", sessionCookie = cookie) => fetch(`${baseUrl}${path}${suffix}`, {
@@ -584,7 +591,7 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     for (const [group, hour] of [["a", "00"], ["b", "03"]]) for (const day of ["07", "13"]) {
       const recordId = `setup-session-${group}-${day}`, occurred = `2026-08-${day}T${hour}:30:00.000Z`;
       const prototype = fixtureInput.records.find((record: Any) => record.event_name === "session_start");
-      source.records.push({ ...structuredClone(prototype), record_id: recordId, event_id: `event:${recordId}`,
+      source.records.push({ ...structuredClone(prototype), tenant_id: tenantId, app_id: appId, record_id: recordId, event_id: `event:${recordId}`,
         delivery_id: `delivery:${recordId}`, occurred_at: occurred, received_at: `2026-08-${day}T${hour}:30:01.000Z`,
         processing_sequence: source.records.length + 1,
         payload: { installation_id: `installation:kpi70-install-${group}-0`, session_id: recordId } });
