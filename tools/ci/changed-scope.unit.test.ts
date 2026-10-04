@@ -35,6 +35,19 @@ describe("CI changed-scope classifier", () => {
     for (const path of ["apps/worker/src/import/runner.ts","apps/runtime/src/index.ts","apps/api/src/sdk-routes.ts","packages/contracts/src/index.ts","package-lock.json","unclassified.file"]) {
       assert.equal(classifyPaths([...html,path]).runtime_performance,true,path);
     }
+    for (const event of ["pull_request", "push"] as const) {
+      for (const path of ["apps/api/src/dashboard/dashboard.unit.test.ts", "packages/fraud-rules/src/fraud-rules.unit.test.ts", "tools/check-doc-links.unit.test.ts"]) {
+        assert.deepEqual(classifyPaths([path, "docs/development.md"], event), {
+          contract: true, runtime: true, android: false, android_emulator: false, ios: false, runtime_performance: false,
+        }, `${event}: ${path}`);
+        for (const implementation of ["apps/worker/src/import/runner.ts", "packages/contracts/src/index.ts", "tools/check-doc-links.ts", "package-lock.json", ".github/workflows/runtime.yml", "unclassified.file"]) {
+          assert.equal(classifyPaths([path, implementation], event).runtime_performance, true, implementation);
+        }
+        assert.equal(classifyPaths([path, "sdk/android/core/src/main/example.kt"], event).android_emulator, true);
+        assert.equal(classifyPaths([path, "sdk/ios/Sources/OpenMasuCore/Storage.swift"], event).ios, true);
+      }
+    }
+    assert.equal(classifyPaths(["unknown-folder/example.unit.test.ts"]).android_emulator, true);
   });
 
   it("runs contract and both native gates for any SDK release surface", () => {
