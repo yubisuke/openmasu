@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { readFileSync } from "node:fs";
 import { classifyPaths } from "./changed-scope.mjs";
 
 describe("CI changed-scope classifier", () => {
   it("keeps offline comparison validation without native or database gates", () => {
     assert.deepEqual(classifyPaths(["tools/compare-cohorts.ts", "tools/cohort-comparison-html.ts", "tools/report-to-snapshot.ts", "tools/report-to-snapshot.unit.test.ts", "examples/synthetic/cohort-snapshot.json", "docs/cohort-comparison.md"]), {
-      contract: true, runtime: false, android: false, android_emulator: false, ios: false, offline_unit: true,
+      contract: true, runtime: false, android: false, android_emulator: false, ios: false, runtime_performance: false, offline_unit: true,
     });
   });
 
@@ -18,39 +19,63 @@ describe("CI changed-scope classifier", () => {
   });
   it("keeps documentation checks while skipping unrelated expensive gates", () => {
     assert.deepEqual(classifyPaths(["README.md", "docs/getting-started.md"]), {
-      contract: true, runtime: false, android: false, android_emulator: false, ios: false,
+      contract: true, runtime: false, android: false, android_emulator: false, ios: false, runtime_performance: false,
     });
+    assert.deepEqual(classifyPaths(["README.md","docs/getting-started.md"],"push"),classifyPaths(["README.md","docs/getting-started.md"]));
   });
 
   it("runs only runtime for application and database implementation changes", () => {
     assert.deepEqual(classifyPaths(["apps/worker/src/main.ts", "db/schema.sql"]), {
-      contract: false, runtime: true, android: false, android_emulator: false, ios: false,
+      contract: false, runtime: true, android: false, android_emulator: false, ios: false, runtime_performance: true,
     });
+    const html = ["apps/api/src/dashboard/render.ts","docs/development.md"];
+    assert.equal(classifyPaths(html).runtime,true);
+    assert.equal(classifyPaths(html).runtime_performance,false);
+    assert.equal(classifyPaths(html,"push").runtime_performance,true);
+    for (const path of ["apps/worker/src/import/runner.ts","apps/runtime/src/index.ts","apps/api/src/sdk-routes.ts","packages/contracts/src/index.ts","package-lock.json","unclassified.file"]) {
+      assert.equal(classifyPaths([...html,path]).runtime_performance,true,path);
+    }
   });
 
   it("runs contract and both native gates for any SDK release surface", () => {
     assert.deepEqual(classifyPaths(["sdk/ios/Sources/OpenMasuCore/Storage.swift"]), {
-      contract: true, runtime: false, android: true, android_emulator: false, ios: true,
+      contract: true, runtime: false, android: true, android_emulator: false, ios: true, runtime_performance: false,
     });
   });
 
   it("runs contract and runtime for shared contract surfaces", () => {
     assert.deepEqual(classifyPaths(["packages/contracts/src/index.ts", "fixtures/v0.4/README.md"]), {
-      contract: true, runtime: true, android: false, android_emulator: false, ios: false,
+      contract: true, runtime: true, android: false, android_emulator: false, ios: false, runtime_performance: true,
     });
   });
 
   it("fails open for workflow, tooling, dependency, and unknown paths", () => {
     for (const path of [".github/workflows/runtime.yml", "tools/sbom.ts", "package-lock.json", "unclassified.file"]) {
       assert.deepEqual(classifyPaths([path]), {
-        contract: true, runtime: true, android: true, android_emulator: true, ios: true,
+        contract: true, runtime: true, android: true, android_emulator: true, ios: true, runtime_performance: true,
       }, path);
     }
+    const scripts = JSON.parse(readFileSync("package.json","utf8")).scripts as Record<string,string>;
+    const runtime = readFileSync(".github/workflows/runtime.yml","utf8");
+    assert.match(runtime,/^\s+npm test$/m);
+    assert.match(runtime,/^\s+npm run test:integration$/m);
+    for (const alias of ["test:m2a","test:financial-parity","test:dashboard-parity"]) {
+      const files = scripts[alias].match(/(?:apps|packages)\/[^\s"]+\.ts/g) ?? [];
+      assert.ok(files.length > 0,alias);
+      for (const file of files) {
+        const suite = file.endsWith(".unit.test.ts") ? "test" : file.endsWith(".integration.test.ts") ? "test:integration" : undefined;
+        assert.ok(suite,`${alias} contains a test outside the bulk suites: ${file}`);
+        const root = file.split("/",1)[0], suffix = file.endsWith(".unit.test.ts") ? "unit" : "integration";
+        assert.ok(scripts[suite].includes(`${root}/**/*.${suffix}.test.ts`),`${alias} lost its CI owner: ${file}`);
+      }
+      assert.ok(!runtime.includes(`run: npm run ${alias}`),`${alias} repeats a bulk suite`);
+    }
+    assert.ok(!runtime.includes("run: npm run verify:consistency"));
   });
 
   it("runs the emulator only for Android source changes", () => {
     assert.deepEqual(classifyPaths(["sdk/android/core/src/main/example.kt"]), {
-      contract: true, runtime: false, android: true, android_emulator: true, ios: false,
+      contract: true, runtime: false, android: true, android_emulator: true, ios: false, runtime_performance: false,
     });
   });
 });

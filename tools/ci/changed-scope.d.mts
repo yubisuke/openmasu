@@ -4,6 +4,7 @@ export type CiScopes = {
   android: boolean;
   android_emulator: boolean;
   ios: boolean;
+  runtime_performance: boolean;
 };
 
-export function classifyPaths(paths: readonly string[]): CiScopes;
+export function classifyPaths(paths: readonly string[], eventName?: "pull_request" | "push"): CiScopes;
