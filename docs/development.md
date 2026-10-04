@@ -139,17 +139,18 @@ Use these categories:
 - historical planning and review records in `issue-drafts/` and
   `docs/review/`.
 
-When status, roadmap order, or a validation inventory changes, update every
-linked summary in the same change. The full `validate` command already checks
-documentation drift, links and threat-model coverage. For a focused
-documentation-only edit, use the relevant standalone command instead of the
-full gate:
+Keep each current document responsible for one question: `README.md` is the
+entry point, `docs/README.md` is the index, `docs/STATUS.md` is current capability
+and evidence, `docs/roadmap.md` is work order, and `docs/project-plan.md` is its
+acceptance crosswalk. Put detailed configuration in the corresponding feature
+guide. Keep tagged release records historical; do not append later source work
+to an older release's evidence.
 
-```bash
-npm run check:doc-drift
-npm run check:doc-links
-npm run check:threat-model
-```
+When status, roadmap order, or validation inventory changes, update the affected
+summaries together. Use an existing standalone documentation check for focused
+iteration if needed. Run full `validate` once at handoff: it already covers
+documentation drift, links and threat-model coverage. Do not run those subsets
+again afterward.
 
 ## Evidence language
 

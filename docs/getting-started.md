@@ -11,9 +11,9 @@ Choose one path; provider settings are not a prerequisite:
 | Verify the full synthetic runtime and clean up automatically | [Recommended first run](#recommended-first-run) | Isolated PostgreSQL parity and HTTP smoke evidence; no persistent dashboard |
 | Explore receipt, metrics and evidence in a local dashboard | [Persistent local stack](#persistent-local-stack), then [receipt to comparison](#from-receipt-to-comparison) | A disposable local instance; never seed a stack containing data you need |
 
-These instructions describe current source. The published `v0.2.0` tag does not
-contain later measurement-health, explanation, comparison-download or aggregate
-CSV additions. Read [next release scope](releases/next.md) for that distinction.
+These instructions describe current source. The published `v0.3.0-rc.1`
+prerelease has its own fixed evidence and does not contain every later `main`
+addition. See [Project status](STATUS.md) and [unreleased scope](releases/next.md).
 
 ## Requirements
 
@@ -146,20 +146,10 @@ defaults. At minimum, keep `OPENMASU_PUBLIC_BASE_URL` and
 deployment must build and validate its own runtime environment rather than
 treating this reference Compose file as a production template.
 
-The worker runs up to four independent tenant cycles by default. Set
-`OPENMASU_WORKER_CONCURRENCY` from 1 through 16 and rerun `npm run bootstrap` to
-change that limit in an existing local runtime; `1` restores globally serial
-processing. Every tenant still keeps its privacy, ingestion, provider, metric,
-and fraud jobs in their established order within one worker process. The
-reference deployment uses one worker replica because tenant/job leases do not
-provide tenant-wide ordering across replicas. Raising the limit changes
-database and provider load and requires deployment-specific monitoring.
-`OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS` controls the bounded graceful-drain window
-from 1000 through 300000 milliseconds and defaults to 30000.
-`OPENMASU_SDK_INBOX_BATCH_LIMIT` and `OPENMASU_MAX_INBOX_BATCH_LIMIT` control the
-number of durable inbox rows processed per tenant cycle. Both default to 100,
-accept 1 through 1000, preserve FIFO order, and can be changed in `.env` before
-rerunning `npm run bootstrap`.
+Keep the reference deployment at one worker replica. Tenant/job leases do not
+guarantee tenant-wide ordering across replicas. See
+[Runtime observability](operations/observability.md) for tenant concurrency,
+inbox limits and graceful shutdown; tuning is not a first-run prerequisite.
 
 `demo:metrics` labels PostgreSQL ledger counts separately from the contract
 fixture preview. The preview is not a database import or live-provider result.
@@ -208,35 +198,21 @@ an SDK key is not required. Keep all secrets out of source, logs and shell histo
 | Run exists but no comparable input | Check units, saved meaning, temporal maturity and complete selection; unknown is a valid result |
 
 [Measurement health](measurement-health.md) describes what each observation can
-and cannot establish. Metric scheduling exists; automatic cost refresh and
-correction-driven recalculation are separate work, not first-run requirements.
+and cannot establish. In a newly registered app, use the
+[recommended measurement setup](scheduled-metrics.md) to preview and confirm
+existing daily definitions; reading a report never starts calculation.
 
-To submit a selected synthetic event from an app backend, issue a dedicated
-server key in the dashboard and follow the
-[server-to-server event guide](server-to-server-events.md). The server secret
-is displayed once. Do not put it in `.env.example`, shell history, source code,
-or logs.
+The following are implemented, optional follow-ups, not first-run prerequisites:
 
-To deliver accepted events to an operator-owned receiver, first set
-`OPENMASU_OPERATOR_WEBHOOKS_ENABLED=on` and list the exact synthetic or private
-HTTPS origin in `OPENMASU_OPERATOR_WEBHOOK_DESTINATION_ALLOWLIST`. Open the app
-dashboard, register an operator webhook, and copy its signing secret once. The
-empty allowlist and the default `off` flag both fail closed. See
-[Operator event webhooks](operator-event-webhooks.md) for the closed event
-vocabulary, exact-body signature, retry behavior, and deletion boundary.
+| Goal | Guide |
+| --- | --- |
+| Keep explicit cost ranges current | [Cost refresh](cost-refresh.md) |
+| Recalculate bounded saved runs | [Explicit corrections](metric-corrections.md) or opt-in [automatic corrections](automatic-metric-corrections.md) |
+| Understand mature retention and custom outcomes | [Standard retention](standard-retention.md) and [custom conversions](custom-conversion-metrics.md) |
+| Deliver selected events outside OpenMasu | Default-off, allowlisted [webhooks](operator-event-webhooks.md) or [bulk exports](operator-bulk-exports.md) |
 
-For larger asynchronous delivery, enable and allowlist an operator-owned
-S3-compatible origin, then register an app-scoped destination from the same
-dashboard. The [operator bulk export guide](operator-bulk-exports.md) describes
-the deterministic gzip NDJSON format, SigV4 credentials, immutable write and
-retry behavior, cursor semantics, and downstream deletion responsibility.
-
-To calculate a stable metric set every day, register an app-scoped durable
-schedule through the admin API. The worker fixes the UTC target date and
-watermark, persists crash-recovery state, and writes through the ordinary
-cohort engine. Start with the checked-in synthetic configuration and the
-[scheduled metric guide](scheduled-metrics.md). Keep `npm run metrics:run` for
-explicit one-off or historical operator runs.
+Real credentials and external delivery require separate private configuration.
+Do not place secrets in examples, source, logs or shell history.
 
 To remove only this repository's local Compose stack and its data:
 
