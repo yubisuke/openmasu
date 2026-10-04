@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import { uuidV7 } from "@openmasu/runtime";
+import { uuidV7, measurementClasses, type MeasurementClasses } from "@openmasu/runtime";
 import type { Any, Correction, Delivery, LogicalEvent, RawRecord, Rejection } from "./model.js";
 
 export async function storedArtifact(
@@ -43,7 +43,8 @@ export async function persistRawWithClient(client: PoolClient, artifact: RawReco
   );
 }
 
-export async function persistDeliveryWithClient(client: PoolClient, artifact: Delivery): Promise<Any> {
+export async function persistDeliveryWithClient(client: PoolClient, artifact: Delivery,
+  classes: MeasurementClasses = measurementClasses()): Promise<Any> {
   const result = await client.query<{ artifact: Any }>(
       `INSERT INTO ledger.event_deliveries (
         delivery_attempt_id, delivery_id, record_id, canonical_record_id, tenant_id, app_id,
@@ -51,8 +52,9 @@ export async function persistDeliveryWithClient(client: PoolClient, artifact: De
         clock_skew_suspected, payload_disposition, reason_code, processing_purpose_id,
         consent_evaluation_policy_version, consent_decision_reason_code,
         withdrawal_recognized_at, alternative_legal_basis_id,
-        alternative_legal_basis_policy_version, artifact
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb)
+        alternative_legal_basis_policy_version, artifact,
+        diagnostic_event_name, diagnostic_producer, diagnostic_producer_version
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21,$22,$23)
       RETURNING artifact`,
       [
         uuidV7(), artifact.delivery_id, artifact.record_id, artifact.canonical_record_id ?? null,
@@ -62,6 +64,7 @@ export async function persistDeliveryWithClient(client: PoolClient, artifact: De
         artifact.consent_evaluation_policy_version, artifact.consent_decision_reason_code,
         artifact.withdrawal_recognized_at ?? null, artifact.alternative_legal_basis_id ?? null,
         artifact.alternative_legal_basis_policy_version ?? null, JSON.stringify(artifact),
+        classes.event_name, classes.producer, classes.producer_version,
       ],
   );
   return result.rows[0].artifact;

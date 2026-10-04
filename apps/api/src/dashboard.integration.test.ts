@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,11 +10,16 @@ import {
   createAppPool,
   createReaderPool,
   EncryptedFilePayloadStore,
+  appendDurableBatch,
+  SDK_POST_PROCESSING_PENDING_REASON,
   withTenant,
 } from "@openmasu/runtime";
 import { ensureAdminKeys } from "./admin-auth.js";
 import { KeyedTokenBucket, TokenBucket } from "./rate-limit.js";
 import { createRequestHandler } from "./router.js";
+import { ingestRuntimeBatch } from "../../worker/src/ingestion.js";
+import type { CandidateAttempt } from "@openmasu/attribution-core";
+import type { MeasurementHealth } from "./measurement-health.js";
 import {
   csrfToken,
   issueDashboardSession,
@@ -170,7 +175,9 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
       "SELECT count(*)::text AS count FROM ledger.audit_logs WHERE tenant_id=$1 AND app_id=$2", [tenantId, healthApp],
     ));
     const again = await read();
-    assert.deepEqual({ ...again, observed_at: null }, { ...pending, observed_at: null });
+    const withoutObservationTime = (health: MeasurementHealth) => ({ ...health, observed_at: null,
+      recent: { ...health.recent, received_from: null, received_to: null, previous_from: null } });
+    assert.deepEqual(withoutObservationTime(again), withoutObservationTime(pending));
     const afterRead = await withTenant(appPool, tenantId, (client) => client.query(
       "SELECT count(*)::text AS count FROM ledger.audit_logs WHERE tenant_id=$1 AND app_id=$2", [tenantId, healthApp],
     ));
@@ -202,6 +209,92 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     assert.equal(computed.metrics.latest_computed_at, at);
     assert.equal(computed.metrics.latest_watermark, at);
     assert.equal(computed.metrics.latest_cohort_date, "2026-09-07");
+  });
+
+  it("diagnoses recent SDK-version receipts through single and bulk admission without turning old failures or local queues into alarms", async () => {
+    const recentApp = `app-recent-${suffix}`;
+    const source = JSON.parse(readFileSync("fixtures/v0.4/33-stage-b-cohort-metrics/input.json", "utf8"));
+    const prototype = source.records.find((record: { event_name: string }) => record.event_name === "session_start");
+    const now = Date.now(), at = (hoursAgo: number) => new Date(now-hoursAgo*3600000).toISOString();
+    const currentAt = at(0.5), previousAt = at(36), oldAt = at(72);
+    const attempt = (label: string, version: string, receivedAt: string, valid = true): CandidateAttempt => {
+      const recordId = `synthetic-recent-${label}-${suffix}`;
+      return { batch_id: `batch:${recordId}`, server: { ...source.server_context, tenant_id: tenantId,
+        app_id: recentApp, received_at: receivedAt, fraud_enabled: false },
+        record: { ...prototype, tenant_id: tenantId, app_id: recentApp, record_id: recordId, event_id: `event:${recordId}`,
+          delivery_id: `delivery:${recordId}`, producer_version: version, received_at: receivedAt, occurred_at: receivedAt,
+          payload: valid ? { installation_id: `installation:synthetic-recent-${suffix}`, session_id: recordId } : {} } };
+    };
+    let accepted!: CandidateAttempt;
+    for (const bulkPersistence of [false,true]) {
+      const mode = bulkPersistence ? "bulk" : "single";
+      const good = attempt(`${mode}-good`, "0.3.0-rc.1", currentAt);
+      if (bulkPersistence) good.record.late = true;
+      else accepted = good;
+      const result = await ingestRuntimeBatch([
+        attempt(`${mode}-previous`, "0.2.0", previousAt), good,
+        attempt(`${mode}-rejected`, "0.3.0-rc.1", currentAt, false),
+      ], appPool, [], { bulkPersistence });
+      assert.equal(result.logical_events.length, 2, mode);
+      assert.equal(result.rejections.length, 1, mode);
+      assert.deepEqual(result.deliveries.map(row => row.ingestion_status).sort(), ["accepted","accepted","rejected"], mode);
+      assert.ok(result.deliveries.every(row => !("diagnostic_event_name" in row)), "operational metadata must not alter artifacts");
+    }
+    const duplicate: CandidateAttempt = { ...accepted, record: { ...accepted.record,
+      record_id: `synthetic-recent-retry-${suffix}`, delivery_id: `delivery:synthetic-recent-retry-${suffix}` } };
+    const duplicateResult = await ingestRuntimeBatch([duplicate], appPool, [accepted]);
+    assert.equal(duplicateResult.deliveries.length, 1);
+    assert.equal(duplicateResult.deliveries[0].duplicate_resolution, "duplicate_delivery");
+    const unknown = attempt("unknown-version", "synthetic-private-value", currentAt);
+    const unknownEvent = attempt("unknown-event", "synthetic-private-value", currentAt);
+    unknownEvent.record.event_name = "synthetic-private-value";
+    await ingestRuntimeBatch([unknown, unknownEvent, attempt("old-rejection", "0.3.0-rc.1", oldAt, false)], appPool);
+    const batch = await appendDurableBatch(appPool, payloadStore, { tenantId, appId: recentApp, producer: "sdk-ios",
+      receivedAt: currentAt, eventCount: 2, body: Buffer.from(JSON.stringify({ records: [
+        { producer_version: "0.3.0-rc.1", event_name: "session_start" },
+        { producer_version: "synthetic-private-value", event_name: "synthetic-private-value" },
+      ] })) });
+    await withTenant(appPool, tenantId, client => client.query(`INSERT INTO ledger.ingest_batch_states
+      (ingest_batch_id,tenant_id,app_id,status,changed_at,reason_code,artifact) VALUES ($1,$2,$3,'processed',$4,$5,'{}')`,
+    [batch,tenantId,recentApp,currentAt,SDK_POST_PROCESSING_PENDING_REASON]));
+    const endpoint = `${baseUrl}/v1/admin/apps/${recentApp}/measurement-health`;
+    const headers = { authorization: `Bearer ${adminKeyA}` };
+    const response = await fetch(endpoint, { headers });
+    assert.equal(response.status, 200);
+    const text = await response.text();
+    for (const forbidden of ["synthetic-private-value", "installation:synthetic-recent", "session_id", "body_ref", "artifact", "sdk_key_id"])
+      assert.equal(text.includes(forbidden), false, forbidden);
+    const health = JSON.parse(text) as MeasurementHealth, recent = health.recent!;
+    assert.equal(recent.window_hours, 24);
+    assert.equal(recent.client_diagnostics, "on_device_only_not_received");
+    const modern = recent.groups.find(group => group.producer === "sdk-android" && group.producer_version === "0.3.0-rc.1")!;
+    assert.deepEqual([modern.current.accepted,modern.current.rejected,modern.current.duplicate,modern.current.late], ["2","2","1","1"]);
+    assert.equal(modern.previous.rejected, "0", "older failures are outside both 24h windows");
+    const earlierVersion = recent.groups.find(group => group.producer_version === "0.2.0")!;
+    assert.equal(earlierVersion.current.accepted, "0");
+    assert.equal(earlierVersion.previous.accepted, "2");
+    assert.equal(recent.groups.find(group => group.producer_version === "other" && group.event_name === "session_start")!.current.accepted, "1");
+    assert.equal(recent.groups.find(group => group.event_name === "other")!.current.rejected, "1");
+    assert.deepEqual(recent.pending_groups.map(group => [group.event_name,group.pending,group.post_processing_pending,group.oldest_received_at]), [
+      ["session_start","1","1",currentAt], ["other","1","1",currentAt],
+    ]);
+    const narrow = await (await fetch(`${endpoint}?window_hours=1`, { headers })).json() as MeasurementHealth;
+    assert.ok(narrow.recent!.groups.every(group => group.producer_version !== "0.2.0"));
+    const wide = await (await fetch(`${endpoint}?window_hours=168`, { headers })).json() as MeasurementHealth;
+    assert.equal(wide.recent!.groups.find(group => group.producer_version === "0.3.0-rc.1")!.current.rejected, "3");
+    for (const query of ["window_hours=25", "window_hours=1&window_hours=24", "installation_id=synthetic"])
+      assert.equal((await fetch(`${endpoint}?${query}`, { headers })).status, 400);
+    const cookieHeader = { cookie: cookie(await login(adminKeyA)) };
+    assert.equal((await fetch(endpoint, { headers: cookieHeader })).status, 401);
+    const dashboardPath = `${baseUrl}/dashboard/apps/${recentApp}/measurement-health`;
+    assert.notEqual((await fetch(dashboardPath, { headers, redirect: "manual" })).status, 200);
+    const page = await fetch(`${dashboardPath}?window_hours=24`, { headers: cookieHeader });
+    assert.equal(page.status, 200);
+    const html = await page.text();
+    for (const state of ["group_no_recent_receipts", "group_rejections_increased", "low_observed_volume", "recent_pending_work"])
+      assert.match(html, new RegExp(`data-measurement-state="${state}"`));
+    assert.doesNotMatch(html, /rejections_observed|synthetic-private-value|<script|javascript:/i);
+    assert.match(html, /window_hours=168/);
   });
 
   it("C01 authenticates both overlap keys and keeps invalid responses byte-identical", async () => {

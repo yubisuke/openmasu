@@ -55,7 +55,7 @@ Progress:
 | Existing provider cost can refresh without publishing partial acquisition | Implemented default-off for one bounded adapter: immutable app configuration, fixed lookback, token-fenced claims/retries/stop and atomic cost/checkpoint commit; empty is not zero and old cost history remains |
 | Selected cost corrections can replace affected saved runs without rewriting history | Implemented bounded requests, saved-definition replay, input-revision/pending labels, atomic new-run completion and immutable supersession; no all-history automation or causal inference |
 | Metric units and analysis selections are readable without changing audited values | Implemented: exact decimal display, SSR filters and scope-preserving CSV links; chart groups stay separate; window/maturity remain explicitly unknown without readable definition evidence |
-| App ingestion and calculation observations are understandable without raw payload access | Implemented: reader-only measurement health for batches, imports, rejections and metric runs; synthetic API/role and state-rendering gates |
+| App ingestion and calculation observations are understandable without raw payload access | Implemented: reader-only measurement health for batches, imports, rejections and metric runs; bounded receipt windows by closed event/SDK-version class keep old failures separate; synthetic API/role and state-rendering gates |
 | Scheduler leases cannot consume the job pool; MAX processing works with a one-connection job pool | Complete |
 | Android and iOS queues share duplicate and event-ID conflict vectors | Complete |
 | One disposable synthetic command is the canonical first run | Complete |
@@ -233,6 +233,12 @@ Use bounded PRs and existing regression suites. The matching
 [project-plan crosswalk](project-plan.md#next-development-foundations) describes
 the same source state and acceptance boundaries. These structural changes do not
 complete the functional backlog or prove live-provider or production readiness.
+
+The [recent measurement view](measurement-health.md#recent-receipt-windows)
+adds 1/24/168-hour server-receipt windows and closed event/SDK-version groups
+(#242), without diagnostic uploads or new services. Its project-plan crosswalk
+is **Recent event and SDK-version diagnostics**. Retained failures remain
+background history; absent receipts are not proof of an outage or device state.
 
 ## Optional operator evidence
 

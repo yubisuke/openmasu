@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { type CandidateAttempt } from "@openmasu/attribution-core";
-import { uuidV7 } from "@openmasu/runtime";
+import { uuidV7, measurementClasses } from "@openmasu/runtime";
 import { resolveActiveFraudBundle } from "../fraud-bundle-runtime.js";
 import { assertNonFraudArtifactBinding, type BoundNonFraudBundle } from "../non-fraud-bundle-runtime.js";
 import { policyDigestForRecord, refundProjectionTargets } from "./input.js";
@@ -47,7 +47,12 @@ const tenantId = attempts[0].server.tenant_id;
 const rawRows: Any[] = selected.raw_records.map((artifact) => ({
     ...artifact, policy_digest: policyDigestForRecord(input, artifact.record_id), artifact,
   }));
-const deliveryRows = selected.deliveries.map((artifact) => ({ ...artifact, delivery_attempt_id: uuidV7(), artifact }));
+const headers = new Map(attempts.map(attempt => [`${attempt.record.record_id}\u0000${attempt.record.delivery_id}`, attempt.record]));
+const deliveryRows = selected.deliveries.map((artifact) => {
+    const classes = measurementClasses(headers.get(`${artifact.record_id}\u0000${artifact.delivery_id}`));
+    return { ...artifact, delivery_attempt_id: uuidV7(), artifact, diagnostic_event_name: classes.event_name,
+      diagnostic_producer: classes.producer, diagnostic_producer_version: classes.producer_version };
+  });
 const logicalRows = selected.logical_events.map((artifact) => ({ ...artifact, artifact }));
 const rejectionRows = selected.rejections.map((artifact) => ({ ...artifact, artifact }));
 const correctionRows = selected.corrections.map((artifact) => ({ ...artifact, artifact }));
@@ -90,11 +95,13 @@ await insertJsonRows(client, deliveryRows, `INSERT INTO ledger.event_deliveries 
       delivery_attempt_id,delivery_id,record_id,canonical_record_id,tenant_id,app_id,received_at,
       ingestion_status,duplicate_resolution,timeliness,clock_skew_suspected,payload_disposition,reason_code,
       processing_purpose_id,consent_evaluation_policy_version,consent_decision_reason_code,
-      withdrawal_recognized_at,alternative_legal_basis_id,alternative_legal_basis_policy_version,artifact)
+      withdrawal_recognized_at,alternative_legal_basis_id,alternative_legal_basis_policy_version,artifact,
+      diagnostic_event_name,diagnostic_producer,diagnostic_producer_version)
       SELECT delivery_attempt_id,delivery_id,record_id,canonical_record_id,tenant_id,app_id,received_at,
       ingestion_status,duplicate_resolution,timeliness,clock_skew_suspected,payload_disposition,reason_code,
       processing_purpose_id,consent_evaluation_policy_version,consent_decision_reason_code,
-      withdrawal_recognized_at,alternative_legal_basis_id,alternative_legal_basis_policy_version,artifact
+      withdrawal_recognized_at,alternative_legal_basis_id,alternative_legal_basis_policy_version,artifact,
+      diagnostic_event_name,diagnostic_producer,diagnostic_producer_version
       FROM jsonb_populate_recordset(NULL::ledger.event_deliveries,$1::jsonb)`);
 await insertJsonRows(client, logicalRows, `INSERT INTO ledger.logical_events (
       logical_event_id,record_id,tenant_id,app_id,producer,event_id,event_name,record_lifecycle,timeliness,artifact)

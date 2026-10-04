@@ -1,6 +1,7 @@
 import { renderSparkline } from "./svg.js";
 import type { DashboardView } from "./view.js";
 import { measurementNotices } from "../measurement-notices.js";
+import { renderRecentMeasurementHealth } from "./recent-measurement-health.js";
 import { metricValueLabel } from "./metric-value.js";
 import { reportFields, reportSelectionParams } from "./report-controls.js";
 import { renderComparisonExport } from "./comparison-export.js";
@@ -150,7 +151,7 @@ function measurementHealthSection(view: DashboardView): string {
     `<li data-measurement-state="${escapeHtml(notice.state)}"><strong>${escapeHtml(notice.message)}</strong> ${escapeHtml(notice.next)}</li>`).join("");
   const reasons = health.rejections.map((row) =>
     `<tr><th scope="row">${escapeHtml(row.source)}</th><td>${escapeHtml(row.reason)}</td><td>${escapeHtml(row.count)}</td></tr>`).join("");
-  return `<section aria-label="Measurement health"><h2>Measurement health</h2>
+  return `${health.recent ? renderRecentMeasurementHealth(health.recent, view.selectedAppId) : ""}<section aria-label="Measurement health"><h2>Retained measurement history</h2><details><summary>Background history — not a current-window alarm</summary>
     <p>Observed at ${value(health.observed_at)}. Counts cover retained history for this app, not the report filter. Each row has a different unit; these are not funnel conversion rates. Configuration and processing observations do not prove live delivery or completeness.</p>
     <ul>${notices}</ul>
     <table><caption>Ingestion and calculation observations</caption><thead><tr><th scope="col">Channel / unit</th><th scope="col">Recorded</th><th scope="col">Waiting</th><th scope="col">Failed</th><th scope="col">Latest observation</th></tr></thead><tbody>
@@ -160,7 +161,7 @@ function measurementHealthSection(view: DashboardView): string {
     <tr><th scope="row">Metric runs (including history)</th><td>${value(health.metrics.runs)}</td><td>${value(health.metrics.pending_schedules)} pending schedules</td><td>Not assessed</td><td>${value(health.metrics.latest_computed_at)}</td></tr>
     </tbody></table><dl><dt>Active SDK keys</dt><dd>${value(health.sdk.active_keys)}</dd><dt>Oldest pending batch receipt</dt><dd>${value(health.sdk.oldest_pending_at)}</dd><dt>Latest completed import</dt><dd>${value(health.imports.latest_completed_at)}</dd><dt>Active metric schedules</dt><dd>${value(health.metrics.active_schedules)}</dd><dt>Latest computed run source watermark</dt><dd>${value(health.metrics.latest_watermark)}</dd></dl>
     <p>Latest computed run cohort date: ${value(health.metrics.latest_cohort_date)}. File mapping configuration is local to the importer and is not observable here. Use import:preview to check it. Use metrics:run with an explicit date/definition/watermark, or app metric schedule settings. The latest run does not cover every cohort.</p>
-    ${reasons ? `<table><caption>Retained rejection artifacts (not unique events)</caption><thead><tr><th scope="col">Source</th><th scope="col">Safe reason</th><th scope="col">Count</th></tr></thead><tbody>${reasons}</tbody></table>` : "<p>No retained rejection artifacts are recorded.</p>"}</section>`;
+    ${reasons ? `<table><caption>Retained rejection artifacts (not unique events)</caption><thead><tr><th scope="col">Source</th><th scope="col">Safe reason</th><th scope="col">Count</th></tr></thead><tbody>${reasons}</tbody></table>` : "<p>No retained rejection artifacts are recorded.</p>"}</details></section>`;
 }
 
 function metricTable(caption: string, rows: DashboardView["rows"], appId?: string): string {

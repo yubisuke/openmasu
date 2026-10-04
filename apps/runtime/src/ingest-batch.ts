@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { uuidV7, withTenant } from "./index.js";
 import type { PayloadStore } from "./payload-store.js";
+import { batchDiagnosticGroups } from "./measurement-diagnostics.js";
 import {
   acquirePrivacyTenantXactFence,
   privacyProjectionIsBlocked,
@@ -80,8 +81,8 @@ export async function appendDurableBatch(
         `INSERT INTO ledger.ingest_batches (
           ingest_batch_id, tenant_id, app_id, producer, sdk_key_id,
           installation_key_id, server_key_id, subject_digest, received_at, body_ref,
-          body_digest, event_count, request_nonce, request_timestamp_ms, artifact
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)`,
+          body_digest, event_count, request_nonce, request_timestamp_ms, artifact, diagnostic_groups
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16::jsonb)`,
         [
           ingestBatchId, input.tenantId, input.appId, input.producer,
           input.sdkKeyId ?? null, input.installationKeyId ?? null,
@@ -89,6 +90,7 @@ export async function appendDurableBatch(
           bodyRef, bodyDigest, input.eventCount, input.requestNonce ?? null,
           input.requestTimestampMs ?? null,
           JSON.stringify(artifact),
+          JSON.stringify(batchDiagnosticGroups(input.producer, input.body, input.eventCount)),
         ],
       );
       await client.query(

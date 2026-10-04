@@ -309,5 +309,15 @@ component evidence and the published v0.3.0-rc.1 record remain unchanged;
 neither source implementation nor synthetic tests prove live delivery, full
 provider coverage, or production correctness.
 
+The [recent measurement view](measurement-health.md#recent-receipt-windows)
+adds bounded server-receipt windows and closed event/public SDK-version
+diagnostics (#242). It records safe header classes in existing delivery/inbox
+tables, including rejected and duplicate attempts, without changing canonical
+artifacts. Older rows remain unknown; protected payloads are not reconstructed.
+Current and preceding windows, pending submissions, late receipt and low-volume
+states are separate from retained history. Local queue-health diagnostics stay
+on the device. These observations do not attest devices, establish an outage,
+upload diagnostics, or extend frozen release evidence.
+
 Private real-data, real-device, and live-provider work is optional operator work
 and is not required to continue repository-only hardening.
