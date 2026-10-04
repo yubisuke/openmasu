@@ -188,6 +188,14 @@ surfaces, but it is not a general secret scanner.
 
 ## Operator responsibility
 
+For server-side failed inbox work, use the app's
+[safe ingest recovery](ingest-recovery.md) page after fixing the dependency or
+temporary failure. It adds a confirmed attempt receipt without repairing
+original evidence, stealing a live claim or resurrecting deleted data. Existing
+auxiliary retries can be brought forward; terminal verification results cannot
+be replayed by this operation. This is distinct from monitoring and the SDK's
+local queue diagnostics.
+
 Choose alert thresholds, notification receivers, retention, redaction, and
 incident response for the deployment. Record production dashboards and alerts
 outside the public repository. Synthetic CI proves metric shape and selected

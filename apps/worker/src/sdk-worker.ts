@@ -6,6 +6,7 @@ import { decryptMetaInstallReferrer, type MetaKey } from "@openmasu/meta-install
 import {
   acquirePrivacyProjectionSessionFence,
   SDK_POST_PROCESSING_PENDING_REASON,
+  SDK_OPERATOR_RETRY_REASON,
   withTenant,
   type PayloadStore,
 } from "@openmasu/runtime";
@@ -405,7 +406,8 @@ async function relevantLedgerHistory(
   const retryRecordKeys = new Set<string>();
   for (const entry of work) {
     byApp.set(entry.row.app_id, [...(byApp.get(entry.row.app_id) ?? []), ...entry.records]);
-    if (entry.row.status === "processed" && entry.row.reason_code === SDK_POST_PROCESSING_PENDING_REASON) {
+    if ((entry.row.status === "processed" && entry.row.reason_code === SDK_POST_PROCESSING_PENDING_REASON)
+      || (entry.row.status === "pending" && entry.row.reason_code === SDK_OPERATOR_RETRY_REASON)) {
       for (const record of entry.records) {
         retryRecordKeys.add(`${entry.row.tenant_id}\u0000${entry.row.app_id}\u0000${record.record_id}`);
       }
@@ -529,7 +531,7 @@ async function relevantLedgerHistory(
     ));
     for (const row of rows.rows) {
       const key = `${row.tenant_id}\u0000${row.app_id}\u0000${row.record_id}`;
-      // A post-processing retry deliberately re-evaluates its own already
+      // A post-processing or confirmed operator retry re-evaluates its own already
       // persisted record so protected auxiliary material can be queued. Other
       // related ledger rows still provide bounded candidate history.
       if (retryRecordKeys.has(key)) continue;

@@ -4,6 +4,7 @@ import type { IncomingMessage } from "node:http";
 import { describe, it } from "node:test";
 import type { Pool } from "pg";
 import { dashboardSessionFor } from "./http-security.js";
+import { parseRecoveryRequest, recoveryReason } from "./ingest-recovery.js";
 import {
   APPLE_AAK_POSTBACK_PATH,
   APPLE_SKAN_POSTBACK_PATH,
@@ -48,6 +49,13 @@ describe("declarative API route security", () => {
   });
 
   it("assigns a capability to every administrator or dashboard session route", () => {
+    const recovery = {kind:"sdk_batch",job_id:"01900000-0000-7000-8000-000000000001",revision:"1",confirmation:"retry_once"};
+    assert.deepEqual(parseRecoveryRequest(recovery),{kind:recovery.kind,job_id:recovery.job_id,revision:recovery.revision});
+    for (const invalid of [{...recovery,confirmation:""},{...recovery,extra:"not_allowed"},{...recovery,job_id:"not-an-id"},{...recovery,revision:"0"}]) {
+      assert.throws(() => parseRecoveryRequest(invalid),/invalid_recovery_request/);
+    }
+    assert.equal(recoveryReason("ingest_batch_scope_mismatch"),"invalid_input");
+    assert.equal(recoveryReason("do-not-publish-arbitrary-database-error"),"worker_failure_review_configuration");
     assert.equal(routes.filter((route) => ["admin_bearer", "dashboard_session"].includes(route.auth))
       .every((route) => route.capability !== undefined), true);
   });
@@ -160,7 +168,7 @@ describe("declarative API route security", () => {
       "dashboard_app_link_identity", "dashboard_apple_registration", "dashboard_conversion_schema",
       "dashboard_rule_bundle", "dashboard_google_data_manager",
     ]) assert.equal(routes.find((route) => route.handler === handler)?.capability, "administer", handler);
-    for (const handler of ["admin_tracking_link_transition", "dashboard_tracking_link_transition"]) {
+    for (const handler of ["admin_tracking_link_transition", "dashboard_tracking_link_transition", "admin_ingest_recovery_request", "dashboard_ingest_recovery_request"]) {
       assert.equal(routes.find((route) => route.handler === handler)?.capability, "operate", handler);
     }
   });

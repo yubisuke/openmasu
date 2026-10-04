@@ -3,15 +3,18 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createServer } from "node:http";
 import { after, describe, it } from "node:test";
 import {
   SDK_POST_PROCESSING_PENDING_REASON,
   appendDurableBatch,
   createAppPool,
+  createReaderPool,
   createMigrationPool,
   EncryptedFilePayloadStore,
   type PayloadStore,
   uuidV7,
+  PostgresSchedulerStore,
   withTenant,
 } from "@openmasu/runtime";
 import {
@@ -31,6 +34,10 @@ import { SELECTED_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
 import { buildMetricDefinitionsInput } from "./metrics/run.js";
 import { persistCostImport } from "./import/cost.js";
+import { listIngestRecovery, requestIngestRecovery } from "../../api/src/ingest-recovery.js";
+import { ensureAdminKeys, type AppAdminIdentity } from "../../api/src/admin-auth.js";
+import { createRequestHandler } from "../../api/src/router.js";
+import { csrfToken, readDashboardToken } from "../../api/src/session.js";
 
 type Any = Record<string, any>;
 
@@ -163,6 +170,156 @@ after(async () => {
 });
 
 describe("SDK auxiliary queue recovery", () => {
+  it("recovers one confirmed SDK/auxiliary attempt while refusing stale forms, active claims, invalid or deleted evidence and preserving admitted facts", async () => {
+    const input = scope("operator", "sdk-ios");
+    const admin = `synthetic-recovery-admin-${run}-${"a".repeat(32)}`;
+    const readonly = `synthetic-recovery-read-${run}-${"b".repeat(32)}`;
+    const keys = await ensureAdminKeys(pool,input,[{key:admin,role:"operator"},{key:readonly,role:"read_only"}]);
+    const identity: AppAdminIdentity = { ...input,keyId:keys[0],role:"operator" };
+    const reader = createReaderPool();
+    const handler = createRequestHandler({pool,readerPool:reader,payloadStore,
+      maxConfig:{tenantId:input.tenantId,appId:input.appId,pathSecret:"synthetic-recovery",eventKey:"synthetic-recovery-key",tokenMode:"all",maxParameters:40,maxQueryBytes:8192},
+      publicBaseUrl:"http://localhost:8080",redirectorBaseUrl:"http://localhost:8090",
+      dashboard:{enabled:true,tenantId:input.tenantId,publicBaseUrl:"http://localhost:8080",sessionTtlSeconds:43200}});
+    const server = createServer(handler);
+    await new Promise<void>(resolve => server.listen(0,"127.0.0.1",resolve));
+    const address = server.address(); assert.ok(address && typeof address === "object");
+    const base = `http://127.0.0.1:${address.port}`, api = `${base}/v1/admin/apps/${input.appId}/ingest-recovery`;
+    const post = (body: unknown, key=admin) => fetch(api,{method:"POST",headers:{authorization:`Bearer ${key}`,"content-type":"application/json"},body:JSON.stringify(body)});
+    const markFailed = async (id: string) => withTenant(pool,input.tenantId,client => client.query(
+      `INSERT INTO ledger.ingest_batch_states (ingest_batch_id,tenant_id,app_id,status,changed_at,reason_code,artifact)
+       VALUES ($1::uuid,$2,$3,'failed',$4,'synthetic_worker_failure','{}'::jsonb)`,[id,input.tenantId,input.appId,new Date().toISOString()]));
+    try {
+      const value = record(input,"operator-install","install",{
+        installation_id:`installation:operator-${run}`,install_type:"first_install",referrer_status:"unavailable"});
+      const batch = await append(input,value);
+      const temporaryStore: PayloadStore = { ...countingPayloadStore([]),read:async () => { throw new Error("synthetic_worker_payload_configuration_unavailable"); } };
+      await processSdkInbox(pool,temporaryStore,input.tenantId);
+      assert.equal((await batchState(input,batch)).status,"failed");
+      const list = await fetch(api,{headers:{authorization:`Bearer ${admin}`}});
+      assert.equal(list.status,200);
+      const initial = await list.json() as Awaited<ReturnType<typeof listIngestRecovery>>;
+      const job = initial.items.find(item => item.job_id === batch)!; assert.ok(job);
+      assert.equal(job.reason,"worker_failure_review_configuration");
+      assert.equal(job.recovery,"validate_before_retry");
+      assert.doesNotMatch(JSON.stringify(initial),/synthetic_worker_payload|encrypted:|protected:|installation:|token_ref|body_ref|subject_digest|record_id/);
+      const request = {kind:"sdk_batch",job_id:batch,revision:job.revision,confirmation:"retry_once"};
+      assert.equal((await post({...request,confirmation:""})).status,400);
+      assert.equal((await post(request,readonly)).status,403);
+      assert.equal((await fetch(`${base}/v1/admin/apps/app-unknown-${run}/ingest-recovery`,{headers:{authorization:`Bearer ${admin}`}})).status,404);
+      const scheduler = new PostgresSchedulerStore(pool);
+      const claim = await scheduler.claim(input.tenantId,"sdk_inbox",{intervalMs:1000,retryMs:1000,leaseMs:300000},new Date());
+      assert.ok(claim);
+      try {
+        const refused = await post(request); assert.equal(refused.status,409); assert.equal((await refused.json() as Any).error,"worker_claim_active");
+      } finally { await scheduler.complete(claim,new Date()); }
+      const concurrent = await Promise.all([post(request),post(request)]);
+      assert.deepEqual(concurrent.map(response => response.status).sort(),[202,409]);
+      const receipt = await concurrent.find(response => response.status === 202)!.json() as Any;
+      const savedReceipt = await withTenant(pool,input.tenantId,client => client.query(
+        "SELECT target_ref FROM ledger.audit_logs WHERE tenant_id=$1 AND app_id=$2 AND audit_log_id=$3",[input.tenantId,input.appId,receipt.receipt_id]));
+      assert.equal(savedReceipt.rows[0].target_ref,batch);
+      assert.equal((await post(request)).status,409);
+      assert.equal(await processSdkInbox(pool,payloadStore,input.tenantId),1,"fixed payload configuration must recover through the original worker");
+      assert.equal(await ledgerCount(input,String(value.record_id)),1);
+      // A failure receipt after partial admission must not create a second logical event/fact.
+      const canonical = await withTenant(pool,input.tenantId,client => client.query(
+        "SELECT artifact FROM ledger.raw_records WHERE tenant_id=$1 AND app_id=$2 AND record_id=$3",[input.tenantId,input.appId,value.record_id]));
+      const originalFacts = await withTenant(pool,input.tenantId,client => client.query(
+        `SELECT fact.artifact FROM ledger.install_facts AS fact JOIN ledger.logical_events AS event
+          USING (tenant_id,app_id,logical_event_id)
+          WHERE fact.tenant_id=$1 AND fact.app_id=$2 AND event.record_id=$3`,[input.tenantId,input.appId,value.record_id]));
+      assert.equal(originalFacts.rowCount,1);
+      await markFailed(batch);
+      const replay = (await listIngestRecovery(reader,identity)).items.find(item => item.job_id === batch)!;
+      await requestIngestRecovery(pool,payloadStore,identity,{...request,revision:replay.revision});
+      await processSdkInbox(pool,payloadStore,input.tenantId);
+      assert.equal(await ledgerCount(input,String(value.record_id)),1);
+      assert.deepEqual((await withTenant(pool,input.tenantId,client => client.query(
+        "SELECT artifact FROM ledger.raw_records WHERE tenant_id=$1 AND app_id=$2 AND record_id=$3",[input.tenantId,input.appId,value.record_id]))).rows,canonical.rows);
+      assert.deepEqual((await withTenant(pool,input.tenantId,client => client.query(
+        `SELECT fact.artifact FROM ledger.install_facts AS fact JOIN ledger.logical_events AS event
+          USING (tenant_id,app_id,logical_event_id)
+          WHERE fact.tenant_id=$1 AND fact.app_id=$2 AND event.record_id=$3`,[input.tenantId,input.appId,value.record_id]))).rows,originalFacts.rows);
+      const invalid = await append(input,record(input,"operator-invalid","install",{install_type:"first_install",referrer_status:"unavailable"}));
+      await markFailed(invalid);
+      const invalidItem = (await listIngestRecovery(reader,identity)).items.find(item => item.job_id === invalid)!;
+      const invalidResponse = await post({...request,job_id:invalid,revision:invalidItem.revision});
+      assert.equal(invalidResponse.status,409); assert.equal((await invalidResponse.json() as Any).error,"recovery_input_invalid");
+      assert.equal((await batchState(input,invalid)).status,"failed");
+      const digest = randomBytes(32).toString("hex");
+      const deletedValue = record(input,"operator-deleted","install",{installation_id:`installation:deleted-${run}`,install_type:"first_install",referrer_status:"unavailable"});
+      const deleted = await appendDurableBatch(pool,payloadStore,{tenantId:input.tenantId,appId:input.appId,producer:input.producer,
+        body:Buffer.from(JSON.stringify({records:[deletedValue]})),eventCount:1,receivedAt:input.receivedAt,subjectDigest:digest});
+      await markFailed(deleted);
+      await withTenant(pool,input.tenantId,client => client.query(`INSERT INTO ledger.privacy_requests
+        (privacy_request_id,tenant_id,app_id,requested_at,completed_at,status,artifact)
+        VALUES ($1,$2,$3,$4,$4,'completed',$5::jsonb)`,[`privacy:operator-${run}`,input.tenantId,input.appId,new Date().toISOString(),
+          JSON.stringify({deletion_scope:"installation",deletion_subject_digest:digest})]));
+      const deletedItem = (await listIngestRecovery(reader,identity)).items.find(item => item.job_id === deleted)!;
+      const reads: string[] = [];
+      await assert.rejects(requestIngestRecovery(pool,countingPayloadStore(reads),identity,{...request,job_id:deleted,revision:deletedItem.revision}),/privacy_subject_inactive/);
+      assert.deepEqual(reads,[],"privacy must be checked before protected evidence is read");
+      // Pending auxiliary retries keep their original immutable source and token.
+      const tokenBody = { records:[{...value,payload:{...(value.payload as Any),
+        extensions:{adservices_attribution_token_protected:`synthetic-operator-token-${run}`}}}] };
+      const tokenRef = await payloadStore.write({tenantId:input.tenantId,appId:input.appId,objectId:`synthetic-operator-token-${run}`},Buffer.from(JSON.stringify(tokenBody)));
+      await queueAdServicesLookup(pool,{tenantId:input.tenantId,appId:input.appId,installRecordId:String(value.record_id),tokenRef,tokenCreatedAt:input.receivedAt});
+      await processAdServicesLookups(pool,payloadStore,input.tenantId,{client:async () => ({status:429,body:Buffer.from("synthetic temporary failure")})});
+      const queued = (await listIngestRecovery(reader,identity)).items.find(item => item.kind === "adservices")!;
+      assert.equal(queued.recovery,"expedite_existing_retry");
+      const auxRequest = {kind:queued.kind,job_id:queued.job_id,revision:queued.revision,confirmation:"retry_once"};
+      assert.equal((await post(auxRequest)).status,202); assert.equal((await post(auxRequest)).status,409);
+      await processAdServicesLookups(pool,payloadStore,input.tenantId,{client:async () => ({status:400,body:Buffer.from("synthetic terminal response")})});
+      assert.equal((await post(auxRequest)).status,404,"a consumed token/completed verdict must not be resurrected");
+      for (const kind of ["integrity","google_play"] as const) {
+        const id = uuidV7(), next = new Date(Date.now()+60000);
+        await withTenant(pool,input.tenantId,client => kind === "integrity" ? client.query(
+          `INSERT INTO ephemeral.integrity_verifications
+            (verification_id,tenant_id,app_id,provider,token_ref,subject_record_id,attempts,next_attempt_at,challenge_digest)
+            VALUES ($1::uuid,$2,$3,'play_integrity',$4,$5,1,$6,$7)`,
+          [id,input.tenantId,input.appId,tokenRef,value.record_id,next,"0".repeat(64)]) : client.query(
+          `INSERT INTO ephemeral.google_play_product_verifications
+            (verification_id,tenant_id,app_id,subject_record_id,token_ref,token_digest,product_id,verified_record_id,attempts,next_attempt_at,requested_at)
+            VALUES ($1::uuid,$2,$3,$4,$5,$6,'synthetic-product',$7,1,$8,$9)`,
+          [id,input.tenantId,input.appId,value.record_id,tokenRef,randomBytes(32).toString("hex"),`verified:${id}`,next,input.receivedAt]));
+        const item = (await listIngestRecovery(reader,identity)).items.find(item => item.job_id === id)!;
+        assert.equal(item.kind,kind); assert.equal(item.recovery,"expedite_existing_retry");
+        const queuedResponse = await post({kind,job_id:id,revision:item.revision,confirmation:"retry_once"});
+        assert.equal(queuedResponse.status,202);
+        const table = kind === "integrity" ? "ephemeral.integrity_verifications" : "ephemeral.google_play_product_verifications";
+        const unchanged = await withTenant(pool,input.tenantId,client => client.query(
+          `SELECT token_ref,attempts${kind === "integrity" ? ",challenge_digest" : ""} FROM ${table} WHERE tenant_id=$1 AND verification_id=$2::uuid`,[input.tenantId,id]));
+        if (kind === "integrity") assert.deepEqual(unchanged.rows,[{token_ref:tokenRef,attempts:1,challenge_digest:"0".repeat(64)}]);
+        else assert.deepEqual(unchanged.rows,[{token_ref:tokenRef,attempts:1}]);
+        await withTenant(pool,input.tenantId,client => client.query(`UPDATE ${table} SET claim_token=$3::uuid,claimed_until=$4
+          WHERE tenant_id=$1 AND verification_id=$2::uuid`,[input.tenantId,id,uuidV7(),new Date(Date.now()+60000)]));
+        const active = (await listIngestRecovery(reader,identity)).items.find(item => item.job_id === id)!;
+        assert.equal(active.recovery,"blocked");
+        assert.equal((await post({kind,job_id:id,revision:active.revision,confirmation:"retry_once"})).status,409);
+        await withTenant(pool,input.tenantId,client => client.query(`DELETE FROM ${table} WHERE tenant_id=$1 AND verification_id=$2::uuid`,[input.tenantId,id]));
+      }
+      const sessionResponse = await fetch(`${base}/dashboard/session`,{method:"POST",redirect:"manual",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({admin_key:admin})});
+      assert.equal(sessionResponse.status,303);
+      const cookie = sessionResponse.headers.get("set-cookie")!.split(";",1)[0];
+      const pageUrl = `${base}/dashboard/apps/${input.appId}/ingest-recovery`;
+      const page = await fetch(pageUrl,{headers:{cookie}}); assert.equal(page.status,200);
+      const html = await page.text(); assert.match(html,/Ingest recovery/); assert.doesNotMatch(html,/<script|javascript:|\son\w+=|encrypted:|protected:|installation:deleted/);
+      assert.equal((await fetch(pageUrl,{headers:{authorization:`Bearer ${admin}`}})).status,401);
+      assert.equal((await fetch(api,{headers:{cookie}})).status,401);
+      const csrf = csrfToken(readDashboardToken(cookie,"http://localhost:8080")!);
+      const csrfCases: Record<string,string>[] = [{cookie,"content-type":"application/x-www-form-urlencoded"},{cookie,"content-type":"application/x-www-form-urlencoded",origin:"https://mismatch.example.test"}];
+      for (const headers of csrfCases) {
+        const response = await fetch(pageUrl,{method:"POST",headers,body:new URLSearchParams({...request,csrf_token:headers.origin ? csrf : ""})});
+        assert.equal(response.status,403);
+      }
+      assert.deepEqual((await withTenant(reader,input.tenantId,client => client.query("SELECT * FROM control.ingest_recovery_auxiliary_items($1)",["app-unknown"]))).rows,[]);
+      await assert.rejects(withTenant(reader,input.tenantId,client => client.query("SELECT token_ref FROM ephemeral.integrity_verifications")),/permission denied/);
+    } finally {
+      await new Promise<void>((resolve,reject) => server.close(error => error ? reject(error) : resolve()));
+      await reader.end();
+    }
+  });
   it("connects native inbox attribution to campaign install count, ad revenue and ROAS without campaign claims", async () => {
     const clickScope = scope("selected-source", "redirector");
     const clickId = `click_${randomBytes(18).toString("base64url")}`;

@@ -65,6 +65,10 @@ export type RouteHandler =
   | "admin_operator_delivery_health"
   | "admin_measurement_health"
   | "dashboard_measurement_health"
+  | "admin_ingest_recovery_list"
+  | "admin_ingest_recovery_request"
+  | "dashboard_ingest_recovery_list"
+  | "dashboard_ingest_recovery_request"
   | "admin_attribution_report"
   | "dashboard_attribution_report"
   | "admin_metric_explanation"
@@ -184,6 +188,10 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "admin_operator_delivery_health", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-delivery-health$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_measurement_health", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/measurement-health$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "dashboard_measurement_health", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/measurement-health$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "admin_ingest_recovery_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/ingest-recovery$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "admin_ingest_recovery_request", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/ingest-recovery$/, auth: "admin_bearer", mutates: true, capability: "operate" },
+  { handler: "dashboard_ingest_recovery_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/ingest-recovery$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_ingest_recovery_request", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/ingest-recovery$/, auth: "dashboard_session", mutates: true, capability: "operate" },
   { handler: "admin_attribution_report", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/attribution$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_metric_explanation", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/metrics\/[^/]+\/explanation$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "dashboard_root", method: "GET", pattern: /^\/dashboard\/?$/, auth: "public", mutates: false },

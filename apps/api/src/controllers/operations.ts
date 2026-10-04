@@ -4,7 +4,10 @@ import { googleDeliveryHealth } from "../google-delivery-health.js";
 import { operatorDeliveryHealth } from "../operator-delivery-health.js";
 import { measurementHealth, parseMeasurementWindow, MeasurementHealthQueryError } from "../measurement-health.js";
 import { renderMeasurementHealthPage } from "../dashboard/recent-measurement-health.js";
-import { recordDashboardAudit } from "../session.js";
+import { csrfToken, recordDashboardAudit } from "../session.js";
+import { roleAllows } from "../authorization.js";
+import { IngestRecoveryError, listIngestRecovery, requestIngestRecovery } from "../ingest-recovery.js";
+import { renderIngestRecovery } from "../dashboard/ingest-recovery.js";
 import { disableOperatorWebhookDestination, listOperatorWebhookDestinations, registerOperatorWebhookDestination } from "../operator-webhooks-admin.js";
 import { disableOperatorBulkExportDestination, listOperatorBulkExportDestinations, registerOperatorBulkExportDestination } from "../operator-bulk-exports-admin.js";
 import type { RequestHandlerDependencies } from "../http-types.js";
@@ -16,6 +19,54 @@ import { dashboardHeaders } from "../http-responses.js";
 import { renderOperatorWebhookRegistered, renderOperatorWebhookOperationFailed, renderBulkExportRegistered, renderBulkExportOperationFailed } from "../dashboard/action-pages.js";
 
 export function createOperationsControllers(dependencies: Pick<RequestHandlerDependencies, "operatorWebhooks" | "pool" | "payloadStore" | "dashboard" | "operatorBulkExports" | "operationalMetrics" | "readerPool">) {
+  const recoveryFailure = async (identity: DashboardAppContext["appIdentity"], error: unknown) => {
+    const failure = error instanceof IngestRecoveryError ? error : new IngestRecoveryError("ingest_recovery_unavailable",503);
+    await recordDashboardAudit(dependencies.pool,{tenantId:identity.tenantId,appId:identity.appId,
+      actorRef:`admin_key:${identity.keyId}`,action:"ingest_recovery_requested",targetScope:"app",targetRef:identity.appId,
+      outcome:"failed",reasonCode:failure.code});
+    return failure;
+  };
+  const adminIngestRecovery = async ({ response,target,route,pool,identity,decoder }: AdminRequestContext): Promise<void> => {
+    let appIdentity;
+    try {
+      appIdentity = await requireRegisteredApp(pool,identity,adminAppId(target.pathname) ?? "");
+      if (target.searchParams.size) throw new IngestRecoveryError("invalid_recovery_request",400);
+      if (route.handler === "admin_ingest_recovery_list") {
+        json(response,200,await listIngestRecovery(pool,appIdentity));
+      } else {
+        json(response,202,await requestIngestRecovery(dependencies.pool,dependencies.payloadStore,appIdentity,await decoder.json()));
+      }
+    } catch (error) {
+      if (error instanceof AppNotFoundError) { json(response,404,{error:"app_not_found"}); return; }
+      const failure = route.mutates && appIdentity ? await recoveryFailure(appIdentity,error)
+        : error instanceof IngestRecoveryError ? error : new IngestRecoveryError("ingest_recovery_unavailable",503);
+      json(response,failure.status,{error:failure.code});
+    }
+  };
+  const dashboardIngestRecovery = async ({ request,response,target,route,pool,session,appIdentity,decoder }: DashboardAppContext): Promise<void> => {
+    try {
+      if (target.searchParams.size) throw new IngestRecoveryError("invalid_recovery_request",400);
+      if (route.mutates) {
+        const form = await decoder.form();
+        if (!await authorizeDashboardForm(dependencies,{request,response,session},form,"ingest_recovery_requested","app",appIdentity.appId)) return;
+        if ([...form.keys()].some(key => !["kind","job_id","revision","confirmation","csrf_token"].includes(key) || form.getAll(key).length !== 1)) {
+          throw new IngestRecoveryError("invalid_recovery_request",400);
+        }
+        const { csrf_token: ignored, ...body } = Object.fromEntries(form); void ignored;
+        await requestIngestRecovery(dependencies.pool,dependencies.payloadStore,appIdentity,body);
+        response.writeHead(303,{...dashboardHeaders,location:`/dashboard/apps/${encodeURIComponent(appIdentity.appId)}/ingest-recovery`}).end();
+        return;
+      }
+      const result = await listIngestRecovery(pool,appIdentity);
+      dashboardHtml(response,200,renderIngestRecovery({appId:appIdentity.appId,items:result.items,
+        csrfToken:csrfToken(session.token),canOperate:roleAllows(session.role,"operate")}));
+    } catch (error) {
+      const failure = route.mutates ? await recoveryFailure(appIdentity,error)
+        : error instanceof IngestRecoveryError ? error : new IngestRecoveryError("ingest_recovery_unavailable",503);
+      dashboardHtml(response,failure.status,renderIngestRecovery({appId:appIdentity.appId,items:[],
+        csrfToken:csrfToken(session.token),canOperate:roleAllows(session.role,"operate"),error:failure.code}));
+    }
+  };
   const dashboardOperatorWebhooksRegister = async ({ request, response, target, route, pool, session, appId, appIdentity, decoder }: DashboardAppContext): Promise<void> => {
     const body = await decoder.form();
     const destinationId = operatorWebhookDestinationId(target.pathname);
@@ -287,6 +338,10 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
   };
 
   return {
+    admin_ingest_recovery_list: { boundary: "admin", handle: adminIngestRecovery },
+    admin_ingest_recovery_request: { boundary: "admin", handle: adminIngestRecovery },
+    dashboard_ingest_recovery_list: { boundary: "dashboard_app", handle: dashboardIngestRecovery },
+    dashboard_ingest_recovery_request: { boundary: "dashboard_app", handle: dashboardIngestRecovery },
     dashboard_operator_webhooks_register: { boundary: "dashboard_app", handle: dashboardOperatorWebhooksRegister },
     dashboard_operator_webhooks_disable: { boundary: "dashboard_app", handle: dashboardOperatorWebhooksRegister },
     dashboard_operator_bulk_exports_register: { boundary: "dashboard_app", handle: dashboardOperatorBulkExportsRegister },

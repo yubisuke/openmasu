@@ -321,3 +321,13 @@ upload diagnostics, or extend frozen release evidence.
 
 Private real-data, real-device, and live-provider work is optional operator work
 and is not required to continue repository-only hardening.
+
+The [safe ingest recovery](operations/ingest-recovery.md) page (#243) adds
+reader-scoped failure diagnosis and explicitly confirmed recovery through
+existing inbox and auxiliary workers. New attempt/audit receipts preserve
+original failures and admitted facts; stale forms, active claims, invalid or
+deleted evidence are refused. Auxiliary operations only bring existing retries
+forward and never recreate completed verification or extend token lifetime.
+Synthetic processing/authorization evidence does not prove real-provider recovery,
+worker secret correctness, operational SLAs or production readiness. No dependency,
+service, queue table or contract/golden change is required.
