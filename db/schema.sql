@@ -5097,6 +5097,7 @@ $$;
 REVOKE ALL ON FUNCTION control.ingest_recovery_auxiliary_items(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION control.ingest_recovery_auxiliary_items(text) TO openmasu_app,openmasu_reader;
 
+-- 070_standard_retention_maturity.sql
 -- Additive reason for the explicitly selected standard-retention profile.
 ALTER TABLE ledger.metric_runs DROP CONSTRAINT metric_runs_undefined_reason_check;
 ALTER TABLE ledger.metric_runs ADD CONSTRAINT metric_runs_undefined_reason_check
