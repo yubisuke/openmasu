@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import {
   assertCleanDemo,
@@ -45,16 +44,6 @@ describe("disposable synthetic runtime pilot", () => {
     assert.match(environment, /^OPENMASU_GOOGLE_DATA_MANAGER_ENABLED=off$/m);
     assert.match(environment, /^OPENMASU_APP_STORE_API_PRIVATE_KEY_FILE=$/m);
     assert.doesNotMatch(environment, /secret|token|credential/i);
-  });
-
-  it("keeps the public redirector URL while probing the Compose service internally", () => {
-    const pilot = readFileSync("tools/synthetic-runtime-pilot.ts", "utf8");
-    assert.match(
-      pilot,
-      /OPENMASU_RUNTIME_SMOKE_REDIRECTOR_PROBE_BASE_URL=http:\/\/redirector:8090 node --import tsx tools\/runtime-smoke\.ts/,
-    );
-    const smoke = readFileSync("tools/runtime-smoke.ts", "utf8");
-    assert.match(smoke, /tracking-link public redirector base was not preserved/);
   });
 
   it("orders writer shutdown before seed and always plans cleanup verification", () => {

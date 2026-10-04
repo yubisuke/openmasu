@@ -98,7 +98,7 @@ checklist:
 | Dashboard/report consistency | `npm run test:dashboard-parity` | Already inside `test:integration`; do not run both for the same edit |
 | Ledger constraints and role grants | `npm run test:db-invariants` | Separate database-invariant step |
 | Persisted contract artifacts | `npm run verify:parity` after synthetic seed | PostgreSQL golden-parity step |
-| Backup and restored privacy state | `npm run test:backup-restore` with its opt-in restore environment | Backup/restore step, including repeated connection cleanup |
+| Backup and restored privacy state | `npm run test:backup-restore` with its opt-in restore environment | One dedicated backup/restore run; idempotency and connection cleanup are asserted within the suite |
 
 `test:privacy-e2e`, `test:m2a` and `test:financial-parity` are convenience subsets.
 Do not run them after their containing suites have already passed. A database
@@ -140,7 +140,10 @@ Use these categories:
   `docs/review/`.
 
 When status, roadmap order, or a validation inventory changes, update every
-linked summary in the same change. Run:
+linked summary in the same change. The full `validate` command already checks
+documentation drift, links and threat-model coverage. For a focused
+documentation-only edit, use the relevant standalone command instead of the
+full gate:
 
 ```bash
 npm run check:doc-drift
