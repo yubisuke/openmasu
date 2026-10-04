@@ -39,7 +39,8 @@ describe("declarative API route security", () => {
     assert.equal(routes.filter((route) => !route.mutates).every((route) => route.method === "GET"
       || (route.method === "POST" && route.capability === "administer"
         && ((route.handler === "admin_metric_schedules_preview_replacement" && route.auth === "admin_bearer")
-          || (route.handler === "dashboard_metric_schedules_preview_replacement" && route.auth === "dashboard_session")))
+          || (["dashboard_metric_schedules_preview_replacement", "dashboard_metric_schedules_preview_recommended"].includes(route.handler)
+            && route.auth === "dashboard_session")))
       || (route.method === "POST" && route.auth === "dashboard_session"
         && ((route.handler === "dashboard_comparison_submit" && route.capability === "read")
           || (route.handler === "dashboard_metric_recalculations_preview" && route.capability === "operate")))), true);
