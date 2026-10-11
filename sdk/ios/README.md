@@ -77,6 +77,12 @@ silently broaden an update to install or every active postback.
 
 ## Queue identity
 
+For opt-in event-key and exact-revenue-bucket conversion meanings, see
+[Apple conversion meanings](../../docs/apple-conversion-meaning.md). The new
+install-only controller verifies the registered digest, persists window-local
+dedupe/lock state and observes the SDK consent barrier. It does not replace the
+legacy count-based controller or prove Apple delivery.
+
 A normal retry is idempotent only when every persisted field is identical. A
 deterministic commerce retry may use a new occurrence time and queue sequence,
 but its event ID, event name, purpose, and payload must match. Any other

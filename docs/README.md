@@ -35,6 +35,7 @@ These documents describe current source unless they explicitly name a release.
   [automatic corrections](automatic-metric-corrections.md).
 - **Read and compare:** [dashboard analysis](dashboard-analysis.md),
   [Apple postback observations](apple-postback-observations.md),
+  [Apple conversion meanings](apple-conversion-meaning.md),
   [saved calculation evidence](metric-explanations.md),
   [cohort comparison](cohort-comparison.md).
 - **Send selected events:** [operator webhooks](operator-event-webhooks.md),

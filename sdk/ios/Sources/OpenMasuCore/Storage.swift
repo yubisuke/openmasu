@@ -95,6 +95,12 @@ public final class OpenMasuStorage: @unchecked Sendable {
 
   func consentBarrierActive() throws -> Bool { try metadata("consent_barrier") == "1" }
 
+  func appleConversionState() throws -> String? { try metadata("apple_conversion_state") }
+  func setAppleConversionState(_ value: String) throws { try setMetadata("apple_conversion_state", value: value) }
+  func clearAppleConversionState() throws {
+    try lock.withLock { try execute("DELETE FROM metadata WHERE key='apple_conversion_state'") }
+  }
+
   func applyConsentState(_ state: String) throws {
     if state == "denied" || state == "withdrawn" {
       try setMetadata("consent_barrier", value: "1")
@@ -105,6 +111,7 @@ public final class OpenMasuStorage: @unchecked Sendable {
 
   func purgeConsentRequiredQueueIfBlocked() throws {
     if try consentBarrierActive() {
+      try clearAppleConversionState()
       try purge(processingPurposes: ["attribution", "analytics", "revenue_measurement"])
     }
   }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import { createServer } from "node:http";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,7 +15,7 @@ import {
   withTenant,
 } from "@openmasu/runtime";
 import { processSdkInbox } from "../../worker/src/sdk-worker.js";
-import { registerAppleApp } from "./apple-admin.js";
+import { registerAppleApp, canonicalConversionSchema } from "./apple-admin.js";
 import { ensureAdminKeys } from "./admin-auth.js";
 import { HourlyLedgerQuota } from "./apple-postback-receiver.js";
 import { KeyedTokenBucket } from "./rate-limit.js";
@@ -455,6 +455,44 @@ describe("M4 Apple aggregate postback receiver", () => {
     assert.equal(page.status, 200); assert.equal(await page.text(), renderApplePostbackReport(appA, report));
     assert.equal((await fetch(`${endpoint}?${new URLSearchParams(selection)}`, { headers: { cookie } })).status, 401);
     assert.match(await (await fetch(`${baseUrl}/dashboard/apps/${appA}/apple-postbacks`, { headers })).text(), /Admin key/);
+
+    // The same received evidence can have incompatible declared meanings. Never choose one implicitly.
+    const { definition } = JSON.parse(readFileSync("sdk/ios/Tests/OpenMasuApplePostbackTests/Vectors/meaning.json", "utf8"));
+    const register = async (definition: Record<string, unknown>, secret = adminSecret) => fetch(`${baseUrl}/v1/admin/apps/${appA}/conversion-schemas`, {
+      method: "POST", headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+      body: JSON.stringify({ schema_version: definition.schema_version, definition }),
+    });
+    assert.equal((await register(definition, readerSecret)).status, 403);
+    const registration = await register(definition); assert.equal(registration.status, 201);
+    const registered = await registration.json() as { schema_digest: string; canonical_definition: string };
+    assert.equal(registered.schema_digest, "1f1d34137531516b47d84f489342966738e4a50d18110e9d3ced2dfc5202b5e0");
+    assert.equal(registered.canonical_definition, canonicalConversionSchema(definition));
+    assert.equal((await register(definition)).status, 409);
+    assert.equal((await register({ ...definition, schema_version: "2.0.1", event_keys: ["tutorial_complete", "purchase"] })).status, 201);
+    assert.equal((await read()).schema_resolution?.reason, "ambiguous_schema");
+    const selectedQuery = new URLSearchParams({ ...selection, schema_version: "2.0.0", schema_digest: registered.schema_digest });
+    const explainedResponse = await fetch(`${endpoint}?${selectedQuery}`, { headers }); assert.equal(explainedResponse.status, 200);
+    const explained = await explainedResponse.json() as ApplePostbackReport;
+    assert.equal(explained.conversion_schema, "not_recorded");
+    assert.equal(explained.schema_resolution?.reason, "operator_selected_definition_not_postback_bound");
+    assert.equal(explained.schema_resolution?.candidates.length, 3);
+    const fine = explained.observations.find(row => row.conversion_bucket === "fine:0")!;
+    assert.deepEqual(fine.meaning?.possible_meanings, [{ fine_value: 0, event_keys_observed: [],
+      revenue_range: { lower_inclusive: "0", upper_exclusive: "100", currency: "USD", amount_scale: 2 } }]);
+    const medium = explained.observations.find(row => row.conversion_bucket === "coarse:medium")!;
+    assert.deepEqual(medium.meaning?.possible_meanings?.map(row => row.fine_value), [6, 7]);
+    assert.ok(explained.observations.every(row => row.meaning?.state === "unverified"));
+    assert.equal(explained.observations.find(row => row.conversion_type === "re-engagement")?.meaning?.reason, "unsupported_window_or_type");
+    assert.equal(explained.observations.find(row => row.verification === "failed")?.meaning?.reason, "verification_failed");
+    const explainedPage = await fetch(`${baseUrl}/dashboard/apps/${appA}/apple-postbacks?${selectedQuery}`, { headers: { cookie } });
+    assert.equal(explainedPage.status, 200); assert.equal(await explainedPage.text(), renderApplePostbackReport(appA, explained));
+    selectedQuery.set("schema_digest", "0".repeat(64));
+    assert.equal((await fetch(`${endpoint}?${selectedQuery}`, { headers })).status, 404);
+    const legacy = await withTenant(pool, tenantA, client => client.query<{ schema_digest: string }>(
+      "SELECT schema_digest FROM control.conversion_schemas WHERE tenant_id=$1 AND app_id=$2 AND schema_version='1.0.0'", [tenantA, appA]));
+    selectedQuery.set("schema_version", "1.0.0"); selectedQuery.set("schema_digest", legacy.rows[0].schema_digest);
+    const old = await (await fetch(`${endpoint}?${selectedQuery}`, { headers })).json() as ApplePostbackReport;
+    assert.equal(old.schema_resolution?.reason, "legacy_definition_unsupported");
 
     await withTenant(pool, tenantA, client => client.query(`INSERT INTO ledger.raw_payload_states
       (tenant_id,app_id,record_id,lifecycle_status,changed_at,privacy_request_id,privacy_tombstone_id)

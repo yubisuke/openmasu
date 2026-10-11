@@ -5,6 +5,9 @@ The app-scoped opt-in administration endpoint and reader-safe status for
 separately; they are not included in the limited OpenAPI surface below.
 The reader-only [Apple postback observation report](../apple-postback-observations.md)
 also has its own selection and four distinct count populations outside this surface.
+Registered [conversion meanings](../apple-conversion-meaning.md) use the existing
+administrator endpoint; the report accepts an explicit version/digest pair,
+never an inferred postback binding.
 
 [openapi.json](openapi.json) is a limited OpenAPI 3.1.1 description of four
 existing endpoints. It is not a new API or a claim of complete API coverage:

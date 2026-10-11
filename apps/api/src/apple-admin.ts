@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { uuidV7, withTenant } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
+import { parseConversionMeaning } from "./apple-conversion-meaning.js";
 
 const bundleIdPattern = /^[A-Za-z0-9][A-Za-z0-9.-]{2,254}$/;
 const schemaVersionPattern = /^[0-9]+\.[0-9]+\.[0-9]+$/;
@@ -154,10 +155,16 @@ export async function registerConversionSchema(input: {
   readonly schema_version: string;
   readonly schema_digest: string;
   readonly status: "active";
+  readonly canonical_definition?: string;
 }> {
   const schemaVersion = typeof input.schemaVersion === "string" ? input.schemaVersion : "";
   if (!schemaVersionPattern.test(schemaVersion)) throw new Error("conversion_schema_version_invalid");
   const canonicalDefinition = canonicalConversionSchema(input.definition);
+  const profile = (input.definition as Record<string, unknown>).profile;
+  if (profile === "event_revenue_v1") {
+    const meaning = parseConversionMeaning(input.definition);
+    if (meaning.schema_version !== schemaVersion) throw new Error("conversion_schema_version_mismatch");
+  }
   const schemaDigest = sha256(canonicalDefinition);
   const now = input.now ?? new Date();
   const conversionSchemaId = `conversion-schema:${uuidV7(now.getTime())}`;
@@ -206,6 +213,7 @@ export async function registerConversionSchema(input: {
         schema_version: schemaVersion,
         schema_digest: schemaDigest,
         status: "active",
+        ...(profile === "event_revenue_v1" ? { canonical_definition: canonicalDefinition } : {}),
       };
     });
   } catch (error) {

@@ -1,0 +1,19 @@
+{
+  "definition": {
+    "profile": "event_revenue_v1",
+    "schema_version": "2.0.0",
+    "effective_from": "2026-01-01T00:00:00.000Z",
+    "effective_to": "2027-01-01T00:00:00.000Z",
+    "event_keys": ["onboarding_complete", "purchase"],
+    "revenue": { "event_key": "purchase", "currency": "USD", "amount_scale": 2, "thresholds": ["0", "100", "500"] },
+    "coarse": { "medium_from": 4, "high_from": 8 },
+    "lock_at_maximum": true
+  },
+  "cases": [
+    { "name": "no_signal", "mask": 0, "revenue": "0", "fine": 0, "coarse": "low", "lock": false, "keys": [], "lower": "0", "upper": "100" },
+    { "name": "onboarding_only", "mask": 1, "revenue": "0", "fine": 1, "coarse": "low", "lock": false, "keys": ["onboarding_complete"], "lower": "0", "upper": "100" },
+    { "name": "purchase_lower_boundary", "mask": 2, "revenue": "100", "fine": 6, "coarse": "medium", "lock": false, "keys": ["purchase"], "lower": "100", "upper": "500" },
+    { "name": "both_below_upper", "mask": 3, "revenue": "499", "fine": 7, "coarse": "medium", "lock": false, "keys": ["onboarding_complete", "purchase"], "lower": "100", "upper": "500" },
+    { "name": "maximum_and_lock", "mask": 3, "revenue": "500", "fine": 11, "coarse": "high", "lock": true, "keys": ["onboarding_complete", "purchase"], "lower": "500", "upper": null }
+  ]
+}
