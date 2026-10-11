@@ -32,6 +32,8 @@ The unreleased source connects:
   simpler, non-overlapping CI test ownership;
 - five optional monitoring rules over existing metrics, synthetic alert
   transitions and linked recovery runbooks, without a new runtime dependency.
+- matched backup/freshness and isolated restore tools with all-tenant privacy
+  reapplication; shared saved analysis filters and all-page previous-period views.
 
 The [documentation index](../README.md) links the corresponding guides.
 These are source implementations with synthetic evidence; they do not qualify
@@ -40,8 +42,7 @@ live providers, devices or production operation.
 ## Remaining integration work
 
 The [current functional plan](https://github.com/yubisuke/openmasu/issues/218)
-and [roadmap](../roadmap.md#next-product-sequence) prioritize scheduled backup,
-followed by saved daily analysis, broader comparison,
+and [roadmap](../roadmap.md#next-product-sequence) prioritize broader comparison,
 Apple aggregate usability and Unity purchase binding. Optional extensions have
 separate usage conditions; they need not all precede candidate promotion.
 

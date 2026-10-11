@@ -24,7 +24,7 @@ it or treating its judgment as first-party evidence.
 | Attribute | Separate first-party, verified platform, imported-provider and Apple aggregate evidence |
 | Calculate | Scoped acquisition KPIs, ROAS, LTV, retention and custom outcomes with saved definitions, cutoffs and exact money |
 | Maintain | Daily schedules, bounded cost refresh and corrections, receipt diagnostics and confirmed ingest recovery |
-| Explain | Reader-only dashboard, saved calculation operands, JSON/CSV reports and explicit aggregate comparison |
+| Explain | Reader-only dashboard, saved daily analyses and bounded previous-period views, calculation operands, JSON/CSV and explicit aggregate comparison |
 | Operate | PostgreSQL role isolation, privacy deletion/reapplication, backup/restore, signed webhooks and bulk exports |
 
 These are bounded, synthetically verified capabilities, not universal provider

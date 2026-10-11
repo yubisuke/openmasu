@@ -48,7 +48,7 @@ guides document their configuration. Published-release evidence remains separate
 
 ## Next product slices
 
-Updated: 2026-10-11. Seventeen of 35 child implementations are complete; the 18 remaining
+Updated: 2026-10-11. Eighteen of 35 child implementations are complete; the 17 remaining
 issues below map directly to the [roadmap sequence](roadmap.md#next-product-sequence).
 Numbers are tracking links, not required background knowledge.
 
@@ -56,7 +56,7 @@ Numbers are tracking links, not required background knowledge.
 
 | Workstream / issue | Acceptance boundary |
 | --- | --- |
-| Daily analysis and comparison: [#244](https://github.com/yubisuke/openmasu/issues/244), [#245](https://github.com/yubisuke/openmasu/issues/245) | Saved, complete bounded selections and explicit meaning for purchase/net, total revenue, retention and outcomes; do not infer upstream completeness or compare incompatible populations |
+| Broader comparison: [#245](https://github.com/yubisuke/openmasu/issues/245) | Saved daily analysis is implemented with complete bounded acquisition and day-offset comparison; extend external declared meaning for purchase/net, total revenue, retention and outcomes without inferring upstream completeness or comparing incompatible populations |
 | Apple aggregate usability: [#233](https://github.com/yubisuke/openmasu/issues/233), then [#234](https://github.com/yubisuke/openmasu/issues/234); [#235](https://github.com/yubisuke/openmasu/issues/235) | Window/suppression/unknown states, meaning-bound conversion decoding and scoped cost through existing paths. Never equate postbacks with unique installs; live Apple permissions remain unverified |
 | Unity purchase binding: [#239](https://github.com/yubisuke/openmasu/issues/239) | Existing native verified preparation/submission through Unity, preserving consent, credential and privacy behavior; no new purchase authority or real-store claim |
 

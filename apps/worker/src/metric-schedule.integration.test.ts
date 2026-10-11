@@ -40,6 +40,10 @@ import { requestMetricRecalculation } from "../../api/src/metric-recalculations.
 import { processMetricRecalculations } from "./metric-recalculation-worker.js";
 import { encodeMetricReport } from "../../api/src/reporting.js";
 import { parseCsv } from "@openmasu/runtime/import-normalization";
+import { analysisQuery, getSavedAnalysis, listSavedAnalyses } from "../../api/src/saved-analysis.js";
+import { acquirePeriodAnalysis, encodePeriodAnalysisCsv } from "../../api/src/period-analysis.js";
+import { comparisonLimits } from "../../api/src/fixed-comparison.js";
+import { persistCalculatedMetricRun } from "./metrics/persistence.js";
 
 type Any = Record<string, any>;
 
@@ -541,7 +545,7 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     });
   });
 
-  it("recommended_SSR_setup_previews_without_writes_then_computes_two_campaigns_and_guides_unsupported_or_unauthorized_choices", async (context) => {
+  it("recommended_SSR_setup_and_saved_analyses_cover_two_campaigns_retention_pagination_and_authorization", async (context) => {
     const tenantId = `tenant-setup-${randomBytes(6).toString("hex")}`;
     const appId = `app-setup-${randomBytes(6).toString("hex")}`;
     const reportIdentity = { tenantId, appId, keyId: "synthetic-recommended-setup", role: "admin" as const };
@@ -627,6 +631,75 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     assert.equal(dashboard.status, 200); const html = await dashboard.text();
     assert.match(html, /kpi70-a/); assert.match(html, /kpi70-b/); assert.match(html, /data-value-unscaled="1200000"/);
     const before = await schedules(); await page(); assert.deepEqual(await schedules(), before, "GET does not claim or change a schedule");
+
+    // Reuse this real two-campaign/retention engine setup instead of a second synthetic stack.
+    const analysisPath = `/dashboard/apps/${appId}/analyses`;
+    const filters = new URLSearchParams({ date_from: "2026-08-06", date_to: "2026-08-07",
+      watermark_at_most: "2026-08-15T00:00:00.000Z", metric_schedule_id: id });
+    const selection = analysisQuery(reportIdentity, filters);
+    const complete = await acquirePeriodAnalysis(readerPool, reportIdentity, { ...selection, limit: 1 });
+    assert.equal(complete.current_count, rows.length); assert.equal(complete.previous_count, 0);
+    assert.equal(new Set(complete.rows.flatMap(row => row.current.map(value => value.run_id))).size, rows.length);
+    assert.ok(complete.rows.some(row => row.metric_name === "retention_d7"));
+    assert.ok(complete.rows.some(row => row.current.some(value => value.reason === "no_attributed_cost")));
+    for (const bounds of [{ ...comparisonLimits, rows: rows.length - 1 }, { ...comparisonLimits, bytes: 10 }]) {
+      await assert.rejects(acquirePeriodAnalysis(readerPool, reportIdentity, selection, { bounds }), /comparison_incomplete_or_limit_exceeded/);
+    }
+    const saveForm = new URLSearchParams(filters); saveForm.set("name", "Synthetic daily acquisition");
+    saveForm.set("display", "all"); saveForm.set("csrf_token", csrfToken(session.token));
+    const save = (body: URLSearchParams, sessionCookie = cookie, origin = "http://localhost:8080", suffix = "") => fetch(`${baseUrl}${analysisPath}${suffix}`, {
+      method: "POST", redirect: "manual", headers: { cookie: sessionCookie, origin }, body });
+    assert.equal((await fetch(`${baseUrl}${analysisPath}`)).status, 401);
+    const deniedSave = new URLSearchParams(saveForm); deniedSave.set("csrf_token", csrfToken(reader.token));
+    assert.equal((await save(deniedSave, `openmasu_dashboard=${reader.token}`)).status, 403);
+    assert.equal((await save(saveForm, cookie, "https://other.synthetic.example")).status, 403);
+    const badCsrf = new URLSearchParams(saveForm); badCsrf.set("csrf_token", "wrong"); assert.equal((await save(badCsrf)).status, 403);
+    const leaked = new URLSearchParams(saveForm); leaked.set("api_key", "synthetic-not-stored"); assert.equal((await save(leaked)).status, 400);
+    const created = await save(saveForm); assert.equal(created.status, 303);
+    const saved = (await listSavedAnalyses(readerPool, reportIdentity))[0]; assert.ok(saved);
+    assert.equal(await getSavedAnalysis(readerPool, { ...reportIdentity, appId: "other-app" }, saved.view_id), undefined);
+    assert.equal(await getSavedAnalysis(readerPool, { ...reportIdentity, tenantId: "other-tenant" }, saved.view_id), undefined);
+    const rls = await withTenant(readerPool, "other-tenant", client => client.query("SELECT view_id FROM control.saved_analysis_views WHERE view_id=$1", [saved.view_id]));
+    assert.equal(rls.rowCount, 0);
+    const location = created.headers.get("location")!;
+    const readView = await fetch(`${baseUrl}${location}`, { headers: { cookie: `openmasu_dashboard=${reader.token}` } });
+    assert.equal(readView.status, 200); const analysisHtml = await readView.text();
+    assert.match(analysisHtml, /kpi70-a/); assert.match(analysisHtml, /kpi70-b/); assert.match(analysisHtml, /no_attributed_cost/);
+    assert.match(analysisHtml, /missing_previous/); assert.match(analysisHtml, /Source completeness remains unknown/);
+    const csvResponse = await fetch(`${baseUrl}${location}.csv`, { headers: { cookie } }); assert.equal(csvResponse.status, 200);
+    assert.equal(await csvResponse.text(), encodePeriodAnalysisCsv(complete, "all"));
+    assert.equal((await fetch(`${baseUrl}${location}?app_id=other-app`, { headers: { cookie } })).status, 400);
+
+    let injected = false; const newId = `zz-analysis-concurrent-${randomBytes(6).toString("hex")}`;
+    const concurrentReader = { connect: async () => {
+      const client = await readerPool.connect(), execute = client.query.bind(client);
+      return new Proxy(client, { get(target, key) {
+        if (key === "query") return async (...args: any[]) => {
+          const result = await (execute as any)(...args);
+          if (!injected && typeof args[0] === "string" && args[0].startsWith("SELECT mr.artifact")) {
+            injected = true;
+            await withTenant(appPool, tenantId, async writer => {
+              const oldId = rows.find(row => row.metric_name === "retention_d7")!.metric_run_id;
+              const old = (await writer.query("SELECT artifact,comparison_context FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2 AND metric_run_id=$3", [tenantId, appId, oldId])).rows[0];
+              await persistCalculatedMetricRun(writer, { tenant_id: tenantId, app_id: appId },
+                { ...old.artifact, metric_run_id: newId }, { ...old.comparison_context, metric_run_id: newId });
+              await writer.query(`INSERT INTO control.metric_schedule_runs
+                (tenant_id,app_id,metric_run_id,metric_schedule_id,target_date,evaluation,definition_digest)
+                SELECT tenant_id,app_id,$4,metric_schedule_id,target_date,evaluation,definition_digest
+                FROM control.metric_schedule_runs WHERE tenant_id=$1 AND app_id=$2 AND metric_run_id=$3`, [tenantId, appId, oldId, newId]);
+            });
+          }
+          return result;
+        };
+        const value = Reflect.get(target, key); return typeof value === "function" ? value.bind(target) : value;
+      } });
+    } } as unknown as Pool;
+    assert.deepEqual(await acquirePeriodAnalysis(concurrentReader, reportIdentity, { ...selection, limit: 1 }), complete);
+    const fresh = await acquirePeriodAnalysis(readerPool, reportIdentity, selection);
+    assert.equal(fresh.current_count, rows.length + 1); assert.ok(fresh.rows.some(row => row.current.some(value => value.run_id === newId)));
+    assert.equal((await save(new URLSearchParams({ csrf_token: csrfToken(session.token) }), cookie, "http://localhost:8080", `/${saved.view_id}/delete`)).status, 303);
+    assert.equal((await fetch(`${baseUrl}${location}`, { headers: { cookie } })).status, 404);
+    assert.equal(await getSavedAnalysis(readerPool, reportIdentity, saved.view_id), undefined);
   });
 
   describe("per-key custom-conversion schedules on the existing engine", () => {

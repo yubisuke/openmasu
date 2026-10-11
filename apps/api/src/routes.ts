@@ -81,6 +81,10 @@ export type RouteHandler =
   | "dashboard_login"
   | "dashboard_logout"
   | "dashboard_app"
+  | "dashboard_analyses"
+  | "dashboard_analysis_save"
+  | "dashboard_analysis_delete"
+  | "dashboard_analysis_read"
   | "dashboard_metric_explanation"
   | "dashboard_export"
   | "dashboard_comparison_export"
@@ -231,6 +235,10 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_rule_bundle", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/rule-bundles$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_google_data_manager", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/google-data-manager$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_app", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_analyses", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/analyses$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_analysis_save", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/analyses$/, auth: "dashboard_session", mutates: true, capability: "operate" },
+  { handler: "dashboard_analysis_delete", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/analyses\/[^/]+\/delete$/, auth: "dashboard_session", mutates: true, capability: "operate" },
+  { handler: "dashboard_analysis_read", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/analyses\/[^/]+$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_apps_create", method: "POST", pattern: /^\/dashboard\/apps$/, auth: "dashboard_session", mutates: true, capability: "administer" },
 ] as const;
 

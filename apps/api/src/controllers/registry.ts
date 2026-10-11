@@ -10,6 +10,7 @@ import { createTrackingControllers } from "./tracking.js";
 import { createKeysControllers } from "./keys.js";
 import { createOperationsControllers } from "./operations.js";
 import { createPrivacyControllers } from "./privacy.js";
+import { createAnalysesControllers } from "./analyses.js";
 
 export type HandlerRegistry = Readonly<Record<RouteHandler, RegisteredController>>;
 
@@ -31,6 +32,7 @@ export function assertHandlerRegistry(registry: Readonly<Partial<Record<RouteHan
 
 export function createHandlerRegistry(dependencies: RequestHandlerDependencies): HandlerRegistry {
   const registry = {
+    ...createAnalysesControllers({ readerPool: dependencies.readerPool, pool: dependencies.pool, dashboard: dependencies.dashboard }),
     ...createReceiversControllers({ maxConfig: dependencies.maxConfig, maxBucket: dependencies.maxBucket, pool: dependencies.pool, payloadStore: dependencies.payloadStore, applePostback: dependencies.applePostback, googlePlayRtdn: dependencies.googlePlayRtdn, appleStoreNotifications: dependencies.appleStoreNotifications, sdk: dependencies.sdk, server: dependencies.server }),
     ...createSessionsControllers({ readerPool: dependencies.readerPool, dashboard: dependencies.dashboard, dashboardLoginBucket: dependencies.dashboardLoginBucket, dashboardLoginGlobalBucket: dependencies.dashboardLoginGlobalBucket, pool: dependencies.pool }),
     ...createAppsControllers({ pool: dependencies.pool, payloadStore: dependencies.payloadStore, publicBaseUrl: dependencies.publicBaseUrl, redirectorBaseUrl: dependencies.redirectorBaseUrl, dashboard: dependencies.dashboard }),
