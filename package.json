@@ -13,6 +13,10 @@
     "npm": "11.6.2"
   },
   "scripts": {
+    "backup:create": "node --env-file-if-exists=.env --import tsx apps/worker/src/backup-cli.ts create",
+    "backup:check": "node --env-file-if-exists=.env --import tsx apps/worker/src/backup-cli.ts check",
+    "backup:boundary": "node --env-file-if-exists=.env --import tsx apps/worker/src/backup-cli.ts boundary",
+    "backup:restore": "node --env-file-if-exists=.env --import tsx apps/worker/src/backup-cli.ts restore",
     "compare:cohorts": "node --import tsx tools/compare-cohorts.ts",
     "snapshot:report": "node --import tsx tools/report-to-snapshot.ts",
     "benchmark:metric-floor": "npm run benchmark:metric-floor --workspace @openmasu/worker",

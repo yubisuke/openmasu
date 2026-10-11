@@ -45,9 +45,9 @@ qualification is stated. No row establishes production readiness.
 | SDKs and verified commerce | Android/iOS/Unity queues and bridges; native verified purchases and Swift submission; synthetic Unity 6 Android export | Real devices/stores/providers and Unity 2022.3 are unverified; Unity purchase helpers remain planned |
 | Deep links and re-engagement | Deterministic direct links on both OSes, Android deferred links, separate latest-open 24-hour outcome profiles | No iOS deferred links; no engagement ROAS/purchase model; device-reported opens can be forged |
 | Fraud controls | Recorded public rules, registered fraud bundle hashes, diagnostics and synthetic Integrity/App Attest verification | No physical-device-farm or reset-fraud guarantee; private threshold calibration and live platform projects unverified |
-| Privacy and recovery | Role isolation, protected payloads, deletion, saved-manifest metric replay, actual dump/restore and privacy reapplication | External recipients retain their own deletion duty; live recovery time and secret custody unverified |
+| Privacy and recovery | Role isolation, protected payloads, deletion, saved-manifest metric replay; matched backup/freshness and isolated restore CLI with all-tenant privacy reapplication and a dedicated synthetic gate | External recipients retain their own deletion duty; live recovery time, authoritative boundary custody and secret custody unverified |
 | Outbound delivery | Default-off signed webhooks, S3-compatible bulk exports and bounded Google conversion delivery with local fencing/health | Live quotas and permissions unverified; no provider-side exactly-once guarantee |
-| Runtime and operation | One-worker tenant fairness, bounded inbox slices, authenticated logs/metrics, five optional monitoring rules and recovery runbooks, upgrade and single-host procedures | Multi-replica tenant-wide ordering, scheduled backup, live alert delivery and capacity remain open |
+| Runtime and operation | One-worker tenant fairness, bounded inbox slices, authenticated logs/metrics, five optional monitoring rules and recovery runbooks, operator-scheduled backup commands, upgrade and single-host procedures | Multi-replica tenant-wide ordering, live backup scheduling, alert delivery and capacity remain unverified |
 
 Detailed limits belong to the [product guides](README.md), [product scope](product-scope.md),
 [privacy/security policy](privacy-security.md) and [threat model](threat-model.md).
@@ -55,16 +55,19 @@ Detailed limits belong to the [product guides](README.md), [product scope](produ
 ## Current development focus
 
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-16 of 35 child issues complete; 19 remain as of this update. The earlier
+17 of 35 child implementations complete; 18 remain as of this update. The earlier
 integration plan is complete, not a second backlog. The dependency, controller,
 presentation, evaluator and ingestion foundations are also implemented.
 
 The [minimal monitoring rules](operations/monitoring.md) are implemented with
 synthetic transition tests; receiver setup and live delivery remain external.
-Next: **scheduled backup and recovery evidence**
-([#250](https://github.com/yubisuke/openmasu/issues/250)). After that, prioritize
-bounded daily analysis/comparison, Apple aggregate usability and Unity purchase
-binding before promoting an integrated candidate. The [roadmap](roadmap.md)
+[Backup and recovery](operations/backup-restore.md)
+([#250](https://github.com/yubisuke/openmasu/issues/250)) is implemented with a
+dedicated synthetic gate; live scheduling/custody remain operator work.
+Next: **saved bounded daily analysis**
+([#244](https://github.com/yubisuke/openmasu/issues/244)), followed by broader
+comparison, Apple aggregate usability and Unity purchase binding before promoting
+an integrated candidate. The [roadmap](roadmap.md)
 owns the sequence; the [project plan](project-plan.md) records its acceptance
 crosswalk. Optional expansions are not all release prerequisites.
 
