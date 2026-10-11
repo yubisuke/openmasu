@@ -2,16 +2,20 @@ import type { Pool } from "pg";
 import { acquirePrivacyTenantXactFence, appleObservationValues, type AppleObservation } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { AttributionReportError, parseAttributionQuery } from "./attribution-reporting.js";
+import { canonicalConversionSchema } from "./apple-admin.js";
+import { createHash } from "node:crypto";
+import { parseConversionMeaning, decodeConversionMeaning, type ConversionMeaning, type DecodedMeaning } from "./apple-conversion-meaning.js";
 
 export const appleReportLimits = { source_rows: 100000, days: 366, milliseconds: 5000 } as const;
-export type AppleReportQuery = { date_from: string; date_to: string; watermark_at_most: string };
+export type AppleReportQuery = { date_from: string; date_to: string; watermark_at_most: string; schema_version?: string; schema_digest?: string };
 type Platform = "skadnetwork" | "adattributionkit";
 type Count = { receipt_date: string; platform: Platform; count: string };
 export type ApplePostbackReport = {
   selection: AppleReportQuery & { app_id: string; time_zone: "UTC" };
   privacy: "current"; conversion_schema: "not_recorded"; coverage: "retained_receiver_ledger_only";
   maximum_source_rows: number;
-  observations: (Count & AppleObservation & { verification: "verified" | "failed" })[];
+  schema_resolution?: { state: "unverified"; reason: string; candidates: { schema_version: string; schema_digest: string; effective_from?: string; effective_to?: string }[] };
+  observations: (Count & AppleObservation & { verification: "verified" | "failed"; conversion_bucket?: string; meaning?: DecodedMeaning })[];
   receipts: (Count & { state: "pending" | "processed" | "post_processing_pending" | "failed" | "not_recorded" })[];
   deliveries: (Count & { state: "accepted_unique" | "duplicate_delivery" | "event_id_conflict" | "other_rejection" | "not_recorded" })[];
   quota_rejections: (Count & { reason: "signature_invalid" | "unknown_key" | "development_postback_rejected" | "other" })[];
@@ -22,9 +26,15 @@ export class AppleReportError extends Error {
 export function parseAppleReportQuery(params: URLSearchParams): AppleReportQuery {
   if (params.has("time_zone")) throw new AppleReportError("unknown_filter");
   const withZone = new URLSearchParams(params); withZone.set("time_zone", "UTC");
+  const version = params.getAll("schema_version"), digest = params.getAll("schema_digest");
+  const selected = version.length || digest.length;
+  if (selected && (version.length !== 1 || digest.length !== 1 || !/^\d+\.\d+\.\d+$/.test(version[0]) || !/^[a-f0-9]{64}$/.test(digest[0]))) {
+    throw new AppleReportError("conversion_schema_selection_invalid");
+  }
+  withZone.delete("schema_version"); withZone.delete("schema_digest");
   try {
     const { time_zone: _, ...selection } = parseAttributionQuery(withZone);
-    return selection;
+    return { ...selection, ...(selected ? { schema_version: version[0], schema_digest: digest[0] } : {}) };
   } catch (error) {
     if (error instanceof AttributionReportError) throw new AppleReportError(error.code, error.statusCode);
     throw error;
@@ -91,7 +101,9 @@ export async function applePostbackReport(pool: Pool, identity: AppAdminIdentity
       ), observation_source AS MATERIALIZED (
         SELECT timezone('UTC',raw.received_at_ts)::date::text AS receipt_date,
           CASE fact.event_name WHEN 'skan_postback' THEN 'skadnetwork' ELSE 'adattributionkit' END AS platform,
-          CASE WHEN fact.signature_verified THEN 'verified' ELSE 'failed' END AS verification,${metadata}
+          CASE WHEN fact.signature_verified THEN 'verified' ELSE 'failed' END AS verification,${metadata},
+          CASE WHEN fact.conversion_bucket ~ '^fine:([0-9]|[1-5][0-9]|6[0-3])$' OR fact.conversion_bucket IN ('coarse:low','coarse:medium','coarse:high','absent')
+            THEN fact.conversion_bucket ELSE 'not_recorded' END AS conversion_bucket
         FROM ledger.apple_postback_facts fact JOIN ledger.logical_events logical USING (tenant_id,app_id,logical_event_id)
         JOIN ledger.raw_records_current raw ON raw.tenant_id=logical.tenant_id AND raw.app_id=logical.app_id AND raw.record_id=logical.record_id
         WHERE fact.tenant_id=$1 AND fact.app_id=$2 AND raw.payload_lifecycle_status='available'
@@ -114,9 +126,32 @@ export async function applePostbackReport(pool: Pool, identity: AppAdminIdentity
     );
     const { source_counts, ...counts } = result.rows[0];
     if (source_counts.some(count => count > appleReportLimits.source_rows)) throw new AppleReportError("apple_source_limit", 413);
+    const registered = await client.query<{ schema_version: string; schema_digest: string; definition: unknown }>(
+      `SELECT schema_version,schema_digest,definition FROM control.conversion_schemas_current
+       WHERE tenant_id=$1 AND app_id=$2 AND status='active' ORDER BY schema_version COLLATE "C" LIMIT 65`, [identity.tenantId, identity.appId]);
+    if (registered.rows.length > 64) throw new AppleReportError("conversion_schema_candidate_limit", 413);
+    let selected: ConversionMeaning | undefined;
+    const candidates = registered.rows.map(row => {
+      let definition: ConversionMeaning | undefined;
+      if ((row.definition as { profile?: string })?.profile === "event_revenue_v1") definition = parseConversionMeaning(row.definition);
+      if (query.schema_version === row.schema_version && query.schema_digest === row.schema_digest) {
+        if (createHash("sha256").update(canonicalConversionSchema(row.definition)).digest("hex") !== row.schema_digest) throw new AppleReportError("conversion_schema_digest_mismatch", 409);
+        selected = definition;
+      }
+      return { schema_version: row.schema_version, schema_digest: row.schema_digest,
+        ...(definition ? { effective_from: definition.effective_from, effective_to: definition.effective_to } : {}) };
+    });
+    const matched = candidates.some(row => row.schema_version === query.schema_version && row.schema_digest === query.schema_digest);
+    if (query.schema_version && !matched) throw new AppleReportError("conversion_schema_selection_not_found", 404);
+    const reason = selected ? "operator_selected_definition_not_postback_bound" : matched ? "legacy_definition_unsupported"
+      : candidates.length > 1 ? "ambiguous_schema" : "unknown_schema";
+    const observations = counts.observations.map(row => ({ ...row, meaning: selected && row.verification === "verified"
+      ? decodeConversionMeaning(selected, row.conversion_bucket ?? "not_recorded", row.protocol, row.sequence, row.conversion_type)
+      : { state: "unverified" as const, reason: row.verification === "failed" ? "verification_failed" : reason } }));
     await client.query("COMMIT");
     return { selection: { app_id: identity.appId, time_zone: "UTC", ...query }, privacy: "current", conversion_schema: "not_recorded",
-      coverage: "retained_receiver_ledger_only", maximum_source_rows: appleReportLimits.source_rows, ...counts };
+      coverage: "retained_receiver_ledger_only", maximum_source_rows: appleReportLimits.source_rows, ...counts, observations,
+      schema_resolution: { state: "unverified", reason, candidates } };
   } catch (error) {
     await client.query("ROLLBACK");
     if (error instanceof AppleReportError) throw error;

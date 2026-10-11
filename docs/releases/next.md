@@ -40,6 +40,9 @@ The unreleased source connects:
 - bounded Apple postback observations with separate receipt, delivery, logical
   postback and quota-audit counts, window/unknown metadata and unsigned-value
   labels; existing metric aliases and contract behavior are unchanged.
+- registered event/revenue conversion meanings shared by Swift and server,
+  window-local persisted dedupe/lock and consent barriers; operator-selected
+  decoding remains unverified and reports ranges, not measured revenue.
 
 The [documentation index](../README.md) links the corresponding guides.
 These are source implementations with synthetic evidence; they do not qualify

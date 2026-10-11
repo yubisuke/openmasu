@@ -2,6 +2,8 @@
 
 Status date: 2026-08-31.
 Apple observation-report entry updated: 2026-10-11; this is not a new live-provider qualification.
+Registered [conversion meanings](../apple-conversion-meaning.md) now support
+digest-matched SDK evaluation and explicit, unverified range explanations.
 
 This matrix is the current index of external measurement surfaces in the public
 source tree. **Implemented** means a typed code path exists. **Synthetically

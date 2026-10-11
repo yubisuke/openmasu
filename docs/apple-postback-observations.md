@@ -2,7 +2,9 @@
 
 Use **Apple postback observations** from an app's dashboard to inspect retained
 SKAdNetwork and AdAttributionKit notifications. This is a receipt report, not a
-unique-install counter, conversion-value decoder, revenue model or win rate.
+unique-install counter, revenue model or win rate. Optional
+[declared-meaning explanations](apple-conversion-meaning.md) do not prove a
+postback-to-schema binding or measured revenue.
 Existing qualified-postback metrics, including historical `*_installs` aliases,
 keep their names and values. First-party acquisition and engagement remain
 separate series.
@@ -39,7 +41,7 @@ retained_receiver_ledger_only`, `conversion_schema: not_recorded`,
 **Never add the four arrays together.** Their populations overlap. Each row
 contains receipt date, platform and decimal-string count. Observation rows add
 closed protocol, sequence, winner, conversion type, source precision,
-conversion-value state/coverage and verification reason. No raw identifiers,
+conversion-value state/coverage, bounded fine/coarse bucket and verification reason. No raw identifiers,
 source values, signatures, free-form extensions or payloads are returned.
 
 Malformed/oversized/rate-limited requests, unknown-app public audits and records

@@ -48,7 +48,7 @@ guides document their configuration. Published-release evidence remains separate
 
 ## Next product slices
 
-Updated: 2026-10-11. Twenty of 35 child implementations are complete; the 15 remaining
+Updated: 2026-10-11. Twenty-one of 35 child implementations are complete; the 14 remaining
 issues below map directly to the [roadmap sequence](roadmap.md#next-product-sequence).
 Numbers are tracking links, not required background knowledge.
 
@@ -56,7 +56,7 @@ Numbers are tracking links, not required background knowledge.
 
 | Workstream / issue | Acceptance boundary |
 | --- | --- |
-| Apple aggregate usability: [#234](https://github.com/yubisuke/openmasu/issues/234); [#235](https://github.com/yubisuke/openmasu/issues/235) | Meaning-bound conversion decoding and scoped cost through existing paths. The bounded [postback observation view](apple-postback-observations.md) is implemented; postbacks are not unique installs and live Apple permissions remain unverified |
+| Apple aggregate usability: [#235](https://github.com/yubisuke/openmasu/issues/235) | Scoped cost through existing paths. [Postback observations](apple-postback-observations.md) and [registered conversion meanings](apple-conversion-meaning.md) are implemented; postbacks are not unique installs, selected meaning is not a verified binding, and live Apple permissions remain unverified |
 | Unity purchase binding: [#239](https://github.com/yubisuke/openmasu/issues/239) | Existing native verified preparation/submission through Unity, preserving consent, credential and privacy behavior; no new purchase authority or real-store claim |
 
 Saved bounded daily analysis and external revenue/ROAS/LTV, retention and outcome

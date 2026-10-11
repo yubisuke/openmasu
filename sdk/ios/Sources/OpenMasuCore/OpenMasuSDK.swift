@@ -1,5 +1,12 @@
 import Foundation
 
+/// Local bookkeeping only. Neither the lease nor the stored state leaves this SDK.
+public struct AppleConversionStateLease: Sendable {
+  public let state: String?
+  fileprivate let id: UUID
+  fileprivate let revision: UInt64
+}
+
 public actor OpenMasuSDK {
   private nonisolated let configuration: OpenMasuConfiguration
   private let storage: OpenMasuStorage
@@ -8,6 +15,7 @@ public actor OpenMasuSDK {
   private nonisolated let deepLinkRouter = DeepLinkRouter()
   private var purchaseContextRevision: UInt64 = 0
   private var purchaseResetInFlight = false
+  private var appleConversionLease: UUID?
 
   public init(
     configuration: OpenMasuConfiguration,
@@ -321,6 +329,7 @@ public actor OpenMasuSDK {
   public func setCollectionEnabled(_ enabled: Bool) async throws {
     purchaseContextRevision &+= 1
     try storage.setCollectionEnabled(enabled)
+    if !enabled { try storage.clearAppleConversionState() }
     if enabled { try await flush() }
   }
 
@@ -388,6 +397,35 @@ public actor OpenMasuSDK {
   public func pendingCount() throws -> Int { try storage.count() }
   public func queueHealth() throws -> OpenMasuQueueHealth { try storage.queueHealth() }
   public func storageRoot() -> URL { storage.root }
+
+  public func beginAppleConversionState(consentGranted: Bool, schemaVersion: String, schemaDigest: String) throws -> AppleConversionStateLease {
+    guard configuration.conversionSchemaVersion == schemaVersion, configuration.conversionSchemaSha256 == schemaDigest else {
+      throw OpenMasuError.conversionSchema("conversion_configuration_mismatch")
+    }
+    guard consentGranted, try !storage.consentBarrierActive() else { throw OpenMasuError.conversionSchema("conversion_consent_required") }
+    guard try isCollectionEnabled() else { throw OpenMasuError.collectionDisabled }
+    guard !purchaseResetInFlight, try !storage.isResetPending(), appleConversionLease == nil else {
+      throw OpenMasuError.conversionSchema("conversion_context_busy")
+    }
+    let state = try storage.appleConversionState()
+    let id = UUID()
+    appleConversionLease = id
+    return AppleConversionStateLease(state: state, id: id, revision: purchaseContextRevision)
+  }
+
+  public func finishAppleConversionState(_ lease: AppleConversionStateLease, state: String) throws {
+    guard appleConversionLease == lease.id else { throw OpenMasuError.conversionSchema("conversion_context_changed") }
+    defer { appleConversionLease = nil }
+    guard lease.revision == purchaseContextRevision, try !storage.consentBarrierActive(), try isCollectionEnabled(), !purchaseResetInFlight else {
+      throw OpenMasuError.conversionSchema("conversion_context_changed")
+    }
+    guard state.utf8.count <= 262_144 else { throw OpenMasuError.conversionSchema("conversion_state_limit") }
+    try storage.setAppleConversionState(state)
+  }
+
+  public func cancelAppleConversionState(_ lease: AppleConversionStateLease) {
+    if appleConversionLease == lease.id { appleConversionLease = nil }
+  }
 
   private func ensureCredential() async throws -> InstallationCredential {
     if let credential = try storage.credential() { return credential }
