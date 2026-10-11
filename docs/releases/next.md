@@ -43,6 +43,8 @@ The unreleased source connects:
 - registered event/revenue conversion meanings shared by Swift and server,
   window-local persisted dedupe/lock and consent barriers; operator-selected
   decoding remains unverified and reports ranges, not measured revenue.
+- Apple Ads Platform v1 campaign costs through the existing default-off scheduler,
+  private token references, complete UTC daily publication and saved ROAS corrections.
 
 The [documentation index](../README.md) links the corresponding guides.
 These are source implementations with synthetic evidence; they do not qualify
@@ -52,7 +54,7 @@ live providers, devices or production operation.
 
 The [current functional plan](https://github.com/yubisuke/openmasu/issues/218)
 and [roadmap](../roadmap.md#next-product-sequence) prioritize
-Apple aggregate usability and Unity purchase binding. Optional extensions have
+Unity purchase binding and candidate integration. Optional extensions have
 separate usage conditions; they need not all precede candidate promotion.
 
 An integrated candidate must bind its source, contract, SDK identities,

@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { after,beforeEach,describe,it } from "node:test";
 import { jcs,type CandidateAttempt } from "@openmasu/attribution-core";
-import { createAppPool,createReaderPool,createSeedPool,withTenant } from "@openmasu/runtime";
+import { createAppPool,createReaderPool,createSeedPool,withTenant,EnvironmentSecretStore,costRefreshSecretName } from "@openmasu/runtime";
 import { VERIFIED_PLATFORM_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 import { registerMetricSchedule } from "../../api/src/metric-schedules.js";
 import { saveMetricCorrectionPolicy } from "../../api/src/metric-correction-policy.js";
@@ -18,6 +18,8 @@ import { planAutomaticMetricCorrections } from "./automatic-metric-corrections.j
 import { processMetricRecalculations } from "./metric-recalculation-worker.js";
 import { persistCostImport } from "./import/cost.js";
 import { ingestRuntimeBatch } from "./ingestion.js";
+import { registerCostSchedule } from "../../api/src/cost-schedules.js";
+import { processCostRefreshes } from "./cost-refresh-worker.js";
 
 type Any = Record<string,any>;
 describe("verified platform acquisition operational workflow",{concurrency:false},()=>{
@@ -70,9 +72,29 @@ describe("verified platform acquisition operational workflow",{concurrency:false
   });
   it("corrects late verified context revenue and cost with immutable lineage while first-party results stay separate",async()=>{
     const apple=input.platform_acquisition_inputs.find((proof:Any)=>proof.install_record_id==="apple-66");
-    const initial={...input,metric_evaluations:[],platform_acquisition_inputs:input.platform_acquisition_inputs.filter((proof:Any)=>proof!==apple)};
+    const initial={...input,metric_evaluations:[],cost_records:input.cost_records.filter((row:Any)=>row.network!=="apple_adservices"),
+      platform_acquisition_inputs:input.platform_acquisition_inputs.filter((proof:Any)=>proof!==apple)};
     await ingestFixture("platform-operational-corrections",initial,app,seed);
     await persistSyntheticPlatformResults(app,initial);
+    const costSchedule=await registerCostSchedule(app,identity,{provider:"apple_ads",ad_account_id:"23501",app_store_id:"23502",
+      campaign_ids:["2066"],account_time_zone:"America/New_York",currency:"USD",lookback_days:2});
+    const acquireAppleCost=async(amount:string,clock:string)=>{
+      await withTenant(app,identity.tenantId,client=>client.query(`UPDATE control.cost_schedule_checkpoints
+        SET next_run_at=clock_timestamp(),next_attempt_at=clock_timestamp() WHERE tenant_id=$1 AND cost_schedule_id=$2`,
+      [identity.tenantId,costSchedule.cost_schedule_id]).then(()=>undefined));
+      const result=await processCostRefreshes(app,identity.tenantId,{enabled:true,now:new Date(clock),maximumSchedules:1,
+        secrets:new EnvironmentSecretStore({[costRefreshSecretName(identity.tenantId,identity.appId,"apple_ads_access_token")]:{value:"synthetic-apple-cost-token"}}),
+        fetch:async(_url,init)=>{
+          const query=JSON.parse(String(init?.body));const days=[];
+          for(let time=Date.parse(query.timeRange.start);time<=Date.parse(query.timeRange.end);time+=86_400_000){
+            const date=new Date(time).toISOString().slice(0,10);days.push({date,localSpend:{currency:"USD",amount:date==="2026-09-28"?amount:"0"}});
+          }
+          return Response.json({result:{rows:[{metadata:{id:2066,adAccountId:23501,promotedObjectId:"23502",promotedObjectType:"APPSTORE_APP"},granularMetrics:days}]},
+            pagination:{offset:0,pageSize:100,totalCount:1}});
+        }});
+      assert.equal(result.completed,1);
+    };
+    await acquireAppleCost("10.00","2026-09-29T11:00:00.000Z");
     const evaluations=[{...input.metric_evaluations.find((evaluation:Any)=>evaluation.metric_run_id_prefix==="platform66-early"),
       metric_run_id_prefix:"synthetic-platform-original",metric_names:["platform_cohort_install_count","platform_d1_roas"]},
       {...input.metric_evaluations.find((evaluation:Any)=>evaluation.metric_run_id_prefix==="platform66-first-party"),
@@ -92,8 +114,7 @@ describe("verified platform acquisition operational workflow",{concurrency:false
     const result=await ingestRuntimeBatch([{server:{...history[0].server,received_at:record.received_at},record,batch_id:"synthetic-platform-late"}],app,history);
     assert.equal(result.rejections.length,0);await drain();
     current=await latest();assert.equal(current.find(row=>row.metric_name==="platform_d1_roas")?.value_unscaled,"1000000");
-    await persistCostImport(app,"synthetic-platform-cost-revision",[{...scope(),network:"apple_adservices",campaign_id:"2066",date:"2026-09-28",
-      amount_unscaled:"20000000",amount_scale:6,currency:"USD",source:"imported_reported",as_of:"2026-09-30T06:00:00.000Z"}]);await drain();
+    await acquireAppleCost("20.00","2026-09-30T06:00:00.000Z");await drain();
     current=await latest();assert.equal(current.find(row=>row.metric_name==="platform_d1_roas")?.value_unscaled,"500000");
     assert.equal(current.find(row=>row.metric_name==="cohort_install_count")?.value_unscaled,"0");
     const saved=await rows();
@@ -109,5 +130,12 @@ describe("verified platform acquisition operational workflow",{concurrency:false
     assert.ok(jobs.every(job=>job.state==="completed" || (job.state==="unavailable" && job.safe_reason==="unsupported_definition"
       && /:(?:platform_)?cohort_install_count$/.test(job.source_metric_run_id))),JSON.stringify(jobs));
     await drain();assert.equal(jcs(await rows()),jcs(saved));
+    const unsafe=await computeSqlMetricRuns(app,{...input,metric_evaluations:["unknown_campaign","wrong_day"].map(kind=>({
+      ...input.metric_evaluations.find((evaluation:Any)=>evaluation.metric_run_id_prefix==="platform66-late"),
+      metric_run_id_prefix:`synthetic-apple-${kind}`,metric_names:["platform_d1_roas"],
+      grouping:{network:"apple_adservices",attribution_status:"non_organic",campaign_id:kind==="unknown_campaign"?"9999":"2066",
+        cohort_date:kind==="wrong_day"?"2026-09-27":"2026-09-28"},
+    }))},false,scope());
+    assert.equal(unsafe.length,2);assert.ok(unsafe.every(row=>row.value_state==="undefined" && row.value_unscaled===undefined));
   });
 });

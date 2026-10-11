@@ -27,6 +27,7 @@ const scope = () => ({ tenant_id: identity.tenantId, app_id: identity.appId });
 const secrets = () => new EnvironmentSecretStore({
   [costRefreshSecretName(identity.tenantId, identity.appId, "access_token")]: { value: "synthetic-access-token" },
   [costRefreshSecretName(identity.tenantId, identity.appId, "developer_token")]: { value: "synthetic-developer-token" },
+  [costRefreshSecretName(identity.tenantId, identity.appId, "apple_ads_access_token")]: { value: "synthetic-apple-token" },
 });
 const options = (fetcher: FetchLike, clock = now) => ({ enabled: true, secrets: secrets(), fetch: fetcher, now: clock, maximumSchedules: 1 });
 async function register(body: unknown = request) { return registerCostSchedule(pool, identity, body, now); }
@@ -64,6 +65,26 @@ function source(amount = "2500000", config: { empty?: boolean; partialFailure?: 
   return { fetcher, queries };
 }
 
+const appleRequest = { provider: "apple_ads", ad_account_id: "23501", app_store_id: "23502", campaign_ids: ["23503", "23504"],
+  currency: "USD", account_time_zone: "America/New_York", lookback_days: 7, limits: { pageSize: 1 } };
+function appleSource(amount = "2.50", config: { failure?: number; duplicate?: boolean; empty?: boolean } = {}) {
+  const requests: any[] = [];
+  const fetcher: FetchLike = async (_url, init) => {
+    const request = JSON.parse(String(init?.body)); requests.push(request);
+    assert.equal((init?.headers as Record<string, string>).authorization, "Bearer synthetic-apple-token");
+    const offset = request.pagination.offset;
+    if (config.empty) return Response.json({ result: {} });
+    if (offset && config.failure) return new Response("synthetic-private-provider-detail", { status: config.failure });
+    const dates: string[] = [];
+    for (let time = Date.parse(request.timeRange.start); time <= Date.parse(request.timeRange.end); time += 86_400_000) dates.push(new Date(time).toISOString().slice(0, 10));
+    return Response.json({ result: { rows: [{ metadata: { id: config.duplicate ? 23503 : 23503 + offset,
+      adAccountId: 23501, promotedObjectId: "23502", promotedObjectType: "APPSTORE_APP" },
+      granularMetrics: dates.map(date => ({ date, localSpend: { amount, currency: "USD" } })) }] },
+      pagination: { offset, pageSize: 1, totalCount: 2 } });
+  };
+  return { fetcher, requests };
+}
+
 describe("durable bounded cost refresh", { concurrency: false }, () => {
   beforeEach(async () => {
     identity = { tenantId: `tenant-cost-refresh-${uuidV7().slice(-12)}-${++counter}`, appId: "app-cost-refresh", keyId: "synthetic-cost-admin", role: "admin" };
@@ -84,6 +105,49 @@ describe("durable bounded cost refresh", { concurrency: false }, () => {
     assert.equal((await listCostSchedules(reader, identity))[0].last_outcome, "complete");
     await processCostRefreshes(pool, identity.tenantId, options(() => { throw new Error("replay must not fetch"); }));
     assert.deepEqual(await counts(), { costs: 1, runs: 1 });
+  });
+  it("publishes complete Apple pages through the shared worker, preserves revisions and never turns empty into zero", async () => {
+    const google = await register();
+    const schedule = await register(appleRequest); // Distinct providers may coexist in the same app.
+    await assert.rejects(register(appleRequest), /cost_schedule_active_exists/);
+    await disableCostSchedule(pool, identity, google.cost_schedule_id);
+    const mock = appleSource();
+    assert.equal((await processCostRefreshes(pool, identity.tenantId, options(mock.fetcher))).completed, 1);
+    assert.deepEqual(mock.requests.map(value => value.pagination.offset), [0, 1]);
+    assert.deepEqual(await counts(), { costs: 14, runs: 1 });
+    await processCostRefreshes(pool, identity.tenantId, options(() => { throw new Error("completed range must not fetch"); }));
+    assert.deepEqual(await counts(), { costs: 14, runs: 1 });
+    await due(schedule.cost_schedule_id);
+    assert.equal((await processCostRefreshes(pool, identity.tenantId, options(appleSource("5.00").fetcher, new Date("2026-08-23T00:00:00.000Z")))).completed, 1);
+    assert.deepEqual(await counts(), { costs: 28, runs: 2 });
+    await due(schedule.cost_schedule_id);
+    assert.equal((await processCostRefreshes(pool, identity.tenantId, options(appleSource("0", { empty: true }).fetcher, new Date("2026-08-24T00:00:00.000Z")))).empty, 1);
+    assert.deepEqual(await counts(), { costs: 28, runs: 2 });
+    const current = await withTenant(pool, identity.tenantId, client => client.query(
+      `SELECT spend_unscaled,artifact FROM ledger.cost_records_current WHERE tenant_id=$1 AND cost_date='2026-08-20'`, [identity.tenantId]));
+    assert.equal(current.rows.length, 2);
+    assert.ok(current.rows.every(row => row.spend_unscaled === "5000000000000000000" && row.artifact.reporting_time_zone === "UTC"));
+    assert.equal((await listCostSchedules(reader, identity)).find(row => row.cost_schedule_id === schedule.cost_schedule_id)?.last_outcome, "empty");
+  });
+  it("keeps Apple partial, throttled, unauthorized and duplicate acquisitions unpublished with safe outcomes", async () => {
+    for (const config of [{ failure: 503 }, { failure: 429 }, { failure: 401 }, { duplicate: true }]) {
+      const schedule = await register(appleRequest);
+      const mock = appleSource("1", config);
+      assert.equal((await processCostRefreshes(pool, identity.tenantId, options(mock.fetcher))).failed, 1);
+      assert.deepEqual(await counts(), { costs: 0, runs: 0 });
+      const state = (await listCostSchedules(reader, identity)).find(row => row.cost_schedule_id === schedule.cost_schedule_id)!;
+      assert.equal(state.state, [503, 429].includes(config.failure ?? 0) ? "retry" : "failed");
+      assert.equal(JSON.stringify(state).includes("synthetic-private"), false);
+      await disableCostSchedule(pool, identity, schedule.cost_schedule_id);
+    }
+    const schedule = await register(appleRequest);
+    await processCostRefreshes(pool, identity.tenantId, options(appleSource("1", { failure: 503 }).fetcher));
+    await due(schedule.cost_schedule_id);
+    const recovered = appleSource("1");
+    assert.equal((await processCostRefreshes(pool, identity.tenantId, options(recovered.fetcher, new Date("2026-08-25T00:00:00.000Z")))).completed, 1);
+    assert.equal(recovered.requests[0].timeRange.end, "2026-08-21");
+    const costs = await withTenant(pool, identity.tenantId, client => client.query("SELECT DISTINCT as_of FROM ledger.cost_records WHERE tenant_id=$1", [identity.tenantId]));
+    assert.deepEqual(costs.rows, [{ as_of: now.toISOString() }]);
   });
   it("keeps incomplete acquisition unpublished and resumes its fixed range and as-of", async () => {
     const schedule = await register();

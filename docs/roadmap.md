@@ -58,18 +58,21 @@ SDK: `v0.3.0-rc.1` remains the published prerelease; see
 
 ## Next product sequence
 
-The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has 21 of
-35 child implementations complete and 14 remaining at this update. Backup and
+The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has 22 of
+35 child implementations complete and 13 remaining at this update. Backup and
 recovery ([#250](https://github.com/yubisuke/openmasu/issues/250)) is implemented;
 the dedicated Runtime gate owns its synthetic evidence. Follow individual issue
 dependencies; the phases below are priorities, not extra refactoring gates.
 
 | Order | Workstream | Remaining issues / exit |
 | --- | --- | --- |
-| 1 | Apple aggregate usability | [#235](https://github.com/yubisuke/openmasu/issues/235): scoped Apple Ads cost. [Postback observations](apple-postback-observations.md) and [registered conversion meanings](apple-conversion-meaning.md) are implemented; selected decoding remains unverified |
-| 2 | Unity purchase binding | [#239](https://github.com/yubisuke/openmasu/issues/239): expose native verified preparation/submission through the existing bridge |
-| 3, when needed | Optional measurement and operator extensions | Activity/payer metrics, detailed costs/discovery, another ILR bridge, engagement policies, recurring comparisons, app access scope, retention expiry, multiple workers and fraud previews; see the [crosswalk](project-plan.md#next-product-slices) |
-| 4 | Integrated candidate | [#252](https://github.com/yubisuke/openmasu/issues/252): coherent first-use journey, source/SDK identities, upgrade and exact-commit distribution evidence |
+| 1 | Unity purchase binding | [#239](https://github.com/yubisuke/openmasu/issues/239): expose native verified preparation/submission through the existing bridge |
+| 2, when needed | Optional measurement and operator extensions | Activity/payer metrics, detailed costs/discovery, another ILR bridge, engagement policies, recurring comparisons, app access scope, retention expiry, multiple workers and fraud previews; see the [crosswalk](project-plan.md#next-product-slices) |
+| 3 | Integrated candidate | [#252](https://github.com/yubisuke/openmasu/issues/252): coherent first-use journey, source/SDK identities, upgrade and exact-commit distribution evidence |
+
+Apple [postback observations](apple-postback-observations.md), [registered conversion meanings](apple-conversion-meaning.md)
+and [scoped campaign cost](cost-refresh.md#apple-ads-campaign-cost) are implemented.
+Selected decoding remains unverified; live provider access is not established.
 
 Saved daily analysis and [broader external cohort comparison](cohort-comparison.md#expanded-closed-declaration)
 are implemented; external declarations remain distinct from captured execution.
