@@ -54,7 +54,27 @@ jobs:
         run: node tools/ci/changed-scope.mjs
       - name: No runtime-sensitive changes
         if: steps.scope.outputs.run_runtime != 'true'
-        run: echo "Runtime validation is not required for this change; the required job remains successful."
+        run: echo "Application runtime suites are not required; any selected operator configuration checks still run."
+      - name: Validate monitoring configuration and synthetic alert transitions
+        if: steps.scope.outputs.run_runtime == 'true' || steps.scope.outputs.run_monitoring == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          monitoring_tools=$(mktemp -d "$RUNNER_TEMP/openmasu-monitoring.XXXXXX")
+          curl --fail --location --silent --show-error --retry 3 \
+            https://github.com/prometheus/prometheus/releases/download/v3.15.0/prometheus-3.15.0.linux-amd64.tar.gz \
+            --output "$monitoring_tools/prometheus.tgz"
+          printf '%s  %s\n' 2a542df32eac02ee17b9d844fb2aa1de00dafa5476579ba8a3ba862e9d572ea0 "$monitoring_tools/prometheus.tgz" | sha256sum --check --status
+          tar -xzf "$monitoring_tools/prometheus.tgz" --directory "$monitoring_tools" --strip-components=1 prometheus-3.15.0.linux-amd64/promtool
+          curl --fail --location --silent --show-error --retry 3 \
+            https://github.com/prometheus/alertmanager/releases/download/v0.34.1/alertmanager-0.34.1.linux-amd64.tar.gz \
+            --output "$monitoring_tools/alertmanager.tgz"
+          printf '%s  %s\n' 265b9d1e55ef0d5306a436018af6d2b686c2ce051f03d968f7464ecb1372a7e8 "$monitoring_tools/alertmanager.tgz" | sha256sum --check --status
+          tar -xzf "$monitoring_tools/alertmanager.tgz" --directory "$monitoring_tools" --strip-components=1 alertmanager-0.34.1.linux-amd64/amtool
+          "$monitoring_tools/promtool" check config --syntax-only config/monitoring/prometheus.yml
+          "$monitoring_tools/promtool" check rules config/monitoring/alerts.yml
+          "$monitoring_tools/promtool" test rules config/monitoring/alerts.test.yml
+          "$monitoring_tools/amtool" check-config config/monitoring/alertmanager.yml
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         if: steps.scope.outputs.run_runtime == 'true'
         with:

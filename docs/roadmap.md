@@ -6,7 +6,7 @@ to replace every feature of an existing provider.
 
 [Project status](STATUS.md) owns current capabilities and release boundaries.
 [Project plan](project-plan.md) gives the acceptance crosswalk for the sequence
-below. Updated: 2026-10-04.
+below. Updated: 2026-10-11.
 
 ## Status vocabulary
 
@@ -58,13 +58,13 @@ SDK: `v0.3.0-rc.1` remains the published prerelease; see
 
 ## Next product sequence
 
-The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has 15 of
-35 children complete and 20 open at this update. Follow individual issue
+The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has 16 of
+35 children complete and 19 open at this update. Follow individual issue
 dependencies; the phases below are priorities, not extra refactoring gates.
 
 | Order | Workstream | Remaining issues / exit |
 | --- | --- | --- |
-| 1 | Minimal monitoring and recovery | [#248](https://github.com/yubisuke/openmasu/issues/248): small rules/runbooks over existing metrics; [#250](https://github.com/yubisuke/openmasu/issues/250): scheduled backup, freshness and restore rehearsal |
+| 1 | Minimal monitoring and recovery | Monitoring rules/runbooks are implemented ([guide](operations/monitoring.md)); next [#250](https://github.com/yubisuke/openmasu/issues/250): scheduled backup, freshness and restore rehearsal |
 | 2 | Daily analysis and comparison | [#244](https://github.com/yubisuke/openmasu/issues/244): saved bounded analysis; [#245](https://github.com/yubisuke/openmasu/issues/245): purchase/net, total revenue, retention and outcome comparison semantics |
 | 2 | Apple aggregate usability | [#233](https://github.com/yubisuke/openmasu/issues/233): windows/suppression/unknowns; [#234](https://github.com/yubisuke/openmasu/issues/234): meaning-bound conversion schema; [#235](https://github.com/yubisuke/openmasu/issues/235): scoped Apple Ads cost |
 | 2 | Unity purchase binding | [#239](https://github.com/yubisuke/openmasu/issues/239): expose native verified preparation/submission through the existing bridge |

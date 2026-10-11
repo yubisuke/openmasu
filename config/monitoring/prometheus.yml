@@ -1,0 +1,28 @@
+# Copy into an operator-owned directory. This example targets loopback only.
+# Use HTTPS for remote targets and a separate read-capability admin key per scope.
+global:
+  scrape_interval: 30s
+  evaluation_interval: 1m
+
+rule_files:
+  - alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: [localhost:9093]
+
+scrape_configs:
+  - job_name: openmasu
+    metrics_path: /metrics
+    honor_labels: false
+    follow_redirects: false
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/openmasu-monitor-token
+    static_configs:
+      - targets: [localhost:8080]
+        # A non-identifying alias, unique per monitored endpoint/key scope.
+        # Never use a tenant, app, device identifier or credential as a label.
+        labels:
+          instance: primary

@@ -5,6 +5,10 @@ scheduler state. It does not send email, webhook, pager, or chat notifications.
 A production operator must connect these surfaces to an external monitoring
 system.
 
+For an optional starting configuration, use the five
+[monitoring rules and recovery runbooks](monitoring.md). They reuse these
+metrics without adding an OpenMasu dependency or enabling notification delivery.
+
 ## Health and metrics
 
 - Service health is exposed by the API health route and Compose health checks.
