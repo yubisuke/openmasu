@@ -297,12 +297,17 @@ and HTML `declared_comparison`; it cannot bypass captured runtime contexts.
 An external aggregate does not become a verified comparison merely by sharing
 a definition label with OpenMasu.
 
-## Compare a saved ROAS with explicit external calculation conditions
+## Compare saved cohort families with explicit external calculation conditions
 
-For installation-anchored **elapsed-window ad-revenue ROAS only**, add an
-`external_calculation` object to the aggregate CSV mapping. This is a separate
+Add an `external_calculation` object to the aggregate CSV mapping. This is a separate
 operator declaration, not a fabricated OpenMasu execution context. No provider
 or database call is made, and no ledger evidence is inserted.
+
+The original `version=1`, `external-elapsed-ad-roas-v1` declaration still supports
+elapsed advertising ROAS. The additive `version=2`, `external-install-cohort-v2`
+declaration covers advertising, purchase-net and total-net revenue sums, ROAS,
+money-valued LTV, retained-installation rates and explicit custom-outcome rates.
+Both use the same CSV conversion, comparator, dashboard review and CLI/HTML paths.
 
 The following complete synthetic mapping matches the historical D3 ROAS
 definition and FX policy in fixture 33. It is an example, **not** a default to
@@ -365,9 +370,9 @@ npm run --silent compare:cohorts -- --external-declared --html saved.json extern
 Exactly one input must have complete supported captured contexts; the other must
 have the closed external declaration. The same pure comparator is used with
 either input order. Every supported meaning must agree: install anchor,
-half-open elapsed window, cumulative population, acquisition basis, cost basis
+half-open window, cumulative versus on-day aggregation, acquisition basis, cost basis
 and cost-grain selection policy, permitted grouping axes, gross/net policy,
-privacy interpretation, ratio units/precision, FX rate/as-of/target precision,
+privacy interpretation, money/ratio units and precision, FX rate/as-of/target precision,
 conversion order and final half-even rounding. Different display names and
 internal policy identifiers are not semantic differences.
 
@@ -380,12 +385,90 @@ must use `cohort_date`, and row keys may use only declared non-identifying axes.
 Unknown campaigns remain absent axes, not invented identifiers or totals.
 
 Ratios are multiples, not percentages: `1.25` is 125%, encoded as `1250000` at
-scale 6. Percentage normalization is not inferred. `currency` must be `none`,
-and each row scale must equal `ratio_scale`. Zero, absent rows and explicitly
-undefined values remain distinct. A completely empty selection stays
-incomparable. Purchase/total-net ROAS, retention, calendar windows and platform
-aggregate series are outside this bridge. FX uses the currently supported
-single explicit conversion rate; a multi-rate policy is not approximated.
+scale 6. Percentage normalization is not inferred. Ratio rows use currency
+`none` and `ratio_scale`; money rows use the declared ISO currency and
+`amount_scale`. LTV is money per cohort member, not a dimensionless ratio.
+Zero, absent rows and explicitly undefined values remain distinct. A completely
+empty selection stays incomparable.
+
+### Expanded closed declaration
+
+This complete v2 declaration describes a synthetic elapsed D30 purchase-net sum.
+In the CSV mapping, use `value.currency.constant="USD"`, `value.scale=6`, the
+appropriate value column and matching cumulative conditions. A decimal input of
+`8.00` becomes `8000000`; it is not ROAS. Keep the mapping's normal grouping and
+conditions fields, and do not infer them from the metric's display name.
+
+```json
+{
+  "version": 2, "profile": "external-install-cohort-v2", "anchor_event": "install",
+  "calculation": "revenue_sum", "numerator": "purchase_net_revenue", "denominator": null,
+  "aggregation": "cumulative", "time_zone": "UTC",
+  "window": { "type": "elapsed", "day": 30, "boundary": "half_open" },
+  "population": "accepted_installation_cohort", "acquisition_basis": "recorded_dimensions",
+  "cost_basis": null, "cost_selection_policy": "legacy_dimension_digest_latest",
+  "grouping_dimensions": ["campaign_id", "network", "country", "cohort_date", "attribution_status"],
+  "fraud_policy": "gross", "privacy_state": "before", "value_type": "money",
+  "currency": "USD", "amount_scale": 6, "ratio_scale": null,
+  "calendar_cohort_policy": null, "cohort_date_basis": null, "cost_reporting_time_zone": null,
+  "retention_maturity_policy": null, "acquisition_dimension_policy": null,
+  "refund_policy": "settled_linked_refunds_own_window", "refund_reversal_policy": null,
+  "conversion_event_key": null, "activity_events": [], "event_names": [],
+  "fx": {
+    "target_currency": "USD", "target_scale": 6, "conversion": "per_event_round_then_sum",
+    "rounding_mode": "half_even",
+    "rates": [{ "currency": "USD", "rate_unscaled": "1000000", "rate_scale": 6, "as_of": "2026-08-01T00:00:00.000Z" }]
+  },
+  "final_rounding": "half_even"
+}
+```
+
+Every field above is required, including explicit nulls and empty arrays. Null
+means the stated policy is absent/not applicable, **not** unknown. In particular,
+null `refund_reversal_policy` retains historical behavior; it does not silently
+adopt `cancel_target_refund_at_watermark`. If a required meaning is unknown,
+leave the comparison unresolved instead of manufacturing a value.
+
+| Family | Meaning that must match the saved definition |
+| --- | --- |
+| Revenue sums | `revenue_sum`; advertising `revenue`, `purchase_net_revenue`, or their sum `total_net_revenue`; null denominator; money units |
+| ROAS | `revenue_over_cost`; cost denominator and `cohort_acquisition_day_current_snapshot`; ratio units; exact cost-grain selection |
+| LTV | `revenue_over_cohort`; distinct cohort-size denominator; money units |
+| Retention | `active_installations_over_cohort`; active installations/cohort size, `on_day`, `activity_events=["session_start"]`, activity-day or qualified calendar-day window; explicit maturity policy; no FX |
+| Custom outcome rate | `converted_installations_over_cohort`; distinct converted installations/cohort size, exact `conversion_event_key`, cumulative elapsed D7; no FX |
+
+`settled_linked_refunds_own_window` means installation-anchored settled purchases
+minus their valid linked settled refunds, each in its own occurrence window;
+pending/reversed entries and unanchored commerce do not contribute. Existing
+matching and per-target cap rules apply. Explicit cancellation, when enabled,
+removes the target refund's deduction at the receipt watermark rather than
+adding a new purchase. Total-net revenue adds installation advertising revenue
+after independent per-event conversion. A purchase-date-restatement policy is
+not supported. These meanings are defined in the [contract](../spec/event-metric-contract-v0.4.md).
+
+V2 can express UTC/Tokyo calendar windows using
+`calendar_cohort_policy=cumulative_revenue_on_day_activity`,
+`cohort_date_basis=installation_local_date` and
+`cost_reporting_time_zone=same_as_aggregation_time_zone`. Maturity then closes
+at local cohort-date start plus `day+1` calendar days. Elapsed and activity-day
+windows use the conservative `day+2` bound described above. Retention's
+`complete_activity_window` policy must match explicitly. Passing the clock
+boundary does not establish upstream completeness.
+
+V2 FX supports either the original single explicit rate or the saved dated policy
+`rate_selection=utc_event_date_and_cost_date` with
+`cost_conversion=per_cost_row_round_then_sum`. Dated rates each include
+`currency`, `effective_date`, `rate_unscaled`, `rate_scale`, `source` and `as_of`;
+all fields are compared, with rate order normalized. The existing 128-rate limit,
+explicit target-currency identity rates and unique currency/date keys apply.
+No rate is fetched or inferred. Non-money retention/outcome rates require `fx=null`;
+the policy's unused saved FX metadata is not treated as an operand.
+
+Unknown/new implementation fields fail closed. Unsupported families, imported
+provider-specific outcome binding, engagement-anchored metrics, Apple aggregate
+series and New York/DST calendar declarations remain outside this external bridge;
+they are not collapsed into a supported acquisition population. Existing
+captured-to-captured comparison remains available for its qualified profiles.
 
 All declaration fields are required and unknown fields are refused. The
 `half_up`/`truncate` rounding and `round_after_sum` conversion declarations can

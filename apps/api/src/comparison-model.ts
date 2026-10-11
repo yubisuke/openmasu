@@ -65,7 +65,7 @@ export function snapshotAssurance(snapshot: Snapshot) {
   const maturities = contexts.map(({ key, context }) => {
     // Report-generated keys are closed grouping objects, not arbitrary user IDs.
     try { const grouping = JSON.parse(key); object(grouping);
-      const dimensions = ["cohort_date", "metric_date", "campaign_id", "network", "country", "attribution_status", "apple_conversion_bucket"];
+      const dimensions = ["cohort_date", "metric_date", "campaign_id", "network", "country", "attribution_status", "apple_conversion_bucket", "ad_group_id", "creative_id", "acquisition_campaign_state"];
       const day = grouping.cohort_date ?? grouping.metric_date;
       if (Object.entries(grouping).some(([k, v]) => !dimensions.includes(k) || typeof v !== "string" || !v)
           || typeof day !== "string" || day < snapshot.conditions.date_from || day >= snapshot.conditions.date_to

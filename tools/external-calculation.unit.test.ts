@@ -11,6 +11,8 @@ import { parseExternalDeclaration, externalWindowMaturity, type ExternalRoasDecl
 import { compareSnapshots, parseSnapshot } from "./compare-cohorts.js";
 import { aggregateCsvToSnapshot, reportToSnapshot } from "./report-to-snapshot.js";
 import { renderComparison } from "./cohort-comparison-html.js";
+import { syntheticExternalComparisonCases, syntheticExternalComparisonPair } from "./synthetic-external-comparison-cases.js";
+import type { ExternalCohortDeclaration } from "../apps/api/src/external-calculation-declaration.js";
 
 const fixture = JSON.parse(readFileSync("fixtures/v0.4/33-stage-b-cohort-metrics/input.json", "utf8"));
 const golden = JSON.parse(readFileSync("fixtures/v0.4/33-stage-b-cohort-metrics/expected_metric_runs.json", "utf8"))
@@ -66,7 +68,7 @@ it("requires the external opt-in without weakening either existing comparison mo
   assert.equal(compareSnapshots(left, left).status, "compared");
   assert.throws(() => compareSnapshots(left, right, { declaredOnly: true, allowExternalDeclaration: true }), /conflicting/);
   const partial = structuredClone(left); partial.comparison_contexts = [];
-  assert.ok(compare(partial, right).mismatches.includes("supported_captured_ad_roas_required"));
+  assert.ok(compare(partial, right).mismatches.includes("supported_captured_cohort_family_required"));
   const unknown = structuredClone(left); unknown.rows[0].key = "unknown"; unknown.provenance!.runs[0].key = "unknown"; unknown.comparison_contexts![0].key = "unknown";
   assert.equal(compare(unknown, right).status, "incomparable");
 });
@@ -142,5 +144,102 @@ it("connects ordinary saved-report and external CSV conversion CLIs to JSON and 
     assert.equal(html.stdout, renderComparison(JSON.parse(output.stdout)));
     const noConsent = run("compare-cohorts", paths); assert.equal(JSON.parse(noConsent.stdout).status, "incomparable");
     const conflicting = run("compare-cohorts", ["--external-declared", "--declared", ...paths]); assert.equal(conflicting.status, 1); assert.equal(conflicting.stdout, "");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+it("matches closed cohort families against independent net revenue LTV retention conversion and dated FX arithmetic", () => {
+  for (const entry of syntheticExternalComparisonCases()) {
+    const { run, saved, mapping, csv } = syntheticExternalComparisonPair(entry);
+    assert.equal(run.value_unscaled, entry.expected, entry.name);
+    const claimed = aggregateCsvToSnapshot(Buffer.from(csv), mapping), result = compare(saved, claimed);
+    assert.equal(result.status, "external_declared_comparison", `${entry.name}: ${result.mismatches}`);
+    assert.equal(result.rows[0].delta_right_minus_left, "0", entry.name);
+    assert.equal(result.assurance.left.meaning, "definition_backed");
+    assert.equal(result.assurance.right.meaning, "external_declared");
+    assert.deepEqual(result.assurance.right.execution, []);
+    const changed = aggregateCsvToSnapshot(Buffer.from(`value\n${BigInt(entry.expected) + 1n}\n`), mapping);
+    assert.equal(compare(saved, changed).rows[0].delta_right_minus_left, "1");
+    assert.equal(compare(changed, saved).rows[0].delta_right_minus_left, "-1");
+  }
+});
+
+it("rejects same-name but different denominator window refund FX outcome and maturity policies without dropping fields", () => {
+  const cases = syntheticExternalComparisonCases();
+  const mutations: [string, string, (d: ExternalCohortDeclaration) => void][] = [
+    ["d30_total_net_roas", "denominator", d => { d.denominator = "cohort_size"; }],
+    ["cohort_total_net_ltv_d30_usd", "window", d => { d.window.day = 90; }],
+    ["explicit-refund-cancellation", "refund_reversal_policy", d => { d.refund_reversal_policy = null; }],
+    ["cohort_purchase_net_revenue_d30_usd", "refund_reversal_policy", d => { d.refund_reversal_policy = "cancel_target_refund_at_watermark"; }],
+    ["cohort_total_net_revenue_d30_usd", "numerator", d => { d.numerator = "purchase_net_revenue"; }],
+    ["retention-distinct-installations", "retention_maturity_policy", d => { d.retention_maturity_policy = null; }],
+    ["retention-distinct-installations", "fraud_policy", d => { d.fraud_policy = "net"; }],
+    ["conversion-distinct-installations", "conversion_event_key", d => { d.conversion_event_key = "signup_complete"; }],
+    ["cohort_purchase_net_revenue_d30_usd", "acquisition_basis", d => { d.acquisition_basis = "selected_verified_platform"; }],
+    ["dated-purchase-refund-FX", "fx", d => { d.fx!.rates[1].rate_unscaled = "14"; }],
+    ["dated-purchase-refund-FX", "fx", d => { d.fx!.rounding_mode = "half_up"; }],
+    ["calendar-Tokyo-LTV", "window", d => { d.window.type = "elapsed"; d.calendar_cohort_policy = null; d.cohort_date_basis = null; d.cost_reporting_time_zone = null; }],
+  ];
+  for (const [name, field, mutate] of mutations) {
+    const entry = cases.find(c => c.name === name)!, { saved, mapping, csv } = syntheticExternalComparisonPair(entry);
+    mutate(mapping.external_calculation);
+    const result = compare(saved, aggregateCsvToSnapshot(Buffer.from(csv), mapping));
+    assert.equal(result.status, "incomparable", `${name}: ${field}`); assert.deepEqual(result.rows, []);
+    assert.ok(result.mismatches.includes(`meaning.${field}`), `${name}: ${result.mismatches}`);
+  }
+  const d = cases[0].declaration;
+  for (const field of Object.keys(d)) {
+    const missing = { ...d } as any; delete missing[field];
+    assert.throws(() => parseExternalDeclaration(missing), /fields/);
+  }
+  for (const patch of [{ refund_policy: "restate_purchase_day" }, { fx: null }, { currency: "none" },
+    { value_type: "ratio" }, { import_provider: "synthetic-provider" }, { grouping_dimensions: ["cohort_date", "installation_id"] }]) {
+    assert.throws(() => parseExternalDeclaration({ ...d, ...patch }));
+  }
+});
+
+it("keeps money zero undefined missing and immature retention separate across the expanded bridge", () => {
+  const cases = syntheticExternalComparisonCases();
+  for (const name of ["cohort_purchase_net_revenue_d30_usd", "retention-distinct-installations", "conversion-distinct-installations"]) {
+    const entry = cases.find(c => c.name === name)!, { saved, mapping } = syntheticExternalComparisonPair(entry);
+    assert.equal(compare(saved, aggregateCsvToSnapshot(Buffer.from("value,unused\n,synthetic\n"), mapping)).rows[0].status, "undefined");
+    const zero = aggregateCsvToSnapshot(Buffer.from("value\n0\n"), mapping);
+    assert.equal(compare(saved, zero).rows[0].delta_right_minus_left, (-BigInt(entry.expected)).toString());
+    const extra = { ...zero.rows[0], key: jcs({ ...JSON.parse(zero.rows[0].key), country: "GB" }) };
+    const expanded = { ...zero, rows: [...zero.rows, extra], mapping_provenance: { ...zero.mapping_provenance!, row_count: 2 } };
+    assert.ok(compare(saved, expanded).rows.some(row => row.status === "missing_left"));
+    const unit = structuredClone(zero); unit.rows[0].currency = entry.declaration.value_type === "money" ? "none" : "USD";
+    assert.throws(() => parseSnapshot(unit), /external_units_mismatch/);
+    const forged = structuredClone(zero); forged.external_calculation!.declaration.fraud_policy = "net";
+    assert.throws(() => parseSnapshot(forged), /digest_mismatch/);
+  }
+  const retention = cases.find(c => c.name === "retention-distinct-installations")!;
+  assert.equal(externalWindowMaturity(retention.declaration, "2026-08-06", "2026-08-10T23:59:59.999999Z"), "unknown");
+  assert.equal(externalWindowMaturity(retention.declaration, "2026-08-06", "2026-08-11T00:00:00Z"), "window_elapsed");
+  const { saved, mapping, csv } = syntheticExternalComparisonPair(retention);
+  mapping.conditions.source_cutoff = "2026-08-10T23:59:59.999Z";
+  const immature = compare(saved, aggregateCsvToSnapshot(Buffer.from(csv), mapping));
+  assert.equal(immature.status, "incomparable"); assert.ok(immature.mismatches.includes("external_window_maturity_unknown"));
+  assert.deepEqual(immature.rows, []);
+  const calendar = cases.find(c => c.name === "calendar-Tokyo-LTV")!.declaration;
+  assert.equal(externalWindowMaturity(calendar, "2026-08-07", "2026-08-14T14:59:59.999Z"), "unknown");
+  assert.equal(externalWindowMaturity(calendar, "2026-08-07", "2026-08-14T15:00:00Z"), "window_elapsed");
+});
+
+it("uses the expanded money projection in ordinary CSV and saved-report CLIs with identical JSON and HTML", () => {
+  const entry = syntheticExternalComparisonCases().find(c => c.name === "dated-purchase-refund-FX")!;
+  const pair = syntheticExternalComparisonPair(entry), directory = mkdtempSync(join(tmpdir(), "openmasu-synthetic-family-"));
+  try {
+    const file = (name: string, value: unknown) => { const path = join(directory, name); writeFileSync(path, typeof value === "string" ? value : JSON.stringify(value)); return path; };
+    const run = (tool: string, args: string[]) => spawnSync(process.execPath, ["--import", "tsx", `tools/${tool}.ts`, ...args], { encoding: "utf8" });
+    const saved = run("report-to-snapshot", [file("report.json", pair.report), file("template.json", pair.template)]);
+    assert.equal(saved.status, 0, saved.stderr);
+    const external = run("report-to-snapshot", ["--csv", file("aggregate.csv", pair.csv), file("mapping.json", pair.mapping)]);
+    assert.equal(external.status, 0, external.stderr);
+    const paths = [file("saved.json", saved.stdout), file("external.json", external.stdout)];
+    const output = run("compare-cohorts", ["--external-declared", ...paths]); assert.equal(output.status, 0, output.stderr);
+    assert.equal(output.stdout.trim(), jcs(compare(pair.saved, JSON.parse(external.stdout))));
+    assert.equal(JSON.parse(output.stdout).rows[0].status, "equal");
+    const html = run("compare-cohorts", ["--external-declared", "--html", ...paths]); assert.equal(html.status, 0, html.stderr);
+    assert.equal(html.stdout, renderComparison(JSON.parse(output.stdout)));
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
