@@ -112,6 +112,15 @@ export class EncryptedFilePayloadStore implements PayloadStore {
     return decrypt(dataKey, object, aad);
   }
 
+  /** Verify an operator's out-of-band master key without decrypting stored payloads. */
+  async verifyWrappedKeys(): Promise<void> {
+    for (const name of readdirSync(this.keyRoot)) {
+      if (!name.endsWith(".json")) throw new Error("payload_wrapped_key_invalid");
+      const wrapped = JSON.parse(readFileSync(join(this.keyRoot, name), "utf8")) as WrappedKey;
+      if (decrypt(this.wrappingKey, wrapped, Buffer.from(name.slice(0, -5), "utf8")).length !== 32) throw new Error("payload_wrapped_key_invalid");
+    }
+  }
+
   async purge(reference: string): Promise<void> {
     const keyId = referenceKeyId(reference);
     rmSync(join(this.objectRoot, `${keyId}.json`), { force: true });

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -23,6 +23,8 @@ import { computeSqlMetricRuns } from "./metrics/cohort.js";
 import { reapplyCompletedPrivacyRequests } from "./privacy-reapply.js";
 import { migrateDatabase, readMigrations } from "../../runtime/src/migration-engine.js";
 import { fileDigest, migrationDigest, UPGRADE_SOURCE, upgradePreflight, validateUpgradeBackup, verifyBackupFiles } from "../../runtime/src/upgrade.js";
+import { checkBackup, createBackup, readPrivacyBoundary, verifyBackupKey } from "@openmasu/runtime/backup";
+import { restoreBackup } from "./backup-operations.js";
 
 type Any = Record<string, any>;
 const fixtureName = "33-stage-b-cohort-metrics";
@@ -118,6 +120,8 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
       "synthetic-m5-privacy-master-key-000000000000000",
     );
     await ingestFixture(fixtureName, input, appPool, seedPool);
+    // This dedicated rehearsal resets its synthetic ledger; discard prior test jobs with it.
+    await seedPool.query("TRUNCATE control.privacy_payload_purges,control.privacy_deletion_jobs");
     const baseline = await computeSqlMetricRuns(appPool, input, true);
     assert.equal(baseline.find((run) => run.metric_name === "cohort_install_count")?.value_unscaled, "1");
 
@@ -330,10 +334,22 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
     const migrationUrl = process.env.OPENMASU_MIGRATION_DATABASE_URL;
     const appUrl = process.env.OPENMASU_APP_DATABASE_URL;
     assert.ok(migrationUrl && appUrl);
-    const databaseName = `openmasu_restore_${Date.now()}`;
-    const dumpPath = join(snapshot, `${databaseName}.dump`);
-    const restoredPayloadRoot = mkdtempSync(join(tmpdir(), "openmasu-m5-restored-payload-"));
-    cpSync(join(snapshot, "payloads"), restoredPayloadRoot, { recursive: true, force: true });
+    let databaseName = "";
+    const restoredPayloadRoot = join(snapshot, "restored-payloads");
+    const bundleRoot = join(snapshot, "backup-bundle");
+    const oldBundleRoot = join(snapshot, "old-backup-bundle");
+    const masterKey = "synthetic-m5-privacy-master-key-000000000000000";
+    const revision = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    cpSync(join(snapshot, "payloads"), root, { recursive: true, force: true });
+    const admin = new Client({ connectionString: migrationUrl });
+    await admin.connect();
+    await appPool.end();
+    await seedPool.end();
+    appPool = createAppPool();
+    seedPool = createSeedPool();
+    const create = (output: string, dump = async (path: string) => runPostgresTool("pg_dump", ["--format=custom", "--file", path, migrationUrl], path)) =>
+      createBackup({ client: admin, output, payloadRoot: root, masterKey, masterKeyRef: "synthetic-key-v1", revision, writersStopped: true, dump });
+    await create(oldBundleRoot);
     const processingRequestId = `privacy:${uuidV7()}`;
     const processingRequestedAt = "2026-08-20T02:05:00.000Z";
     const processingReference = await payloadStore.write(
@@ -370,27 +386,61 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
         [processingRequestId, sha256(processingReference), processingReference, processingRequestedAt],
       );
     });
-    cpSync(root, restoredPayloadRoot, { recursive: true, force: true });
-    const admin = new Client({ connectionString: migrationUrl });
-    await admin.connect();
     let restoredPool: Pool | undefined;
+    let failedDatabase = "";
     const restoredPoolErrors: Error[] = [];
     let testError: unknown;
     try {
-      runPostgresTool("pg_dump", ["--format=custom", "--no-owner", "--file", dumpPath, migrationUrl], dumpPath);
+      await assert.rejects(create(join(snapshot, "busy-backup")), /backup_writers_not_stopped/);
+      await appPool.end();
+      await seedPool.end();
+      appPool = createAppPool();
+      seedPool = createSeedPool();
+      const manifest = await create(bundleRoot);
+      const boundary = await readPrivacyBoundary(admin);
+      const check = (directory: string) => checkBackup({ directory, boundary, revision, maximumAgeHours: 24 });
+      await check(bundleRoot);
+      const checkpointPath = join(snapshot, "current-boundary.json");
+      writeFileSync(checkpointPath, JSON.stringify(boundary));
+      const checked = execFileSync(process.execPath, ["--import", "tsx", "apps/worker/src/backup-cli.ts", "check",
+        "--directory", bundleRoot, "--boundary", checkpointPath, "--maximum-age-hours", "24"], { encoding: "utf8" });
+      assert.equal(JSON.parse(checked).backup_valid, true);
+      await assert.rejects(check(oldBundleRoot), /backup_privacy_boundary_mismatch/);
+      await assert.rejects(create(join(snapshot, "partial-backup"), async () => { throw new Error("synthetic_dump_failure"); }), /synthetic_dump_failure/);
+      await assert.rejects(check(join(snapshot, "partial-backup")), /ENOENT/);
+      assert.throws(() => verifyBackupKey(manifest, "wrong-synthetic-master-key-0000000000000000", "synthetic-key-v1"), /backup_master_key_mismatch/);
+      const archive = join(bundleRoot, "database.dump");
+      renameSync(archive, `${archive}.missing`);
+      try { await assert.rejects(check(bundleRoot), /ENOENT/); }
+      finally { renameSync(`${archive}.missing`, archive); }
+      const extraKey = join(bundleRoot, "payloads", "keys", "synthetic-mismatched-key.json");
+      writeFileSync(extraKey, "{}");
+      try { await assert.rejects(check(bundleRoot), /backup_payload_checksum_mismatch/); }
+      finally { rmSync(extraKey); }
       const liveDrain = await processPrivacyDeletionJobs({
         pool: appPool,
         payloadStore,
         tenantId: "tenant-a",
       });
       assert.equal(liveDrain.completed, 1);
-      await admin.query(`CREATE DATABASE "${databaseName}"`);
-      const restoredAdminUrl = new URL(migrationUrl);
-      restoredAdminUrl.pathname = `/${databaseName}`;
-      runPostgresTool("pg_restore", [
-        "--exit-on-error", "--no-owner", "--dbname", restoredAdminUrl.toString(), dumpPath,
-      ], dumpPath);
-
+      const restoreOptions = { admin, adminUrl: migrationUrl, directory: bundleRoot, payloadOutput: restoredPayloadRoot,
+        masterKey, masterKeyRef: "synthetic-key-v1", revision, maximumAgeHours: 24, privacyIntakeStopped: true,
+        currentBoundary: () => readPrivacyBoundary(admin) };
+      await assert.rejects(restoreBackup({ ...restoreOptions, payloadOutput: join(snapshot, "failed-restore"),
+        restoreArchive: async (url) => { failedDatabase = new URL(url).pathname.slice(1); throw new Error("synthetic_restore_failure"); } }), /synthetic_restore_failure/);
+      assert.equal((await admin.query("SELECT datconnlimit FROM pg_database WHERE datname=$1", [failedDatabase])).rows[0].datconnlimit, 0);
+      const result = await restoreBackup({ ...restoreOptions, restoreArchive: async (url, path) => {
+        databaseName = new URL(url).pathname.slice(1);
+        runPostgresTool("pg_restore", ["--exit-on-error", "--dbname", url, path], path);
+        const blockedUrl = new URL(appUrl);
+        blockedUrl.pathname = `/${databaseName}`;
+        const blocked = new Client({ connectionString: blockedUrl.toString() });
+        try { await assert.rejects(blocked.connect(), /too many connections/); }
+        finally { await blocked.end(); }
+      } });
+      assert.equal(result.ready, true);
+      assert.equal(result.privacy_requests, 2);
+      assert.equal(result.metrics_recalculated, 8);
       const restoredAppUrl = new URL(appUrl);
       restoredAppUrl.pathname = `/${databaseName}`;
       restoredPool = new Pool({ connectionString: restoredAppUrl.toString() });
@@ -399,25 +449,17 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
       });
       const restoredPayloadStore = new EncryptedFilePayloadStore(
         restoredPayloadRoot,
-        "synthetic-m5-privacy-master-key-000000000000000",
+        masterKey,
       );
-      assert.equal((await restoredPayloadStore.read(payloadReference)).toString("utf8"), "synthetic payload only");
-      assert.equal((await restoredPayloadStore.read(processingReference)).toString("utf8"), "synthetic processing payload only");
-      const drained = await processPrivacyDeletionJobs({
-        pool: restoredPool,
-        payloadStore: restoredPayloadStore,
-        tenantId: "tenant-a",
-      });
-      assert.equal(drained.completed, 1);
       await assert.rejects(restoredPayloadStore.read(processingReference));
-      const result = await reapplyCompletedPrivacyRequests({
-        pool: restoredPool,
-        payloadStore: restoredPayloadStore,
-        tenantId: "tenant-a",
-      });
-      assert.equal(result.privacy_requests, 2);
-      assert.equal(result.metrics_recalculated, 8);
       await assert.rejects(restoredPayloadStore.read(payloadReference));
+      const restoredQuery = parseMetricQuery({ tenantId: "tenant-a", appId: "app-a",
+        searchParams: new URLSearchParams({ metric_name: "cohort_install_count", limit: "20" }) });
+      const restoredReport = await metricReport(restoredPool, { keyId: "key:synthetic", tenantId: "tenant-a", appId: "app-a", role: "admin" }, restoredQuery.query);
+      assert.equal(restoredReport.data.length, 1);
+      assert.equal(restoredReport.data[0].value_unscaled, "0");
+      assert.equal(restoredReport.data[0].reproducibility_status, "redaction_affected");
+      for (const format of ["json", "csv"] as const) assert.equal(encodeMetricReport(restoredReport, format).body.includes("installation:install-33"), false);
       const auditCount = await withTenant(restoredPool, "tenant-a", async (client) => Number((await client.query<{ count: string }>(
         "SELECT count(*)::text AS count FROM ledger.audit_logs WHERE action='privacy_reapply' AND target_ref=$1",
         [privacyRequestId],
@@ -442,7 +484,8 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
       cleanupErrors.push(new AggregateError(restoredPoolErrors, "restored pool emitted background errors"));
     }
     try {
-      await admin.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
+      if (databaseName) await admin.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
+      if (failedDatabase) await admin.query(`DROP DATABASE IF EXISTS "${failedDatabase}"`);
     } catch (error) {
       cleanupErrors.push(error);
     }
