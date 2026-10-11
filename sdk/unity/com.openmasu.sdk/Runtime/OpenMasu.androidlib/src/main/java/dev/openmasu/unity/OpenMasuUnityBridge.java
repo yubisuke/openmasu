@@ -11,6 +11,7 @@ import dev.openmasu.sdk.MetaReferrerReader;
 import dev.openmasu.sdk.OpenMasuSdk;
 import dev.openmasu.sdk.OpenMasuSdkFactory;
 import dev.openmasu.sdk.OpenMasuQueueHealth;
+import dev.openmasu.sdk.OpenMasuPurchaseQueueResult;
 import dev.openmasu.sdk.PlayReferrerEvidence;
 import dev.openmasu.sdk.PlayReferrerReader;
 import dev.openmasu.sdk.max.OpenMasuMaxBridge;
@@ -64,6 +65,69 @@ public final class OpenMasuUnityBridge {
 
   public static void trackPurchase(String transactionId, String amountUnscaled, int amountScale, String currency) {
     requireSdk().trackPurchase(transactionId, amountUnscaled, amountScale, currency);
+  }
+
+  public static void trackGooglePlayProductPurchase(String purchaseToken, String productId, String transactionId,
+      String amountUnscaled, int amountScale, String currency, StringCallback callback) {
+    trackGooglePlayPurchase(false, purchaseToken, productId, transactionId, amountUnscaled, amountScale,
+        currency, callback);
+  }
+
+  public static void trackGooglePlaySubscriptionPurchase(String purchaseToken, String productId, String transactionId,
+      String amountUnscaled, int amountScale, String currency, StringCallback callback) {
+    trackGooglePlayPurchase(true, purchaseToken, productId, transactionId, amountUnscaled, amountScale,
+        currency, callback);
+  }
+
+  private static void trackGooglePlayPurchase(boolean subscription, String purchaseToken, String productId,
+      String transactionId, String amountUnscaled, int amountScale, String currency, StringCallback callback) {
+    if (callback == null) throw new IllegalArgumentException("callback_required");
+    OpenMasuSdk current = sdk;
+    if (current == null) {
+      callback.onResult("state=not_submitted&error=not_initialized");
+      return;
+    }
+    kotlin.jvm.functions.Function1<OpenMasuPurchaseQueueResult, kotlin.Unit> completed = result -> {
+      callback.onResult(purchaseResult(result));
+      return kotlin.Unit.INSTANCE;
+    };
+    try {
+      if (subscription) {
+        current.trackGooglePlaySubscriptionPurchase(
+            purchaseToken, productId, transactionId, amountUnscaled, amountScale, currency, completed);
+      } else {
+        current.trackGooglePlayProductPurchase(
+            purchaseToken, productId, transactionId, amountUnscaled, amountScale, currency, completed);
+      }
+    } catch (IllegalArgumentException exception) {
+      callback.onResult("state=not_submitted&error=invalid_arguments");
+    } catch (RuntimeException exception) {
+      callback.onResult("state=not_submitted&error=native_failure");
+    }
+  }
+
+  static String purchaseResult(OpenMasuPurchaseQueueResult result) {
+    if (result == OpenMasuPurchaseQueueResult.QUEUED) return "state=queued";
+    return "state=not_submitted&error=" + result.name().toLowerCase(Locale.ROOT);
+  }
+
+  public static void updateConsent(String state, String policyVersion, StringCallback callback) {
+    if (callback == null) throw new IllegalArgumentException("callback_required");
+    OpenMasuSdk current = sdk;
+    if (current == null) {
+      callback.onResult("state=not_submitted&error=not_initialized");
+      return;
+    }
+    try {
+      current.updateConsent(state, policyVersion, updated -> {
+        callback.onResult(updated ? "state=updated" : "state=not_submitted&error=native_failure");
+        return kotlin.Unit.INSTANCE;
+      });
+    } catch (IllegalArgumentException exception) {
+      callback.onResult("state=not_submitted&error=invalid_arguments");
+    } catch (RuntimeException exception) {
+      callback.onResult("state=not_submitted&error=native_failure");
+    }
   }
 
   public static void trackRefund(String transactionId, String originalTransactionId, String amountUnscaled,

@@ -48,15 +48,17 @@ guides document their configuration. Published-release evidence remains separate
 
 ## Next product slices
 
-Updated: 2026-10-11. Twenty-two of 35 child implementations are complete; the 13 remaining
+Updated: 2026-10-11. Twenty-three of 35 child implementations are complete; the 12 remaining
 issues below map directly to the [roadmap sequence](roadmap.md#next-product-sequence).
 Numbers are tracking links, not required background knowledge.
 
 ### Core and selected-use work
 
-| Workstream / issue | Acceptance boundary |
-| --- | --- |
-| Unity purchase binding: [#239](https://github.com/yubisuke/openmasu/issues/239) | Existing native verified preparation/submission through Unity, preserving consent, credential and privacy behavior; no new purchase authority or real-store claim |
+[Unity purchase binding](../sdk/unity/README.md#protected-store-purchases) is
+implemented: the existing native preparation/submission paths retain consent,
+credential and privacy boundaries. Queued/pending is not verification, and no
+purchase authority or real-store qualification is added. The next core task is
+the [integrated candidate](#integration-and-distribution), not another bridge layer.
 
 Saved bounded daily analysis and external revenue/ROAS/LTV, retention and outcome
 comparison are implemented. External declarations never become captured execution

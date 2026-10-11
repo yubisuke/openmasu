@@ -58,6 +58,8 @@ alias.
 
 ## Settled commerce events
 
+These generic helpers report client-declared commerce. They do not establish store verification.
+
 Use `OpenMasuClient.TrackPurchase(transactionId, amountUnscaled, amountScale,
 currency)` and `TrackRefund(transactionId, originalTransactionId,
 amountUnscaled, amountScale, currency)`. Android and iOS always attach the
@@ -68,6 +70,51 @@ silently discarded. On iOS, the C bridge calls the anchored Swift
 `trackSettledPurchase` and target-free refund helpers; deprecated unanchored
 Swift overloads remain compatibility-only. Pending and reversed lifecycle
 evidence remains limited to canonical/import fixture surfaces, not these public helpers.
+
+## Protected store purchases
+
+Current source also exposes the existing native purchase paths through additive
+platform interfaces; older `IOpenMasuPlatform` implementations remain compatible.
+These additions are not yet in the published `v0.3.0-rc.1` SDK assets.
+
+- Android: `TrackGooglePlayProductPurchase` and `TrackGooglePlaySubscriptionPurchase`
+  accept the protected purchase token, product ID, transaction ID, unscaled amount,
+  scale, currency and a typed completion. `Queued` means native durable admission,
+  not server receipt or Google verification. Reuse the same stable fields on retry;
+  native deterministic IDs and the server ledger retain their deduplication rules.
+- iOS: `PrepareAppStorePurchase(productId, requestId, revenueMeasurementConsent, completion)`
+  returns `Prepared` plus an opaque prepared purchase and its `AppAccountToken`.
+  The host's billing layer owns the actual purchase and must supply that token to
+  its purchase flow. `SubmitAppStorePurchase(prepared, signedTransaction,
+  revenueMeasurementConsent, completion)` returns `Pending` after server acceptance,
+  not `Verified`. Reuse the request UUID/prepared purchase when retrying the same
+  operation; after restart, prepare again with the saved request UUID rather than
+  inventing a new purchase identity. The SDK never grants an entitlement.
+- `NotSubmitted` means this callback cannot establish successful admission. A
+  transport interruption can still follow server acceptance; retry with the same
+  identity, not a new transaction. Server reconciliation owns the eventual outcome.
+
+Call `UpdateConsent(OpenMasuConsentState, policyVersion, completion)` to forward
+consent changes to the native SDK, and wait for its acknowledgement before starting
+new work. Native collection, consent, installation reset and credential barriers
+still apply. A stale prepared purchase is refused after installation changes.
+Do not log purchase tokens, JWS, prepared state or app-account tokens; do not put
+them in public fixtures, analytics, URLs or `PlayerPrefs`.
+
+Completions run once through `PumpCallbacks()` on the Unity main thread. Continue
+pumping while operations are pending. Disposing the client suppresses its later
+callbacks; it does not cancel a request already accepted by the server or roll back
+native queue admission. In-flight retries preserve the same purchase identity.
+The Editor fallback reports `NotSubmitted`, never a fake store success.
+
+`SyntheticPurchaseSample.cs`, included in the Android measurement sample and the
+managed compile probe, demonstrates both platform calls with synthetic values.
+Use it only with a disposable synthetic deployment after initializing the client
+and explicitly configuring collection/consent. Its JWS is deliberately not Apple
+signed; it cannot prove verification. The existing server integration journey
+separately proves synthetic prepare → pending → verified purchase → refund metrics.
+Real-store billing, credentials, physical devices and a Unity iOS export remain
+operator checks; no new billing dependency or purchase process is included.
 
 ## Deep links
 

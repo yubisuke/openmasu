@@ -36,6 +36,7 @@ let package = Package(
       exclude: ["README.md"]
     ),
     .testTarget(name: "OpenMasuCoreTests", dependencies: ["OpenMasuCore"]),
+    .testTarget(name: "OpenMasuObjCTests", dependencies: ["OpenMasuObjC", "OpenMasuCore"]),
     .testTarget(name: "OpenMasuApplePostbackTests", dependencies: ["OpenMasuApplePostback", "OpenMasuCore"], resources: [.process("Vectors")]),
     .testTarget(name: "OpenMasuMaxTests", dependencies: ["OpenMasuMax"]),
   ],

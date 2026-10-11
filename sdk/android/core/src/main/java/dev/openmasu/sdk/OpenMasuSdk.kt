@@ -15,6 +15,7 @@ import org.json.JSONObject
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import java.time.Duration
 import java.time.Instant
 
@@ -37,6 +38,11 @@ data class OpenMasuConfiguration @JvmOverloads constructor(
   }
 }
 
+/** Local queue admission only; a queued purchase has not been store-verified. */
+enum class OpenMasuPurchaseQueueResult {
+  QUEUED, COLLECTION_DISABLED, CONSENT_REQUIRED, INSTALLATION_CHANGED, CONTEXT_CHANGED, QUEUE_REJECTED, NATIVE_FAILURE,
+}
+
 class OpenMasuSdk private constructor(
   private val context: Context,
   private val configuration: OpenMasuConfiguration,
@@ -49,6 +55,7 @@ class OpenMasuSdk private constructor(
   private val database = OpenMasuQueueDatabase.open(context)
   private val executor = Executors.newSingleThreadExecutor()
   private val initialized = AtomicBoolean(false)
+  private val measurementRevision = AtomicLong()
   private val defaultCollectionEnabled = manifestCollectionDefault(context)
   @Volatile private var deepLinkListener: OpenMasuDeepLinkListener? = null
 
@@ -150,6 +157,7 @@ class OpenMasuSdk private constructor(
   }
 
   /** Queues a Google Play one-time-product purchase for protected server verification. */
+  @JvmOverloads
   fun trackGooglePlayProductPurchase(
     purchaseToken: String,
     productId: String,
@@ -157,39 +165,15 @@ class OpenMasuSdk private constructor(
     amountUnscaled: String,
     amountScale: Int,
     currency: String,
+    onComplete: ((OpenMasuPurchaseQueueResult) -> Unit)? = null,
   ) {
-    if (!isCollectionEnabled()) return
-    validateCommerceEvent(transactionId, amountUnscaled, amountScale, currency)
-    require(purchaseToken.isNotEmpty() && purchaseToken.toByteArray(Charsets.UTF_8).size <= 64 * 1024) {
-      "google_play_purchase_token_invalid"
-    }
-    require(productId.matches(Regex("^[A-Za-z0-9._:-]{1,255}$"))) { "google_play_product_id_invalid" }
-    executor.execute {
-      val installationId = storage.installationId()
-      enqueueJson(
-        "purchase",
-        "revenue_measurement",
-        EventFactory.purchase(
-          installationId,
-          transactionId,
-          amountUnscaled,
-          amountScale,
-          currency,
-          "pending",
-          JSONObject()
-            .put("google_play_purchase_token_protected", purchaseToken)
-            .put("google_play_product_id_protected", productId),
-        ),
-        EventFactory.googlePlayProductEventId(
-          installationId, productId, purchaseToken, transactionId,
-          amountUnscaled, amountScale, currency,
-        ),
-      )
-      drain()
-    }
+    enqueueGooglePlayPurchase(
+      false, purchaseToken, productId, transactionId, amountUnscaled, amountScale, currency, onComplete,
+    )
   }
 
   /** Queues a Google Play initial subscription purchase for protected server verification. */
+  @JvmOverloads
   fun trackGooglePlaySubscriptionPurchase(
     purchaseToken: String,
     productId: String,
@@ -197,36 +181,71 @@ class OpenMasuSdk private constructor(
     amountUnscaled: String,
     amountScale: Int,
     currency: String,
+    onComplete: ((OpenMasuPurchaseQueueResult) -> Unit)? = null,
   ) {
-    if (!isCollectionEnabled()) return
+    enqueueGooglePlayPurchase(
+      true, purchaseToken, productId, transactionId, amountUnscaled, amountScale, currency, onComplete,
+    )
+  }
+
+  private fun enqueueGooglePlayPurchase(
+    subscription: Boolean,
+    purchaseToken: String,
+    productId: String,
+    transactionId: String,
+    amountUnscaled: String,
+    amountScale: Int,
+    currency: String,
+    onComplete: ((OpenMasuPurchaseQueueResult) -> Unit)?,
+  ) {
+    if (!isCollectionEnabled()) {
+      onComplete?.invoke(OpenMasuPurchaseQueueResult.COLLECTION_DISABLED)
+      return
+    }
     validateCommerceEvent(transactionId, amountUnscaled, amountScale, currency)
     require(purchaseToken.isNotEmpty() && purchaseToken.toByteArray(Charsets.UTF_8).size <= 64 * 1024) {
       "google_play_purchase_token_invalid"
     }
     require(productId.matches(Regex("^[A-Za-z0-9._:-]{1,255}$"))) { "google_play_product_id_invalid" }
-    executor.execute {
-      val installationId = storage.installationId()
-      enqueueJson(
-        "purchase",
-        "revenue_measurement",
-        EventFactory.purchase(
-          installationId,
-          transactionId,
-          amountUnscaled,
-          amountScale,
-          currency,
-          "pending",
-          JSONObject()
-            .put("google_play_purchase_token_protected", purchaseToken)
-            .put("google_play_product_id_protected", productId)
-            .put("google_play_purchase_kind", "subscription_initial"),
-        ),
-        EventFactory.googlePlaySubscriptionEventId(
-          installationId, productId, purchaseToken, transactionId,
-          amountUnscaled, amountScale, currency,
-        ),
-      )
-      drain()
+    val revision = measurementRevision.get()
+    val installationId = storage.installationId()
+    try {
+      executor.execute {
+        val result = runCatching {
+          when {
+            !isCollectionEnabled() -> OpenMasuPurchaseQueueResult.COLLECTION_DISABLED
+            storage.consentBarrierActive() -> OpenMasuPurchaseQueueResult.CONSENT_REQUIRED
+            storage.installationId() != installationId -> OpenMasuPurchaseQueueResult.INSTALLATION_CHANGED
+            measurementRevision.get() != revision -> OpenMasuPurchaseQueueResult.CONTEXT_CHANGED
+            else -> {
+              val extensions = JSONObject()
+                .put("google_play_purchase_token_protected", purchaseToken)
+                .put("google_play_product_id_protected", productId)
+              if (subscription) extensions.put("google_play_purchase_kind", "subscription_initial")
+              val eventId = if (subscription) EventFactory.googlePlaySubscriptionEventId(
+                installationId, productId, purchaseToken, transactionId, amountUnscaled, amountScale, currency,
+              ) else EventFactory.googlePlayProductEventId(
+                installationId, productId, purchaseToken, transactionId, amountUnscaled, amountScale, currency,
+              )
+              val admitted = enqueueJson(
+                "purchase", "revenue_measurement",
+                EventFactory.purchase(
+                  installationId, transactionId, amountUnscaled, amountScale, currency, "pending", extensions,
+                ),
+                eventId,
+              )
+              if (admitted) OpenMasuPurchaseQueueResult.QUEUED else OpenMasuPurchaseQueueResult.QUEUE_REJECTED
+            }
+          }
+        }.getOrDefault(OpenMasuPurchaseQueueResult.NATIVE_FAILURE)
+        try {
+          onComplete?.invoke(result)
+        } finally {
+          if (result == OpenMasuPurchaseQueueResult.QUEUED) drain()
+        }
+      }
+    } catch (_: java.util.concurrent.RejectedExecutionException) {
+      onComplete?.invoke(OpenMasuPurchaseQueueResult.NATIVE_FAILURE)
     }
   }
 
@@ -266,25 +285,40 @@ class OpenMasuSdk private constructor(
   fun flushBlocking(timeoutMs: Long = 10_000): Boolean =
     executor.submit<Boolean> { drain() }.get(timeoutMs, TimeUnit.MILLISECONDS)
 
-  fun updateConsent(state: String, policyVersion: String) {
+  @JvmOverloads
+  fun updateConsent(state: String, policyVersion: String, onComplete: ((Boolean) -> Unit)? = null) {
     require(state in setOf("granted", "denied", "withdrawn", "not_required", "unknown"))
+    if (state == "denied" || state == "withdrawn") measurementRevision.incrementAndGet()
     storage.applyConsentState(state)
-    executor.execute {
-      database.runInTransaction {
-        purgeConsentRequiredQueueIfBlocked()
-        enqueueJson("consent_changed", "fraud_prevention", EventFactory.consent(state, policyVersion))
-      }
-      if (isCollectionEnabled()) {
-        if ((state == "granted" || state == "not_required") && storage.resetInstallPending()) {
-          completePendingResetInstall()
-        } else {
-          drain()
+    try {
+      executor.execute {
+        val updated = runCatching {
+          var admitted = false
+          database.runInTransaction {
+            purgeConsentRequiredQueueIfBlocked()
+            admitted = enqueueJson("consent_changed", "fraud_prevention", EventFactory.consent(state, policyVersion))
+          }
+          admitted
+        }.getOrDefault(false)
+        try {
+          onComplete?.invoke(updated)
+        } finally {
+          if (isCollectionEnabled()) {
+            if ((state == "granted" || state == "not_required") && storage.resetInstallPending()) {
+              completePendingResetInstall()
+            } else {
+              drain()
+            }
+          }
         }
       }
+    } catch (_: java.util.concurrent.RejectedExecutionException) {
+      onComplete?.invoke(false)
     }
   }
 
   fun setCollectionEnabled(enabled: Boolean) {
+    if (!enabled) measurementRevision.incrementAndGet()
     storage.setCollectionEnabled(enabled)
     if (enabled) executor.execute { drain() }
   }
@@ -293,6 +327,7 @@ class OpenMasuSdk private constructor(
 
   @JvmOverloads
   fun resetInstallationId(onComplete: (Boolean) -> Unit = {}) {
+    measurementRevision.incrementAndGet()
     executor.execute {
       val oldId = storage.installationId()
       val credential = storage.credential()
@@ -355,15 +390,15 @@ class OpenMasuSdk private constructor(
     return value.copy(deferredDeepLinkStatus = value.deferredDeepLinkStatus ?: "delivered")
   }
 
-  private fun enqueueJson(eventName: String, purpose: String, payload: JSONObject, eventId: String? = null) {
-    if (!isCollectionEnabled() && eventName != "consent_changed") return
-    if (storage.consentBarrierActive() && purpose in CONSENT_REQUIRED_PURPOSES) return
+  private fun enqueueJson(eventName: String, purpose: String, payload: JSONObject, eventId: String? = null): Boolean {
+    if (!isCollectionEnabled() && eventName != "consent_changed") return false
+    if (storage.consentBarrierActive() && purpose in CONSENT_REQUIRED_PURPOSES) return false
     val now = EventFactory.canonicalNow()
-    database.queue().admit(
+    return database.queue().admit(
       QueuedEvent(eventId ?: EventFactory.newEventId(), eventName, purpose, payload.toString(), now, storage.nextSequence(), System.currentTimeMillis()),
       configuration.maxQueueRecords,
       configuration.maxQueueBytes,
-    )
+    ).admitted
   }
 
   private fun purgeConsentRequiredQueueIfBlocked() {

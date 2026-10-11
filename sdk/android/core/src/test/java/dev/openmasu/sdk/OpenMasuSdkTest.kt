@@ -419,6 +419,129 @@ class OpenMasuSdkTest {
     assertTrue(event.eventId.startsWith("event:commerce:"))
   }
 
+  @Test fun `protected purchase callbacks acknowledge durable admission and idempotent retries only`() {
+    val sdk = sdk(RecordingTransport(false), configuration = OpenMasuConfiguration(
+      "http://127.0.0.1", "sdk-key:synthetic", "synthetic-secret", maxQueueRecords = 2,
+    ))
+    repeat(2) {
+      assertEquals(OpenMasuPurchaseQueueResult.QUEUED, purchaseResult { completed ->
+        sdk.trackGooglePlayProductPurchase(
+          "synthetic-purchase-token-239", "product.synthetic.239", "transaction:synthetic-239",
+          "199", 2, "USD", completed,
+        )
+      })
+    }
+    assertEquals(OpenMasuPurchaseQueueResult.QUEUED, purchaseResult { completed ->
+      sdk.trackGooglePlaySubscriptionPurchase(
+        "synthetic-subscription-token-239", "subscription.synthetic.239", "transaction:subscription-239",
+        "999", 2, "USD", completed,
+      )
+    })
+    assertEquals(OpenMasuPurchaseQueueResult.QUEUE_REJECTED, purchaseResult { completed ->
+      sdk.trackGooglePlayProductPurchase(
+        "synthetic-rejected-token-239", "product.synthetic.239", "transaction:rejected-239",
+        "299", 2, "USD", completed,
+      )
+    })
+    val pending = sdk.pendingEvents()
+    assertEquals(2, pending.size)
+    assertTrue(pending.all { JSONObject(it.payloadJson).getString("financial_status") == "pending" })
+    assertTrue(pending.none { it.eventId.contains("synthetic-purchase-token-239") })
+  }
+
+  @Test fun `protected purchase callbacks refuse disabled collection and withdrawn consent`() {
+    val sdk = sdk(RecordingTransport(false))
+    sdk.setCollectionEnabled(false)
+    fun submit() = purchaseResult { completed ->
+      sdk.trackGooglePlayProductPurchase(
+        "synthetic-disabled-token-239", "product.synthetic.239", "transaction:disabled-239",
+        "199", 2, "USD", completed,
+      )
+    }
+    assertEquals(OpenMasuPurchaseQueueResult.COLLECTION_DISABLED, submit())
+    sdk.setCollectionEnabled(true)
+    val updated = CountDownLatch(1)
+    sdk.updateConsent("withdrawn", "synthetic-policy-239") { success ->
+      assertTrue(success)
+      updated.countDown()
+    }
+    assertTrue(updated.await(5, TimeUnit.SECONDS))
+    assertEquals(OpenMasuPurchaseQueueResult.CONSENT_REQUIRED, submit())
+    assertTrue(sdk.pendingEvents().none { it.eventName == "purchase" })
+  }
+
+  @Test fun `consent callback refusal does not roll back the privacy purge`() {
+    val sdk = sdk(RecordingTransport(false), configuration = OpenMasuConfiguration(
+      "http://127.0.0.1", "sdk-key:synthetic", "synthetic-secret", maxQueueBytes = 65_536,
+    ))
+    assertEquals(OpenMasuPurchaseQueueResult.QUEUED, purchaseResult { completed ->
+      sdk.trackGooglePlayProductPurchase(
+        "synthetic-purge-token-239", "product.synthetic.239", "transaction:purge-239",
+        "199", 2, "USD", completed,
+      )
+    })
+    val result = AtomicReference<Boolean>()
+    val completed = CountDownLatch(1)
+    sdk.updateConsent("withdrawn", "x".repeat(70_000)) { result.set(it); completed.countDown() }
+    assertTrue(completed.await(5, TimeUnit.SECONDS))
+    assertFalse(result.get())
+    assertTrue(OpenMasuStorage(context).consentBarrierActive())
+    assertTrue(sdk.pendingEvents().none { it.eventName == "purchase" })
+  }
+
+  @Test fun `withdrawal and regrant invalidate a protected purchase waiting on the native executor`() {
+    val entered = CountDownLatch(1)
+    val release = CountDownLatch(1)
+    val sdk = sdk(RecordingTransport(false), PlayReferrerReader {
+      entered.countDown()
+      check(release.await(5, TimeUnit.SECONDS))
+      PlayReferrerEvidence("none", "ok")
+    })
+    sdk.initialize()
+    assertTrue(entered.await(5, TimeUnit.SECONDS))
+    val result = AtomicReference<OpenMasuPurchaseQueueResult>()
+    val completed = CountDownLatch(1)
+    try {
+      sdk.trackGooglePlaySubscriptionPurchase(
+        "synthetic-race-token-239", "subscription.synthetic.239", "transaction:race-239",
+        "999", 2, "USD",
+      ) { result.set(it); completed.countDown() }
+      sdk.updateConsent("withdrawn", "synthetic-policy-239")
+      sdk.updateConsent("granted", "synthetic-policy-239")
+    } finally { release.countDown() }
+    assertTrue(completed.await(5, TimeUnit.SECONDS))
+    assertEquals(OpenMasuPurchaseQueueResult.CONTEXT_CHANGED, result.get())
+    assertTrue(sdk.pendingEvents().none { it.eventName == "purchase" })
+  }
+
+  @Test fun `installation reset invalidates protected purchase work already waiting on the executor`() {
+    val entered = CountDownLatch(1)
+    val release = CountDownLatch(1)
+    val sdk = sdk(RecordingTransport(true), PlayReferrerReader {
+      entered.countDown()
+      check(release.await(5, TimeUnit.SECONDS))
+      PlayReferrerEvidence("none", "ok")
+    })
+    sdk.initialize()
+    assertTrue(entered.await(5, TimeUnit.SECONDS))
+    val result = AtomicReference<OpenMasuPurchaseQueueResult>()
+    val completed = CountDownLatch(1)
+    val reset = CountDownLatch(1)
+    val oldId = sdk.installationId()
+    try {
+      sdk.trackGooglePlayProductPurchase(
+        "synthetic-reset-token-239", "product.synthetic.239", "transaction:reset-239",
+        "199", 2, "USD",
+      ) { result.set(it); completed.countDown() }
+      sdk.resetInstallationId { success -> assertTrue(success); reset.countDown() }
+    } finally { release.countDown() }
+    assertTrue(completed.await(5, TimeUnit.SECONDS))
+    assertTrue(reset.await(5, TimeUnit.SECONDS))
+    assertEquals(OpenMasuPurchaseQueueResult.CONTEXT_CHANGED, result.get())
+    assertNotEquals(oldId, sdk.installationId())
+    assertTrue(sdk.pendingEvents().none { it.eventName == "purchase" })
+  }
+
   @Test fun `DL-A-17 and DL-A-18 route a verified app link synchronously before queue delivery`() {
     val transport = RecordingTransport(false)
     val sdk = sdk(transport, configuration = OpenMasuConfiguration(
@@ -586,6 +709,16 @@ class OpenMasuSdkTest {
   private fun await(condition: () -> Boolean) {
     repeat(100) { if (condition()) return; Thread.sleep(25) }
     error("condition_not_met")
+  }
+
+  private fun purchaseResult(
+    submit: ((OpenMasuPurchaseQueueResult) -> Unit) -> Unit,
+  ): OpenMasuPurchaseQueueResult {
+    val result = AtomicReference<OpenMasuPurchaseQueueResult>()
+    val completed = CountDownLatch(1)
+    submit { result.set(it); completed.countDown() }
+    assertTrue(completed.await(5, TimeUnit.SECONDS))
+    return result.get()
   }
 
   private class RecordingTransport(private val deliverySucceeds: Boolean) : OpenMasuTransport {

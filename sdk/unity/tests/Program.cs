@@ -5,7 +5,7 @@ using System.Threading;
 using System.Xml.Linq;
 using OpenMasu.Unity;
 
-internal static class Program
+internal static partial class Program
 {
     private static int Main()
     {
@@ -46,6 +46,7 @@ internal static class Program
         ExerciseIosCallbackPath(mainThread);
         Require(OpenMasuiOSPlatform.ActiveCallbackCount == 0, "iOS function-pointer callback leaked");
         ExerciseRevenuePlatformCompatibility();
+        ExerciseProtectedPurchases(mainThread);
         ExerciseAppleConversionPlatformCompatibility();
         ExerciseAndroidManifestGeneration();
         ExerciseAndroidGradleSettings();

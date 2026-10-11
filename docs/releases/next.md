@@ -45,6 +45,9 @@ The unreleased source connects:
   decoding remains unverified and reports ranges, not measured revenue.
 - Apple Ads Platform v1 campaign costs through the existing default-off scheduler,
   private token references, complete UTC daily publication and saved ROAS corrections.
+- typed Unity bindings to native Google Play protected purchase admission and
+  App Store preparation/submission, with consent forwarding and main-thread callbacks;
+  queued/pending remain distinct from server verification and entitlements.
 
 The [documentation index](../README.md) links the corresponding guides.
 These are source implementations with synthetic evidence; they do not qualify
@@ -54,7 +57,7 @@ live providers, devices or production operation.
 
 The [current functional plan](https://github.com/yubisuke/openmasu/issues/218)
 and [roadmap](../roadmap.md#next-product-sequence) prioritize
-Unity purchase binding and candidate integration. Optional extensions have
+candidate integration. Optional extensions have
 separate usage conditions; they need not all precede candidate promotion.
 
 An integrated candidate must bind its source, contract, SDK identities,
