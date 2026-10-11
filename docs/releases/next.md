@@ -37,6 +37,9 @@ The unreleased source connects:
 - closed external revenue/ROAS/LTV, retention and outcome comparison declarations,
   including refund reversal, calendar windows and dated FX; all remain
   operator-declared rather than captured external execution.
+- bounded Apple postback observations with separate receipt, delivery, logical
+  postback and quota-audit counts, window/unknown metadata and unsigned-value
+  labels; existing metric aliases and contract behavior are unchanged.
 
 The [documentation index](../README.md) links the corresponding guides.
 These are source implementations with synthetic evidence; they do not qualify

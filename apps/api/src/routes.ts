@@ -70,6 +70,8 @@ export type RouteHandler =
   | "dashboard_ingest_recovery_list"
   | "dashboard_ingest_recovery_request"
   | "admin_attribution_report"
+  | "admin_apple_postbacks"
+  | "dashboard_apple_postbacks"
   | "dashboard_attribution_report"
   | "admin_metric_explanation"
   | "apple_skan_postback"
@@ -197,6 +199,7 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_ingest_recovery_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/ingest-recovery$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_ingest_recovery_request", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/ingest-recovery$/, auth: "dashboard_session", mutates: true, capability: "operate" },
   { handler: "admin_attribution_report", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/attribution$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "admin_apple_postbacks", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/apple-postbacks$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_metric_explanation", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/metrics\/[^/]+\/explanation$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "dashboard_root", method: "GET", pattern: /^\/dashboard\/?$/, auth: "public", mutates: false },
   { handler: "dashboard_css", method: "GET", pattern: /^\/dashboard\/app\.css$/, auth: "public", mutates: false },
@@ -211,6 +214,7 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_differences", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/differences$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_fraud", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/fraud$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_attribution_report", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/attribution$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_apple_postbacks", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/apple-postbacks$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_metric_schedules_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules$/, auth: "dashboard_session", mutates: false, capability: "administer" },
   { handler: "dashboard_metric_schedules_register", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_metric_schedules_preview_recommended", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules\/preview-recommended$/, auth: "dashboard_session", mutates: false, capability: "administer" },

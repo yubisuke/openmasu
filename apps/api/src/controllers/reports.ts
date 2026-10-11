@@ -20,6 +20,8 @@ import { operatorDeliveryHealth } from "../operator-delivery-health.js";
 import { measurementHealth } from "../measurement-health.js";
 import { attributionReport, AttributionReportError, parseAttributionQuery } from "../attribution-reporting.js";
 import { renderAttributionReport } from "../dashboard/attribution-report.js";
+import { applePostbackReport, AppleReportError, parseAppleReportQuery } from "../apple-postback-reporting.js";
+import { renderApplePostbackReport } from "../dashboard/apple-postback-report.js";
 import { csrfToken, verifyCsrfToken } from "../session.js";
 import { listTrackingLinks } from "../tracking-links.js";
 import { listSdkKeys } from "../sdk-auth.js";
@@ -35,6 +37,27 @@ import { dashboardHeaders } from "../http-responses.js";
 import { renderAttributionReportNotCompleted, renderComparisonNotCompleted, renderMetricRunNotFound, renderExportLimitExceeded } from "../dashboard/action-pages.js";
 
 export function createReportsControllers(dependencies: Pick<RequestHandlerDependencies, "readerPool" | "dashboard" | "reportMaximumRows" | "reportMaximumExportRows" | "redirectorBaseUrl">) {
+  const dashboardApplePostbacks = async ({ response, target, appId, appIdentity }: DashboardAppContext): Promise<void> => {
+    try {
+      const report = [...target.searchParams].length ? await applePostbackReport(dependencies.readerPool, appIdentity, parseAppleReportQuery(target.searchParams)) : undefined;
+      dashboardHtml(response, 200, renderApplePostbackReport(appId, report));
+    } catch (error) {
+      if (!(error instanceof AppleReportError)) throw error;
+      dashboardHtml(response, error.statusCode, renderApplePostbackReport(appId, undefined, error.code));
+    }
+  };
+
+  const adminApplePostbacks = async ({ response, target, pool, identity }: AdminRequestContext): Promise<void> => {
+    try {
+      const appIdentity = await requireRegisteredApp(pool, identity, adminAppId(target.pathname) ?? "");
+      json(response, 200, await applePostbackReport(pool, appIdentity, parseAppleReportQuery(target.searchParams)));
+    } catch (error) {
+      if (error instanceof AppNotFoundError) json(response, 404, { error: "app_not_found" });
+      else if (error instanceof AppleReportError) json(response, error.statusCode, { error: error.code });
+      else throw error;
+    }
+  };
+
   const dashboardAttributionReport = async ({ response, target, appId, appIdentity }: DashboardAppContext): Promise<void> => {
     try {
       const report = [...target.searchParams].length ? await attributionReport(dependencies.readerPool, appIdentity, parseAttributionQuery(target.searchParams)) : undefined;
@@ -312,6 +335,8 @@ export function createReportsControllers(dependencies: Pick<RequestHandlerDepend
   };
 
   return {
+    dashboard_apple_postbacks: { boundary: "dashboard_app", handle: dashboardApplePostbacks },
+    admin_apple_postbacks: { boundary: "admin", handle: adminApplePostbacks },
     dashboard_attribution_report: { boundary: "dashboard_app", handle: dashboardAttributionReport },
     dashboard_comparison_form: { boundary: "dashboard_app", handle: dashboardComparisonForm },
     dashboard_comparison_submit: { boundary: "dashboard_app", handle: dashboardComparisonForm },
