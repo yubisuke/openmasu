@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-10-04. This page describes the current `main` source tree.
+Updated: 2026-10-11. This page describes the current `main` source tree.
 Implementation and synthetic verification are not live operational qualification.
 
 ## Release snapshot
@@ -47,7 +47,7 @@ qualification is stated. No row establishes production readiness.
 | Fraud controls | Recorded public rules, registered fraud bundle hashes, diagnostics and synthetic Integrity/App Attest verification | No physical-device-farm or reset-fraud guarantee; private threshold calibration and live platform projects unverified |
 | Privacy and recovery | Role isolation, protected payloads, deletion, saved-manifest metric replay, actual dump/restore and privacy reapplication | External recipients retain their own deletion duty; live recovery time and secret custody unverified |
 | Outbound delivery | Default-off signed webhooks, S3-compatible bulk exports and bounded Google conversion delivery with local fencing/health | Live quotas and permissions unverified; no provider-side exactly-once guarantee |
-| Runtime and operation | One-worker tenant fairness, bounded inbox slices, authenticated logs/metrics, upgrade and single-host procedures | Multi-replica tenant-wide ordering, packaged alert rules, scheduled backup and live capacity remain open |
+| Runtime and operation | One-worker tenant fairness, bounded inbox slices, authenticated logs/metrics, five optional monitoring rules and recovery runbooks, upgrade and single-host procedures | Multi-replica tenant-wide ordering, scheduled backup, live alert delivery and capacity remain open |
 
 Detailed limits belong to the [product guides](README.md), [product scope](product-scope.md),
 [privacy/security policy](privacy-security.md) and [threat model](threat-model.md).
@@ -55,12 +55,13 @@ Detailed limits belong to the [product guides](README.md), [product scope](produ
 ## Current development focus
 
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-15 of 35 child issues complete; 20 remain as of this update. The earlier
+16 of 35 child issues complete; 19 remain as of this update. The earlier
 integration plan is complete, not a second backlog. The dependency, controller,
 presentation, evaluator and ingestion foundations are also implemented.
 
-Next: **minimal monitoring rules** ([#248](https://github.com/yubisuke/openmasu/issues/248)),
-then **scheduled backup and recovery evidence**
+The [minimal monitoring rules](operations/monitoring.md) are implemented with
+synthetic transition tests; receiver setup and live delivery remain external.
+Next: **scheduled backup and recovery evidence**
 ([#250](https://github.com/yubisuke/openmasu/issues/250)). After that, prioritize
 bounded daily analysis/comparison, Apple aggregate usability and Unity purchase
 binding before promoting an integrated candidate. The [roadmap](roadmap.md)

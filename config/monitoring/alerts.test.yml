@@ -1,0 +1,200 @@
+rule_files: [alerts.yml]
+evaluation_interval: 1m
+
+tests:
+  - name: Scrape failure takes priority over stale queue signals and recovers
+    interval: 1m
+    input_series:
+      - series: 'up{job="openmasu",instance="primary"}'
+        values: '1x1 0x7 1x20'
+      - series: 'openmasu_ingest_backlog{job="openmasu",instance="primary",queue="privacy_purges"}'
+        values: '0x1 1x7 0x20'
+      - series: 'openmasu_ingest_oldest_pending_seconds{job="openmasu",instance="primary",queue="privacy_purges"}'
+        values: '0x1 6000x7 0x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: OpenMasuMetricsUnavailable
+        exp_alerts:
+          - exp_labels: {instance: primary, severity: critical}
+            exp_annotations:
+              runbook_url: https://github.com/yubisuke/openmasu/blob/main/docs/operations/monitoring.md#metrics-unavailable
+    promql_expr_test:
+      - expr: count(ALERTS{alertstate="firing"}) or vector(0)
+        eval_time: 1m
+        exp_samples: [{labels: '{}', value: 0}]
+      - expr: count(ALERTS{alertstate="firing"}) or vector(0)
+        eval_time: 5m
+        exp_samples: [{labels: '{}', value: 1}]
+      - expr: count(ALERTS{alertstate="firing"}) or vector(0)
+        eval_time: 15m
+        exp_samples: [{labels: '{}', value: 0}]
+
+  - name: Privacy failures take priority over schedule and backlog symptoms
+    interval: 1m
+    input_series:
+      - series: 'up{job="openmasu",instance="primary"}'
+        values: '1x30'
+      - series: 'openmasu_ingest_backlog{job="openmasu",instance="primary",queue="privacy_purges"}'
+        values: '0x1 2x17 0x10'
+      - series: 'openmasu_ingest_oldest_pending_seconds{job="openmasu",instance="primary",queue="privacy_purges"}'
+        values: '0x1 600x17 0x10'
+      - series: 'openmasu_scheduled_job_consecutive_failures{job="openmasu",instance="primary",exported_job="privacy_purge"}'
+        values: '0x1 3x17 0x10'
+      - series: 'openmasu_scheduled_job_configured{job="openmasu",instance="primary",exported_job="metric_run"}'
+        values: '1x30'
+      - series: 'openmasu_scheduled_job_overdue_seconds{job="openmasu",instance="primary",exported_job="metric_run"}'
+        values: '0x1 1800x17 0x10'
+      - series: 'openmasu_scheduled_job_lease_active{job="openmasu",instance="primary",exported_job="metric_run"}'
+        values: '0x30'
+      - series: 'openmasu_ingest_backlog{job="openmasu",instance="primary",queue="sdk_batches"}'
+        values: '0x1 10x17 0x10'
+      - series: 'openmasu_ingest_oldest_pending_seconds{job="openmasu",instance="primary",queue="sdk_batches"}'
+        values: '0x1 6000x17 0x10'
+      - series: 'openmasu_ingest_backlog{job="openmasu",instance="primary",queue="operator_webhooks"}'
+        values: '0x1 10x17 0x10'
+      - series: 'openmasu_ingest_oldest_pending_seconds{job="openmasu",instance="primary",queue="operator_webhooks"}'
+        values: '0x1 6000x17 0x10'
+    alert_rule_test:
+      - eval_time: 18m
+        alertname: OpenMasuPrivacyPurgeStalled
+        exp_alerts:
+          - exp_labels: {instance: primary, severity: critical}
+            exp_annotations:
+              runbook_url: https://github.com/yubisuke/openmasu/blob/main/docs/operations/monitoring.md#privacy-purge-stalled
+    promql_expr_test:
+      - expr: count(ALERTS{alertstate="firing"}) or vector(0)
+        eval_time: 3m
+        exp_samples: [{labels: '{}', value: 0}]
+      - expr: count(ALERTS{alertstate="firing"}) or vector(0)
+        eval_time: 18m
+        exp_samples: [{labels: '{}', value: 1}]
+      - expr: count(ALERTS{alertstate="firing"}) or vector(0)
+        eval_time: 28m
+        exp_samples: [{labels: '{}', value: 0}]
+
+  - name: Stopped scheduler coalesces job failures and suppresses secondary queues
+    interval: 1m
+    input_series:
+      - series: 'up{job="openmasu",instance="primary"}'
+        values: '1x30'
+      - series: 'openmasu_scheduled_job_configured{job="openmasu",instance="primary",exported_job="sdk_inbox"}'
+        values: '1x30'
+      - series: 'openmasu_scheduled_job_overdue_seconds{job="openmasu",instance="primary",exported_job="sdk_inbox"}'
+        values: '0x1 1800x17 0x10'
+      - series: 'openmasu_scheduled_job_lease_active{job="openmasu",instance="primary",exported_job="sdk_inbox"}'
+        values: '0x30'
+      - series: 'openmasu_scheduled_job_configured{job="openmasu",instance="primary",exported_job="metric_run"}'
+        values: '1x30'
+      - series: 'openmasu_scheduled_job_consecutive_failures{job="openmasu",instance="primary",exported_job="metric_run"}'
+        values: '0x1 3x17 0x10'
+      - series: 'openmasu_ingest_backlog{job="openmasu",instance="primary",queue="max_inbox"}'
+        values: '0x1 10x17 0x10'
+      - series: 'openmasu_ingest_oldest_pending_seconds{job="openmasu",instance="primary",queue="max_inbox"}'
+        values: '0x1 6000x17 0x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: OpenMasuScheduleStalled
+        exp_alerts:
+          - exp_labels: {instance: primary, severity: warning}
+            exp_annotations:
+              runbook_url: https://github.com/yubisuke/openmasu/blob/main/docs/operations/monitoring.md#schedule-stalled
+    promql_expr_test:
+      - expr: count(ALERTS{alertstate="firing"}) or vector(0)
+        eval_time: 1m
+        exp_samples: [{labels: '{}', value: 0}]
+      - expr: count(ALERTS{alertstate="firing"}) or vector(0)
+        eval_time: 8m
+        exp_samples: [{labels: '{}', value: 1}]
+      - expr: count(ALERTS{alertstate="firing"}) or vector(0)
+        eval_time: 28m
+        exp_samples: [{labels: '{}', value: 0}]
+
+  - name: Ingest ignores a short spike and alerts once across delayed queues
+    interval: 1m
+    input_series:
+      - series: 'up{job="openmasu",instance="primary"}'
+        values: '1x40'
+      - series: 'openmasu_ingest_backlog{job="openmasu",instance="primary",queue="sdk_batches"}'
+        values: '0 5x2 0x5 5x20 0x10'
+      - series: 'openmasu_ingest_oldest_pending_seconds{job="openmasu",instance="primary",queue="sdk_batches"}'
+        values: '0 1800x2 0x5 1800x20 0x10'
+      - series: 'openmasu_ingest_backlog{job="openmasu",instance="primary",queue="adservices"}'
+        values: '0x9 5x19 0x10'
+      - series: 'openmasu_ingest_oldest_pending_seconds{job="openmasu",instance="primary",queue="adservices"}'
+        values: '0x9 1800x19 0x10'
+    alert_rule_test:
+      - eval_time: 18m
+        alertname: OpenMasuIngestDelayed
+        exp_alerts:
+          - exp_labels: {instance: primary, severity: warning}
+            exp_annotations:
+              runbook_url: https://github.com/yubisuke/openmasu/blob/main/docs/operations/monitoring.md#ingest-delayed
+    promql_expr_test:
+      - expr: count(ALERTS{alertstate="firing"}) or vector(0)
+        eval_time: 7m
+        exp_samples: [{labels: '{}', value: 0}]
+      - expr: count(ALERTS{alertstate="firing"}) or vector(0)
+        eval_time: 18m
+        exp_samples: [{labels: '{}', value: 1}]
+      - expr: count(ALERTS{alertstate="firing"}) or vector(0)
+        eval_time: 38m
+        exp_samples: [{labels: '{}', value: 0}]
+
+  - name: Delivery waits through bounded retry then resolves after draining
+    interval: 1m
+    input_series:
+      - series: 'up{job="openmasu",instance="primary"}'
+        values: '1x60'
+      - series: 'openmasu_ingest_backlog{job="openmasu",instance="primary",queue="operator_webhooks"}'
+        values: '0x1 5x37 0x20'
+      - series: 'openmasu_ingest_oldest_pending_seconds{job="openmasu",instance="primary",queue="operator_webhooks"}'
+        values: '0x1 7200x37 0x20'
+      - series: 'openmasu_ingest_backlog{job="openmasu",instance="primary",queue="operator_bulk_exports"}'
+        values: '0x1 5x37 0x20'
+      - series: 'openmasu_ingest_oldest_pending_seconds{job="openmasu",instance="primary",queue="operator_bulk_exports"}'
+        values: '0x1 7200x37 0x20'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: OpenMasuDeliveryDelayed
+        exp_alerts:
+          - exp_labels: {instance: primary, severity: warning}
+            exp_annotations:
+              runbook_url: https://github.com/yubisuke/openmasu/blob/main/docs/operations/monitoring.md#delivery-delayed
+    promql_expr_test:
+      - expr: count(ALERTS{alertstate="firing"}) or vector(0)
+        eval_time: 10m
+        exp_samples: [{labels: '{}', value: 0}]
+      - expr: count(ALERTS{alertstate="firing"}) or vector(0)
+        eval_time: 20m
+        exp_samples: [{labels: '{}', value: 1}]
+      - expr: count(ALERTS{alertstate="firing"}) or vector(0)
+        eval_time: 50m
+        exp_samples: [{labels: '{}', value: 0}]
+
+  - name: Empty and never-started work is quiet and a valid lease is respected
+    interval: 1m
+    input_series:
+      - series: 'up{job="openmasu",instance="primary"}'
+        values: '1x40'
+      - series: 'openmasu_ingest_backlog{job="openmasu",instance="primary",queue="sdk_batches"}'
+        values: '0x40'
+      - series: 'openmasu_ingest_oldest_pending_seconds{job="openmasu",instance="primary",queue="sdk_batches"}'
+        values: '7200x40'
+      - series: 'openmasu_scheduled_job_configured{job="openmasu",instance="primary",exported_job="sdk_inbox"}'
+        values: '0x40'
+      - series: 'openmasu_scheduled_job_overdue_seconds{job="openmasu",instance="primary",exported_job="sdk_inbox"}'
+        values: '7200x40'
+      - series: 'openmasu_scheduled_job_lease_active{job="openmasu",instance="primary",exported_job="sdk_inbox"}'
+        values: '0x40'
+      - series: 'openmasu_scheduled_job_configured{job="openmasu",instance="primary",exported_job="metric_run"}'
+        values: '1x40'
+      - series: 'openmasu_scheduled_job_overdue_seconds{job="openmasu",instance="primary",exported_job="metric_run"}'
+        values: '7200x40'
+      - series: 'openmasu_scheduled_job_lease_active{job="openmasu",instance="primary",exported_job="metric_run"}'
+        values: '1x40'
+      - series: 'openmasu_job_last_completion_timestamp_seconds{job="openmasu",instance="primary",exported_job="metric_run",outcome="succeeded"}'
+        values: '0x40'
+    promql_expr_test:
+      - expr: count(ALERTS{alertstate="firing"}) or vector(0)
+        eval_time: 35m
+        exp_samples: [{labels: '{}', value: 0}]

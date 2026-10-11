@@ -12,6 +12,13 @@ than rebuilding unrelated SDKs after every documentation or backend merge.
 Manual runs, missing revisions, empty/failed diffs and unknown paths retain all gates.
 Required jobs remain visible even when their expensive steps are not relevant.
 
+The four explicit `config/monitoring/*.yml` examples run native `promtool` and
+`amtool` checks in the existing Runtime job, plus contract/documentation checks.
+Changing only these files does not run application suites, native SDK builds or
+benchmarks. Runtime implementation changes still check the rules; unknown
+configuration files keep the normal runtime gates. Six synthetic series scenarios
+own alert behavior; no custom test harness or additional required job is added.
+
 Backend unit-test-only edits under `apps/`, `packages/` and `tools/` run contract
 checks and Runtime's existing unit owner, without native SDK builds or throughput
 benchmarks. Runtime integration, PostgreSQL parity, role/privacy checks and the

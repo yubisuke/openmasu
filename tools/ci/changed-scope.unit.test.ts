@@ -4,6 +4,20 @@ import { readFileSync } from "node:fs";
 import { classifyPaths } from "./changed-scope.mjs";
 
 describe("CI changed-scope classifier", () => {
+  it("validates monitoring examples without unrelated runtime or native suites", () => {
+    const paths = ["config/monitoring/prometheus.yml", "config/monitoring/alertmanager.yml",
+      "config/monitoring/alerts.yml", "config/monitoring/alerts.test.yml", "docs/operations/monitoring.md"];
+    for (const event of ["pull_request", "push"] as const) {
+      assert.deepEqual(classifyPaths(paths, event), {
+        contract: true, runtime: false, android: false, android_emulator: false,
+        ios: false, runtime_performance: false, monitoring: true,
+      });
+      assert.equal(classifyPaths([...paths, "apps/api/src/operational-metrics.ts"], event).runtime, true);
+      assert.equal(classifyPaths([...paths, "config/monitoring/unknown.yml"], event).runtime, true);
+      assert.equal(classifyPaths([...paths, ".github/workflows/runtime.yml"], event).android_emulator, true);
+    }
+  });
+
   it("keeps offline comparison validation without native or database gates", () => {
     assert.deepEqual(classifyPaths(["tools/compare-cohorts.ts", "tools/cohort-comparison-html.ts", "tools/report-to-snapshot.ts", "tools/report-to-snapshot.unit.test.ts", "examples/synthetic/cohort-snapshot.json", "docs/cohort-comparison.md"]), {
       contract: true, runtime: false, android: false, android_emulator: false, ios: false, runtime_performance: false, offline_unit: true,

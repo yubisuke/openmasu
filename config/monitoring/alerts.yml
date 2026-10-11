@@ -1,0 +1,83 @@
+# Conservative examples, not a delivery or privacy SLA. Tune thresholds and holds
+# in the operator's copy. Scrape job must be openmasu with honor_labels: false:
+# the application's fixed job label becomes exported_job after scraping.
+groups:
+  - name: openmasu
+    interval: 1m
+    rules:
+      - record: openmasu:metrics_available
+        expr: max by (instance) (up{job="openmasu"})
+
+      - record: openmasu:privacy_stalled
+        expr: |
+          max by (instance) (
+            (openmasu_ingest_backlog{job="openmasu",queue="privacy_purges"} > 0)
+            and on (instance) (
+              (openmasu_ingest_oldest_pending_seconds{job="openmasu",queue="privacy_purges"} > 900)
+              or (openmasu_scheduled_job_consecutive_failures{job="openmasu",exported_job="privacy_purge"} >= 3)
+            )
+          ) and on (instance) (openmasu:metrics_available == 1)
+
+      - record: openmasu:schedule_stalled
+        expr: |
+          max by (instance) (
+            (openmasu_scheduled_job_configured{job="openmasu"} == 1)
+            and on (instance, exported_job) (
+              ((openmasu_scheduled_job_overdue_seconds{job="openmasu"} > 900)
+                and on (instance, exported_job) (openmasu_scheduled_job_lease_active{job="openmasu"} == 0))
+              or (openmasu_scheduled_job_consecutive_failures{job="openmasu"} >= 3)
+            )
+          ) and on (instance) (openmasu:metrics_available == 1)
+          unless on (instance) openmasu:privacy_stalled
+
+      - alert: OpenMasuMetricsUnavailable
+        expr: openmasu:metrics_available == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          runbook_url: https://github.com/yubisuke/openmasu/blob/main/docs/operations/monitoring.md#metrics-unavailable
+
+      - alert: OpenMasuPrivacyPurgeStalled
+        expr: openmasu:privacy_stalled
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          runbook_url: https://github.com/yubisuke/openmasu/blob/main/docs/operations/monitoring.md#privacy-purge-stalled
+
+      - alert: OpenMasuScheduleStalled
+        expr: openmasu:schedule_stalled
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          runbook_url: https://github.com/yubisuke/openmasu/blob/main/docs/operations/monitoring.md#schedule-stalled
+
+      - alert: OpenMasuIngestDelayed
+        expr: |
+          max by (instance) (
+            (openmasu_ingest_oldest_pending_seconds{job="openmasu",queue=~"max_inbox|sdk_batches|adservices"} > 900)
+            and on (instance, queue) (openmasu_ingest_backlog{job="openmasu"} > 0)
+          ) and on (instance) (openmasu:metrics_available == 1)
+          unless on (instance) openmasu:privacy_stalled
+          unless on (instance) openmasu:schedule_stalled
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          runbook_url: https://github.com/yubisuke/openmasu/blob/main/docs/operations/monitoring.md#ingest-delayed
+
+      - alert: OpenMasuDeliveryDelayed
+        expr: |
+          max by (instance) (
+            (openmasu_ingest_oldest_pending_seconds{job="openmasu",queue=~"operator_webhooks|operator_bulk_exports"} > 3600)
+            and on (instance, queue) (openmasu_ingest_backlog{job="openmasu"} > 0)
+          ) and on (instance) (openmasu:metrics_available == 1)
+          unless on (instance) openmasu:privacy_stalled
+          unless on (instance) openmasu:schedule_stalled
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          runbook_url: https://github.com/yubisuke/openmasu/blob/main/docs/operations/monitoring.md#delivery-delayed

@@ -1,0 +1,10 @@
+# No notification is sent until the operator configures this receiver privately.
+route:
+  receiver: configure-me
+  group_by: [instance]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: configure-me

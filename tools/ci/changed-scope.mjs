@@ -11,6 +11,11 @@ const OFFLINE_COMPARISON = new Set([
   "tools/report-to-snapshot.ts", "tools/report-to-snapshot.unit.test.ts",
   "examples/synthetic/cohort-snapshot.json",
 ]);
+// Operator examples have native Prometheus validation, not an application runtime.
+const MONITORING = new Set([
+  "config/monitoring/prometheus.yml", "config/monitoring/alertmanager.yml",
+  "config/monitoring/alerts.yml", "config/monitoring/alerts.test.yml",
+]);
 
 function normalized(path) {
   return path.replaceAll("\\", "/").replace(/^\.\//, "");
@@ -31,6 +36,11 @@ export function classifyPaths(inputPaths, eventName = "pull_request") {
   for (const rawPath of inputPaths) {
     const path = normalized(rawPath.trim());
     if (!path) continue;
+    if (MONITORING.has(path)) {
+      result.contract = true;
+      result.monitoring = true;
+      continue;
+    }
     if (OFFLINE_COMPARISON.has(path)) {
       result.contract = true;
       result.offline_unit = true;
