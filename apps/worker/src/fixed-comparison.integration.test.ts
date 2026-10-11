@@ -17,6 +17,7 @@ import { ensureAdminKeys } from "../../api/src/admin-auth.js";
 import { issueDashboardSession } from "../../api/src/session.js";
 import { aggregateCsvToSnapshot } from "../../api/src/aggregate-csv-snapshot.js";
 import { renderComparison } from "../../api/src/dashboard/comparison-report.js";
+import { syntheticExternalComparisonCases, syntheticExternalComparisonPair } from "../../../tools/synthetic-external-comparison-cases.js";
 
 describe("fixed comparison acquisition", { concurrency: false }, () => {
   const identity = { tenantId: "tenant-a", appId: "app-a", keyId: "key:synthetic-fixed", role: "read_only" as const };
@@ -108,10 +109,10 @@ describe("fixed comparison acquisition", { concurrency: false }, () => {
           fraud_policy: "gross", privacy_state: "before", value_type: "ratio", ratio_scale: 6,
           fx: { target_currency: "USD", target_scale: 6, conversion: "per_event_round_then_sum", rounding_mode: "half_even",
             rates: [{ currency: "EUR", rate_unscaled: "5", rate_scale: 1, as_of: "2026-08-01T00:00:00.000Z" }] }, final_rounding: "half_even" } };
-      const upload = (candidate = saved, map = mapping) => {
+      const upload = (candidate = saved, map = mapping, content = csv) => {
         const form = new FormData(); form.set("action", "review"); form.set("csrf_token", token);
         form.set("saved_json", new File([jcs(candidate)], "private-filename.json"));
-        form.set("external_csv", new File([csv], "private-filename.csv")); form.set("mapping_json", new File([jcs(map)], "mapping.json")); return form;
+        form.set("external_csv", new File([content], "private-filename.csv")); form.set("mapping_json", new File([jcs(map)], "mapping.json")); return form;
       };
       const reviewed = await post(upload()); assert.equal(reviewed.status, 200);
       const reviewHtml = await reviewed.text(); assert.match(reviewHtml, /No numerical comparison has been performed/);
@@ -132,6 +133,19 @@ describe("fixed comparison acquisition", { concurrency: false }, () => {
       assert.match(json.headers.get("content-disposition")!, /attachment; filename="openmasu-comparison.json"/);
       const html = await post(submit(resultHtml, "html", true)); assert.equal(html.status, 200);
       assert.equal(await html.text(), renderComparison(expected));
+      // Reuse the authenticated, no-writer journey for all newly supported aggregate families.
+      for (const entry of syntheticExternalComparisonCases()) {
+        const pair = syntheticExternalComparisonPair(entry);
+        assert.equal(pair.run.value_unscaled, entry.expected, entry.name);
+        const reviewedFamily = await post(upload(pair.saved, pair.mapping, pair.csv)); assert.equal(reviewedFamily.status, 200, entry.name);
+        const familyHtml = await reviewedFamily.text();
+        const expectedFamily = compareSnapshots(pair.saved, aggregateCsvToSnapshot(Buffer.from(pair.csv), pair.mapping), { allowExternalDeclaration: true });
+        assert.equal(expectedFamily.status, "external_declared_comparison", `${entry.name}: ${expectedFamily.mismatches}`);
+        const resultFamily = await post(submit(familyHtml, "json", true)); assert.equal(resultFamily.status, 200, entry.name);
+        assert.equal(await resultFamily.text(), `${jcs(expectedFamily)}\n`, entry.name);
+        const staticFamily = await post(submit(familyHtml, "html", true)); assert.equal(staticFamily.status, 200, entry.name);
+        assert.equal(await staticFamily.text(), renderComparison(expectedFamily), entry.name);
+      }
       const mismatched = structuredClone(mapping); mismatched.external_calculation.final_rounding = "half_up";
       const mismatchReview = await post(upload(saved, mismatched));
       const mismatchResult = await post(submit(await mismatchReview.text(), "json", true));

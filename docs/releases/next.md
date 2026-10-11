@@ -34,6 +34,9 @@ The unreleased source connects:
   transitions and linked recovery runbooks, without a new runtime dependency.
 - matched backup/freshness and isolated restore tools with all-tenant privacy
   reapplication; shared saved analysis filters and all-page previous-period views.
+- closed external revenue/ROAS/LTV, retention and outcome comparison declarations,
+  including refund reversal, calendar windows and dated FX; all remain
+  operator-declared rather than captured external execution.
 
 The [documentation index](../README.md) links the corresponding guides.
 These are source implementations with synthetic evidence; they do not qualify
@@ -42,7 +45,7 @@ live providers, devices or production operation.
 ## Remaining integration work
 
 The [current functional plan](https://github.com/yubisuke/openmasu/issues/218)
-and [roadmap](../roadmap.md#next-product-sequence) prioritize broader comparison,
+and [roadmap](../roadmap.md#next-product-sequence) prioritize
 Apple aggregate usability and Unity purchase binding. Optional extensions have
 separate usage conditions; they need not all precede candidate promotion.
 

@@ -2,7 +2,7 @@ import { jcs } from "@openmasu/attribution-core/canonical";
 import { validateMetricDefinition } from "@openmasu/contracts/validation";
 import { comparisonMeaning, comparisonMaturity, type MetricComparisonContext } from "@openmasu/runtime/metric-comparison";
 import { groupingDimensionAllowlist, validateGrouping, type GroupingDimension } from "./report-query-model.js";
-import { parseExternalDeclaration, externalDeclarationMeaning, capturedRoasMeaning, externalWindowMaturity, type ExternalCalculation } from "./external-calculation-declaration.js";
+import { parseExternalDeclaration, externalDeclarationMeaning, capturedExternalMeaning, externalUnits, type ExternalCalculation } from "./external-calculation-declaration.js";
 import { parseMetricFreshness } from "./metric-freshness.js";
 import { validDatedFxPolicy, canonicalDatedFxPolicy } from "@openmasu/contracts/definitions";
 
@@ -142,7 +142,8 @@ export function parseSnapshot(input: unknown): Snapshot {
     if (comparisonDigest(declaration) !== e.declaration_sha256) throw Error("external_declaration_digest_mismatch");
     if (declaration.time_zone !== c.time_zone || declaration.aggregation !== c.aggregation) throw Error("external_conditions_mismatch");
     for (const row of input.rows as Row[]) {
-      if (row.currency !== "none" || row.scale !== declaration.ratio_scale) throw Error("external_units_mismatch");
+      const units = externalUnits(declaration);
+      if (row.currency !== units.currency || row.scale !== units.scale) throw Error("external_units_mismatch");
       let group: unknown; try { group = JSON.parse(row.key); } catch { throw Error("external_grouping_invalid"); }
       object(group);
       if (jcs(group) !== row.key || typeof group.cohort_date !== "string"
@@ -178,12 +179,12 @@ export function compareSnapshots(left: unknown, right: unknown, options: { decla
       const captured = a.external_calculation ? b : a, declaration = (a.external_calculation ?? b.external_calculation)!.declaration;
       const capturedAssurance = a.external_calculation ? ra : la, externalAssurance = a.external_calculation ? la : ra;
       const meaning = capturedAssurance.assurance.meaning === "definition_backed" && captured.comparison_contexts?.[0]
-        ? capturedRoasMeaning(captured.comparison_contexts[0].context) : undefined;
-      if (capturedAssurance.assurance.meaning !== "definition_backed" || !meaning) mismatches.push("supported_captured_ad_roas_required");
+        ? capturedExternalMeaning(captured.comparison_contexts[0].context) : undefined;
+      if (capturedAssurance.assurance.meaning !== "definition_backed" || !meaning) mismatches.push("supported_captured_cohort_family_required");
       if (externalAssurance.assurance.meaning !== "external_declared") mismatches.push("external_window_maturity_unknown");
       if (meaning) {
         const declaredMeaning = externalDeclarationMeaning(declaration);
-        for (const key of Object.keys(meaning) as (keyof typeof meaning)[]) {
+        for (const key of new Set([...Object.keys(meaning), ...Object.keys(declaredMeaning)])) {
           if (jcs(meaning[key]) !== jcs(declaredMeaning[key])) mismatches.push(`meaning.${key}`);
         }
         // A declared dimension is a permitted axis, not proof that every row uses it.

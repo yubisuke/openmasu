@@ -3,10 +3,10 @@ import { jcs } from "@openmasu/attribution-core/canonical";
 import { parseSnapshot, comparisonDigest } from "./cohort-comparison.js";
 import { groupingDimensionAllowlist, validateGrouping, type GroupingDimension } from "./report-query.js";
 import { parseCsv, CsvFormatError, decimalToUnscaled } from "@openmasu/runtime/import-normalization";
-import { parseExternalDeclaration, type ExternalRoasDeclaration } from "./external-calculation-declaration.js";
+import { parseExternalDeclaration, externalUnits, type ExternalDeclaration } from "./external-calculation-declaration.js";
 
 type Binding = { column: string; omit_if_empty?: true } | { constant: string };
-type CsvMapping = { version: 1; source: string; conditions: ReturnType<typeof parseSnapshot>["conditions"]; external_calculation?: ExternalRoasDeclaration;
+type CsvMapping = { version: 1; source: string; conditions: ReturnType<typeof parseSnapshot>["conditions"]; external_calculation?: ExternalDeclaration;
   grouping: Partial<Record<GroupingDimension, Binding>>;
   value: { column: string; input: "integer" | "decimal"; scale: number; currency: Binding;
     undefined?: { marker: string; reason: Binding } } };
@@ -55,12 +55,12 @@ function parseCsvMapping(input: unknown): CsvMapping {
     if (typeof value.undefined.marker !== "string" || value.undefined.marker.length > 256) throw new AggregateCsvError("mapping_invalid");
     undefinedValue = { marker: value.undefined.marker, reason: binding(value.undefined.reason) };
   }
-  let external: ExternalRoasDeclaration | undefined;
+  let external: ExternalDeclaration | undefined;
   if (Object.hasOwn(input, "external_calculation")) {
     try { external = parseExternalDeclaration(input.external_calculation); }
     catch { throw new AggregateCsvError("mapping_calculation_invalid"); }
     if (external.time_zone !== base.conditions.time_zone || external.aggregation !== base.conditions.aggregation
-        || external.ratio_scale !== value.scale || !grouping.cohort_date
+        || externalUnits(external).scale !== value.scale || !grouping.cohort_date
         || Object.keys(grouping).some(key => !external!.grouping_dimensions.includes(key as GroupingDimension))) throw new AggregateCsvError("mapping_calculation_mismatch");
   }
   return { version: 1, source: base.source, conditions: base.conditions, grouping, ...(external ? { external_calculation: external } : {}),
@@ -98,7 +98,7 @@ export function aggregateCsvToSnapshot(bytes: Uint8Array, inputMapping: unknown)
     if (seen.has(key)) throw new AggregateCsvError("duplicate_grouping", number); seen.add(key);
     const currency = boundValue(row, mapping.value.currency, number)!;
     if (!/^(?:[A-Z]{3}|none)$/.test(currency)) throw new AggregateCsvError("currency_invalid", number);
-    if (mapping.external_calculation && currency !== "none") throw new AggregateCsvError("external_units_mismatch", number);
+    if (mapping.external_calculation && currency !== externalUnits(mapping.external_calculation).currency) throw new AggregateCsvError("external_units_mismatch", number);
     if (!Object.hasOwn(row, mapping.value.column)) throw new AggregateCsvError("column_missing", number);
     const raw: string = row[mapping.value.column];
     if (mapping.value.undefined && raw === mapping.value.undefined.marker) {
