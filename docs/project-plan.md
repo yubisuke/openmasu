@@ -48,7 +48,7 @@ guides document their configuration. Published-release evidence remains separate
 
 ## Next product slices
 
-Updated: 2026-10-11. Nineteen of 35 child implementations are complete; the 16 remaining
+Updated: 2026-10-11. Twenty of 35 child implementations are complete; the 15 remaining
 issues below map directly to the [roadmap sequence](roadmap.md#next-product-sequence).
 Numbers are tracking links, not required background knowledge.
 
@@ -56,14 +56,14 @@ Numbers are tracking links, not required background knowledge.
 
 | Workstream / issue | Acceptance boundary |
 | --- | --- |
-| Apple aggregate usability: [#233](https://github.com/yubisuke/openmasu/issues/233), then [#234](https://github.com/yubisuke/openmasu/issues/234); [#235](https://github.com/yubisuke/openmasu/issues/235) | Window/suppression/unknown states, meaning-bound conversion decoding and scoped cost through existing paths. Never equate postbacks with unique installs; live Apple permissions remain unverified |
+| Apple aggregate usability: [#234](https://github.com/yubisuke/openmasu/issues/234); [#235](https://github.com/yubisuke/openmasu/issues/235) | Meaning-bound conversion decoding and scoped cost through existing paths. The bounded [postback observation view](apple-postback-observations.md) is implemented; postbacks are not unique installs and live Apple permissions remain unverified |
 | Unity purchase binding: [#239](https://github.com/yubisuke/openmasu/issues/239) | Existing native verified preparation/submission through Unity, preserving consent, credential and privacy behavior; no new purchase authority or real-store claim |
 
 Saved bounded daily analysis and external revenue/ROAS/LTV, retention and outcome
 comparison are implemented. External declarations never become captured execution
 or completeness evidence; see [the comparison guide](cohort-comparison.md).
 The prerequisites already implemented in the core plan do not need to be repeated.
-Apple conversion-schema work depends on the aggregate view; all other explicit
+Apple conversion-schema work can now use the aggregate view; all other explicit
 dependencies remain in the linked issues.
 
 ### Optional extensions

@@ -20,6 +20,8 @@ import { ensureAdminKeys } from "./admin-auth.js";
 import { HourlyLedgerQuota } from "./apple-postback-receiver.js";
 import { KeyedTokenBucket } from "./rate-limit.js";
 import { createRequestHandler } from "./router.js";
+import type { ApplePostbackReport } from "./apple-postback-reporting.js";
+import { renderApplePostbackReport } from "./dashboard/apple-postback-report.js";
 
 const run = randomBytes(6).toString("hex");
 const tenantA = `tenant-m4-a-${run}`;
@@ -29,6 +31,7 @@ const appB = `app-m4-b-${run}`;
 const adamA = 410_000_000 + Number.parseInt(run.slice(0, 5), 16) % 10_000_000;
 const adamUnknown = adamA + 20_000_000;
 const adminSecret = `m4-admin-${randomBytes(32).toString("base64url")}`;
+const readerSecret = `m4-reader-${randomBytes(32).toString("base64url")}`;
 const fixedNow = new Date("2026-08-20T12:00:00.000Z");
 let currentNow = fixedNow;
 const root = mkdtempSync(join(tmpdir(), "openmasu-m4-postback-"));
@@ -72,6 +75,10 @@ function skanBody(input: {
   readonly sequence?: number;
   readonly sourceIdentifier?: string;
   readonly privateKey?: typeof signingPair.privateKey;
+  readonly didWin?: boolean;
+  readonly redownload?: boolean;
+  readonly fine?: number;
+  readonly coarse?: string;
 } = {}): Record<string, unknown> {
   const body: Record<string, unknown> = {
     version: "4.0",
@@ -79,13 +86,15 @@ function skanBody(input: {
     "source-identifier": input.sourceIdentifier ?? "4321",
     "app-id": input.adamId ?? adamA,
     "transaction-id": input.transactionId ?? `00000000-0000-4000-8000-${run.padEnd(12, "0").slice(0, 12)}`,
-    redownload: false,
+    redownload: input.redownload ?? false,
     "source-app-id": 123456789,
     "fidelity-type": 1,
-    "did-win": true,
+    "did-win": input.didWin ?? true,
     "postback-sequence-index": input.sequence ?? 0,
     "country-code": "US",
   };
+  if (input.fine !== undefined) body["conversion-value"] = input.fine;
+  if (input.coarse !== undefined) body["coarse-conversion-value"] = input.coarse;
   body["attribution-signature"] = sign(
     "sha256",
     Buffer.from(skanMessage(body), "utf8"),
@@ -103,6 +112,10 @@ function aakBody(input: {
   readonly didWin?: boolean;
   readonly interactionType?: "view" | "click";
   readonly identifierSuffix?: string;
+  readonly sequence?: number;
+  readonly sourceIdentifier?: string | null;
+  readonly fine?: number | null;
+  readonly coarse?: string;
 } = {}): Record<string, unknown> {
   const header = encodeJson({ alg: "ES256", kid: "apple-cas-identifier/0" });
   const claims = encodeJson({
@@ -112,8 +125,8 @@ function aakBody(input: {
     "advertised-item-identifier": adamA,
     "conversion-type": input.conversionType ?? "download",
     "did-win": input.didWin ?? true,
-    "postback-sequence-index": 0,
-    "source-identifier": "4321",
+    "postback-sequence-index": input.sequence ?? 0,
+    ...(input.sourceIdentifier === null ? {} : { "source-identifier": input.sourceIdentifier ?? "4321" }),
   });
   const signature = sign("sha256", Buffer.from(`${header}.${claims}`, "ascii"), {
     key: signingPair.privateKey,
@@ -121,7 +134,8 @@ function aakBody(input: {
   }).toString("base64url");
   return {
     "jws-string": `${header}.${claims}.${signature}`,
-    "conversion-value": 7,
+    ...(input.fine === null ? {} : { "conversion-value": input.fine ?? 7 }),
+    ...(input.coarse ? { "coarse-conversion-value": input.coarse } : {}),
     "ad-interaction-type": input.interactionType ?? "click",
     "country-code": "US",
   };
@@ -145,7 +159,7 @@ async function scopedCount(table: string): Promise<number> {
 
 describe("M4 Apple aggregate postback receiver", () => {
   before(async () => {
-    await ensureAdminKeys(pool, { tenantId: tenantA, appId: appA }, [adminSecret]);
+    await ensureAdminKeys(pool, { tenantId: tenantA, appId: appA }, [adminSecret, { key: readerSecret, role: "read_only" }]);
     await withTenant(pool, tenantB, (client) => client.query(
       "INSERT INTO control.apps (tenant_id, app_id, created_at) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
       [tenantB, appB, fixedNow.toISOString()],
@@ -165,7 +179,7 @@ describe("M4 Apple aggregate postback receiver", () => {
       },
       publicBaseUrl: "http://localhost:8080",
       redirectorBaseUrl: "http://localhost:8090",
-      dashboard: { enabled: false, publicBaseUrl: "http://localhost:8080", tenantId: tenantA, sessionTtlSeconds: 43_200 },
+      dashboard: { enabled: true, publicBaseUrl: "http://localhost:8080", tenantId: tenantA, sessionTtlSeconds: 43_200 },
       applePostback: {
         pool,
         payloadStore,
@@ -373,6 +387,87 @@ describe("M4 Apple aggregate postback receiver", () => {
       [tenantA, appA],
     ));
     assert.equal(conflicts.rows[0].count, 1);
+  });
+
+  it("reports independent Apple windows, unsigned values, retries, quota failures and current privacy through the reader API and SSR", async () => {
+    currentNow = new Date("2026-08-22T12:00:00.000Z");
+    const skanPath = "/.well-known/skadnetwork/report-attribution/", aakPath = "/.well-known/appattribution/report-attribution/";
+    const firstId = "00000000-0000-4000-8100-000000000000";
+    const first = skanBody({ transactionId: firstId, fine: 0, sourceIdentifier: "12" });
+    const bodies = [first,
+      skanBody({ transactionId: "00000000-0000-4000-8100-000000000001", sequence: 1, coarse: "low", sourceIdentifier: "123", redownload: true }),
+      skanBody({ transactionId: "00000000-0000-4000-8100-000000000002", sequence: 2 }),
+      skanBody({ transactionId: "00000000-0000-4000-8100-000000000003", didWin: false })];
+    for (const body of bodies) assert.equal((await post(skanPath, body)).response.status, 200);
+    for (const body of [aakBody({ identifierSuffix: "9100", sourceIdentifier: null, fine: null }),
+      aakBody({ identifierSuffix: "9101", conversionType: "redownload", sequence: 1, fine: null, coarse: "medium" }),
+      aakBody({ identifierSuffix: "9102", conversionType: "re-engagement", sequence: 2, fine: null, coarse: "high" })]) {
+      assert.equal((await post(aakPath, body)).response.status, 200);
+    }
+    for (let index = 0; index < 4; index++) assert.equal((await post(skanPath, skanBody({
+      transactionId: `00000000-0000-4000-8101-${String(index).padStart(12, "0")}`, privateKey: forgedPair.privateKey,
+    }))).response.status, 200);
+    for (let index = 0; index < 2; index++) assert.equal((await post(skanPath, first)).response.status, 200);
+    await processSdkInbox(pool, payloadStore, tenantA);
+    currentNow = new Date("2026-08-22T12:00:00.001Z");
+    assert.equal((await post(skanPath, skanBody({ transactionId: firstId, fine: 0, sourceIdentifier: "34" }))).response.status, 200);
+    await processSdkInbox(pool, payloadStore, tenantA);
+    assert.equal((await post(skanPath, skanBody({ transactionId: "00000000-0000-4000-8102-000000000000" }))).response.status, 200);
+    assert.equal((await post(skanPath, {})).response.status, 400);
+
+    const selection = { date_from: "2026-08-22", date_to: "2026-08-23", watermark_at_most: "2026-08-22T23:59:59.999999Z" };
+    const endpoint = `${baseUrl}/v1/admin/apps/${appA}/apple-postbacks`;
+    const headers = { authorization: `Bearer ${readerSecret}` };
+    const read = async (values = selection): Promise<ApplePostbackReport> => {
+      const response = await fetch(`${endpoint}?${new URLSearchParams(values)}`, { headers });
+      const body = await response.json(); assert.equal(response.status, 200, JSON.stringify(body));
+      return body as ApplePostbackReport;
+    };
+    const report = await read(), total = (rows: { count: string }[]) => rows.reduce((sum, row) => sum + Number(row.count), 0);
+    assert.equal(total(report.observations), 10); assert.equal(total(report.receipts), 14);
+    assert.equal(total(report.deliveries), 13); assert.equal(total(report.quota_rejections), 1);
+    const states = (rows: { state: string; count: string }[]) => Object.fromEntries([...new Set(rows.map(row => row.state))].sort().map(state => [state, total(rows.filter(row => row.state === state))]));
+    assert.deepEqual(states(report.receipts), { pending: 1, processed: 13 });
+    assert.deepEqual(states(report.deliveries), { accepted_unique: 10, duplicate_delivery: 2, event_id_conflict: 1 });
+    assert.deepEqual(report.quota_rejections, [{ receipt_date: "2026-08-22", platform: "skadnetwork", reason: "signature_invalid", count: "1" }]);
+    const observed = report.observations.map(row => [row.platform, row.verification, row.sequence, row.winner, row.conversion_type,
+      row.source_state, row.conversion_value_state, row.conversion_value_coverage, row.verification_reason, row.count].join("|")).sort();
+    assert.deepEqual(observed, [
+      "skadnetwork|verified|0|winner|download|digits_2|fine|unsigned|verified|1",
+      "skadnetwork|verified|1|winner|redownload|digits_3|coarse_low|unsigned|verified|1",
+      "skadnetwork|verified|2|winner|download|digits_4|absent|not_applicable|verified|1",
+      "skadnetwork|verified|0|nonwinner|download|digits_4|absent|not_applicable|verified|1",
+      "skadnetwork|failed|0|winner|download|digits_4|absent|not_applicable|signature_invalid|3",
+      "adattributionkit|verified|0|winner|download|absent|absent|not_applicable|verified|1",
+      "adattributionkit|verified|1|winner|redownload|digits_4|coarse_medium|unsigned|verified|1",
+      "adattributionkit|verified|2|winner|re-engagement|digits_4|coarse_high|unsigned|verified|1",
+    ].sort());
+    assert.equal(report.conversion_schema, "not_recorded", "the app's registered schema is not postback-bound evidence");
+    assert.doesNotMatch(JSON.stringify(report), /transaction_id|postback_identifier|record_id|signature\"|4321|synthetic\.m4/);
+    const earlier = await read({ ...selection, watermark_at_most: "2026-08-22T11:59:59.999999Z" });
+    assert.deepEqual([earlier.observations, earlier.receipts, earlier.deliveries, earlier.quota_rejections], [[], [], [], []]);
+    assert.equal((await fetch(`${baseUrl}/v1/admin/apps/${appB}/apple-postbacks?${new URLSearchParams(selection)}`, { headers })).status, 404);
+    assert.equal((await fetch(`${endpoint}?${new URLSearchParams(selection)}&source_identifier=12`, { headers })).status, 400);
+    const login = await fetch(`${baseUrl}/dashboard/session`, { method: "POST", redirect: "manual",
+      headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ admin_key: readerSecret }) });
+    assert.equal(login.status, 303); const cookie = login.headers.get("set-cookie")!.split(";", 1)[0];
+    const page = await fetch(`${baseUrl}/dashboard/apps/${appA}/apple-postbacks?${new URLSearchParams(selection)}`, { headers: { cookie } });
+    assert.equal(page.status, 200); assert.equal(await page.text(), renderApplePostbackReport(appA, report));
+    assert.equal((await fetch(`${endpoint}?${new URLSearchParams(selection)}`, { headers: { cookie } })).status, 401);
+    assert.match(await (await fetch(`${baseUrl}/dashboard/apps/${appA}/apple-postbacks`, { headers })).text(), /Admin key/);
+
+    await withTenant(pool, tenantA, client => client.query(`INSERT INTO ledger.raw_payload_states
+      (tenant_id,app_id,record_id,lifecycle_status,changed_at,privacy_request_id,privacy_tombstone_id)
+      SELECT tenant_id,app_id,record_id,'redacted','2026-08-23T00:00:00.000Z',$4,$5 FROM ledger.raw_records
+      WHERE tenant_id=$1 AND app_id=$2 AND event_id=$3`, [tenantA, appA, `skan:${firstId}`, `privacy-apple-${run}`, `tombstone-apple-${run}`]));
+    const redacted = await read();
+    assert.deepEqual([total(redacted.observations), total(redacted.receipts), total(redacted.deliveries)], [9, 10, 9]);
+    await withTenant(pool, tenantA, client => client.query(`INSERT INTO ledger.privacy_requests
+      (privacy_request_id,tenant_id,app_id,requested_at,completed_at,status,artifact)
+      VALUES ($1,$2,$3,'2026-08-23T00:00:00.000Z','2026-08-23T00:00:01.000Z','completed','{"deletion_scope":"app"}'::jsonb)`,
+    [`privacy-apple-app-${run}`, tenantA, appA]));
+    const deleted = await read();
+    assert.deepEqual([deleted.observations, deleted.receipts, deleted.deliveries, deleted.quota_rejections], [[], [], [], []], "current deletion applies even at a pre-deletion cutoff");
   });
 
   it("A06 returns 500 when the durable database path fails", async () => {

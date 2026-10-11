@@ -135,6 +135,8 @@ Advertising identifiers require explicit configuration, platform permission
 and the required consent. Direct deep links are deterministic on both OSes;
 deferred deep links are deterministic on Android only, not provided on iOS.
 Apple aggregate reports are not device-level or unique-install counts.
+The [postback observation view](docs/apple-postback-observations.md) separates
+receipt windows, signature results, retries and unknown/source-value states.
 
 The configured SDK bundle path is
 `build/sdk-release/openmasu-sdk-0.3.0-rc.1`. An untagged bundle is only a local candidate artifact.

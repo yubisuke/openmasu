@@ -1,6 +1,7 @@
 # Platform and Provider Capability Matrix
 
 Status date: 2026-08-31.
+Apple observation-report entry updated: 2026-10-11; this is not a new live-provider qualification.
 
 This matrix is the current index of external measurement surfaces in the public
 source tree. **Implemented** means a typed code path exists. **Synthetically
@@ -15,6 +16,7 @@ quota behavior, or production correctness.
 | Apple AdServices | iOS token handoff and bounded server lookup with protected evidence | Swift source/simulator gates and synthetic worker responses | Real token acquisition, Apple response behavior, rate limits, reset/reinstall behavior |
 | SKAdNetwork | Signed developer-copy receiver and separate aggregate reporting | Synthetic signature vectors, replay/conflict tests, contract and SQL parity | Real developer copies, Apple timing, second/third postbacks, production keys |
 | AdAttributionKit | Signed developer-copy receiver; install and re-engagement aggregate series; iOS and Unity conversion-type/tag helpers | Synthetic JWS fixture, receiver/replay tests, TypeScript/Python/PostgreSQL parity, macOS SDK and Unity bridge gates | Real copies, Info.plist propagation, real consumer-project Unity export, device conversion windows, caller-owned conversion-tag lifecycle |
+| Apple postback observations | [Reader API and dashboard](../apple-postback-observations.md) separate receipt/attempt/logical/quota populations, windows, signature results, unsigned values and unknown metadata | Synthetic signed receiver-to-report journey, fixed independent counts, reader scope, cutoff and deletion; existing qualified metrics unchanged | Not unique installs, a win rate, suppressed-value recovery or verified conversion-schema decoding; live receipt completeness remains unknown |
 | AppLovin MAX | Android/iOS/Unity impression-revenue mapping, authenticated receiver, bounded aggregate-revenue import | Native compile probes, synthetic callbacks/imports, runtime tests | Live callbacks/reports, account permissions, completeness, restatements; no user-level install-attribution claim |
 | Meta Insights cost | Bounded synchronous date-range/ad-set/country cost import | Synthetic HTTP responses, validation, atomic-import tests | Token/account permissions, timezone, pagination, live API behavior; default Graph version must be rechecked before deployment |
 | Google Ads cost | Bounded v25 `SearchStream` import for closed campaign partitions and country resolution | Synthetic streamed responses, query/limit validation, atomic-import tests | OAuth/developer-token access, customer hierarchy, quotas, live fields and future API-version upgrades |

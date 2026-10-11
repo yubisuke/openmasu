@@ -175,6 +175,7 @@ function normalizedPayload(
 ): JsonObject {
   const evidenceBoundary = {
     apple_signature_status: verification.verified ? "verified" : "unverified",
+    apple_verification_reason: verification.verified ? "verified" : verification.reason,
     unsigned_observation_fields: Object.keys(verification.unsigned).sort(),
   };
   if (kind === "skadnetwork") {

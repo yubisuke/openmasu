@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
-import { uuidV7 } from "@openmasu/runtime";
+import { uuidV7, projectApplePostbackObservation } from "@openmasu/runtime";
 import { buildDeepLinkAuditEvidence } from "../deep-link-audit.js";
 import { inputAttempts } from "./input.js";
 import type { Any, LogicalEvent } from "./model.js";
@@ -256,6 +256,7 @@ export async function persistProjectionWithClient(
           ? `coarse:${payload.coarse_conversion_value}`
           : null;
       const aggregateFact = {
+        observation: projectApplePostbackObservation(payload),
         event_name: logical.event_name,
         conversion_type: payload.conversion_type ?? null,
         signature_verified: payload.signature_verified === true,
@@ -408,6 +409,7 @@ export function bulkProjectionRows(
         ? `fine:${payload.conversion_value}`
         : payload.coarse_conversion_value !== undefined ? `coarse:${payload.coarse_conversion_value}` : null;
       const artifact = {
+        observation: projectApplePostbackObservation(payload),
         event_name: logical.event_name, conversion_type: payload.conversion_type ?? null,
         signature_verified: payload.signature_verified === true,
         did_win: payload.did_win === true, source_identifier_present: payload.source_identifier !== undefined,

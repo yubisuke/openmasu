@@ -35,7 +35,7 @@ qualification is stated. No row establishes production readiness.
 | Contract and evaluator | Reviewed fixtures, deterministic TypeScript/Python, canonical artifacts and independent SQL metric parity | Real-input representativeness and external adoption |
 | Receipt and import | Durable SDK/backend admission; explicit raw-event, cost and revenue mappings; atomic records, schema rejection, idempotency and bounded bulk import | Real exports/credentials are not repository evidence; mappings remain explicit |
 | Attribution | First-party Install Referrer, verified platform evidence and imported provider judgments remain separate; recorded exclusions and reasons | No probabilistic identity, blanket partner coverage or external-equivalence claim |
-| Apple aggregate measurement | Signed synthetic SKAdNetwork/AdAttributionKit receiver, replay protection and separated aggregate series | Postbacks are not unique installs; richer window/suppression views and conversion semantics remain planned |
+| Apple aggregate measurement | Signed synthetic receivers, replay protection, separate aggregate series and bounded receipt/window/verification/unknown-state observation reports | Postbacks are not unique installs; absence is not proven suppression; meaning-bound conversion decoding and live delivery remain unverified |
 | Acquisition and money | Selected native/platform/imported profiles; safe cost grain; purchase/refund/reversal, ROAS/LTV, saved FX and native D7 same-set KPIs | Profiles have explicit source, currency and window limits; no inferred cost ownership/allocation or live FX service |
 | Retention and outcomes | Opt-in D3/D14/D30 retained-installation horizons and multiple custom D7 outcome keys | Incomplete windows are not zero; native/platform/imported populations stay separate |
 | Calendar metrics | Explicit UTC, Tokyo and New York calendar definitions coexist with historical elapsed definitions | Other zones are not qualified; time-zone-data upgrades require boundary requalification |
@@ -55,7 +55,7 @@ Detailed limits belong to the [product guides](README.md), [product scope](produ
 ## Current development focus
 
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-19 of 35 child implementations complete; 16 remain as of this update. The earlier
+20 of 35 child implementations complete; 15 remain as of this update. The earlier
 integration plan is complete, not a second backlog. The dependency, controller,
 presentation, evaluator and ingestion foundations are also implemented.
 
@@ -68,7 +68,9 @@ Saved bounded daily analysis and previous-period cohort views are implemented;
 see [the guide](dashboard-analysis.md#saved-daily-analyses-and-previous-periods).
 Broader [external cohort comparison](cohort-comparison.md#expanded-closed-declaration)
 is implemented, with declared versus captured evidence kept separate.
-Next: **Apple aggregate usability** ([#233](https://github.com/yubisuke/openmasu/issues/233))
+The [Apple postback observation view](apple-postback-observations.md) now separates
+windows, unsigned values, verification, retries and missing metadata.
+Next: **meaning-bound Apple conversion schemas** ([#234](https://github.com/yubisuke/openmasu/issues/234))
 and Unity purchase binding before promoting
 an integrated candidate. The [roadmap](roadmap.md)
 owns the sequence; the [project plan](project-plan.md) records its acceptance
