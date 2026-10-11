@@ -23,7 +23,7 @@ it or treating its judgment as first-party evidence.
 | Collect | Android, iOS and Unity SDKs; authenticated backend events; explicit file mappings |
 | Attribute | Separate first-party, verified platform, imported-provider and Apple aggregate evidence |
 | Calculate | Scoped acquisition KPIs, ROAS, LTV, retention and custom outcomes with saved definitions, cutoffs and exact money |
-| Maintain | Daily schedules, bounded cost refresh and corrections, receipt diagnostics and confirmed ingest recovery |
+| Maintain | Daily schedules, bounded Google/Apple [cost refresh](docs/cost-refresh.md) and corrections, receipt diagnostics and confirmed ingest recovery |
 | Explain | Reader-only dashboard, saved daily analyses and bounded previous-period views; explicit external revenue/ROAS/LTV, retention and outcome comparison with preserved evidence levels |
 | Operate | PostgreSQL role isolation, privacy deletion/reapplication, backup/restore, signed webhooks and bulk exports |
 

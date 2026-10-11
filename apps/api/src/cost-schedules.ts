@@ -13,8 +13,11 @@ export async function registerCostSchedule(pool: Pool, identity: AppAdminIdentit
       JSON.stringify([identity.tenantId, identity.appId, "cost-schedules"]),
     ]);
     const active = await client.query(
-      "SELECT 1 FROM control.cost_schedules_current WHERE tenant_id=$1 AND app_id=$2 AND status='active'",
-      [identity.tenantId, identity.appId],
+      `SELECT 1 FROM control.cost_schedules_current AS current
+       JOIN control.cost_schedules AS schedule USING (tenant_id,app_id,cost_schedule_id)
+       WHERE current.tenant_id=$1 AND current.app_id=$2 AND current.status='active'
+         AND schedule.definition->>'provider'=$3`,
+      [identity.tenantId, identity.appId, definition.provider],
     );
     if (active.rowCount) throw new Error("cost_schedule_active_exists");
     await client.query(

@@ -5,6 +5,7 @@ import {
   type CostRefreshDefinition, type SecretStore,
 } from "@openmasu/runtime";
 import { fetchGoogleAds, type FetchLike } from "./import/adapters.js";
+import { fetchAppleAds } from "./import/apple-cost.js";
 import { persistCostImportWithClient, type CostInput } from "./import/cost.js";
 
 type Claim = {
@@ -86,7 +87,8 @@ function sourceFailure(error: unknown): { reason: string; retry: boolean } {
 async function acquire(claim: Claim, secrets: SecretStore, fetcher: FetchLike, timeoutMs: number): Promise<CostInput[]> {
   const scoped: SecretStore = {
     read: (name) => secrets.read(costRefreshSecretName(claim.tenant_id, claim.app_id,
-      name === "OPENMASU_GOOGLE_ADS_ACCESS_TOKEN" ? "access_token" : "developer_token")),
+      name === "OPENMASU_APPLE_ADS_ACCESS_TOKEN" ? "apple_ads_access_token"
+        : name === "OPENMASU_GOOGLE_ADS_ACCESS_TOKEN" ? "access_token" : "developer_token")),
     require(name) {
       const value = this.read(name);
       if (!value) throw new Error("cost_source_credentials_missing");
@@ -99,13 +101,15 @@ async function acquire(claim: Claim, secrets: SecretStore, fetcher: FetchLike, t
     const deadline = new Promise<never>((_, reject) => {
       timer = setTimeout(() => { controller.abort(); reject(new Error("cost_acquisition_timeout")); }, timeoutMs);
     });
-    return await Promise.race([deadline, fetchGoogleAds({
+    const common = {
       fetch: (input, init) => fetcher(input, { ...init, signal: controller.signal }), secrets: scoped,
-      customerId: claim.definition.customer_id, loginCustomerId: claim.definition.login_customer_id,
-      apiVersion: claim.definition.api_version, limits: claim.definition.limits,
       since: claim.since, until: claim.until,
       scope: { tenant_id: claim.tenant_id, app_id: claim.app_id, currency: claim.definition.currency, as_of: claim.as_of },
-    })]);
+    } satisfies Pick<Parameters<typeof fetchGoogleAds>[0], "fetch" | "secrets" | "since" | "until" | "scope">;
+    return await Promise.race([deadline, claim.definition.provider === "apple_ads"
+      ? fetchAppleAds({ ...common, definition: claim.definition })
+      : fetchGoogleAds({ ...common, customerId: claim.definition.customer_id, loginCustomerId: claim.definition.login_customer_id,
+        apiVersion: claim.definition.api_version, limits: claim.definition.limits })]);
   } finally { clearTimeout(timer!); }
 }
 

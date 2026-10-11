@@ -39,7 +39,7 @@ qualification is stated. No row establishes production readiness.
 | Acquisition and money | Selected native/platform/imported profiles; safe cost grain; purchase/refund/reversal, ROAS/LTV, saved FX and native D7 same-set KPIs | Profiles have explicit source, currency and window limits; no inferred cost ownership/allocation or live FX service |
 | Retention and outcomes | Opt-in D3/D14/D30 retained-installation horizons and multiple custom D7 outcome keys | Incomplete windows are not zero; native/platform/imported populations stay separate |
 | Calendar metrics | Explicit UTC, Tokyo and New York calendar definitions coexist with historical elapsed definitions | Other zones are not qualified; time-zone-data upgrades require boundary requalification |
-| Ongoing calculation | Durable daily schedules, bounded target discovery, cost refresh, saved replay and explicit/opt-in automatic corrections | Not every profile supports discovery or automatic correction; no implicit all-history scan |
+| Ongoing calculation | Durable daily schedules, bounded target discovery, Google/Apple cost refresh, saved replay and explicit/opt-in automatic corrections | Not every profile supports discovery or automatic correction; no implicit all-history scan; live cost access and billing agreement remain unverified |
 | Dashboard and comparison | Server-rendered reader-only reports; saved filters, bounded previous-period views and operands; external revenue/ROAS/LTV, retention and outcome declarations via the same offline/web comparator | External meaning remains operator-declared; no provider completeness, imported-binding or engagement-equivalence claim; incompatible/missing/undefined/zero remain distinct |
 | Setup and diagnostics | Recommended measurement form, recent event/SDK-version classes and confirmation-bound ingest recovery | SDK versions are client-declared; absent receipts do not prove an outage; invalid/deleted/claimed evidence is not replayed |
 | SDKs and verified commerce | Android/iOS/Unity queues and bridges; native verified purchases and Swift submission; synthetic Unity 6 Android export | Real devices/stores/providers and Unity 2022.3 are unverified; Unity purchase helpers remain planned |
@@ -55,7 +55,7 @@ Detailed limits belong to the [product guides](README.md), [product scope](produ
 ## Current development focus
 
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-21 of 35 child implementations complete; 14 remain as of this update. The earlier
+22 of 35 child implementations complete; 13 remain as of this update. The earlier
 integration plan is complete, not a second backlog. The dependency, controller,
 presentation, evaluator and ingestion foundations are also implemented.
 
@@ -72,8 +72,9 @@ The [Apple postback observation view](apple-postback-observations.md) now separa
 windows, unsigned values, verification, retries and missing metadata.
 [Apple conversion meanings](apple-conversion-meaning.md) share a registered
 digest with the SDK and expose ranges without inventing postback bindings.
-Next: **scoped Apple Ads cost** ([#235](https://github.com/yubisuke/openmasu/issues/235))
-and Unity purchase binding before promoting
+[Apple Ads campaign cost](cost-refresh.md#apple-ads-campaign-cost) now uses the
+existing bounded refresh and correction path with explicit UTC days and currency.
+Next: **Unity purchase binding** ([#239](https://github.com/yubisuke/openmasu/issues/239)) before promoting
 an integrated candidate. The [roadmap](roadmap.md)
 owns the sequence; the [project plan](project-plan.md) records its acceptance
 crosswalk. Optional expansions are not all release prerequisites.
