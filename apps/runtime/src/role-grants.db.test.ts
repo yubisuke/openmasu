@@ -46,6 +46,7 @@ const readerNoTableSelect = new Set([
   "ephemeral.operator_bulk_export_batches",
 ]);
 const seedControlTruncate = new Set([
+  "control.saved_analysis_views",
   "control.metric_correction_policies",
   "control.metric_correction_receipts",
   "control.apple_purchase_evidence",
@@ -129,6 +130,7 @@ function expected(row: Row): Privilege[] {
     return row.role_name === "openmasu_seed" ? ["SELECT", "INSERT", "UPDATE", "DELETE"] : [];
   }
   if (row.role_name === "openmasu_app") {
+    if (qualified === "control.saved_analysis_views") return ["SELECT", "INSERT", "DELETE"];
     if (["control.metric_correction_policies","control.metric_correction_receipts"].includes(qualified)) return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.apple_purchase_intents") return ["SELECT", "INSERT", "DELETE"];
     if (qualified === "control.google_play_order_digests") return ["SELECT", "INSERT", "UPDATE"];

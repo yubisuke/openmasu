@@ -40,7 +40,7 @@ qualification is stated. No row establishes production readiness.
 | Retention and outcomes | Opt-in D3/D14/D30 retained-installation horizons and multiple custom D7 outcome keys | Incomplete windows are not zero; native/platform/imported populations stay separate |
 | Calendar metrics | Explicit UTC, Tokyo and New York calendar definitions coexist with historical elapsed definitions | Other zones are not qualified; time-zone-data upgrades require boundary requalification |
 | Ongoing calculation | Durable daily schedules, bounded target discovery, cost refresh, saved replay and explicit/opt-in automatic corrections | Not every profile supports discovery or automatic correction; no implicit all-history scan |
-| Dashboard and comparison | Server-rendered, reader-only reports; saved operands, receipt freshness, bounded downloads and explicit offline/web comparisons | Unknown/missing/undefined/zero are distinct; saved views and broader comparison families remain planned |
+| Dashboard and comparison | Server-rendered, reader-only reports; shared saved filters, complete bounded previous-period views, saved operands, receipt freshness and explicit offline/web comparisons | No period ratio averages; incompatible/missing/undefined/zero remain distinct; broader external comparison families remain planned |
 | Setup and diagnostics | Recommended measurement form, recent event/SDK-version classes and confirmation-bound ingest recovery | SDK versions are client-declared; absent receipts do not prove an outage; invalid/deleted/claimed evidence is not replayed |
 | SDKs and verified commerce | Android/iOS/Unity queues and bridges; native verified purchases and Swift submission; synthetic Unity 6 Android export | Real devices/stores/providers and Unity 2022.3 are unverified; Unity purchase helpers remain planned |
 | Deep links and re-engagement | Deterministic direct links on both OSes, Android deferred links, separate latest-open 24-hour outcome profiles | No iOS deferred links; no engagement ROAS/purchase model; device-reported opens can be forged |
@@ -55,7 +55,7 @@ Detailed limits belong to the [product guides](README.md), [product scope](produ
 ## Current development focus
 
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-17 of 35 child implementations complete; 18 remain as of this update. The earlier
+18 of 35 child implementations complete; 17 remain as of this update. The earlier
 integration plan is complete, not a second backlog. The dependency, controller,
 presentation, evaluator and ingestion foundations are also implemented.
 
@@ -64,9 +64,10 @@ synthetic transition tests; receiver setup and live delivery remain external.
 [Backup and recovery](operations/backup-restore.md)
 ([#250](https://github.com/yubisuke/openmasu/issues/250)) is implemented with a
 dedicated synthetic gate; live scheduling/custody remain operator work.
-Next: **saved bounded daily analysis**
-([#244](https://github.com/yubisuke/openmasu/issues/244)), followed by broader
-comparison, Apple aggregate usability and Unity purchase binding before promoting
+Saved bounded daily analysis and previous-period cohort views are implemented;
+see [the guide](dashboard-analysis.md#saved-daily-analyses-and-previous-periods).
+Next: **broader external comparison** ([#245](https://github.com/yubisuke/openmasu/issues/245)),
+then Apple aggregate usability and Unity purchase binding before promoting
 an integrated candidate. The [roadmap](roadmap.md)
 owns the sequence; the [project plan](project-plan.md) records its acceptance
 crosswalk. Optional expansions are not all release prerequisites.

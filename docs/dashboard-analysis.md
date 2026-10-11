@@ -15,6 +15,49 @@ Ad-group/creative filters require previously calculated
 [selected acquisition detail runs](acquisition-detail-metrics.md); they do not
 split campaign totals or extend the raw daily record-count projection.
 
+## Saved daily analyses and previous periods
+
+From an app's cohort page, open **Saved daily analyses and previous-period
+comparison**. An operator or administrator can save a name, the existing safe
+report filters and either all observations or incomparable observations only.
+Readers can open and export shared views. Views are tenant/app scoped, protected
+by row-level security; saving/deleting requires the existing session, capability,
+CSRF and origin checks. Only filters/settings are stored, never values, credentials,
+private evidence or SQL. Deleting a view deletes those filters, not metric runs.
+
+Enter an inclusive start, exclusive end and explicit UTC receipt cutoff. With
+no metric filter, the view selects the eight standard native D7 acquisition KPIs
+and D1/D3/D7/D14/D30 retention. Only already-calculated observations exist: this
+does not enable a schedule or invent missing dates/metrics. Use a schedule-series
+filter when multiple independent definitions are saved. Cohort/metric-date equality
+filters are not accepted here; the period is the date selection.
+
+Both the selected period and the immediately preceding equal-length period are
+read across **all keyset pages in one privacy-fenced, repeatable-read transaction**.
+The combined limit is 10,000 runs, 4 MiB and 30 seconds, with a 4 MiB rendered
+response limit; exceeded limits fail without a partial report. Views are limited
+to 100 per app and periods to 366 days. Adjust dates/cutoff on the read page without
+changing the saved filters. Each GET, including CSV, acquires a new database
+snapshot; its selection digest changes when its saved rows change. This is not
+durable cross-request snapshot storage or proof of source completeness.
+
+Rows align the same metric and non-date dimensions by cohort-day offset. Their
+captured definition, population, acquisition basis, window, currency/scales, FX,
+policy and bundle must match, and both conservative windows must have elapsed.
+Acquisition rows also require complete, compatible eight-role saved calculation
+sets. Duplicates, missing runs, undefined/privacy-withdrawn values, pending
+corrections, unknown meaning/maturity or incompatible sets remain explicit.
+HTML and CSV use the same model, reasons, run/snapshot IDs and unscaled values.
+No campaign/currency totals or period ratio averages are inferred. In particular,
+retention remains a saved cohort observation because general denominator operands
+are not exposed. A valid row difference is current minus previous at the stored
+scale, not growth percent or a weighted period aggregate.
+
+The existing two-campaign schedule integration journey owns persistence, session
+authorization, cross-scope isolation, pagination/concurrent-insert and export
+evidence. Pure model cases own incompatible FX/basis, maturity and undefined
+behavior; no new service, dependency or dedicated CI job is required.
+
 ## Values and provenance
 
 - Money displays its currency and exact decimal scale: `1250000` at scale 6

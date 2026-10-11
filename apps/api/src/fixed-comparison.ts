@@ -7,7 +7,8 @@ import { comparisonExport, ComparisonExportError, requireComparisonQuery } from 
 import { decodeMetricCursor } from "./report-query.js";
 
 export const comparisonLimits = Object.freeze({ rows: 10000, bytes: 4 * 1024 * 1024, milliseconds: 30000 });
-type Bounds = { readonly rows: number; readonly bytes: number; readonly milliseconds: number };
+export type SelectionBounds = { readonly rows: number; readonly bytes: number; readonly milliseconds: number };
+export type SelectionOptions = { signal?: AbortSignal; bounds?: SelectionBounds };
 
 async function boundedClient(pool: Pool, milliseconds: number): Promise<PoolClient> {
   const pending = pool.connect();
@@ -24,11 +25,20 @@ async function boundedClient(pool: Pool, milliseconds: number): Promise<PoolClie
 
 /** Buffer a bounded all-page result; publish nothing until consistent acquisition succeeds. */
 export async function fixedComparisonDownload(pool: Pool, identity: AppAdminIdentity, query: MetricQuery,
-    options: { declaredAggregation?: string; signal?: AbortSignal; bounds?: Bounds } = {}): Promise<string> {
+    options: SelectionOptions & { declaredAggregation?: string } = {}): Promise<string> {
   requireComparisonQuery(query);
-  if (query.tenantId !== identity.tenantId || query.appId !== identity.appId) throw new ComparisonExportError("comparison_scope_mismatch");
+  return fixedMetricSelections(pool, identity, [query], ([rows]) =>
+    comparisonExport({ data: rows }, query, options.declaredAggregation, true), options);
+}
+
+/** All selections and the projection share one privacy-fenced database snapshot and budget. */
+export async function fixedMetricSelections<T>(pool: Pool, identity: AppAdminIdentity, queries: readonly MetricQuery[],
+    project: (rows: readonly (readonly MetricReportRow[])[]) => T, options: SelectionOptions = {}): Promise<T> {
+  if (!queries.length || queries.some(query => query.tenantId !== identity.tenantId || query.appId !== identity.appId)) {
+    throw new ComparisonExportError("comparison_scope_mismatch");
+  }
   const bounds = options.bounds ?? comparisonLimits;
-  if (Object.entries(bounds).some(([k, v]) => !Number.isInteger(v) || v < 1 || v > comparisonLimits[k as keyof Bounds])) {
+  if (Object.entries(bounds).some(([k, v]) => !Number.isInteger(v) || v < 1 || v > comparisonLimits[k as keyof SelectionBounds])) {
     throw new ComparisonExportError("comparison_limit_invalid");
   }
   const deadline = performance.now() + bounds.milliseconds;
@@ -46,21 +56,26 @@ export async function fixedComparisonDownload(pool: Pool, identity: AppAdminIden
     await client.query("SELECT set_config('openmasu.tenant_id',$1,true)", [identity.tenantId]);
     const pendingPrivacy = await client.query<{ pending_count: string }>("SELECT pending_count FROM control.privacy_deletion_backlog()");
     if (pendingPrivacy.rows[0]?.pending_count !== "0") throw new ComparisonExportError("comparison_privacy_pending");
-    const rows: MetricReportRow[] = [];
-    let pageQuery: MetricQuery = { ...query, limit: Math.min(query.limit, 1000) }, bytes = 0;
-    for (;;) {
-      await client.query("SELECT set_config('statement_timeout',$1,true)", [String(remaining())]);
-      const page = await metricReportOnClient(client, pageQuery, true);
-      rows.push(...page.data);
-      bytes += Buffer.byteLength(JSON.stringify(page.data), "utf8");
-      if (rows.length > bounds.rows || bytes > bounds.bytes) throw new ComparisonExportError("comparison_incomplete_or_limit_exceeded");
-      remaining();
-      if (!page.next_cursor) break;
-      if (!page.data.length) throw new ComparisonExportError("comparison_acquisition_incomplete");
-      pageQuery = { ...pageQuery, after: decodeMetricCursor(page.next_cursor) };
+    const selections: MetricReportRow[][] = [];
+    let bytes = 0, count = 0;
+    for (const query of queries) {
+      const rows: MetricReportRow[] = [];
+      let pageQuery: MetricQuery = { ...query, limit: Math.min(query.limit, 1000) };
+      for (;;) {
+        await client.query("SELECT set_config('statement_timeout',$1,true)", [String(remaining())]);
+        const page = await metricReportOnClient(client, pageQuery, true);
+        rows.push(...page.data); count += page.data.length;
+        bytes += Buffer.byteLength(JSON.stringify(page.data), "utf8");
+        if (count > bounds.rows || bytes > bounds.bytes) throw new ComparisonExportError("comparison_incomplete_or_limit_exceeded");
+        remaining();
+        if (!page.next_cursor) break;
+        if (!page.data.length) throw new ComparisonExportError("comparison_acquisition_incomplete");
+        pageQuery = { ...pageQuery, after: decodeMetricCursor(page.next_cursor) };
+      }
+      selections.push(rows);
     }
-    const body = comparisonExport({ data: rows }, query, options.declaredAggregation, true);
-    if (Buffer.byteLength(body, "utf8") > bounds.bytes) throw new ComparisonExportError("comparison_byte_limit_exceeded");
+    const body = project(selections);
+    if (Buffer.byteLength(typeof body === "string" ? body : JSON.stringify(body), "utf8") > bounds.bytes) throw new ComparisonExportError("comparison_byte_limit_exceeded");
     remaining();
     await client.query("COMMIT"); transaction = false;
     return body;
