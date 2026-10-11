@@ -37,7 +37,7 @@ it("backup preflight rejects stale backups and untrusted or stale privacy checkp
 });
 
 it("backup rejects repository and reused destinations, and verifies the actual wrapping key", async () => {
-  await assert.rejects(createPrivateDirectory(join(process.cwd(), "build", "backup-forbidden")), /outside_repository/);
+  await assert.rejects(createPrivateDirectory(join(process.cwd(), "backup-forbidden")), /outside_repository/);
   const root = await mkdtemp(join(tmpdir(), "openmasu-backup-key-"));
   try {
     await assert.rejects(createPrivateDirectory(root), /EEXIST/);

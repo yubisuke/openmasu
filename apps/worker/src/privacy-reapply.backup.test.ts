@@ -347,6 +347,7 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
     await seedPool.end();
     appPool = createAppPool();
     seedPool = createSeedPool();
+    await waitForDatabaseConnectionsToClose(admin, new URL(migrationUrl).pathname.slice(1));
     const create = (output: string, dump = async (path: string) => runPostgresTool("pg_dump", ["--format=custom", "--file", path, migrationUrl], path)) =>
       createBackup({ client: admin, output, payloadRoot: root, masterKey, masterKeyRef: "synthetic-key-v1", revision, writersStopped: true, dump });
     await create(oldBundleRoot);
@@ -396,6 +397,7 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
       await seedPool.end();
       appPool = createAppPool();
       seedPool = createSeedPool();
+      await waitForDatabaseConnectionsToClose(admin, new URL(migrationUrl).pathname.slice(1));
       const manifest = await create(bundleRoot);
       const boundary = await readPrivacyBoundary(admin);
       const check = (directory: string) => checkBackup({ directory, boundary, revision, maximumAgeHours: 24 });
