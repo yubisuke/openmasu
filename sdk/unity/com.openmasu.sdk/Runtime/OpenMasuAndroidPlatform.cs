@@ -4,7 +4,8 @@ using UnityEngine;
 
 namespace OpenMasu.Unity
 {
-    public sealed class OpenMasuAndroidPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform
+    public sealed class OpenMasuAndroidPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform,
+        IOpenMasuGooglePlayPurchasePlatform, IOpenMasuConsentPlatform
     {
         private AndroidJavaClass bridge;
         private bool disposed;
@@ -38,6 +39,16 @@ namespace OpenMasu.Unity
             string currency) =>
             EnsureBridge().CallStatic("trackRefund", transactionId, originalTransactionId, amountUnscaled, amountScale, currency);
         public void StartSession() => EnsureBridge().CallStatic("startSession");
+        public void TrackGooglePlayProductPurchase(string purchaseToken, string productId, string transactionId,
+            string amountUnscaled, int amountScale, string currency, Action<string> completion) =>
+            EnsureBridge().CallStatic("trackGooglePlayProductPurchase", purchaseToken, productId, transactionId,
+                amountUnscaled, amountScale, currency, new StringCallback(completion));
+        public void TrackGooglePlaySubscriptionPurchase(string purchaseToken, string productId, string transactionId,
+            string amountUnscaled, int amountScale, string currency, Action<string> completion) =>
+            EnsureBridge().CallStatic("trackGooglePlaySubscriptionPurchase", purchaseToken, productId, transactionId,
+                amountUnscaled, amountScale, currency, new StringCallback(completion));
+        public void UpdateConsent(string state, string policyVersion, Action<string> completion) =>
+            EnsureBridge().CallStatic("updateConsent", state, policyVersion, new StringCallback(completion));
         public void GetQueueHealth(Action<string> completion) =>
             EnsureBridge().CallStatic("getQueueHealth", new StringCallback(completion));
         public void SetCollectionEnabled(bool enabled) => EnsureBridge().CallStatic("setCollectionEnabled", enabled);

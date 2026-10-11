@@ -77,6 +77,7 @@ async function harness(t: TestContext, options: { cohort?: boolean; refundRevers
   const prepared = await post("/v1/apple/purchases/prepare",{ request_id: randomUUID(),installation_id: installationId,
     product_id: "synthetic.product",revenue_measurement_consent: true });
   assert.equal(prepared.status,200); const intent = await prepared.json() as Any;
+  assert.equal(intent.state,"prepared");
   const transaction: Any = { transactionId: `synthetic-transaction-${tag}`,originalTransactionId: `synthetic-original-${tag}`,
     bundleId,productId: "synthetic.product",environment: "Sandbox",appAccountToken: intent.app_account_token,
     purchaseDate: Date.parse("2026-08-06T02:00:00.000Z"),signedDate: Date.now(),quantity: 3,
@@ -195,7 +196,12 @@ describe("installation-bound App Store monetary projection",{ concurrency: false
   });
 
   it("connects authenticated purchases and late refunds to immutable campaign revenue LTV and ROAS runs",async t => {
-    const h = await harness(t,{ cohort: true }); await h.submit(); await h.work([h.transaction]);
+    const h = await harness(t,{ cohort: true });
+    const submitted = await h.submit();
+    assert.equal(submitted.status,202);
+    assert.deepEqual(await submitted.json(),{ intent_id: h.intent.intent_id,state: "pending" });
+    assert.deepEqual(await h.facts(),[]);
+    assert.deepEqual(await h.work([h.transaction]),{ processed: 1,deferred: 0,failed: 0 });
     const identity = { tenantId: h.tenantId,appId: h.appId,keyId: "synthetic-admin",role: "admin" as const };
     const allRuns = () => h.query("SELECT artifact FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2").then(rows => rows.map(row => row.artifact));
     async function recalculate(recordIds: string[], watermark: string) {

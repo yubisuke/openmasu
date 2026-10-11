@@ -42,6 +42,27 @@ void openmasu_ios_track_refund(
   int64_t request_id,
   OpenMasuCStringCallback callback
 );
+/* Preparation is private retry state; pending is not verified revenue or an entitlement. */
+void openmasu_ios_prepare_app_store_purchase(
+  const char *product_id,
+  const char *purchase_request_id,
+  bool revenue_measurement_consent,
+  int64_t request_id,
+  OpenMasuCStringCallback callback
+);
+void openmasu_ios_submit_app_store_purchase(
+  const char *encoded_preparation,
+  const char *signed_transaction,
+  bool revenue_measurement_consent,
+  int64_t request_id,
+  OpenMasuCStringCallback callback
+);
+void openmasu_ios_update_consent(
+  const char *state,
+  const char *policy_version,
+  int64_t request_id,
+  OpenMasuCStringCallback callback
+);
 void openmasu_ios_track_max_revenue(
   double revenue,
   const char *precision,

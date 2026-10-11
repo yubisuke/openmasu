@@ -6,7 +6,8 @@ using AOT;
 
 namespace OpenMasu.Unity
 {
-    public sealed class OpenMasuiOSPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform, IOpenMasuAppleConversionPlatform
+    public sealed class OpenMasuiOSPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform,
+        IOpenMasuAppleConversionPlatform, IOpenMasuAppStorePurchasePlatform, IOpenMasuConsentPlatform
     {
         private delegate void NativeCallback(long requestId, IntPtr value);
         private static readonly NativeCallback Callback = OnNativeCallback;
@@ -15,6 +16,7 @@ namespace OpenMasu.Unity
         private static long nextRequestId;
         private bool disposed;
         private Action<string> deepLinkListener;
+        private readonly ConcurrentDictionary<long, byte> purchaseCallbacks = new ConcurrentDictionary<long, byte>();
 
         public static int ActiveCallbackCount => Callbacks.Count;
 
@@ -84,6 +86,38 @@ namespace OpenMasu.Unity
                 transactionId, originalTransactionId, amountUnscaled, amountScale, currency, requestId, Callback);
 #else
             CompleteSynthetic(requestId, "ok");
+#endif
+        }
+
+        public void PrepareAppStorePurchase(string productId, string requestId, bool revenueMeasurementConsent,
+            Action<string> completion)
+        {
+            var callbackId = RegisterPurchase(completion);
+#if UNITY_IOS && !UNITY_EDITOR
+            openmasu_ios_prepare_app_store_purchase(productId, requestId, revenueMeasurementConsent, callbackId, Callback);
+#else
+            CompleteSynthetic(callbackId, "state=not_submitted&error=platform_unavailable");
+#endif
+        }
+
+        public void SubmitAppStorePurchase(string prepared, string signedTransaction, bool revenueMeasurementConsent,
+            Action<string> completion)
+        {
+            var callbackId = RegisterPurchase(completion);
+#if UNITY_IOS && !UNITY_EDITOR
+            openmasu_ios_submit_app_store_purchase(prepared, signedTransaction, revenueMeasurementConsent, callbackId, Callback);
+#else
+            CompleteSynthetic(callbackId, "state=not_submitted&error=platform_unavailable");
+#endif
+        }
+
+        public void UpdateConsent(string state, string policyVersion, Action<string> completion)
+        {
+            var callbackId = RegisterPurchase(completion);
+#if UNITY_IOS && !UNITY_EDITOR
+            openmasu_ios_update_consent(state, policyVersion, callbackId, Callback);
+#else
+            CompleteSynthetic(callbackId, "state=not_submitted&error=platform_unavailable");
 #endif
         }
 
@@ -175,6 +209,21 @@ namespace OpenMasu.Unity
         {
             if (disposed) return;
             disposed = true;
+            foreach (var requestId in purchaseCallbacks.Keys) Callbacks.TryRemove(requestId, out _);
+            purchaseCallbacks.Clear();
+        }
+
+        private long RegisterPurchase(Action<string> completion)
+        {
+            ThrowIfDisposed();
+            if (completion == null) throw new ArgumentNullException(nameof(completion));
+            var requestId = Interlocked.Increment(ref nextRequestId);
+            purchaseCallbacks.TryAdd(requestId, 0);
+            if (!Callbacks.TryAdd(requestId, value => {
+                purchaseCallbacks.TryRemove(requestId, out _);
+                if (!disposed) completion(value);
+            })) throw new InvalidOperationException("callback_id_collision");
+            return requestId;
         }
 
         private static long Register(Action<string> completion)
@@ -205,6 +254,17 @@ namespace OpenMasu.Unity
         }
 
 #if UNITY_IOS && !UNITY_EDITOR
+        [DllImport("__Internal")]
+        private static extern void openmasu_ios_prepare_app_store_purchase(
+            string productId, string requestId, [MarshalAs(UnmanagedType.I1)] bool revenueMeasurementConsent,
+            long callbackId, NativeCallback callback);
+        [DllImport("__Internal")]
+        private static extern void openmasu_ios_submit_app_store_purchase(
+            string prepared, string signedTransaction, [MarshalAs(UnmanagedType.I1)] bool revenueMeasurementConsent,
+            long callbackId, NativeCallback callback);
+        [DllImport("__Internal")]
+        private static extern void openmasu_ios_update_consent(
+            string state, string policyVersion, long callbackId, NativeCallback callback);
         [DllImport("__Internal")]
         private static extern void openmasu_ios_initialize(
             string endpoint, string sdkKeyId, string sdkSecret, long requestId, NativeCallback callback);

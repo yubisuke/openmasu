@@ -4,6 +4,7 @@ import android.content.Context;
 import androidx.test.core.app.ApplicationProvider;
 import dev.openmasu.sdk.MetaReferrerReader;
 import dev.openmasu.sdk.PlayReferrerReader;
+import dev.openmasu.sdk.OpenMasuPurchaseQueueResult;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
@@ -69,5 +70,20 @@ public final class OpenMasuUnityBridgeTest {
     assertNotNull(OpenMasuUnityBridge.class.getMethod(
         "trackMaxRevenue", double.class, String.class, String.class, String.class, String.class, String.class,
         String.class));
+  }
+
+  @Test public void protectedPurchaseAndConsentBridgesExposeCallbacksWithoutClaimingVerification() throws Exception {
+    for (String name : new String[] { "trackGooglePlayProductPurchase", "trackGooglePlaySubscriptionPurchase" }) {
+      assertNotNull(OpenMasuUnityBridge.class.getMethod(name,
+          String.class, String.class, String.class, String.class, int.class, String.class,
+          OpenMasuUnityBridge.StringCallback.class));
+    }
+    assertNotNull(OpenMasuUnityBridge.class.getMethod("updateConsent", String.class, String.class,
+        OpenMasuUnityBridge.StringCallback.class));
+    assertEquals("state=queued", OpenMasuUnityBridge.purchaseResult(OpenMasuPurchaseQueueResult.QUEUED));
+    assertEquals("state=not_submitted&error=consent_required",
+        OpenMasuUnityBridge.purchaseResult(OpenMasuPurchaseQueueResult.CONSENT_REQUIRED));
+    assertEquals("state=not_submitted&error=queue_rejected",
+        OpenMasuUnityBridge.purchaseResult(OpenMasuPurchaseQueueResult.QUEUE_REJECTED));
   }
 }

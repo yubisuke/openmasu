@@ -58,17 +58,20 @@ SDK: `v0.3.0-rc.1` remains the published prerelease; see
 
 ## Next product sequence
 
-The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has 22 of
-35 child implementations complete and 13 remaining at this update. Backup and
+The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has 23 of
+35 child implementations complete and 12 remaining at this update. Backup and
 recovery ([#250](https://github.com/yubisuke/openmasu/issues/250)) is implemented;
 the dedicated Runtime gate owns its synthetic evidence. Follow individual issue
 dependencies; the phases below are priorities, not extra refactoring gates.
 
 | Order | Workstream | Remaining issues / exit |
 | --- | --- | --- |
-| 1 | Unity purchase binding | [#239](https://github.com/yubisuke/openmasu/issues/239): expose native verified preparation/submission through the existing bridge |
-| 2, when needed | Optional measurement and operator extensions | Activity/payer metrics, detailed costs/discovery, another ILR bridge, engagement policies, recurring comparisons, app access scope, retention expiry, multiple workers and fraud previews; see the [crosswalk](project-plan.md#next-product-slices) |
-| 3 | Integrated candidate | [#252](https://github.com/yubisuke/openmasu/issues/252): coherent first-use journey, source/SDK identities, upgrade and exact-commit distribution evidence |
+| 1 | Integrated candidate | [#252](https://github.com/yubisuke/openmasu/issues/252): coherent first-use journey, source/SDK identities, upgrade and exact-commit distribution evidence |
+| When needed | Optional measurement and operator extensions | Activity/payer metrics, detailed costs/discovery, another ILR bridge, engagement policies, recurring comparisons, app access scope, retention expiry, multiple workers and fraud previews; see the [crosswalk](project-plan.md#next-product-slices) |
+
+[Unity purchase binding](../sdk/unity/README.md#protected-store-purchases)
+is implemented through the existing native helpers. Queued/pending callbacks are
+not verification or entitlement evidence, and no new SDK release is implied.
 
 Apple [postback observations](apple-postback-observations.md), [registered conversion meanings](apple-conversion-meaning.md)
 and [scoped campaign cost](cost-refresh.md#apple-ads-campaign-cost) are implemented.

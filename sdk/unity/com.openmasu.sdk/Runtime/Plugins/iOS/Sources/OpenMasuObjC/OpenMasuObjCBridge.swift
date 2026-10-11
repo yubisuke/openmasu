@@ -41,6 +41,63 @@ private func callback(_ callback: OpenMasuCStringCallback?, requestId: Int64, va
   }
 }
 
+// The bridge carries private preparation state, not purchase verification or an entitlement.
+// Keep failures closed: Error descriptions can contain transport bodies or purchase evidence.
+enum AppStorePurchaseBridge {
+  static func failure(_ error: Error) -> String {
+    let code: String
+    switch error as? OpenMasuError {
+    case .purchaseConsentRequired: code = "consent_required"
+    case .purchaseContextChanged: code = "context_changed"
+    case .collectionDisabled: code = "collection_disabled"
+    case .resetRequiresEnrollment: code = "not_initialized"
+    case .purchaseTransportUnsupported: code = "unsupported"
+    case .invalidAttributes: code = "invalid_purchase"
+    case .responseInvalid: code = "response_invalid"
+    case .transport: code = "transport_failed"
+    default: code = "purchase_failed"
+    }
+    return "state=not_submitted&error=\(code)"
+  }
+
+  static func prepare(
+    sdk: OpenMasuSDK, productId: String, purchaseRequestId: String, consent: Bool
+  ) async -> String {
+    guard let requestId = UUID(uuidString: purchaseRequestId) else {
+      return failure(OpenMasuError.invalidAttributes)
+    }
+    do {
+      let prepared = try await sdk.prepareAppStorePurchase(
+        productId: productId, requestId: requestId, revenueMeasurementConsent: consent
+      )
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.sortedKeys]
+      let encoded = try encoder.encode(prepared).base64EncodedString()
+      let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+      guard let escaped = encoded.addingPercentEncoding(withAllowedCharacters: unreserved) else {
+        return failure(OpenMasuError.responseInvalid)
+      }
+      return "state=prepared&prepared=\(escaped)&app_account_token=\(prepared.appAccountToken.uuidString.lowercased())"
+    } catch { return failure(error) }
+  }
+
+  static func submit(
+    sdk: OpenMasuSDK, encodedPreparation: String, signedTransaction: String, consent: Bool
+  ) async -> String {
+    // The closed preparation DTO is small; reject oversized input before decoding it.
+    guard encodedPreparation.utf8.count <= 8_192,
+          let data = Data(base64Encoded: encodedPreparation),
+          let prepared = try? JSONDecoder().decode(OpenMasuPreparedAppStorePurchase.self, from: data)
+    else { return failure(OpenMasuError.invalidAttributes) }
+    do {
+      _ = try await sdk.submitAppStorePurchase(
+        prepared: prepared, signedTransaction: signedTransaction, revenueMeasurementConsent: consent
+      )
+      return "state=pending"
+    } catch { return failure(error) }
+  }
+}
+
 @_cdecl("openmasu_ios_initialize")
 public func openmasuIOSInitialize(
   _ endpoint: UnsafePointer<CChar>?,
@@ -202,6 +259,87 @@ public func openmasuIOSTrackPurchase(
       callback(callbackValue, requestId: requestId, value: "ok")
     } catch {
       callback(callbackValue, requestId: requestId, value: "error:purchase_failed")
+    }
+  }
+}
+
+@_cdecl("openmasu_ios_prepare_app_store_purchase")
+public func openmasuIOSPrepareAppStorePurchase(
+  _ productId: UnsafePointer<CChar>?,
+  _ purchaseRequestId: UnsafePointer<CChar>?,
+  _ revenueMeasurementConsent: Bool,
+  _ requestId: Int64,
+  _ callbackValue: OpenMasuCStringCallback?
+) {
+  guard let sdk = BridgeState.get() else {
+    callback(callbackValue, requestId: requestId, value: "state=not_submitted&error=not_initialized")
+    return
+  }
+  guard let productId, let purchaseRequestId else {
+    callback(callbackValue, requestId: requestId, value: AppStorePurchaseBridge.failure(OpenMasuError.invalidAttributes))
+    return
+  }
+  let product = String(cString: productId), purchaseRequest = String(cString: purchaseRequestId)
+  Task {
+    let result = await AppStorePurchaseBridge.prepare(
+      sdk: sdk, productId: product, purchaseRequestId: purchaseRequest, consent: revenueMeasurementConsent
+    )
+    callback(callbackValue, requestId: requestId, value: result)
+  }
+}
+
+@_cdecl("openmasu_ios_submit_app_store_purchase")
+public func openmasuIOSSubmitAppStorePurchase(
+  _ encodedPreparation: UnsafePointer<CChar>?,
+  _ signedTransaction: UnsafePointer<CChar>?,
+  _ revenueMeasurementConsent: Bool,
+  _ requestId: Int64,
+  _ callbackValue: OpenMasuCStringCallback?
+) {
+  guard let sdk = BridgeState.get() else {
+    callback(callbackValue, requestId: requestId, value: "state=not_submitted&error=not_initialized")
+    return
+  }
+  guard let encodedPreparation, let signedTransaction else {
+    callback(callbackValue, requestId: requestId, value: AppStorePurchaseBridge.failure(OpenMasuError.invalidAttributes))
+    return
+  }
+  let prepared = String(cString: encodedPreparation), transaction = String(cString: signedTransaction)
+  Task {
+    let result = await AppStorePurchaseBridge.submit(
+      sdk: sdk, encodedPreparation: prepared, signedTransaction: transaction, consent: revenueMeasurementConsent
+    )
+    callback(callbackValue, requestId: requestId, value: result)
+  }
+}
+
+@_cdecl("openmasu_ios_update_consent")
+public func openmasuIOSUpdateConsent(
+  _ state: UnsafePointer<CChar>?,
+  _ policyVersion: UnsafePointer<CChar>?,
+  _ requestId: Int64,
+  _ callbackValue: OpenMasuCStringCallback?
+) {
+  guard let sdk = BridgeState.get() else {
+    callback(callbackValue, requestId: requestId, value: "state=not_submitted&error=not_initialized")
+    return
+  }
+  guard let state, let policyVersion else {
+    callback(callbackValue, requestId: requestId, value: "state=not_submitted&error=invalid_consent")
+    return
+  }
+  let stateValue = String(cString: state), policy = String(cString: policyVersion)
+  guard ["granted", "denied", "withdrawn", "not_required", "unknown"].contains(stateValue),
+        policy.range(of: "^[A-Za-z0-9._:-]{1,128}$", options: .regularExpression) != nil else {
+    callback(callbackValue, requestId: requestId, value: "state=not_submitted&error=invalid_consent")
+    return
+  }
+  Task {
+    do {
+      try await sdk.updateConsent(state: stateValue, policyVersion: policy)
+      callback(callbackValue, requestId: requestId, value: "state=updated")
+    } catch {
+      callback(callbackValue, requestId: requestId, value: "state=not_submitted&error=consent_update_failed")
     }
   }
 }

@@ -42,7 +42,7 @@ qualification is stated. No row establishes production readiness.
 | Ongoing calculation | Durable daily schedules, bounded target discovery, Google/Apple cost refresh, saved replay and explicit/opt-in automatic corrections | Not every profile supports discovery or automatic correction; no implicit all-history scan; live cost access and billing agreement remain unverified |
 | Dashboard and comparison | Server-rendered reader-only reports; saved filters, bounded previous-period views and operands; external revenue/ROAS/LTV, retention and outcome declarations via the same offline/web comparator | External meaning remains operator-declared; no provider completeness, imported-binding or engagement-equivalence claim; incompatible/missing/undefined/zero remain distinct |
 | Setup and diagnostics | Recommended measurement form, recent event/SDK-version classes and confirmation-bound ingest recovery | SDK versions are client-declared; absent receipts do not prove an outage; invalid/deleted/claimed evidence is not replayed |
-| SDKs and verified commerce | Android/iOS/Unity queues and bridges; native verified purchases and Swift submission; synthetic Unity 6 Android export | Real devices/stores/providers and Unity 2022.3 are unverified; Unity purchase helpers remain planned |
+| SDKs and verified commerce | Android/iOS/Unity queues and bridges; native verified purchases, Swift submission and typed Unity purchase binding; synthetic Unity 6 Android export | Real devices/stores/providers and Unity 2022.3 are unverified; queued/pending does not mean verified; current helpers are not newly published SDK assets |
 | Deep links and re-engagement | Deterministic direct links on both OSes, Android deferred links, separate latest-open 24-hour outcome profiles | No iOS deferred links; no engagement ROAS/purchase model; device-reported opens can be forged |
 | Fraud controls | Recorded public rules, registered fraud bundle hashes, diagnostics and synthetic Integrity/App Attest verification | No physical-device-farm or reset-fraud guarantee; private threshold calibration and live platform projects unverified |
 | Privacy and recovery | Role isolation, protected payloads, deletion, saved-manifest metric replay; matched backup/freshness and isolated restore CLI with all-tenant privacy reapplication and a dedicated synthetic gate | External recipients retain their own deletion duty; live recovery time, authoritative boundary custody and secret custody unverified |
@@ -55,7 +55,7 @@ Detailed limits belong to the [product guides](README.md), [product scope](produ
 ## Current development focus
 
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-22 of 35 child implementations complete; 13 remain as of this update. The earlier
+23 of 35 child implementations complete; 12 remain as of this update. The earlier
 integration plan is complete, not a second backlog. The dependency, controller,
 presentation, evaluator and ingestion foundations are also implemented.
 
@@ -74,8 +74,10 @@ windows, unsigned values, verification, retries and missing metadata.
 digest with the SDK and expose ranges without inventing postback bindings.
 [Apple Ads campaign cost](cost-refresh.md#apple-ads-campaign-cost) now uses the
 existing bounded refresh and correction path with explicit UTC days and currency.
-Next: **Unity purchase binding** ([#239](https://github.com/yubisuke/openmasu/issues/239)) before promoting
-an integrated candidate. The [roadmap](roadmap.md)
+[Unity purchase binding](../sdk/unity/README.md#protected-store-purchases) now reuses
+native preparation/submission and consent boundaries without claiming verification
+from queued/pending callbacks. Next: **integrated candidate preparation**
+([#252](https://github.com/yubisuke/openmasu/issues/252)). The [roadmap](roadmap.md)
 owns the sequence; the [project plan](project-plan.md) records its acceptance
 crosswalk. Optional expansions are not all release prerequisites.
 

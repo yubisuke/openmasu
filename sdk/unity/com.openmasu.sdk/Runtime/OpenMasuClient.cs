@@ -129,7 +129,7 @@ namespace OpenMasu.Unity
         public string MetaAppId { get; set; } = string.Empty;
     }
 
-    public sealed class OpenMasuClient : IDisposable
+    public sealed partial class OpenMasuClient : IDisposable
     {
         private readonly IOpenMasuPlatform platform;
         private readonly OpenMasuDispatcher dispatcher;
