@@ -549,10 +549,6 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
   });
 
   it("recommended_SSR_setup_and_saved_analyses_cover_two_campaigns_retention_pagination_and_authorization", async (context) => {
-    // Freeze only Date: real HTTP/DB timers still run, and authenticated admission
-    // assigns received_at before the schedule watermark without rewriting rows.
-    const admittedAt = "2026-08-14T00:00:00.000Z";
-    context.mock.timers.enable({ apis: ["Date"], now: new Date(admittedAt) });
     const tenantId = `tenant-setup-${randomBytes(6).toString("hex")}`;
     const appId = `app-setup-${randomBytes(6).toString("hex")}`;
     const reportIdentity = { tenantId, appId, keyId: "synthetic-recommended-setup", role: "admin" as const };
@@ -622,48 +618,57 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     // Acquisition, cost and revenue retain their reviewed synthetic inputs. The
     // only retention activity now enters through the public signed SDK path.
     assert.equal(source.records.some((row: Any) => row.event_name === "session_start"), false);
-    const keyResponse = await admin(`/v1/admin/apps/${appId}/sdk-keys`, {
-      method: "POST", body: JSON.stringify({ platform: "android" }) });
-    assert.equal(keyResponse.status, 201);
-    const sdkKey = await keyResponse.json() as { sdk_key_id: string; sdk_key: string };
-    const signed = (path: string, value: unknown, credential?: { installation_key_id: string; installation_secret: string }) => {
-      const body = Buffer.from(JSON.stringify(value)), timestampMs = Date.now(), nonce = randomBytes(18).toString("base64url");
-      const signature = signSdkRequest(credential?.installation_secret ?? sdkKey.sdk_key, {
-        method: "POST", path, sdkKeyId: sdkKey.sdk_key_id, installationKeyId: credential?.installation_key_id,
-        timestampMs, nonce, body });
-      return fetch(`${baseUrl}${path}`, { method: "POST", body: body.toString("utf8"), headers: {
-        "content-type": "application/json", "x-openmasu-sdk-key-id": sdkKey.sdk_key_id,
-        "x-openmasu-installation-key-id": credential?.installation_key_id ?? "-",
-        "x-openmasu-timestamp-ms": String(timestampMs), "x-openmasu-nonce": nonce, "x-openmasu-signature": signature } });
-    };
-    const sdkEventIds: string[] = [], sdkBatchIds: string[] = [];
-    for (const [group, hour] of [["a", "00"], ["b", "03"]]) {
-      const installationId = `installation:kpi70-install-${group}-0`;
-      const enrollment = await signed("/v1/installations", { installation_id: installationId });
-      assert.equal(enrollment.status, 201);
-      const credential = await enrollment.json() as { installation_key_id: string; installation_secret: string };
-      const records = ["07", "13"].map((day, index) => {
-        const sessionId = `setup-session-${group}-${day}`, eventId = `event:${sessionId}`;
-        sdkEventIds.push(eventId);
-        return { producer_version: "synthetic-setup-sdk", event_id: eventId, event_name: "session_start",
-          occurred_at: `2026-08-${day}T${hour}:30:00.000Z`, occurred_at_source: "device", processing_sequence: index + 1,
-          payload: { event_name: "session_start", installation_id: installationId, session_id: sessionId } };
+    // Freeze only SDK admission and processing, not schedule registration: a
+    // D7 schedule with a nine-day lag cannot start on Aug 06 before Aug 15.
+    // Real HTTP/DB timers still run; received_at is never rewritten afterward.
+    const admittedAt = "2026-08-14T00:00:00.000Z";
+    context.mock.timers.enable({ apis: ["Date"], now: new Date(admittedAt) });
+    try {
+      const keyResponse = await admin(`/v1/admin/apps/${appId}/sdk-keys`, {
+        method: "POST", body: JSON.stringify({ platform: "android" }) });
+      assert.equal(keyResponse.status, 201);
+      const sdkKey = await keyResponse.json() as { sdk_key_id: string; sdk_key: string };
+      const signed = (path: string, value: unknown, credential?: { installation_key_id: string; installation_secret: string }) => {
+        const body = Buffer.from(JSON.stringify(value)), timestampMs = Date.now(), nonce = randomBytes(18).toString("base64url");
+        const signature = signSdkRequest(credential?.installation_secret ?? sdkKey.sdk_key, {
+          method: "POST", path, sdkKeyId: sdkKey.sdk_key_id, installationKeyId: credential?.installation_key_id,
+          timestampMs, nonce, body });
+        return fetch(`${baseUrl}${path}`, { method: "POST", body: body.toString("utf8"), headers: {
+          "content-type": "application/json", "x-openmasu-sdk-key-id": sdkKey.sdk_key_id,
+          "x-openmasu-installation-key-id": credential?.installation_key_id ?? "-",
+          "x-openmasu-timestamp-ms": String(timestampMs), "x-openmasu-nonce": nonce, "x-openmasu-signature": signature } });
+      };
+      const sdkEventIds: string[] = [], sdkBatchIds: string[] = [];
+      for (const [group, hour] of [["a", "00"], ["b", "03"]]) {
+        const installationId = `installation:kpi70-install-${group}-0`;
+        const enrollment = await signed("/v1/installations", { installation_id: installationId });
+        assert.equal(enrollment.status, 201);
+        const credential = await enrollment.json() as { installation_key_id: string; installation_secret: string };
+        const records = ["07", "13"].map((day, index) => {
+          const sessionId = `setup-session-${group}-${day}`, eventId = `event:${sessionId}`;
+          sdkEventIds.push(eventId);
+          return { producer_version: "synthetic-setup-sdk", event_id: eventId, event_name: "session_start",
+            occurred_at: `2026-08-${day}T${hour}:30:00.000Z`, occurred_at_source: "device", processing_sequence: index + 1,
+            payload: { event_name: "session_start", installation_id: installationId, session_id: sessionId } };
+        });
+        const response = await signed("/v1/events/batch", { records }, credential);
+        assert.equal(response.status, 202);
+        sdkBatchIds.push((await response.json() as { ingest_batch_id: string }).ingest_batch_id);
+      }
+      assert.equal(await processSdkInbox(appPool, payloadStore, tenantId), 2);
+      await withTenant(readerPool, tenantId, async client => {
+        const admitted = await client.query<{ event_id: string; producer: string; received_at: string }>(
+          `SELECT event_id,producer,received_at FROM ledger.raw_records
+            WHERE tenant_id=$1 AND app_id=$2 AND event_id=ANY($3::text[]) ORDER BY event_id`, [tenantId, appId, sdkEventIds]);
+        assert.deepEqual(admitted.rows, sdkEventIds.sort().map(event_id => ({ event_id, producer: "sdk-android", received_at: admittedAt })));
+        const batches = await client.query<{ status: string }>(`SELECT status FROM ledger.ingest_batches_current
+          WHERE tenant_id=$1 AND app_id=$2 AND ingest_batch_id=ANY($3::uuid[])`, [tenantId, appId, sdkBatchIds]);
+        assert.deepEqual(batches.rows.map(row => row.status), ["processed", "processed"]);
       });
-      const response = await signed("/v1/events/batch", { records }, credential);
-      assert.equal(response.status, 202);
-      sdkBatchIds.push((await response.json() as { ingest_batch_id: string }).ingest_batch_id);
+      assert.equal(await processSdkInbox(appPool, payloadStore, tenantId), 0, "a completed SDK batch is not applied again");
+    } finally {
+      context.mock.timers.reset();
     }
-    assert.equal(await processSdkInbox(appPool, payloadStore, tenantId), 2);
-    await withTenant(readerPool, tenantId, async client => {
-      const admitted = await client.query<{ event_id: string; producer: string; received_at: string }>(
-        `SELECT event_id,producer,received_at FROM ledger.raw_records
-          WHERE tenant_id=$1 AND app_id=$2 AND event_id=ANY($3::text[]) ORDER BY event_id`, [tenantId, appId, sdkEventIds]);
-      assert.deepEqual(admitted.rows, sdkEventIds.sort().map(event_id => ({ event_id, producer: "sdk-android", received_at: admittedAt })));
-      const batches = await client.query<{ status: string }>(`SELECT status FROM ledger.ingest_batches_current
-        WHERE tenant_id=$1 AND app_id=$2 AND ingest_batch_id=ANY($3::uuid[])`, [tenantId, appId, sdkBatchIds]);
-      assert.deepEqual(batches.rows.map(row => row.status), ["processed", "processed"]);
-    });
-    assert.equal(await processSdkInbox(appPool, payloadStore, tenantId), 0, "a completed SDK batch is not applied again");
     assert.match(await page(), /data-measurement-state="not_computed"/);
     assert.equal((await processMetricSchedules(appPool, tenantId, { now: new Date("2026-08-15T00:00:00.000Z") })).completedDates, 1);
     const rows = (await metricReport(readerPool, reportIdentity, { tenantId, appId, metricScheduleId: id,
