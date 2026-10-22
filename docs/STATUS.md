@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-10-11. This page describes the current `main` source tree.
+Updated: 2026-10-22. This page describes the current `main` source tree.
 Implementation and synthetic verification are not live operational qualification.
 
 ## Release snapshot
@@ -8,6 +8,7 @@ Implementation and synthetic verification are not live operational qualification
 | Line | Identity and evidence |
 | --- | --- |
 | Published prerelease | `v0.3.0-rc.1` at `90a0f5f`; eight SDK assets and exact-tag publication evidence |
+| Configured candidate | `v0.3.0-rc.2`; candidate integration and platform evidence are separate from publication |
 | Latest stable source release | `v0.2.0`; later features belong to newer source, not this tag |
 | Current source | Contract patch ledger through v0.4.24; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 71 fixtures, 923 golden artifacts |
 
@@ -15,8 +16,10 @@ Implementation and synthetic verification are not live operational qualification
 prerelease. Its [release page](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.1),
 [synthetic evidence](validation/v0.3.0-rc.1-synthetic-evidence.md) and
 [publication receipt](validation/v0.3.0-rc.1-publication.md) describe that exact tag.
-Configured SDK version remains `0.3.0-rc.1`; current source is not a newly
-published SDK. [Unreleased scope](releases/next.md) summarizes the difference.
+Current source and SDK are configured for candidate `v0.3.0-rc.2`; this does not
+publish a new SDK. The [candidate record](validation/v0.3.0-rc.2-synthetic-evidence.md)
+maps the integration paths to existing gates. [Candidate notes](releases/v0.3.0-rc.2.md)
+summarize the difference from the published SDK.
 
 ## What the status means
 
@@ -76,8 +79,12 @@ digest with the SDK and expose ranges without inventing postback bindings.
 existing bounded refresh and correction path with explicit UTC days and currency.
 [Unity purchase binding](../sdk/unity/README.md#protected-store-purchases) now reuses
 native preparation/submission and consent boundaries without claiming verification
-from queued/pending callbacks. Next: **integrated candidate preparation**
-([#252](https://github.com/yubisuke/openmasu/issues/252)). The [roadmap](roadmap.md)
+from queued/pending callbacks. Current work: **integrated candidate preparation**
+([#252](https://github.com/yubisuke/openmasu/issues/252)), including authenticated
+receipt-to-calculation coverage, both published-source upgrade paths and aligned
+SDK identities. Exact-commit platform gates and release-owner publication remain
+distinct steps; the issue is not complete merely because a version was configured.
+The [roadmap](roadmap.md)
 owns the sequence; the [project plan](project-plan.md) records its acceptance
 crosswalk. Optional expansions are not all release prerequisites.
 

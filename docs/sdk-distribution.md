@@ -8,6 +8,12 @@ Its annotated tag, full platform CI and eight public assets identify source
 checksum, manifest and exact-CI-byte verification. A prepared file alone is not
 publication. Historical `v0.2.0` tags and records are not modified.
 
+Current source is configured for `v0.3.0-rc.2`. Its added SDK helpers are not in
+the public rc.1 downloads below. Contributors can build the candidate using the
+[release runbook](operations/release.md); only exact-commit CI artifacts qualify
+as candidate evidence. Do not substitute rc.2 into these public download commands
+until that release is approved, tagged, published and verified.
+
 ## Obtain and verify the exact assets
 
 Use a new empty local directory. These commands download public artifacts; they
@@ -106,4 +112,4 @@ Maintain one source/SDK version and reuse the existing
 [release runbook](operations/release.md). Create assets from the full-gate
 same-commit CI bundle, not from stale local build outputs. No new registry,
 service, distribution signing key or SDK API is introduced. Contract wire and
-package identity remains `0.4.0` through the additive v0.4.10 ledger.
+package identity remains `0.4.0` through the additive v0.4.24 ledger.

@@ -48,7 +48,7 @@ guides document their configuration. Published-release evidence remains separate
 
 ## Next product slices
 
-Updated: 2026-10-11. Twenty-three of 35 child implementations are complete; the 12 remaining
+Updated: 2026-10-22. Twenty-three of 35 child implementations are complete; the 12 remaining
 issues below map directly to the [roadmap sequence](roadmap.md#next-product-sequence).
 Numbers are tracking links, not required background knowledge.
 
@@ -97,6 +97,14 @@ upgrade and release evidence. Its dependencies include monitoring, backup,
 Apple aggregate views, Unity purchase binding, daily analysis and broader
 comparison semantics. Do not treat a local bundle or a green source-only check
 as a published SDK.
+
+The configured candidate is `v0.3.0-rc.2`. Its
+[integration record](validation/v0.3.0-rc.2-synthetic-evidence.md) reuses existing
+journey, correction/privacy, package-consumer and backup suites. It adds no
+service or parallel release harness. Frozen `v0.2.0` and `v0.3.0-rc.1` backups
+must both survive forward migration and privacy reapplication. Publication is
+still a separate release-owner step; keep this issue open until the distribution
+acceptance is met.
 
 ## Next development foundations
 

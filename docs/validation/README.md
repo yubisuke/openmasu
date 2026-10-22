@@ -11,6 +11,10 @@ For the current checkout, use the disposable pilot and gates in
 [Getting started](../getting-started.md) and [Development](../development.md).
 Their result applies only to the exact source revision that ran them.
 
+The configured `v0.3.0-rc.2` [candidate integration record](v0.3.0-rc.2-synthetic-evidence.md)
+maps the current first-use, correction, upgrade and SDK paths to their existing
+test owners. It is not a tag, publication receipt or evidence for real operation.
+
 The [v0.3.0-rc.1 publication receipt](v0.3.0-rc.1-publication.md) records
 full CI and eight verified public SDK assets at tagged commit `90a0f5f`.
 It does not apply to later source changes or production operation.

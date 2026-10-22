@@ -228,12 +228,12 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     let accepted!: CandidateAttempt;
     for (const bulkPersistence of [false,true]) {
       const mode = bulkPersistence ? "bulk" : "single";
-      const good = attempt(`${mode}-good`, "0.3.0-rc.1", currentAt);
+      const good = attempt(`${mode}-good`, "0.3.0-rc.2", currentAt);
       if (bulkPersistence) good.record.late = true;
       else accepted = good;
       const result = await ingestRuntimeBatch([
         attempt(`${mode}-previous`, "0.2.0", previousAt), good,
-        attempt(`${mode}-rejected`, "0.3.0-rc.1", currentAt, false),
+        attempt(`${mode}-rejected`, "0.3.0-rc.2", currentAt, false),
       ], appPool, [], { bulkPersistence });
       assert.equal(result.logical_events.length, 2, mode);
       assert.equal(result.rejections.length, 1, mode);
@@ -249,10 +249,10 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     const unknown = attempt("unknown-version", "synthetic-private-value", currentAt);
     const unknownEvent = attempt("unknown-event", "synthetic-private-value", currentAt);
     unknownEvent.record.event_name = "synthetic-private-value";
-    await ingestRuntimeBatch([unknown, unknownEvent, attempt("old-rejection", "0.3.0-rc.1", oldAt, false)], appPool);
+    await ingestRuntimeBatch([unknown, unknownEvent, attempt("old-rejection", "0.3.0-rc.2", oldAt, false)], appPool);
     const batch = await appendDurableBatch(appPool, payloadStore, { tenantId, appId: recentApp, producer: "sdk-ios",
       receivedAt: currentAt, eventCount: 2, body: Buffer.from(JSON.stringify({ records: [
-        { producer_version: "0.3.0-rc.1", event_name: "session_start" },
+        { producer_version: "0.3.0-rc.2", event_name: "session_start" },
         { producer_version: "synthetic-private-value", event_name: "synthetic-private-value" },
       ] })) });
     await withTenant(appPool, tenantId, client => client.query(`INSERT INTO ledger.ingest_batch_states
@@ -268,7 +268,7 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     const health = JSON.parse(text) as MeasurementHealth, recent = health.recent!;
     assert.equal(recent.window_hours, 24);
     assert.equal(recent.client_diagnostics, "on_device_only_not_received");
-    const modern = recent.groups.find(group => group.producer === "sdk-android" && group.producer_version === "0.3.0-rc.1")!;
+    const modern = recent.groups.find(group => group.producer === "sdk-android" && group.producer_version === "0.3.0-rc.2")!;
     assert.deepEqual([modern.current.accepted,modern.current.rejected,modern.current.duplicate,modern.current.late], ["2","2","1","1"]);
     assert.equal(modern.previous.rejected, "0", "older failures are outside both 24h windows");
     const earlierVersion = recent.groups.find(group => group.producer_version === "0.2.0")!;
@@ -282,7 +282,7 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     const narrow = await (await fetch(`${endpoint}?window_hours=1`, { headers })).json() as MeasurementHealth;
     assert.ok(narrow.recent!.groups.every(group => group.producer_version !== "0.2.0"));
     const wide = await (await fetch(`${endpoint}?window_hours=168`, { headers })).json() as MeasurementHealth;
-    assert.equal(wide.recent!.groups.find(group => group.producer_version === "0.3.0-rc.1")!.current.rejected, "3");
+    assert.equal(wide.recent!.groups.find(group => group.producer_version === "0.3.0-rc.2")!.current.rejected, "3");
     for (const query of ["window_hours=25", "window_hours=1&window_hours=24", "installation_id=synthetic"])
       assert.equal((await fetch(`${endpoint}?${query}`, { headers })).status, 400);
     const cookieHeader = { cookie: cookie(await login(adminKeyA)) };

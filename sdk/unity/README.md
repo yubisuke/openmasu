@@ -18,11 +18,10 @@ manifest, and the conversion schema remain in the main application target.
 This catches target-membership regressions without claiming an actual Unity
 iOS export or Xcode link; those remain operator checks.
 
-Generate the local bundle after building the five release AARs and SDK SBOMs:
+Generate the local candidate bundle once. The packager rebuilds its five AARs
+and SDK SBOM inputs; do not run those prerequisite builds separately:
 
 ```bash
-npm run sbom
-./sdk/android/gradlew -p sdk/android :core:assembleRelease :installreferrer:assembleRelease :metareferrer:assembleRelease :max:assembleRelease :unitybridge:assembleRelease verifySdkSbom --no-daemon
 python tools/build-sdk-release.py --reproducibility-check
 python tools/verify-unity-upm.py
 ```
@@ -31,8 +30,8 @@ Run the actual Unity 6 headless export probe on a machine with the Android
 module installed (replace the Editor path for that machine):
 
 ```powershell
-npm run probe:unity-android-export -- --unity "C:\Program Files\Unity\Hub\Editor\6000.3.11f1\Editor\Unity.exe" --bundle build/sdk-release/openmasu-sdk-0.3.0-rc.1
-npm run probe:unity-android-export -- --unity "C:\Program Files\Unity\Hub\Editor\6000.3.11f1\Editor\Unity.exe" --bundle build/sdk-release/openmasu-sdk-0.3.0-rc.1 --without-settings
+npm run probe:unity-android-export -- --unity "C:\Program Files\Unity\Hub\Editor\6000.3.11f1\Editor\Unity.exe" --bundle build/sdk-release/openmasu-sdk-0.3.0-rc.2
+npm run probe:unity-android-export -- --unity "C:\Program Files\Unity\Hub\Editor\6000.3.11f1\Editor\Unity.exe" --bundle build/sdk-release/openmasu-sdk-0.3.0-rc.2 --without-settings
 ```
 
 The second invocation proves that packaged Android dependency resolution does
@@ -40,8 +39,8 @@ not depend on the optional App Links settings file. Both probes create and
 remove a temporary synthetic project. They do not use a
 device, account, credential, provider payload, or production identifier.
 
-For configured candidate `v0.3.0-rc.1`, the output under
-`build/sdk-release/openmasu-sdk-0.3.0-rc.1/` contains Maven AAR/POM pairs, the
+For configured candidate `v0.3.0-rc.2`, the output under
+`build/sdk-release/openmasu-sdk-0.3.0-rc.2/` contains Maven AAR/POM pairs, the
 UPM archive, the Swift Package source archive, three CycloneDX SDK SBOMs, a
 source/toolchain manifest, and `SHA256SUMS`. It is a local CI artifact, not a
 public registry publication. Treat the bundle as release evidence only when the

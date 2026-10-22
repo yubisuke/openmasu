@@ -31,15 +31,16 @@ describe("measurement health", () => {
       assert.throws(() => parseMeasurementWindow(new URLSearchParams(query)));
     const unknown = { producer: "synthetic-private-value", producer_version: "synthetic-private-value", event_name: "synthetic-private-value" };
     assert.deepEqual(measurementClasses(unknown), { producer: "other", producer_version: "other", event_name: "other" });
-    const headers = [unknown, { producer_version: "0.3.0-rc.1", event_name: "install" }];
+    const headers = [unknown, { producer_version: "0.3.0-rc.2", event_name: "install" }];
     assert.deepEqual(batchDiagnosticGroups("sdk-ios", Buffer.from(JSON.stringify({ records: headers })), 2), [
-      { producer: "sdk-ios", event_name: "install", producer_version: "0.3.0-rc.1", event_count: 1 },
+      { producer: "sdk-ios", event_name: "install", producer_version: "0.3.0-rc.2", event_count: 1 },
       { producer: "sdk-ios", event_name: "other", producer_version: "other", event_count: 1 },
     ]);
     assert.equal(batchDiagnosticGroups("sdk-ios", Buffer.from("not JSON"), 2)[0].event_count, 2);
     assert.deepEqual(MEASUREMENT_EVENTS.filter(value => value !== "other"), JSON.parse(readFileSync("registries/event-names-v0.4.json", "utf8")).event_names);
     const currentVersion = readFileSync("sdk/android/build.gradle.kts", "utf8").match(/^version = "([^"]+)"$/m)![1];
     assert.ok(MEASUREMENT_SDK_VERSIONS.some(version => version === currentVersion));
+    assert.equal(measurementClasses({ producer: "sdk-android", producer_version: "0.3.0-rc.1" }).producer_version, "0.3.0-rc.1");
   });
 
   it("separates pending work, rejection evidence and uncomputed events without inferring an outage", () => {
@@ -55,7 +56,7 @@ describe("measurement health", () => {
       received_to: h.observed_at, previous_from: h.observed_at, pending_unit: "submitted_events", pending_groups: [],
       client_diagnostics: "on_device_only_not_received", groups: [
         { producer: "sdk-android", producer_version: "0.2.0", event_name: "install", current: zero(), previous: { ...zero(), accepted: "8" } },
-        { producer: "sdk-android", producer_version: "0.3.0-rc.1", event_name: "install", current: { ...zero(), rejected: "2", late: "1" }, previous: zero() },
+        { producer: "sdk-android", producer_version: "0.3.0-rc.2", event_name: "install", current: { ...zero(), rejected: "2", late: "1" }, previous: zero() },
       ] };
     assert.deepEqual(recentMeasurementNotices(h.recent).map(notice => notice.state), ["group_no_recent_receipts", "group_rejections_increased", "low_observed_volume"]);
     assert.ok(recentMeasurementNotices(h.recent).every(notice => notice.state !== "rejections_observed"));
