@@ -14,6 +14,10 @@ Choose one path; provider settings are not a prerequisite:
 These instructions describe current source. The published `v0.3.0-rc.1`
 prerelease has its own fixed evidence and does not contain every later `main`
 addition. See [Project status](STATUS.md) and [unreleased scope](releases/next.md).
+Current source and SDK are configured for candidate `v0.3.0-rc.2`. Its
+[integration record](validation/v0.3.0-rc.2-synthetic-evidence.md) distinguishes
+authenticated admission, seeded reference evidence, packaged SDK consumers and
+upgrade checks; none is a live-device or provider qualification.
 
 ## Requirements
 

@@ -6,7 +6,7 @@ to replace every feature of an existing provider.
 
 [Project status](STATUS.md) owns current capabilities and release boundaries.
 [Project plan](project-plan.md) gives the acceptance crosswalk for the sequence
-below. Updated: 2026-10-11.
+below. Updated: 2026-10-22.
 
 ## Status vocabulary
 
@@ -66,7 +66,7 @@ dependencies; the phases below are priorities, not extra refactoring gates.
 
 | Order | Workstream | Remaining issues / exit |
 | --- | --- | --- |
-| 1 | Integrated candidate | [#252](https://github.com/yubisuke/openmasu/issues/252): coherent first-use journey, source/SDK identities, upgrade and exact-commit distribution evidence |
+| 1 | Integrated candidate | [#252](https://github.com/yubisuke/openmasu/issues/252): configured `v0.3.0-rc.2`, connected first-use journey, stable/rc.1 upgrade, exact-commit platform and distribution evidence |
 | When needed | Optional measurement and operator extensions | Activity/payer metrics, detailed costs/discovery, another ILR bridge, engagement policies, recurring comparisons, app access scope, retention expiry, multiple workers and fraud previews; see the [crosswalk](project-plan.md#next-product-slices) |
 
 [Unity purchase binding](../sdk/unity/README.md#protected-store-purchases)
@@ -80,8 +80,9 @@ Selected decoding remains unverified; live provider access is not established.
 Saved daily analysis and [broader external cohort comparison](cohort-comparison.md#expanded-closed-declaration)
 are implemented; external declarations remain distinct from captured execution.
 Complete the required core and chosen usage-specific paths before candidate
-promotion. Do not wait for every optional extension. A new release number or
-publication is a separate decision, not implied by this sequence.
+promotion. Do not wait for every optional extension. Candidate `v0.3.0-rc.2` is
+configured; publication still requires release-owner approval and matching
+annotated-tag/artifact evidence. See the [candidate record](validation/v0.3.0-rc.2-synthetic-evidence.md).
 
 Minimal monitoring rules/runbooks and the operator-scheduled backup, freshness and
 isolated restore workflow are implemented in existing tools; see

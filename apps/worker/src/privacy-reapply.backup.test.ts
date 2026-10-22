@@ -22,7 +22,7 @@ import { ingestFixture } from "./test-support/fixture-ingestion.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
 import { reapplyCompletedPrivacyRequests } from "./privacy-reapply.js";
 import { migrateDatabase, readMigrations } from "../../runtime/src/migration-engine.js";
-import { fileDigest, migrationDigest, UPGRADE_SOURCE, upgradePreflight, validateUpgradeBackup, verifyBackupFiles } from "../../runtime/src/upgrade.js";
+import { fileDigest, migrationDigest, UPGRADE_SOURCES, upgradePreflight, validateUpgradeBackup, verifyBackupFiles } from "../../runtime/src/upgrade.js";
 import { checkBackup, createBackup, readPrivacyBoundary, verifyBackupKey } from "@openmasu/runtime/backup";
 import { restoreBackup } from "./backup-operations.js";
 
@@ -535,7 +535,8 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
   });
 });
 
-it("upgrades the frozen v0.2.0 backup, resumes a failed migration, retains ledger and metrics, and reapplies privacy", {
+for (const upgradeSource of UPGRADE_SOURCES) {
+it(`upgrades the frozen ${upgradeSource.tag} backup, resumes a failed migration, retains ledger and metrics, and reapplies privacy`, {
   skip: process.env.OPENMASU_M5_BACKUP_RESTORE !== "1", timeout: 120_000,
 }, async () => {
   const migrationUrl = process.env.OPENMASU_MIGRATION_DATABASE_URL;
@@ -558,15 +559,15 @@ it("upgrades the frozen v0.2.0 backup, resumes a failed migration, retains ledge
     }
     sourceClient = new Client({ connectionString: source.toString() }); await sourceClient.connect();
     const current = readMigrations();
-    const frozen = current.slice(0, 48).map((migration) => ({ ...migration,
-      source: execFileSync("git", ["show", `${UPGRADE_SOURCE.revision}:db/migrations/${migration.name}`], { encoding: "utf8" }).replaceAll("\r\n", "\n"),
+    const frozen = current.slice(0, upgradeSource.migrationCount).map((migration) => ({ ...migration,
+      source: execFileSync("git", ["show", `${upgradeSource.revision}:db/migrations/${migration.name}`], { encoding: "utf8" }).replaceAll("\r\n", "\n"),
     }));
-    assert.equal(migrationDigest(frozen), UPGRADE_SOURCE.migrationDigest);
+    assert.equal(migrationDigest(frozen), upgradeSource.migrationDigest);
     for (const migration of frozen) assert.equal(createHash("sha256").update(migration.source).digest("hex"), migration.checksum);
-    assert.equal(await migrateDatabase(sourceClient, frozen), 48);
+    assert.equal(await migrateDatabase(sourceClient, frozen), upgradeSource.migrationCount);
     const payloadStore = new EncryptedFilePayloadStore(join(root, "payloads"), "synthetic-upgrade-master-key-0000000000000000");
     const payloadRef = await payloadStore.write({ tenantId: "tenant-a", appId: "app-delete", objectId: "synthetic-upgrade-inbox" }, Buffer.from("synthetic upgrade evidence"));
-    const frozenArtifact = (name: string) => JSON.parse(execFileSync("git", ["show", `${UPGRADE_SOURCE.revision}:fixtures/v0.4/${fixtureName}/${name}`], { encoding: "utf8" }));
+    const frozenArtifact = (name: string) => JSON.parse(execFileSync("git", ["show", `${upgradeSource.revision}:fixtures/v0.4/${fixtureName}/${name}`], { encoding: "utf8" }));
     const metric = (frozenArtifact("expected_metric_runs.json") as Any[]).find((run) => run.metric_name === "d7_roas" && run.value_unscaled !== undefined)!;
     assert.ok(metric, "the frozen fixture must contain a present d7 ROAS run");
     const raw = frozenArtifact("expected_raw_records.json")[0] as Any;
@@ -591,21 +592,29 @@ it("upgrades the frozen v0.2.0 backup, resumes a failed migration, retains ledge
     const restoredRoot = join(root, "restored"); mkdirSync(restoredRoot);
     execFileSync("tar", ["-xf", payloadArchive, "-C", restoredRoot], { stdio: "pipe" });
     const restoredPayloadStore = new EncryptedFilePayloadStore(join(restoredRoot, "payloads"), "synthetic-upgrade-master-key-0000000000000000");
-    const backup = validateUpgradeBackup({ format: "openmasu-upgrade-backup-v1", source_tag: "v0.2.0", source_revision: UPGRADE_SOURCE.revision,
-      postgres_major: 17, migration_digest: UPGRADE_SOURCE.migrationDigest, database_sha256: await fileDigest(dumpPath), payload_sha256: await fileDigest(payloadArchive),
-      payload_snapshot_id: "synthetic:snapshot", master_key_ref: "synthetic:key", privacy_boundary_at: "2026-08-02T00:00:01.000Z" }, "v0.2.0");
+    const backup = validateUpgradeBackup({ format: "openmasu-upgrade-backup-v1", source_tag: upgradeSource.tag, source_revision: upgradeSource.revision,
+      postgres_major: upgradeSource.postgresMajor, migration_digest: upgradeSource.migrationDigest, database_sha256: await fileDigest(dumpPath), payload_sha256: await fileDigest(payloadArchive),
+      payload_snapshot_id: "synthetic:snapshot", master_key_ref: "synthetic:key", privacy_boundary_at: "2026-08-02T00:00:01.000Z" }, upgradeSource.tag);
     await verifyBackupFiles(backup, dumpPath, payloadArchive);
     await assert.rejects(verifyBackupFiles({ ...backup, payload_sha256: "b".repeat(64) }, dumpPath, payloadArchive), /upgrade_backup_checksum_mismatch/);
     // Restore through the privileged connection while retaining archive ownership.
     // COPY must not run as the FORCE-RLS owner, and later DDL needs its original owner.
     runPostgresTool("pg_restore", ["--exit-on-error", "--dbname", target.toString(), dumpPath], dumpPath);
     targetClient = new Client({ connectionString: target.toString() }); await targetClient.connect();
-    assert.equal((await upgradePreflight(targetClient, backup)).pending, current.length - 48);
-    await assert.rejects(migrateDatabase(targetClient, current, (migration) => { if (migration.version === "050") throw new Error("synthetic_mid_migration_failure"); }), /synthetic_mid_migration_failure/);
-    assert.equal((await targetClient.query("SELECT count(*)::int AS count FROM public.schema_migrations")).rows[0].count, 49);
-    assert.equal((await targetClient.query("SELECT has_column_privilege('openmasu_reader','control.google_data_manager_destinations','enabled','SELECT') AS allowed")).rows[0].allowed, false, "failed migration grant rolls back too");
-    assert.equal((await upgradePreflight(targetClient, backup)).pending, current.length - 49);
-    assert.equal(await migrateDatabase(targetClient), current.length - 49);
+    assert.equal((await upgradePreflight(targetClient, backup)).pending, current.length - upgradeSource.migrationCount);
+    // Commit the first pending file, then fail the second to exercise resumability for each source.
+    const failedMigration = current[upgradeSource.migrationCount + 1];
+    assert.ok(failedMigration, "the candidate must contain two pending migrations for this rehearsal");
+    const committedCount = upgradeSource.migrationCount + 1;
+    await assert.rejects(migrateDatabase(targetClient, current, (migration) => { if (migration.version === failedMigration.version) throw new Error("synthetic_mid_migration_failure"); }), /synthetic_mid_migration_failure/);
+    assert.equal((await targetClient.query("SELECT count(*)::int AS count FROM public.schema_migrations")).rows[0].count, committedCount);
+    if (upgradeSource.tag === "v0.2.0") {
+      assert.equal((await targetClient.query("SELECT has_column_privilege('openmasu_reader','control.google_data_manager_destinations','enabled','SELECT') AS allowed")).rows[0].allowed, false, "failed migration grant rolls back too");
+    } else {
+      assert.equal((await targetClient.query("SELECT count(*)::int AS count FROM pg_attribute WHERE attrelid='control.metric_recalculation_jobs'::regclass AND attname='trigger_kind' AND NOT attisdropped")).rows[0].count, 0, "failed migration column rolls back too");
+    }
+    assert.equal((await upgradePreflight(targetClient, backup)).pending, current.length - committedCount);
+    assert.equal(await migrateDatabase(targetClient), current.length - committedCount);
     assert.equal(await migrateDatabase(targetClient), 0);
     assert.equal((await upgradePreflight(targetClient, backup)).pending, 0);
     const targetAppUrl = new URL(appUrl); targetAppUrl.pathname = `/${names[1]}`;
@@ -613,14 +622,22 @@ it("upgrades the frozen v0.2.0 backup, resumes a failed migration, retains ledge
     const before = await withTenant(targetPool, "tenant-a", (client) => client.query("SELECT artifact,comparison_context FROM ledger.metric_runs"));
     assert.equal(sha256(before.rows[0].artifact), sha256(metric));
     assert.equal(before.rows[0].comparison_context, null, "legacy meaning is not invented");
-    assert.equal(await withTenant(targetPool, "tenant-a", async (client) => (await client.query("SELECT count(*)::int AS count FROM ledger.raw_records")).rows[0].count), 1);
+    const restoredRaw = await withTenant(targetPool, "tenant-a", (client) => client.query("SELECT artifact FROM ledger.raw_records"));
+    assert.equal(restoredRaw.rows.length, 1);
+    assert.equal(sha256(restoredRaw.rows[0].artifact), sha256(raw));
     assert.equal((await restoredPayloadStore.read(payloadRef)).toString(), "synthetic upgrade evidence");
     const result = await reapplyCompletedPrivacyRequests({ pool: targetPool, payloadStore: restoredPayloadStore, tenantId: "tenant-a" });
     assert.equal(result.privacy_requests, 1); assert.equal(result.payloads_purged, 1); assert.equal(result.unsupported_metric_runs, 0);
     await assert.rejects(restoredPayloadStore.read(payloadRef));
+    // The count records references checked, including references already made unreadable.
+    const repeated = await reapplyCompletedPrivacyRequests({ pool: targetPool, payloadStore: restoredPayloadStore, tenantId: "tenant-a" });
+    assert.deepEqual(repeated, result);
+    await assert.rejects(restoredPayloadStore.read(payloadRef));
     const after = await withTenant(targetPool, "tenant-a", (client) => client.query("SELECT artifact FROM ledger.metric_runs"));
     assert.equal(sha256(after.rows[0].artifact), sha256(metric));
-    console.log(JSON.stringify({ upgrade: "v0.2.0_to_candidate", postgres_major: 17, postgres_version: (await targetClient.query("SHOW server_version")).rows[0].server_version,
+    assert.equal(sha256((await withTenant(targetPool, "tenant-a", (client) => client.query("SELECT artifact FROM ledger.raw_records"))).rows[0].artifact), sha256(raw));
+    console.log(JSON.stringify({ upgrade: `${upgradeSource.tag}_to_candidate`, source_revision: upgradeSource.revision, source_migrations: upgradeSource.migrationCount,
+      failed_migration: failedMigration.version, postgres_major: 17, postgres_version: (await targetClient.query("SHOW server_version")).rows[0].server_version,
       platform: process.platform, node: process.version, synthetic: true, elapsed_ms: Math.round(performance.now() - started), stopped_boundary_ms: Math.round(performance.now() - stoppedStarted),
       downtime_scope: "isolated test writers absent; not a production SLO", ledger_preserved: true, metric_preserved: true, privacy_reapplied: true, failed_migration_resumed: true }));
   } finally {
@@ -631,3 +648,4 @@ it("upgrades the frozen v0.2.0 backup, resumes a failed migration, retains ledge
     await admin.end(); rmSync(root, { recursive: true, force: true });
   }
 });
+}

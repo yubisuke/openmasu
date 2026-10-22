@@ -1,8 +1,13 @@
 # Upgrade without losing evidence
 
-The supported source is published `v0.2.0` at
-`68b8c483a30c3804a216a655d964788d0204185f`, PostgreSQL 17, with 48 migrations.
-The next supported target is the configured `v0.3.0-rc.1` source candidate,
+Supported frozen sources use PostgreSQL 17:
+
+| Source tag | Source commit | Migrations | Migration inventory SHA-256 |
+| --- | --- | --- | --- |
+| `v0.2.0` | `68b8c483a30c3804a216a655d964788d0204185f` | 48 | `d4c18ba078913cfefa420ea6adfcf3d7386994a614f3b197e6222276bc4905c6` |
+| `v0.3.0-rc.1` | `90a0f5fe56b75e8fdefd2f759e33b3ae538b79c2` | 55 | `dbff0d98396a48dfc9c25d66bcbaab373c344cd2bee43dea561be024d4842276` |
+
+The next supported target is the configured `v0.3.0-rc.2` source candidate,
 **only after its annotated tag and exact-commit full CI evidence are published**.
 This path is a stopped-writer upgrade, not zero-downtime deployment.
 
@@ -36,7 +41,9 @@ This path is a stopped-writer upgrade, not zero-downtime deployment.
    ```
 
    The migration digest hashes compact JSON of ordered `{version,name,checksum}`
-   rows for the frozen 48 files (LF-normalized SQL SHA-256). The preflight verifies
+   rows for that source's frozen files (LF-normalized SQL SHA-256). For rc.1,
+   use its tag, peeled commit and digest from the table together; never mix
+   identities from the two sources. The preflight verifies
    archive bytes, source identity, PostgreSQL major and a contiguous migration
    prefix. The snapshot label/time/key reference are an operator declaration,
    **not proof** of backup completeness, authenticity or correct secret custody.
@@ -45,9 +52,11 @@ This path is a stopped-writer upgrade, not zero-downtime deployment.
    Run the read-only preflight before any role/DDL change:
 
    ```bash
-   npm run db:upgrade:preflight -- --from=v0.2.0 --to=v0.3.0-rc.1 --backup=/private/upgrade.json --database-backup=/private/openmasu.dump --payload-backup=/private/payloads.tar
+   npm run db:upgrade:preflight -- --from=v0.2.0 --to=v0.3.0-rc.2 --backup=/private/upgrade.json --database-backup=/private/openmasu.dump --payload-backup=/private/payloads.tar
    ```
 
+   Set `--from=v0.3.0-rc.1` for an rc.1 backup with the matching declaration.
+   An untagged rc.2 checkout deliberately refuses this deployment preflight.
    Exit zero and `status: ready` are required. Output is aggregate-only and includes
    the target and applied/pending counts, not backup contents, key labels or paths.
    Unknown versions, dirty/wrong target, major mismatch, gaps, altered SQL, extra
@@ -86,13 +95,14 @@ table deletion or resurrection of deleted payloads is provided.
 
 ## Synthetic evidence
 
-One version-to-version case extends `npm run test:backup-restore` (PostgreSQL 17
-tools enabled in existing Runtime CI). It loads the exact frozen tag's 48 SQL files,
+One parameterized version-to-version case in `npm run test:backup-restore`
+(PostgreSQL 17 tools enabled in existing Runtime CI) covers both sources above.
+It loads each exact frozen tag's SQL files,
 inserts reviewed synthetic ledger/metric artifacts using only old columns, dumps
 and restores to a separate DB, checks the backup hashes, injects failure during
-migration 050, verifies rollback, resumes through the target, and reapplies deletion
+migration after the first pending file, verifies rollback, resumes through the target, and reapplies deletion
 to a restored encrypted payload snapshot. The unrelated historical metric/ledger
-remain byte-identical; new comparison context stays NULL. JSON output records elapsed
+remain byte-identical; missing historical context is not reconstructed. JSON output records elapsed
 time and the isolated absent-writer boundary. No real recovery time, production
 durability, zero downtime or backup schedule is established by this test.
 

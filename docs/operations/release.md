@@ -62,10 +62,11 @@ iOS Simulator gates; there is no separate Unity workflow. Platform CI is
 required even when the contributor's local operating system cannot run a
 platform gate.
 
-Pull-request path selection never applies to a `main` push or manual workflow
-dispatch. Release evidence must come from one of those full-gate events at the
-exact candidate commit, not from a pull request whose unrelated steps were
-intentionally skipped.
+Both pull requests and `main` pushes use path selection. A green workflow with
+skipped platform/runtime steps is not full release evidence. Inspect the actual
+steps at the exact candidate commit; use manual workflow dispatch for a full
+gate when needed. Do not rerun a full gate that already passed at that commit.
+Never publish a pull request's merge-preview artifact as the main/tag artifact.
 
 ## 3. Verify identities and documentation
 
@@ -105,8 +106,8 @@ The packager regenerates the ignored SDK SBOM and Android binary inputs from a
 clean checkout before it creates the bundle. It does not trust existing
 `sbom/` or Gradle `build/` files as release inputs.
 
-The v0.3.0-rc.1 bundle path is
-`build/sdk-release/openmasu-sdk-0.3.0-rc.1/`. It is valid release evidence only
+The configured v0.3.0-rc.2 bundle path is
+`build/sdk-release/openmasu-sdk-0.3.0-rc.2/`. It is valid release evidence only
 at the exact source commit named by the matching annotated tag, after every
 required full platform gate is green for that commit.
 
@@ -148,10 +149,10 @@ After creating the annotated tag and acquiring the bundle from its exact
 target's full CI, run:
 
 ```bash
-python tools/build-sdk-release.py --verify-only build/sdk-release/openmasu-sdk-0.3.0-rc.1 --verify-tag
+python tools/build-sdk-release.py --verify-only build/sdk-release/openmasu-sdk-0.3.0-rc.2 --verify-tag
 ```
 
-This final check requires the annotated `v0.3.0-rc.1` target, current checkout, and
+This final check requires the annotated `v0.3.0-rc.2` target, current checkout, and
 bundle manifest revision to be identical.
 Run the verifier from a clean source checkout at that tag. A later `main`
 checkout must fail this identity check; do not rebuild or replace the published
@@ -163,7 +164,7 @@ older run, and do not rebuild at a later commit. Verify the downloaded bundle,
 then wrap its already verified bytes for public download:
 
 ```bash
-python tools/build-sdk-release.py --verify-only build/sdk-release/openmasu-sdk-0.3.0-rc.1 --verify-tag --release-assets build/sdk-release-assets/openmasu-sdk-0.3.0-rc.1
+python tools/build-sdk-release.py --verify-only build/sdk-release/openmasu-sdk-0.3.0-rc.2 --verify-tag --release-assets build/sdk-release-assets/openmasu-sdk-0.3.0-rc.2
 ```
 
 The output refuses an existing directory and contains eight files: the complete

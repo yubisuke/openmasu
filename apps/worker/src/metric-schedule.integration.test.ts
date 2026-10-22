@@ -44,6 +44,9 @@ import { analysisQuery, getSavedAnalysis, listSavedAnalyses } from "../../api/sr
 import { acquirePeriodAnalysis, encodePeriodAnalysisCsv } from "../../api/src/period-analysis.js";
 import { comparisonLimits } from "../../api/src/fixed-comparison.js";
 import { persistCalculatedMetricRun } from "./metrics/persistence.js";
+import { signSdkRequest } from "../../api/src/sdk-auth.js";
+import { KeyedTokenBucket } from "../../api/src/rate-limit.js";
+import { processSdkInbox } from "./sdk-worker.js";
 
 type Any = Record<string, any>;
 
@@ -546,6 +549,10 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
   });
 
   it("recommended_SSR_setup_and_saved_analyses_cover_two_campaigns_retention_pagination_and_authorization", async (context) => {
+    // Freeze only Date: real HTTP/DB timers still run, and authenticated admission
+    // assigns received_at before the schedule watermark without rewriting rows.
+    const admittedAt = "2026-08-14T00:00:00.000Z";
+    context.mock.timers.enable({ apis: ["Date"], now: new Date(admittedAt) });
     const tenantId = `tenant-setup-${randomBytes(6).toString("hex")}`;
     const appId = `app-setup-${randomBytes(6).toString("hex")}`;
     const reportIdentity = { tenantId, appId, keyId: "synthetic-recommended-setup", role: "admin" as const };
@@ -567,11 +574,18 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
       maxConfig: { tenantId, appId, pathSecret: "synthetic-setup-path", eventKey: "synthetic-setup-event",
         tokenMode: "all_with_event_fallback", maxParameters: 40, maxQueryBytes: 8192 },
       publicBaseUrl: "http://localhost:8080", redirectorBaseUrl: "http://localhost:8090",
+      sdk: { pool: appPool, payloadStore,
+        config: { tenantId, appId, timestampSkewMs: 300_000, nonceTtlMs: 900_000,
+          installationDigestKey: `synthetic-setup-digest-${randomBytes(32).toString("base64url")}` },
+        maximumBytes: 64 * 1024, maximumEvents: 100,
+        enrollmentBucket: new KeyedTokenBucket(100, 100), installationBucket: new KeyedTokenBucket(100, 100),
+        appBucket: new KeyedTokenBucket(100, 100), privacyBucket: new KeyedTokenBucket(100, 100) },
       dashboard: { enabled: true, publicBaseUrl: "http://localhost:8080", tenantId, sessionTtlSeconds: 43_200 } }));
     context.after(async () => { api.closeAllConnections(); await new Promise<void>(resolve => api.close(() => resolve())); });
     api.listen(0, "127.0.0.1"); await once(api, "listening");
     const baseUrl = `http://127.0.0.1:${(api.address() as AddressInfo).port}`;
-    const admin = (path: string) => fetch(`${baseUrl}${path}`, { headers: { authorization: `Bearer ${adminKey}` } });
+    const admin = (path: string, init: RequestInit = {}) => fetch(`${baseUrl}${path}`, { ...init,
+      headers: { authorization: `Bearer ${adminKey}`, "content-type": "application/json", ...(init.headers ?? {}) } });
     const path = `/dashboard/apps/${appId}/metric-schedules`, cookie = `openmasu_dashboard=${session.token}`;
     const page = async () => (await fetch(`${baseUrl}${path}`, { headers: { cookie } })).text();
     const post = (form: URLSearchParams, suffix = "/preview-recommended", sessionCookie = cookie) => fetch(`${baseUrl}${path}${suffix}`, {
@@ -604,15 +618,52 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     assert.equal((await post(confirmed, "")).status, 303);
     assert.equal((await schedules()).length, 1);
     const id = (await schedules())[0].metric_schedule_id;
-    for (const [group, hour] of [["a", "00"], ["b", "03"]]) for (const day of ["07", "13"]) {
-      const recordId = `setup-session-${group}-${day}`, occurred = `2026-08-${day}T${hour}:30:00.000Z`;
-      const prototype = fixtureInput.records.find((record: Any) => record.event_name === "session_start");
-      source.records.push({ ...structuredClone(prototype), tenant_id: tenantId, app_id: appId, record_id: recordId, event_id: `event:${recordId}`,
-        delivery_id: `delivery:${recordId}`, occurred_at: occurred, received_at: `2026-08-${day}T${hour}:30:01.000Z`,
-        processing_sequence: source.records.length + 1,
-        payload: { installation_id: `installation:kpi70-install-${group}-0`, session_id: recordId } });
-    }
     await ingestFixture(`setup-observed-${randomBytes(6).toString("hex")}`, source, appPool, seedPool);
+    // Acquisition, cost and revenue retain their reviewed synthetic inputs. The
+    // only retention activity now enters through the public signed SDK path.
+    assert.equal(source.records.some((row: Any) => row.event_name === "session_start"), false);
+    const keyResponse = await admin(`/v1/admin/apps/${appId}/sdk-keys`, {
+      method: "POST", body: JSON.stringify({ platform: "android" }) });
+    assert.equal(keyResponse.status, 201);
+    const sdkKey = await keyResponse.json() as { sdk_key_id: string; sdk_key: string };
+    const signed = (path: string, value: unknown, credential?: { installation_key_id: string; installation_secret: string }) => {
+      const body = Buffer.from(JSON.stringify(value)), timestampMs = Date.now(), nonce = randomBytes(18).toString("base64url");
+      const signature = signSdkRequest(credential?.installation_secret ?? sdkKey.sdk_key, {
+        method: "POST", path, sdkKeyId: sdkKey.sdk_key_id, installationKeyId: credential?.installation_key_id,
+        timestampMs, nonce, body });
+      return fetch(`${baseUrl}${path}`, { method: "POST", body: body.toString("utf8"), headers: {
+        "content-type": "application/json", "x-openmasu-sdk-key-id": sdkKey.sdk_key_id,
+        "x-openmasu-installation-key-id": credential?.installation_key_id ?? "-",
+        "x-openmasu-timestamp-ms": String(timestampMs), "x-openmasu-nonce": nonce, "x-openmasu-signature": signature } });
+    };
+    const sdkEventIds: string[] = [], sdkBatchIds: string[] = [];
+    for (const [group, hour] of [["a", "00"], ["b", "03"]]) {
+      const installationId = `installation:kpi70-install-${group}-0`;
+      const enrollment = await signed("/v1/installations", { installation_id: installationId });
+      assert.equal(enrollment.status, 201);
+      const credential = await enrollment.json() as { installation_key_id: string; installation_secret: string };
+      const records = ["07", "13"].map((day, index) => {
+        const sessionId = `setup-session-${group}-${day}`, eventId = `event:${sessionId}`;
+        sdkEventIds.push(eventId);
+        return { producer_version: "synthetic-setup-sdk", event_id: eventId, event_name: "session_start",
+          occurred_at: `2026-08-${day}T${hour}:30:00.000Z`, occurred_at_source: "device", processing_sequence: index + 1,
+          payload: { event_name: "session_start", installation_id: installationId, session_id: sessionId } };
+      });
+      const response = await signed("/v1/events/batch", { records }, credential);
+      assert.equal(response.status, 202);
+      sdkBatchIds.push((await response.json() as { ingest_batch_id: string }).ingest_batch_id);
+    }
+    assert.equal(await processSdkInbox(appPool, payloadStore, tenantId), 2);
+    await withTenant(readerPool, tenantId, async client => {
+      const admitted = await client.query<{ event_id: string; producer: string; received_at: string }>(
+        `SELECT event_id,producer,received_at FROM ledger.raw_records
+          WHERE tenant_id=$1 AND app_id=$2 AND event_id=ANY($3::text[]) ORDER BY event_id`, [tenantId, appId, sdkEventIds]);
+      assert.deepEqual(admitted.rows, sdkEventIds.sort().map(event_id => ({ event_id, producer: "sdk-android", received_at: admittedAt })));
+      const batches = await client.query<{ status: string }>(`SELECT status FROM ledger.ingest_batches_current
+        WHERE tenant_id=$1 AND app_id=$2 AND ingest_batch_id=ANY($3::uuid[])`, [tenantId, appId, sdkBatchIds]);
+      assert.deepEqual(batches.rows.map(row => row.status), ["processed", "processed"]);
+    });
+    assert.equal(await processSdkInbox(appPool, payloadStore, tenantId), 0, "a completed SDK batch is not applied again");
     assert.match(await page(), /data-measurement-state="not_computed"/);
     assert.equal((await processMetricSchedules(appPool, tenantId, { now: new Date("2026-08-15T00:00:00.000Z") })).completedDates, 1);
     const rows = (await metricReport(readerPool, reportIdentity, { tenantId, appId, metricScheduleId: id,

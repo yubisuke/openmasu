@@ -1,8 +1,9 @@
 # Unreleased Source
 
 This is a living summary of source changes after the published prerelease,
-not release notes for a new version. It does not select a release number,
-promise a date or claim new SDK assets are published.
+not publication evidence for a new version. Source and SDK are now configured
+for candidate `v0.3.0-rc.2`; [candidate notes](v0.3.0-rc.2.md) describe that scope.
+This does not promise a date or claim new SDK assets are published.
 
 ## Published baseline
 

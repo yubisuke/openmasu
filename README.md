@@ -38,6 +38,12 @@ prerelease. Download its SDK assets from the
 [GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.1).
 Later `main` commits are not evidence for that release.
 
+Current source and SDK are configured for candidate `v0.3.0-rc.2`. This
+candidate is published only if the matching annotated tag and GitHub Release
+identify the exact fully verified commit. Follow the
+[candidate integration record](docs/validation/v0.3.0-rc.2-synthetic-evidence.md)
+for its existing test owners and remaining publication gates.
+
 Current source includes additions through contract patch `v0.4.24`; the wire
 identity remains `0.4.0` with schema URNs ending in `:v0.4`. See
 [current status](docs/STATUS.md) and [unreleased changes](docs/releases/next.md).
@@ -141,7 +147,7 @@ Optional [conversion meanings](docs/apple-conversion-meaning.md) share a registe
 definition with the SDK; decoded ranges remain unverified, not measured revenue.
 
 The configured SDK bundle path is
-`build/sdk-release/openmasu-sdk-0.3.0-rc.1`. An untagged bundle is only a local candidate artifact.
+`build/sdk-release/openmasu-sdk-0.3.0-rc.2`. An untagged bundle is only a local candidate artifact.
 Publishing requires exact-tag platform/build evidence; follow the
 [release runbook](docs/operations/release.md). Unity 2022.3 and physical-device
 acceptance remain separate from the synthetic Unity 6 Android export gate.

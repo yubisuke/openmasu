@@ -31,9 +31,10 @@ sets: `current` and `previous`.
 
 The event classes are the 13 contract event names plus `other`. SDK producer
 classes are `sdk-android`, `sdk-ios` and `other`. Version classes are the public
-versions `0.1.0`, `0.2.0-rc.1` through `0.2.0-rc.4`, `0.2.0`, `0.3.0-rc.1` and
+versions `0.1.0`, `0.2.0-rc.1` through `0.2.0-rc.4`, `0.2.0`, `0.3.0-rc.1`,
+configured candidate `0.3.0-rc.2` and
 `other`. The shared classifier folds arbitrary or unsupported strings into
-`other` before storage and again when querying. There are at most 336 distinct
+`other` before storage and again when querying. There are at most 378 distinct
 groups. Versions are client-reported, not verified device identities. Update
 the closed version vocabulary when introducing another supported public SDK
 release; unknown versions remain readable as `other` meanwhile.

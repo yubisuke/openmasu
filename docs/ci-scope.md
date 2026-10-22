@@ -52,8 +52,8 @@ longer run every unrelated application's unit test. Database privileges use
 `role-grants.db.test.ts` inside `test:db-invariants`, not the integration glob.
 Restored privacy and release upgrades use `privacy-reapply.backup.test.ts` inside
 `test:backup-restore`, also outside that glob. CI runs that suite once with its
-restore environment enabled. Its four existing cases retain idempotent
-reapplication, real dump/restore, frozen-release upgrade, pool shutdown and
+restore environment enabled. Its cases retain idempotent
+reapplication, real dump/restore, both frozen-release upgrades, pool shutdown and
 connection-drain assertions; a second identical command adds no new scenario.
 PostgreSQL parity, role isolation, and disposable Compose
 tests cover different boundaries and are not replaced by evaluator unit tests.
