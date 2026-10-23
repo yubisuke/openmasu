@@ -1,0 +1,74 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:custom-a-72",
+    "record_id": "custom-a-72",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:custom-a-72",
+    "event_name": "custom_event",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:custom-c-72",
+    "record_id": "custom-c-72",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:custom-c-72",
+    "event_name": "custom_event",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:session-a-first-72",
+    "record_id": "session-a-first-72",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:session-a-first-72",
+    "event_name": "session_start",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:session-a-next-72",
+    "record_id": "session-a-next-72",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:session-a-next-72",
+    "event_name": "session_start",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:session-a-second-72",
+    "record_id": "session-a-second-72",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:session-a-second-72",
+    "event_name": "session_start",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:session-d-late-72",
+    "record_id": "session-d-late-72",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:session-d-late-72",
+    "event_name": "session_start",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  }
+]

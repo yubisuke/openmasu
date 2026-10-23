@@ -5,6 +5,30 @@ Contract v0.4.0 completed the identity migration from the immutable
 contract identity but did not change field meaning, attribution behavior, metric
 arithmetic, ordering, hashing, privacy, or fraud semantics.
 
+## Daily recorded activity (0.4.25)
+
+The independent `metric-calendar-activity` bundle adds three closed UTC count
+definitions. `active_installations_count` is an additive calculation; the
+existing event selector enum additionally admits `session_start` and
+`custom_event` only through this profile. Existing event-count branches and
+all old definitions, hashes and results retain their meaning. Wire/package
+`0.4.0`, URNs `:v0.4`, event schemas and registries do not change. No dependency,
+service, table or CI job is added. JSON/CSV append activity units and dates;
+existing columns retain order. See [daily recorded activity](calendar-activity.md).
+
+Complete golden addition inventory: `72-calendar-activity/input.json` and all
+13 `expected_*.json` families: raw_records, deliveries, logical_events,
+corrections, privacy_requests, privacy_tombstones, attributions,
+metric_definitions, metric_runs, cost_records, fraud_decisions, rejections,
+reconciliation. Existing 71 fixture inputs and 923 goldens are unchanged.
+Verify with `git diff --name-status 7c85d0bd -- fixtures/v0.4/`: only directory
+72 and the shared README differ. The [fixture derivation](../fixtures/v0.4/72-calendar-activity/README.md)
+records the five independently calculated triples, all artifact constructions
+and snapshot/provenance hash inputs. Three unchanged default definitions are
+reused from fixture 01. Candidate TS/Python bytes matched before promotion;
+expected values were not copied from either evaluator. Golden promotion is
+separate from schema/calculation changes.
+
 ## Standard retention horizons (0.4.24)
 
 Optional metric-definition `retention_maturity_policy=complete_activity_window`

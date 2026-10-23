@@ -1,0 +1,27 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "privacy_request_id": "privacy-calendar72-b",
+    "deletion_subject_digest": "7272727272727272727272727272727272727272727272727272727272727272",
+    "deletion_scope": "installation",
+    "requested_via": "tenant_admin_api",
+    "requester_auth_ref": "admin_key:synthetic-calendar72",
+    "requested_at": "2026-08-22T00:01:00.000Z",
+    "completed_at": "2026-08-22T00:02:00.000Z",
+    "status": "completed",
+    "reason_code": "privacy_deletion",
+    "policy_version": "privacy-v0.4.25",
+    "affected_records": [
+      {
+        "record_id": "custom-b-72",
+        "lifecycle_status": "redacted"
+      },
+      {
+        "record_id": "session-b-72",
+        "lifecycle_status": "redacted"
+      }
+    ]
+  }
+]

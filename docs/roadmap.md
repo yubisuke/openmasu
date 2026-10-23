@@ -17,7 +17,7 @@ store or production qualification. Those remain separate operator evidence.
 ## Completed contract and product milestones
 
 The contract gate preserves deterministic artifacts across 28 schemas,
-8 registries, and 71 reviewed synthetic fixtures. Patch definitions and
+8 registries, and 72 reviewed synthetic fixtures. Patch definitions and
 derivations are in the [specification](../spec/event-metric-contract-v0.4.md)
 and [fixture guide](../fixtures/v0.4/README.md).
 
@@ -28,7 +28,7 @@ ownership. Completion refers to their declared synthetic scope.
 | --- | --- |
 | Contract v0.2 | Coherent event, attribution, metric and reconciliation contract |
 | Contract v0.3 | Android/platform referrer, revenue and device-producer vocabulary |
-| Contract v0.4 | OpenMasu identity and additive patch ledger, currently through v0.4.24 |
+| Contract v0.4 | OpenMasu identity and additive patch ledger, currently through v0.4.25 |
 | Shadow ledger and import foundation | Durable admission, atomic ledger writes, explicit three-family imports and privacy controls |
 | Cohort metrics and difference audit | SQL/reference parity, saved snapshots, exact arithmetic and aggregate exports |
 | Android, Unity, and redirector | SDK queues, credentials, redirect evidence and synthetic bridges |
@@ -60,15 +60,19 @@ API 24, with its later harness revision recorded separately in the receipt.
 
 ## Next product sequence
 
-The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has 24 of
-35 child implementations complete and 11 optional extensions remaining. Backup and
+[Daily recorded activity](calendar-activity.md) is implemented in current source:
+UTC session starts, all custom events and distinct installations remain separate
+from acquisition cohorts, with no sum presented as a period-unique audience.
+
+The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has 25 of
+35 child implementations complete and 10 optional extensions remaining. Backup and
 recovery ([#250](https://github.com/yubisuke/openmasu/issues/250)) is implemented;
 the dedicated Runtime gate owns its synthetic evidence. Follow individual issue
 dependencies; the phases below are priorities, not extra refactoring gates.
 
 | Order | Workstream | Remaining issues / exit |
 | --- | --- | --- |
-| When needed | Optional measurement and operator extensions | Activity/payer metrics, detailed costs/discovery, another ILR bridge, engagement policies, recurring comparisons, app access scope, retention expiry, multiple workers and fraud previews; see the [crosswalk](project-plan.md#next-product-slices) |
+| When needed | Optional measurement and operator extensions | Payer metrics, detailed costs/discovery, another ILR bridge, engagement policies, recurring comparisons, app access scope, retention expiry, multiple workers and fraud previews; see the [crosswalk](project-plan.md#next-product-slices) |
 
 [Unity purchase binding](../sdk/unity/README.md#protected-store-purchases)
 is implemented through the existing native helpers. Queued/pending callbacks are
