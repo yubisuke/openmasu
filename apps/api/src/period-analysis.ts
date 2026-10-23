@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { acquisitionKpiRole } from "@openmasu/contracts/definitions";
+import { acquisitionKpiRole, isCalendarActivityMetricDefinition } from "@openmasu/contracts/definitions";
 import { comparisonMeaning, comparisonMaturity } from "@openmasu/runtime/metric-comparison";
 import { comparisonDigest, parseComparisonContext } from "./cohort-comparison.js";
 import { buildAcquisitionKpiSets } from "./acquisition-kpis.js";
@@ -13,6 +13,7 @@ import { metricValueLabel } from "./dashboard/metric-value.js";
 export type AnalysisObservation = {
   run_id: string; snapshot_id: string; watermark: string; state: string; reason: string | null;
   value_unscaled: string | null; label: string; currency: string | null; scale: number | null;
+  activity_unit: MetricReportRow["activity_unit"] | null;
   freshness: string; source_observation: string; import_completion: string;
 };
 export type PeriodAnalysisRow = { metric_name: string; dimensions: Record<string, string>; day_offset: number;
@@ -27,6 +28,7 @@ function observation(row: MetricReportRow): AnalysisObservation {
     state: row.value_state, reason: row.unavailable_reason ?? row.undefined_reason,
     value_unscaled: row.value_state === "present" ? row.value_unscaled ?? null : null, label: metricValueLabel(row),
     currency: row.currency, scale: row.value_type === "count" ? 0 : row.ratio_scale ?? row.amount_scale,
+    activity_unit: row.activity_unit ?? null,
     freshness: row.data_freshness, source_observation: JSON.stringify(row.source_observation ?? null),
     import_completion: JSON.stringify(row.import_completion ?? null) };
 }
@@ -42,7 +44,10 @@ function eligibility(row: MetricReportRow, kpis: Map<string, string | null>): { 
   }
   try {
     const context = parseComparisonContext(row.comparison_context), d = context.definition, meaning = comparisonMeaning(context);
-    if (!meaning || !row.grouping.cohort_date || row.grouping.metric_date
+    const activity = isCalendarActivityMetricDefinition(d);
+    const validDateGrouping = activity ? !!row.grouping.metric_date && Object.keys(row.grouping).length === 1
+      : !!row.grouping.cohort_date && !row.grouping.metric_date;
+    if (!meaning || !validDateGrouping
         || row.metric_run_id !== context.metric_run_id || row.input_snapshot_id !== context.input_snapshot_id
         || row.metric_name !== d.metric_name || row.metric_definition_version !== d.metric_definition_version
         || row.rule_bundle_id !== d.rule_bundle_id || row.rule_bundle_hash !== d.rule_bundle_hash
@@ -60,7 +65,7 @@ function eligibility(row: MetricReportRow, kpis: Map<string, string | null>): { 
   } catch { return { reason: "meaning_unverified" }; }
 }
 
-/** Align cohort days by offset. Never sum/average ratios or silently collapse multiple saved runs. */
+/** Align saved dates by offset. Never aggregate daily distinct counts, ratios, or multiple saved runs. */
 export function buildPeriodAnalysis(query: MetricQuery, current: readonly MetricReportRow[], previous: readonly MetricReportRow[]): PeriodAnalysis {
   const prior = previousAnalysisQuery(query), groups = new Map<string, { metric: string; dimensions: Record<string, string>;
     offset: number; current: MetricReportRow[]; previous: MetricReportRow[] }>();

@@ -17,6 +17,9 @@ export {
 } from "./m1b-metric-definitions.js";
 export { M3_METRIC_DEFINITIONS, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "./m3-metric-definitions.js";
 export { calendarAcquisitionMetricDefinitions } from "./calendar-metric-definitions.js";
+export { CALENDAR_ACTIVITY_BUNDLE, CALENDAR_ACTIVITY_VERSION, CALENDAR_ACTIVITY_METRIC_NAMES,
+  CALENDAR_ACTIVITY_METRIC_DEFINITIONS, calendarActivityMetricDefinitions,
+  isCalendarActivityMetric, isCalendarActivityMetricDefinition } from "./calendar-activity-definitions.js";
 export { STANDARD_RETENTION_DAYS, standardRetentionMetricDefinitions, standardRetentionClosesAt,
   type StandardRetentionDay } from "./standard-retention-definitions.js";
 export { ACQUISITION_KPI_METRIC_DEFINITIONS, ACQUISITION_KPI_VERSION, ACQUISITION_KPI_BUNDLE,

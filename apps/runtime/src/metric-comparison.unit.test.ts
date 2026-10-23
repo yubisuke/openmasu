@@ -7,10 +7,29 @@ import { captureMetricComparisonContext, comparisonMeaning, comparisonMaturity }
 import { engagementMetricDefinitions } from "@openmasu/contracts";
 import { importedAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
 import { calendarAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
+import { calendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
 
 const fx = { policy_version: "synthetic", target_currency: "USD", target_scale: 6, rounding_mode: "half_even" as const,
   rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0, as_of: "2026-01-01T00:00:00.000Z", source: "not-in-reader-projection" }] };
 const run = { metric_run_id: "synthetic", input_snapshot_id: "a".repeat(64) };
+it("calendar_activity_comparison_preserves_event_units_daily_distinct_scope_and_UTC_maturity", () => {
+  const definitions = calendarActivityMetricDefinitions();
+  const meanings = definitions.map(definition => {
+    const context = captureMetricComparisonContext(run, definition, fx, "after", sha256);
+    const meaning = comparisonMeaning(context);
+    assert.ok(meaning); assert.equal(meaning.population, "accepted_calendar_activity");
+    assert.equal(meaning.fx, null); assert.equal(meaning.aggregation, "on_day");
+    assert.deepEqual(comparisonMaturity(context, { metric_date: "2026-08-06" }, "2026-08-06T23:59:59.999Z"),
+      { state: "unknown", closes_at: "2026-08-07T00:00:00.000Z" });
+    assert.equal(comparisonMaturity(context, { metric_date: "2026-08-06" }, "2026-08-07T00:00:00.000Z").state, "window_elapsed");
+    assert.equal(comparisonMaturity(context, { cohort_date: "2026-08-06" }, "2026-08-07T00:00:00.000Z").state, "unknown");
+    for (const mutation of [{ fraud_policy: "net" }, { event_names: ["install"] }, { grouping_dimensions: ["country"] }]) {
+      assert.equal(comparisonMeaning({ ...context, definition: { ...definition, ...mutation } as typeof definition }), undefined);
+    }
+    return meaning;
+  });
+  assert.equal(new Set(meanings.map(meaning => JSON.stringify(meaning))).size, 3);
+});
 it("dated_FX_comparison_freezes_currency_date_source_as_of_and_digest_without_legacy_reinterpretation", () => {
   const fixture = JSON.parse(readFileSync("fixtures/v0.4/69-dated-fx-cohorts/input.json", "utf8"));
   const definition = DISJOINT_COST_METRIC_DEFINITIONS.find(d => d.metric_name === "d7_roas")!;
@@ -79,7 +98,9 @@ it("keeps different custom outcomes incomparable and derives cumulative D7 matur
   const second = captureMetricComparisonContext(run, customConversionMetricDefinitions("different_outcome")[1], fx, "after", sha256);
   assert.equal(first.definition.conversion_event_key, "tutorial_complete");
   assert.notEqual(first.definition_digest, second.definition_digest);
-  assert.equal(comparisonMeaning(first)?.conversion_event_key, "tutorial_complete");
+  const firstMeaning = comparisonMeaning(first);
+  assert.ok(firstMeaning && "conversion_event_key" in firstMeaning);
+  assert.equal(firstMeaning.conversion_event_key, "tutorial_complete");
   assert.notDeepEqual(comparisonMeaning(first), comparisonMeaning(second));
   assert.equal(comparisonMeaning(first)?.aggregation, "cumulative");
   assert.equal(comparisonMeaning(first)?.fx, null);

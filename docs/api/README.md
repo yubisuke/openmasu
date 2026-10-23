@@ -28,6 +28,11 @@ mutation rights or private replay-manifest access.
 
 ## Source relationships
 
+Daily recorded activity appends `activity_unit` and `activity_date` to metric
+JSON/CSV within the existing `cohort_or_activity` report category. Units come from
+captured closed definitions; installations are not people and daily distinct counts are
+not period-unique audiences. These fields are null for other/unknown profiles.
+
 Generate the JSON with `npm run api:contract`. Two narrow existing-unit-suite
 tests require the committed JSON to match the builder, route auth/methods and
 report query allowlist. The builder reads contract field/enumeration schemas,

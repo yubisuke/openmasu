@@ -25,6 +25,8 @@ export function buildHttpApiContract(): Json {
     grouping_digest: metric.properties.grouping.properties.dimension_digest, superseded: { type: "boolean" },
     comparison_context: { type: ["object", "null"], description: "Saved aggregate-only meaning; null/unknown is not reconstructed." },
     acquisition_kpi_set_key: nullable({ type: "string", pattern: "^[a-f0-9]{64}$", description: "Definition-backed acquisition calculation-set identity; not a run ID or permission to divide arbitrary rows. Null for unknown/legacy profiles." }),
+    activity_unit: { enum: ["distinct_installations", "session_starts", "custom_events", null], description: "Closed UTC activity unit from captured definitions. Installations are not people; daily uniques are not period uniques. Null for other or unknown profiles." },
+    activity_date: nullable({ type: "string", format: "date", description: "UTC activity date, not acquisition cohort date. Null for other or unknown profiles." }),
     cost_update_state: { type: "string", description: "Current persisted recalculation/input-revision state." },
     late_input_update_state: { type: "string", description: "Explicit late-input request state; not proof of upstream completeness." },
     attribution_update_state: { enum: ["recalculation_pending","unavailable","completed","no_recorded_request"], description: "Recorded selected-attribution correction state; separate from late-event and privacy correction." },

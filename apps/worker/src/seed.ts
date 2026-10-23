@@ -9,10 +9,14 @@ import { withSyntheticSeedLock } from "./test-support/seed-safety.js";
 type Any = Record<string, any>;
 
 const fixtureRoot = join(process.cwd(), "fixtures", "v0.4");
+const dashboardFixtureName = "42-daily-metric-date";
 const fixtureNames = readdirSync(fixtureRoot, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
-  .sort();
+  .sort()
+  // Each fixture resets the active ledger. Leave the explicit dashboard sample
+  // last, not whichever new contract scenario happens to have the highest number.
+  .sort((left, right) => Number(left === dashboardFixtureName) - Number(right === dashboardFixtureName));
 const appPool = createAppPool();
 const seedPool = createSeedPool();
 let artifactCount = 0;
@@ -39,7 +43,7 @@ try {
       if (stored.rows[0].input_digest !== inputDigest) throw new Error(`fixture input digest drift: ${fixtureName}`);
       try {
         artifactCount += await ingestFixture(fixtureName, stored.rows[0].input, appPool, seedPool);
-        if (fixtureName === "42-daily-metric-date") dashboardMetricInput = stored.rows[0].input;
+        if (fixtureName === dashboardFixtureName) dashboardMetricInput = stored.rows[0].input;
       } catch (error) {
         throw new Error(`fixture ingestion failed: ${fixtureName}`, { cause: error });
       }

@@ -350,7 +350,20 @@ export function metricRuns(
       const cohortSize = BigInt(new Set(eligibleInstalls.map((install) => install.record.payload.installation_id)).size);
       let value: bigint | undefined;
       let undefined_reason: MetricRun["undefined_reason"];
-      if (definition.engagement_credit_policy) {
+      if (definition.rule_bundle_id === "metric-calendar-activity") {
+        const metricDate = evaluation.grouping?.metric_date;
+        if (metricDate === undefined || Object.keys(evaluation.grouping ?? {}).some(key => key !== "metric_date")) {
+          throw new Error(`calendar_activity requires only metric_date grouping: ${metricName}`);
+        }
+        dateAt(`${metricDate}T00:00:00.000Z`, "UTC", "metric_date");
+        const eventNames = new Set<string>(definition.event_names ?? []);
+        const events = visible.filter(attempt => eventNames.has(attempt.record.event_name)
+          && dateAt(attempt.record.occurred_at, "UTC", "occurred_at") === metricDate);
+        value = definition.definition.calculation === "active_installations_count"
+          ? BigInt(new Set(events.map(attempt => compositeKey([
+            attempt.server.tenant_id, attempt.server.app_id, attempt.record.payload.installation_id,
+          ]))).size) : BigInt(events.length);
+      } else if (definition.engagement_credit_policy) {
         if (definition.value_type === "money" && (fxPolicy.target_currency !== definition.currency || fxPolicy.target_scale !== definition.amount_scale)) {
           throw new Error("engagement_metric_fx_target_mismatch");
         }
@@ -513,7 +526,7 @@ export function metricRuns(
         value = undefined;
         undefined_reason = "missing_fx_rate";
       }
-      if (!definition.engagement_credit_policy && definition.definition.calculation !== "event_count" && evaluation.grouping?.metric_date !== undefined) {
+      if (definition.rule_bundle_id !== "metric-calendar-activity" && !definition.engagement_credit_policy && definition.definition.calculation !== "event_count" && evaluation.grouping?.metric_date !== undefined) {
         throw new Error(`metric_date grouping is reserved for event_count: ${metricName}`);
       }
       const grouping = evaluation.grouping ? {

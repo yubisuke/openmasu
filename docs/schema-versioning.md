@@ -81,6 +81,7 @@ The v0.4 line adds independently exercised optional vocabulary and definitions:
 | 0.4.22 | opt-in bounded currency/date FX snapshots, per-event/per-cost conversion, saved provenance and `missing_fx_rate`; optional metric snapshot and conditional money-field relaxation preserve historical one-rate artifacts |
 | 0.4.23 | closed opt-in first-party D7 acquisition set, additive `cost_sum`/`cost_over_cohort` operations and `cost` numerator; saved cost/CPI, separate revenue/ROAS and same-set report identity; old definitions/results unchanged |
 | 0.4.24 | opt-in D3/D14/D30 selected-cohort retention with optional `retention_maturity_policy` and `observation_window_not_elapsed`; bounded elapsed activity days, complete-window schedule lag, separate native/platform/imported populations and unchanged old D1/D7 |
+| 0.4.25 | closed opt-in UTC recorded activity: session-start/custom-event counts and distinct active installations; additive `active_installations_count` and activity event selectors only within the new profile; no acquisition join or period-unique claim |
 
 Existing schema `$id` values remain on `v0.4`; existing event artifact version
 fields remain `0.4.0` where their schema did not change.

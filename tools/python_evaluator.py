@@ -1202,6 +1202,25 @@ def metric_definitions(value: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def validate_metric_definition_series(definition: dict[str, Any]) -> None:
+    activity_events = {"daily_session_starts": ["session_start"], "daily_custom_events": ["custom_event"],
+                       "daily_active_installations": ["session_start", "custom_event"]}
+    if (definition.get("rule_bundle_id") == "metric-calendar-activity" or definition.get("metric_name") in activity_events
+            or definition.get("definition", {}).get("calculation") == "active_installations_count"):
+        metric_name = definition.get("metric_name")
+        distinct = metric_name == "daily_active_installations"
+        expected = {
+            "metric_name": metric_name, "metric_definition_version": "0.4.25",
+            "anchor_event": "calendar_day", "aggregation_time_zone": "UTC", "value_type": "count",
+            "definition": {"calculation": "active_installations_count" if distinct else "event_count",
+                           "numerator": "active_installations" if distinct else "events",
+                           "window": {"type": "calendar_day", "day": 0}},
+            "event_names": activity_events.get(metric_name), "grouping_dimensions": ["metric_date"], "fraud_policy": "gross",
+            "rule_bundle_id": "metric-calendar-activity", "rule_bundle_version": "0.4.25",
+            "rule_bundle_hash": "05a850574304074f7ab93cd2ab0f8781a957b31cb7c48271992d66ba5b53178b",
+        }
+        if metric_name not in activity_events or definition != expected:
+            raise ValueError(f"metric_definition_series_mismatch:{metric_name}")
+        return
     if ("retention_maturity_policy" in definition or definition.get("rule_bundle_id") == "metric-standard-retention"):
         basis = definition.get("acquisition_basis")
         prefix = {"selected_first_party_click": "", "selected_verified_platform": "platform_", "selected_imported_provider": "imported_"}.get(basis)
@@ -2146,7 +2165,17 @@ def metric_runs(
             calculation = definition["definition"]["calculation"]
             amount: int | None = None
             undefined_reason: str | None = None
-            if definition.get("engagement_credit_policy"):
+            if definition.get("rule_bundle_id") == "metric-calendar-activity":
+                grouping = evaluation.get("grouping", {})
+                metric_date = grouping.get("metric_date")
+                if not isinstance(metric_date, str) or set(grouping) != {"metric_date"}:
+                    raise ValueError(f"calendar_activity requires only metric_date grouping: {metric_name}")
+                day(f"{metric_date}T00:00:00.000Z", "UTC", "metric_date")
+                events = [item for item in visible if item["record"]["event_name"] in definition["event_names"]
+                          and day(item["record"]["occurred_at"], "UTC", "occurred_at") == metric_date]
+                amount = len({(item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["payload"]["installation_id"])
+                              for item in events}) if calculation == "active_installations_count" else len(events)
+            elif definition.get("engagement_credit_policy"):
                 amount = engagement_value(engagement, visible, definition, evaluation, lifecycle, policy, money)
                 if amount is None:
                     undefined_reason = "empty_cohort"
@@ -2315,7 +2344,7 @@ def metric_runs(
                 raise ValueError(f"unsupported metric calculation: {calculation}")
             if missing_fx and uses_fx and undefined_reason != "overlapping_cost_grains":
                 amount, undefined_reason = None, "missing_fx_rate"
-            if not definition.get("engagement_credit_policy") and calculation != "event_count" and evaluation.get("grouping", {}).get("metric_date") is not None:
+            if definition.get("rule_bundle_id") != "metric-calendar-activity" and not definition.get("engagement_credit_policy") and calculation != "event_count" and evaluation.get("grouping", {}).get("metric_date") is not None:
                 raise ValueError(f"metric_date grouping is reserved for event_count: {metric_name}")
             run = {
                 "metric_run_id": f"{evaluation['metric_run_id_prefix']}:{metric_name}",

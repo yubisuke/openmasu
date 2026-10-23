@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { buildMetricDefinitionsInput } from "./run.js";
-import { engagementMetricDefinitions, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import { CALENDAR_ACTIVITY_METRIC_DEFINITIONS, engagementMetricDefinitions, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
 
 const config = (grouping: Record<string, string> = {}) => ({
   tenant_id: "tenant-synthetic",
@@ -16,6 +16,24 @@ const config = (grouping: Record<string, string> = {}) => ({
 });
 
 describe("WO16 metric backfill CLI", () => {
+  it("calendar_activity_CLI_keeps_metric_date_cutoff_current_privacy_and_separate_anchors", () => {
+    const source = { ...config(), metric_definitions: CALENDAR_ACTIVITY_METRIC_DEFINITIONS,
+      evaluations: [{ metric_names: CALENDAR_ACTIVITY_METRIC_DEFINITIONS.map(definition => definition.metric_name), grouping: {} }] };
+    const daily = buildMetricDefinitionsInput(source, "2026-08-01").metric_evaluations[0];
+    assert.deepEqual(daily.grouping, { metric_date: "2026-08-01" });
+    assert.equal(daily.privacy_state, "after");
+    assert.equal(daily.input_received_at_watermark, "2026-08-02T00:00:00.000Z");
+    const declared = { ...source, evaluations: [{ ...source.evaluations[0], grouping: { metric_date: "2026-07-01" } }] };
+    const backfill = buildMetricDefinitionsInput(declared, "2026-08-01", "2026-08-12T00:00:00.000Z").metric_evaluations[0];
+    assert.deepEqual(backfill.grouping, { metric_date: "2026-07-01" });
+    assert.equal(backfill.input_received_at_watermark, "2026-08-12T00:00:00.000Z");
+    for (const grouping of [{ cohort_date: "2026-08-01" }, { campaign_id: "synthetic-campaign" }]) {
+      assert.throws(() => buildMetricDefinitionsInput({ ...source,
+        evaluations: [{ ...source.evaluations[0], grouping }] }, "2026-08-01"), /separate_anchor_evaluation/);
+    }
+    assert.throws(() => buildMetricDefinitionsInput({ ...source, evaluations: [{ ...source.evaluations[0],
+      metric_names: [...source.evaluations[0].metric_names, "d7_roas"] }] }, "2026-08-01"), /separate_anchor_evaluation/);
+  });
   it("daily_acquisition_CLI_defaults_to_occurrence_day_and_preserves_explicit_backfill_dates", () => {
     const source = { ...config(), metric_definitions: SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS,
       evaluations: [{ metric_names: ["daily_selected_install_count"], grouping: { acquisition_campaign_state: "known" } }] };

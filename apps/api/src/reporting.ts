@@ -4,7 +4,7 @@ import type { MetricComparisonContext } from "@openmasu/runtime";
 import { projectDatedFxSnapshot } from "@openmasu/contracts/definitions";
 import { acquisitionKpiSetKey } from "./acquisition-kpis.js";
 import type { AppAdminIdentity } from "./admin-auth.js";
-import { metricSeries } from "./metric-series.js";
+import { calendarActivityUnit, metricSeries } from "./metric-series.js";
 import { metricFreshness, type ImportReceiptObservation, type MetricFreshness } from "./metric-freshness.js";
 import {
   buildDifferenceQuery,
@@ -33,6 +33,7 @@ export const metricColumns = [
   "time_window_maturity", "source_observation", "import_completion", "recalculation_state",
   "attribution_update_state",
   "fx_conversion_snapshot", "acquisition_kpi_set_key",
+  "activity_unit", "activity_date",
 ] as const;
 
 export const differenceColumns = [
@@ -81,6 +82,8 @@ export type MetricReportRow = {
   readonly recalculation_state?: MetricFreshness["recalculation_state"];
   readonly fx_conversion_snapshot?: ReturnType<typeof projectDatedFxSnapshot>;
   readonly acquisition_kpi_set_key?: string | null;
+  readonly activity_unit?: ReturnType<typeof calendarActivityUnit>;
+  readonly activity_date?: string | null;
 };
 
 export type MetricReportPage = {
@@ -168,6 +171,8 @@ function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, c
     late_input_update_state: lateInputUpdateState ?? "no_recorded_request",
     measurement_series: metricSeries(artifact.metric_name),
     engagement_evidence_trust: metricSeries(artifact.metric_name) === "first_party_engagement" ? "device_reported_forgeable" : null,
+    activity_unit: calendarActivityUnit(comparisonContext?.definition),
+    activity_date: calendarActivityUnit(comparisonContext?.definition) ? artifact.grouping?.dimensions?.metric_date ?? null : null,
     privacy_update_state: privacyChanged ? privacyUpdateState ?? "unavailable" : "not_affected",
     unavailable_reason: privacyChanged ? "privacy_deletion" : null,
     ...(projectDatedFxSnapshot(artifact.fx_conversion_snapshot)

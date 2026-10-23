@@ -83,6 +83,11 @@ export function buildMetricDefinitionsInput(config: Any, requestedDate: string, 
         (config.metric_definitions ?? []).find((definition: Any) => definition.metric_name === name));
       const engagement = selectedDefinitions.some((definition: Any) => definition?.engagement_credit_policy);
       const dailyAcquisition = selectedDefinitions.some((definition: Any) => definition?.rule_bundle_id === "metric-selected-daily-acquisition");
+      const calendarActivity = selectedDefinitions.some((definition: Any) => definition?.rule_bundle_id === "metric-calendar-activity");
+      if (calendarActivity && (selectedDefinitions.some((definition: Any) => definition?.rule_bundle_id !== "metric-calendar-activity")
+          || Object.keys(evaluation.grouping).some(key => key !== "metric_date"))) {
+        throw new Error("calendar_activity_cli_requires_separate_anchor_evaluation");
+      }
       if (dailyAcquisition && selectedDefinitions.some((definition: Any) => definition?.rule_bundle_id !== "metric-selected-daily-acquisition")) {
         throw new Error("daily_acquisition_cli_requires_separate_anchor_evaluation");
       }
@@ -97,13 +102,14 @@ export function buildMetricDefinitionsInput(config: Any, requestedDate: string, 
         input_received_at_watermark: evaluationWatermark,
         computed_at: evaluationWatermark,
         data_freshness: "complete",
-        // Operational selected-acquisition runs must not resurrect deleted source
+        // Operational acquisition and activity runs must not resurrect deleted source
         // semantics. Legacy replay definitions retain their historical default.
         privacy_state: (config.metric_definitions ?? []).some((definition: Any) =>
-          evaluation.metric_names.includes(definition.metric_name) && (definition.acquisition_basis || definition.cost_selection_policy || definition.engagement_credit_policy))
+          evaluation.metric_names.includes(definition.metric_name) && (definition.acquisition_basis || definition.cost_selection_policy || definition.engagement_credit_policy
+            || definition.rule_bundle_id === "metric-calendar-activity"))
           ? "after" : "before",
         metric_names: evaluation.metric_names,
-        grouping: { [engagement || dailyAcquisition ? "metric_date" : "cohort_date"]: date.day, ...evaluation.grouping },
+        grouping: { [engagement || dailyAcquisition || calendarActivity ? "metric_date" : "cohort_date"]: date.day, ...evaluation.grouping },
       };
     }),
   };

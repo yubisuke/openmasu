@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 71 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 72 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -23,6 +23,16 @@ The validator checks every object against its Draft 2020-12 schema, checks regis
 The data is synthetic. It contains no external-source format, campaign data, user data, credential, live fraud rule, or operational threshold.
 
 ## Independent third-oracle calculations
+
+### Fixture 72: daily recorded activity
+
+[The complete derivation](72-calendar-activity/README.md) constructs all 13
+families independently. Five `(session starts, custom events, active
+installations)` triples are `(3,3,3)`, `(4,3,4)`, `(3,2,3)`, `(1,0,1)` and
+`(0,0,0)` for the initial, late, private, next-day and empty-day evaluations.
+A custom-only installation proves union membership; redelivery is not an
+extra event, and the same installation on two days is not two unique people.
+All earlier inputs and goldens remain unchanged.
 
 These high-value calculations were checked without invoking either reference evaluator.
 

@@ -548,7 +548,9 @@
                   "recalculation_state",
                   "attribution_update_state",
                   "fx_conversion_snapshot",
-                  "acquisition_kpi_set_key"
+                  "acquisition_kpi_set_key",
+                  "activity_unit",
+                  "activity_date"
                 ]
               }
             }
@@ -2121,6 +2123,27 @@
                 "type": "string",
                 "pattern": "^[a-f0-9]{64}$",
                 "description": "Definition-backed acquisition calculation-set identity; not a run ID or permission to divide arbitrary rows. Null for unknown/legacy profiles."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "activity_unit": {
+            "enum": [
+              "distinct_installations",
+              "session_starts",
+              "custom_events",
+              null
+            ],
+            "description": "Closed UTC activity unit from captured definitions. Installations are not people; daily uniques are not period uniques. Null for other or unknown profiles."
+          },
+          "activity_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date",
+                "description": "UTC activity date, not acquisition cohort date. Null for other or unknown profiles."
               },
               {
                 "type": "null"

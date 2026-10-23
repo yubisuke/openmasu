@@ -8,6 +8,29 @@ import { SELECTED_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts/def
 import { expandRecommendedMetricSchedule, recommendedSchedulePreviewDigest } from "../recommended-metric-schedules.js";
 import { renderRecommendedMetricSchedulePreview } from "./measurement-setup.js";
 
+it("registers closed daily activity separately from cohort and targeting dimensions", () => {
+  const request = metricScheduleFormRequest(new URLSearchParams({ calendar_activity: "true", start_date: "2026-08-06" }));
+  const now = new Date("2026-08-08T00:00:00.000Z"), normalized = normalizeMetricScheduleRequest(request, now);
+  assert.equal(normalized.lagDays, 1);
+  assert.deepEqual(normalized.definition.evaluations, [{ metric_names: ["daily_active_installations", "daily_custom_events", "daily_session_starts"], date_dimension: "metric_date", grouping: {} }]);
+  assert.ok(normalized.definition.metric_definitions.every(definition => definition.fraud_policy === "gross"));
+  for (const change of [{ date_dimension: "cohort_date" }, { grouping: { country: "JP" } },
+    { campaign_discovery: { policy: "selected_acquisition_and_cost_v1", max_targets: 2 } },
+    { metric_names: ["daily_session_starts", "d7_roas"] }]) {
+    assert.throws(() => normalizeMetricScheduleRequest({ ...request, evaluations: [{ ...normalized.definition.evaluations[0], ...change }] }, now),
+      /metric_schedule_calendar_activity_profile_required/);
+  }
+  for (const field of ["fraud_policy", "tenant_id", "request_json", "custom_conversion_event_keys"]) {
+    assert.throws(() => metricScheduleFormRequest(new URLSearchParams({ calendar_activity: "true", [field]: "synthetic" })), /metric_schedule_form_invalid/);
+  }
+  const duplicate = new URLSearchParams("calendar_activity=true&calendar_activity=true");
+  assert.throws(() => metricScheduleFormRequest(duplicate), /metric_schedule_form_invalid/);
+  const html = renderMetricSchedules("app-synthetic", [], "synthetic-csrf");
+  assert.match(html, /Schedule daily activity/); assert.match(html, /Installations are not people or DAU/);
+  assert.match(html, /name="calendar_activity" value="true"/);
+  assert.doesNotMatch(html, /<script|javascript:|\son\w+=/i);
+});
+
 it("opts into bounded standard retention days with separate populations and rejects immature schedule lags", () => {
   const now = new Date("2026-10-04T00:00:00.000Z");
   for (const basis of ["selected_first_party_click", "selected_verified_platform", "selected_imported_provider"]) {

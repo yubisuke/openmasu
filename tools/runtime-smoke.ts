@@ -55,11 +55,11 @@ if (dashboardHome.status !== 200 || !(await dashboardHome.text()).includes("Open
   throw new Error(`authenticated dashboard smoke returned ${dashboardHome.status}`);
 }
 const configuredAppId = required("OPENMASU_MAX_APP_ID");
-const dashboardApp = await fetch(`${base}/dashboard/apps/${encodeURIComponent(configuredAppId)}`, {
+const dashboardApp = await fetch(`${base}/dashboard/apps/${encodeURIComponent(configuredAppId)}?metric_name=daily_install_count`, {
   headers: { cookie: dashboardCookie },
 });
 const dashboardAppBody = await dashboardApp.text();
-if (dashboardApp.status !== 200 || !/data-value-unscaled="-?[0-9]+"/.test(dashboardAppBody)) {
+if (dashboardApp.status !== 200 || !dashboardAppBody.includes('data-value-unscaled="1"')) {
   throw new Error(`seeded dashboard metric smoke returned ${dashboardApp.status}`);
 }
 const parameters = new URLSearchParams({

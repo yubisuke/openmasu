@@ -344,7 +344,8 @@ function validateRegistryReferences(output: Any, label: string): void {
       "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
       "aak_attributed_reengagements",
     ]);
-    const expectedVersion = definition.rule_bundle_id === "metric-standard-retention" ? "0.4.24"
+    const expectedVersion = definition.rule_bundle_id === "metric-calendar-activity" ? "0.4.25"
+      : definition.rule_bundle_id === "metric-standard-retention" ? "0.4.24"
       : definition.rule_bundle_id === "metric-acquisition-kpis" ? ACQUISITION_KPI_VERSION
       : definition.rule_bundle_id === "metric-calendar-acquisition" ? "0.4.21"
       : definition.rule_bundle_id === "metric-imported-provider-acquisition" ? "0.4.20"
@@ -605,8 +606,8 @@ if (!summaryOnly) {
         }
       });
     }
-    it("contains 71 fixture directories", () => {
-      check(fixtureDirs.length === 71, `expected 71 fixture directories, found ${fixtureDirs.length}`);
+    it("contains 72 fixture directories", () => {
+      check(fixtureDirs.length === 72, `expected 72 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -1122,12 +1123,21 @@ const scenarios: Array<[string, () => void]> = [
     check(equal(output.metric_runs.map((run: Any) => run.value_unscaled ?? run.undefined_reason),
       ["observation_window_not_elapsed", "0", "observation_window_not_elapsed", "0", "0", "0"]), "scenario 71 complete observation, never fabricated immature zero");
   }],
+  ["72 calendar activity counts logical events and daily installations without acquisition joins", () => {
+    const { input, output } = fixture("72-calendar-activity");
+    const names = ["daily_session_starts", "daily_custom_events", "daily_active_installations"];
+    const expected = { initial: ["3", "3", "3"], late: ["4", "3", "4"], private: ["3", "2", "3"], next: ["1", "0", "1"], empty: ["0", "0", "0"] };
+    check(!input.records.some((record: Any) => record.event_name === "install"), "scenario 72 no acquisition anchor");
+    check(output.metric_runs.length === 15 && output.deliveries.length === 9 && output.raw_records.length === 6, "scenario 72 bounded evidence with two redactions and one retry");
+    check(output.deliveries.filter((delivery: Any) => delivery.duplicate_resolution === "duplicate_delivery").length === 1, "scenario 72 retry remains a delivery, not an extra event");
+    for (const [cutoff, values] of Object.entries(expected)) check(equal(names.map(name => output.metric_runs.find((run: Any) => run.metric_run_id === `calendar72-${cutoff}:${name}`)?.value_unscaled), values), `scenario 72 ${cutoff} independent arithmetic`);
+  }],
 ];
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 71 scenario assertions", () => {
-      check(scenarios.length === 71, "scenario assertion inventory must contain 71 entries");
+    it("contains 72 scenario assertions", () => {
+      check(scenarios.length === 72, "scenario assertion inventory must contain 72 entries");
     });
   });
 
@@ -1696,7 +1706,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 71 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 72 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1737,7 +1747,7 @@ const acceptance: Array<[string, () => void]> = [
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
   ["AC21 one command validates every schema registry fixture and golden", () => {
-    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 71 && outputArtifactCount === 71 * 13, "AC21");
+    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 72 && outputArtifactCount === 72 * 13, "AC21");
     checkDocumentationDrift(root, validationSummary());
   }],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {
