@@ -214,6 +214,14 @@ export function normalizeMetricScheduleRequest(
           ?.acquisition_basis === "selected_verified_platform")) throw new Error("platform_acquisition_source_required");
     const dailyAcquisition = evaluation.metric_names.some(name =>
       suppliedDefinitions.find(definition => definition.metric_name === name)?.rule_bundle_id === "metric-selected-daily-acquisition");
+    const calendarActivity = evaluation.metric_names.some(name =>
+      suppliedDefinitions.find(definition => definition.metric_name === name)?.rule_bundle_id === "metric-calendar-activity");
+    if (calendarActivity && (dateDimension !== "metric_date" || Object.keys(grouping).length > 0
+        || evaluation.campaign_discovery !== undefined
+        || evaluation.metric_names.some(name => suppliedDefinitions.find(definition => definition.metric_name === name)
+          ?.rule_bundle_id !== "metric-calendar-activity"))) {
+      throw new Error("metric_schedule_calendar_activity_profile_required");
+    }
     if ((dailyAcquisition || grouping.acquisition_campaign_state !== undefined)
         && (dateDimension !== "metric_date" || evaluation.metric_names.some(name =>
           suppliedDefinitions.find(definition => definition.metric_name === name)?.rule_bundle_id !== "metric-selected-daily-acquisition"))) {

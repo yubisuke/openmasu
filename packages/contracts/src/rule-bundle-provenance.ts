@@ -13,6 +13,7 @@ export type NonFraudRuleBundleId =
   | "metric-selected-daily-acquisition"
   | "metric-acquisition-kpis"
   | "metric-standard-retention"
+  | "metric-calendar-activity"
   | "metric-disjoint-cost"
   | "metric-selected-commerce"
   | "metric-refund-reversal"
@@ -34,6 +35,15 @@ export type NonFraudRuleBundleDefinition = {
 };
 
 export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonFraudRuleBundleDefinition>> = {
+  "metric-calendar-activity": {
+    id: "metric-calendar-activity", version: "0.4.25", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["utc-occurrence-day-half-open", "accepted-canonical-session-and-custom-events",
+      "count-session-starts-not-distinct-session-ids", "count-all-custom-event-keys",
+      "distinct-tenant-app-installation-union", "received-evidence-as-of-watermark",
+      "current-privacy-visibility", "gross-recorded-activity-only", "no-acquisition-cohort-join",
+      "metric-date-only-no-inferred-dimensions", "daily-installations-not-persons-or-period-uniques"],
+  },
   "metric-standard-retention": {
     id: "metric-standard-retention", version: "0.4.24", kind: "metric",
     implementation: "reference-metric-v0.4",

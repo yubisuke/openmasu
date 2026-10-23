@@ -185,7 +185,8 @@ export type OpenMasuMetricDefinitionV04 = {
       | "converted_installations"
       | "converted_installations_over_cohort"
       | "cost_sum"
-      | "cost_over_cohort";
+      | "cost_over_cohort"
+      | "active_installations_count";
     window: {
       type: "elapsed" | "calendar_day" | "activity_day";
       day: number;
@@ -209,7 +210,15 @@ export type OpenMasuMetricDefinitionV04 = {
   /**
    * @minItems 1
    */
-  event_names?: ("click" | "install" | "skan_postback" | "adattributionkit_postback" | "deep_link_open")[];
+  event_names?: (
+    | "click"
+    | "install"
+    | "skan_postback"
+    | "adattributionkit_postback"
+    | "deep_link_open"
+    | "session_start"
+    | "custom_event"
+  )[];
   /**
    * @minItems 1
    */

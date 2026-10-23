@@ -8,6 +8,8 @@ import { analysisQuery, savedAnalysisInput, previousAnalysisQuery, dailyAnalysis
 import { buildPeriodAnalysis, encodePeriodAnalysisCsv } from "./period-analysis.js";
 import { renderPeriodAnalysis } from "./dashboard/saved-analysis.js";
 import type { MetricReportRow } from "./reporting.js";
+import { calendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
+import { calendarActivityUnit } from "./metric-series.js";
 type Any = Record<string, any>;
 const identity = { tenantId: "tenant-a", appId: "app-a", keyId: "synthetic-analysis", role: "admin" as const };
 const params = new URLSearchParams({ date_from: "2026-08-06", date_to: "2026-08-07", watermark_at_most: "2026-08-20T00:00:00.000Z" });
@@ -93,4 +95,39 @@ it("period_analysis_retention_compares_saved_cohorts_but_never_invents_period_de
   const result = buildPeriodAnalysis(query, [adapt("2026-08-06", "current", "333333")], [adapt("2026-08-05", "previous", "500000")]);
   assert.equal(result.rows[0].status, "compared"); assert.equal(result.rows[0].delta_current_minus_previous, "-166667");
   assert.equal(result.rows[0].current[0].value_unscaled, "333333");
+});
+
+it("period_analysis_aligns_daily_activity_without_summing_distinct_installations_into_period_users", () => {
+  const definitions = calendarActivityMetricDefinitions();
+  const adapt = (date: string, prefix: string): MetricReportRow[] => definitions.map(definition => {
+    const row = structuredClone(rows(date, prefix)[0]) as Any;
+    row.metric_run_id = `${prefix}:${date}:${definition.metric_name}`;
+    row.metric_name = definition.metric_name; row.metric_definition_version = definition.metric_definition_version;
+    row.rule_bundle_id = definition.rule_bundle_id; row.rule_bundle_hash = definition.rule_bundle_hash;
+    row.policy_versions = [`rule_bundle:${definition.rule_bundle_version}`];
+    row.grouping = { metric_date: date }; row.grouping_digest = sha256(row.grouping);
+    row.value_type = "count"; row.ratio_scale = null; row.currency = null; row.amount_scale = null;
+    row.value_unscaled = "2"; row.activity_unit = calendarActivityUnit(definition); row.activity_date = date;
+    row.comparison_context = captureMetricComparisonContext({ metric_run_id: row.metric_run_id,
+      input_snapshot_id: row.input_snapshot_id }, definition, input.fx_policy, "after", sha256);
+    return row as MetricReportRow;
+  });
+  const selection = { ...query, dateTo: "2026-08-08", metricNames: definitions.map(definition => definition.metric_name) };
+  const current = [...adapt("2026-08-06", "current"), ...adapt("2026-08-07", "current")];
+  const previous = [...adapt("2026-08-04", "previous"), ...adapt("2026-08-05", "previous")];
+  const analysis = buildPeriodAnalysis(selection, current, previous);
+  assert.equal(analysis.rows.length, 6);
+  assert.ok(analysis.rows.every(row => row.status === "compared" && row.current[0].value_unscaled === "2"
+    && row.delta_current_minus_previous === "0"));
+  assert.deepEqual(analysis.rows.filter(row => row.metric_name === "daily_active_installations")
+    .map(row => row.current[0].activity_unit), ["distinct_installations", "distinct_installations"]);
+  const saved = { view_id: "synthetic-activity", name: "Synthetic daily activity", selection: params.toString(),
+    display: "all" as const, created_at: "2026-08-20T00:00:00.000Z" };
+  const html = renderPeriodAnalysis(identity.appId, saved, analysis), csv = encodePeriodAnalysisCsv(analysis, "all");
+  assert.match(html, /2 distinct installations \(not people\)/); assert.match(html, /activity-date offset/);
+  assert.match(html, /never summed into period-unique users/); assert.match(csv, /distinct_installations/);
+  assert.match(csv, /2026-08-07/); assert.doesNotMatch(html, /<script|javascript:|\son[a-z]+=/i);
+  const wrongDate = structuredClone(current[0]) as Any;
+  wrongDate.grouping = { cohort_date: "2026-08-06" }; wrongDate.grouping_digest = sha256(wrongDate.grouping);
+  assert.equal(buildPeriodAnalysis(selection, [wrongDate as MetricReportRow], previous).rows.find(row => row.metric_name === wrongDate.metric_name)!.reason, "meaning_unverified");
 });

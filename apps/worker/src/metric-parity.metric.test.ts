@@ -57,6 +57,48 @@ const datedEngagementFxSource: Any = JSON.parse(readFileSync("fixtures/v0.4/64-f
 const datedFxCases = [...syntheticFxCases(datedFxSource), ...syntheticEngagementFxCases(datedEngagementFxSource)];
 const acquisitionKpiSource: Any = JSON.parse(readFileSync("fixtures/v0.4/70-saved-acquisition-kpis/input.json", "utf8"));
 const acquisitionKpiCases = syntheticAcquisitionKpiCases(acquisitionKpiSource);
+const calendarActivitySource: Any = JSON.parse(readFileSync("fixtures/v0.4/72-calendar-activity/input.json", "utf8"));
+
+describe("calendar activity SQL parity and saved reporting", { concurrency: false }, () => {
+  const app = createAppPool(), seed = createSeedPool(), reader = createReaderPool();
+  after(async () => { await Promise.all([app.end(), seed.end(), reader.end()]); });
+  it("calendar_activity_canonical_events_distinct_installations_cutoffs_privacy_and_empty_days_match_reviewed_bytes", async () => {
+    await ingestFixture("calendar72-parity", calendarActivitySource, app, seed);
+    const actual = await computeSqlMetricRuns(app, calendarActivitySource, false);
+    const values: Record<string, readonly string[]> = {
+      "calendar72-initial": ["3", "3", "3"], "calendar72-late": ["4", "3", "4"],
+      "calendar72-private": ["3", "2", "3"], "calendar72-next": ["1", "0", "1"],
+      "calendar72-empty": ["0", "0", "0"],
+    };
+    for (const [prefix, expected] of Object.entries(values)) {
+      assert.deepEqual(["daily_session_starts", "daily_custom_events", "daily_active_installations"].map(name =>
+        actual.find(run => run.metric_run_id === `${prefix}:${name}`)?.value_unscaled), expected, prefix);
+    }
+    assertPlatformRunParity(actual, evaluate(calendarActivitySource).metric_runs, "calendar activity evaluator");
+    assertPlatformRunParity(actual, JSON.parse(readFileSync("fixtures/v0.4/72-calendar-activity/expected_metric_runs.json", "utf8")),
+      "independent calendar activity golden");
+    // Publish current-privacy runs only. Historical before-deletion replay is
+    // arithmetic evidence, not a way to republish erased activity to reports.
+    const current = { ...calendarActivitySource, metric_evaluations: calendarActivitySource.metric_evaluations
+      .filter((evaluation: Any) => evaluation.privacy_state === "after") };
+    const saved = await computeSqlMetricRuns(app, current, true);
+    const identity = { keyId: "synthetic-calendar72", tenantId: "tenant-a", appId: "app-a", role: "admin" as const };
+    const page = await metricReport(reader, identity, { tenantId: "tenant-a", appId: "app-a", supersession: "latest", limit: 200 });
+    const csv = parseCsv(encodeMetricReport(page, "csv").body);
+    for (const run of saved) {
+      const row = page.data.find(value => value.metric_run_id === run.metric_run_id)!;
+      assert.equal(row.value_unscaled, run.value_unscaled);
+      assert.equal(row.comparison_context?.definition.anchor_event, "calendar_day");
+      assert.equal(row.comparison_context?.definition.rule_bundle_id, "metric-calendar-activity");
+      const csvRow = csv.find(value => value.metric_run_id === run.metric_run_id)!;
+      assert.equal(csvRow.value_unscaled, run.value_unscaled);
+      assert.equal(JSON.parse(csvRow.grouping).metric_date, run.grouping?.dimensions.metric_date);
+      assert.equal(csvRow.activity_date, run.grouping?.dimensions.metric_date);
+      assert.equal(csvRow.activity_unit, row.activity_unit);
+      assert.ok(row.activity_unit);
+    }
+  });
+});
 
 describe("same-set acquisition KPI SQL parity and saved reporting", { concurrency: false }, () => {
   const app = createAppPool(), seed = createSeedPool(), reader = createReaderPool();

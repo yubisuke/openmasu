@@ -21,6 +21,7 @@ import { disableMetricSchedule, registerMetricSchedule, type MetricScheduleRecor
 import { previewMetricScheduleReplacement, replaceMetricSchedule } from "../../api/src/metric-schedule-replacements.js";
 import { csrfToken, issueDashboardSession, type DashboardSession } from "../../api/src/session.js";
 import { buildDashboardView } from "../../api/src/dashboard/view.js";
+import { renderDashboard } from "../../api/src/dashboard/render.js";
 import { parseMetricQuery } from "../../api/src/report-query.js";
 import { metricReport } from "../../api/src/reporting.js";
 import { reportToSnapshot } from "../../api/src/report-snapshot.js";
@@ -1079,5 +1080,50 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     assert.equal((await processMetricSchedules(appPool,scope.tenantId,{now,maximumCatchupDates:1})).completedDates,0);
     assert.equal(jcs(await metricReport(readerPool,scope,query)),before);
     await disableMetricSchedule({pool:appPool,identity:scope,metricScheduleId:registered.metric_schedule_id,now});
+  });
+
+  it("calendar_activity_form_runs_saved_UTC_counts_and_exports_installation_units_without_period_sums", async () => {
+    const source = JSON.parse(readFileSync("fixtures/v0.4/72-calendar-activity/input.json", "utf8"),
+      (key, value) => key === "tenant_id" ? tenantId : key === "app_id" ? appId : value);
+    await seedPool.query("TRUNCATE control.metric_schedules,control.metric_schedule_states,control.metric_schedule_checkpoints CASCADE");
+    await ingestFixture("calendar72-schedule", source, appPool, seedPool);
+    const path = `/dashboard/apps/${appId}/metric-schedules`, cookie = `openmasu_dashboard=${session.token}`;
+    const response = await fetch(`${baseUrl}${path}`, { method: "POST", redirect: "manual",
+      headers: { cookie, origin: "http://localhost:8080", "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ csrf_token: csrfToken(session.token), calendar_activity: "true", lag_days: "2", start_date: "2026-08-20" }) });
+    assert.equal(response.status, 303);
+    const schedules = (await (await admin(`/v1/admin/apps/${appId}/metric-schedules`)).json() as { data: MetricScheduleRecord[] }).data;
+    const registered = schedules.find(row => row.status === "active")!;
+    assert.ok(registered); assert.equal(registered.definition.evaluations[0].date_dimension, "metric_date");
+    const clock = new Date("2026-08-22T01:00:00.000Z");
+    assert.deepEqual(await processMetricSchedules(appPool, tenantId, { now: clock, maximumCatchupDates: 1 }),
+      { schedules: 1, completedDates: 1, replayedDates: 0, failedSchedules: 0 });
+    const query = { tenantId, appId, metricScheduleId: registered.metric_schedule_id, supersession: "latest" as const, limit: 200 };
+    const page = await metricReport(readerPool, reportIdentity, query);
+    assert.deepEqual(Object.fromEntries(page.data.map(row => [row.metric_name, row.value_unscaled])), {
+      daily_active_installations: "3", daily_custom_events: "2", daily_session_starts: "3",
+    });
+    for (const row of page.data) {
+      assert.deepEqual(row.grouping, { metric_date: "2026-08-20" });
+      assert.equal(row.activity_date, "2026-08-20"); assert.ok(row.activity_unit);
+      assert.equal(row.comparison_context!.privacy_state, "after");
+      assert.equal(row.input_received_at_watermark, "2026-08-22T00:00:00.000Z");
+    }
+    const selection = new URLSearchParams({ metric_schedule_id: registered.metric_schedule_id, format: "csv" });
+    const apiCsv = await admin(`/v1/reports/metrics?app_id=${appId}&${selection}`);
+    const dashboardCsv = await fetch(`${baseUrl}/dashboard/apps/${appId}/cohorts.csv?${selection}`, { headers: { cookie } });
+    assert.equal(apiCsv.status, 200); assert.equal(dashboardCsv.status, 200);
+    const csv = await apiCsv.text(); assert.equal(await dashboardCsv.text(), csv);
+    const csvRows = parseCsv(csv);
+    assert.deepEqual(csvRows.map(row => row.activity_unit), ["distinct_installations", "custom_events", "session_starts"]);
+    assert.ok(csvRows.every(row => row.activity_date === "2026-08-20"));
+    const html = renderDashboard(buildDashboardView({ apps: [{ app_id: appId, created_at: "2026-08-01T00:00:00.000Z" }], selectedAppId: appId,
+      query, metrics: page, csrfToken: "synthetic-calendar-activity" }));
+    assert.match(html, /3 distinct installations \(not people\)/); assert.match(html, /Daily calendar activity/);
+    assert.match(html, /Never add daily distinct counts into period-unique users/);
+    assert.doesNotMatch(html, /<script|javascript:|\son[a-z]+=/i);
+    assert.equal((await processMetricSchedules(appPool, tenantId, { now: clock, maximumCatchupDates: 1 })).completedDates, 0);
+    assert.equal(jcs(await metricReport(readerPool, reportIdentity, query)), jcs(page));
+    await disableMetricSchedule({ pool: appPool, identity: reportIdentity, metricScheduleId: registered.metric_schedule_id, now: clock });
   });
 });

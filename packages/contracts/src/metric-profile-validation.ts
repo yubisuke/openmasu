@@ -2,6 +2,7 @@ import type { OpenMasuMetricDefinitionV04 as Definition } from "./generated/cont
 import { acquisitionDetailBase } from "./m1b-metric-definitions.js";
 import { validateMetricDefinition } from "./event-validation.js";
 import { ACQUISITION_KPI_BUNDLE } from "./acquisition-kpi-definitions.js";
+import { isCalendarActivityMetric } from "./calendar-activity-definitions.js";
 import {
   METRIC_PROFILE_BINDINGS, PURCHASE_NET_METRIC_SERIES, TOTAL_NET_METRIC_SERIES,
   APPLE_AGGREGATE_METRIC_SERIES, DEEP_LINK_METRIC_SERIES, AGGREGATE_EVENT_NAMES,
@@ -38,6 +39,7 @@ function validStringArray(value: unknown, allowed?: ReadonlySet<string>): boolea
 export function validateScheduledMetricDefinition(input: unknown): input is ScheduledMetricDefinition {
   if (!input || typeof input !== "object" || Array.isArray(input)) return false;
   const value = input as JsonObject;
+  if (isCalendarActivityMetric(value)) return validateMetricDefinition(value);
   if (value.retention_maturity_policy !== undefined || value.rule_bundle_id === METRIC_PROFILE_BINDINGS.standard_retention.rule_bundle_id) {
     return validateMetricDefinition(value);
   }
@@ -152,6 +154,10 @@ export function validateScheduledMetricDefinition(input: unknown): input is Sche
 /** Independent calculators share profile constraints, not their calculation implementation. */
 export function assertMetricDefinitionSeries(definition: Definition, entry: "reference" | "sql" = "sql"): void {
   const metricName = definition.metric_name;
+  if (isCalendarActivityMetric(definition)) {
+    if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${metricName}`);
+    return;
+  }
   if (definition.retention_maturity_policy !== undefined || definition.rule_bundle_id === METRIC_PROFILE_BINDINGS.standard_retention.rule_bundle_id) {
     if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${metricName}`);
     return;

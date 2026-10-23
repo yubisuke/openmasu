@@ -1,6 +1,43 @@
 import { selectedAcquisitionSql, selectedClickJoinSql } from "./selected-acquisition.js";
 import type { MetricClient, MetricDefinition, MetricGrouping, MetricScope, MetricValue } from "./model.js";
 
+export async function calendarActivityValue(
+  client: MetricClient, scope: MetricScope, watermark: string, grouping: MetricGrouping | undefined,
+  definition: MetricDefinition, privacyState: "before" | "after",
+): Promise<{ value_state: "present"; value_unscaled: string }> {
+  if (definition.aggregation_time_zone !== "UTC" || typeof grouping?.metric_date !== "string"
+      || Object.keys(grouping).some(key => key !== "metric_date") || definition.fraud_policy !== "gross") {
+    throw new Error("calendar_activity_requires_UTC_metric_date_and_gross_policy");
+  }
+  // Activity is the canonical accepted event population, not an install cohort.
+  // The facts retain the scoped installation ID without inferring acquisition.
+  const result = await client.query<{ value_unscaled: string }>(
+    `WITH activity AS (
+       SELECT tenant_id, app_id, logical_event_id, installation_id, 'session_start'::text AS event_name
+       FROM ledger.session_facts WHERE tenant_id=$1 AND app_id=$2
+       UNION ALL
+       SELECT tenant_id, app_id, logical_event_id, installation_id, 'custom_event'::text AS event_name
+       FROM ledger.custom_event_facts WHERE tenant_id=$1 AND app_id=$2
+     )
+     SELECT (CASE WHEN $7::text='active_installations_count'
+       THEN count(DISTINCT activity.installation_id) ELSE count(*) END)::text AS value_unscaled
+     FROM activity
+     JOIN ledger.logical_events AS logical
+       ON logical.tenant_id=activity.tenant_id AND logical.app_id=activity.app_id
+       AND logical.logical_event_id=activity.logical_event_id AND logical.event_name=activity.event_name
+     JOIN ledger.raw_records_current AS raw
+       ON raw.tenant_id=logical.tenant_id AND raw.app_id=logical.app_id AND raw.record_id=logical.record_id
+     WHERE logical.tenant_id=$1 AND logical.app_id=$2 AND logical.event_name=ANY($5::text[])
+       AND raw.received_at <= $3
+       AND ($4='before' OR raw.payload_lifecycle_status='available')
+       AND control.canonical_timestamp_value(raw.occurred_at) >= ($6::date::timestamp AT TIME ZONE 'UTC')
+       AND control.canonical_timestamp_value(raw.occurred_at) < (($6::date + 1)::timestamp AT TIME ZONE 'UTC')`,
+    [scope.tenant_id, scope.app_id, watermark, privacyState, definition.event_names,
+      grouping.metric_date, definition.definition.calculation],
+  );
+  return { value_state: "present", value_unscaled: result.rows[0].value_unscaled };
+}
+
 export async function eventCountValue(
   client: MetricClient,
   scope: MetricScope,

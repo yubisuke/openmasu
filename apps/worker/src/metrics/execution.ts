@@ -93,6 +93,7 @@ export async function executeMetricCalculation(
       if (definition.acquisition_basis === "selected_verified_platform" && (grouping?.campaign_id || grouping?.ad_group_id)
           && !grouping?.network) throw new Error("platform_acquisition_source_required");
       const selectedDaily = definition.rule_bundle_id === "metric-selected-daily-acquisition";
+      const calendarActivity = definition.rule_bundle_id === "metric-calendar-activity";
       if (selectedDaily && grouping?.acquisition_campaign_state !== undefined &&
           !["known", "unknown"].includes(grouping.acquisition_campaign_state)) {
         throw new Error("daily_acquisition_campaign_state_invalid");
@@ -100,7 +101,7 @@ export async function executeMetricCalculation(
       if (!selectedDaily && grouping?.acquisition_campaign_state !== undefined) {
         throw new Error(`unsupported acquisition campaign state for ${metricName}`);
       }
-      if (selectedDaily && Object.keys(grouping ?? {}).some((key) => !new Set<string>(definition.grouping_dimensions).has(key))) {
+      if ((selectedDaily || calendarActivity) && Object.keys(grouping ?? {}).some((key) => !new Set<string>(definition.grouping_dimensions).has(key))) {
         throw new Error(`unsupported grouping for ${metricName}`);
       }
       if (!definition.acquisition_dimension_policy && !(["selected_verified_platform", "selected_imported_provider"].includes(definition.acquisition_basis ?? "") && grouping?.creative_id === undefined) && (grouping?.ad_group_id !== undefined || grouping?.creative_id !== undefined)) {

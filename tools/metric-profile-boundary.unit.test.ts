@@ -7,6 +7,7 @@ import {
   REFUND_REVERSAL_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS,
   SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS,
   ACQUISITION_KPI_METRIC_DEFINITIONS,
+  CALENDAR_ACTIVITY_METRIC_DEFINITIONS, isCalendarActivityMetricDefinition,
   VERIFIED_PLATFORM_METRIC_DEFINITIONS,
   importedAcquisitionMetricDefinitions,
   standardRetentionMetricDefinitions,
@@ -84,6 +85,29 @@ async function boundaryResult(name: string, definition: Definition): Promise<Bou
 }
 
 describe("metric profile entry boundaries", () => {
+  it("calendar_activity_is_closed_to_gross_UTC_day_counts_and_distinct_installations", async () => {
+    for (const definition of CALENDAR_ACTIVITY_METRIC_DEFINITIONS) {
+      assert.ok(isCalendarActivityMetricDefinition(definition));
+      assert.deepEqual(await boundaryResult("calendar_activity/valid", definition), {
+        name: "calendar_activity/valid", schema: true, schedule: true, evaluator: true, sql: true,
+      });
+      for (const change of [
+        { metric_name: "daily_install_count" }, { rule_bundle_hash: "0".repeat(64) },
+        { metric_definition_version: "0.4.24" }, { rule_bundle_id: "metric-stage-m3" },
+        { aggregation_time_zone: "Asia/Tokyo" }, { fraud_policy: "net" },
+        { event_names: ["install"] }, { grouping_dimensions: ["metric_date", "country"] },
+        { conversion_event_key: "synthetic_outcome" }, { acquisition_basis: "selected_first_party_click" },
+        { definition: { ...definition.definition, window: { type: "calendar_day", day: 1 } } },
+      ]) {
+        const invalid = { ...structuredClone(definition), ...change } as Definition;
+        assert.equal(isCalendarActivityMetricDefinition(invalid), false);
+        assert.deepEqual(await boundaryResult("calendar_activity/invalid", invalid), {
+          name: "calendar_activity/invalid", schema: false, schedule: false, evaluator: false, sql: false,
+        });
+      }
+    }
+    assert.equal(validateMetricDefinition({ ...M3_METRIC_DEFINITIONS[0], event_names: ["session_start"] }), false);
+  });
   it("calendar_profile_requires_its_policy_zone_name_day_and_binding_without_upgrading_legacy_definitions", () => {
     const definition = calendarAcquisitionMetricDefinitions("America/New_York")[0];
     assert.ok(validateMetricDefinition(definition));
@@ -100,6 +124,7 @@ describe("metric profile entry boundaries", () => {
   it("metric_profile_schema_consistency distinguishes registered identities from legacy and external declarations", () => {
     const valid = [...metricProfileBoundaryCases().filter(entry => entry.name.endsWith("/valid")),
       ...ACQUISITION_KPI_METRIC_DEFINITIONS.map(definition => ({ name: "acquisition_kpis/valid", definition })),
+      ...CALENDAR_ACTIVITY_METRIC_DEFINITIONS.map(definition => ({ name: "calendar_activity/valid", definition })),
       ...SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS.map(definition => ({ name: "daily_acquisition/valid", definition })),
       ...VERIFIED_PLATFORM_METRIC_DEFINITIONS.map(definition => ({ name: "platform/valid", definition })),
       ...importedAcquisitionMetricDefinitions("synthetic-export").map(definition => ({ name: "imported/valid", definition })),
@@ -110,7 +135,7 @@ describe("metric profile entry boundaries", () => {
       ...COHORT_TIME_ZONES.flatMap(zone=>["selected_first_party_click","selected_verified_platform","selected_imported_provider"].flatMap(basis=>
         calendarAcquisitionMetricDefinitions(zone,basis as NonNullable<Definition["acquisition_basis"]>,basis === "selected_imported_provider" ? "synthetic-export" : undefined)
           .map(definition=>({name:"calendar/valid",definition}))))];
-    assert.equal(valid.length, 231 + ACQUISITION_KPI_METRIC_DEFINITIONS.length);
+    assert.equal(valid.length, 231 + ACQUISITION_KPI_METRIC_DEFINITIONS.length + CALENDAR_ACTIVITY_METRIC_DEFINITIONS.length);
     const exercised = new Set<string>();
     for (const { name, definition } of valid) {
       assert.ok(validateMetricDefinition(definition), name);

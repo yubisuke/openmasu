@@ -23,6 +23,10 @@ export function metricValueLabel(row: MetricReportRow): string {
   if (row.value_type === "ratio" && row.ratio_scale !== null) {
     return `${exactDecimal(row.value_unscaled, row.ratio_scale)} ×`;
   }
-  if (row.value_type === "count") return `${exactDecimal(row.value_unscaled, 0)} count`;
+  if (row.value_type === "count") {
+    const unit = row.activity_unit === "distinct_installations" ? "distinct installations (not people)"
+      : row.activity_unit === "session_starts" ? "session starts" : row.activity_unit === "custom_events" ? "custom events" : "count";
+    return `${exactDecimal(row.value_unscaled, 0)} ${unit}`;
+  }
   return `${row.value_unscaled} (unscaled; unit unavailable)`;
 }

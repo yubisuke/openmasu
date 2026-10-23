@@ -2,7 +2,7 @@ import type { RoasOperands, TotalNetRoasOperands } from "@openmasu/runtime";
 import { standardRetentionClosesAt } from "@openmasu/contracts/definitions";
 import { metricAcquisitionSql, metricAcquisitionJoinSql } from "./selected-acquisition.js";
 import { engagementMetricValue } from "./engagement.js";
-import { customConversionValue, eventCountValue } from "./event-values.js";
+import { calendarActivityValue, customConversionValue, eventCountValue } from "./event-values.js";
 import type { CostSelection, MetricClient, MetricDefinition, MetricFxPolicy, MetricGrouping, MetricScope, MetricValue } from "./model.js";
 
 // Keep total, purchase and ad-revenue calculation together: total recursively
@@ -358,6 +358,9 @@ export async function metricValue(
   }
   if (definition.definition.numerator === "purchase_net_revenue") {
     return purchaseNetRevenueValue(client, scope, watermark, grouping, definition, fxPolicy, privacyState);
+  }
+  if (definition.rule_bundle_id === "metric-calendar-activity") {
+    return calendarActivityValue(client, scope, watermark, grouping, definition, privacyState);
   }
   if (calculation === "event_count") {
     return eventCountValue(client, scope, watermark, grouping, definition, privacyState);

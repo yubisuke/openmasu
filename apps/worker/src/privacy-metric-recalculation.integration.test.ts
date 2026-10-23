@@ -7,6 +7,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Pool } from "pg";
 import { jcs, sha256 } from "@openmasu/attribution-core/canonical";
+import { CALENDAR_ACTIVITY_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 import { createAppPool, createReaderPool, createSeedPool, PayloadNotFoundError,
   processPrivacyDeletionJobs, uuidV7, withTenant } from "@openmasu/runtime";
 import { parseCsv as readCsv } from "@openmasu/runtime/import-normalization";
@@ -75,7 +76,8 @@ describe("privacy metric correction through the existing durable worker", { conc
     batches.push({ batch_id: "synthetic-unrelated", server_context: { ...base.server_context, app_id: other.app_id }, records: [other] });
     batches.push({ batch_id: "synthetic-custom", server_context: custom.server_context, records: custom.records }, ...engagement.batches);
     input = { ...base, records: undefined, batches, cost_records: [], metric_evaluations: [],
-      metric_definitions: [...base.metric_definitions, ...custom.metric_definitions, ...engagement.metric_definitions] };
+      metric_definitions: [...base.metric_definitions, ...custom.metric_definitions, ...engagement.metric_definitions,
+        ...CALENDAR_ACTIVITY_METRIC_DEFINITIONS] };
     await ingestFixture(`synthetic-privacy-${tenantId}`, input, app, seed);
     originals = [];
     for (const [fxPolicy, group] of [[base.fx_policy, evaluations], [custom.fx_policy, custom.metric_evaluations],
@@ -83,6 +85,11 @@ describe("privacy metric correction through the existing durable worker", { conc
       originals.push(...await computeSqlMetricRuns(app, { ...input, fx_policy: fxPolicy, metric_evaluations: group }, true,
         { tenant_id: tenantId, app_id: "app-a" }));
     }
+    originals.push(...await computeSqlMetricRuns(app, { ...input, fx_policy: base.fx_policy, metric_evaluations: [{
+      metric_run_id_prefix: "synthetic-calendar-activity", metric_names: CALENDAR_ACTIVITY_METRIC_DEFINITIONS.map(definition => definition.metric_name),
+      grouping: { metric_date: "2026-08-02" }, privacy_state: "after", data_freshness: "complete",
+      input_received_at_watermark: "2026-08-13T00:00:00.000Z", computed_at: "2026-08-13T00:01:00.000Z",
+    }] }, true, { tenant_id: tenantId, app_id: "app-a" }));
     foreign = await computeSqlMetricRuns(app, { ...base, metric_evaluations: [{ ...base.metric_evaluations[0],
       metric_run_id_prefix: "synthetic-unrelated", metric_names: ["cohort_install_count"],
       grouping: { cohort_date: "2026-08-01", attribution_status: "organic" } }] }, true,
@@ -135,8 +142,10 @@ describe("privacy metric correction through the existing durable worker", { conc
     }
   }
 
-  it("synthetic privacy_multi_group_recalculation updates two days times two campaigns plus retention/custom/engagement without touching unrelated runs", async () => {
-    assert.equal(originals.length, 20);
+  it("synthetic privacy_multi_group_recalculation updates two days times two campaigns plus retention/custom/engagement/calendar_activity without touching unrelated runs", async () => {
+    assert.equal(originals.length, 23);
+    const dailyActive = originals.find(run => run.metric_name === "daily_active_installations")!;
+    assert.ok(BigInt(dailyActive.value_unscaled) > 0n);
     assert.equal(foreign[0].value_unscaled, "1");
     assert.equal(originals.filter(run => run.metric_name === "cohort_install_count" && run.value_unscaled === "1").length, 4);
     assert.ok(originals.some(run => run.metric_name === "retention_d1" && run.value_unscaled === "1000000"));
@@ -166,6 +175,7 @@ describe("privacy metric correction through the existing durable worker", { conc
     } finally { server.close(); await once(server, "close"); }
     assert.equal(await drain(), originals.length);
     await assertSuccessors();
+    assert.equal((await saved()).find(run => run.supersedes_metric_run_id === dailyActive.metric_run_id)?.value_unscaled, "0");
     const latest = await report("app-a", "latest");
     assert.equal(latest.data.length, originals.length);
     assert.ok(latest.data.every(row => row.value_state !== "unavailable" && row.data_freshness === "recalculated"));

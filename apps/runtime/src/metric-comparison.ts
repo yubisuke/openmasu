@@ -1,5 +1,6 @@
 import type { OpenMasuMetricDefinitionV04 as MetricDefinition } from "../../../packages/contracts/src/generated/contract-types.js";
-import { cohortDayStart, addCalendarDays, canonicalDatedFxPolicy, type DatedFxPolicyInput } from "@openmasu/contracts/definitions";
+import { cohortDayStart, addCalendarDays, canonicalDatedFxPolicy, isCalendarActivityMetric,
+  isCalendarActivityMetricDefinition, type DatedFxPolicyInput } from "@openmasu/contracts/definitions";
 
 /** Aggregate-only metadata. Never store a replay manifest or evidence IDs here. */
 export type ComparisonFx = {
@@ -74,6 +75,20 @@ export function comparisonMeaning(context: MetricComparisonContext) {
   const revenue = ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(calculation);
   const cost = ["cost_sum", "cost_over_cohort"].includes(calculation);
   const conversion = ["converted_installations", "converted_installations_over_cohort"].includes(calculation);
+  if (isCalendarActivityMetric(d)) {
+    if (!isCalendarActivityMetricDefinition(d)) return undefined;
+    return {
+      profile: context.profile, anchor_event: "calendar_day", time_zone: "UTC", calculation,
+      numerator: d.definition.numerator, denominator: null, cost_basis: null, aggregation: "on_day",
+      window: { ...window, boundary: "half_open" }, population: "accepted_calendar_activity",
+      acquisition_basis: "not_applicable", cost_selection_policy: "not_applicable", fraud_policy: "gross",
+      grouping_dimensions: ["metric_date"], event_names: [...d.event_names!].sort(),
+      distinct_scope: calculation === "active_installations_count" ? "tenant_app_installation_per_day" : null,
+      activity_unit: calculation === "active_installations_count" ? "distinct_installations"
+        : d.metric_name === "daily_session_starts" ? "session_starts" : "custom_events",
+      privacy_state: context.privacy_state, value_type: "count", currency: null, amount_scale: null, ratio_scale: null, fx: null,
+    };
+  }
   if (d.engagement_credit_policy) {
     if (d.anchor_event !== "deep_link_open" || d.engagement_credit_policy !== "latest_eligible_open_before_outcome"
         || d.aggregation_time_zone !== "UTC" || window.type !== "elapsed" || window.day !== 0
@@ -147,7 +162,7 @@ export function comparisonMeaning(context: MetricComparisonContext) {
 /** Conservative temporal maturity, not a promise of provider completeness. */
 export function comparisonMaturity(context: MetricComparisonContext, grouping: Record<string, string>, watermark: string) {
   const d = context.definition, calculation = d.definition.calculation;
-  const day = calculation === "event_count" || d.engagement_credit_policy ? grouping.metric_date : grouping.cohort_date;
+  const day = calculation === "event_count" || isCalendarActivityMetric(d) || d.engagement_credit_policy ? grouping.metric_date : grouping.cohort_date;
   if (!comparisonMeaning(context) || !day || !/^\d{4}-\d{2}-\d{2}$/.test(day)
       || new Date(day).toISOString().slice(0, 10) !== day) return { state: "unknown", closes_at: null } as const;
   const offset = d.aggregation_time_zone === "Asia/Tokyo" ? 9 * 3_600_000 : 0;
@@ -157,7 +172,7 @@ export function comparisonMaturity(context: MetricComparisonContext, grouping: R
   }
   // Installs may occur anywhere within the cohort date. Use its exclusive end,
   // plus the complete elapsed/activity window, never an inferred install time.
-  const days = calculation === "event_count" || calculation === "cohort_size" ? 1 : d.definition.window.day + 2;
+  const days = calculation === "event_count" || isCalendarActivityMetric(d) || calculation === "cohort_size" ? 1 : d.definition.window.day + 2;
   const closesAt = new Date(Date.parse(day) - offset + days * 86_400_000).toISOString();
   return { state: Date.parse(watermark) >= Date.parse(closesAt) ? "window_elapsed" : "unknown",
     closes_at: closesAt } as const;
