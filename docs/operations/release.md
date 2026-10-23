@@ -4,11 +4,15 @@ OpenMasu publishes source tags and downloadable reproducible SDK bundles. This r
 does not publish Maven, Swift, Unity, npm, container, or hosting artifacts to a
 public registry.
 
-The current published prerelease is `v0.3.0-rc.1`. Its annotated tag,
-[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.1)
-and eight public assets point to green commit `90a0f5f`; see the
-[publication receipt](../validation/v0.3.0-rc.1-publication.md). `v0.2.0`
+The current published prerelease is `v0.3.0-rc.2`. Its annotated tag,
+[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.2)
+and eight verified public assets point to green commit
+`d775cc950bdc06c0c929c9d17e2274ec4afbe9cf`; see the
+[2026-10-24 publication receipt](../validation/v0.3.0-rc.2-publication.md). `v0.2.0`
 remains the latest non-prerelease source line and is unchanged.
+Downloaded-Android-SDK onboarding also passed on JVM/Robolectric API 24 with
+a separately recorded harness revision; see the publication receipt. This is
+not physical-device or all-platform onboarding acceptance.
 A configured version is not publication by
 itself: future candidates must not be treated as published unless their
 matching annotated tag and GitHub Release point to the same green commit. A
@@ -178,6 +182,39 @@ again and verify checksums and manifest identity. Follow
 Published `v0.2.0` uses
 [its own synthetic evidence manifest](../validation/v0.2.0-synthetic-evidence.md).
 The published rc.4 and preceding records remain immutable historical evidence.
+
+## Optional published-SDK onboarding seam
+
+After public asset verification, the existing Runtime workflow has an opt-in
+`published_sdk_onboarding` dispatch. It runs only the release seam, not the full
+Runtime suites again:
+
+```bash
+gh workflow run runtime.yml --repo yubisuke/openmasu --ref main \
+  -f published_sdk_onboarding=true
+```
+
+It downloads the frozen rc.2 SDK ZIP with its recorded checksum, creates an
+isolated `openmasu_sdk_synthetic` PostgreSQL service, and runs
+`npm run test:published-sdk`. A temporary standalone Android consumer resolves
+the public core AAR from that bundle, uses the real native Room queue and HMAC
+HTTP transport, then checks durable processing, a daily install value and saved
+analysis/CSV. No fixture events are injected into that app and the operator
+does not author event JSON. Existing Robolectric/Android test pins are reused
+(API 24 with Java 17; the separate emulator suite owns API 36);
+there is no new SDK or runtime dependency, emulator, or public provider call.
+
+This is opt-in release evidence, not another per-PR matrix. Local use requires
+the same explicitly disposable loopback database, `OPENMASU_SYNTHETIC_ONBOARDING=1`,
+the normal app/reader database URLs, and `OPENMASU_PUBLISHED_SDK_BUNDLE` pointing
+to the verified extracted ZIP. The command does not read `.env` or reset a
+ledger. The CI service owns database teardown; native consumer state and payload
+files are removed by the test. Current-day counts are measured at a saved
+receipt cutoff, not claimed as a completed live day.
+
+The later harness revision and frozen SDK source must both be recorded. This
+does not turn existing fixture-projected campaign/cost tests into native device
+evidence, nor repeat the correction/privacy/backup suites.
 
 ## Public release contents
 

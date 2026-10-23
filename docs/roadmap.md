@@ -6,7 +6,7 @@ to replace every feature of an existing provider.
 
 [Project status](STATUS.md) owns current capabilities and release boundaries.
 [Project plan](project-plan.md) gives the acceptance crosswalk for the sequence
-below. Updated: 2026-10-22.
+below. Updated: 2026-10-24.
 
 ## Status vocabulary
 
@@ -52,26 +52,27 @@ platform/imported profiles, qualified calendar cohorts, fixed FX, same-set KPIs,
 standard retention, multiple outcomes, guided setup and safe ingest recovery.
 
 The prior integration plan is complete. It must not be reused as a future
-backlog. Source completeness does not mean those additions are in a published
-SDK: `v0.3.0-rc.1` remains the published prerelease; see
-[unreleased scope](releases/next.md) and [SDK distribution](sdk-distribution.md).
+backlog. `v0.3.0-rc.2` is the published source and SDK prerelease; see the
+[publication receipt](validation/v0.3.0-rc.2-publication.md),
+[post-release scope](releases/next.md) and [SDK distribution](sdk-distribution.md).
+The downloaded Android SDK/backend journey has also passed on JVM/Robolectric
+API 24, with its later harness revision recorded separately in the receipt.
 
 ## Next product sequence
 
-The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has 23 of
-35 child implementations complete and 12 remaining at this update. Backup and
+The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has 24 of
+35 child implementations complete and 11 optional extensions remaining. Backup and
 recovery ([#250](https://github.com/yubisuke/openmasu/issues/250)) is implemented;
 the dedicated Runtime gate owns its synthetic evidence. Follow individual issue
 dependencies; the phases below are priorities, not extra refactoring gates.
 
 | Order | Workstream | Remaining issues / exit |
 | --- | --- | --- |
-| 1 | Integrated candidate | [#252](https://github.com/yubisuke/openmasu/issues/252): configured `v0.3.0-rc.2`, connected first-use journey, stable/rc.1 upgrade, exact-commit platform and distribution evidence |
 | When needed | Optional measurement and operator extensions | Activity/payer metrics, detailed costs/discovery, another ILR bridge, engagement policies, recurring comparisons, app access scope, retention expiry, multiple workers and fraud previews; see the [crosswalk](project-plan.md#next-product-slices) |
 
 [Unity purchase binding](../sdk/unity/README.md#protected-store-purchases)
 is implemented through the existing native helpers. Queued/pending callbacks are
-not verification or entitlement evidence, and no new SDK release is implied.
+not verification or entitlement evidence. These helpers are included in rc.2.
 
 Apple [postback observations](apple-postback-observations.md), [registered conversion meanings](apple-conversion-meaning.md)
 and [scoped campaign cost](cost-refresh.md#apple-ads-campaign-cost) are implemented.
@@ -79,10 +80,12 @@ Selected decoding remains unverified; live provider access is not established.
 
 Saved daily analysis and [broader external cohort comparison](cohort-comparison.md#expanded-closed-declaration)
 are implemented; external declarations remain distinct from captured execution.
-Complete the required core and chosen usage-specific paths before candidate
-promotion. Do not wait for every optional extension. Candidate `v0.3.0-rc.2` is
-configured; publication still requires release-owner approval and matching
-annotated-tag/artifact evidence. See the [candidate record](validation/v0.3.0-rc.2-synthetic-evidence.md).
+Integrated candidate acceptance
+([#252](https://github.com/yubisuke/openmasu/issues/252)) is complete within its
+declared synthetic scope. Select the remaining optional extensions only when
+their usage conditions apply. The downloaded Android SDK journey does not
+relabel existing fixture-projected campaign/cost/revenue tests or establish
+physical-device, all-platform onboarding or live-provider acceptance.
 
 Minimal monitoring rules/runbooks and the operator-scheduled backup, freshness and
 isolated restore workflow are implemented in existing tools; see

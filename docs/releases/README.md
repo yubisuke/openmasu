@@ -8,7 +8,7 @@ describe later `main` behavior.
 
 | Tag | Record | Evidence |
 | --- | --- | --- |
-| `v0.3.0-rc.2` (configured, not published) | [Candidate notes](v0.3.0-rc.2.md) | [Integration and evidence requirements](../validation/v0.3.0-rc.2-synthetic-evidence.md) |
+| `v0.3.0-rc.2` | [Release notes](v0.3.0-rc.2.md) | [Frozen integration record](../validation/v0.3.0-rc.2-synthetic-evidence.md) and [public receipt](../validation/v0.3.0-rc.2-publication.md) |
 | `v0.3.0-rc.1` | [Release notes](v0.3.0-rc.1.md) | [Frozen requirements](../validation/v0.3.0-rc.1-synthetic-evidence.md) and [public receipt](../validation/v0.3.0-rc.1-publication.md) |
 | `v0.2.0` | [Release notes](v0.2.0.md) | [Synthetic evidence](../validation/v0.2.0-synthetic-evidence.md) |
 | `v0.2.0-rc.4` | [Release notes](v0.2.0-rc.4.md) | [Synthetic evidence](../validation/v0.2.0-rc.4-synthetic-evidence.md) |
@@ -16,11 +16,15 @@ describe later `main` behavior.
 | `v0.2.0-rc.2` | [Release notes](v0.2.0-rc.2.md) | [Synthetic evidence](../validation/v0.2.0-rc.2-synthetic-evidence.md) |
 | `v0.2.0-rc.1` | [Release notes](v0.2.0-rc.1.md) | [Synthetic pilot record](../validation/v0.2.0-rc.1-pilot.md) |
 
-`v0.3.0-rc.1` is the current published prerelease. Its annotated tag,
-[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.1),
+`v0.3.0-rc.2` is the current published prerelease. Its annotated tag,
+[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.2),
 eight SDK assets and full platform workflows identify green `main` commit
-`90a0f5f`. Candidate notes/requirements remain frozen at that tag; the separate
-receipt records their completed publication and public download checks.
+`d775cc950bdc06c0c929c9d17e2274ec4afbe9cf`. Candidate notes/requirements remain
+frozen at that tag; the separate receipt records the completed 2026-10-24
+publication and public re-download checks. The receipt also records successful
+downloaded-Android-SDK onboarding on JVM/Robolectric API 24 with a later harness
+revision; the release bytes remain unchanged. This is not physical-device or
+all-platform onboarding acceptance.
 `v0.2.0` remains the latest non-prerelease source line at `68b8c48`.
 Earlier prereleases are frozen historical records. Verify the tag, source
 commit, and full-gate results independently when

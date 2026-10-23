@@ -11,13 +11,17 @@ Choose one path; provider settings are not a prerequisite:
 | Verify the full synthetic runtime and clean up automatically | [Recommended first run](#recommended-first-run) | Isolated PostgreSQL parity and HTTP smoke evidence; no persistent dashboard |
 | Explore receipt, metrics and evidence in a local dashboard | [Persistent local stack](#persistent-local-stack), then [receipt to comparison](#from-receipt-to-comparison) | A disposable local instance; never seed a stack containing data you need |
 
-These instructions describe current source. The published `v0.3.0-rc.1`
-prerelease has its own fixed evidence and does not contain every later `main`
-addition. See [Project status](STATUS.md) and [unreleased scope](releases/next.md).
-Current source and SDK are configured for candidate `v0.3.0-rc.2`. Its
-[integration record](validation/v0.3.0-rc.2-synthetic-evidence.md) distinguishes
-authenticated admission, seeded reference evidence, packaged SDK consumers and
-upgrade checks; none is a live-device or provider qualification.
+These instructions describe current source. `v0.3.0-rc.2` is the published
+source and SDK prerelease; its
+[publication receipt](validation/v0.3.0-rc.2-publication.md) records the exact
+tag and verified public assets on 2026-10-24. See [Project status](STATUS.md),
+[SDK installation](sdk-distribution.md) and [post-release scope](releases/next.md).
+The [frozen integration record](validation/v0.3.0-rc.2-synthetic-evidence.md)
+distinguishes authenticated HTTP admission, seeded reference evidence, packaged
+SDK consumers and upgrade checks. A separate downloaded-Android-SDK/backend
+journey also passed on JVM/Robolectric API 24; its later harness revision is
+recorded in the publication receipt. These checks do not qualify physical
+devices, all-platform onboarding or live providers.
 
 ## Requirements
 

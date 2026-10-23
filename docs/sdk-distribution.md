@@ -1,18 +1,20 @@
 # SDK Downloads and Installation
 
 The downloadable prerelease is
-[v0.3.0-rc.1](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.1).
+[v0.3.0-rc.2](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.2).
 Its annotated tag, full platform CI and eight public assets identify source
-`90a0f5fe56b75e8fdefd2f759e33b3ae538b79c2`. The
-[publication receipt](validation/v0.3.0-rc.1-publication.md) records re-download,
-checksum, manifest and exact-CI-byte verification. A prepared file alone is not
-publication. Historical `v0.2.0` tags and records are not modified.
+`d775cc950bdc06c0c929c9d17e2274ec4afbe9cf`. The
+[publication receipt](validation/v0.3.0-rc.2-publication.md) records the
+2026-10-24 publication, public re-download, checksum, manifest and exact-tag
+verification. `v0.2.0` remains the latest stable source release; historical tags
+and records are not modified.
 
-Current source is configured for `v0.3.0-rc.2`. Its added SDK helpers are not in
-the public rc.1 downloads below. Contributors can build the candidate using the
-[release runbook](operations/release.md); only exact-commit CI artifacts qualify
-as candidate evidence. Do not substitute rc.2 into these public download commands
-until that release is approved, tagged, published and verified.
+The downloaded Android SDK passed a first-use journey through its native queue
+and HTTP transport to the synthetic backend, a daily install value and saved
+analysis/CSV. The publication receipt records the later harness revision
+separately. This is JVM/Robolectric API 24 evidence, not physical-device or
+all-platform onboarding. Contributors should reuse the
+[release runbook](operations/release.md) and exact-commit CI artifacts.
 
 ## Obtain and verify the exact assets
 
@@ -20,10 +22,10 @@ Use a new empty local directory. These commands download public artifacts; they
 do not contact a measurement endpoint or need a provider account:
 
 ```bash
-gh release download v0.3.0-rc.1 --repo yubisuke/openmasu --dir build/sdk-download
+gh release download v0.3.0-rc.2 --repo yubisuke/openmasu --dir build/sdk-download
 cd build/sdk-download
 sha256sum --check SHA256SUMS
-unzip openmasu-sdk-0.3.0-rc.1.zip
+unzip openmasu-sdk-0.3.0-rc.2.zip
 cat release-manifest.json
 ```
 
@@ -37,18 +39,20 @@ The eight assets are:
 
 | Asset | Purpose |
 | --- | --- |
-| `openmasu-sdk-0.3.0-rc.1.zip` | Entire verified bundle, five compiled Android AAR/POM pairs, legal files, internal checksums and original manifest |
-| `com.openmasu.sdk-0.3.0-rc.1.tgz` | Standalone Unity UPM package with packaged Android dependencies and vendored Swift source |
-| `OpenMasuIOS-0.3.0-rc.1-source.zip` | Swift Package source, not a binary XCFramework |
+| `openmasu-sdk-0.3.0-rc.2.zip` | Entire verified bundle, five compiled Android AAR/POM pairs, legal files, internal checksums and original manifest |
+| `com.openmasu.sdk-0.3.0-rc.2.tgz` | Standalone Unity UPM package with packaged Android dependencies and vendored Swift source |
+| `OpenMasuIOS-0.3.0-rc.2-source.zip` | Swift Package source, not a binary XCFramework |
 | `release-manifest.json` | Original SDK version, source revision and complete inner artifact inventory |
 | `sdk-android.cdx.json`, `sdk-ios.cdx.json`, `sdk-unity.cdx.json` | Version-bound CycloneDX component inventories |
 | `SHA256SUMS` | Checksums of the seven other downloadable assets |
 
-The manifest `version` must be `0.3.0-rc.1`; `source_revision` must equal
-`git rev-parse 'v0.3.0-rc.1^{commit}'` in a source checkout with that annotated
+The manifest `version` must be `0.3.0-rc.2`; `source_revision` must equal
+`d775cc950bdc06c0c929c9d17e2274ec4afbe9cf` and
+`git rev-parse 'v0.3.0-rc.2^{commit}'` in a source checkout with that annotated
 tag. The manifest inside the whole SDK ZIP must be byte-identical to the separate
 asset. Its internal `SHA256SUMS` verifies every contained file. Release notes
-link the full Contract, Runtime, Android JVM/emulator and iOS runs at that SHA.
+and the publication receipt link the full Contract, Runtime, Android JVM/emulator
+and iOS runs at that SHA.
 PR no-op checks and an unrelated successful run are not release evidence.
 
 The maintainer's `--verify-only --verify-tag` tool additionally requires a clean
@@ -59,17 +63,17 @@ and manifest comparison above does not require rebuilding the SDK.
 
 Use an existing Android host project with minimum API 24 and the pinned SDK
 toolchain described in [Android setup](../sdk/android/README.md). Point a local
-Maven repository at the extracted `openmasu-sdk-0.3.0-rc.1/maven` directory:
+Maven repository at the extracted `openmasu-sdk-0.3.0-rc.2/maven` directory:
 
 ```kotlin
 repositories {
     google()
     mavenCentral()
-    maven { url = uri("/absolute/local/path/openmasu-sdk-0.3.0-rc.1/maven") }
+    maven { url = uri("/absolute/local/path/openmasu-sdk-0.3.0-rc.2/maven") }
 }
 dependencies {
-    implementation("dev.openmasu:core:0.3.0-rc.1")
-    implementation("dev.openmasu:installreferrer:0.3.0-rc.1") // optional module
+    implementation("dev.openmasu:core:0.3.0-rc.2")
+    implementation("dev.openmasu:installreferrer:0.3.0-rc.2") // optional module
 }
 ```
 
@@ -82,7 +86,7 @@ device delivery, store signing or live provider permissions.
 ## Unity: add the generated package, not a repository reference
 
 In Package Manager choose **Add package from tarball** and select the verified
-`com.openmasu.sdk-0.3.0-rc.1.tgz`. The tarball includes the local Android Maven
+`com.openmasu.sdk-0.3.0-rc.2.tgz`. The tarball includes the local Android Maven
 modules, so it does not require a separately published Maven registry. Follow
 [Unity host setup](../sdk/unity/README.md) for platform settings, link-host
 validation, the optional sample and callback pumping. Keep real endpoints and
@@ -95,8 +99,8 @@ physical-device operation, Unity 2022.3 or Unity iOS export acceptance.
 
 ## iOS: consume Swift source
 
-Extract `OpenMasuIOS-0.3.0-rc.1-source.zip` and add its
-`OpenMasuIOS-0.3.0-rc.1/sdk/ios` directory as a local Swift Package in Xcode.
+Extract `OpenMasuIOS-0.3.0-rc.2-source.zip` and add its
+`OpenMasuIOS-0.3.0-rc.2/sdk/ios` directory as a local Swift Package in Xcode.
 Select only the products required by the host; follow
 [iOS host setup](../sdk/ios/README.md) for the privacy manifest and provider
 integration. `swift test --package-path <extracted-package-directory>` tests
