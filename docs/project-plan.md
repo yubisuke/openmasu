@@ -48,8 +48,8 @@ guides document their configuration. Published-release evidence remains separate
 
 ## Next product slices
 
-Updated: 2026-10-24. Twenty-three of 35 child implementations are complete; the 12 remaining
-issues below map directly to the [roadmap sequence](roadmap.md#next-product-sequence).
+Updated: 2026-10-24. Twenty-four of 35 child implementations are complete; the 11 remaining
+optional issues below map directly to the [roadmap sequence](roadmap.md#next-product-sequence).
 Numbers are tracking links, not required background knowledge.
 
 ### Core and selected-use work
@@ -57,8 +57,7 @@ Numbers are tracking links, not required background knowledge.
 [Unity purchase binding](../sdk/unity/README.md#protected-store-purchases) is
 implemented: the existing native preparation/submission paths retain consent,
 credential and privacy boundaries. Queued/pending is not verification, and no
-purchase authority or real-store qualification is added. The next core task is
-the [integrated candidate](#integration-and-distribution), not another bridge layer.
+purchase authority or real-store qualification is added.
 
 Saved bounded daily analysis and external revenue/ROAS/LTV, retention and outcome
 comparison are implemented. External declarations never become captured execution
@@ -72,8 +71,8 @@ remain in the linked issues.
 
 ### Optional extensions
 
-Implement only for the selected usage scope. They are not all prerequisites for
-the integrated candidate.
+Implement only for the selected usage scope; these extensions are not required
+for the completed integrated candidate.
 
 | Issue / workstream | Narrow acceptance |
 | --- | --- |
@@ -106,12 +105,13 @@ passed forward migration and privacy reapplication. The
 [publication receipt](validation/v0.3.0-rc.2-publication.md) records exact-commit
 full CI, the annotated tag and eight verified public assets on 2026-10-24.
 
-The first criterion remains open: execute the integrated first-use journey with
-the downloaded native SDK against the synthetic backend. Existing authenticated
-HMAC HTTP sessions reached the durable inbox, retention and saved analysis/CSV,
-but were not native SDK execution; acquisition, cost and revenue were
-fixture-projected. Keep #252 open and the 23-of-35 total unchanged until its
-remaining integration acceptance is met.
+The downloaded rc.2 Android SDK passed the native Room queue/HMAC HTTP path
+through durable backend processing to a daily install value and saved
+analysis/CSV on JVM/Robolectric API 24. The publication receipt records the
+later harness revision separately from the frozen SDK source. This completes
+#252 within its declared synthetic scope, bringing the plan to 24 of 35 complete.
+Existing fixture-projected campaign/cost/revenue tests remain separate; this is
+not physical-device, all-platform onboarding or live-provider acceptance.
 
 ## Next development foundations
 

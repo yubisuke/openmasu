@@ -15,10 +15,13 @@ The `v0.3.0-rc.2` [frozen integration record](v0.3.0-rc.2-synthetic-evidence.md)
 maps first-use, correction, upgrade and SDK paths to their existing test owners.
 The separate [publication receipt](v0.3.0-rc.2-publication.md) records full CI
 and eight verified public SDK assets at tagged commit `d775cc9` on 2026-10-24.
-Neither record applies to later source changes or production operation.
-The downloaded native SDK/backend first-use journey remains unexecuted; existing
-HMAC HTTP sessions are not native SDK execution, and acquisition, cost and
-revenue in that journey were fixture-projected.
+The release evidence does not apply to later source changes or production operation.
+The receipt separately records the downloaded Android SDK journey through its
+native Room queue/HMAC HTTP transport, durable backend processing, a daily
+install value and saved analysis/CSV. Its later harness revision is distinct
+from the frozen SDK source. This is JVM/Robolectric API 24 evidence, not physical-device
+or all-platform onboarding; existing fixture-projected campaign/cost/revenue tests
+remain separate.
 
 The [v0.3.0-rc.1 publication receipt](v0.3.0-rc.1-publication.md) remains the
 historical record for its tagged commit `90a0f5f`.

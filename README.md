@@ -44,9 +44,11 @@ Its annotated tag and eight verified assets identify source
 evidence for that release or for rc.2.
 
 The [frozen integration record](docs/validation/v0.3.0-rc.2-synthetic-evidence.md)
-describes the existing synthetic test owners. A first-use journey from the
-downloaded native SDK through the synthetic backend is still unexecuted;
-publication does not complete that integration acceptance.
+describes the existing synthetic test owners. The downloaded rc.2 Android SDK
+also passed a first-use journey through its native queue and HTTP transport to
+the synthetic backend, a daily install value and saved analysis/CSV. The
+publication receipt records the later harness revision separately. This is
+JVM/Robolectric API 24 evidence, not physical-device or all-platform onboarding.
 
 Current source includes additions through contract patch `v0.4.24`; the wire
 identity remains `0.4.0` with schema URNs ending in `:v0.4`. See

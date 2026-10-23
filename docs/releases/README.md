@@ -21,8 +21,10 @@ describe later `main` behavior.
 eight SDK assets and full platform workflows identify green `main` commit
 `d775cc950bdc06c0c929c9d17e2274ec4afbe9cf`. Candidate notes/requirements remain
 frozen at that tag; the separate receipt records the completed 2026-10-24
-publication and public re-download checks. The downloaded native SDK/backend
-first-use journey remains unexecuted; publication does not close integration acceptance.
+publication and public re-download checks. The receipt also records successful
+downloaded-Android-SDK onboarding on JVM/Robolectric API 24 with a later harness
+revision; the release bytes remain unchanged. This is not physical-device or
+all-platform onboarding acceptance.
 `v0.2.0` remains the latest non-prerelease source line at `68b8c48`.
 Earlier prereleases are frozen historical records. Verify the tag, source
 commit, and full-gate results independently when

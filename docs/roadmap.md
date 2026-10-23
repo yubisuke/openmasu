@@ -55,19 +55,19 @@ The prior integration plan is complete. It must not be reused as a future
 backlog. `v0.3.0-rc.2` is the published source and SDK prerelease; see the
 [publication receipt](validation/v0.3.0-rc.2-publication.md),
 [post-release scope](releases/next.md) and [SDK distribution](sdk-distribution.md).
-Publication does not establish the remaining downloaded native SDK/backend journey.
+The downloaded Android SDK/backend journey has also passed on JVM/Robolectric
+API 24, with its later harness revision recorded separately in the receipt.
 
 ## Next product sequence
 
-The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has 23 of
-35 child implementations complete and 12 remaining at this update. Backup and
+The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has 24 of
+35 child implementations complete and 11 optional extensions remaining. Backup and
 recovery ([#250](https://github.com/yubisuke/openmasu/issues/250)) is implemented;
 the dedicated Runtime gate owns its synthetic evidence. Follow individual issue
 dependencies; the phases below are priorities, not extra refactoring gates.
 
 | Order | Workstream | Remaining issues / exit |
 | --- | --- | --- |
-| 1 | Integrated candidate | [#252](https://github.com/yubisuke/openmasu/issues/252): execute the downloaded native SDK to synthetic backend first-use journey; rc.2 publication, stable/rc.1 upgrade and exact-commit platform evidence are verified |
 | When needed | Optional measurement and operator extensions | Activity/payer metrics, detailed costs/discovery, another ILR bridge, engagement policies, recurring comparisons, app access scope, retention expiry, multiple workers and fraud previews; see the [crosswalk](project-plan.md#next-product-slices) |
 
 [Unity purchase binding](../sdk/unity/README.md#protected-store-purchases)
@@ -80,12 +80,12 @@ Selected decoding remains unverified; live provider access is not established.
 
 Saved daily analysis and [broader external cohort comparison](cohort-comparison.md#expanded-closed-declaration)
 are implemented; external declarations remain distinct from captured execution.
-Complete the required core and chosen usage-specific paths before integration
-acceptance; do not wait for every optional extension. `v0.3.0-rc.2` is published,
-but #252 remains open until the downloaded native SDK/backend journey runs.
-The [frozen integration record](validation/v0.3.0-rc.2-synthetic-evidence.md)
-contains authenticated HMAC HTTP session evidence, not native SDK execution;
-acquisition, cost and revenue remain fixture-projected.
+Integrated candidate acceptance
+([#252](https://github.com/yubisuke/openmasu/issues/252)) is complete within its
+declared synthetic scope. Select the remaining optional extensions only when
+their usage conditions apply. The downloaded Android SDK journey does not
+relabel existing fixture-projected campaign/cost/revenue tests or establish
+physical-device, all-platform onboarding or live-provider acceptance.
 
 Minimal monitoring rules/runbooks and the operator-scheduled backup, freshness and
 isolated restore workflow are implemented in existing tools; see

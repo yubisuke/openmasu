@@ -10,8 +10,9 @@ and eight verified public assets point to green commit
 `d775cc950bdc06c0c929c9d17e2274ec4afbe9cf`; see the
 [2026-10-24 publication receipt](../validation/v0.3.0-rc.2-publication.md). `v0.2.0`
 remains the latest non-prerelease source line and is unchanged.
-The downloaded native SDK/backend first-use journey remains unexecuted;
-publication and platform gates do not complete that integration acceptance.
+Downloaded-Android-SDK onboarding also passed on JVM/Robolectric API 24 with
+a separately recorded harness revision; see the publication receipt. This is
+not physical-device or all-platform onboarding acceptance.
 A configured version is not publication by
 itself: future candidates must not be treated as published unless their
 matching annotated tag and GitHub Release point to the same green commit. A

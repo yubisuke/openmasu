@@ -9,9 +9,11 @@ Its annotated tag, full platform CI and eight public assets identify source
 verification. `v0.2.0` remains the latest stable source release; historical tags
 and records are not modified.
 
-The downloaded native SDK/backend first-use journey remains unexecuted. Public
-asset verification and existing package/platform gates do not establish that
-integration acceptance or live-device delivery. Contributors should reuse the
+The downloaded Android SDK passed a first-use journey through its native queue
+and HTTP transport to the synthetic backend, a daily install value and saved
+analysis/CSV. The publication receipt records the later harness revision
+separately. This is JVM/Robolectric API 24 evidence, not physical-device or
+all-platform onboarding. Contributors should reuse the
 [release runbook](operations/release.md) and exact-commit CI artifacts.
 
 ## Obtain and verify the exact assets

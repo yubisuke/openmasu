@@ -14,22 +14,18 @@ remain frozen. The separate
 annotated tag, exact-commit full CI and eight verified public assets.
 `v0.2.0` remains the latest stable source release.
 
-## Remaining integration acceptance
+## Remaining optional scope
 
-[#252](https://github.com/yubisuke/openmasu/issues/252) remains open: the
-downloaded native SDK has not yet driven the integrated first-use journey
-against the synthetic backend. Existing authenticated HMAC HTTP sessions
-reached the durable inbox, retention and saved analysis/CSV, but did not execute
-the native SDK. Acquisition, cost and revenue remained fixture-projected.
-Published assets, package checks and platform CI do not replace that journey.
-
-Reuse the existing SDK, backend, journey suites and release tools. Do not add
-another service or parallel validation harness. The
-[functional plan](https://github.com/yubisuke/openmasu/issues/218) remains at
-23 of 35 child implementations complete, with 12 remaining. Optional extensions
-follow the [roadmap](../roadmap.md#next-product-sequence) and
-[acceptance crosswalk](../project-plan.md#next-product-slices); they are not all
-prerequisites for closing the integration scope.
+Integrated candidate acceptance
+([#252](https://github.com/yubisuke/openmasu/issues/252)) is complete within its
+declared synthetic scope. The publication receipt records the downloaded Android
+SDK/backend journey on JVM/Robolectric API 24 separately from the frozen release.
+It does not establish physical-device or all-platform onboarding acceptance.
+The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
+24 of 35 child implementations complete, with 11 optional extensions remaining.
+Select further work from the [roadmap](../roadmap.md#next-product-sequence) and
+[acceptance crosswalk](../project-plan.md#next-product-slices) according to the
+intended usage.
 
 ## Separate operator evidence
 

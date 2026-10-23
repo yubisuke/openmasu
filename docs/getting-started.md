@@ -18,8 +18,10 @@ tag and verified public assets on 2026-10-24. See [Project status](STATUS.md),
 [SDK installation](sdk-distribution.md) and [post-release scope](releases/next.md).
 The [frozen integration record](validation/v0.3.0-rc.2-synthetic-evidence.md)
 distinguishes authenticated HTTP admission, seeded reference evidence, packaged
-SDK consumers and upgrade checks. The downloaded native SDK/backend first-use
-journey remains unexecuted; none of these checks qualifies live devices or providers.
+SDK consumers and upgrade checks. A separate downloaded-Android-SDK/backend
+journey also passed on JVM/Robolectric API 24; its later harness revision is
+recorded in the publication receipt. These checks do not qualify physical
+devices, all-platform onboarding or live providers.
 
 ## Requirements
 
