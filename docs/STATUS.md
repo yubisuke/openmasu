@@ -1,25 +1,25 @@
 # Project Status
 
-Updated: 2026-10-22. This page describes the current `main` source tree.
+Updated: 2026-10-24. This page describes the current `main` source tree.
 Implementation and synthetic verification are not live operational qualification.
 
 ## Release snapshot
 
 | Line | Identity and evidence |
 | --- | --- |
-| Published prerelease | `v0.3.0-rc.1` at `90a0f5f`; eight SDK assets and exact-tag publication evidence |
-| Configured candidate | `v0.3.0-rc.2`; candidate integration and platform evidence are separate from publication |
+| Published prerelease | `v0.3.0-rc.2` at `d775cc9`; eight verified SDK assets and exact-commit full CI |
+| Remaining integration acceptance | Downloaded native SDK to synthetic backend first-use journey has not been executed |
 | Latest stable source release | `v0.2.0`; later features belong to newer source, not this tag |
 | Current source | Contract patch ledger through v0.4.24; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 71 fixtures, 923 golden artifacts |
 
-`v0.3.0-rc.1` is the current published source and SDK release, marked as a
-prerelease. Its [release page](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.1),
-[synthetic evidence](validation/v0.3.0-rc.1-synthetic-evidence.md) and
-[publication receipt](validation/v0.3.0-rc.1-publication.md) describe that exact tag.
-Current source and SDK are configured for candidate `v0.3.0-rc.2`; this does not
-publish a new SDK. The [candidate record](validation/v0.3.0-rc.2-synthetic-evidence.md)
-maps the integration paths to existing gates. [Candidate notes](releases/v0.3.0-rc.2.md)
-summarize the difference from the published SDK.
+`v0.3.0-rc.2` is the current published source and SDK release, marked as a
+prerelease. Its [release page](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.2)
+and [publication receipt](validation/v0.3.0-rc.2-publication.md) identify source
+`d775cc950bdc06c0c929c9d17e2274ec4afbe9cf`, exact-commit CI and eight public
+assets re-downloaded and verified on 2026-10-24. The
+[frozen integration record](validation/v0.3.0-rc.2-synthetic-evidence.md) and
+[release notes](releases/v0.3.0-rc.2.md) retain their pre-publication evidence
+boundaries; the separate receipt records publication without rewriting them.
 
 ## What the status means
 
@@ -45,7 +45,7 @@ qualification is stated. No row establishes production readiness.
 | Ongoing calculation | Durable daily schedules, bounded target discovery, Google/Apple cost refresh, saved replay and explicit/opt-in automatic corrections | Not every profile supports discovery or automatic correction; no implicit all-history scan; live cost access and billing agreement remain unverified |
 | Dashboard and comparison | Server-rendered reader-only reports; saved filters, bounded previous-period views and operands; external revenue/ROAS/LTV, retention and outcome declarations via the same offline/web comparator | External meaning remains operator-declared; no provider completeness, imported-binding or engagement-equivalence claim; incompatible/missing/undefined/zero remain distinct |
 | Setup and diagnostics | Recommended measurement form, recent event/SDK-version classes and confirmation-bound ingest recovery | SDK versions are client-declared; absent receipts do not prove an outage; invalid/deleted/claimed evidence is not replayed |
-| SDKs and verified commerce | Android/iOS/Unity queues and bridges; native verified purchases, Swift submission and typed Unity purchase binding; synthetic Unity 6 Android export | Real devices/stores/providers and Unity 2022.3 are unverified; queued/pending does not mean verified; current helpers are not newly published SDK assets |
+| SDKs and verified commerce | Android/iOS/Unity queues and bridges; native verified purchases, Swift submission and typed Unity purchase binding in rc.2 assets; synthetic Unity 6 Android export | Downloaded native SDK/backend journey, real devices/stores/providers and Unity 2022.3 are unverified; queued/pending does not mean verified |
 | Deep links and re-engagement | Deterministic direct links on both OSes, Android deferred links, separate latest-open 24-hour outcome profiles | No iOS deferred links; no engagement ROAS/purchase model; device-reported opens can be forged |
 | Fraud controls | Recorded public rules, registered fraud bundle hashes, diagnostics and synthetic Integrity/App Attest verification | No physical-device-farm or reset-fraud guarantee; private threshold calibration and live platform projects unverified |
 | Privacy and recovery | Role isolation, protected payloads, deletion, saved-manifest metric replay; matched backup/freshness and isolated restore CLI with all-tenant privacy reapplication and a dedicated synthetic gate | External recipients retain their own deletion duty; live recovery time, authoritative boundary custody and secret custody unverified |
@@ -79,11 +79,14 @@ digest with the SDK and expose ranges without inventing postback bindings.
 existing bounded refresh and correction path with explicit UTC days and currency.
 [Unity purchase binding](../sdk/unity/README.md#protected-store-purchases) now reuses
 native preparation/submission and consent boundaries without claiming verification
-from queued/pending callbacks. Current work: **integrated candidate preparation**
-([#252](https://github.com/yubisuke/openmasu/issues/252)), including authenticated
-receipt-to-calculation coverage, both published-source upgrade paths and aligned
-SDK identities. Exact-commit platform gates and release-owner publication remain
-distinct steps; the issue is not complete merely because a version was configured.
+from queued/pending callbacks. Current work: **downloaded SDK integration acceptance**
+([#252](https://github.com/yubisuke/openmasu/issues/252)). Exact-commit platform
+gates, both published-source upgrade paths and rc.2 publication are verified.
+The first acceptance criterion remains open: the downloaded native SDK has not
+yet driven the integrated first-use journey against the synthetic backend.
+Existing authenticated HMAC HTTP sessions reached the durable inbox, retention
+and saved analysis/CSV; they were not native SDK execution. Acquisition, cost and
+revenue in that journey remain fixture-projected. Publication does not close the issue.
 The [roadmap](roadmap.md)
 owns the sequence; the [project plan](project-plan.md) records its acceptance
 crosswalk. Optional expansions are not all release prerequisites.

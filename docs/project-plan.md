@@ -48,7 +48,7 @@ guides document their configuration. Published-release evidence remains separate
 
 ## Next product slices
 
-Updated: 2026-10-22. Twenty-three of 35 child implementations are complete; the 12 remaining
+Updated: 2026-10-24. Twenty-three of 35 child implementations are complete; the 12 remaining
 issues below map directly to the [roadmap sequence](roadmap.md#next-product-sequence).
 Numbers are tracking links, not required background knowledge.
 
@@ -98,13 +98,20 @@ Apple aggregate views, Unity purchase binding, daily analysis and broader
 comparison semantics. Do not treat a local bundle or a green source-only check
 as a published SDK.
 
-The configured candidate is `v0.3.0-rc.2`. Its
-[integration record](validation/v0.3.0-rc.2-synthetic-evidence.md) reuses existing
+The published prerelease is `v0.3.0-rc.2`. Its
+[frozen integration record](validation/v0.3.0-rc.2-synthetic-evidence.md) reuses existing
 journey, correction/privacy, package-consumer and backup suites. It adds no
 service or parallel release harness. Frozen `v0.2.0` and `v0.3.0-rc.1` backups
-must both survive forward migration and privacy reapplication. Publication is
-still a separate release-owner step; keep this issue open until the distribution
-acceptance is met.
+passed forward migration and privacy reapplication. The
+[publication receipt](validation/v0.3.0-rc.2-publication.md) records exact-commit
+full CI, the annotated tag and eight verified public assets on 2026-10-24.
+
+The first criterion remains open: execute the integrated first-use journey with
+the downloaded native SDK against the synthetic backend. Existing authenticated
+HMAC HTTP sessions reached the durable inbox, retention and saved analysis/CSV,
+but were not native SDK execution; acquisition, cost and revenue were
+fixture-projected. Keep #252 open and the 23-of-35 total unchanged until its
+remaining integration acceptance is met.
 
 ## Next development foundations
 

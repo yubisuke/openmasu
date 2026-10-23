@@ -2,6 +2,11 @@ name: Runtime
 
 on:
   workflow_dispatch:
+    inputs:
+      published_sdk_onboarding:
+        description: Run only the public rc.2 native SDK onboarding seam
+        type: boolean
+        default: false
   pull_request:
   push:
     branches: [main]
@@ -15,6 +20,7 @@ permissions:
 
 jobs:
   runtime:
+    if: ${{ inputs.published_sdk_onboarding != true }}
     # Runtime containers are verified on Linux. Windows development uses Docker Desktop.
     runs-on: ubuntu-24.04
     services:
@@ -165,3 +171,61 @@ jobs:
           name: runtime-sbom
           path: sbom/*.cdx.json
           if-no-files-found: error
+
+  published-sdk-onboarding:
+    # Release-only seam. It replaces, never duplicates, the full Runtime matrix
+    # for this explicit dispatch; ordinary PRs/pushes retain their existing gates.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.published_sdk_onboarding == true }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: openmasu_sdk_synthetic
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres-synthetic-ci
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d openmasu_sdk_synthetic"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      OPENMASU_SYNTHETIC_ONBOARDING: "1"
+      OPENMASU_MIGRATION_DATABASE_URL: postgresql://postgres:postgres-synthetic-ci@localhost:5432/openmasu_sdk_synthetic
+      OPENMASU_APP_DATABASE_PASSWORD: app-synthetic-ci-password
+      OPENMASU_READER_DATABASE_PASSWORD: reader-synthetic-ci-password
+      OPENMASU_SEED_DATABASE_PASSWORD: seed-synthetic-ci-password
+      OPENMASU_APP_DATABASE_URL: postgresql://openmasu_app:app-synthetic-ci-password@localhost:5432/openmasu_sdk_synthetic
+      OPENMASU_READER_DATABASE_URL: postgresql://openmasu_reader:reader-synthetic-ci-password@localhost:5432/openmasu_sdk_synthetic
+      OPENMASU_PUBLISHED_SDK_BUNDLE: build/published-sdk/openmasu-sdk-0.3.0-rc.2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.18.0
+          cache: npm
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: 3.13.5
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - name: Install existing pinned tooling
+        run: |
+          npm install --global npm@11.6.2
+          npm ci
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
+      - name: Download and verify frozen public SDK bytes
+        run: |
+          mkdir -p build/published-sdk
+          curl --fail --location --silent --show-error --retry 3 \
+            https://github.com/yubisuke/openmasu/releases/download/v0.3.0-rc.2/openmasu-sdk-0.3.0-rc.2.zip \
+            --output build/published-sdk/release.zip
+          printf '%s  %s\n' ea98c0355113504b20843a54daf27f439d3dda74d09f28e13ae16abb4020ac8b build/published-sdk/release.zip | sha256sum --check
+          unzip -q build/published-sdk/release.zip -d build/published-sdk
+      - name: Run published native SDK through API ledger and saved analysis
+        run: |
+          npm run db:migrate
+          npm run test:published-sdk

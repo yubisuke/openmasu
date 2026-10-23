@@ -33,20 +33,24 @@ support. [Project status](docs/STATUS.md) lists their limits; the
 
 ## Source and release
 
-`v0.3.0-rc.1` is the current published source and SDK release, marked as a
+`v0.3.0-rc.2` is the current published source and SDK release, marked as a
 prerelease. Download its SDK assets from the
-[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.1).
-Later `main` commits are not evidence for that release.
+[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.2).
+Its annotated tag and eight verified assets identify source
+`d775cc950bdc06c0c929c9d17e2274ec4afbe9cf`; the
+[publication receipt](docs/validation/v0.3.0-rc.2-publication.md) records the
+2026-10-24 publication, exact-commit CI and public re-download checks.
+`v0.2.0` remains the latest stable source release. Later `main` commits are not
+evidence for that release or for rc.2.
 
-Current source and SDK are configured for candidate `v0.3.0-rc.2`. This
-candidate is published only if the matching annotated tag and GitHub Release
-identify the exact fully verified commit. Follow the
-[candidate integration record](docs/validation/v0.3.0-rc.2-synthetic-evidence.md)
-for its existing test owners and remaining publication gates.
+The [frozen integration record](docs/validation/v0.3.0-rc.2-synthetic-evidence.md)
+describes the existing synthetic test owners. A first-use journey from the
+downloaded native SDK through the synthetic backend is still unexecuted;
+publication does not complete that integration acceptance.
 
 Current source includes additions through contract patch `v0.4.24`; the wire
 identity remains `0.4.0` with schema URNs ending in `:v0.4`. See
-[current status](docs/STATUS.md) and [unreleased changes](docs/releases/next.md).
+[current status](docs/STATUS.md) and [post-release scope](docs/releases/next.md).
 Use the matching tag and its documentation when evaluating a published release.
 
 ## Start with synthetic data
