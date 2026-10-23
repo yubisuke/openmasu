@@ -199,7 +199,8 @@ isolated `openmasu_sdk_synthetic` PostgreSQL service, and runs
 the public core AAR from that bundle, uses the real native Room queue and HMAC
 HTTP transport, then checks durable processing, a daily install value and saved
 analysis/CSV. No fixture events are injected into that app and the operator
-does not author event JSON. Existing Robolectric/Android test pins are reused;
+does not author event JSON. Existing Robolectric/Android test pins are reused
+(API 24 with Java 17; the separate emulator suite owns API 36);
 there is no new SDK or runtime dependency, emulator, or public provider call.
 
 This is opt-in release evidence, not another per-PR matrix. Local use requires

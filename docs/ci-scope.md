@@ -30,6 +30,13 @@ test harness or required job context is introduced.
 
 ## One owner per correctness test
 
+Published native SDK onboarding is an opt-in release seam in the existing
+Runtime workflow (`published_sdk_onboarding=true`). That dispatch runs only
+the isolated public-AAR consumer and backend journey; it does not also run the
+Runtime suites. Normal PRs and pushes skip this optional job. It reuses the
+existing Android test dependencies and real runtime services, and is not a new
+per-change matrix. See the [release procedure](operations/release.md#optional-published-sdk-onboarding-seam).
+
 Runtime executes `npm test` once for all unit files and `test:integration` once
 for all application integration files. Do not repeat subsets afterwards:
 

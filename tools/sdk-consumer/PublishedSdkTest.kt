@@ -14,7 +14,9 @@ import org.robolectric.annotation.Config
 
 /** Uses only the downloaded public SDK: real Room storage and default HTTP/HMAC. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+// Match the shipping SDK's minimum Android API and existing Java 17 JVM gate.
+// API 36 execution remains owned by the separate Android emulator workflow.
+@Config(sdk = [24])
 class PublishedSdkTest {
   @Test(timeout = 90_000)
   fun publishedCoreDeliversNativeEvents() {

@@ -194,43 +194,69 @@ def terminate_tree(process: subprocess.Popen[bytes]) -> None:
 
 
 def safe_diagnostics(consumer: Path, environment: dict[str, str]) -> list[str]:
-    """Allowlist compiler locations and stack frames; never publish raw logs/XML."""
+    """Extract failure metadata/cause lines, never stdout or raw payload logs."""
     diagnostics: list[str] = []
+    results = consumer / "build/test-results/testDebugUnitTest"
+    # Initialization/worker failures can use a different report or testcase name.
+    # Successful evidence is checked more strictly below, independently of this.
+    for report in sorted(results.glob("TEST-*.xml"))[:8]:
+        try:
+            for case in ET.parse(report).getroot().findall("testcase"):
+                for failure in [*case.findall("failure"), *case.findall("error")]:
+                    diagnostics.append(
+                        f"test={case.get('classname', 'unknown')}.{case.get('name', 'unknown')}; "
+                        f"failure={failure.get('type', 'unknown')}"
+                    )
+                    if failure.get("message"):
+                        diagnostics.extend(failure.get("message", "").splitlines()[:4])
+                    frames = 0
+                    for line in (failure.text or "").splitlines():
+                        if line.lstrip().startswith(("Caused by:", "Suppressed:")):
+                            diagnostics.append(line.strip())
+                        elif frames < 4 and re.fullmatch(r"\s+at [A-Za-z_$][A-Za-z0-9_.$]*\([A-Za-z0-9_.$: +~-]+\)", line):
+                            diagnostics.append(line.strip())
+                            frames += 1
+        except ET.ParseError:
+            diagnostics.append("native_test_report_unreadable")
     compiler_line = re.compile(
         r"^(?:e: (?:file:/{1,3})?.*PublishedSdkTest\.kt:[0-9]+|"
         r".*build\.gradle:[0-9]+:|Execution failed for task ':?[A-Za-z0-9:]+')"
     )
     log = consumer / "gradle-private.log"
     if log.is_file():
+        failure_section = False
+        causes = 0
         for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
-            if compiler_line.match(line):
-                diagnostics.append(line[:500])
-                if len(diagnostics) >= 8:
-                    break
-    report = consumer / f"build/test-results/testDebugUnitTest/TEST-{TEST_CLASS}.xml"
-    if report.is_file():
-        try:
-            for case in ET.parse(report).getroot().findall("testcase"):
-                if case.get("classname") != TEST_CLASS or case.get("name") != TEST_METHOD:
-                    continue
-                for failure in [*case.findall("failure"), *case.findall("error")]:
-                    kind = failure.get("type", "")
-                    if re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_.$]*", kind):
-                        diagnostics.append(f"{TEST_CLASS}.{TEST_METHOD}: {kind}")
-                    for line in (failure.text or "").splitlines():
-                        if re.fullmatch(r"\s+at [A-Za-z_$][A-Za-z0-9_.$]*\([A-Za-z0-9_.$: +~-]+\)", line):
-                            diagnostics.append(line.strip())
-                            if len(diagnostics) >= 16:
-                                break
-        except ET.ParseError:
-            diagnostics.append("native_test_report_unreadable")
+            if line.strip() == "* What went wrong:":
+                failure_section = True
+                continue
+            if line.startswith("* "):
+                failure_section = False
+            if compiler_line.match(line) or (failure_section and line.strip()):
+                diagnostics.append(line.strip())
+            elif line.lstrip().startswith("Caused by:") and causes < 8:
+                diagnostics.append(line.strip())
+                causes += 1
     redacted: list[str] = []
-    for line in diagnostics[:16]:
+    for line in diagnostics:
         for key in (*KEY_VARIABLES, "OPENMASU_SYNTHETIC_SDK_ENDPOINT"):
-            line = line.replace(environment[key], "[redacted]")
+            if environment.get(key):
+                line = line.replace(environment[key], "[redacted]")
         line = line.replace(str(consumer), "<consumer>").replace(consumer.as_posix(), "<consumer>")
         line = line.replace(str(ROOT), "<repository>").replace(ROOT.as_posix(), "<repository>")
-        redacted.append(line)
+        line = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", line)
+        # Exception messages can carry raw objects or request bodies. Retain the
+        # error explanation, but never expose structured event/credential data.
+        line = re.sub(r"[\[{]\s*[\"']?[A-Za-z_][A-Za-z0-9_]*[\"']?\s*:.*", "[structured data omitted]", line)
+        line = re.sub(r"[\"'][A-Za-z_][A-Za-z0-9_]*[\"']\s*:.*", "[structured data omitted]", line)
+        line = re.sub(r"(?i)\b(?:payload|request_body|response_body|body|records|authorization|x-openmasu-[a-z-]+)\s*[:=].*", "[sensitive detail omitted]", line)
+        line = re.sub(r"\b(?:installation|event|session):[A-Za-z0-9._:-]+", "[identifier omitted]", line)
+        line = re.sub(r"[A-Za-z0-9_+/=-]{40,}", "[token omitted]", line)
+        line = line[:700]
+        if line not in redacted:
+            redacted.append(line)
+        if len(redacted) >= 32:
+            break
     return redacted
 
 
@@ -243,7 +269,7 @@ def run_consumer(consumer: Path, environment: dict[str, str], timeout_seconds: i
         or "distributionSha256Sum=20f1b1176237254a6fc204d8434196fa11a4cfb387567519c61556e8710aed78" not in properties.splitlines()
     ):
         raise ConsumerFailure("pinned_gradle_wrapper_missing_or_changed")
-    command = [str(gradle), "-p", str(consumer), "testDebugUnitTest", "--tests", f"{TEST_CLASS}.{TEST_METHOD}", "--no-daemon", "--no-build-cache", "--no-configuration-cache", "--console=plain"]
+    command = [str(gradle), "-p", str(consumer), "testDebugUnitTest", "--tests", f"{TEST_CLASS}.{TEST_METHOD}", "--no-daemon", "--no-build-cache", "--no-configuration-cache", "--console=plain", "--stacktrace"]
     if os.name == "nt":
         command = ["cmd.exe", "/d", "/c", *command]
     # Isolate caches, daemon logs, and user init scripts as well as the project.
@@ -265,17 +291,20 @@ def run_consumer(consumer: Path, environment: dict[str, str], timeout_seconds: i
             terminate_tree(process)
     if returncode != 0:
         raise ConsumerFailure("consumer_gradle_or_native_test_failed", safe_diagnostics(consumer, environment))
-    report = consumer / f"build/test-results/testDebugUnitTest/TEST-{TEST_CLASS}.xml"
-    if not report.is_file():
+    reports = list((consumer / "build/test-results/testDebugUnitTest").glob("TEST-*.xml"))
+    if not reports:
         raise ConsumerFailure("native_test_report_missing")
-    suite = ET.parse(report).getroot()
-    cases = suite.findall("testcase")
+    suites = [ET.parse(report).getroot() for report in reports]
+    cases = [case for suite in suites for case in suite.findall("testcase")]
     if (
-        suite.get("tests") != "1" or suite.get("failures") != "0" or suite.get("errors") != "0"
-        or len(cases) != 1 or cases[0].get("name") != TEST_METHOD
+        sum(int(suite.get("tests", "0")) for suite in suites) != 1
+        or any(suite.get("failures") != "0" or suite.get("errors") != "0" or suite.get("skipped", "0") != "0" for suite in suites)
+        or len(cases) != 1 or cases[0].get("classname") != TEST_CLASS
+        or re.fullmatch(re.escape(TEST_METHOD) + r"(?:\[[0-9]+\])?", cases[0].get("name", "")) is None
         or cases[0].find("skipped") is not None
+        or cases[0].find("failure") is not None or cases[0].find("error") is not None
     ):
-        raise ConsumerFailure("native_test_report_did_not_confirm_one_passing_test")
+        raise ConsumerFailure("native_test_report_did_not_confirm_one_passing_test", safe_diagnostics(consumer, environment))
 
 
 def main() -> int:

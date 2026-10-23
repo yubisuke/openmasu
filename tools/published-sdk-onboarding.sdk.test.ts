@@ -10,19 +10,19 @@ import { join, resolve } from "node:path";
 import { it } from "node:test";
 import { M3_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 import { createAppPool, createReaderPool, EncryptedFilePayloadStore, withTenant } from "@openmasu/runtime";
-import { processSdkInbox } from "../../worker/src/sdk-worker.js";
-import { computeSqlMetricRuns } from "../../worker/src/metrics/cohort.js";
-import { ensureAdminKeys } from "./admin-auth.js";
-import { createRequestHandler } from "./router.js";
-import { KeyedTokenBucket } from "./rate-limit.js";
-import { csrfToken, issueDashboardSession } from "./session.js";
+import { processSdkInbox } from "../apps/worker/src/sdk-worker.js";
+import { computeSqlMetricRuns } from "../apps/worker/src/metrics/cohort.js";
+import { ensureAdminKeys } from "../apps/api/src/admin-auth.js";
+import { createRequestHandler } from "../apps/api/src/router.js";
+import { KeyedTokenBucket } from "../apps/api/src/rate-limit.js";
+import { csrfToken, issueDashboardSession } from "../apps/api/src/session.js";
 
 // Dedicated opt-in gate: never run a Gradle consumer from the normal integration
 // glob. Its database must be explicitly disposable and local, not a .env fallback.
 it("published_native_sdk_reaches_durable_ledger_daily_metric_and_saved_csv", { timeout: 720_000 }, async () => {
   assert.equal(process.env.OPENMASU_SYNTHETIC_ONBOARDING, "1", "use an explicitly disposable synthetic database");
-  for (const name of ["OPENMASU_APP_DATABASE_URL", "OPENMASU_READER_DATABASE_URL"]) {
-    const url = new URL(process.env[name] ?? "");
+  for (const connection of [process.env.OPENMASU_APP_DATABASE_URL, process.env.OPENMASU_READER_DATABASE_URL]) {
+    const url = new URL(connection ?? "");
     assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(url.hostname), "only loopback databases are permitted");
     assert.equal(url.pathname, "/openmasu_sdk_synthetic", "use the dedicated disposable onboarding database");
   }
