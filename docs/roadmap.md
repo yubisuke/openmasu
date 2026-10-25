@@ -6,7 +6,7 @@ to replace every feature of an existing provider.
 
 [Project status](STATUS.md) owns current capabilities and release boundaries.
 [Project plan](project-plan.md) gives the acceptance crosswalk for the sequence
-below. Updated: 2026-10-24.
+below. Updated: 2026-10-25.
 
 ## Status vocabulary
 
@@ -17,7 +17,7 @@ store or production qualification. Those remain separate operator evidence.
 ## Completed contract and product milestones
 
 The contract gate preserves deterministic artifacts across 28 schemas,
-8 registries, and 74 reviewed synthetic fixtures. Patch definitions and
+8 registries, and 75 reviewed synthetic fixtures. Patch definitions and
 derivations are in the [specification](../spec/event-metric-contract-v0.4.md)
 and [fixture guide](../fixtures/v0.4/README.md).
 
@@ -28,7 +28,7 @@ ownership. Completion refers to their declared synthetic scope.
 | --- | --- |
 | Contract v0.2 | Coherent event, attribution, metric and reconciliation contract |
 | Contract v0.3 | Android/platform referrer, revenue and device-producer vocabulary |
-| Contract v0.4 | OpenMasu identity and additive patch ledger, currently through v0.4.27 |
+| Contract v0.4 | OpenMasu identity and additive patch ledger, currently through v0.4.28 |
 | Shadow ledger and import foundation | Durable admission, atomic ledger writes, explicit three-family imports and privacy controls |
 | Cohort metrics and difference audit | SQL/reference parity, saved snapshots, exact arithmetic and aggregate exports |
 | Android, Unity, and redirector | SDK queues, credentials, redirect evidence and synthetic bridges |
@@ -68,15 +68,15 @@ from acquisition cohorts, with no sum presented as a period-unique audience.
 distinct paying installations, payer rate and purchase-net ARPPU with explicit
 verified-projection and refund/undefined boundaries.
 
-The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has 30 of
-35 child implementations complete and 5 optional extensions remaining. Backup and
+The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has 31 of
+35 child implementations complete and 4 optional extensions remaining. Backup and
 recovery ([#250](https://github.com/yubisuke/openmasu/issues/250)) is implemented;
 the dedicated Runtime gate owns its synthetic evidence. Follow individual issue
 dependencies; the phases below are priorities, not extra refactoring gates.
 
 | Order | Workstream | Remaining issues / exit |
 | --- | --- | --- |
-| When needed | Optional measurement and operator extensions | Engagement policies, app access scope, retention expiry, multiple workers and fraud previews; see the [crosswalk](project-plan.md#next-product-slices) |
+| When needed | Optional operator extensions | App access scope, retention expiry, multiple workers and fraud previews; see the [crosswalk](project-plan.md#next-product-slices) |
 
 The optional [Unity ILR sample](../sdk/unity/README.md#optional-levelplay-impression-revenue)
 is implemented in source with explicit provider-shim evidence and existing native

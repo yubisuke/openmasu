@@ -254,6 +254,7 @@ export type OpenMasuMetricDefinitionV04 = {
   acquisition_dimension_policy?: "selected_link_ad_group_creative";
   conversion_event_key?: string;
   engagement_credit_policy?: "latest_eligible_open_before_outcome";
+  engagement_inactivity_days?: number;
   cost_selection_policy?: "reject_overlapping_grains";
   refund_reversal_policy?: "cancel_target_refund_at_watermark";
   rule_bundle_id: string;
@@ -296,7 +297,8 @@ export type OpenMasuMetricRunV04 = {
     | "overlapping_cost_grains"
     | "missing_fx_rate"
     | "observation_window_not_elapsed"
-    | "no_paying_installations";
+    | "no_paying_installations"
+    | "insufficient_activity_history";
   value_unscaled?: string;
   fraud_policy?: "gross" | "net";
   amount_scale?: number;

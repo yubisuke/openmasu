@@ -1,6 +1,7 @@
 import type { OpenMasuMetricDefinitionV04 } from "./generated/contract-types.js";
 import { M1B_METRIC_DEFINITIONS } from "./m1b-metric-definitions.js";
 import { M3_METRIC_DEFINITIONS } from "./m3-metric-definitions.js";
+import { ENGAGEMENT_POLICY_METRIC_NAMES } from "./engagement-policy-definitions.js";
 import { NON_FRAUD_RULE_BUNDLES, nonFraudBundleHash, type NonFraudRuleBundleKey } from "./rule-bundle-provenance.js";
 
 export type MetricBundleBinding = Readonly<Pick<OpenMasuMetricDefinitionV04,
@@ -29,6 +30,7 @@ export const METRIC_PROFILE_BINDINGS = {
   commerce: binding("metric-selected-commerce"), refund: binding("metric-refund-reversal"),
   detail: binding("metric-acquisition-detail"), custom: binding("metric-custom-conversion"),
   engagement: binding("metric-first-party-engagement"),
+  engagement_policy: binding("metric-engagement-policy"),
 } as const;
 
 type Definition = OpenMasuMetricDefinitionV04;
@@ -56,7 +58,9 @@ export const DEEP_LINK_METRIC_SERIES: ReadonlyMap<string, EventSeries> = new Map
 export const AGGREGATE_EVENT_NAMES: ReadonlySet<string> = new Set(
   [...APPLE_AGGREGATE_METRIC_SERIES.values()].map(value => value.event),
 );
-export const ENGAGEMENT_METRIC_NAMES: ReadonlySet<string> = new Set(["engagement_custom_event_converters_24h", "engagement_ad_revenue_24h_usd"]);
+export const ENGAGEMENT_METRIC_NAMES: ReadonlySet<string> = new Set([
+  "engagement_custom_event_converters_24h", "engagement_ad_revenue_24h_usd", ...ENGAGEMENT_POLICY_METRIC_NAMES,
+]);
 export const CONVERSION_CALCULATIONS: readonly string[] = ["converted_installations", "converted_installations_over_cohort"];
 
 export type MetricProfileKey = keyof typeof METRIC_PROFILE_BINDINGS;
@@ -73,6 +77,7 @@ const labels: Record<MetricProfileKey, string> = {
   total: "Total net revenue", daily: "Daily events", selected: "Selected acquisition",
   safe_cost: "Disjoint cost", commerce: "Selected commerce", refund: "Refund reversal",
   detail: "Acquisition detail", custom: "Custom conversion", engagement: "First-party engagement",
+  engagement_policy: "First-party engagement with explicit recorded inactivity and verified purchase net",
   daily_acquisition: "Daily selected acquisition",
   acquisition_kpis: "Saved first-party acquisition KPIs",
   standard_retention: "D3/D14/D30 retained installations (complete observation window)",
@@ -89,9 +94,9 @@ export const METRIC_PROFILE_METADATA: readonly MetricProfileMetadata[] =
       rule_bundle_version: METRIC_PROFILE_BINDINGS[key].rule_bundle_version,
       rule_bundle_hash: METRIC_PROFILE_BINDINGS[key].rule_bundle_hash,
     },
-    scheduleValidation: ["detail", "engagement", "daily_acquisition", "platform", "imported", "calendar", "acquisition_kpis", "standard_retention", "calendar_activity", "payer"].includes(key) ? "schema_profile"
+    scheduleValidation: ["detail", "engagement", "engagement_policy", "daily_acquisition", "platform", "imported", "calendar", "acquisition_kpis", "standard_retention", "calendar_activity", "payer"].includes(key) ? "schema_profile"
       : ["selected", "safe_cost", "commerce", "refund", "custom"].includes(key) ? "manual_profile" : "legacy_operation",
-    evaluationValidation: ["refund", "detail", "custom", "engagement", "daily_acquisition", "platform", "imported", "calendar", "acquisition_kpis", "standard_retention", "calendar_activity", "payer"].includes(key) ? "schema_profile"
+    evaluationValidation: ["refund", "detail", "custom", "engagement", "engagement_policy", "daily_acquisition", "platform", "imported", "calendar", "acquisition_kpis", "standard_retention", "calendar_activity", "payer"].includes(key) ? "schema_profile"
       : ["purchase", "purchase_horizon", "total", "commerce"].includes(key) ? "named_series"
       : ["selected", "safe_cost"].includes(key) ? "manual_profile" : "operation",
   }));

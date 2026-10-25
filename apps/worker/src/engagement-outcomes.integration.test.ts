@@ -96,6 +96,75 @@ describe("first-party engagement operator workflow", { concurrency: false }, () 
   ]));
   const money = "engagement_ad_revenue_24h_usd", converters = "engagement_custom_event_converters_24h";
 
+  it("engagement_policy_CLI_saved_API_HTML_CSV_and_actual_privacy_removal_preserve_verified_net_and_separate_acquisition", async () => {
+    const policy = JSON.parse(readFileSync("fixtures/v0.4/75-engagement-policy/input.json", "utf8")
+      .replaceAll('"tenant-a"', JSON.stringify(identity.tenantId)));
+    await ingestFixture("synthetic-engagement-policy-operator", {
+      ...policy, metric_evaluations: [], cost_records: acquisition.cost_records,
+      batches: [{ batch_id: "synthetic-original-acquisition", server_context: acquisition.server_context,
+        records: acquisition.records }, ...policy.batches],
+    }, app, seed);
+    const acquisitionRuns = await computeSqlMetricRuns(app, acquisition, true);
+    const definitionsPath = join(temporary, "policy-definitions.json");
+    writeFileSync(definitionsPath, JSON.stringify({ tenant_id: identity.tenantId, app_id: identity.appId,
+      fx_policy: policy.fx_policy, metric_definitions: policy.metric_definitions,
+      evaluations: policy.metric_evaluations.map((evaluation: Any) => ({ metric_names: evaluation.metric_names, grouping: evaluation.grouping })) }));
+    const options = { pool: app, date: "2026-08-21", definitionsPath };
+    const runs = await runMetricDefinitionsFile(options);
+    assert.equal(runs.length, 12);
+    assert.ok(runs.every(run => run.input_received_at_watermark === "2026-08-25T00:00:00.000Z"));
+    const net = "engagement_policy_purchase_net_usd";
+    assert.equal(values(runs)[`synthetic-engagement-a/${net}`], "5000000");
+    assert.equal(values(runs)[`synthetic-engagement-b/${net}`], "empty_cohort");
+    assert.equal(values(runs)[`synthetic-engagement-c/${net}`], "insufficient_activity_history");
+    assert.equal(jcs(await runMetricDefinitionsFile({ ...options, persist: false })), jcs(runs));
+    const manifests = await withTenant(reader, identity.tenantId, async client => (await client.query<{ artifact: Any }>(
+      "SELECT artifact FROM control.metric_replay_manifests WHERE tenant_id=$1 AND app_id=$2 AND artifact->'metric_definition'->>'metric_definition_version'='0.4.28'",
+      [identity.tenantId, identity.appId],
+    )).rows);
+    assert.equal(manifests.length, 12);
+    assert.ok(manifests.every(row => row.artifact.metric_definition.engagement_inactivity_days === 7
+      && row.artifact.metric_definition.definition.window.day === 2));
+    const query = new URLSearchParams({ app_id: "app-a", metric_definition_version: "0.4.28", limit: "200" });
+    const reportResponse = await admin(`/v1/reports/metrics?${query}`);
+    assert.equal(reportResponse.status, 200);
+    const report = await reportResponse.json() as Any;
+    assert.equal(report.data.length, 12);
+    assert.ok(report.data.every((row: Any) => row.measurement_series === "first_party_engagement"
+      && row.engagement_evidence_trust === "device_reported_forgeable"));
+    const htmlResponse = await page("/dashboard/apps/app-a?limit=200");
+    assert.equal(htmlResponse.status, 200);
+    const html = await htmlResponse.text();
+    const section = html.match(/<section aria-label="First-party engagement outcomes">[\s\S]*?<\/section>/)?.[0] ?? "";
+    assert.match(section, /insufficient_activity_history/);
+    assert.match(section, /Recorded inactivity is not proof of human inactivity/);
+    assert.doesNotMatch(section, /data-metric-run-id="detail63-|aak_attributed|skan_attributed/);
+    assert.match(html, /data-metric-run-id="detail63-/);
+    query.set("format", "csv"); query.set("export", "true");
+    const apiCsv = await admin(`/v1/reports/metrics?${query}`);
+    const dashboardCsv = await page(`/dashboard/apps/app-a/cohorts.csv?${query}`);
+    assert.equal(apiCsv.status, 200); assert.equal(dashboardCsv.status, 200);
+    const csv = await apiCsv.text();
+    assert.equal(await dashboardCsv.text(), csv);
+    assert.match(csv, /first_party_engagement,device_reported_forgeable/);
+    assert.match(csv, /insufficient_activity_history/);
+    const removed = await admin("/v1/admin/privacy-requests", { tenant_id: identity.tenantId, app_id: identity.appId,
+      requested_via: "tenant_admin_api", deletion_scope: "installation", deletion_subject_ref: "installation:engagement-75-x" });
+    assert.equal(removed.status, 201);
+    const deletion = await removed.json() as Any;
+    assert.equal(deletion.status, "completed");
+    for (const id of ["install75-x", "open64-a", "purchase75-a", "refund75-a"])
+      assert.ok(deletion.affected_records.some((row: Any) => row.record_id === id));
+    const recalculated = await runMetricDefinitionsFile({ ...options, watermark: "2026-08-26T00:00:00.000Z" });
+    for (const campaign of ["a", "b"])
+      assert.equal(values(recalculated)[`synthetic-engagement-${campaign}/${net}`], "empty_cohort");
+    assert.equal(values(recalculated)[`synthetic-engagement-c/${net}`], "insufficient_activity_history");
+    assert.ok(recalculated.every(run => run.reproducibility_status === "redaction_affected"));
+    const retained = await saved();
+    for (const original of [...acquisitionRuns, ...runs])
+      assert.equal(jcs(retained.find(run => run.metric_run_id === original.metric_run_id)), jcs(original));
+  });
+
   it("runs explicit CLI definitions into separated API, HTML and identical CSV without rewriting install acquisition", async () => {
     const originals = await computeSqlMetricRuns(app, acquisition, true);
     const options = { pool: app, date: "2026-08-21", definitionsPath: join(temporary, "definitions.json") };

@@ -10,7 +10,7 @@ Implementation and synthetic verification are not live operational qualification
 | Published prerelease | `v0.3.0-rc.2` at `d775cc9`; eight verified SDK assets and exact-commit full CI |
 | Synthetic SDK onboarding | Published rc.2 Android SDK/backend journey passed on JVM/Robolectric API 24; later harness evidence is recorded separately |
 | Latest stable source release | `v0.2.0`; later features belong to newer source, not this tag |
-| Current source | Contract patch ledger through v0.4.27; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 74 fixtures, 962 golden artifacts |
+| Current source | Contract patch ledger through v0.4.28; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 75 fixtures, 975 golden artifacts |
 
 `v0.3.0-rc.2` is the current published source and SDK release, marked as a
 prerelease. Its [release page](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.2)
@@ -47,7 +47,7 @@ qualification is stated. No row establishes production readiness.
 | Dashboard and comparison | Server-rendered reader-only reports; saved filters, bounded previous-period views and operands; external revenue/ROAS/LTV, retention and outcome declarations via the same offline/web comparator | External meaning remains operator-declared; no provider completeness, imported-binding or engagement-equivalence claim; incompatible/missing/undefined/zero remain distinct |
 | Setup and diagnostics | Recommended measurement form, recent event/SDK-version classes and confirmation-bound ingest recovery | SDK versions are client-declared; absent receipts do not prove an outage; invalid/deleted/claimed evidence is not replayed |
 | SDKs and verified commerce | Android/iOS/Unity queues and bridges; native verified purchases, Swift submission and typed Unity purchase binding in rc.2 assets; synthetic Unity 6 Android export | Real devices/stores/providers, all-platform onboarding and Unity 2022.3 are unverified; queued/pending does not mean verified |
-| Deep links and re-engagement | Deterministic direct links on both OSes, Android deferred links, separate latest-open 24-hour outcome profiles | No iOS deferred links; no engagement ROAS/purchase model; device-reported opens can be forged |
+| Deep links and re-engagement | Deterministic direct links on both OSes, Android deferred links; preserved 24-hour outcomes plus explicit-window/recorded-inactivity and verified purchase-net profiles | No iOS deferred links or engagement ROAS; recorded inactivity is not human inactivity, insufficient history stays unknown, device-reported opens can be forged |
 | Fraud controls | Recorded public rules, registered fraud bundle hashes, diagnostics and synthetic Integrity/App Attest verification | No physical-device-farm or reset-fraud guarantee; private threshold calibration and live platform projects unverified |
 | Privacy and recovery | Role isolation, protected payloads, deletion, saved-manifest metric replay; matched backup/freshness and isolated restore CLI with all-tenant privacy reapplication and a dedicated synthetic gate | External recipients retain their own deletion duty; live recovery time, authoritative boundary custody and secret custody unverified |
 | Outbound delivery | Default-off signed webhooks, S3-compatible bulk exports and bounded Google conversion delivery with local fencing/health | Live quotas and permissions unverified; no provider-side exactly-once guarantee |
@@ -59,7 +59,7 @@ Detailed limits belong to the [product guides](README.md), [product scope](produ
 ## Current development focus
 
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-30 of 35 child implementations complete; 5 optional extensions remain. The earlier
+31 of 35 child implementations complete; 4 optional extensions remain. The earlier
 integration plan is complete, not a second backlog. The dependency, controller,
 presentation, evaluator and ingestion foundations are also implemented.
 
