@@ -118,7 +118,8 @@ describe("first-party engagement operator workflow", { concurrency: false }, () 
     assert.equal(values(runs)[`synthetic-engagement-b/${net}`], "empty_cohort");
     assert.equal(values(runs)[`synthetic-engagement-c/${net}`], "insufficient_activity_history");
     assert.equal(jcs(await runMetricDefinitionsFile({ ...options, persist: false })), jcs(runs));
-    const manifests = await withTenant(reader, identity.tenantId, async client => (await client.query<{ artifact: Any }>(
+    // Replay manifests contain protected calculation inputs, not reader-report data.
+    const manifests = await withTenant(app, identity.tenantId, async client => (await client.query<{ artifact: Any }>(
       "SELECT artifact FROM control.metric_replay_manifests WHERE tenant_id=$1 AND app_id=$2 AND artifact->'metric_definition'->>'metric_definition_version'='0.4.28'",
       [identity.tenantId, identity.appId],
     )).rows);

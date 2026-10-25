@@ -1,4 +1,5 @@
 import type { OpenMasuMetricRunV04 } from "../../../packages/contracts/src/generated/contract-types.js";
+import { ENGAGEMENT_METRIC_NAMES } from "@openmasu/contracts/definitions";
 
 type MetricGrouping = NonNullable<OpenMasuMetricRunV04["grouping"]>["dimensions"];
 export type GroupingDimension = keyof MetricGrouping;
@@ -271,7 +272,7 @@ export function parseMetricQuery(input: {
     "aak_attributed_reengagements",
   ]);
   const selectedAggregate = metricNames.filter((name) => aggregateMetricNames.has(name));
-  const selectedEngagement = metricNames.some(name => ["engagement_custom_event_converters_24h", "engagement_ad_revenue_24h_usd"].includes(name));
+  const selectedEngagement = metricNames.some(name => ENGAGEMENT_METRIC_NAMES.has(name));
   if (selectedEngagement && Object.keys(grouping).some(key => !["campaign_id", "metric_date"].includes(key))) {
     throw new ReportQueryError("metric_series_mismatch");
   }
