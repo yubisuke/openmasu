@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
-import { acquirePrivacyTenantSessionReadFence, replayPrivacyMetricItem, selectedPlatformAcquisitionSql, withTenant,
+import { acquirePrivacyTenantSessionReadFence, assertMetricRetentionAvailable, replayPrivacyMetricItem, selectedPlatformAcquisitionSql, withTenant,
   type PrivacyCalculatedMetric } from "@openmasu/runtime";
 import { computeSqlMetricRunsWithClient } from "./metrics/cohort.js";
 
@@ -116,6 +116,7 @@ async function calculate(pool: Pool, claim: Claim): Promise<"completed" | "skipp
         metricClient, calculation.input, true, calculation.scope,
       ) as PrivacyCalculatedMetric[]) ?? null;
     } else if (!superseded.rowCount) {
+      await assertMetricRetentionAvailable(client, claim, claim.source_metric_run_id);
       const manifest = await client.query<{ artifact: Record<string, any> }>(`SELECT artifact FROM control.metric_replay_manifests
         WHERE tenant_id=$1 AND app_id=$2 AND source_metric_run_id=$3`, [claim.tenant_id, claim.app_id, claim.source_metric_run_id]);
       const replay = manifest.rows[0]?.artifact;

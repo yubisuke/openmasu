@@ -223,6 +223,10 @@ repository does not claim that its example durations are universally lawful.
 
 ## Authentication and authorization
 
+Explicit [retention expiry](operations/retention.md) is default-off and requires
+a reviewed fixed receipt. It preserves privacy/history and refuses to reproduce
+expired inputs; a retention duration is an operator decision, not a legal default.
+
 - Admin keys are tenant-wide by default, with an optional immutable single-app
   restriction. The registered-app gate applies that restriction to API lists,
   detail, exports, jobs and sessions; it never widens the role's capabilities.

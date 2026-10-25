@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "enabled": false,
+  "as_of": "2026-08-10T00:00:00.000Z",
+  "layers": {
+    "protected_payload": { "keep_days": 7 },
+    "expired_request_nonces": { "grace_seconds": 0 }
+  }
+}

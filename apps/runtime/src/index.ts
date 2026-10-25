@@ -15,6 +15,8 @@ export * from "./platform-acquisition.js";
 export * from "./privacy-purge.js";
 export * from "./privacy-fence.js";
 export * from "./privacy-metrics.js";
+export * from "./retention.js";
+export * from "./retention-evidence.js";
 export * from "./webhook-security.js";
 export type { RoasOperands, TotalNetRoasOperands, RoasCalculationEvidence } from "./metric-evidence.js";
 export * from "./metric-comparison.js";
