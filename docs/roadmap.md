@@ -68,15 +68,17 @@ from acquisition cohorts, with no sum presented as a period-unique audience.
 distinct paying installations, payer rate and purchase-net ARPPU with explicit
 verified-projection and refund/undefined boundaries.
 
-The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has 34 of
-35 child implementations complete and one optional extension remaining. Backup and
+The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has all
+35 child implementations in current source. Backup and
 recovery ([#250](https://github.com/yubisuke/openmasu/issues/250)) is implemented;
 the dedicated Runtime gate owns its synthetic evidence. Follow individual issue
 dependencies; the phases below are priorities, not extra refactoring gates.
 
-| Order | Workstream | Remaining issues / exit |
-| --- | --- | --- |
-| When needed | Optional operator extension | Fraud previews; see the [crosswalk](project-plan.md#next-product-slices) |
+[Fraud policy preview](fraud-preview.md) completes the operator-extension
+crosswalk: bounded same-evidence decision/gross-net effects and explicit
+receipt-bound activation. Missing historical rule inputs remain unavailable,
+not guessed. No additional feature backlog is implied by the completed plan;
+future slices need a concrete user requirement and their own scope.
 
 [App-scoped access](operations/access.md) now narrows existing operator roles
 across API/dashboard reads and controls. Tenant-wide keys remain compatible;
@@ -112,8 +114,8 @@ Saved daily analysis and [broader external cohort comparison](cohort-comparison.
 are implemented; external declarations remain distinct from captured execution.
 Integrated candidate acceptance
 ([#252](https://github.com/yubisuke/openmasu/issues/252)) is complete within its
-declared synthetic scope. Select the remaining optional extensions only when
-their usage conditions apply. The downloaded Android SDK journey does not
+declared synthetic scope. Optional extensions in current source are not
+retroactively included in that candidate. The downloaded Android SDK journey does not
 relabel existing fixture-projected campaign/cost/revenue tests or establish
 physical-device, all-platform onboarding or live-provider acceptance.
 

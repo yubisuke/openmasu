@@ -8,6 +8,8 @@ also has its own selection and four distinct count populations outside this surf
 Registered [conversion meanings](../apple-conversion-meaning.md) use the existing
 administrator endpoint; the report accepts an explicit version/digest pair,
 never an inferred postback binding.
+The administrator-only [fraud policy preview](../fraud-preview.md) and its
+receipt-bound activation workflow are also outside the limited OpenAPI surface.
 
 [openapi.json](openapi.json) is a limited OpenAPI 3.1.1 description of four
 existing endpoints. It is not a new API or a claim of complete API coverage:

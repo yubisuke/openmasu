@@ -56,8 +56,8 @@ guides document their configuration. Published-release evidence remains separate
 
 ## Next product slices
 
-Updated: 2026-10-25. Thirty-four of 35 child implementations are complete; the remaining
-optional issue below maps directly to the [roadmap sequence](roadmap.md#next-product-sequence).
+Updated: 2026-10-25. All 35 child implementations are present in current source;
+the completed crosswalk follows the [roadmap sequence](roadmap.md#next-product-sequence).
 Numbers are tracking links, not required background knowledge.
 
 ### Core and selected-use work
@@ -116,9 +116,11 @@ native queue, signed ingestion and worker revenue path retain their boundaries.
 Implement only for the selected usage scope; these extensions are not required
 for the completed integrated candidate.
 
-| Issue / workstream | Narrow acceptance |
-| --- | --- |
-| [#253](https://github.com/yubisuke/openmasu/issues/253): Fraud bundle preview | Same synthetic evidence shows decision and metric effects before activation |
+[Fraud bundle preview](fraud-preview.md) is implemented: same retained evidence
+shows decision and gross/net metric effects before receipt-bound activation.
+Threshold, all-flag and negative-clock synthetic cases preserve ledger state;
+recorded revisions replay without rewriting history. Incomplete old inputs are
+unavailable and block activation, rather than becoming estimated detection rates.
 
 ### Integration and distribution
 

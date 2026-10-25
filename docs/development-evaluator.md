@@ -16,6 +16,7 @@ do not import private calculation helpers from another workspace.
 | `rule-bundles.ts` | Explicit registered bundle identity/digest/hash checks and the existing fixture defaults. |
 | `attribution.ts` | Installation, imported/platform/aggregate, and deep-link attribution; historical installs impacted by newly received clicks. |
 | `fraud-artifacts.ts` | Bound transport/install/source decisions, clock-provisional revisions, and fraud attribution/exclusion effects. |
+| `fraud-preview.ts` | Pure counterfactual projection of already-admitted, scoped evidence through the same fraud and metric functions. Admission/privacy selection remains the API caller's responsibility. |
 | `metric-runs.ts` | Reference definitions/profile guards, cost selection, snapshots, family calculations, grouping, FX rounding, and metric artifacts. |
 | `reconciliation.ts` | Imported reconciliation inputs, matching, persisted explanation fields, and reason selection. |
 | `evidence-artifacts.ts` | Raw/delivery/logical artifacts, refund/privacy corrections, privacy artifacts, and rejection artifacts. |
