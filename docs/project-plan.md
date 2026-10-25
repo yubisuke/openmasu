@@ -40,6 +40,9 @@ standard retention, multiple custom outcomes, guided setup, recent receipt
 diagnostics, safe ingest recovery and optional monitoring rules/runbooks.
 Separate UTC [daily activity](calendar-activity.md) counts session starts, custom
 events and active installations without acquisition joins or period-unique sums.
+Separate [verified payer metrics](payer-metrics.md) expose transaction and
+paying-installation counts, payer rate and purchase-net ARPPU with explicit
+store-projection authority, refund and undefined-denominator behavior.
 Matched backup/freshness commands and isolated, privacy-safe restoration are also
 implemented ([#250](https://github.com/yubisuke/openmasu/issues/250)); a dedicated
 Runtime gate owns synthetic evidence. These are not future implementation tasks. Backup custody,
@@ -50,7 +53,7 @@ guides document their configuration. Published-release evidence remains separate
 
 ## Next product slices
 
-Updated: 2026-10-24. Twenty-five of 35 child implementations are complete; the 10 remaining
+Updated: 2026-10-25. Twenty-six of 35 child implementations are complete; the 9 remaining
 optional issues below map directly to the [roadmap sequence](roadmap.md#next-product-sequence).
 Numbers are tracking links, not required background knowledge.
 
@@ -78,7 +81,6 @@ for the completed integrated candidate.
 
 | Issue / workstream | Narrow acceptance |
 | --- | --- |
-| [#232](https://github.com/yubisuke/openmasu/issues/232): Payer metrics | Verified purchases support payer rate, purchase count and ARPPU with explicit denominator/window |
 | [#236](https://github.com/yubisuke/openmasu/issues/236): Detailed cost adapter | Declared ad-group/ad grain without inferred parent allocation |
 | [#237](https://github.com/yubisuke/openmasu/issues/237): Detailed target discovery | Bounded ad-group/creative discovery after detailed cost support |
 | [#238](https://github.com/yubisuke/openmasu/issues/238): Additional Unity ILR | Thin callback adapter into existing advertising revenue; unknown is not zero |

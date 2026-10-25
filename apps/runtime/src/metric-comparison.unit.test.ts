@@ -8,10 +8,25 @@ import { engagementMetricDefinitions } from "@openmasu/contracts";
 import { importedAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
 import { calendarAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
 import { calendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
+import { payerMetricDefinitions } from "@openmasu/contracts/definitions";
 
 const fx = { policy_version: "synthetic", target_currency: "USD", target_scale: 6, rounding_mode: "half_even" as const,
   rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0, as_of: "2026-01-01T00:00:00.000Z", source: "not-in-reader-projection" }] };
 const run = { metric_run_id: "synthetic", input_snapshot_id: "a".repeat(64) };
+it("payer_comparison_keeps_verified_population_historical_payers_net_money_and_D7_scope", () => {
+  for (const definition of payerMetricDefinitions()) {
+    const context = captureMetricComparisonContext(run, definition, fx, "after", sha256);
+    const meaning = comparisonMeaning(context);
+    assert.ok(meaning && "payer_identity" in meaning);
+    assert.equal(meaning.payer_identity, "tenant_app_installation_not_person");
+    assert.equal(meaning.refunded_payer, "retained_historical_purchase");
+    assert.equal(meaning.population, "native_cohort_verified_settled_store_projections");
+    assert.equal(meaning.aggregation, "cumulative");
+    assert.equal(meaning.fx === null, definition.value_type !== "money");
+    assert.equal(comparisonMaturity(context, { cohort_date: "2026-08-01" }, "2026-08-10T00:00:00.000Z").state, "window_elapsed");
+    assert.equal(comparisonMeaning({ ...context, definition: { ...definition, fraud_policy: "net" } }), undefined);
+  }
+});
 it("calendar_activity_comparison_preserves_event_units_daily_distinct_scope_and_UTC_maturity", () => {
   const definitions = calendarActivityMetricDefinitions();
   const meanings = definitions.map(definition => {

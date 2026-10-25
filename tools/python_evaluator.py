@@ -1202,6 +1202,39 @@ def metric_definitions(value: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def validate_metric_definition_series(definition: dict[str, Any]) -> None:
+    payer_rows = {
+        "cohort_purchase_count_d7": ("purchase_count", "purchases", "count", None),
+        "cohort_paying_installations_d7": ("paying_installations", "paying_installations", "count", None),
+        "cohort_payer_rate_d7": ("paying_installations_over_cohort", "paying_installations", "ratio", "cohort_size"),
+        "cohort_arppu_d7_usd": ("revenue_over_paying_installations", "purchase_net_revenue", "money", "paying_installations"),
+    }
+    if (definition.get("rule_bundle_id") == "metric-verified-payers" or definition.get("metric_name") in payer_rows
+            or definition.get("definition", {}).get("calculation") in {row[0] for row in payer_rows.values()}
+            or definition.get("definition", {}).get("numerator") in ("purchases", "paying_installations")
+            or definition.get("definition", {}).get("denominator") == "paying_installations"):
+        row = payer_rows.get(definition.get("metric_name"))
+        if row is None:
+            raise ValueError("payer_metric_unknown")
+        calculation, numerator, value_type, denominator = row
+        expected = {
+            "metric_name": definition["metric_name"], "metric_definition_version": "0.4.26",
+            "anchor_event": "install", "aggregation_time_zone": "UTC", "value_type": value_type,
+            "definition": {"calculation": calculation, "numerator": numerator, "window": {"type": "elapsed", "day": 7}},
+            "acquisition_basis": "selected_first_party_click", "fraud_policy": "gross",
+            "refund_reversal_policy": "cancel_target_refund_at_watermark",
+            "grouping_dimensions": ["campaign_id", "network", "country", "cohort_date", "attribution_status"],
+            "rule_bundle_id": "metric-verified-payers", "rule_bundle_version": "0.4.26",
+            "rule_bundle_hash": "a9574eb2d767e0fe816b5861f7dd88e885c30aa799b0d0511ce115d6f81e3b52",
+        }
+        if denominator is not None:
+            expected["definition"]["denominator"] = denominator
+        if value_type == "ratio":
+            expected["ratio_scale"] = 6
+        if value_type == "money":
+            expected.update(currency="USD", amount_scale=6)
+        if definition != expected:
+            raise ValueError(f"metric_definition_series_mismatch:{definition['metric_name']}")
+        return
     activity_events = {"daily_session_starts": ["session_start"], "daily_custom_events": ["custom_event"],
                        "daily_active_installations": ["session_start", "custom_event"]}
     if (definition.get("rule_bundle_id") == "metric-calendar-activity" or definition.get("metric_name") in activity_events
@@ -2005,8 +2038,9 @@ def metric_runs(
                 raise ValueError(f"unknown metric definition: {metric_name}")
             definition = definitions_by_name[metric_name]
             cost_calculation = definition["definition"]["calculation"] in ("cost_sum", "cost_over_cohort")
-            uses_fx = cost_calculation or definition["definition"]["calculation"] in ("revenue_sum", "revenue_over_cost", "revenue_over_cohort")
-            if (policy.get("rate_selection") and definition["value_type"] == "money"
+            payer_profile = definition.get("rule_bundle_id") == "metric-verified-payers"
+            uses_fx = cost_calculation or definition["definition"]["calculation"] in ("revenue_sum", "revenue_over_cost", "revenue_over_cohort", "revenue_over_paying_installations")
+            if ((policy.get("rate_selection") or payer_profile) and definition["value_type"] == "money"
                     and (definition["currency"] != policy["target_currency"] or definition["amount_scale"] != policy["target_scale"])):
                 raise ValueError("dated_fx_target_mismatch")
             missing_fx = False
@@ -2106,7 +2140,7 @@ def metric_runs(
             if unsupported:
                 raise ValueError(f"unsupported grouping for {metric_name}: {','.join(unsupported)}")
             revenue_value = 0
-            for item in ([] if cost_calculation or definition.get("engagement_credit_policy") or "conversion_event_key" in definition
+            for item in ([] if payer_profile or cost_calculation or definition.get("engagement_credit_policy") or "conversion_event_key" in definition
                          or policy.get("rate_selection") and (not uses_fx or definition["definition"]["numerator"] == "purchase_net_revenue") else revenue):
                 if provider and item["record"]["producer"] != f"import:{provider}":
                     continue
@@ -2122,8 +2156,17 @@ def metric_runs(
                 if installation and eligible_revenue(definition, installation["record"], item["record"]):
                     revenue_value += money(item["record"]["payload"], day(item["record"]["occurred_at"], "UTC", "occurred_at"))
             purchase_net_revenue_value = 0
+            def verified_projection(item: dict[str, Any]) -> bool:
+                producer, digest = item["record"]["producer"], item["server"]["policy_digest"]
+                return producer.startswith("adapter:") and digest in ("verified-commerce-v1", "google-play-product-verification-v1")
+
+            payer_purchases = [item for item in purchases if verified_projection(item) and any(
+                install["server"]["tenant_id"] == item["server"]["tenant_id"]
+                and install["server"]["app_id"] == item["server"]["app_id"]
+                and install["record"]["payload"]["installation_id"] == item["record"]["payload"].get("installation_id")
+                and eligible_revenue(definition, install["record"], item["record"]) for install in eligible_installs)] if payer_profile else []
             if definition["definition"]["numerator"] in {"purchase_net_revenue", "total_net_revenue"}:
-                for item in purchases:
+                for item in (payer_purchases if payer_profile else purchases):
                     installation = next((
                         candidate for candidate in eligible_installs
                         if candidate["server"]["tenant_id"] == item["server"]["tenant_id"]
@@ -2136,12 +2179,15 @@ def metric_runs(
                     target = resolve_refund_target(item, visible)
                     if target is None or target["record"]["payload"]["financial_status"] != "settled":
                         continue
+                    if payer_profile and (not verified_projection(item) or target not in payer_purchases):
+                        continue
                     if definition.get("refund_reversal_policy") and any(
                         reversal["record"]["event_name"] == "refund"
                         and reversal["record"]["payload"]["financial_status"] == "reversed"
                         and reversal["server"]["tenant_id"] == item["server"]["tenant_id"]
                         and reversal["server"]["app_id"] == item["server"]["app_id"]
                         and reversal["record"]["payload"].get("reverses_refund_record_id") == item["record"]["record_id"]
+                        and (not payer_profile or verified_projection(reversal))
                         for reversal in visible
                     ):
                         continue
@@ -2165,7 +2211,24 @@ def metric_runs(
             calculation = definition["definition"]["calculation"]
             amount: int | None = None
             undefined_reason: str | None = None
-            if definition.get("rule_bundle_id") == "metric-calendar-activity":
+            if payer_profile:
+                key = lambda item: (item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["payload"]["installation_id"])
+                payers = len({key(item) for item in payer_purchases})
+                population = len({key(item) for item in eligible_installs})
+                if calculation == "purchase_count":
+                    amount = len(payer_purchases)
+                elif calculation == "paying_installations":
+                    amount = payers
+                elif calculation == "paying_installations_over_cohort":
+                    if population == 0:
+                        undefined_reason = "empty_cohort"
+                    else:
+                        amount = round_half_even(payers * 1000000, population)
+                elif payers == 0:
+                    undefined_reason = "no_paying_installations"
+                else:
+                    amount = round_half_even(purchase_net_revenue_value, payers)
+            elif definition.get("rule_bundle_id") == "metric-calendar-activity":
                 grouping = evaluation.get("grouping", {})
                 metric_date = grouping.get("metric_date")
                 if not isinstance(metric_date, str) or set(grouping) != {"metric_date"}:

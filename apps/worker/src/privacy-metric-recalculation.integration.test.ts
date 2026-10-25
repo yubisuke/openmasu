@@ -47,6 +47,7 @@ describe("privacy metric correction through the existing durable worker", { conc
     tenantId = `tenant-privacy-metric-${randomBytes(5).toString("hex")}`;
     stalled = false; readable = true; payloadRef = `encrypted:synthetic-privacy-metric-${tenantId}`;
     const base = fixture("33-stage-b-cohort-metrics"), custom = fixture("61-custom-conversion"), engagement = fixture("64-first-party-engagement");
+    const payer = fixture("73-verified-payers");
     const batches: Any[] = [];
     const evaluations: Any[] = [];
     for (const [day, date] of [[0, "2026-08-01"], [1, "2026-08-02"]] as const) for (const campaign of ["a", "b"]) {
@@ -74,14 +75,15 @@ describe("privacy metric correction through the existing durable worker", { conc
     for (const key of ["record_id", "delivery_id", "event_id"]) other[key] += "-synthetic-unrelated";
     other.app_id = "app-unrelated"; other.payload.installation_id = "installation:synthetic-unrelated";
     batches.push({ batch_id: "synthetic-unrelated", server_context: { ...base.server_context, app_id: other.app_id }, records: [other] });
-    batches.push({ batch_id: "synthetic-custom", server_context: custom.server_context, records: custom.records }, ...engagement.batches);
+    batches.push({ batch_id: "synthetic-custom", server_context: custom.server_context, records: custom.records }, ...engagement.batches, ...payer.batches);
     input = { ...base, records: undefined, batches, cost_records: [], metric_evaluations: [],
       metric_definitions: [...base.metric_definitions, ...custom.metric_definitions, ...engagement.metric_definitions,
-        ...CALENDAR_ACTIVITY_METRIC_DEFINITIONS] };
+        ...CALENDAR_ACTIVITY_METRIC_DEFINITIONS, ...payer.metric_definitions] };
     await ingestFixture(`synthetic-privacy-${tenantId}`, input, app, seed);
     originals = [];
     for (const [fxPolicy, group] of [[base.fx_policy, evaluations], [custom.fx_policy, custom.metric_evaluations],
-      [engagement.fx_policy, engagement.metric_evaluations]] as [Any, Any[]][]) {
+      [engagement.fx_policy, engagement.metric_evaluations],
+      [payer.fx_policy, payer.metric_evaluations.filter((evaluation: Any) => evaluation.metric_run_id_prefix === "payer73-full")]] as [Any, Any[]][]) {
       originals.push(...await computeSqlMetricRuns(app, { ...input, fx_policy: fxPolicy, metric_evaluations: group }, true,
         { tenant_id: tenantId, app_id: "app-a" }));
     }
@@ -138,12 +140,14 @@ describe("privacy metric correction through the existing durable worker", { conc
       assert.equal(next.metric_definition_version, prior.metric_definition_version);
       assert.equal(next.rule_bundle_hash, prior.rule_bundle_hash);
       assert.equal(next.data_freshness, "recalculated");
-      assert.ok(next.value_unscaled === "0" || next.undefined_reason === "empty_cohort", `${prior.metric_run_id}: ${jcs(next)}`);
+      assert.ok(next.value_unscaled === "0" || next.undefined_reason === "empty_cohort"
+        || prior.metric_name === "cohort_arppu_d7_usd" && next.undefined_reason === "no_paying_installations", `${prior.metric_run_id}: ${jcs(next)}`);
     }
   }
 
   it("synthetic privacy_multi_group_recalculation updates two days times two campaigns plus retention/custom/engagement/calendar_activity without touching unrelated runs", async () => {
-    assert.equal(originals.length, 23);
+    assert.equal(originals.length, 27);
+    assert.equal(originals.find(run => run.metric_name === "cohort_arppu_d7_usd")?.value_unscaled, "6000000");
     const dailyActive = originals.find(run => run.metric_name === "daily_active_installations")!;
     assert.ok(BigInt(dailyActive.value_unscaled) > 0n);
     assert.equal(foreign[0].value_unscaled, "1");

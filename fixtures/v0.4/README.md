@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 72 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 73 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -23,6 +23,16 @@ The validator checks every object against its Draft 2020-12 schema, checks regis
 The data is synthetic. It contains no external-source format, campaign data, user data, credential, live fraud rule, or operational threshold.
 
 ## Independent third-oracle calculations
+
+### Fixture 73: verified payer metrics
+
+[The independent derivation](73-verified-payers/README.md) constructs all 13
+families. The full/cutoff/empty vectors `(transactions, paying installations,
+payer rate, ARPPU)` are `(1,1,1000000,6000000)`,
+`(0,0,0,undefined/no_paying_installations)` and
+`(0,0,undefined/empty_cohort,undefined/no_paying_installations)`.
+Pending/reversed transactions and independent advertising revenue do not enter
+payer money. Earlier 72 inputs and 936 golden artifacts are unchanged.
 
 ### Fixture 72: daily recorded activity
 

@@ -1,4 +1,5 @@
 import type { MetricReportRow } from "../reporting.js";
+import { isPayerMetricDefinition } from "@openmasu/contracts/definitions";
 
 /** Decimal placement only: no floating-point conversion and no display rounding. */
 export function exactDecimal(integer: string, scale: number): string {
@@ -17,14 +18,17 @@ export function metricValueLabel(row: MetricReportRow): string {
   if (row.value_state === "unavailable") return `— (${row.unavailable_reason ?? "value unavailable"}; ${row.privacy_update_state ?? "unavailable"})`;
   if (row.value_state === "undefined") return `— (${row.undefined_reason ?? "reason unavailable"})`;
   if (row.value_unscaled === undefined) return "Value unavailable";
+  const payer = isPayerMetricDefinition(row.comparison_context?.definition);
   if (row.value_type === "money" && row.amount_scale !== null && row.currency) {
-    return `${row.currency} ${exactDecimal(row.value_unscaled, row.amount_scale)}`;
+    return `${row.currency} ${exactDecimal(row.value_unscaled, row.amount_scale)}${payer ? " per paying installation (not person)" : ""}`;
   }
   if (row.value_type === "ratio" && row.ratio_scale !== null) {
-    return `${exactDecimal(row.value_unscaled, row.ratio_scale)} ×`;
+    return `${exactDecimal(row.value_unscaled, row.ratio_scale)} ${payer ? "paying installations / cohort installations" : "×"}`;
   }
   if (row.value_type === "count") {
-    const unit = row.activity_unit === "distinct_installations" ? "distinct installations (not people)"
+    const unit = payer ? row.comparison_context!.definition.definition.calculation === "purchase_count"
+      ? "settled purchase transactions" : "paying installations (not people)"
+      : row.activity_unit === "distinct_installations" ? "distinct installations (not people)"
       : row.activity_unit === "session_starts" ? "session starts" : row.activity_unit === "custom_events" ? "custom events" : "count";
     return `${exactDecimal(row.value_unscaled, 0)} ${unit}`;
   }

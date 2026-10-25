@@ -19,12 +19,14 @@ async function purchaseNetRevenueValue(
   purchase_revenue_unscaled: string; refund_deduction_unscaled: string;
   purchase_event_count: string; refund_event_count: string;
   refund_reversal_unscaled?: string; refund_reversal_event_count?: string;
-} } | { value_state: "undefined"; undefined_reason: "missing_fx_rate" }> {
-  if (definition.definition.calculation !== "revenue_sum"
+} } | { value_state: "undefined"; undefined_reason: "missing_fx_rate" | "empty_cohort" | "no_paying_installations" }> {
+  const payerProfile = definition.rule_bundle_id === "metric-verified-payers";
+  if ((!payerProfile && definition.definition.calculation !== "revenue_sum")
       || definition.definition.window?.type !== "elapsed") {
     throw new Error(`SQL purchase net revenue definition is invalid: ${definition.metric_name}`);
   }
   const result = await client.query<{ value_unscaled: string; missing_fx_count: string;
+    payer_count: string; cohort_size: string;
     purchase_revenue_unscaled: string; refund_deduction_unscaled: string;
     purchase_event_count: string; refund_event_count: string;
     refund_reversal_unscaled: string; refund_reversal_event_count: string }>(
@@ -73,7 +75,7 @@ async function purchaseNetRevenueValue(
        ),
        purchase_candidates AS (
          SELECT purchase.amount_unscaled, purchase.amount_scale,
-                rate.rate_unscaled, rate.rate_scale, 1::numeric AS sign, false AS reversed
+                rate.rate_unscaled, rate.rate_scale, 1::numeric AS sign, false AS reversed, purchase.installation_id
          FROM ledger.purchase_facts AS purchase
          JOIN cohort ON cohort.installation_id=purchase.installation_id
          JOIN ledger.logical_events AS logical
@@ -89,6 +91,8 @@ async function purchaseNetRevenueValue(
              AND control.canonical_timestamp_value(rate.as_of) <= control.canonical_timestamp_value($3)))
          WHERE purchase.tenant_id=$1 AND purchase.app_id=$2
            AND purchase.financial_status='settled'
+           AND (NOT $20::boolean OR (raw.producer LIKE 'adapter:%'
+             AND raw.policy_digest IN ('google-play-product-verification-v1','verified-commerce-v1')))
            AND raw.received_at <= $3
            AND ($12='before' OR raw.payload_lifecycle_status='available')
            AND purchase.occurred_at_ts >= cohort.installed_at
@@ -114,7 +118,9 @@ async function purchaseNetRevenueValue(
                     AND reversal.occurred_at_ts >= refund.occurred_at_ts
                     AND reversal_raw.received_at >= refund_raw.received_at AND reversal_raw.received_at <= $3
                     AND ($12='before' OR reversal_raw.payload_lifecycle_status='available')
-                )) AS reversed
+                    AND (NOT $20::boolean OR (reversal_raw.producer LIKE 'adapter:%'
+                      AND reversal_raw.policy_digest IN ('google-play-product-verification-v1','verified-commerce-v1')))
+                )) AS reversed, purchase.installation_id
          FROM ledger.refund_facts AS refund
          JOIN ledger.logical_events AS refund_logical
            ON refund_logical.logical_event_id=refund.logical_event_id
@@ -143,6 +149,11 @@ async function purchaseNetRevenueValue(
          WHERE refund.tenant_id=$1 AND refund.app_id=$2
            AND refund.financial_status='settled'
            AND purchase.financial_status='settled'
+           AND (NOT $20::boolean OR (
+             (refund_raw.producer LIKE 'adapter:%' AND refund_raw.policy_digest IN ('google-play-product-verification-v1','verified-commerce-v1'))
+             AND (purchase_raw.producer LIKE 'adapter:%' AND purchase_raw.policy_digest IN ('google-play-product-verification-v1','verified-commerce-v1'))
+             AND purchase.occurred_at_ts >= cohort.installed_at
+             AND purchase.occurred_at_ts < cohort.installed_at + (($9 + 1) * interval '1 day')))
            AND refund.installation_id=purchase.installation_id
            AND refund.currency=purchase.currency
            AND refund_raw.received_at <= $3
@@ -158,12 +169,14 @@ async function purchaseNetRevenueValue(
          UNION ALL
          SELECT * FROM refund_candidates
        ), converted AS (
-         SELECT sign, reversed, rate_unscaled, ledger.half_even_div(
+         SELECT sign, reversed, rate_unscaled, installation_id, ledger.half_even_div(
               amount_unscaled::numeric * rate_unscaled * power(10::numeric, $11),
               power(10::numeric, amount_scale + rate_scale)
             ) AS amount FROM commerce
        )
      SELECT coalesce(sum(CASE WHEN reversed THEN 0 ELSE sign * amount END), 0::numeric)::text AS value_unscaled,
+            count(DISTINCT installation_id) FILTER (WHERE sign=1)::text AS payer_count,
+            (SELECT count(DISTINCT installation_id)::text FROM cohort) AS cohort_size,
             trim_scale(coalesce(sum(amount) FILTER (WHERE sign=1), 0::numeric))::text AS purchase_revenue_unscaled,
             trim_scale(coalesce(sum(amount) FILTER (WHERE sign=-1), 0::numeric))::text AS refund_deduction_unscaled,
             count(*) FILTER (WHERE sign=1)::text AS purchase_event_count,
@@ -192,12 +205,35 @@ async function purchaseNetRevenueValue(
       grouping?.ad_group_id ?? null,
       grouping?.creative_id ?? null,
       !!fxPolicy.rate_selection,
+      payerProfile,
     ],
   );
   const row = result.rows[0];
+  const commerce = { purchase_revenue_unscaled: row.purchase_revenue_unscaled,
+    refund_deduction_unscaled: row.refund_deduction_unscaled, purchase_event_count: row.purchase_event_count,
+    refund_event_count: row.refund_event_count,
+    ...(definition.refund_reversal_policy ? { refund_reversal_unscaled: row.refund_reversal_unscaled,
+      refund_reversal_event_count: row.refund_reversal_event_count } : {}) };
+  if (payerProfile) {
+    const calculation = definition.definition.calculation;
+    if (calculation === "purchase_count") return { value_state: "present", value_unscaled: row.purchase_event_count, commerce };
+    if (calculation === "paying_installations") return { value_state: "present", value_unscaled: row.payer_count, commerce };
+    if (calculation === "paying_installations_over_cohort") {
+      if (row.cohort_size === "0") return { value_state: "undefined", undefined_reason: "empty_cohort" };
+      const ratio = await client.query<{ value: string }>(
+        "SELECT ledger.half_even_div($1::numeric * 1000000, $2::numeric)::text AS value", [row.payer_count, row.cohort_size]);
+      return { value_state: "present", value_unscaled: ratio.rows[0].value, commerce };
+    }
+    if (row.payer_count === "0") return { value_state: "undefined", undefined_reason: "no_paying_installations" };
+  }
   if (row.missing_fx_count !== "0") {
     if (fxPolicy.rate_selection) return { value_state: "undefined", undefined_reason: "missing_fx_rate" };
     throw new Error(`missing FX rate for ${definition.metric_name}`);
+  }
+  if (payerProfile) {
+    const ratio = await client.query<{ value: string }>(
+      "SELECT ledger.half_even_div($1::numeric, $2::numeric)::text AS value", [row.value_unscaled, row.payer_count]);
+    return { value_state: "present", value_unscaled: ratio.rows[0].value, commerce };
   }
   return { value_state: "present", value_unscaled: row.value_unscaled, commerce: {
     purchase_revenue_unscaled: row.purchase_revenue_unscaled, refund_deduction_unscaled: row.refund_deduction_unscaled,
@@ -356,7 +392,7 @@ export async function metricValue(
   if (definition.definition.numerator === "total_net_revenue") {
     return totalNetRevenueValue(client, scope, watermark, grouping, definition, fxPolicy, privacyState, selectedCosts);
   }
-  if (definition.definition.numerator === "purchase_net_revenue") {
+  if (definition.definition.numerator === "purchase_net_revenue" || definition.rule_bundle_id === "metric-verified-payers") {
     return purchaseNetRevenueValue(client, scope, watermark, grouping, definition, fxPolicy, privacyState);
   }
   if (definition.rule_bundle_id === "metric-calendar-activity") {

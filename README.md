@@ -24,6 +24,7 @@ it or treating its judgment as first-party evidence.
 | Attribute | Separate first-party, verified platform, imported-provider and Apple aggregate evidence |
 | Calculate | Scoped acquisition KPIs, ROAS, LTV, retention and custom outcomes with saved definitions, cutoffs and exact money |
 | Observe activity | Separate [UTC session starts, custom events and active installations](docs/calendar-activity.md); not unique people or period-unique audiences |
+| Analyze verified purchases | [Transaction count, paying installations, payer rate and purchase-net ARPPU](docs/payer-metrics.md); installations are not people, and undefined money is not zero |
 | Maintain | Daily schedules, bounded Google/Apple [cost refresh](docs/cost-refresh.md) and corrections, receipt diagnostics and confirmed ingest recovery |
 | Explain | Reader-only dashboard, saved daily analyses and bounded previous-period views; explicit external revenue/ROAS/LTV, retention and outcome comparison with preserved evidence levels |
 | Operate | PostgreSQL role isolation, privacy deletion/reapplication, backup/restore, signed webhooks and bulk exports |
@@ -51,7 +52,7 @@ the synthetic backend, a daily install value and saved analysis/CSV. The
 publication receipt records the later harness revision separately. This is
 JVM/Robolectric API 24 evidence, not physical-device or all-platform onboarding.
 
-Current source includes additions through contract patch `v0.4.25`; the wire
+Current source includes additions through contract patch `v0.4.26`; the wire
 identity remains `0.4.0` with schema URNs ending in `:v0.4`. See
 [current status](docs/STATUS.md) and [post-release scope](docs/releases/next.md).
 Use the matching tag and its documentation when evaluating a published release.
@@ -115,8 +116,8 @@ python -m pip install --require-hashes --requirement requirements-contract.txt
 npm run validate
 ```
 
-It checks 28 schemas, 8 registries, 72 reviewed synthetic fixtures, 936 golden
-output artifacts, 72 scenario assertions, 27 acceptance criteria,
+It checks 28 schemas, 8 registries, 73 reviewed synthetic fixtures, 949 golden
+output artifacts, 73 scenario assertions, 27 acceptance criteria,
 TypeScript/Python determinism and RFC 8785 conformance, plus type, documentation,
 release-identity and public-data guardrails. It never regenerates goldens.
 Runtime, database and native SDK evidence have separate CI owners.
