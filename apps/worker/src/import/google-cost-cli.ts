@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { readFileSync, statSync } from "node:fs";
 import type { Pool } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
 import {
@@ -6,6 +7,8 @@ import {
   EnvironmentSecretStore,
   recordJobOutcome,
   runWithTerminalJobOutcome,
+  normalizeGoogleCostDetail,
+  type GoogleCostDetailSelection,
   type SecretStore,
 } from "@openmasu/runtime";
 import {
@@ -51,6 +54,7 @@ export async function runGoogleCostImport(options: {
   apiVersion?: string;
   now?: Date;
   limits?: Partial<GoogleAdsLimits>;
+  detail?: GoogleCostDetailSelection;
 }): Promise<GoogleCostImportResult> {
   const asOf = canonicalTimestamp(options.asOf ?? (options.now ?? new Date()).toISOString());
   const tenantId = identifier(options.tenantId, "--tenant");
@@ -65,6 +69,7 @@ export async function runGoogleCostImport(options: {
     since: options.since,
     until: options.until,
     limits: options.limits,
+    detail: options.detail,
     scope: { tenant_id: tenantId, app_id: appId, currency, as_of: asOf },
   });
   if (rows.length === 0) throw new Error("Google Ads returned no cost rows for the requested range");
@@ -104,8 +109,18 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
   const until = argument("until");
   const asOf = argument("as-of");
   const apiVersion = argument("api-version");
+  const detailMapping = argument("detail-mapping");
+  let detail: GoogleCostDetailSelection | undefined;
+  if (detailMapping) {
+    try {
+      if (statSync(detailMapping).size > 65536) throw Error("cost_detail_mapping_limit");
+      detail = normalizeGoogleCostDetail(JSON.parse(readFileSync(detailMapping,"utf8")));
+    } catch (error) {
+      throw Error(error instanceof Error && /^cost_detail_[a-z_]+$/.test(error.message) ? error.message : "cost_detail_mapping_invalid");
+    }
+  }
   if (!tenantId || !appId || !customerId || !currency || !since || !until) {
-    throw new Error("usage: npm run import:cost:google -- --tenant=<id> --app=<id> --customer=<10-digit-id> --currency=<ISO-4217> --since=<YYYY-MM-DD> --until=<YYYY-MM-DD> [--login-customer=<10-digit-id>] [--as-of=<UTC timestamp>] [--api-version=v25]");
+    throw new Error("usage: npm run import:cost:google -- --tenant=<id> --app=<id> --customer=<10-digit-id> --currency=<ISO-4217> --since=<YYYY-MM-DD> --until=<YYYY-MM-DD> [--login-customer=<10-digit-id>] [--as-of=<UTC timestamp>] [--api-version=v25] [--detail-mapping=<json-file>]");
   }
   const secrets = new EnvironmentSecretStore({
     OPENMASU_GOOGLE_ADS_ACCESS_TOKEN: {
@@ -132,6 +147,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
       until,
       asOf,
       apiVersion,
+      detail,
     })));
   } finally {
     await pool.end();

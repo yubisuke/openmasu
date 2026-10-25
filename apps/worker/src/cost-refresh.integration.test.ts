@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, describe, it } from "node:test";
 import {
-  createAppPool, createReaderPool, EncryptedFilePayloadStore, EnvironmentSecretStore,
+  createAppPool, createReaderPool, createSeedPool, EncryptedFilePayloadStore, EnvironmentSecretStore,
   costRefreshSecretName, uuidV7, withTenant,
 } from "@openmasu/runtime";
 import { ensureAdminKeys, type AppAdminIdentity } from "../../api/src/admin-auth.js";
@@ -16,9 +16,16 @@ import { createRequestHandler } from "../../api/src/router.js";
 import { processCostRefreshes } from "./cost-refresh-worker.js";
 import { persistCostImportWithClient } from "./import/cost.js";
 import type { FetchLike } from "./import/adapters.js";
+import { ingestFixture } from "./test-support/fixture-ingestion.js";
+import { computeSqlMetricRuns } from "./metrics/cohort.js";
+import { requestMetricRecalculation } from "../../api/src/metric-recalculations.js";
+import { processMetricRecalculations } from "./metric-recalculation-worker.js";
+import { metricReport } from "../../api/src/reporting.js";
+import { jcs } from "@openmasu/attribution-core/canonical";
 
 const pool = createAppPool();
 const reader = createReaderPool();
+const seed = createSeedPool();
 const request = { provider: "google_ads", customer_id: "4300000000", currency: "USD", lookback_days: 7 };
 const now = new Date("2026-08-22T00:00:00.000Z");
 let identity: AppAdminIdentity;
@@ -93,7 +100,57 @@ describe("durable bounded cost refresh", { concurrency: false }, () => {
       [identity.tenantId, identity.appId, now.toISOString()],
     ).then(() => undefined));
   });
-  after(async () => { await Promise.all([pool.end(), reader.end()]); });
+  after(async () => { await Promise.all([pool.end(), reader.end(), seed.end()]); });
+
+  it("selected_detail_refresh_reaches_saved_ROAS_revisions_and_reader_capability_without_parent_allocation_or_partial_publication", async () => {
+    const input=JSON.parse(readFileSync("fixtures/v0.4/63-selected-acquisition-detail/input.json","utf8")
+      .replaceAll('"tenant-a"',JSON.stringify(identity.tenantId)).replaceAll('"app-a"',JSON.stringify(identity.appId)));
+    for(const record of input.records) {
+      const p=record.payload;
+      if(p.campaign_id==="campaign-a")p.campaign_id="43601";
+      if(p.network==="synthetic-network")p.network="google-ads";
+      if(p.ad_group_id==="synthetic-group-a")p.ad_group_id="43602";
+      if(p.ad_group_id==="synthetic-group-b")p.ad_group_id="43604";
+    }
+    for(const evaluation of input.metric_evaluations) Object.assign(evaluation.grouping,{ campaign_id:"43601",network:"google-ads",
+      ...(evaluation.grouping.ad_group_id?{ad_group_id:evaluation.grouping.ad_group_id==="synthetic-group-a"?"43602":"43604"}:{}) });
+    input.cost_records=[];
+    await ingestFixture("synthetic-provider-detail",{...input,metric_evaluations:[]},pool,seed);
+    const detail={version:1,grain:"ad",country_scope:"all",coverage:"explicit_selection",selections:[
+      {campaign_id:"43601",ad_group_id:"43602",provider_ad_id:"43603",creative_id:"synthetic-creative-a"}]};
+    const first=await register({...request,detail});
+    const mock=(amount:string,partial=false):FetchLike=>async(_url,init)=>{
+      assert.match(JSON.parse(String(init?.body)).query,/FROM ad_group_ad/);
+      return Response.json([{results:[{customer:{currencyCode:"USD"},campaign:{id:"43601"},adGroup:{id:"43602"},adGroupAd:{ad:{id:"43603"}},
+        segments:{date:"2026-08-06"},metrics:{costMicros:amount}}]},...(partial?[{error:{message:"synthetic unread tail"}}]:[])]);
+    };
+    assert.equal((await processCostRefreshes(pool,identity.tenantId,options(mock("10000000"),new Date("2026-08-12T00:00:00.000Z")))).completed,1);
+    const initial=await computeSqlMetricRuns(pool,input,true);
+    const values=(runs:any[],prefix:string)=>["d7_roas","d30_total_net_roas"].map(name=>{const r=runs.find(row=>row.metric_run_id===`${prefix}:${name}`)!;return r.value_unscaled??r.undefined_reason;});
+    assert.deepEqual(values(initial,"detail63-a"),["2000000","2600000"]);
+    assert.deepEqual(values(initial,"detail63-b"),["no_attributed_cost","no_attributed_cost"]);
+    assert.deepEqual(values(initial,"detail63-campaign"),["no_attributed_cost","no_attributed_cost"]);
+    const health=(await listCostSchedules(reader,identity))[0];
+    assert.equal(health.adapter_capability.grain,"ad"); assert.equal(health.adapter_capability.coverage,"explicit_selection");
+    for(const forbidden of ["43601","43602","43603",request.customer_id,"selections","access_token"]) assert.equal(JSON.stringify(health).includes(forbidden),false);
+    const before=await counts();
+    await due(first.cost_schedule_id);
+    assert.equal((await processCostRefreshes(pool,identity.tenantId,options(mock("20000000",true),new Date("2026-08-13T00:00:00.000Z")))).failed,1);
+    assert.deepEqual(await counts(),before,"an incomplete stream cannot publish its valid prefix");
+    await disableCostSchedule(pool,identity,first.cost_schedule_id);
+    await register({...request,detail});
+    assert.equal((await processCostRefreshes(pool,identity.tenantId,options(mock("15000000"),new Date("2026-08-13T00:00:00.000Z")))).completed,1);
+    const revision=await withTenant(reader,identity.tenantId,async c=>(await c.query("SELECT import_run_id FROM control.import_runs WHERE tenant_id=$1 AND app_id=$2 ORDER BY started_at DESC LIMIT 1",[identity.tenantId,identity.appId])).rows[0]);
+    const requested=await requestMetricRecalculation(pool,identity,{date_from:"2026-08-06",date_to:"2026-08-06",metric_names:["d7_roas","d30_total_net_roas"],cost_import_run_id:revision.import_run_id,watermark:"2026-08-13T00:00:00.000Z"});
+    assert.equal(requested.selected_runs,4);
+    assert.equal((await processMetricRecalculations(pool,identity.tenantId)).completed,4);
+    const latest=(await metricReport(reader,identity,{...identity,supersession:"latest",limit:200,metricNames:["d7_roas","d30_total_net_roas"]})).data;
+    const selected=latest.filter(r=>r.grouping?.creative_id==="synthetic-creative-a");
+    assert.deepEqual(selected.map(r=>[r.metric_name,r.value_unscaled]).sort(),[["d30_total_net_roas","1733333"],["d7_roas","1333333"]]);
+    assert.ok(latest.filter(r=>r.grouping?.creative_id!=="synthetic-creative-a").every(r=>r.value_state==="undefined"&&r.undefined_reason==="no_attributed_cost"));
+    const history=await withTenant(reader,identity.tenantId,async c=>(await c.query("SELECT artifact FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2",[identity.tenantId,identity.appId])).rows);
+    for(const run of initial)assert.equal(jcs(history.find(row=>row.artifact.metric_run_id===run.metric_run_id)!.artifact),jcs(run));
+  });
 
   it("publishes only a complete partitioned lookback and makes replay a no-op", async () => {
     await register();

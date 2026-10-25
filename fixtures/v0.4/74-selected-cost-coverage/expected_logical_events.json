@@ -1,0 +1,122 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:redirector:event:click-63-a",
+    "record_id": "click-63-a",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "redirector",
+    "event_id": "event:click-63-a",
+    "event_name": "click",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:redirector:event:click-63-b",
+    "record_id": "click-63-b",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "redirector",
+    "event_id": "event:click-63-b",
+    "event_name": "click",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:install-63-a",
+    "record_id": "install-63-a",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:install-63-a",
+    "event_name": "install",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:install-63-b",
+    "record_id": "install-63-b",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:install-63-b",
+    "event_name": "install",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:purchase-63-a",
+    "record_id": "purchase-63-a",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:purchase-63-a",
+    "event_name": "purchase",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:purchase-63-b",
+    "record_id": "purchase-63-b",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:purchase-63-b",
+    "event_name": "purchase",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:refund-63-a",
+    "record_id": "refund-63-a",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:refund-63-a",
+    "event_name": "refund",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:refund-63-b",
+    "record_id": "refund-63-b",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:refund-63-b",
+    "event_name": "refund",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:revenue-63-a",
+    "record_id": "revenue-63-a",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:revenue-63-a",
+    "event_name": "ad_revenue",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  },
+  {
+    "contract_version": "0.4.0",
+    "logical_event_id": "logical:tenant-a:app-a:sdk-android:event:revenue-63-b",
+    "record_id": "revenue-63-b",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "producer": "sdk-android",
+    "event_id": "event:revenue-63-b",
+    "event_name": "ad_revenue",
+    "record_lifecycle": "active",
+    "timeliness": "on_time"
+  }
+]

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { jcs } from "@openmasu/attribution-core/canonical";
-import { selectDisjointCosts } from "@openmasu/attribution-core";
+import { selectDisjointCosts, costCoverageMatchesGrouping } from "@openmasu/attribution-core";
 import { compareMetricText } from "./model.js";
 import type { CostSelection, CurrentCost, DisjointCost, MetricClient, MetricGrouping, MetricScope, SnapshotRecord, SnapshotScan } from "./model.js";
 
@@ -100,7 +100,7 @@ export async function currentCosts(
      FROM (
        SELECT DISTINCT ON (cost_key_digest)
          tenant_id, app_id, cost_record_id, as_of,
-         report_snapshot_digest, cost_key_digest
+         report_snapshot_digest, cost_key_digest, artifact
        FROM ledger.cost_records
        WHERE tenant_id=$1 AND app_id=$2 AND as_of <= $3 AND NOT (artifact ? 'creative_id')
          AND ($4::text IS NULL OR campaign_id=$4)
@@ -110,6 +110,7 @@ export async function currentCosts(
          AND ($8::text IS NULL OR ad_group_id=$8)
        ORDER BY cost_key_digest, as_of DESC, cost_record_id COLLATE "C" DESC
      ) AS current
+     WHERE NOT (artifact ? 'coverage_scope')
      ORDER BY as_of, cost_record_id`,
     [
       scope.tenant_id,
@@ -132,7 +133,8 @@ export async function disjointCosts(client: MetricClient, scope: MetricScope, wa
   const result = await client.query<DisjointCost>(
     `SELECT DISTINCT ON (network, cost_date, campaign_id, ad_group_id, country, (artifact->>'creative_id'))
        tenant_id, app_id, cost_record_id, as_of, report_snapshot_digest, cost_key_digest AS dimension_digest,
-       network, cost_date::text AS date, campaign_id, ad_group_id, artifact->>'creative_id' AS creative_id, country, currency, spend_unscaled, spend_scale
+       network, cost_date::text AS date, campaign_id, ad_group_id, artifact->>'creative_id' AS creative_id,
+       artifact->>'coverage_scope' AS coverage_scope, country, currency, spend_unscaled, spend_scale
      FROM ledger.cost_records
      WHERE tenant_id=$1 AND app_id=$2 AND as_of <= $3
        AND ($4::text IS NULL OR campaign_id=$4) AND ($5::text IS NULL OR network=$5)
@@ -144,5 +146,5 @@ export async function disjointCosts(client: MetricClient, scope: MetricScope, wa
     [scope.tenant_id, scope.app_id, watermark, grouping?.campaign_id ?? null, grouping?.network ?? null,
       grouping?.country ?? null, grouping?.cohort_date ?? null, detail, grouping?.ad_group_id ?? null, grouping?.creative_id ?? null, reportingZone ?? null],
   );
-  return selectDisjointCosts(result.rows, detail);
+  return selectDisjointCosts(result.rows, detail, cost => costCoverageMatchesGrouping(cost, grouping, detail));
 }

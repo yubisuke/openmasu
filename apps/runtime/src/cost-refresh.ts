@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { EnvironmentSecretStore, type SecretEntry } from "./secrets.js";
+import { normalizeGoogleCostDetail, type GoogleCostDetailSelection } from "./google-cost-detail.js";
+export { normalizeGoogleCostDetail, type GoogleCostDetailSelection } from "./google-cost-detail.js";
 
 export type GoogleCostRefreshDefinition = Readonly<{
   version: 1;
@@ -9,6 +11,7 @@ export type GoogleCostRefreshDefinition = Readonly<{
   customer_id: string;
   login_customer_id?: string;
   currency: string;
+  detail?: GoogleCostDetailSelection;
   lag_days: number;
   lookback_days: number;
   limits: Readonly<{
@@ -25,6 +28,16 @@ export type AppleCostRefreshDefinition = Readonly<{
   limits: Readonly<{ maxRows: number; maxPages: number; pageSize: number; maxResponseBytes: number }>;
 }>;
 export type CostRefreshDefinition = GoogleCostRefreshDefinition | AppleCostRefreshDefinition;
+
+/** Reader-safe configured scope, not proof of provider completeness or account permission. */
+export function costAdapterCapability(definition: CostRefreshDefinition) {
+  const detail = definition.provider === "google_ads" ? definition.detail : undefined;
+  return { version:1, provider:definition.provider, api_version:definition.api_version,
+    grain:detail?.grain ?? (definition.provider === "apple_ads" ? "campaign" : "provider_partitioned"),
+    coverage:detail?.coverage ?? "provider_partitioned", country_scope:detail?.country_scope ?? (definition.provider === "apple_ads" ? "all" : "location_of_presence"),
+    creative_binding:detail?.grain === "ad" ? "operator_explicit" : "not_provided",
+    selection_count:detail?.selections.length ?? null, upstream_completeness:"unknown" } as const;
+}
 
 const ceilings: GoogleCostRefreshDefinition["limits"] = {
   maxRows: 100_000, maxBatches: 1_000, maxResponseBytes: 32 * 1024 * 1024,
@@ -48,7 +61,7 @@ export function normalizeCostRefreshDefinition(value: unknown): CostRefreshDefin
   if (body.provider === "apple_ads") return normalizeAppleDefinition(body);
   if (Object.keys(body).some((key) => ![
     "version", "provider", "api_version", "customer_id", "login_customer_id", "currency",
-    "lag_days", "lookback_days", "limits",
+    "lag_days", "lookback_days", "limits", "detail",
   ].includes(key))) throw new Error("cost_schedule_field_forbidden");
   if ((body.version ?? 1) !== 1 || body.provider !== "google_ads" || (body.api_version ?? "v25") !== "v25") {
     throw new Error("cost_schedule_provider_invalid");
@@ -69,6 +82,7 @@ export function normalizeCostRefreshDefinition(value: unknown): CostRefreshDefin
     ...(body.login_customer_id === undefined ? {} : { login_customer_id: body.login_customer_id as string }),
     currency: body.currency, lag_days: boundedInteger(body.lag_days, 1, 31),
     lookback_days: boundedInteger(body.lookback_days, 7, 31), limits,
+    ...(body.detail === undefined ? {} : { detail: normalizeGoogleCostDetail(body.detail) }),
   };
 }
 

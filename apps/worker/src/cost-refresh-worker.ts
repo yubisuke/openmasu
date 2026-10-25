@@ -109,7 +109,7 @@ async function acquire(claim: Claim, secrets: SecretStore, fetcher: FetchLike, t
     return await Promise.race([deadline, claim.definition.provider === "apple_ads"
       ? fetchAppleAds({ ...common, definition: claim.definition })
       : fetchGoogleAds({ ...common, customerId: claim.definition.customer_id, loginCustomerId: claim.definition.login_customer_id,
-        apiVersion: claim.definition.api_version, limits: claim.definition.limits })]);
+        apiVersion: claim.definition.api_version, limits: claim.definition.limits, detail: claim.definition.detail })]);
   } finally { clearTimeout(timer!); }
 }
 

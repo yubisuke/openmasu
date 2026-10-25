@@ -56,7 +56,7 @@ guides document their configuration. Published-release evidence remains separate
 
 ## Next product slices
 
-Updated: 2026-10-25. Twenty-seven of 35 child implementations are complete; the 8 remaining
+Updated: 2026-10-25. Twenty-eight of 35 child implementations are complete; the 7 remaining
 optional issues below map directly to the [roadmap sequence](roadmap.md#next-product-sequence).
 Numbers are tracking links, not required background knowledge.
 
@@ -77,6 +77,12 @@ Postbacks are not unique installs, selected meaning is not a verified binding,
 and live Apple permissions/billing remain unverified. Other explicit dependencies
 remain in the linked issues.
 
+[Detailed Google costs](cost-refresh.md#explicit-google-ad-group-and-ad-costs)
+are implemented with bounded explicit ad-group/ad selections, declared coverage,
+reader-safe configured capability and existing saved-ROAS correction. Selected
+children cannot become an unqualified parent denominator. Automatic detail
+discovery is separate, and live provider completeness remains unverified.
+
 ### Optional extensions
 
 Implement only for the selected usage scope; these extensions are not required
@@ -84,7 +90,6 @@ for the completed integrated candidate.
 
 | Issue / workstream | Narrow acceptance |
 | --- | --- |
-| [#236](https://github.com/yubisuke/openmasu/issues/236): Detailed cost adapter | Declared ad-group/ad grain without inferred parent allocation |
 | [#237](https://github.com/yubisuke/openmasu/issues/237): Detailed target discovery | Bounded ad-group/creative discovery after detailed cost support |
 | [#238](https://github.com/yubisuke/openmasu/issues/238): Additional Unity ILR | Thin callback adapter into existing advertising revenue; unknown is not zero |
 | [#240](https://github.com/yubisuke/openmasu/issues/240): Engagement policy and purchase outcomes | Independent windows/inactivity and purchase-net definitions, not acquisition rewriting |

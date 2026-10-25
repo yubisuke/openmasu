@@ -152,14 +152,16 @@ def sort_by_key(values: list[dict[str, Any]], key: SortKey) -> list[dict[str, An
     ))
 
 
-def select_disjoint_costs(costs: list[dict[str, Any]], include_creative: bool = False) -> tuple[list[dict[str, Any]], bool]:
+def select_disjoint_costs(costs: list[dict[str, Any]], include_creative: bool = False,
+                          eligible: Callable[[dict[str, Any]], bool] | None = None) -> tuple[list[dict[str, Any]], bool]:
     """Latest explicit dated grains; absent dimensions do not prove separation."""
     dimensions = ("campaign_id", "ad_group_id", "country") + (("creative_id",) if include_creative else ())
     revisions: dict[tuple[Any, ...], dict[str, Any]] = {}
     for row in sorted(costs, key=lambda value: (utf16_key(value["as_of"]), utf16_key(value["cost_record_id"]))):
         key = tuple(row.get(field) for field in ("tenant_id", "app_id", "network", "date", *dimensions))
         revisions[key] = row
-    rows = sorted(revisions.values(), key=lambda value: (utf16_key(value["as_of"]), utf16_key(value["cost_record_id"])))
+    rows = sorted((row for row in revisions.values() if eligible is None or eligible(row)),
+                  key=lambda value: (utf16_key(value["as_of"]), utf16_key(value["cost_record_id"])))
     cells: dict[tuple[str, ...], dict[int, dict[int, set[tuple[Any, ...]]]]] = {}
     overlapping = False
     for row in rows:
@@ -2097,6 +2099,12 @@ def metric_runs(
                 (install["server"]["tenant_id"], install["server"]["app_id"])
                 for install in selected_installs
             }
+            def cost_coverage_eligible(cost: dict[str, Any]) -> bool:
+                return cost.get("coverage_scope") is None or bool(
+                    definition.get("acquisition_dimension_policy") and cost.get("coverage_scope") == "matching_detail_only"
+                    and cost.get("ad_group_id") and evaluation.get("grouping", {}).get("ad_group_id") == cost["ad_group_id"]
+                    and (not cost.get("creative_id") or evaluation.get("grouping", {}).get("creative_id") == cost["creative_id"])
+                )
             grouped_costs = [
                 cost for cost in costs
                 if not definition.get("engagement_credit_policy") and not selected_daily and cost["as_of"] <= evaluation["input_received_at_watermark"]
@@ -2110,10 +2118,10 @@ def metric_runs(
             current_by_digest: dict[tuple[str, str, str], dict[str, Any]] = {}
             for cost in sorted(grouped_costs, key=lambda item: (utf16_key(item["as_of"]), utf16_key(item["cost_record_id"]))):
                 current_by_digest[(cost["tenant_id"], cost["app_id"], cost["dimension_digest"])] = cost
-            current_costs = list(current_by_digest.values())
+            current_costs = [cost for cost in current_by_digest.values() if cost_coverage_eligible(cost)]
             overlapping_costs = False
             if definition.get("cost_selection_policy") or definition.get("acquisition_dimension_policy"):
-                current_costs, overlapping_costs = select_disjoint_costs(grouped_costs, bool(definition.get("acquisition_dimension_policy")))
+                current_costs, overlapping_costs = select_disjoint_costs(grouped_costs, bool(definition.get("acquisition_dimension_policy")), cost_coverage_eligible)
             cost_snapshot_rows = [
                 ["cost", cost["as_of"], cost["cost_record_id"], cost["report_snapshot_digest"], cost["dimension_digest"]]
                 for cost in sort_by_key(current_costs, lambda item: (item["as_of"], item["cost_record_id"]))

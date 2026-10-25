@@ -10,6 +10,7 @@ export type CostInput = {
   campaign_id?: string | null;
   ad_group_id?: string | null;
   creative_id?: string | null;
+  coverage_scope?: "matching_detail_only";
   country?: string | null;
   date: string;
   reporting_time_zone?: CohortTimeZone;
@@ -50,16 +51,21 @@ export function prepareCostImportRows(rows: readonly CostInput[]): CostInput[] {
 }
 
 export function costArtifact(row: CostInput, reportSnapshotDigest: string): Record<string, unknown> {
+  if (row.coverage_scope !== undefined && (row.coverage_scope !== "matching_detail_only"
+      || typeof row.ad_group_id !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(row.ad_group_id))) {
+    throw Error("cost_coverage_scope_invalid");
+  }
   const dimensions = dimensionObject(row);
   return {
     contract_version: "0.4.0",
-    cost_record_id: `cost:${sha256([dimensions, row.as_of, row.amount_unscaled, row.currency]).slice(0, 48)}`,
+    cost_record_id: `cost:${sha256([dimensions, row.as_of, row.amount_unscaled, row.currency, ...(row.coverage_scope ? [row.coverage_scope] : [])]).slice(0, 48)}`,
     tenant_id: row.tenant_id,
     app_id: row.app_id,
     network: row.network,
     campaign_id: row.campaign_id ?? null,
     ...(row.ad_group_id ? { ad_group_id: row.ad_group_id } : {}),
     ...(row.creative_id ? { creative_id: row.creative_id } : {}),
+    ...(row.coverage_scope ? { coverage_scope: row.coverage_scope } : {}),
     ...(row.country ? { country: row.country } : {}),
     date: row.date,
     ...(row.reporting_time_zone ? { reporting_time_zone: row.reporting_time_zone } : {}),

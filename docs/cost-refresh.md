@@ -34,6 +34,68 @@ bytes, 1,000 country criteria, 200 criteria per lookup and eight total requests.
 An operator may lower these, not raise them. At least three requests are needed
 for the disjoint cost partitions; country lookup may need additional allowance.
 
+## Explicit Google ad-group and ad costs
+
+The Google v25 adapter optionally accepts `detail` using the synthetic selection
+in [this example](../examples/synthetic/google-cost-detail.json). Add that object
+to the ordinary Google cost-schedule registration above. `grain` is `ad_group`
+or `ad`; `coverage` must be `explicit_selection`, with 1–100 bounded selections.
+Each entry declares a campaign and ad group. Ad grain also requires a provider
+ad ID and an explicit first-party `creative_id`; names, assets and coincidental
+ID equality never infer this binding. Duplicate provider keys and ambiguous
+many-ad-to-one-creative mappings inside a group are refused. Different ad groups
+remain separately scoped even if an operator reuses a creative label.
+
+`country_scope: all` requests unsegmented spend and emits no country. Country
+filters therefore do not borrow it. Ad-group grain also supports explicit
+`geo_country`: select `segments.geo_target_country`, resolve every criterion with
+the existing bounded country lookup, and retain that declared provider segment.
+This does not attest an equivalence to first-party location or billing geography.
+The v25 reference does not list this segment for `ad_group_ad`; ad grain plus
+`geo_country` is unsupported and rejected before credentials or network access.
+Other grains, automatic hierarchy discovery and creative assets are not provided.
+
+The CLI can use the same mapping without a schedule:
+
+```bash
+npm run import:cost:google -- --tenant=tenant-synthetic --app=app-synthetic --customer=4300000000 --currency=USD --since=2026-08-06 --until=2026-08-06 --detail-mapping=examples/synthetic/google-cost-detail.json
+```
+
+All values above are synthetic. The command requires separately configured
+operator credentials to contact a provider; this repository's acceptance uses
+fake responses only. Real selection files and credentials belong outside this
+public checkout. The mapping file is capped at 64 KiB and unknown fields are
+rejected. Existing CLI behavior without a mapping and schedules without `detail`
+retain their historical campaign partitions unchanged.
+
+Each selected report is bounded before publication: exact integer cost micros,
+currency/date checks, one explicit binding per returned key, duplicate rejection,
+bounded response bytes/batches/rows/requests and complete country resolution.
+Malformed/truncated streams, unexpected parent/unknown ad rows, an error tail or
+unread page token fail the refresh; a valid response prefix is never committed.
+Empty or omitted observations are not filled with zero or a parent allocation.
+Acquisition limits and live upstream completeness remain independent questions.
+
+Selected costs carry contract patch 0.4.27's optional
+`coverage_scope=matching_detail_only`. A matching explicit detail profile fixes
+the ad group and, for ad costs, creative. It may not roll selected children into
+a campaign or ad-group denominator. A full parent remains independently eligible
+at its own grain, and ordinary overlap rejection remains. Missing coverage is
+`undefined/no_attributed_cost`. Current watermark, revision and saved-manifest
+recalculation keep this same policy; prior runs are never overwritten.
+Latest revisions are selected before coverage eligibility: a newly restricted
+revision cannot revive an older, apparently full-coverage cost as a denominator.
+
+Immutable schedule definitions retain the complete private selection and digest.
+Registration also saves a reader-safe `adapter_capability`: configured provider,
+API version, grain, country scope, selection count, explicit binding class and
+`upstream_completeness: unknown`, never account IDs, mapping IDs or credentials.
+The existing cost-schedule health endpoint exposes it. Older rows remain null,
+not backfilled into a claimed historical capability. New migration 074 appends
+the safe column/view projection while the definition remains inaccessible to
+readers. CLI imports retain coverage/grain in their cost artifacts; they do not
+create or implicitly activate a schedule.
+
 ## Apple Ads campaign cost
 
 Use the same registration endpoint with this synthetic configuration:
@@ -189,6 +251,17 @@ Confirmed 2026-10-02, against public first-party documentation:
 Live permissions, quotas, account timezone, token validity/rotation, report
 availability and retry snapshot stability remain unverified. Read acceptance
 and a complete local snapshot do not prove upstream completeness.
+
+Detail-query sources confirmed 2026-10-25:
+
+- [v25 ad-group fields](https://developers.google.com/google-ads/api/fields/v25/ad_group?hl=en): cost micros, date and target-country segmentation.
+- [v25 ad fields](https://developers.google.com/google-ads/api/fields/v25/ad_group_ad?hl=en): cost micros and date; target-country segmentation is not declared here.
+- [Query structure](https://developers.google.com/google-ads/api/docs/query/structure): fixed resource and validated finite date/ID predicates.
+- [Continuous streamed responses](https://developers.google.com/google-ads/api/docs/reporting/streaming): a stream is not a sequence of Search pages; failed acquisition must not publish its prefix.
+
+These references do not establish account access, all campaign-type coverage,
+operator mapping correctness, source completeness, first-party geographic
+equivalence or agreement with invoices. Those remain unverified.
 
 Apple sources confirmed 2026-10-11:
 

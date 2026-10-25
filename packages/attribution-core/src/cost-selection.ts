@@ -6,6 +6,7 @@ export type ScopedCost = {
   campaign_id?: string | null;
   ad_group_id?: string | null;
   creative_id?: string | null;
+  coverage_scope?: "matching_detail_only" | null;
   country?: string | null;
   date: string;
   cost_record_id: string;
@@ -17,12 +18,19 @@ const textOrder = (left: string, right: string) => left < right ? -1 : left > ri
 const revisionOrder = (left: ScopedCost, right: ScopedCost) =>
   textOrder(left.as_of, right.as_of) || textOrder(left.cost_record_id, right.cost_record_id);
 
+/** An explicit partial selection cannot supply a parent denominator. */
+export function costCoverageMatchesGrouping(cost: ScopedCost, grouping: Readonly<Record<string,string>> | undefined, detail: boolean): boolean {
+  return cost.coverage_scope == null || (detail && cost.coverage_scope === "matching_detail_only"
+    && !!cost.ad_group_id && grouping?.ad_group_id === cost.ad_group_id
+    && (!cost.creative_id || grouping.creative_id === cost.creative_id));
+}
+
 /**
  * Call after scope, grouping and watermark selection. Missing dimensions mean
  * unknown coverage, not proven non-overlap. Do not arbitrarily prefer a parent
  * or its detail rows: preserve candidates and report unsafe overlap separately.
  */
-export function selectDisjointCosts<T extends ScopedCost>(input: readonly T[], includeCreative = false): {
+export function selectDisjointCosts<T extends ScopedCost>(input: readonly T[], includeCreative = false, eligible: (cost: T) => boolean = () => true): {
   rows: T[];
   overlapping: boolean;
 } {
@@ -34,7 +42,8 @@ export function selectDisjointCosts<T extends ScopedCost>(input: readonly T[], i
     const previous = revisions.get(key);
     if (!previous || revisionOrder(previous, row) < 0) revisions.set(key, row);
   }
-  const rows = [...revisions.values()].sort(revisionOrder);
+  // Eligibility never revives an older revision whose coverage is less restricted.
+  const rows = [...revisions.values()].filter(eligible).sort(revisionOrder);
   // Bounded nullable-dimension masks keep the overlap check linear in row count.
   // Each mask indexes its projections onto all subsets of its known dimensions.
   const cells = new Map<string, Map<number, Map<number, Set<string>>>>();

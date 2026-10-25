@@ -610,7 +610,7 @@ if (!summaryOnly) {
       });
     }
     it("contains 72 fixture directories", () => {
-      check(fixtureDirs.length === 73, `expected 73 fixture directories, found ${fixtureDirs.length}`);
+      check(fixtureDirs.length === 74, `expected 74 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -665,6 +665,35 @@ if (!summaryOnly) {
 }
 
 const scenarios: Array<[string, () => void]> = [
+  ["74 selected child costs stay within matching detail coverage", () => {
+    const { input, output } = fixture("74-selected-cost-coverage");
+    const expectations: Record<string,string[]> = {
+      a:["1","20000000","6000000","2600000","2000000"],
+      b:["1","40000000","12000000","no_attributed_cost","no_attributed_cost"],
+      campaign:["2","30000000","18000000","no_attributed_cost","no_attributed_cost"],
+      "group-early":["1","20000000","6000000","no_attributed_cost","no_attributed_cost"],
+      "group-late":["1","20000000","6000000","1733333","1333333"],
+      parent:["2","30000000","18000000","2600000","2000000"],
+      "detail-with-parent":["1","20000000","6000000","2600000","2000000"],
+    };
+    check(output.metric_runs.length===35 && output.cost_records.filter((row:Any)=>row.coverage_scope==="matching_detail_only").length===2,"scenario 74 inventory");
+    for(const [suffix,expected] of Object.entries(expectations)) check(equal(
+      ["cohort_install_count","cohort_ltv_d7_usd","cohort_purchase_net_revenue_d30_usd","d30_total_net_roas","d7_roas"].map(name=>{
+        const row=output.metric_runs.find((run:Any)=>run.metric_run_id===`coverage74-${suffix}:${name}`);
+        return row?.value_unscaled??row?.undefined_reason;
+      }),expected),`scenario 74 independent ${suffix}`);
+    const revised=structuredClone(input);
+    const historical={...revised.cost_records.find((cost:Any)=>cost.ad_group_id&&!cost.creative_id),
+      cost_record_id:"coverage74-old-full-group",as_of:"2026-08-12T00:00:00.000Z",amount_unscaled:"8000000"};
+    delete historical.coverage_scope;
+    revised.cost_records.push(historical);
+    revised.metric_evaluations=[{...revised.metric_evaluations.find((evaluation:Any)=>evaluation.metric_run_id_prefix==="coverage74-campaign"),
+      input_received_at_watermark:"2026-08-13T00:00:00.000Z"}];
+    const actual=evaluate(revised), [independent]=pythonOutputs([revised]);
+    check(equal(actual,independent),"scenario 74 revised coverage TS/Python parity");
+    check(equal(actual.metric_runs.map((run:Any)=>run.value_unscaled??run.undefined_reason),expectations.campaign),
+      "scenario 74 latest restricted coverage revived old full spend");
+  }],
   ["01 valid Install Referrer", () => {
     const value = fixture("01-valid-install-referrer").output;
     check(value.attributions[0].status === "non_organic" && value.reconciliation[0].difference_reason_code === "matched", "scenario 01");
@@ -1149,8 +1178,8 @@ const scenarios: Array<[string, () => void]> = [
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 73 scenario assertions", () => {
-      check(scenarios.length === 73, "scenario assertion inventory must contain 73 entries");
+    it("contains 74 scenario assertions", () => {
+      check(scenarios.length === 74, "scenario assertion inventory must contain 74 entries");
     });
   });
 
@@ -1719,7 +1748,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 73 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 74 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1760,7 +1789,7 @@ const acceptance: Array<[string, () => void]> = [
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
   ["AC21 one command validates every schema registry fixture and golden", () => {
-    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 73 && outputArtifactCount === 73 * 13, "AC21");
+    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 74 && outputArtifactCount === 74 * 13, "AC21");
     checkDocumentationDrift(root, validationSummary());
   }],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {

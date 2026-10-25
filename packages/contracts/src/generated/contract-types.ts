@@ -144,6 +144,8 @@ export type OpenMasuAttributionResultV04 = {
   supersedes_attribution_id?: string;
 };
 export type OpenMasuCostRecordV04 = Money & {
+  [k: string]: unknown;
+} & {
   contract_version: "0.4.0";
   cost_record_id: string;
   tenant_id: string;
@@ -152,6 +154,10 @@ export type OpenMasuCostRecordV04 = Money & {
   campaign_id: string;
   ad_group_id?: string;
   creative_id?: string;
+  /**
+   * Explicitly selected child spend is eligible only for a detail-profile grouping that fixes its ad group and, when present, creative. It is not complete campaign or sibling coverage. Absence preserves historical selection.
+   */
+  coverage_scope?: "matching_detail_only";
   country?: string;
   date: string;
   reporting_time_zone?: "UTC" | "Asia/Tokyo" | "America/New_York";

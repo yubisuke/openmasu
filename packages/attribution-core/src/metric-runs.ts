@@ -1,5 +1,5 @@
 import { sha256 } from "./canonical.js";
-import { selectDisjointCosts } from "./cost-selection.js";
+import { selectDisjointCosts, costCoverageMatchesGrouping } from "./cost-selection.js";
 import { cohortCalendarDayIndex, canonicalDatedFxPolicy, selectDatedFxRate, standardRetentionClosesAt, type CohortTimeZone, type DatedFxPolicyInput } from "@openmasu/contracts/definitions";
 import { selectPlatformAcquisition, platformAcquisitionDimensions, selectedPlatformProofRows } from "./platform-acquisition.js";
 import { engagementInputs, engagementSnapshotRows, engagementValue } from "./engagement-metrics.js";
@@ -279,10 +279,12 @@ export function metricRuns(
         (grouping.cohort_date === undefined || cost.date === grouping.cohort_date);
     });
     const disjoint = definition.cost_selection_policy || definition.acquisition_dimension_policy
-      ? selectDisjointCosts(groupedCosts, !!definition.acquisition_dimension_policy) : undefined;
+      ? selectDisjointCosts(groupedCosts, !!definition.acquisition_dimension_policy,
+        cost => costCoverageMatchesGrouping(cost,evaluation.grouping,!!definition.acquisition_dimension_policy)) : undefined;
     const currentCosts = disjoint?.rows ?? [...new Map(groupedCosts
       .sort((a, b) => compareText(a.as_of, b.as_of) || compareText(a.cost_record_id, b.cost_record_id))
-      .map((cost) => [compositeKey([cost.tenant_id, cost.app_id, cost.dimension_digest]), cost])).values()];
+      .map((cost) => [compositeKey([cost.tenant_id, cost.app_id, cost.dimension_digest]), cost])).values()]
+        .filter(cost => costCoverageMatchesGrouping(cost,evaluation.grouping,false));
     const costSnapshotRows = sortByKey(currentCosts, (cost) => [cost.as_of, cost.cost_record_id]).map((cost) => [
       "cost", cost.as_of, cost.cost_record_id, cost.report_snapshot_digest, cost.dimension_digest,
     ]);

@@ -10,7 +10,7 @@ Implementation and synthetic verification are not live operational qualification
 | Published prerelease | `v0.3.0-rc.2` at `d775cc9`; eight verified SDK assets and exact-commit full CI |
 | Synthetic SDK onboarding | Published rc.2 Android SDK/backend journey passed on JVM/Robolectric API 24; later harness evidence is recorded separately |
 | Latest stable source release | `v0.2.0`; later features belong to newer source, not this tag |
-| Current source | Contract patch ledger through v0.4.26; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 73 fixtures, 949 golden artifacts |
+| Current source | Contract patch ledger through v0.4.27; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 74 fixtures, 962 golden artifacts |
 
 `v0.3.0-rc.2` is the current published source and SDK release, marked as a
 prerelease. Its [release page](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.2)
@@ -59,7 +59,7 @@ Detailed limits belong to the [product guides](README.md), [product scope](produ
 ## Current development focus
 
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-27 of 35 child implementations complete; 8 optional extensions remain. The earlier
+28 of 35 child implementations complete; 7 optional extensions remain. The earlier
 integration plan is complete, not a second backlog. The dependency, controller,
 presentation, evaluator and ingestion foundations are also implemented.
 
@@ -79,6 +79,12 @@ fixed-cutoff, content-addressed results; missing/unknown/incomparable are not
 threshold breaches. Inputs remain operator deposited, with explicit expiry,
 deletion and conservative privacy suppression. No provider authentication,
 notification delivery or new service is introduced. This is after rc.2.
+
+[Selected Google detail costs](cost-refresh.md#explicit-google-ad-group-and-ad-costs)
+add bounded ad-group/ad acquisition and explicit creative binding. Selected child
+coverage is eligible only for its matching detail grouping, never an inferred
+parent or sibling denominator. Reader health describes configured capability,
+not provider completeness. This source addition is not in the rc.2 assets.
 
 The [minimal monitoring rules](operations/monitoring.md) are implemented with
 synthetic transition tests; receiver setup and live delivery remain external.

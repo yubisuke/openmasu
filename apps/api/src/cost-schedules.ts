@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
-import { normalizeCostRefreshDefinition, uuidV7, withTenant } from "@openmasu/runtime";
+import { costAdapterCapability, normalizeCostRefreshDefinition, uuidV7, withTenant } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
 
@@ -21,9 +21,9 @@ export async function registerCostSchedule(pool: Pool, identity: AppAdminIdentit
     );
     if (active.rowCount) throw new Error("cost_schedule_active_exists");
     await client.query(
-      `INSERT INTO control.cost_schedules (cost_schedule_id,tenant_id,app_id,definition,definition_digest,created_at)
-       VALUES ($1,$2,$3,$4::jsonb,$5,$6)`,
-      [scheduleId, identity.tenantId, identity.appId, JSON.stringify(definition), definitionDigest, now.toISOString()],
+      `INSERT INTO control.cost_schedules (cost_schedule_id,tenant_id,app_id,definition,definition_digest,created_at,adapter_capability)
+       VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7)`,
+      [scheduleId, identity.tenantId, identity.appId, JSON.stringify(definition), definitionDigest, now.toISOString(),costAdapterCapability(definition)],
     );
     await client.query(
       `INSERT INTO control.cost_schedule_states (cost_schedule_id,tenant_id,app_id,status,changed_at)
@@ -46,7 +46,7 @@ export async function registerCostSchedule(pool: Pool, identity: AppAdminIdentit
 export async function listCostSchedules(pool: Pool, identity: AppAdminIdentity) {
   return withTenant(pool, identity.tenantId, async (client) => (await client.query(
     `SELECT schedule.cost_schedule_id,schedule.definition_digest,schedule.status,schedule.created_at,
-            schedule.changed_at,checkpoint.state,checkpoint.last_target_date::text,
+            schedule.changed_at,schedule.adapter_capability,checkpoint.state,checkpoint.last_target_date::text,
             checkpoint.pending_since::text,checkpoint.pending_until::text,
             checkpoint.next_run_at,checkpoint.next_attempt_at,checkpoint.attempts,
             checkpoint.last_success_at,checkpoint.last_since::text,checkpoint.last_until::text,

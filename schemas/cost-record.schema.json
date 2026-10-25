@@ -4,7 +4,9 @@
   "title": "OpenMasu Cost Record v0.4",
   "type": "object",
   "additionalProperties": false,
-  "allOf": [{ "$ref": "common.schema.json#/$defs/money" }],
+  "allOf": [{ "$ref": "common.schema.json#/$defs/money" },
+    { "if": { "properties": { "coverage_scope": {} }, "required": ["coverage_scope"] },
+      "then": { "properties": { "ad_group_id": {} }, "required": ["ad_group_id"] } }],
   "required": [
     "contract_version", "cost_record_id", "tenant_id", "app_id", "network", "campaign_id",
     "date", "amount_unscaled", "amount_scale", "currency", "source", "as_of",
@@ -19,6 +21,7 @@
     "campaign_id": { "$ref": "common.schema.json#/$defs/id" },
     "ad_group_id": { "$ref": "common.schema.json#/$defs/id" },
     "creative_id": { "$ref": "common.schema.json#/$defs/id" },
+    "coverage_scope": { "const": "matching_detail_only", "description": "Explicitly selected child spend is eligible only for a detail-profile grouping that fixes its ad group and, when present, creative. It is not complete campaign or sibling coverage. Absence preserves historical selection." },
     "country": { "type": "string", "pattern": "^[A-Z]{2}$" },
     "date": { "type": "string", "format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
     "reporting_time_zone": { "$ref": "common.schema.json#/$defs/aggregationTimeZone" },

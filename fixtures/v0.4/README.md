@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 73 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 74 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -23,6 +23,17 @@ The validator checks every object against its Draft 2020-12 schema, checks regis
 The data is synthetic. It contains no external-source format, campaign data, user data, credential, live fraud rule, or operational threshold.
 
 ## Independent third-oracle calculations
+
+### Fixture 74: explicitly selected cost coverage
+
+[The complete independent derivation](74-selected-cost-coverage/README.md) builds
+three costs and35 runs without importing calculation or selection code. Selected
+creative A cost10 supplies only its matching detail; it is not campaign or group
+coverage. A separately received group cost15 yields ad/total ratios1.333333 /
+1.733333. A later full campaign parent30 yields2 /2.6, without adding either
+selected child. Missing coverage remains undefined. Eleven immutable fixture63
+output families are unchanged; costs, run proofs, values and hashes are explicitly
+constructed. Earlier73 inputs and949 golden files are unchanged.
 
 ### Fixture 73: verified payer metrics
 
