@@ -1,4 +1,4 @@
-import type { SecretStore } from "@openmasu/runtime";
+import { normalizeGoogleCostDetail, type GoogleCostDetailSelection, type SecretStore } from "@openmasu/runtime";
 import { decimalToUnscaled, prepareCostImportRows, type CostInput } from "./cost.js";
 
 type Any = Record<string, any>;
@@ -541,6 +541,47 @@ async function resolveGoogleCountries(
   return countries;
 }
 
+async function fetchSelectedGoogleDetails(context: GoogleRequestContext, scope: CostScope, range: GoogleAdsRange, detail: GoogleCostDetailSelection): Promise<CostInput[]> {
+  const ids = (key: "campaign_id" | "ad_group_id" | "provider_ad_id") => [...new Set(detail.selections.map(item=>item[key]!))].sort().join(",");
+  const ad = detail.grain === "ad", geo = detail.country_scope === "geo_country";
+  const query = "SELECT customer.currency_code,segments.date,campaign.id,ad_group.id,metrics.cost_micros"
+    + (ad ? ",ad_group_ad.ad.id" : "") + (geo ? ",segments.geo_target_country" : "")
+    + ` FROM ${ad ? "ad_group_ad" : "ad_group"} WHERE segments.date BETWEEN '${range.since}' AND '${range.until}'`
+    + ` AND campaign.id IN (${ids("campaign_id")}) AND ad_group.id IN (${ids("ad_group_id")})`
+    + (ad ? ` AND ad_group_ad.ad.id IN (${ids("provider_ad_id")})` : "") + ` LIMIT ${context.limits.maxRows+1}`;
+  const response = await googleSearchStream(context,query,"selected detail cost");
+  if (!Array.isArray(response) || response.some(batch=>batch && (batch.error || batch.nextPageToken || batch.next_page_token))) throw Error("Google Ads detail acquisition was incomplete");
+  const bindings = new Map(detail.selections.map(item=>[JSON.stringify([item.campaign_id,item.ad_group_id,item.provider_ad_id??null]),item]));
+  const seen = new Set<string>();
+  const rows = googleSearchStreamResults(response,"selected detail cost",context.limits.maxBatches,context.limits.maxRows).map((row,index)=>{
+    const campaignId = googleInt64(row.campaign?.id,`detail row ${index} campaign.id`);
+    const adGroupId = googleInt64(row.adGroup?.id,`detail row ${index} adGroup.id`);
+    const adId = ad ? googleInt64(row.adGroupAd?.ad?.id,`detail row ${index} adGroupAd.ad.id`) : null;
+    const binding = bindings.get(JSON.stringify([campaignId,adGroupId,adId]));
+    if (!binding) throw Error("Google Ads detail row has no explicit selected mapping");
+    const day = canonicalGoogleDay(row.segments?.date,`detail row ${index} date`);
+    if (day < range.since || day > range.until) throw Error("Google Ads detail row is outside the requested range");
+    const currency = googleCurrency(row.customer?.currencyCode,`detail row ${index} currency`);
+    if (currency !== scope.currency) throw Error("Google Ads detail currency does not match configured currency");
+    let countryId: string | null = null;
+    if (geo) {
+      const match = /^geoTargetConstants\/([1-9]\d*)$/.exec(String(row.segments?.geoTargetCountry));
+      if (!match) throw Error("Google Ads detail country criterion is invalid");
+      countryId = googleInt64(match[1],`detail row ${index} country criterion`);
+    } else if (row.segments?.geoTargetCountry !== undefined || row.geographicView !== undefined) throw Error("Google Ads all-country detail unexpectedly contains a geographic slice");
+    const key = JSON.stringify([day,campaignId,adGroupId,adId,countryId]);
+    if (seen.has(key)) throw Error("Google Ads detail response contains a duplicate selected key");
+    seen.add(key);
+    return { day,campaignId,adGroupId,countryId,creativeId:binding.creative_id,
+      amount:googleInt64(row.metrics?.costMicros,`detail row ${index} costMicros`,true),currency };
+  });
+  const countries = await resolveGoogleCountries(context,[...new Set(rows.flatMap(row=>row.countryId?[row.countryId]:[]))].sort());
+  return prepareCostImportRows(rows.map(row=>({ ...scope,network:"google-ads",campaign_id:row.campaignId,
+    ad_group_id:row.adGroupId,...(row.creativeId?{ creative_id:row.creativeId }:{}),
+    ...(row.countryId?{ country:googleCountry(countries[row.countryId],"selected detail resolved country") }:{}),
+    date:row.day,amount_unscaled:row.amount,amount_scale:6,currency:row.currency,source:"imported_reported" as const })));
+}
+
 export async function fetchGoogleAds(options: {
   fetch: FetchLike;
   secrets: SecretStore;
@@ -551,6 +592,7 @@ export async function fetchGoogleAds(options: {
   since: string;
   until: string;
   limits?: Partial<GoogleAdsLimits>;
+  detail?: GoogleCostDetailSelection;
 }): Promise<CostInput[]> {
   const range = validateGoogleRange({ since: options.since, until: options.until });
   const customerId = googleCustomerId(options.customerId, "customerId");
@@ -561,6 +603,7 @@ export async function fetchGoogleAds(options: {
   if (version !== "v25") throw new Error("Google Ads apiVersion must be v25 for this campaign partition");
   googleCurrency(options.scope.currency, "configured currency");
   const limits = googleLimits(options.limits);
+  const detail = options.detail === undefined ? undefined : normalizeGoogleCostDetail(options.detail);
   const token = options.secrets.require("OPENMASU_GOOGLE_ADS_ACCESS_TOKEN");
   const developerToken = options.secrets.require("OPENMASU_GOOGLE_ADS_DEVELOPER_TOKEN");
   const headers: Record<string, string> = {
@@ -577,6 +620,7 @@ export async function fetchGoogleAds(options: {
     requests: 0,
     responseBytes: 0,
   };
+  if (detail) return fetchSelectedGoogleDetails(context,options.scope,range,detail);
   const appSubtypes = [...googleAppCampaignSubtypes].map((value) => `'${value}'`).join(", ");
   const adGroupCampaignTypes = [...googleAdGroupCampaignTypes].map((value) => `'${value}'`).join(", ");
   const sharedFields = "customer.currency_code, segments.date, campaign.id, campaign.advertising_channel_type, "
