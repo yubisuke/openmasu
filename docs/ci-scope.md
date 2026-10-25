@@ -32,6 +32,8 @@ test harness or required job context is introduced.
 
 Published native SDK onboarding is an opt-in release seam in the existing
 Runtime workflow (`published_sdk_onboarding=true`). That dispatch runs only
+the explicitly selected public SDK version and verified ZIP SHA-256; both inputs
+are required, so a newer release cannot silently exercise an older bundle. It runs
 the isolated public-AAR consumer and backend journey; it does not also run the
 Runtime suites. Normal PRs and pushes skip this optional job. It reuses the
 existing Android test dependencies and real runtime services, and is not a new

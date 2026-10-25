@@ -11,6 +11,9 @@ For the current checkout, use the disposable pilot and gates in
 [Getting started](../getting-started.md) and [Development](../development.md).
 Their result applies only to the exact source revision that ran them.
 
+The configured `v0.3.0-rc.3` candidate has [evidence requirements](v0.3.0-rc.3-synthetic-evidence.md).
+Previous release results must not be reused as proof of this candidate.
+
 The `v0.3.0-rc.2` [frozen integration record](v0.3.0-rc.2-synthetic-evidence.md)
 maps first-use, correction, upgrade and SDK paths to their existing test owners.
 The separate [publication receipt](v0.3.0-rc.2-publication.md) records full CI

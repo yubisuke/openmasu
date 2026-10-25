@@ -143,11 +143,17 @@ The downloaded rc.2 Android SDK passed the native Room queue/HMAC HTTP path
 through durable backend processing to a daily install value and saved
 analysis/CSV on JVM/Robolectric API 24. The publication receipt records the
 later harness revision separately from the frozen SDK source. This completes
-#252 within its declared synthetic scope, bringing the plan to 24 of 35 complete.
+#252 within its declared synthetic scope. All 35 child implementations are now
+complete in source; rc.3 packages the additions made after the frozen rc.2 tag.
 Existing fixture-projected campaign/cost/revenue tests remain separate; this is
 not physical-device, all-platform onboarding or live-provider acceptance.
 
 ## Next development foundations
+
+The next bounded delivery is the configured rc.3 candidate: matching source,
+SDKs and documentation, exact-commit full CI and verified public assets. Reuse
+the existing first-use walkthrough and record only observed usability or upgrade
+gaps as follow-ups. No extra feature or architecture milestone is implied.
 
 The [roadmap foundations](roadmap.md#next-development-foundations) are implemented.
 New HTTP work uses authenticated feature controllers and typed ViewModels;

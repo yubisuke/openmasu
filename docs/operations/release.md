@@ -1,5 +1,8 @@
 # Release Runbook
 
+The next configured source/SDK candidate is `v0.3.0-rc.3`. The procedure below
+targets that candidate; rc.2 remains published until rc.3 publication is verified.
+
 OpenMasu publishes source tags and downloadable reproducible SDK bundles. This runbook
 does not publish Maven, Swift, Unity, npm, container, or hosting artifacts to a
 public registry.
@@ -110,8 +113,8 @@ The packager regenerates the ignored SDK SBOM and Android binary inputs from a
 clean checkout before it creates the bundle. It does not trust existing
 `sbom/` or Gradle `build/` files as release inputs.
 
-The configured v0.3.0-rc.2 bundle path is
-`build/sdk-release/openmasu-sdk-0.3.0-rc.2/`. It is valid release evidence only
+The configured v0.3.0-rc.3 bundle path is
+`build/sdk-release/openmasu-sdk-0.3.0-rc.3/`. It is valid release evidence only
 at the exact source commit named by the matching annotated tag, after every
 required full platform gate is green for that commit.
 
@@ -153,10 +156,10 @@ After creating the annotated tag and acquiring the bundle from its exact
 target's full CI, run:
 
 ```bash
-python tools/build-sdk-release.py --verify-only build/sdk-release/openmasu-sdk-0.3.0-rc.2 --verify-tag
+python tools/build-sdk-release.py --verify-only build/sdk-release/openmasu-sdk-0.3.0-rc.3 --verify-tag
 ```
 
-This final check requires the annotated `v0.3.0-rc.2` target, current checkout, and
+This final check requires the annotated `v0.3.0-rc.3` target, current checkout, and
 bundle manifest revision to be identical.
 Run the verifier from a clean source checkout at that tag. A later `main`
 checkout must fail this identity check; do not rebuild or replace the published
@@ -168,7 +171,7 @@ older run, and do not rebuild at a later commit. Verify the downloaded bundle,
 then wrap its already verified bytes for public download:
 
 ```bash
-python tools/build-sdk-release.py --verify-only build/sdk-release/openmasu-sdk-0.3.0-rc.2 --verify-tag --release-assets build/sdk-release-assets/openmasu-sdk-0.3.0-rc.2
+python tools/build-sdk-release.py --verify-only build/sdk-release/openmasu-sdk-0.3.0-rc.3 --verify-tag --release-assets build/sdk-release-assets/openmasu-sdk-0.3.0-rc.3
 ```
 
 The output refuses an existing directory and contains eight files: the complete
@@ -191,10 +194,16 @@ Runtime suites again:
 
 ```bash
 gh workflow run runtime.yml --repo yubisuke/openmasu --ref main \
-  -f published_sdk_onboarding=true
+  -f published_sdk_onboarding=true \
+  -f published_sdk_version=0.3.0-rc.3 \
+  -f published_sdk_sha256=<verified-complete-SDK-ZIP-sha256>
 ```
 
-It downloads the frozen rc.2 SDK ZIP with its recorded checksum, creates an
+Supply the exact version and whole-SDK ZIP digest from the verified publication
+receipt. Missing or malformed values fail before tool installation; a wrong
+digest fails before extraction. The repository and download host are fixed.
+This avoids editing the workflow or running all Runtime suites for each release.
+It downloads the selected frozen SDK ZIP with its recorded checksum, creates an
 isolated `openmasu_sdk_synthetic` PostgreSQL service, and runs
 `npm run test:published-sdk`. A temporary standalone Android consumer resolves
 the public core AAR from that bundle, uses the real native Room queue and HMAC

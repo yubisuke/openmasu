@@ -4,7 +4,7 @@ export const MEASUREMENT_EVENTS = ["click", "install", "session_start", "ad_impr
   "ad_revenue", "purchase", "refund", "consent_changed", "custom_event", "skan_postback",
   "adattributionkit_postback", "deep_link_open", "other"] as const;
 export const MEASUREMENT_SDK_VERSIONS = ["0.1.0", "0.2.0-rc.1", "0.2.0-rc.2", "0.2.0-rc.3",
-  "0.2.0-rc.4", "0.2.0", "0.3.0-rc.1", "0.3.0-rc.2", "other"] as const;
+  "0.2.0-rc.4", "0.2.0", "0.3.0-rc.1", "0.3.0-rc.2", "0.3.0-rc.3", "other"] as const;
 export const measurementGroupLimit = MEASUREMENT_PRODUCERS.length * MEASUREMENT_EVENTS.length * MEASUREMENT_SDK_VERSIONS.length;
 export type MeasurementClasses = {
   producer: typeof MEASUREMENT_PRODUCERS[number];

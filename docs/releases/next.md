@@ -3,6 +3,9 @@
 Updated: 2026-10-25. This is a living record of current source after rc.2,
 not a new release note or a promise of a release date.
 
+All additions below are now selected for the configured
+[rc.3 candidate](v0.3.0-rc.3.md). This does not change the frozen rc.2 assets.
+
 ## Published baseline
 
 `v0.3.0-rc.2` is the published source and SDK prerelease at

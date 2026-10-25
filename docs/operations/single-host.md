@@ -3,7 +3,7 @@
 Use the **one existing `compose.yaml`**: PostgreSQL 17, migration, API, worker and
 redirector on one Docker host. Build from an exact annotated source release tag;
 do not track a moving `main` checkout or describe a source candidate as deployed.
-The configured next supported version is `v0.3.0-rc.2`, after exact-tag publication.
+The configured next supported version is `v0.3.0-rc.3`, after exact-tag publication.
 Existing deployments first follow [Safe upgrade](upgrade.md). This guide is an
 operator configuration path, not evidence of a live or production installation.
 

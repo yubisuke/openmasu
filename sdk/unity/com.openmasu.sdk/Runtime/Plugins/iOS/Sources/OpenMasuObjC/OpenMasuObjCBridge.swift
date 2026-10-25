@@ -163,7 +163,7 @@ public func openmasuIOSInitialize(
       endpoint: endpointURL,
       sdkKeyId: String(cString: sdkKeyId),
       sdkSecret: String(cString: sdkSecret),
-      wrapperVersion: "unity-0.3.0-rc.2",
+      wrapperVersion: "unity-0.3.0-rc.3",
       conversionSchemaVersion: schema.schemaVersion,
       conversionSchemaSha256: schema.sha256,
       deepLinkHosts: Set(Bundle.main.object(forInfoDictionaryKey: "OpenMasuLinkHosts") as? [String] ?? []),

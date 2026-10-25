@@ -4,9 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       published_sdk_onboarding:
-        description: Run only the public rc.2 native SDK onboarding seam
+        description: Run only the selected public native SDK onboarding seam
         type: boolean
         default: false
+      published_sdk_version:
+        description: Exact published SDK version without v (required for onboarding)
+        type: string
+      published_sdk_sha256:
+        description: SHA-256 of the published complete SDK ZIP (required for onboarding)
+        type: string
   pull_request:
   push:
     branches: [main]
@@ -197,9 +203,16 @@ jobs:
       OPENMASU_SEED_DATABASE_PASSWORD: seed-synthetic-ci-password
       OPENMASU_APP_DATABASE_URL: postgresql://openmasu_app:app-synthetic-ci-password@localhost:5432/openmasu_sdk_synthetic
       OPENMASU_READER_DATABASE_URL: postgresql://openmasu_reader:reader-synthetic-ci-password@localhost:5432/openmasu_sdk_synthetic
-      OPENMASU_PUBLISHED_SDK_BUNDLE: build/published-sdk/openmasu-sdk-0.3.0-rc.2
+      OPENMASU_PUBLISHED_SDK_VERSION: ${{ inputs.published_sdk_version }}
+      OPENMASU_PUBLISHED_SDK_SHA256: ${{ inputs.published_sdk_sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Require an exact published version and checksum
+        shell: bash
+        run: |
+          [[ "$OPENMASU_PUBLISHED_SDK_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]
+          [[ "$OPENMASU_PUBLISHED_SDK_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          echo "OPENMASU_PUBLISHED_SDK_BUNDLE=build/published-sdk/openmasu-sdk-$OPENMASU_PUBLISHED_SDK_VERSION" >> "$GITHUB_ENV"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22.18.0
@@ -221,9 +234,9 @@ jobs:
         run: |
           mkdir -p build/published-sdk
           curl --fail --location --silent --show-error --retry 3 \
-            https://github.com/yubisuke/openmasu/releases/download/v0.3.0-rc.2/openmasu-sdk-0.3.0-rc.2.zip \
+            "https://github.com/yubisuke/openmasu/releases/download/v$OPENMASU_PUBLISHED_SDK_VERSION/openmasu-sdk-$OPENMASU_PUBLISHED_SDK_VERSION.zip" \
             --output build/published-sdk/release.zip
-          printf '%s  %s\n' ea98c0355113504b20843a54daf27f439d3dda74d09f28e13ae16abb4020ac8b build/published-sdk/release.zip | sha256sum --check
+          printf '%s  %s\n' "$OPENMASU_PUBLISHED_SDK_SHA256" build/published-sdk/release.zip | sha256sum --check
           unzip -q build/published-sdk/release.zip -d build/published-sdk
       - name: Run published native SDK through API ledger and saved analysis
         run: |
