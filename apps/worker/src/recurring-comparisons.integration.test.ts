@@ -1,21 +1,19 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { once } from "node:events";
-import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { after, before, it } from "node:test";
-import { createAppPool, createReaderPool, createSeedPool, withTenant, type PayloadStore } from "@openmasu/runtime";
+import { createAppPool, createReaderPool, withTenant, type PayloadStore } from "@openmasu/runtime";
 import { processRecurringComparisons, readComparisonRun, registerComparison } from "@openmasu/runtime/recurring-comparisons";
 import { jcs } from "@openmasu/attribution-core/canonical";
-import { ingestFixture } from "./test-support/fixture-ingestion.js";
 import { createRequestHandler } from "../../api/src/router.js";
 import { ensureAdminKeys } from "../../api/src/admin-auth.js";
 import { issueDashboardSession, csrfToken } from "../../api/src/session.js";
 import { syntheticComparisonRegistration, syntheticRecurringSnapshot } from "../../../tools/synthetic-recurring-comparison.js";
 
-const pool = createAppPool(), reader = createReaderPool(), seed = createSeedPool();
-const scope = { tenantId:"tenant-a",appId:"app-a" };
+const pool = createAppPool(), reader = createReaderPool();
+const scope = { tenantId:`tenant-recurring-${randomBytes(6).toString("hex")}`,appId:"app-a" };
 const key = `synthetic-comparison-${randomBytes(32).toString("hex")}`, readKey = `synthetic-comparison-reader-${randomBytes(32).toString("hex")}`;
 let base = "", cookie = "", csrf = "";
 const server = createServer(createRequestHandler({ pool,readerPool:reader,payloadStore:{} as PayloadStore,
@@ -27,14 +25,12 @@ const endpoint = "/v1/admin/apps/app-a/comparisons";
 const command = (body: unknown, selectedKey = key) => fetch(`${base}${endpoint}`, { method:"POST",headers:{ authorization:`Bearer ${selectedKey}`,"content-type":"application/json" },body:JSON.stringify(body) });
 const list = async () => { const r=await fetch(`${base}${endpoint}`,{ headers:{ authorization:`Bearer ${key}` } }); assert.equal(r.status,200); return r.json() as Promise<any>; };
 before(async()=>{
-  await ingestFixture("synthetic-recurring-comparison",JSON.parse(readFileSync("fixtures/v0.4/33-stage-b-cohort-metrics/input.json","utf8")),pool,seed);
-  await seed.query("TRUNCATE control.comparison_runs,control.comparison_snapshots,control.comparison_definitions CASCADE");
   const [id] = await ensureAdminKeys(pool,scope,[key,{ key:readKey,role:"read_only" }]);
   const session = await issueDashboardSession(pool,scope.tenantId,id!,43200);
   cookie=`openmasu_dashboard=${session.token}`; csrf=csrfToken(session.token);
   server.listen(0,"127.0.0.1"); await once(server,"listening"); base=`http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
-after(async()=>{ server.close(); await once(server,"close"); await Promise.all([pool.end(),reader.end(),seed.end()]); });
+after(async()=>{ server.close(); await once(server,"close"); await Promise.all([pool.end(),reader.end()]); });
 
 it("recurring_comparison_form_worker_saved_bytes_next_date_revisions_expiry_and_RLS",async()=>{
   const registration = syntheticComparisonRegistration();
