@@ -8,11 +8,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { after, before, describe, it } from "node:test";
-import { evaluate, jcs, sha256 } from "@openmasu/attribution-core";
+import { jcs } from "@openmasu/attribution-core/canonical";
 import { createAppPool, createMigrationPool, createReaderPool, createSeedPool, EncryptedFilePayloadStore, uuidV7, withTenant } from "@openmasu/runtime";
 import { registerOperatorBulkExportDestination } from "../../api/src/operator-bulk-exports-admin.js";
 import { discoverOperatorBulkExports } from "./operator-bulk-export-worker.js";
-import { costArtifact, type CostInput } from "./import/cost.js";
+import type { CostInput } from "./import/cost.js";
+import { computeSqlMetricRuns } from "./metrics/cohort.js";
 import { ingestFixture } from "./test-support/fixture-ingestion.js";
 
 type Message = { id?: string; stage: string; error?: string; result?: any };
@@ -111,8 +112,8 @@ describe("cross-process tenant cycle coordination", { concurrency: false, timeou
     release(path);
     const result = await first.wait("done", id); assert.equal(result.error, undefined); assert.equal(result.result.value.outcome, "succeeded");
     const runs = result.result.value.runs; assert.equal(runs[0].value_unscaled, "750000");
-    const expected = evaluate({ ...test.input, cost_records: [...test.input.cost_records, costArtifact(cost, sha256([cost]))] }).metric_runs;
-    assert.equal(jcs(runs), jcs(expected), "fenced worker preserves single-worker evaluator bytes");
+    const expected = await computeSqlMetricRuns(pool, test.input, false);
+    assert.equal(jcs(runs), jcs(expected), "fenced worker preserves the unfenced single-worker SQL bytes on the same ledger snapshot");
     const repeat = second.start({ ...test, mode: "publish", cost });
     assert.equal((await second.wait("done", repeat)).result.value.outcome, "not_due");
     const count = await withTenant(pool, test.tenantId, c => c.query("SELECT count(*)::int AS count FROM ledger.metric_runs WHERE tenant_id=$1", [test.tenantId]));
