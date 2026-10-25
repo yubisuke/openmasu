@@ -1,9 +1,10 @@
 import type { Pool } from "pg";
 import { fraudBundleHash, sha256Jcs, type FraudBundle } from "@openmasu/fraud-rules";
 import { NON_FRAUD_RULE_BUNDLES, validateNonFraudBundleDefinition } from "@openmasu/contracts/definitions";
-import { uuidV7, withTenant } from "@openmasu/runtime";
+import { uuidV7 } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
+import { FraudPreviewError,parseFraudPreviewRequest,fraudPreviewWithClient,withFraudSnapshot } from "./fraud-preview.js";
 
 type Any = Record<string, unknown>;
 
@@ -15,6 +16,9 @@ export type RuleBundleRevision = {
   readonly definition_digest?: string;
   readonly supersedes_rule_bundle_revision_id?: string;
   readonly activated_at: string;
+  readonly preview_receipt?: string;
+  readonly preview_evidence_digest?: string;
+  readonly preview_watermark_at_most?: string;
 };
 
 function validateBody(body: Any): {
@@ -79,12 +83,16 @@ export async function activateRuleBundle(input: {
   readonly identity: AppAdminIdentity;
   readonly body: Any;
   readonly now?: Date;
+  /** Public operator replacement routes require the reviewed evidence receipt. */
+  readonly requirePreview?: boolean;
 }): Promise<RuleBundleRevision> {
-  const value = validateBody(input.body);
+  const {preview:proof,...body}=input.body;
+  const value = validateBody(body);
+  if (proof !== undefined && !value.ruleBundleId.startsWith("fraud-")) throw new FraudPreviewError("fraud_preview_only");
   const now = input.now ?? new Date();
   const activatedAt = now.toISOString();
   const revisionId = `rule-bundle:${uuidV7(now.getTime())}`;
-  const artifact: RuleBundleRevision = {
+  let artifact: RuleBundleRevision = {
     rule_bundle_revision_id: revisionId,
     rule_bundle_id: value.ruleBundleId,
     rule_bundle_version: value.ruleBundleVersion,
@@ -93,11 +101,7 @@ export async function activateRuleBundle(input: {
     ...(value.supersedes ? { supersedes_rule_bundle_revision_id: value.supersedes } : {}),
     activated_at: activatedAt,
   };
-  await withTenant(input.pool, input.identity.tenantId, async (client) => {
-    await client.query(
-      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
-      [JSON.stringify([input.identity.tenantId, input.identity.appId, value.ruleBundleId])],
-    );
+  await withFraudSnapshot(input.pool,input.identity,false,async (client) => {
     const current = await client.query<{ rule_bundle_revision_id: string }>(
       `SELECT rule_bundle_revision_id
          FROM control.rule_bundles_current
@@ -108,6 +112,23 @@ export async function activateRuleBundle(input: {
     );
     const currentId = current.rows[0]?.rule_bundle_revision_id;
     if ((currentId ?? undefined) !== value.supersedes) throw new Error("rule_bundle_predecessor_mismatch");
+    if (input.requirePreview && value.ruleBundleId.startsWith("fraud-") && !currentId) {
+      const other=await client.query(`SELECT 1 FROM control.rule_bundles_current WHERE tenant_id=$1 AND app_id=$2 AND rule_bundle_id LIKE 'fraud-%'`,[input.identity.tenantId,input.identity.appId]);
+      if (other.rowCount) throw new FraudPreviewError("fraud_preview_baseline_mismatch");
+    }
+    if (currentId && value.ruleBundleId.startsWith("fraud-") && (input.requirePreview || proof !== undefined)) {
+      if (!proof || typeof proof !== "object" || Array.isArray(proof)) throw new FraudPreviewError("fraud_preview_required");
+      const evidence=proof as Any;
+      if (Object.keys(evidence).some(key=>!["receipt","watermark_at_most","baseline_revision_id"].includes(key))
+        || typeof evidence.receipt !== "string" || !/^[a-f0-9]{64}$/.test(evidence.receipt)) throw new FraudPreviewError("fraud_preview_receipt_invalid");
+      const request=parseFraudPreviewRequest({definition:value.definition,watermark_at_most:evidence.watermark_at_most,
+        ...(evidence.baseline_revision_id ? {baseline_revision_id:evidence.baseline_revision_id}:{})},now);
+      const result=await fraudPreviewWithClient(client,input.identity,request);
+      if (!result.can_activate || result.baseline_revision_id!==currentId) throw new FraudPreviewError("fraud_preview_blocked");
+      if (result.receipt!==evidence.receipt) throw new FraudPreviewError("fraud_preview_receipt_mismatch");
+      artifact={...artifact,preview_receipt:result.receipt,preview_evidence_digest:result.evidence.evidence_digest,
+        preview_watermark_at_most:result.watermark_at_most};
+    }
     await client.query(
       `INSERT INTO control.rule_bundle_revisions (
         rule_bundle_revision_id, tenant_id, app_id, rule_bundle_id,
@@ -129,6 +150,6 @@ export async function activateRuleBundle(input: {
       outcome: "succeeded",
       now,
     });
-  });
+  },JSON.stringify([input.identity.tenantId,input.identity.appId,value.ruleBundleId]));
   return artifact;
 }

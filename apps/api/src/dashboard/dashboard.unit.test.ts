@@ -423,7 +423,9 @@ describe("M3 zero-JavaScript dashboard", () => {
     const scopedAdmin = renderDashboard(buildDashboardView({ ...base, canOperate: true, canAdminister: true, canManageTenant: false }));
     assert.match(scopedAdmin, /Issue successor key/);
     assert.doesNotMatch(scopedAdmin, /Register an app|Register a link domain/);
-    assert.match(admin, /Complete activation request JSON/);
+    assert.match(admin, /Candidate definition JSON/);
+    assert.match(admin, /rule-bundles\/preview/);
+    assert.doesNotMatch(admin, />Activate rule bundle</);
     assert.equal(admin.includes("<script"), false);
     assert.equal(/\son[a-z]+\s*=/i.test(admin), false);
   });

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { it } from "node:test";
-import { DEFAULT_FRAUD_BUNDLE, type FraudBundle } from "@openmasu/fraud-rules";
+import { DEFAULT_FRAUD_BUNDLE, fraudBundleHash, type FraudBundle } from "@openmasu/fraud-rules";
 import { evaluate, jcs } from "./evaluator.js";
 import { attempts } from "./candidates.js";
 import { previewAcceptedFraudEvidence } from "./fraud-preview.js";
@@ -33,4 +33,12 @@ it("fraud_preview_reuses_admitted_projection_for_manual_gross_net_and_threshold_
   click.payload.redirector_click_at=new Date(Date.parse(install.payload.install_begin_at_server)+1_000).toISOString();
   const anomaly=preview(negative,bundle).fraud_decisions.find(hit=>hit.reason_code==="ctit_clock_anomaly");
   assert.equal(anomaly?.decision,"clear"); assert.equal(anomaly?.action,"allow");
+  // Source-only evidence must use the selected definition even without a click
+  // or install from which the ordinary evaluator can recover its binding.
+  const source=fixture("48-source-scoped-fraud");
+  const aggregateInput={source_day_aggregates:source.source_day_aggregates,metric_evaluations:[]};
+  const sourceCandidate={...bundle,version:"synthetic-source-only",rules:bundle.rules.map(rule=>({...rule,action:"flag" as const}))};
+  const sourceResult=previewAcceptedFraudEvidence({attempts:[],initialAttributions:[],metricInput:aggregateInput,definition:sourceCandidate});
+  assert.ok(sourceResult.fraud_decisions.length>0);
+  assert.ok(sourceResult.fraud_decisions.every(hit=>hit.rule_bundle_hash===fraudBundleHash(sourceCandidate)&&hit.action==="flag"));
 });

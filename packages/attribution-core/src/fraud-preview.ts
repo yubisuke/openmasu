@@ -33,7 +33,7 @@ export function previewAcceptedFraudEvidence(input: {
       semantic_available: true,ledger_position: "preview" } };
   }));
   const fraud = fraudArtifacts(input.metricInput,attempts,attempts,
-    attempts.filter(attempt=>attempt.record.event_name === "install"),structuredClone([...input.initialAttributions]));
+    attempts.filter(attempt=>attempt.record.event_name === "install"),structuredClone([...input.initialAttributions]),{definition,hash});
   return { fraud_decisions:fraud.fraud_decisions,attributions:fraud.attributions,
     metric_runs:metricRuns(input.metricInput,attempts,new Map(),new Map(),fraud.attributions,fraud.excludedInstallationIds) };
 }
