@@ -8,6 +8,26 @@ before publishing a complete local snapshot.
 
 ## Defaults and scope
 
+### Cost dimensions and row identity
+
+New runtime cost artifacts use the contract's `dimension_digest`: the JCS SHA-256
+of retained `network`, `campaign_id`, `ad_group_id`, `creative_id`, `country` and
+`reporting_time_zone` fields only. Only fields present in the emitted artifact
+are hashed; an omitted field is not an inserted null. Scope and date belong to
+the separate database revision key, not this
+public grain digest. Equal public dimensions on two dates still occupy two
+internal row keys; latest-revision selection must not collapse them together.
+Cost record IDs and the internal scoped/date key keep their earlier derivation.
+
+SQL input snapshots use the recorded artifact's public dimension digest rather
+than aliasing the internal key. Stored artifacts, import receipts and metric
+runs are never rewritten by this correction. Older runtime artifacts can still
+contain the earlier internal digest: SQL replay preserves that recorded identity,
+but a strict contract consumer will reject those old wire objects. Reimporting
+the identical report retains its existing ID and artifact; a new reported
+revision needs its own `as_of`. Do not silently relabel an old object as a newly
+validated contract artifact. Reviewed fixture artifacts are unaffected.
+
 `OPENMASU_COST_REFRESH_ENABLED=off` means no provider requests or secret-registry
 reads. Synthetic integration tests supply fake responses to the actual adapter;
 they need no provider account. Enabling it is a separate private operator action.

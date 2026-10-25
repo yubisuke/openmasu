@@ -96,7 +96,7 @@ export async function currentCosts(
   if (grouping?.attribution_status !== undefined && grouping.attribution_status !== "non_organic") return [];
   const result = await client.query<CurrentCost>(
     `SELECT tenant_id, app_id, cost_record_id, as_of,
-            report_snapshot_digest, cost_key_digest AS dimension_digest
+            report_snapshot_digest, COALESCE(artifact->>'dimension_digest',cost_key_digest) AS dimension_digest
      FROM (
        SELECT DISTINCT ON (cost_key_digest)
          tenant_id, app_id, cost_record_id, as_of,
@@ -132,7 +132,8 @@ export async function disjointCosts(client: MetricClient, scope: MetricScope, wa
   if (grouping?.attribution_status !== undefined && grouping.attribution_status !== "non_organic") return { rows: [], overlapping: false };
   const result = await client.query<DisjointCost>(
     `SELECT DISTINCT ON (network, cost_date, campaign_id, ad_group_id, country, (artifact->>'creative_id'))
-       tenant_id, app_id, cost_record_id, as_of, report_snapshot_digest, cost_key_digest AS dimension_digest,
+       tenant_id, app_id, cost_record_id, as_of, report_snapshot_digest,
+       COALESCE(artifact->>'dimension_digest',cost_key_digest) AS dimension_digest,
        network, cost_date::text AS date, campaign_id, ad_group_id, artifact->>'creative_id' AS creative_id,
        artifact->>'coverage_scope' AS coverage_scope, country, currency, spend_unscaled, spend_scale
      FROM ledger.cost_records
