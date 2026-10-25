@@ -16,6 +16,11 @@ annotated tag, exact-commit full CI and eight verified public assets.
 
 ## Remaining optional scope
 
+The [cost wire correction](../cost-refresh.md#cost-dimensions-and-row-identity)
+separates public dimension digests from internal scoped/date revision keys.
+New imported artifacts interoperate with the contract evaluator; historical
+artifacts and their replay identity are not retroactively rewritten.
+
 [Tenant-cycle coordination](../operations/observability.md#scheduler-behavior)
 uses the existing PostgreSQL service for cross-replica order and stale-commit
 fencing. Synthetic process/connection-loss probes do not establish live capacity

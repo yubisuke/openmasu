@@ -6,9 +6,7 @@ SecretStore, PostgreSQL scheduler and append-only cost ledger. It adds no OAuth
 flow, dependency, queue service or database. Both adapters bound acquisition
 before publishing a complete local snapshot.
 
-## Defaults and scope
-
-### Cost dimensions and row identity
+## Cost dimensions and row identity
 
 New runtime cost artifacts use the contract's `dimension_digest`: the JCS SHA-256
 of retained `network`, `campaign_id`, `ad_group_id`, `creative_id`, `country` and
@@ -27,6 +25,8 @@ but a strict contract consumer will reject those old wire objects. Reimporting
 the identical report retains its existing ID and artifact; a new reported
 revision needs its own `as_of`. Do not silently relabel an old object as a newly
 validated contract artifact. Reviewed fixture artifacts are unaffected.
+
+## Defaults and scope
 
 `OPENMASU_COST_REFRESH_ENABLED=off` means no provider requests or secret-registry
 reads. Synthetic integration tests supply fake responses to the actual adapter;
