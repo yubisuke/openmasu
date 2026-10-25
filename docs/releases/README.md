@@ -8,7 +8,7 @@ describe later `main` behavior.
 
 | Tag | Record | Evidence |
 | --- | --- | --- |
-| `v0.3.0-rc.3` (candidate) | [Release notes](v0.3.0-rc.3.md) | [Evidence requirements](../validation/v0.3.0-rc.3-synthetic-evidence.md); not yet a publication receipt |
+| `v0.3.0-rc.3` | [Frozen candidate notes](v0.3.0-rc.3.md) | [Evidence requirements](../validation/v0.3.0-rc.3-synthetic-evidence.md) and [publication receipt](../validation/v0.3.0-rc.3-publication.md) |
 | `v0.3.0-rc.2` | [Release notes](v0.3.0-rc.2.md) | [Frozen integration record](../validation/v0.3.0-rc.2-synthetic-evidence.md) and [public receipt](../validation/v0.3.0-rc.2-publication.md) |
 | `v0.3.0-rc.1` | [Release notes](v0.3.0-rc.1.md) | [Frozen requirements](../validation/v0.3.0-rc.1-synthetic-evidence.md) and [public receipt](../validation/v0.3.0-rc.1-publication.md) |
 | `v0.2.0` | [Release notes](v0.2.0.md) | [Synthetic evidence](../validation/v0.2.0-synthetic-evidence.md) |
@@ -17,13 +17,13 @@ describe later `main` behavior.
 | `v0.2.0-rc.2` | [Release notes](v0.2.0-rc.2.md) | [Synthetic evidence](../validation/v0.2.0-rc.2-synthetic-evidence.md) |
 | `v0.2.0-rc.1` | [Release notes](v0.2.0-rc.1.md) | [Synthetic pilot record](../validation/v0.2.0-rc.1-pilot.md) |
 
-`v0.3.0-rc.2` is the current published prerelease. Its annotated tag,
-[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.2),
+`v0.3.0-rc.3` is the current published prerelease. Its annotated tag,
+[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.3),
 eight SDK assets and full platform workflows identify green `main` commit
-`d775cc950bdc06c0c929c9d17e2274ec4afbe9cf`. Candidate notes/requirements remain
-frozen at that tag; the separate receipt records the completed 2026-10-24
+`2d689dc63546e5a2121fd0026d83f04aa8cc3f7d`. Candidate notes/requirements remain
+frozen at that tag; the separate receipt records the completed 2026-10-26
 publication and public re-download checks. The receipt also records successful
-downloaded-Android-SDK onboarding on JVM/Robolectric API 24 with a later harness
+downloaded-Android-SDK onboarding on JVM/Robolectric API 24 with the recorded harness
 revision; the release bytes remain unchanged. This is not physical-device or
 all-platform onboarding acceptance.
 `v0.2.0` remains the latest non-prerelease source line at `68b8c48`.

@@ -11,8 +11,10 @@ For the current checkout, use the disposable pilot and gates in
 [Getting started](../getting-started.md) and [Development](../development.md).
 Their result applies only to the exact source revision that ran them.
 
-The configured `v0.3.0-rc.3` candidate has [evidence requirements](v0.3.0-rc.3-synthetic-evidence.md).
-Previous release results must not be reused as proof of this candidate.
+The published `v0.3.0-rc.3` has a [publication receipt](v0.3.0-rc.3-publication.md)
+for exact-commit full CI, public-byte verification and separately recorded SDK
+onboarding. Its [candidate requirements](v0.3.0-rc.3-synthetic-evidence.md) remain
+frozen. Previous release results must not be reused as proof of this release.
 
 The `v0.3.0-rc.2` [frozen integration record](v0.3.0-rc.2-synthetic-evidence.md)
 maps first-use, correction, upgrade and SDK paths to their existing test owners.
@@ -36,6 +38,8 @@ The rc.4 evidence manifest remains release evidence only for tagged commit
 
 ## Tagged and historical repository evidence
 
+- [v0.3.0-rc.3 public SDK receipt](v0.3.0-rc.3-publication.md)
+- [v0.3.0-rc.3 frozen evidence requirements](v0.3.0-rc.3-synthetic-evidence.md)
 - [v0.3.0-rc.2 public SDK receipt](v0.3.0-rc.2-publication.md)
 - [v0.3.0-rc.2 frozen integration record](v0.3.0-rc.2-synthetic-evidence.md)
 - [v0.3.0-rc.1 public SDK receipt](v0.3.0-rc.1-publication.md)

@@ -15,17 +15,19 @@ Do not start Docker or configure an SDK just to understand a difference.
 | Verify the full synthetic runtime and clean up automatically | [Recommended first run](#recommended-first-run) | Isolated PostgreSQL parity and HTTP smoke evidence; no persistent dashboard |
 | Explore receipt, metrics and evidence in a local dashboard | [Persistent local stack](#persistent-local-stack), then [receipt to comparison](#from-receipt-to-comparison) | A disposable local instance; never seed a stack containing data you need |
 
-These instructions describe current source. `v0.3.0-rc.2` is the published
+These instructions describe current source. `v0.3.0-rc.3` is the published
 source and SDK prerelease; its
-[publication receipt](validation/v0.3.0-rc.2-publication.md) records the exact
-tag and verified public assets on 2026-10-24. See [Project status](STATUS.md),
+[publication receipt](validation/v0.3.0-rc.3-publication.md) records the exact
+tag and verified public assets on 2026-10-26. See [Project status](STATUS.md),
 [SDK installation](sdk-distribution.md) and [post-release scope](releases/next.md).
-The [frozen integration record](validation/v0.3.0-rc.2-synthetic-evidence.md)
+The [frozen integration record](validation/v0.3.0-rc.3-synthetic-evidence.md)
 distinguishes authenticated HTTP admission, seeded reference evidence, packaged
 SDK consumers and upgrade checks. A separate downloaded-Android-SDK/backend
-journey also passed on JVM/Robolectric API 24; its later harness revision is
+journey also passed on JVM/Robolectric API 24; its harness revision is
 recorded in the publication receipt. These checks do not qualify physical
-devices, all-platform onboarding or live providers.
+devices, all-platform onboarding or live providers. Use a new disposable
+synthetic instance: rc.2-to-current upgrades are not yet supported
+([#315](https://github.com/yubisuke/openmasu/issues/315)).
 
 ## Requirements
 

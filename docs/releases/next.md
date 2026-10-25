@@ -1,98 +1,40 @@
-# Post-rc.2 Scope
+# Work After rc.3
 
-Updated: 2026-10-25. This is a living record of current source after rc.2,
-not a new release note or a promise of a release date.
-
-All additions below are now selected for the configured
-[rc.3 candidate](v0.3.0-rc.3.md). This does not change the frozen rc.2 assets.
+Updated: 2026-10-26. This is the living follow-up list, not a release promise.
 
 ## Published baseline
 
-`v0.3.0-rc.2` is the published source and SDK prerelease at
-`d775cc950bdc06c0c929c9d17e2274ec4afbe9cf`. Its
-[release notes](v0.3.0-rc.2.md) and
-[synthetic integration record](../validation/v0.3.0-rc.2-synthetic-evidence.md)
-remain frozen. The separate
-[publication receipt](../validation/v0.3.0-rc.2-publication.md) records the
-annotated tag, exact-commit full CI and eight verified public assets.
-`v0.2.0` remains the latest stable source release.
+[v0.3.0-rc.3](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.3)
+is the published source and SDK prerelease at
+`2d689dc63546e5a2121fd0026d83f04aa8cc3f7d`. Its
+[publication receipt](../validation/v0.3.0-rc.3-publication.md) records exact-source
+full CI, eight verified public assets and downloaded Android SDK onboarding.
+The [frozen notes](v0.3.0-rc.3.md) describe the included functionality.
+All 35 child implementations in the
+[functional plan](https://github.com/yubisuke/openmasu/issues/218) are included.
+This documentation update adds no functionality or SDK bytes.
 
-## Implemented source additions
+## Concrete next work
 
-[Fraud policy preview](../fraud-preview.md) adds a read-only, bounded same-evidence
-comparison and receipt-bound public activation. It reuses existing pure fraud
-and metric projections; incomplete old rule inputs block impact claims and
-activation. Past decisions, contract wire identity and reviewed goldens stay
-unchanged. Counts are not measured fraud detection effectiveness.
+- [#315](https://github.com/yubisuke/openmasu/issues/315): add a safe upgrade
+  from the published rc.2. The current preflight deliberately rejects that source
+  with `upgrade_source_unsupported`. Extend the existing backup/upgrade path;
+  never relabel an old backup, bypass preflight or reset a ledger to work around it.
+- [PR #290](https://github.com/yubisuke/openmasu/pull/290): qualify the timezone
+  data update separately against calendar boundaries. rc.3 retains the qualified
+  version; it is not a missing release gate.
 
-The [cost wire correction](../cost-refresh.md#cost-dimensions-and-row-identity)
-separates public dimension digests from internal scoped/date revision keys.
-New imported artifacts interoperate with the contract evaluator; historical
-artifacts and their replay identity are not retroactively rewritten.
+The first-use dependency findings in
+[#316](https://github.com/yubisuke/openmasu/issues/316) were fixed before rc.3
+publication. Do not reopen completed scope as speculative feature work.
 
-[Tenant-cycle coordination](../operations/observability.md#scheduler-behavior)
-uses the existing PostgreSQL service for cross-replica order and stale-commit
-fencing. Synthetic process/connection-loss probes do not establish live capacity
-or recall an already-sent provider request. No new queue or service is added.
+## Evidence boundary
 
-Current source now adds [daily recorded activity](../calendar-activity.md):
-three UTC metrics, schedules and saved CSV with explicit installation units.
-This post-rc.2 addition is not part of the published rc.2 assets or evidence.
-It also adds [verified payer metrics](../payer-metrics.md): D7 transactions,
-paying installations, payer rate and purchase-net ARPPU. Full refunds retain
-historical payers; zero-payer ARPPU is undefined. No SDK release is implied.
+Use rc.3 in a new disposable synthetic instance. Live provider permissions,
+physical-device delivery, store approval, domain association, production
+capacity, alerts and recovery objectives remain separate operator evidence.
+No real credentials, devices or data are required for the follow-up development
+above. Synthetic completion is not provider equivalence or production readiness.
 
-[Scheduled comparisons](../recurring-comparisons.md) add private aggregate-only
-storage, immutable revisions, fixed-cutoff worker results and explicit retention,
-deletion and privacy suppression. Inputs are operator deposited, not live fetched.
-
-[Google detail costs](../cost-refresh.md#explicit-google-ad-group-and-ad-costs)
-add explicit ad-group/ad selection and creative binding. Additive contract patch
-0.4.27 records matching-detail-only coverage without changing wire identity or
-earlier goldens. Selected spend cannot be allocated to parents or siblings.
-Live provider permissions, mapping correctness and completeness remain unverified.
-
-[Recorded-detail discovery](../scheduled-metrics.md#discover-selected-ad-groups-or-creatives)
-reuses frozen daily target receipts for ad-group/creative tuples. Missing detail
-and parent-only cost are explicit partial observations, not fabricated targets;
-restarts retain the frozen set and later dates may adopt newly recorded detail.
-
-Integrated candidate acceptance
-([#252](https://github.com/yubisuke/openmasu/issues/252)) is complete within its
-declared synthetic scope. The publication receipt records the downloaded Android
-SDK/backend journey on JVM/Robolectric API 24 separately from the frozen release.
-It does not establish physical-device or all-platform onboarding acceptance.
-The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-all 35 child implementations in current source. The
-[roadmap](../roadmap.md#next-product-sequence) and
-[acceptance crosswalk](../project-plan.md#next-product-slices) record the completed
-scope. Further work needs a concrete usage requirement; it is not an implied
-unfinished release gate.
-
-[Optional app-scoped access](../operations/access.md) narrows existing role
-capabilities consistently across API and dashboard workflows. Existing keys keep
-tenant-wide access; scoped keys cannot use global controls. This source feature
-does not change the published SDKs or the event contract.
-
-[Explicit retention](../operations/retention.md) adds default-off operator
-preview/apply with immutable bounded targets, crash-safe retry and current
-retention-affected report provenance. It does not purge ledger/privacy history,
-credentials, all object classes or backups and does not choose a legal duration.
-
-The optional [Unity LevelPlay ILR sample](../../sdk/unity/README.md#optional-levelplay-impression-revenue)
-adds per-ad background callbacks, explicit consent and stable impression identity
-through existing Android/iOS queues. Synthetic provider-shim/native/backend
-evidence is not actual provider or device execution. It is not in rc.2 assets.
-
-[Explicit engagement policy](../engagement-outcomes.md#explicit-outcome-window-and-recorded-inactivity)
-adds independent 1–30-day outcomes, recorded SDK inactivity with an explicit
-unknown state, and verified purchase/partial-refund net. Historical 24h outputs
-and acquisition/Apple series stay unchanged. Contract patch 0.4.28 retains wire
-identity and earlier goldens; it adds no new SDK release or live qualification.
-
-## Separate operator evidence
-
-Live provider permissions/connections, device delivery, store approval, domain
-association, production capacity, alert delivery and recovery objectives remain
-private operator evidence. Synthetic completion and public prerelease
-distribution do not establish provider equivalence or production readiness.
+See [project status](../STATUS.md), [roadmap](../roadmap.md#next-product-sequence)
+and the [acceptance crosswalk](../project-plan.md#next-product-slices).

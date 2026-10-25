@@ -52,18 +52,18 @@ platform/imported profiles, qualified calendar cohorts, fixed FX, same-set KPIs,
 standard retention, multiple outcomes, guided setup and safe ingest recovery.
 
 The prior integration plan is complete. It must not be reused as a future
-backlog. `v0.3.0-rc.2` is the published source and SDK prerelease; see the
-[publication receipt](validation/v0.3.0-rc.2-publication.md),
+backlog. `v0.3.0-rc.3` is the published source and SDK prerelease; see the
+[publication receipt](validation/v0.3.0-rc.3-publication.md),
 [post-release scope](releases/next.md) and [SDK distribution](sdk-distribution.md).
 The downloaded Android SDK/backend journey has also passed on JVM/Robolectric
-API 24, with its later harness revision recorded separately in the receipt.
+API 24, with SDK and harness revisions recorded in the receipt.
 
 ## Next product sequence
 
-The configured rc.3 candidate packages the completed source plan. Its next steps
-are exact-commit release verification and distribution, then a first-use pass
-through the existing synthetic walkthrough. New work must address observed
-friction, not create another speculative feature or testing backlog.
+The published rc.3 packages the completed source plan. The concrete next
+development item is the missing rc.2 upgrade source ([#315](https://github.com/yubisuke/openmasu/issues/315)),
+not another feature list. The existing synthetic first-use path produces saved
+comparison reports without provider setup. New work must address observed friction.
 
 [Daily recorded activity](calendar-activity.md) is implemented in current source:
 UTC session starts, all custom events and distinct installations remain separate

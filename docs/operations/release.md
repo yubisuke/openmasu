@@ -1,21 +1,20 @@
 # Release Runbook
 
-The next configured source/SDK candidate is `v0.3.0-rc.3`. The procedure below
-targets that candidate; rc.2 remains published until rc.3 publication is verified.
+The published source/SDK prerelease is `v0.3.0-rc.3`. The procedure below records
+its release method; never overwrite its existing tag or assets for a later candidate.
 
 OpenMasu publishes source tags and downloadable reproducible SDK bundles. This runbook
 does not publish Maven, Swift, Unity, npm, container, or hosting artifacts to a
 public registry.
 
-The current published prerelease is `v0.3.0-rc.2`. Its annotated tag,
-[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.2)
+The current published prerelease is `v0.3.0-rc.3`. Its annotated tag,
+[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.3)
 and eight verified public assets point to green commit
-`d775cc950bdc06c0c929c9d17e2274ec4afbe9cf`; see the
-[2026-10-24 publication receipt](../validation/v0.3.0-rc.2-publication.md). `v0.2.0`
+`2d689dc63546e5a2121fd0026d83f04aa8cc3f7d`; see the
+[2026-10-26 publication receipt](../validation/v0.3.0-rc.3-publication.md). `v0.2.0`
 remains the latest non-prerelease source line and is unchanged.
-Downloaded-Android-SDK onboarding also passed on JVM/Robolectric API 24 with
-a separately recorded harness revision; see the publication receipt. This is
-not physical-device or all-platform onboarding acceptance.
+Downloaded-Android-SDK onboarding evidence is recorded separately in that receipt.
+It is not physical-device or all-platform onboarding acceptance.
 A configured version is not publication by
 itself: future candidates must not be treated as published unless their
 matching annotated tag and GitHub Release point to the same green commit. A
@@ -193,7 +192,7 @@ After public asset verification, the existing Runtime workflow has an opt-in
 Runtime suites again:
 
 ```bash
-gh workflow run runtime.yml --repo yubisuke/openmasu --ref main \
+gh workflow run runtime.yml --repo yubisuke/openmasu --ref v0.3.0-rc.3 \
   -f published_sdk_onboarding=true \
   -f published_sdk_version=0.3.0-rc.3 \
   -f published_sdk_sha256=<verified-complete-SDK-ZIP-sha256>
@@ -221,7 +220,7 @@ ledger. The CI service owns database teardown; native consumer state and payload
 files are removed by the test. Current-day counts are measured at a saved
 receipt cutoff, not claimed as a completed live day.
 
-The later harness revision and frozen SDK source must both be recorded. This
+The selected harness revision and frozen SDK source must both be recorded. This
 does not turn existing fixture-projected campaign/cost tests into native device
 evidence, nor repeat the correction/privacy/backup suites.
 
