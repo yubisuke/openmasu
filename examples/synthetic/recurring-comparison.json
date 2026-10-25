@@ -1,0 +1,178 @@
+{
+  "action": "register",
+  "registration": {
+    "name": "Synthetic daily comparison",
+    "first_date": "2026-08-01",
+    "last_date": "2026-08-03",
+    "watermark_lag_days": 9,
+    "retention_days": 30,
+    "mode": "captured",
+    "threshold": {
+      "value_unscaled": "300000",
+      "scale": 6
+    },
+    "supersedes_id": null,
+    "left_snapshot": {
+      "source": "synthetic-operator-aggregate",
+      "conditions": {
+        "date_from": "2026-08-01",
+        "date_to": "2026-08-02",
+        "time_zone": "UTC",
+        "maturity": "window_elapsed",
+        "aggregation": "cumulative",
+        "attribution_scope": "non_organic",
+        "metric_definition": "d7_roas@0.3.0",
+        "source_cutoff": "2026-08-10T00:00:00.000000Z"
+      },
+      "rows": [
+        {
+          "key": "{\"attribution_status\":\"non_organic\",\"campaign_id\":\"provider-campaign-33\",\"cohort_date\":\"2026-08-01\",\"country\":\"JP\",\"network\":\"synthetic-network\"}",
+          "currency": "none",
+          "scale": 6,
+          "state": "present",
+          "value": "1500000"
+        }
+      ],
+      "provenance": {
+        "report_sha256": "f18c0d5634360612da2f4bdea6cc3853f1facd37f373296f08b5fd84b1b7210b",
+        "runs": [
+          {
+            "key": "{\"attribution_status\":\"non_organic\",\"campaign_id\":\"provider-campaign-33\",\"cohort_date\":\"2026-08-01\",\"country\":\"JP\",\"network\":\"synthetic-network\"}",
+            "metric_run_id": "synthetic-comparison:2026-08-01:1500000",
+            "input_snapshot_id": "b50b04841b797379d3fa3d3e6c911142a91b0b99e4fc3e0bd7ff8a4cef473aad"
+          }
+        ]
+      },
+      "comparison_contexts": [
+        {
+          "key": "{\"attribution_status\":\"non_organic\",\"campaign_id\":\"provider-campaign-33\",\"cohort_date\":\"2026-08-01\",\"country\":\"JP\",\"network\":\"synthetic-network\"}",
+          "context": {
+            "version": 1,
+            "profile": "openmasu-sql-metric-v1",
+            "metric_run_id": "synthetic-comparison:2026-08-01:1500000",
+            "input_snapshot_id": "b50b04841b797379d3fa3d3e6c911142a91b0b99e4fc3e0bd7ff8a4cef473aad",
+            "definition": {
+              "metric_name": "d7_roas",
+              "metric_definition_version": "0.3.0",
+              "anchor_event": "install",
+              "aggregation_time_zone": "UTC",
+              "value_type": "ratio",
+              "ratio_scale": 6,
+              "definition": {
+                "calculation": "revenue_over_cost",
+                "numerator": "revenue",
+                "window": {
+                  "type": "elapsed",
+                  "day": 7
+                },
+                "denominator": "cost",
+                "cost_basis": "cohort_acquisition_day_current_snapshot"
+              },
+              "rule_bundle_id": "metric-stage-b",
+              "rule_bundle_version": "0.3.0",
+              "rule_bundle_hash": "f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499"
+            },
+            "definition_digest": "6103ea4348685e1ae83d5181d58b25f21b36c181daada4e26296770d7884862b",
+            "fx": {
+              "policy_version": "fx-stage-b-v0.2",
+              "target_currency": "USD",
+              "target_scale": 6,
+              "rounding_mode": "half_even",
+              "rates": [
+                {
+                  "currency": "EUR",
+                  "rate_unscaled": "5",
+                  "rate_scale": 1,
+                  "as_of": "2026-08-01T00:00:00.000Z"
+                }
+              ]
+            },
+            "fx_digest": "5f14fab0276ae5b37e6d2787c23f85fe5142942c881d247528266d5a26ea0d6f",
+            "privacy_state": "before"
+          }
+        }
+      ]
+    },
+    "right_snapshot": {
+      "source": "synthetic-operator-aggregate",
+      "conditions": {
+        "date_from": "2026-08-01",
+        "date_to": "2026-08-02",
+        "time_zone": "UTC",
+        "maturity": "window_elapsed",
+        "aggregation": "cumulative",
+        "attribution_scope": "non_organic",
+        "metric_definition": "d7_roas@0.3.0",
+        "source_cutoff": "2026-08-10T00:00:00.000000Z"
+      },
+      "rows": [
+        {
+          "key": "{\"attribution_status\":\"non_organic\",\"campaign_id\":\"provider-campaign-33\",\"cohort_date\":\"2026-08-01\",\"country\":\"JP\",\"network\":\"synthetic-network\"}",
+          "currency": "none",
+          "scale": 6,
+          "state": "present",
+          "value": "1750000"
+        }
+      ],
+      "provenance": {
+        "report_sha256": "ad950f2b73b801595a2155f8a872b22b034eb9eeb5fe3bd8dcd4d3128f8c5a09",
+        "runs": [
+          {
+            "key": "{\"attribution_status\":\"non_organic\",\"campaign_id\":\"provider-campaign-33\",\"cohort_date\":\"2026-08-01\",\"country\":\"JP\",\"network\":\"synthetic-network\"}",
+            "metric_run_id": "synthetic-comparison:2026-08-01:1750000",
+            "input_snapshot_id": "9bd54fae2516173e728ba0a20656913a6e02de35f0b44fcd681b9b695ff5dbc3"
+          }
+        ]
+      },
+      "comparison_contexts": [
+        {
+          "key": "{\"attribution_status\":\"non_organic\",\"campaign_id\":\"provider-campaign-33\",\"cohort_date\":\"2026-08-01\",\"country\":\"JP\",\"network\":\"synthetic-network\"}",
+          "context": {
+            "version": 1,
+            "profile": "openmasu-sql-metric-v1",
+            "metric_run_id": "synthetic-comparison:2026-08-01:1750000",
+            "input_snapshot_id": "9bd54fae2516173e728ba0a20656913a6e02de35f0b44fcd681b9b695ff5dbc3",
+            "definition": {
+              "metric_name": "d7_roas",
+              "metric_definition_version": "0.3.0",
+              "anchor_event": "install",
+              "aggregation_time_zone": "UTC",
+              "value_type": "ratio",
+              "ratio_scale": 6,
+              "definition": {
+                "calculation": "revenue_over_cost",
+                "numerator": "revenue",
+                "window": {
+                  "type": "elapsed",
+                  "day": 7
+                },
+                "denominator": "cost",
+                "cost_basis": "cohort_acquisition_day_current_snapshot"
+              },
+              "rule_bundle_id": "metric-stage-b",
+              "rule_bundle_version": "0.3.0",
+              "rule_bundle_hash": "f2a282f9b089d2da4505954e871ab48c162a81aa497ccf0aaf811a9e50091499"
+            },
+            "definition_digest": "6103ea4348685e1ae83d5181d58b25f21b36c181daada4e26296770d7884862b",
+            "fx": {
+              "policy_version": "fx-stage-b-v0.2",
+              "target_currency": "USD",
+              "target_scale": 6,
+              "rounding_mode": "half_even",
+              "rates": [
+                {
+                  "currency": "EUR",
+                  "rate_unscaled": "5",
+                  "rate_scale": 1,
+                  "as_of": "2026-08-01T00:00:00.000Z"
+                }
+              ]
+            },
+            "fx_digest": "5f14fab0276ae5b37e6d2787c23f85fe5142942c881d247528266d5a26ea0d6f",
+            "privacy_state": "before"
+          }
+        }
+      ]
+    }
+  }
+}

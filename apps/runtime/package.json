@@ -5,6 +5,12 @@
   "description": "OpenMasu PostgreSQL runtime and migration tooling",
   "type": "module",
   "exports": {
+    "./cohort-comparison": "./src/cohort-comparison.ts",
+    "./comparison-model": "./src/comparison-model.ts",
+    "./external-calculation-declaration": "./src/external-calculation-declaration.ts",
+    "./metric-freshness": "./src/metric-freshness.ts",
+    "./report-query-model": "./src/report-query-model.ts",
+    "./recurring-comparisons": "./src/recurring-comparisons.ts",
     "./backup": {
       "types": "./src/backup.ts",
       "default": "./src/backup.ts"
