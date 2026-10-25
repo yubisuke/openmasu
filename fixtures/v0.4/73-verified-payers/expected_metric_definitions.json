@@ -1,0 +1,179 @@
+[
+  {
+    "metric_name": "cohort_arppu_d7_usd",
+    "metric_definition_version": "0.4.26",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_over_paying_installations",
+      "numerator": "purchase_net_revenue",
+      "denominator": "paying_installations",
+      "window": {
+        "type": "elapsed",
+        "day": 7
+      }
+    },
+    "acquisition_basis": "selected_first_party_click",
+    "fraud_policy": "gross",
+    "refund_reversal_policy": "cancel_target_refund_at_watermark",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "rule_bundle_id": "metric-verified-payers",
+    "rule_bundle_version": "0.4.26",
+    "rule_bundle_hash": "a9574eb2d767e0fe816b5861f7dd88e885c30aa799b0d0511ce115d6f81e3b52"
+  },
+  {
+    "metric_name": "cohort_payer_rate_d7",
+    "metric_definition_version": "0.4.26",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "ratio",
+    "ratio_scale": 6,
+    "definition": {
+      "calculation": "paying_installations_over_cohort",
+      "numerator": "paying_installations",
+      "denominator": "cohort_size",
+      "window": {
+        "type": "elapsed",
+        "day": 7
+      }
+    },
+    "acquisition_basis": "selected_first_party_click",
+    "fraud_policy": "gross",
+    "refund_reversal_policy": "cancel_target_refund_at_watermark",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "rule_bundle_id": "metric-verified-payers",
+    "rule_bundle_version": "0.4.26",
+    "rule_bundle_hash": "a9574eb2d767e0fe816b5861f7dd88e885c30aa799b0d0511ce115d6f81e3b52"
+  },
+  {
+    "metric_name": "cohort_paying_installations_d7",
+    "metric_definition_version": "0.4.26",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "count",
+    "definition": {
+      "calculation": "paying_installations",
+      "numerator": "paying_installations",
+      "window": {
+        "type": "elapsed",
+        "day": 7
+      }
+    },
+    "acquisition_basis": "selected_first_party_click",
+    "fraud_policy": "gross",
+    "refund_reversal_policy": "cancel_target_refund_at_watermark",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "rule_bundle_id": "metric-verified-payers",
+    "rule_bundle_version": "0.4.26",
+    "rule_bundle_hash": "a9574eb2d767e0fe816b5861f7dd88e885c30aa799b0d0511ce115d6f81e3b52"
+  },
+  {
+    "metric_name": "cohort_purchase_count_d7",
+    "metric_definition_version": "0.4.26",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "count",
+    "definition": {
+      "calculation": "purchase_count",
+      "numerator": "purchases",
+      "window": {
+        "type": "elapsed",
+        "day": 7
+      }
+    },
+    "acquisition_basis": "selected_first_party_click",
+    "fraud_policy": "gross",
+    "refund_reversal_policy": "cancel_target_refund_at_watermark",
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "rule_bundle_id": "metric-verified-payers",
+    "rule_bundle_version": "0.4.26",
+    "rule_bundle_hash": "a9574eb2d767e0fe816b5861f7dd88e885c30aa799b0d0511ce115d6f81e3b52"
+  },
+  {
+    "metric_name": "d0_install_to_24h_ad_revenue_usd",
+    "aggregation_time_zone": "UTC",
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": {
+        "type": "elapsed",
+        "day": 0
+      },
+      "numerator": "revenue"
+    },
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
+  },
+  {
+    "metric_name": "d0_jst_install_calendar_ad_revenue_usd",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue"
+    },
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
+  },
+  {
+    "metric_name": "d0_utc_install_calendar_ad_revenue_usd",
+    "aggregation_time_zone": "UTC",
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue"
+    },
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
+  }
+]
