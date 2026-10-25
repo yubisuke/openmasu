@@ -151,8 +151,8 @@ export async function previewRetention(pool: Pool, scope: Scope, value: unknown,
 async function audit(client: PoolClient, scope: Scope, receipt: string, now: string, actorRef?: string): Promise<void> {
   await client.query(`INSERT INTO ledger.audit_logs (audit_log_id,tenant_id,app_id,occurred_at,actor_type,actor_ref,
     action,target_scope,target_ref,policy_version,request_digest,outcome)
-    VALUES ($1,$2,$3,$4,$6,$7,'retention_expiry_started','app',$3,'retention-v1',$5,'succeeded')`,
-  [uuidV7(), ...scopeValues(scope), now, receipt,actorRef ? "admin_key" : "system_job",actorRef ?? "job:retention_expiry"]);
+    VALUES ($1,$2,$3,$4,$6,$7,'retention_expiry_started','app',$8,'retention-v1',$5,'succeeded')`,
+  [uuidV7(), ...scopeValues(scope), now, receipt,actorRef ? "admin_key" : "system_job",actorRef ?? "job:retention_expiry",scope.appId]);
 }
 
 export async function applyRetention(input: { pool: Pool; payloadStore: PayloadStore; scope: Scope; policy: unknown;
