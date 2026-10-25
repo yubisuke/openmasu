@@ -150,6 +150,6 @@ export async function activateRuleBundle(input: {
       outcome: "succeeded",
       now,
     });
-  },JSON.stringify([input.identity.tenantId,input.identity.appId,value.ruleBundleId]));
+  },JSON.stringify([input.identity.tenantId,input.identity.appId,value.ruleBundleId.startsWith("fraud-") ? "fraud-policy" : value.ruleBundleId]));
   return artifact;
 }

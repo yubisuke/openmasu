@@ -21,7 +21,8 @@ export function acquisitionDimensions(payload: Any): {
 
 /** Existing normalized rule inputs only: no tokens, raw referrer, IP or UA. */
 function fraudInputEvidence(event: "click" | "install", payload: Any): Any {
-  if (event === "click") return { fraud_input_version: 1,replay_suspected: payload.replay_suspected === true };
+  if (event === "click") return { fraud_input_version: 1,replay_suspected: payload.replay_suspected === true,
+    redirector_time_status: payload.redirector_time_status ?? null };
   const fields = ["click_id","referrer_status","referrer_click_at_server","referrer_click_at_server_status",
     "install_begin_at_server","install_begin_at_server_status"];
   return { fraud_input_version:1,...Object.fromEntries(fields.map(field=>[field,payload[field] ?? null])) };

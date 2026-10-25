@@ -36,6 +36,10 @@ function sourceRef(tenantId: string, appId: string, row: SourceAggregate): strin
 
 async function persistAggregate(client: PoolClient, tenantId: string, appId: string, row: SourceAggregate, now: string): Promise<void> {
   const artifact = {
+    // Retain the actual cross-source baseline used by this evaluation. Older
+    // aggregates without it must not be guessed by a later policy preview.
+    fraud_input_version: 1,
+    median_cvr: row.median_cvr,
     metric_date: row.metric_date,
     campaign_id: row.campaign_id,
     network: row.network,

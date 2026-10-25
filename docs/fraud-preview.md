@@ -48,7 +48,9 @@ policy review, not an unbounded historical backtest.
 New normalized click/install facts retain a versioned closed subset of existing
 rule inputs: replay classification and authoritative click/install times and
 statuses. No new device input, raw referrer, token, IP or User-Agent is retained.
-Older click/install facts without that input version cannot prove a faithful
+Source-day artifacts also retain the actual cross-source median used by their
+evaluation, rather than recomputing an old baseline from a changed population.
+Older click/install facts or source aggregates without their input version cannot prove a faithful
 comparison: the response reports `historical_fraud_inputs_missing`, omits impact
 numbers, and blocks activation. There is no guessed backfill. No available
 evidence, an in-progress privacy operation, missing projections/metric inputs or

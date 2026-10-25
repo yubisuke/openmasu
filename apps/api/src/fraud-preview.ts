@@ -78,9 +78,10 @@ export async function fraudPreviewWithClient(client:PoolClient,identity:AppAdmin
   const privacy=(await client.query(`SELECT count(*)::int AS count FROM control.privacy_deletion_jobs
     WHERE tenant_id=$1 AND status='processing' AND (app_id=$2 OR artifact_template->>'deletion_scope'='tenant')`,args.slice(0,2))).rows[0];
   if (privacy.count>0) issues.add("privacy_in_progress");
-  const rows=bounded((await client.query<Any>(`SELECT raw.artifact AS raw,raw.policy_digest,logical.artifact AS logical,
+  const rows=bounded((await client.query<Any>(`SELECT raw.artifact AS raw,stored.policy_digest,logical.artifact AS logical,
     COALESCE(click.artifact,install.artifact,session.artifact,purchase.artifact,refund.artifact,revenue.artifact,custom.artifact,deep.artifact) AS payload
-    FROM ledger.raw_records_current raw JOIN ledger.logical_events logical USING(tenant_id,app_id,record_id)
+    FROM ledger.raw_records_current raw JOIN ledger.raw_records stored USING(tenant_id,app_id,record_id)
+    JOIN ledger.logical_events logical USING(tenant_id,app_id,record_id)
     LEFT JOIN ledger.click_facts click USING(tenant_id,app_id,logical_event_id)
     LEFT JOIN ledger.install_facts install USING(tenant_id,app_id,logical_event_id)
     LEFT JOIN ledger.session_facts session USING(tenant_id,app_id,logical_event_id)
@@ -95,6 +96,7 @@ export async function fraudPreviewWithClient(client:PoolClient,identity:AppAdmin
     ORDER BY raw.received_at::timestamptz,raw.record_id COLLATE "C" LIMIT 1001`,args)).rows,FRAUD_PREVIEW_LIMITS.records,"fraud_preview_evidence_limit_exceeded");
   for (const row of rows) {
     if (!row.payload) issues.add("projection_unavailable");
+    if (typeof row.policy_digest!=="string"||!row.policy_digest) issues.add("historical_fraud_inputs_missing");
     if (["click","install"].includes(row.raw.event_name) && row.payload?.fraud_input_version!==1) issues.add("historical_fraud_inputs_missing");
   }
   if (rows.length===0) issues.add("no_available_evidence");
@@ -103,6 +105,7 @@ export async function fraudPreviewWithClient(client:PoolClient,identity:AppAdmin
   const attrs=(await client.query<Any>(`SELECT DISTINCT ON(subject_scope,subject_ref) artifact
     FROM ledger.attribution_results WHERE tenant_id=$1 AND app_id=$2 AND decided_at::timestamptz<=$3::timestamptz AND NOT(artifact ? 'fraud_decision_ref')
       AND attribution_id NOT LIKE '%:ctit-clock-provisional:%'
+      AND attribution_id NOT LIKE 'attribution:ctit-provisional:%'
     ORDER BY subject_scope,subject_ref,decided_at::timestamptz DESC,attribution_id COLLATE "C" DESC LIMIT 1001`,args)).rows;
   bounded(attrs,FRAUD_PREVIEW_LIMITS.records,"fraud_preview_attribution_limit_exceeded");
   const costs=bounded((await client.query<Any>(`SELECT artifact FROM ledger.cost_records
@@ -110,11 +113,13 @@ export async function fraudPreviewWithClient(client:PoolClient,identity:AppAdmin
     FRAUD_PREVIEW_LIMITS.costRows,"fraud_preview_cost_limit_exceeded");
   const sources=bounded((await client.query<Any>(`SELECT DISTINCT ON(source.metric_date,source.campaign_id,source.network,source.site_id)
     source.tenant_id,source.app_id,source.metric_date::text,source.campaign_id,source.network,source.site_id,
-    source.clicks::text,source.installs::text,source.median_cvr::text,source.ctit_negative_count::text,
+    source.clicks::text,source.installs::text,source.artifact->>'median_cvr' AS median_cvr,
+    source.artifact->>'fraud_input_version' AS fraud_input_version,source.ctit_negative_count::text,
     source.ctit_p50_ms::text,source.ctit_p95_ms::text,source.computed_at,source.input_snapshot_id FROM ledger.source_day_aggregates source
     WHERE source.tenant_id=$1 AND source.app_id=$2 AND source.computed_at::timestamptz<=$3::timestamptz
     ORDER BY source.metric_date,source.campaign_id,source.network,source.site_id,source.computed_at::timestamptz DESC,source.input_snapshot_id DESC LIMIT 101`,args)).rows,
     FRAUD_PREVIEW_LIMITS.sourceDays,"fraud_preview_source_limit_exceeded");
+  if (sources.some(row=>row.fraud_input_version!=="1"||typeof row.median_cvr!=="string")) issues.add("historical_fraud_inputs_missing");
   const profiles=bounded((await client.query<Any>(`SELECT DISTINCT ON(run.metric_name,run.metric_definition_version,run.grouping_digest) manifest.artifact
     FROM ledger.metric_runs run JOIN control.metric_replay_manifests manifest
       ON manifest.tenant_id=run.tenant_id AND manifest.app_id=run.app_id AND manifest.source_metric_run_id=run.metric_run_id

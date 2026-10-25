@@ -12,6 +12,7 @@ import { createAppPool,createReaderPool,createSeedPool,EncryptedFilePayloadStore
 import { ingestFixture,persistRaw,persistLogical } from "../../worker/src/test-support/fixture-ingestion.js";
 import { ingestRuntimeBatch } from "../../worker/src/ingestion.js";
 import { computeSqlMetricRuns } from "../../worker/src/metrics/cohort.js";
+import { aggregateSourceDay } from "../../worker/src/fraud-worker.js";
 import { ensureAdminKeys,verifyAdminKey,type AppAdminIdentity } from "./admin-auth.js";
 import { createRequestHandler } from "./router.js";
 import { previewFraudBundle } from "./fraud-preview.js";
@@ -113,6 +114,7 @@ it("fraud_preview_reconstructs_retained_CTIT_inputs_for_threshold_and_negative_c
     input.metric_definitions=profiles.metric_definitions;
     input.metric_evaluations=profiles.metric_evaluations.map((evaluation:any)=>({...evaluation,grouping:{metric_date:"2026-08-19"}}));
     await ingestFixture(`preview-${tenantId}`,input,pool,seed);await computeSqlMetricRuns(pool,input);
+    await aggregateSourceDay(pool,tenantId,"2026-08-19","2026-08-21T12:00:00.000Z");
     const key=`synthetic-ctit-admin-${tenantId}`;
     await ensureAdminKeys(pool,{tenantId,appId},[{key,role:"admin"}]);
     const admin=await verifyAdminKey(pool,tenantId,`Bearer ${key}`);assert.ok(admin);const identity={...admin,appId};
@@ -139,6 +141,8 @@ it("fraud_preview_does_not_invent_missing_historical_rule_inputs_or_change_state
   const admin=await verifyAdminKey(pool,tenantId,`Bearer ${key}`);assert.ok(admin);const identity={...admin,appId};
   await activateRuleBundle({pool,identity,body:{rule_bundle_id:DEFAULT_FRAUD_BUNDLE.id,rule_bundle_version:DEFAULT_FRAUD_BUNDLE.version,definition:DEFAULT_FRAUD_BUNDLE}});
   await persistRaw(pool,raw,input.server_context.policy_digest);await persistLogical(pool,logical);
+  await withTenant(pool,tenantId,c=>c.query(`INSERT INTO ledger.raw_payload_states
+    (tenant_id,app_id,record_id,lifecycle_status,changed_at) VALUES($1,$2,$3,'available',$4)`,[tenantId,appId,raw.record_id,raw.received_at]));
   const payload=input.records.find((row:any)=>row.event_name==="click").payload;
   await withTenant(pool,tenantId,c=>c.query(`INSERT INTO ledger.click_facts
     (logical_event_id,tenant_id,app_id,click_id,redirector_click_at,artifact) VALUES($1,$2,$3,$4,$5,$6::jsonb)`,
