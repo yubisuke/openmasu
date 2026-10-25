@@ -372,16 +372,20 @@ only.
   by default. `OPENMASU_WORKER_CONCURRENCY` accepts 1 through 16; `1` restores
   the former globally serial behavior. An active or queued tenant is not
   submitted twice, while each tenant keeps the existing privacy, ingestion,
-  provider, metric, and fraud job order within one worker process. A slow tenant
+  provider, metric, and fraud job order across participating worker processes. A slow tenant
   therefore occupies one bounded slot instead of blocking every other tenant.
 - Work inside one tenant remains serial. SDK and MAX inbox work is sliced to 100
   durable rows per cycle by default; both limits accept 1 through 1000 and
   preserve FIFO order. A single slow row, a large backlog spanning many cycles,
   or enough slow tenants to fill every slot can still delay later work and
   requires deployment-specific capacity monitoring.
-- Scheduler leases are tenant/job scoped. Multiple worker replicas may
-  interleave different jobs for the same tenant, so the reference deployment
-  uses one worker replica. Tenant-wide distributed ordering is not claimed.
+- Scheduler leases remain tenant/job scoped. A separate PostgreSQL session lock
+  owns the whole tenant cycle without waiting on occupied tenants. A private
+  generation row fences job and scheduler commits; a new owner cannot advance
+  that row while a previous generation is committing. Losing the owner backend
+  closes borrowed clients and aborts in-flight writes. This preserves local
+  publication order, not external exactly-once delivery. Stop older worker
+  binaries before a multi-replica rollout; all replicas must use coordination.
 - Graceful shutdown stops new submissions and gives discovered and active work
   a bounded drain window. The default is 30000 milliseconds and
   `OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS` accepts 1000 through 300000; expiry is a
@@ -405,6 +409,9 @@ only.
   budget because privacy purge can hold one record-lock connection while using
   one tenant transaction. Lease completion or failure is committed on the held
   scheduler connection, so leases cannot consume the job connection budget.
+  A separate coordination pool reserves one connection per tenant slot. Total
+  worker connections per replica are four times configured concurrency (16 by
+  default, at most 64), before other services' connection budgets.
 - PostgreSQL is the only supported primary store. Additional analytical stores
   require measured evidence and a separate design.
 - Live provider credentials, alert routing, TLS termination, and production

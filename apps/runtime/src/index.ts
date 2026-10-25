@@ -5,6 +5,7 @@ export * from "./secrets.js";
 export * from "./payload-store.js";
 export * from "./job-health.js";
 export * from "./scheduler.js";
+export * from "./tenant-cycle.js";
 export * from "./cost-refresh.js";
 export * from "./metric-recalculation.js";
 export * from "./metric-correction-policy.js";

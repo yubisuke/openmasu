@@ -6,6 +6,7 @@ import {
   PostgresSchedulerStore,
   processPrivacyDeletionJobs,
   runScheduledJob,
+  runTenantCycle,
   uuidV7,
   withTenant,
   costRefreshEnabled,
@@ -65,7 +66,8 @@ const maxInboxBatchLimit = parseWorkerInboxBatchLimit(
 const poolSizes = workerPoolSizes(workerConcurrency);
 const pool = new Pool({ connectionString, max: poolSizes.jobs });
 const schedulerPool = new Pool({ connectionString, max: poolSizes.scheduler });
-await Promise.all([pool.query("SELECT 1"), schedulerPool.query("SELECT 1")]);
+const coordinationPool = new Pool({ connectionString, max: poolSizes.coordination });
+await Promise.all([pool.query("SELECT 1"), schedulerPool.query("SELECT 1"), coordinationPool.query("SELECT 1")]);
 process.stdout.write('{"event":"service_started","component":"worker"}\n');
 
 const interval = Number(process.env.OPENMASU_WORKER_POLL_MS ?? "5000");
@@ -138,7 +140,7 @@ const integrityProviderMode = (() => {
   }
   return value as "off" | IntegrityProvider | "both";
 })();
-async function sweepDashboardSessions(): Promise<void> {
+async function sweepDashboardSessions(pool: Pool): Promise<void> {
   const now = new Date();
   await withTenant(pool, maxTenantId, async (client) => {
     const deleted = await client.query(
@@ -161,14 +163,14 @@ async function sweepDashboardSessions(): Promise<void> {
     );
   });
 }
-const schedulerStore = new PostgresSchedulerStore(schedulerPool);
 const schedulePolicy = {
   intervalMs: interval,
   retryMs: interval,
   leaseMs: Math.min(86_400_000, Math.max(300_000, interval * 12)),
 };
 
-async function runWorkerJob(
+async function runWorkerScheduledJob(
+  schedulerStore: PostgresSchedulerStore,
   tenantId: string,
   job: ScheduledWorkerJob,
   task: () => Promise<void>,
@@ -200,7 +202,10 @@ async function runWorkerJob(
   }
 }
 
-async function processTenantCycle(tenantId: string): Promise<void> {
+async function processTenantCycle(tenantId: string, pool: Pool, schedulerPool: Pool): Promise<void> {
+  const store = new PostgresSchedulerStore(schedulerPool);
+  const runWorkerJob = (jobTenant: string, job: ScheduledWorkerJob, task: () => Promise<void>, policy = schedulePolicy) =>
+    runWorkerScheduledJob(store, jobTenant, job, task, policy);
   if (tenantId === maxTenantId) {
     await runWorkerJob(maxTenantId, "max_inbox", async () => {
       await processMaxInbox(pool, payloadStore, maxTenantId, maxInboxBatchLimit);
@@ -347,7 +352,7 @@ async function processTenantCycle(tenantId: string): Promise<void> {
     }
   });
   if (tenantId === maxTenantId) {
-    await runWorkerJob(maxTenantId, "dashboard_session_sweep", sweepDashboardSessions);
+    await runWorkerJob(maxTenantId, "dashboard_session_sweep", () => sweepDashboardSessions(pool));
   }
 }
 
@@ -368,7 +373,10 @@ async function discoverAndSubmitTenantWork(): Promise<void> {
       ...await listRuntimeWorkTenants(pool),
     ]);
     for (const tenantId of [...tenants].sort()) {
-      coordinator.submit(tenantId, () => processTenantCycle(tenantId));
+      coordinator.submit(tenantId, async () => {
+        await runTenantCycle({ coordinationPool, pools: [pool, schedulerPool], tenantId,
+          task: ({ pools }) => processTenantCycle(tenantId, pools[0], pools[1]) });
+      });
     }
   }
   catch {
@@ -404,7 +412,7 @@ async function stop(): Promise<void> {
         );
         process.exit(1);
       }
-      await Promise.all([pool.end(), schedulerPool.end()]);
+      await Promise.all([pool.end(), schedulerPool.end(), coordinationPool.end()]);
       process.exit(0);
     })();
   }

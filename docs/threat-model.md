@@ -264,11 +264,14 @@ validation, and immutable reviewed goldens.
   slices, but a slow row, backlog that spans many cycles, or enough slow tenants
   to fill all slots can delay later work and remains an operational capacity
   risk.
-- Tenant/job leases do not provide tenant-wide ordering across multiple worker
-  replicas. The reference deployment uses one replica; independently scaling
-  workers requires an explicit interleaving review. Shutdown drain is bounded,
-  and deadline expiry deliberately fails the process so the supervisor can
-  report and replace it.
+- PostgreSQL session ownership now covers the entire tenant cycle, separately
+  from tenant/job leases. A private generation row fences every writable job and
+  scheduler transaction at commit; owner loss closes borrowed clients. A live
+  owner is not stolen on lease expiry. Old worker binaries do not participate:
+  stop them before scaling replicas. Session-affine connections and the documented
+  four-connections-per-slot budget are required. Shutdown drain is bounded, and
+  deadline expiry deliberately fails the process. External requests already sent
+  cannot be recalled, so this is not an end-to-end exactly-once claim.
 - Synthetic platform vectors do not prove production keys, projects, delivery,
   or provider behavior.
 - Synthetic server-event vectors do not prove backend integration, sustained
