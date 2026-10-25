@@ -120,6 +120,12 @@ export async function executePrivacyRequest(
   payloadStore: PayloadStore,
   now?: Date,
 ): Promise<Any> {
+  if ("appScope" in identity && identity.appScope !== undefined
+    && (identity.appScope !== body.app_id || body.deletion_scope === "tenant")) {
+    const error = new Error("forbidden");
+    (error as Any).statusCode = 403;
+    throw error;
+  }
   if (body.requested_via === "on_device_sdk"
     && (!("actorType" in identity) || identity.actorType !== "sdk_installation")) {
     const error = new Error("on_device_path_not_implemented");

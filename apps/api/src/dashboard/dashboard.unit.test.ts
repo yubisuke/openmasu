@@ -420,6 +420,9 @@ describe("M3 zero-JavaScript dashboard", () => {
     assert.match(admin, /events\.example\.test/);
     assert.match(admin, />Disable</);
     assert.match(admin, /Register a link domain/);
+    const scopedAdmin = renderDashboard(buildDashboardView({ ...base, canOperate: true, canAdminister: true, canManageTenant: false }));
+    assert.match(scopedAdmin, /Issue successor key/);
+    assert.doesNotMatch(scopedAdmin, /Register an app|Register a link domain/);
     assert.match(admin, /Complete activation request JSON/);
     assert.equal(admin.includes("<script"), false);
     assert.equal(/\son[a-z]+\s*=/i.test(admin), false);

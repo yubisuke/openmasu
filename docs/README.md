@@ -53,7 +53,8 @@ The [development guide](development.md) links the existing dependency, HTTP,
 metric, evaluator and ingestion boundaries. Use those seams rather than another
 framework or parallel service.
 
-For deployment and recovery, see [single-host operation](operations/single-host.md),
+For deployment and recovery, see [operator access](operations/access.md),
+[single-host operation](operations/single-host.md),
 [upgrades](operations/upgrade.md), [backup/restore](operations/backup-restore.md),
 [observability](operations/observability.md),
 [monitoring rules and recovery](operations/monitoring.md), [capacity](operations/capacity.md)

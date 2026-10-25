@@ -13,6 +13,7 @@
     "npm": "11.6.2"
   },
   "scripts": {
+    "admin:keys": "node --env-file-if-exists=.env --import tsx apps/api/src/admin-key-cli.ts",
     "backup:create": "node --env-file-if-exists=.env --import tsx apps/worker/src/backup-cli.ts create",
     "backup:check": "node --env-file-if-exists=.env --import tsx apps/worker/src/backup-cli.ts check",
     "backup:boundary": "node --env-file-if-exists=.env --import tsx apps/worker/src/backup-cli.ts boundary",

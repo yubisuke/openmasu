@@ -9,6 +9,10 @@ export function createPrivacyControllers(dependencies: Pick<RequestHandlerDepend
     try {
       const body = await decoder.json() as PrivacyRequestBody;
       const appIdentity = await requireRegisteredApp(dependencies.pool, identity, String(body.app_id ?? ""));
+      if (identity.appScope !== undefined && body.deletion_scope === "tenant") {
+        json(response, 403, { error: "forbidden" });
+        return;
+      }
       const digestKey = dependencies.privacySubjectDigestKey
         ?? dependencies.server?.installationDigestKey
         ?? dependencies.sdk?.config.installationDigestKey;

@@ -1,5 +1,5 @@
-import type { AdminRole } from "./admin-auth.js";
-import type { RouteCapability } from "./routes.js";
+import type { AdminIdentity, AdminRole } from "./admin-auth.js";
+import type { RouteCapability, RouteDefinition } from "./routes.js";
 
 const roleCapabilities: Readonly<Record<AdminRole, ReadonlySet<RouteCapability>>> = {
   admin: new Set<RouteCapability>(["read", "operate", "administer"]),
@@ -9,6 +9,10 @@ const roleCapabilities: Readonly<Record<AdminRole, ReadonlySet<RouteCapability>>
 
 export function roleAllows(role: AdminRole, capability: RouteCapability | undefined): boolean {
   return capability === undefined || roleCapabilities[role].has(capability);
+}
+
+export function routeAllows(identity: Pick<AdminIdentity, "role" | "appScope">, route: Pick<RouteDefinition, "capability" | "tenantWideOnly">): boolean {
+  return roleAllows(identity.role, route.capability) && (!route.tenantWideOnly || identity.appScope === undefined);
 }
 
 export function assertRoleAllows(role: AdminRole, capability: RouteCapability): void {

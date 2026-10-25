@@ -24,7 +24,10 @@ callbacks, outbound delivery and dashboard sessions are outside this document.
 `/v1` never treats cookies as credentials. Use separate signing and read keys;
 never put either in query parameters, logs or public examples. Unknown/missing/
 cross-tenant app requests return the same 404. Reader capability never grants
-mutation rights or private replay-manifest access.
+mutation rights or private replay-manifest access. An optional single-app scope
+on operator keys also restricts lists, detail, exports and job operations; see
+[access and key rotation](../operations/access.md). Scope never grants additional
+role capabilities, and a cursor never bypasses app authorization.
 
 ## Source relationships
 

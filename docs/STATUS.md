@@ -36,6 +36,7 @@ qualification is stated. No row establishes production readiness.
 | Capability | Current source | Residual boundary |
 | --- | --- | --- |
 | Contract and evaluator | Reviewed fixtures, deterministic TypeScript/Python, canonical artifacts and independent SQL metric parity | Real-input representativeness and external adoption |
+| Operator access | Optional single-app restriction on existing roles; shared API/session/list/export/job gates; atomic audited key issuance/retirement with immediate session revocation | Backend reader credentials remain trusted tenant-scoped SQL access, not app-scoped user logins; no SSO or general IAM |
 | Receipt and import | Durable SDK/backend admission; explicit raw-event, cost and revenue mappings; atomic records, schema rejection, idempotency and bounded bulk import | Real exports/credentials are not repository evidence; mappings remain explicit |
 | Attribution | First-party Install Referrer, verified platform evidence and imported provider judgments remain separate; recorded exclusions and reasons | No probabilistic identity, blanket partner coverage or external-equivalence claim |
 | Apple aggregate measurement | Signed synthetic receivers, separate bounded observations, registered event/revenue meaning profiles and window-local SDK state | Postbacks are not unique installs; selected-schema decoding is unverified, not actual revenue or a verified postback binding; live delivery is unverified |

@@ -11,6 +11,7 @@ export type DashboardSession = {
   readonly tenantId: string;
   readonly adminKeyId: string;
   readonly role: AdminRole;
+  readonly appScope?: string;
   readonly token: string;
   readonly expiresAt: string;
 };
@@ -101,8 +102,9 @@ export async function verifyDashboardSession(
     admin_key_id: string;
     expires_at: Date | string;
     role: AdminRole;
+    app_scope: string | null;
   }>(
-    `SELECT session.session_id, session.admin_key_id, session.expires_at, key.role
+    `SELECT session.session_id, session.admin_key_id, session.expires_at, key.role, key.app_scope
        FROM ephemeral.dashboard_sessions AS session
        JOIN control.admin_key_roles_current AS key
          ON key.tenant_id=session.tenant_id AND key.key_id=session.admin_key_id
@@ -117,6 +119,7 @@ export async function verifyDashboardSession(
     tenantId,
     adminKeyId: row.admin_key_id,
     role: row.role,
+    ...(typeof row.app_scope === "string" ? { appScope: row.app_scope } : {}),
     token,
     expiresAt: new Date(row.expires_at).toISOString(),
   };
@@ -150,7 +153,7 @@ export type DashboardAuditInput = {
     readonly appId?: string;
     readonly actorRef: string;
     readonly action: string;
-    readonly targetScope: "tenant" | "app" | "session" | "tracking_link" | "sdk_key" | "rule_bundle" | "server_key" | "webhook_destination" | "bulk_export_destination" | "metric_schedule";
+    readonly targetScope: "tenant" | "app" | "session" | "tracking_link" | "sdk_key" | "rule_bundle" | "server_key" | "webhook_destination" | "bulk_export_destination" | "metric_schedule" | "admin_key";
     readonly targetRef: string;
     readonly outcome: "succeeded" | "failed";
     readonly reasonCode?: string;

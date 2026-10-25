@@ -1,6 +1,6 @@
 import type { RequestListener } from "node:http";
 import { AppNotFoundError, requireRegisteredApp } from "./apps-admin.js";
-import { roleAllows } from "./authorization.js";
+import { routeAllows } from "./authorization.js";
 import { ComparisonExportError } from "./comparison-export.js";
 import { createHandlerRegistry } from "./controllers/registry.js";
 import type { DashboardTenantContext, HttpRequestContext } from "./controllers/context.js";
@@ -52,7 +52,7 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
           json(response, 401, { error: "unauthorized" });
           return;
         }
-        if (!roleAllows(identity.role, route.capability)) {
+        if (!routeAllows(identity, route)) {
           json(response, 403, { error: "forbidden" });
           return;
         }
@@ -64,13 +64,14 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
         dashboardHtml(response, 401, loginPage("Authentication required."));
         return;
       }
-      if (!roleAllows(session.role, route.capability)) {
+      if (!routeAllows(session, route)) {
         dashboardHtml(response, 403, renderForbidden());
         return;
       }
       const dashboardContext: DashboardTenantContext = {
         ...context, session,
-        sessionIdentity: { keyId: session.adminKeyId, tenantId: session.tenantId, role: session.role },
+        sessionIdentity: { keyId: session.adminKeyId, tenantId: session.tenantId, role: session.role,
+          ...(session.appScope !== undefined ? { appScope: session.appScope } : {}) },
       };
       if (controller.boundary === "dashboard_tenant") {
         await controller.handle(dashboardContext);
