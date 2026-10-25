@@ -59,7 +59,7 @@ Detailed limits belong to the [product guides](README.md), [product scope](produ
 ## Current development focus
 
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-26 of 35 child implementations complete; 9 optional extensions remain. The earlier
+27 of 35 child implementations complete; 8 optional extensions remain. The earlier
 integration plan is complete, not a second backlog. The dependency, controller,
 presentation, evaluator and ingestion foundations are also implemented.
 
@@ -72,6 +72,13 @@ and paying-installation counts, payer rate and purchase-net ARPPU. They preserve
 historical payers after full refund, exclude advertising revenue and leave
 zero-payer money undefined. Store projections and privacy replay are synthetic
 evidence, not live store qualification; this addition is also after rc.2.
+
+[Scheduled aggregate comparisons](recurring-comparisons.md) persist explicit
+definition revisions and aggregate-only operands. The existing worker produces
+fixed-cutoff, content-addressed results; missing/unknown/incomparable are not
+threshold breaches. Inputs remain operator deposited, with explicit expiry,
+deletion and conservative privacy suppression. No provider authentication,
+notification delivery or new service is introduced. This is after rc.2.
 
 The [minimal monitoring rules](operations/monitoring.md) are implemented with
 synthetic transition tests; receiver setup and live delivery remain external.

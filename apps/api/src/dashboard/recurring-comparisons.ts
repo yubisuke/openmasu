@@ -1,0 +1,15 @@
+import { escapeHtml as e } from "./html.js";
+import type { readComparisons } from "@openmasu/runtime/recurring-comparisons";
+
+export function renderRecurringComparisons(appId: string, saved: Awaited<ReturnType<typeof readComparisons>>, token: string, canOperate: boolean, error?: string): string {
+  const base = `/dashboard/apps/${encodeURIComponent(appId)}`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Scheduled comparisons · OpenMasu</title><link rel="stylesheet" href="/dashboard/app.css"></head><body><main>
+<h1>Scheduled aggregate comparisons</h1><p><a href="${base}">Reports</a> · <a href="${base}/comparison">One-off comparison</a></p>
+<p>The worker compares deposited aggregate snapshots at a fixed cutoff per UTC date. External inputs are operator supplied; no provider is contacted and no notification is sent. Missing, unknown and incomparable are not threshold breaches.</p>
+${error ? `<p role="alert">${e(error)}</p>` : ""}
+<h2>Definition revisions</h2><table><thead><tr><th scope="col">Name / revision</th><th scope="col">State</th><th scope="col">Definition digest</th><th scope="col">Retention</th></tr></thead><tbody>${saved.plans.map(plan => `<tr><td>${e(plan.name)}<br>${e(plan.comparison_id)}</td><td>${e(plan.privacy_state === "suppressed" ? "privacy suppressed" : plan.active ? "active" : "replaced / inactive")}</td><td>${e(plan.definition_digest)}</td><td>${e(plan.definition.retention_days)} days</td></tr>`).join("")}</tbody></table>
+<h2>Recent results</h2><p>At most 200 recent result summaries. Downloaded JSON preserves the stored comparison; the page does not recalculate it.</p><table><thead><tr><th scope="col">UTC target date</th><th scope="col">Revision</th><th scope="col">Result</th></tr></thead><tbody>${saved.runs.map(run => `<tr><td>${e(run.target_date)}</td><td>${e(run.comparison_id)}</td><td><a href="${base}/comparison-runs/${encodeURIComponent(run.run_id)}.json">${e(run.state)}</a></td></tr>`).join("")}</tbody></table>
+${canOperate ? `<h2>Register, deposit or delete</h2><p>Use the command shapes in docs/recurring-comparisons.md. Registering from two initial snapshots captures the expected definition digests. A replacement creates a separate revision. Delete removes stored aggregate inputs and results, retaining only revision metadata.</p><form method="post" action="${base}/comparisons"><input type="hidden" name="csrf_token" value="${e(token)}"><label>Command JSON<textarea name="command" rows="12" required></textarea></label><button type="submit">Apply command</button></form>` : "<p>Only operators and administrators can store or delete comparisons.</p>"}
+<p>Inputs: at most 10,000 aggregate rows / 4 MiB per snapshot. Twenty active definitions per tenant, a 366-date horizon, explicit 1–90 day retention and a 64 MiB aggregate-storage budget per app. Raw CSV files, row-level events and identifying grouping dimensions are not stored.</p>
+</main></body></html>`;
+}

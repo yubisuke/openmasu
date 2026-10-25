@@ -1,5 +1,9 @@
 # Offline cohort comparison
 
+For optional versioned aggregate storage and fixed-cutoff worker runs, see
+[Scheduled aggregate comparisons](recurring-comparisons.md). The ordinary offline
+and web comparison below remain stateless and reader-only.
+
 Run `npm run compare:cohorts -- left.json right.json` after `npm ci`.
 The command reads two aggregate snapshots without database or network access.
 Inputs are limited to 4 MiB and 10,000 rows each. Keep private data outside this

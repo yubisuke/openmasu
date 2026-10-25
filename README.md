@@ -57,6 +57,10 @@ identity remains `0.4.0` with schema URNs ending in `:v0.4`. See
 [current status](docs/STATUS.md) and [post-release scope](docs/releases/next.md).
 Use the matching tag and its documentation when evaluating a published release.
 
+Optional [scheduled aggregate comparisons](docs/recurring-comparisons.md) retain
+definition revisions and fixed-cutoff results in private operator storage, using
+the existing worker. They do not fetch providers or send notifications.
+
 ## Start with synthetic data
 
 No provider account, real credential, device or production data is needed.

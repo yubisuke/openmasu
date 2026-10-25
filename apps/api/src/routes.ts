@@ -2,6 +2,10 @@ export type RouteAuth = "public" | "admin_bearer" | "sdk_hmac" | "server_hmac" |
 export type RouteCapability = "read" | "operate" | "administer";
 
 export type RouteHandler =
+  | "admin_comparison_read"
+  | "admin_comparison_mutate"
+  | "dashboard_comparison_runs"
+  | "dashboard_comparison_runs_mutate"
   | "health"
   | "operational_metrics"
   | "max_ingest"
@@ -132,6 +136,10 @@ function exactPathPattern(path: string): RegExp {
 }
 
 export const routes: readonly RouteDefinition[] = [
+  { handler: "admin_comparison_read", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/(?:comparisons|comparison-runs\/[^/]+)$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "admin_comparison_mutate", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/comparisons$/, auth: "admin_bearer", mutates: true, capability: "operate" },
+  { handler: "dashboard_comparison_runs", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/(?:comparisons|comparison-runs\/[^/]+\.json)$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_comparison_runs_mutate", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/comparisons$/, auth: "dashboard_session", mutates: true, capability: "operate" },
   { handler: "health", method: "GET", pattern: /^\/health$/, auth: "public", mutates: false },
   { handler: "operational_metrics", method: "GET", pattern: /^\/metrics$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "max_ingest", method: "GET", pattern: /^\/v1\/ingest\/max\/[^/]+$/, auth: "public", mutates: true },

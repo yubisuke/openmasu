@@ -33,6 +33,7 @@ import {
   processCommerceReadbacks,
 } from "./commerce-readback-worker.js";
 import { processMetricSchedules } from "./metric-schedule-worker.js";
+import { processRecurringComparisons } from "@openmasu/runtime/recurring-comparisons";
 import { processCostRefreshes } from "./cost-refresh-worker.js";
 import { processMetricRecalculations } from "./metric-recalculation-worker.js";
 import { planAutomaticMetricCorrections } from "./automatic-metric-corrections.js";
@@ -334,6 +335,10 @@ async function processTenantCycle(tenantId: string): Promise<void> {
     retryMs: Math.min(86_400_000, Math.max(60_000, interval)),
     leaseMs: 86_400_000,
   });
+  const comparisons = await processRecurringComparisons(pool, tenantId);
+  if (comparisons.completed || comparisons.purged) {
+    process.stdout.write(`${JSON.stringify({ event: "comparison_cycle", component: "worker", ...comparisons })}\n`);
+  }
   await runWorkerJob(tenantId, "fraud_maintenance", async () => {
     if (fraudEnabled) {
       const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);

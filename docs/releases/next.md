@@ -23,13 +23,17 @@ It also adds [verified payer metrics](../payer-metrics.md): D7 transactions,
 paying installations, payer rate and purchase-net ARPPU. Full refunds retain
 historical payers; zero-payer ARPPU is undefined. No SDK release is implied.
 
+[Scheduled comparisons](../recurring-comparisons.md) add private aggregate-only
+storage, immutable revisions, fixed-cutoff worker results and explicit retention,
+deletion and privacy suppression. Inputs are operator deposited, not live fetched.
+
 Integrated candidate acceptance
 ([#252](https://github.com/yubisuke/openmasu/issues/252)) is complete within its
 declared synthetic scope. The publication receipt records the downloaded Android
 SDK/backend journey on JVM/Robolectric API 24 separately from the frozen release.
 It does not establish physical-device or all-platform onboarding acceptance.
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-26 of 35 child implementations complete, with 9 optional extensions remaining.
+27 of 35 child implementations complete, with 8 optional extensions remaining.
 Select further work from the [roadmap](../roadmap.md#next-product-sequence) and
 [acceptance crosswalk](../project-plan.md#next-product-slices) according to the
 intended usage.

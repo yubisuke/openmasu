@@ -39,7 +39,8 @@ These documents describe current source unless they explicitly name a release.
   [Apple postback observations](apple-postback-observations.md),
   [Apple conversion meanings](apple-conversion-meaning.md),
   [saved calculation evidence](metric-explanations.md),
-  [cohort comparison](cohort-comparison.md).
+  [cohort comparison](cohort-comparison.md),
+  [scheduled aggregate comparisons](recurring-comparisons.md).
 - **Send selected events:** [operator webhooks](operator-event-webhooks.md),
   [bulk exports](operator-bulk-exports.md).
 - **Use APIs and SDKs:** [HTTP API](api/README.md),

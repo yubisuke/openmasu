@@ -43,6 +43,9 @@ events and active installations without acquisition joins or period-unique sums.
 Separate [verified payer metrics](payer-metrics.md) expose transaction and
 paying-installation counts, payer rate and purchase-net ARPPU with explicit
 store-projection authority, refund and undefined-denominator behavior.
+[Scheduled comparisons](recurring-comparisons.md) retain explicit definition
+revisions and aggregate snapshots for fixed-cutoff worker runs, with bounded
+storage, expiry, deletion and conservative privacy suppression.
 Matched backup/freshness commands and isolated, privacy-safe restoration are also
 implemented ([#250](https://github.com/yubisuke/openmasu/issues/250)); a dedicated
 Runtime gate owns synthetic evidence. These are not future implementation tasks. Backup custody,
@@ -53,7 +56,7 @@ guides document their configuration. Published-release evidence remains separate
 
 ## Next product slices
 
-Updated: 2026-10-25. Twenty-six of 35 child implementations are complete; the 9 remaining
+Updated: 2026-10-25. Twenty-seven of 35 child implementations are complete; the 8 remaining
 optional issues below map directly to the [roadmap sequence](roadmap.md#next-product-sequence).
 Numbers are tracking links, not required background knowledge.
 
@@ -85,7 +88,6 @@ for the completed integrated candidate.
 | [#237](https://github.com/yubisuke/openmasu/issues/237): Detailed target discovery | Bounded ad-group/creative discovery after detailed cost support |
 | [#238](https://github.com/yubisuke/openmasu/issues/238): Additional Unity ILR | Thin callback adapter into existing advertising revenue; unknown is not zero |
 | [#240](https://github.com/yubisuke/openmasu/issues/240): Engagement policy and purchase outcomes | Independent windows/inactivity and purchase-net definitions, not acquisition rewriting |
-| [#246](https://github.com/yubisuke/openmasu/issues/246): Recurring comparison | Versioned configurations/snapshots after saved analysis and broader comparison semantics |
 | [#247](https://github.com/yubisuke/openmasu/issues/247): App-scoped access | Explicit app restrictions without weakening tenant isolation |
 | [#249](https://github.com/yubisuke/openmasu/issues/249): Retention expiry | Explicit-policy preview and bounded expiry with privacy-safe replay |
 | [#251](https://github.com/yubisuke/openmasu/issues/251): Multiple workers | Tenant-wide ordering and stop/recovery evidence before multi-replica claims |
