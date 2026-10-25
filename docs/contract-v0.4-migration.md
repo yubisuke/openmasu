@@ -19,7 +19,7 @@ an opaque record ID. Wire/package identity remains `0.4.0`, URNs remain `:v0.4`,
 and metric definitions remain independently versioned.
 
 New fixture `74-selected-cost-coverage` reuses fixture63's unchanged synthetic
-events and ten non-cost output families. Its independently constructed three
+events and eleven unchanged output families. Its independently constructed three
 costs are creative A = 10 at Aug12, group A = 15 at Aug13 (both matching-only),
 and a full campaign parent = 30 at Aug14. Hand arithmetic: A ad revenue 20 and
 purchase net 6; B ad revenue 40 and purchase net 12. Matching A creative has ad

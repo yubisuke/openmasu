@@ -630,6 +630,12 @@ describe("selected acquisition detail SQL parity", { concurrency: false }, () =>
   let seed: Pool;
   before(() => { app = createAppPool(); seed = createSeedPool(); });
   after(async () => { await app?.end(); await seed?.end(); });
+  it("selected_child_coverage_SQL_matches_all_35_independent_runs_without_parent_or_sibling_allocation", async () => {
+    const input=JSON.parse(readFileSync("fixtures/v0.4/74-selected-cost-coverage/input.json","utf8"));
+    await ingestFixture("selected-cost-coverage-74",input,app,seed);
+    const runs=await computeSqlMetricRuns(app,input,true);
+    assert.equal(jcs(runs),jcs(JSON.parse(readFileSync("fixtures/v0.4/74-selected-cost-coverage/expected_metric_runs.json","utf8"))));
+  });
   const baseline = JSON.parse(readFileSync("fixtures/v0.4/63-selected-acquisition-detail/input.json", "utf8"));
   for (const entry of syntheticAcquisitionDetailCases(baseline)) it(entry.name, async () => {
     await ingestFixture(`detail-${entry.name}`, entry.input, app, seed);
