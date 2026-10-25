@@ -100,6 +100,34 @@ describe("verified payer SQL parity and saved reporting", { concurrency: false }
       if (run.undefined_reason) assert.match(metricValueLabel(row), new RegExp(run.undefined_reason));
     }
   });
+  it("payer_late_purchase_then_refund_replays_saved_definitions_without_recounting_refunds_as_purchases", async () => {
+    const input = JSON.parse(readFileSync("fixtures/v0.4/73-verified-payers/input.json", "utf8"));
+    await ingestFixture("payer73-late", { ...input, metric_evaluations: [] }, app, seed);
+    const prior = await computeSqlMetricRuns(app, { ...input,
+      metric_evaluations: input.metric_evaluations.filter((evaluation: Any) => evaluation.metric_run_id_prefix === "payer73-cutoff") }, true);
+    assert.equal(prior.length, 4);
+    const identity = { tenantId: "tenant-a", appId: "app-a", keyId: "synthetic-payer", role: "admin" as const };
+    const body = { trigger_kind: "late_events", source_record_ids: ["purchase-55-d0"],
+      date_from: "2026-08-01", date_to: "2026-08-01", watermark: "2026-08-02T00:00:00.000Z" };
+    assert.equal((await requestMetricRecalculation(app, identity, body)).selected_runs, 4);
+    const purchase = await processMetricRecalculations(app, "tenant-a", 10);
+    assert.equal(purchase.completed, 4); assert.equal(purchase.failed, 0);
+    const query = { tenantId: "tenant-a", appId: "app-a", supersession: "latest" as const, limit: 200 };
+    const first = await metricReport(reader, identity, query);
+    assert.equal(first.data.find(row => row.metric_name === "cohort_arppu_d7_usd")?.value_unscaled, "10000000");
+    const refund = { ...body, source_record_ids: ["refund-55-d0"], watermark: "2026-08-10T00:00:00.000Z" };
+    assert.equal((await requestMetricRecalculation(app, identity, refund)).selected_runs, 1);
+    const corrected = await processMetricRecalculations(app, "tenant-a", 10);
+    assert.equal(corrected.completed, 1); assert.equal(corrected.failed, 0);
+    const latest = await metricReport(reader, identity, query);
+    assert.deepEqual(PAYER_METRIC_DEFINITIONS.map(definition => latest.data.find(row => row.metric_name === definition.metric_name)?.value_unscaled),
+      ["1", "1", "1000000", "6000000"]);
+    for (const old of prior) {
+      const saved = await withTenant(app, "tenant-a", client => client.query("SELECT artifact FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2 AND metric_run_id=$3", ["tenant-a", "app-a", old.metric_run_id]));
+      assert.equal(jcs(saved.rows[0].artifact), jcs(old));
+    }
+    assert.equal((await processMetricRecalculations(app, "tenant-a", 10)).completed, 0);
+  });
 });
 
 describe("calendar activity SQL parity and saved reporting", { concurrency: false }, () => {

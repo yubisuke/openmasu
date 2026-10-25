@@ -74,6 +74,10 @@ paying installations and money per paying installation explicitly. Undefined
 money stays absent (empty CSV cell plus reason). Compare compatible saved
 rows; do not average payer rates or ARPPU across cohorts. Current-privacy
 deletion and saved-manifest replay use the existing correction path.
+The bounded late-input selector connects a later qualifying purchase to all
+four saved definitions. Refund/cancellation inputs select ARPPU, not transaction
+or payer counts. Replacements retain the original definition and leave history
+immutable; unverified source claims cannot trigger payer publication.
 
 ## Evidence and limits
 

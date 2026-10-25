@@ -86,13 +86,15 @@ async function purchaseNetRevenueValue(
            ON raw.record_id=logical.record_id
           AND raw.tenant_id=logical.tenant_id
           AND raw.app_id=logical.app_id
+         JOIN ledger.raw_records AS purchase_policy ON purchase_policy.tenant_id=raw.tenant_id
+           AND purchase_policy.app_id=raw.app_id AND purchase_policy.record_id=raw.record_id
          LEFT JOIN rates AS rate ON rate.currency=purchase.currency
            AND (NOT $19::boolean OR (rate.effective_date=timezone('UTC',purchase.occurred_at_ts)::date
              AND control.canonical_timestamp_value(rate.as_of) <= control.canonical_timestamp_value($3)))
          WHERE purchase.tenant_id=$1 AND purchase.app_id=$2
            AND purchase.financial_status='settled'
            AND (NOT $20::boolean OR (raw.producer LIKE 'adapter:%'
-             AND raw.policy_digest IN ('google-play-product-verification-v1','verified-commerce-v1')))
+             AND purchase_policy.policy_digest IN ('google-play-product-verification-v1','verified-commerce-v1')))
            AND raw.received_at <= $3
            AND ($12='before' OR raw.payload_lifecycle_status='available')
            AND purchase.occurred_at_ts >= cohort.installed_at
@@ -108,6 +110,10 @@ async function purchaseNetRevenueValue(
                     ON reversal_raw.tenant_id=reversal.tenant_id AND reversal_raw.app_id=reversal.app_id
                    AND reversal_raw.record_id=reversal_logical.record_id
                   WHERE reversal.tenant_id=refund.tenant_id AND reversal.app_id=refund.app_id
+                    AND EXISTS (SELECT 1 FROM ledger.raw_records AS reversal_policy
+                      WHERE reversal_policy.tenant_id=reversal_raw.tenant_id AND reversal_policy.app_id=reversal_raw.app_id
+                        AND reversal_policy.record_id=reversal_raw.record_id AND (NOT $20::boolean
+                          OR reversal_policy.policy_digest IN ('google-play-product-verification-v1','verified-commerce-v1')))
                     AND reversal.original_transaction_id=refund.original_transaction_id
                     AND reversal.financial_status='reversed'
                     AND reversal.artifact->>'reverses_refund_record_id'=refund_logical.record_id
@@ -118,8 +124,7 @@ async function purchaseNetRevenueValue(
                     AND reversal.occurred_at_ts >= refund.occurred_at_ts
                     AND reversal_raw.received_at >= refund_raw.received_at AND reversal_raw.received_at <= $3
                     AND ($12='before' OR reversal_raw.payload_lifecycle_status='available')
-                    AND (NOT $20::boolean OR (reversal_raw.producer LIKE 'adapter:%'
-                      AND reversal_raw.policy_digest IN ('google-play-product-verification-v1','verified-commerce-v1')))
+                    AND (NOT $20::boolean OR reversal_raw.producer LIKE 'adapter:%')
                 )) AS reversed, purchase.installation_id
          FROM ledger.refund_facts AS refund
          JOIN ledger.logical_events AS refund_logical
@@ -143,6 +148,10 @@ async function purchaseNetRevenueValue(
           AND purchase_raw.tenant_id=target_logical.tenant_id
           AND purchase_raw.app_id=target_logical.app_id
          JOIN cohort ON cohort.installation_id=purchase.installation_id
+         JOIN ledger.raw_records AS purchase_policy ON purchase_policy.tenant_id=purchase_raw.tenant_id
+           AND purchase_policy.app_id=purchase_raw.app_id AND purchase_policy.record_id=purchase_raw.record_id
+         JOIN ledger.raw_records AS refund_policy ON refund_policy.tenant_id=refund_raw.tenant_id
+           AND refund_policy.app_id=refund_raw.app_id AND refund_policy.record_id=refund_raw.record_id
          LEFT JOIN rates AS rate ON rate.currency=refund.currency
            AND (NOT $19::boolean OR (rate.effective_date=timezone('UTC',refund.occurred_at_ts)::date
              AND control.canonical_timestamp_value(rate.as_of) <= control.canonical_timestamp_value($3)))
@@ -150,8 +159,8 @@ async function purchaseNetRevenueValue(
            AND refund.financial_status='settled'
            AND purchase.financial_status='settled'
            AND (NOT $20::boolean OR (
-             (refund_raw.producer LIKE 'adapter:%' AND refund_raw.policy_digest IN ('google-play-product-verification-v1','verified-commerce-v1'))
-             AND (purchase_raw.producer LIKE 'adapter:%' AND purchase_raw.policy_digest IN ('google-play-product-verification-v1','verified-commerce-v1'))
+             (refund_raw.producer LIKE 'adapter:%' AND refund_policy.policy_digest IN ('google-play-product-verification-v1','verified-commerce-v1'))
+             AND (purchase_raw.producer LIKE 'adapter:%' AND purchase_policy.policy_digest IN ('google-play-product-verification-v1','verified-commerce-v1'))
              AND purchase.occurred_at_ts >= cohort.installed_at
              AND purchase.occurred_at_ts < cohort.installed_at + (($9 + 1) * interval '1 day')))
            AND refund.installation_id=purchase.installation_id
