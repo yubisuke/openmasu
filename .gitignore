@@ -13,6 +13,7 @@ sdk/unity/**/Library/
 sdk/unity/**/Temp/
 sdk/unity/**/Logs/
 sdk/unity/**/obj/
+sdk/unity/tests/bin/
 
 # Real-data guardrails (this repository is public; fixtures are synthetic only).
 # Tabular exports and any lab/input directories must never be committed.

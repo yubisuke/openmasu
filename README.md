@@ -35,6 +35,11 @@ support. [Project status](docs/STATUS.md) lists their limits; the
 
 ## Source and release
 
+The source and SDK are configured for candidate `v0.3.0-rc.3`, including the
+completed 35-item functional plan. This candidate is published only if the matching annotated tag
+and GitHub Release identify the same green commit and verified assets.
+See the [candidate notes](docs/releases/v0.3.0-rc.3.md) for its scope and limits.
+
 `v0.3.0-rc.2` is the current published source and SDK release, marked as a
 prerelease. Download its SDK assets from the
 [GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.2).
@@ -76,19 +81,18 @@ Docker with Compose is needed only for the runtime path.
 
 ```bash
 npm ci
-npm run --silent demo:shadow
+npm run --silent demo:shadow -- --comparison-dir=build/first-comparison
 ```
 
-This checks reviewed fixture results and shows difference reasons without a
-database. To generate synthetic CSV inputs and equal, different, incomparable
-and unknown HTML reports in a new output directory:
+Open `build/first-comparison/different.html`: synthetic selected cost doubles,
+so the same D7 ROAS changes from 1.5 × to 0.75 ×. The directory also contains
+equal, incompatible-window and unknown-meaning reports, plus their CSV inputs,
+mappings and JSON snapshots. [Getting started](docs/getting-started.md#offline-shadow-comparison-without-docker)
+explains each result. No database, JSON editing or second setup command is needed.
 
-```bash
-npm run --silent demo:shadow -- --comparison-dir=build/synthetic-comparison
-```
-
-The command refuses to overwrite an existing directory. This is reference
-evaluator evidence, not proof of runtime persistence or provider agreement.
+Use a new directory when repeating the command; it never overwrites a saved
+report. This is reference-evaluator evidence, not runtime persistence or provider
+agreement. Run `npm run --silent demo:shadow` alone for console-only output.
 
 ### Disposable runtime walkthrough
 
@@ -159,7 +163,7 @@ Optional [conversion meanings](docs/apple-conversion-meaning.md) share a registe
 definition with the SDK; decoded ranges remain unverified, not measured revenue.
 
 The configured SDK bundle path is
-`build/sdk-release/openmasu-sdk-0.3.0-rc.2`. An untagged bundle is only a local candidate artifact.
+`build/sdk-release/openmasu-sdk-0.3.0-rc.3`. An untagged bundle is only a local candidate artifact.
 Publishing requires exact-tag platform/build evidence; follow the
 [release runbook](docs/operations/release.md). Unity 2022.3 and physical-device
 acceptance remain separate from the synthetic Unity 6 Android export gate.

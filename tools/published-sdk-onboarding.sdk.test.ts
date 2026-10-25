@@ -28,6 +28,9 @@ it("published_native_sdk_reaches_durable_ledger_daily_metric_and_saved_csv", { t
   }
   const bundle = resolve(process.env.OPENMASU_PUBLISHED_SDK_BUNDLE ?? "missing-published-sdk-bundle");
   const manifest = JSON.parse(readFileSync(join(bundle, "release-manifest.json"), "utf8")) as { version: string; source_revision: string };
+  if (process.env.OPENMASU_PUBLISHED_SDK_VERSION) {
+    assert.equal(manifest.version, process.env.OPENMASU_PUBLISHED_SDK_VERSION, "downloaded SDK must match the selected release");
+  }
   const suffix = randomBytes(6).toString("hex"), tenantId = `tenant-sdk-consumer-${suffix}`, appId = `app-sdk-consumer-${suffix}`;
   const adminKey = `synthetic-admin-${randomBytes(32).toString("base64url")}`;
   const root = mkdtempSync(join(tmpdir(), "openmasu-published-sdk-"));

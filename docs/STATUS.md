@@ -1,16 +1,20 @@
 # Project Status
 
-Updated: 2026-10-25. This page describes the current `main` source tree.
+Updated: 2026-10-26. This page describes the current `main` source tree.
 Implementation and synthetic verification are not live operational qualification.
 
 ## Release snapshot
 
 | Line | Identity and evidence |
 | --- | --- |
+| Configured candidate | Source and SDK `v0.3.0-rc.3`; not published until exact-tag CI and downloadable assets are verified |
 | Published prerelease | `v0.3.0-rc.2` at `d775cc9`; eight verified SDK assets and exact-commit full CI |
 | Synthetic SDK onboarding | Published rc.2 Android SDK/backend journey passed on JVM/Robolectric API 24; later harness evidence is recorded separately |
 | Latest stable source release | `v0.2.0`; later features belong to newer source, not this tag |
 | Current source | Contract patch ledger through v0.4.28; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 75 fixtures, 975 golden artifacts |
+
+The source and SDK are configured for candidate `v0.3.0-rc.3`; see its
+[scope](releases/v0.3.0-rc.3.md) and [evidence requirements](validation/v0.3.0-rc.3-synthetic-evidence.md).
 
 `v0.3.0-rc.2` is the current published source and SDK release, marked as a
 prerelease. Its [release page](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.2)

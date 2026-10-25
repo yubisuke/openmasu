@@ -7,9 +7,13 @@ Supported frozen sources use PostgreSQL 17:
 | `v0.2.0` | `68b8c483a30c3804a216a655d964788d0204185f` | 48 | `d4c18ba078913cfefa420ea6adfcf3d7386994a614f3b197e6222276bc4905c6` |
 | `v0.3.0-rc.1` | `90a0f5fe56b75e8fdefd2f759e33b3ae538b79c2` | 55 | `dbff0d98396a48dfc9c25d66bcbaab373c344cd2bee43dea561be024d4842276` |
 
-The next supported target is the configured `v0.3.0-rc.2` source candidate,
+The next supported target is the configured `v0.3.0-rc.3` source candidate,
 **only after its annotated tag and exact-commit full CI evidence are published**.
 This path is a stopped-writer upgrade, not zero-downtime deployment.
+
+The published rc.2 is not yet a supported source in this preflight. It fails with
+`upgrade_source_unsupported`; do not relabel an rc.2 backup as rc.1 or bypass the
+check. A new disposable synthetic instance can evaluate rc.3 independently.
 
 ## One ordered procedure
 
@@ -52,11 +56,11 @@ This path is a stopped-writer upgrade, not zero-downtime deployment.
    Run the read-only preflight before any role/DDL change:
 
    ```bash
-   npm run db:upgrade:preflight -- --from=v0.2.0 --to=v0.3.0-rc.2 --backup=/private/upgrade.json --database-backup=/private/openmasu.dump --payload-backup=/private/payloads.tar
+   npm run db:upgrade:preflight -- --from=v0.2.0 --to=v0.3.0-rc.3 --backup=/private/upgrade.json --database-backup=/private/openmasu.dump --payload-backup=/private/payloads.tar
    ```
 
    Set `--from=v0.3.0-rc.1` for an rc.1 backup with the matching declaration.
-   An untagged rc.2 checkout deliberately refuses this deployment preflight.
+   An untagged rc.3 checkout deliberately refuses this deployment preflight.
    Exit zero and `status: ready` are required. Output is aggregate-only and includes
    the target and applied/pending counts, not backup contents, key labels or paths.
    Unknown versions, dirty/wrong target, major mismatch, gaps, altered SQL, extra

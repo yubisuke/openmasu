@@ -5,6 +5,10 @@ provider exports. It is the supported first experience for contributors.
 
 Choose one path; provider settings are not a prerequisite:
 
+For the shortest first experience, choose **offline comparison** below: install
+dependencies, generate the reports with one command, and open `different.html`.
+Do not start Docker or configure an SDK just to understand a difference.
+
 | Your goal | Follow this path | What it establishes |
 | --- | --- | --- |
 | Understand values and comparison without Docker | [Offline comparison](#offline-shadow-comparison-without-docker) | Reference-evaluator results and explicit comparison states, not stored runtime evidence |
@@ -47,11 +51,16 @@ python -m pip install --require-hashes --requirement requirements-contract.txt
 
 ## Offline Shadow comparison without Docker
 
-To see the core difference-explanation story before starting a database, run:
+After `npm ci`, generate the full value-to-comparison walkthrough:
 
 ```bash
-npm run --silent demo:shadow
+npm run --silent demo:shadow -- --comparison-dir=build/first-comparison
 ```
+
+Open `build/first-comparison/different.html` in your browser. The same directory
+holds the CSV inputs, mapping definitions, snapshots and all four reports below.
+For console-only output, omit `--comparison-dir`. Later examples use a separate
+directory so they cannot overwrite this first saved result.
 
 The command evaluates existing reviewed fixtures and checks their selected
 artifacts against the committed goldens. It reports `window_mismatch` and

@@ -60,6 +60,11 @@ API 24, with its later harness revision recorded separately in the receipt.
 
 ## Next product sequence
 
+The configured rc.3 candidate packages the completed source plan. Its next steps
+are exact-commit release verification and distribution, then a first-use pass
+through the existing synthetic walkthrough. New work must address observed
+friction, not create another speculative feature or testing backlog.
+
 [Daily recorded activity](calendar-activity.md) is implemented in current source:
 UTC session starts, all custom events and distinct installations remain separate
 from acquisition cohorts, with no sum presented as a period-unique audience.

@@ -8,6 +8,7 @@ describe later `main` behavior.
 
 | Tag | Record | Evidence |
 | --- | --- | --- |
+| `v0.3.0-rc.3` (candidate) | [Release notes](v0.3.0-rc.3.md) | [Evidence requirements](../validation/v0.3.0-rc.3-synthetic-evidence.md); not yet a publication receipt |
 | `v0.3.0-rc.2` | [Release notes](v0.3.0-rc.2.md) | [Frozen integration record](../validation/v0.3.0-rc.2-synthetic-evidence.md) and [public receipt](../validation/v0.3.0-rc.2-publication.md) |
 | `v0.3.0-rc.1` | [Release notes](v0.3.0-rc.1.md) | [Frozen requirements](../validation/v0.3.0-rc.1-synthetic-evidence.md) and [public receipt](../validation/v0.3.0-rc.1-publication.md) |
 | `v0.2.0` | [Release notes](v0.2.0.md) | [Synthetic evidence](../validation/v0.2.0-synthetic-evidence.md) |

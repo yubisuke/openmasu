@@ -1,6 +1,6 @@
 {
   "format": "openmasu-single-host-v1",
-  "release_tag": "v0.3.0-rc.2",
+  "release_tag": "v0.3.0-rc.3",
   "compose_project": "openmasu-service",
   "api_origin": "https://metrics.example.invalid",
   "redirector_origin": "https://links.example.invalid",
