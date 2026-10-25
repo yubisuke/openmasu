@@ -172,7 +172,11 @@ describe("cross-process tenant cycle coordination", { concurrency: false, timeou
     assert.ok(lines.some(line => line.record_kind === "privacy_deletion"));
     assert.equal(lines.some(line => line.event_name === "ad_revenue"), false);
     const counts = await withTenant(pool, test.tenantId, c => c.query(
-      "SELECT (SELECT count(*)::int FROM ledger.privacy_requests WHERE tenant_id=$1) AS requests,(SELECT count(*)::int FROM ledger.operator_bulk_export_results WHERE tenant_id=$1) AS exports", [test.tenantId]));
-    assert.deepEqual(counts.rows[0], { requests: 1, exports: 1 });
+      `SELECT (SELECT count(*)::int FROM ledger.privacy_requests WHERE tenant_id=$1) AS requests,
+       (SELECT count(*)::int FROM ledger.operator_bulk_export_results WHERE tenant_id=$1 AND state='succeeded') AS published,
+       (SELECT count(*)::int FROM ledger.operator_bulk_export_results WHERE tenant_id=$1 AND state='suppressed') AS suppressed,
+       (SELECT count(*)::int FROM ledger.operator_bulk_export_results WHERE tenant_id=$1 AND state NOT IN ('succeeded','suppressed')) AS other`, [test.tenantId]));
+    assert.deepEqual(counts.rows[0], { requests: 1, published: 1, suppressed: 1, other: 0 },
+      "the discarded pre-privacy batch keeps its suppression audit; only the deletion batch is published");
   });
 });
