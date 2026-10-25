@@ -5310,3 +5310,8 @@ GRANT SELECT,INSERT ON control.retention_receipts TO openmasu_app;
 GRANT SELECT,INSERT,UPDATE ON control.retention_items TO openmasu_app;
 GRANT SELECT ON control.retention_receipts TO openmasu_reader;
 GRANT TRUNCATE ON control.retention_receipts,control.retention_items TO openmasu_seed;
+
+-- 078_retention_reader_boundary.sql
+-- Bootstrap defaults grant SELECT on new tables. Target bindings are private;
+-- readers receive only the aggregate receipt, never object references or keys.
+REVOKE ALL ON control.retention_items FROM openmasu_reader;
