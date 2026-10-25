@@ -36,9 +36,10 @@ export function parseWorkerInboxBatchLimit(name: string, value: string | undefin
 export function workerPoolSizes(concurrency: number): {
   readonly jobs: number;
   readonly scheduler: number;
+  readonly coordination: number;
 } {
   const bounded = parseWorkerConcurrency(String(concurrency));
-  return { jobs: bounded * 2, scheduler: bounded };
+  return { jobs: bounded * 2, scheduler: bounded, coordination: bounded };
 }
 
 type TenantWork = {

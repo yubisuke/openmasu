@@ -16,6 +16,11 @@ annotated tag, exact-commit full CI and eight verified public assets.
 
 ## Remaining optional scope
 
+[Tenant-cycle coordination](../operations/observability.md#scheduler-behavior)
+uses the existing PostgreSQL service for cross-replica order and stale-commit
+fencing. Synthetic process/connection-loss probes do not establish live capacity
+or recall an already-sent provider request. No new queue or service is added.
+
 Current source now adds [daily recorded activity](../calendar-activity.md):
 three UTC metrics, schedules and saved CSV with explicit installation units.
 This post-rc.2 addition is not part of the published rc.2 assets or evidence.
@@ -44,7 +49,7 @@ declared synthetic scope. The publication receipt records the downloaded Android
 SDK/backend journey on JVM/Robolectric API 24 separately from the frozen release.
 It does not establish physical-device or all-platform onboarding acceptance.
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-33 of 35 child implementations complete, with 2 optional extensions remaining.
+34 of 35 child implementations complete, with one optional extension remaining.
 Select further work from the [roadmap](../roadmap.md#next-product-sequence) and
 [acceptance crosswalk](../project-plan.md#next-product-slices) according to the
 intended usage.

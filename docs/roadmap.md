@@ -68,15 +68,15 @@ from acquisition cohorts, with no sum presented as a period-unique audience.
 distinct paying installations, payer rate and purchase-net ARPPU with explicit
 verified-projection and refund/undefined boundaries.
 
-The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has 33 of
-35 child implementations complete and 2 optional extensions remaining. Backup and
+The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has 34 of
+35 child implementations complete and one optional extension remaining. Backup and
 recovery ([#250](https://github.com/yubisuke/openmasu/issues/250)) is implemented;
 the dedicated Runtime gate owns its synthetic evidence. Follow individual issue
 dependencies; the phases below are priorities, not extra refactoring gates.
 
 | Order | Workstream | Remaining issues / exit |
 | --- | --- | --- |
-| When needed | Optional operator extensions | Multiple workers and fraud previews; see the [crosswalk](project-plan.md#next-product-slices) |
+| When needed | Optional operator extension | Fraud previews; see the [crosswalk](project-plan.md#next-product-slices) |
 
 [App-scoped access](operations/access.md) now narrows existing operator roles
 across API/dashboard reads and controls. Tenant-wide keys remain compatible;
@@ -85,6 +85,11 @@ scope changes use key replacement and retirement rather than a new IAM service.
 [Explicit retention](operations/retention.md) adds a default-off, read-only
 preview and fixed-receipt bounded expiry for selected protected objects/nonces.
 Privacy and history are preserved; lost evidence is not silently reproduced.
+
+[Cross-process worker coordination](operations/observability.md#scheduler-behavior)
+keeps each tenant's ordered pass under a PostgreSQL session lock and fences stale
+commits. Independent tenants still progress. Stop old binaries before a replica
+rollout; live capacity and external delivery guarantees are not established.
 
 The optional [Unity ILR sample](../sdk/unity/README.md#optional-levelplay-impression-revenue)
 is implemented in source with explicit provider-shim evidence and existing native

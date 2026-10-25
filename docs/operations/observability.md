@@ -59,11 +59,16 @@ sanitized stderr event and becomes eligible at its persisted retry time.
 The worker polls for tenant work without waiting for already-active tenant
 cycles to finish. A FIFO coordinator runs four tenant cycles by default,
 deduplicates tenants that are active or queued, and keeps each tenant's jobs in
-their original serial order within one worker process.
+their original serial order. A PostgreSQL tenant-cycle session lock also keeps
+that order across worker replicas. An occupied tenant is skipped, not waited on,
+so an available replica can continue with another tenant.
 `OPENMASU_WORKER_CONCURRENCY` accepts 1 through 16; use `1` as the rollback
 mode. The scheduler pool reserves one connection per slot and the job pool
 reserves two because privacy purge can temporarily need a record-lock
-connection and a tenant transaction together.
+connection and a tenant transaction together. A third coordination pool reserves
+one connection per slot. The total worker budget is four times concurrency:
+16 connections at the default, 64 at the maximum, per replica. Include API,
+redirector, operator and migration connections in the database capacity budget.
 
 A scheduled job failure emits `worker_job_failed` and uses its durable retry.
 An unexpected exception outside that scheduled-job boundary emits
@@ -79,6 +84,10 @@ forced shutdowns, and database availability. If the worker process or database
 is unavailable, no in-process notification can be emitted; the monitor must
 observe from outside that failure domain.
 
+Lock behavior follows PostgreSQL's documented session advisory locks and
+transaction-held shared row locks; [primary reference](https://www.postgresql.org/docs/17/explicit-locking.html),
+checked 2026-10-25. This is the local coordination mechanism, not a provider guarantee.
+
 The shutdown deadline is a hard process exit, not cooperative cancellation of
 an active provider or database operation. A scheduler lease held by that work
 remains unavailable until its persisted lease expiry, after which a supervisor-
@@ -86,10 +95,34 @@ restarted worker can retry it. The ordinary lease is at least five minutes and
 some jobs intentionally use a longer policy, so forced shutdown should be an
 alerted exceptional path rather than a routine deployment mechanism.
 
-Scheduler leases are scoped to a tenant and job, not to an entire tenant.
-Multiple worker replicas can therefore interleave different jobs for the same
-tenant even though each replica preserves its own serial tenant order. Run one
-worker replica unless a deployment has separately validated that interleaving.
+Scheduler leases remain tenant/job scoped and retain their existing retry times.
+The separate tenant-cycle lock covers the entire ordered pass, including cost,
+metric correction, metric runs, privacy and export work. Lease expiry does not
+steal a live tenant-cycle owner. A stalled provider holds only its tenant slot;
+its existing request timeout or the shutdown deadline bounds recovery.
+The cycle's database generation is checked under a shared row lock immediately
+before every writable transaction commits, including scheduler state. Standalone
+queries are fenced transactions too. Losing the owner connection closes borrowed
+job/scheduler clients, rolling back in-flight writes and releasing session privacy
+locks. A replacement owner advances the generation; late callbacks cannot publish
+through another still-live connection. Read-only transactions cannot publish.
+
+`control.worker_tenant_cycles` records the current generation, owner backend,
+start/finish time, status and interrupted-cycle count. It is private to the app
+role, with forced tenant RLS; the reader role cannot inspect it. Operator recovery
+can correlate this state with `control.worker_job_schedules`: after a dead process,
+the next cycle advances its generation, while unexpired per-job claims remain
+not due until their recorded lease expiry. Do not force-unlock live owners or
+rewrite job leases as a routine recovery action. A `running` row is the last
+recorded state, not proof that a process or backend is alive.
+
+Roll out this change by stopping old worker processes before starting multiple
+new replicas. Older binaries do not acquire the cycle lock. Connections must be
+session-affine; transaction-pooling proxies are incompatible with the existing
+session advisory locks. `OPENMASU_WORKER_CONCURRENCY=1` remains the simple rollback
+mode; it still participates in database coordination. Provider calls already sent
+cannot be recalled by a lost database connection. Local publication fencing is
+not a claim of distributed or external exactly-once delivery.
 The global MAX inbox and dashboard-session sweep are attached to the configured
 MAX tenant cycle and may overlap work for other tenants; neither is a barrier
 for all tenant cycles.

@@ -53,7 +53,7 @@ qualification is stated. No row establishes production readiness.
 | Fraud controls | Recorded public rules, registered fraud bundle hashes, diagnostics and synthetic Integrity/App Attest verification | No physical-device-farm or reset-fraud guarantee; private threshold calibration and live platform projects unverified |
 | Privacy and recovery | Role isolation, protected payloads, deletion, saved-manifest metric replay; matched backup/freshness and isolated restore CLI with all-tenant privacy reapplication and a dedicated synthetic gate | External recipients retain their own deletion duty; live recovery time, authoritative boundary custody and secret custody unverified |
 | Outbound delivery | Default-off signed webhooks, S3-compatible bulk exports and bounded Google conversion delivery with local fencing/health | Live quotas and permissions unverified; no provider-side exactly-once guarantee |
-| Runtime and operation | One-worker tenant fairness, bounded inbox slices, authenticated logs/metrics, five optional monitoring rules and recovery runbooks, operator-scheduled backup commands, upgrade and single-host procedures | Multi-replica tenant-wide ordering, live backup scheduling, alert delivery and capacity remain unverified |
+| Runtime and operation | Cross-process tenant-cycle ordering and commit fencing, bounded inbox slices, authenticated logs/metrics, five optional monitoring rules and recovery runbooks, operator-scheduled backup commands, upgrade and single-host procedures | Live multi-replica capacity, backup scheduling and alert delivery remain unverified; in-flight external requests cannot be recalled |
 
 Detailed limits belong to the [product guides](README.md), [product scope](product-scope.md),
 [privacy/security policy](privacy-security.md) and [threat model](threat-model.md).
@@ -61,7 +61,7 @@ Detailed limits belong to the [product guides](README.md), [product scope](produ
 ## Current development focus
 
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-31 of 35 child implementations complete; 4 optional extensions remain. The earlier
+34 of 35 child implementations complete; one optional extension remains. The earlier
 integration plan is complete, not a second backlog. The dependency, controller,
 presentation, evaluator and ingestion foundations are also implemented.
 

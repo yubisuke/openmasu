@@ -29,8 +29,8 @@ describe("bounded tenant work coordinator", () => {
     for (const value of ["0", "17", "1.5", "NaN", ""]) {
       assert.throws(() => parseWorkerConcurrency(value), /OPENMASU_WORKER_CONCURRENCY/);
     }
-    assert.deepEqual(workerPoolSizes(1), { jobs: 2, scheduler: 1 });
-    assert.deepEqual(workerPoolSizes(DEFAULT_WORKER_CONCURRENCY), { jobs: 8, scheduler: 4 });
+    assert.deepEqual(workerPoolSizes(1), { jobs: 2, scheduler: 1, coordination: 1 });
+    assert.deepEqual(workerPoolSizes(DEFAULT_WORKER_CONCURRENCY), { jobs: 8, scheduler: 4, coordination: 4 });
     assert.equal(parseWorkerShutdownTimeout(undefined), DEFAULT_WORKER_SHUTDOWN_TIMEOUT_MS);
     assert.equal(parseWorkerShutdownTimeout("1000"), 1_000);
     assert.equal(

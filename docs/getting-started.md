@@ -154,8 +154,9 @@ defaults. At minimum, keep `OPENMASU_PUBLIC_BASE_URL` and
 deployment must build and validate its own runtime environment rather than
 treating this reference Compose file as a production template.
 
-Keep the reference deployment at one worker replica. Tenant/job leases do not
-guarantee tenant-wide ordering across replicas. See
+The reference deployment starts one worker. Current workers also coordinate whole
+tenant cycles through PostgreSQL; stop older binaries before adding replicas and
+budget their additional database connections. See
 [Runtime observability](operations/observability.md) for tenant concurrency,
 inbox limits and graceful shutdown; tuning is not a first-run prerequisite.
 

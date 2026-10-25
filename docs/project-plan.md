@@ -56,8 +56,8 @@ guides document their configuration. Published-release evidence remains separate
 
 ## Next product slices
 
-Updated: 2026-10-25. Thirty of 35 child implementations are complete; the 5 remaining
-optional issues below map directly to the [roadmap sequence](roadmap.md#next-product-sequence).
+Updated: 2026-10-25. Thirty-four of 35 child implementations are complete; the remaining
+optional issue below maps directly to the [roadmap sequence](roadmap.md#next-product-sequence).
 Numbers are tracking links, not required background knowledge.
 
 ### Core and selected-use work
@@ -97,12 +97,17 @@ or Apple aggregate identity is joined.
 [App-scoped access](operations/access.md) is implemented after rc.2: one optional
 app restriction narrows existing roles across API/session/list/export/job paths;
 legacy keys remain tenant-wide. Issuance, rotation and revocation reuse existing
-verifiers, sessions and audit storage, not a new IAM service. The next extension
-is multiple-worker tenant coordination.
+verifiers, sessions and audit storage, not a new IAM service.
 
 [Explicit retention](operations/retention.md) is implemented after rc.2. It keeps
 preview read-only, seals a bounded policy/target receipt on explicit apply, and
 preserves privacy/history while reporting retention-affected replay honestly.
+
+[Multiple-worker coordination](operations/observability.md#scheduler-behavior)
+preserves tenant order and fences stale publications with the existing database.
+Synthetic two-process probes cover provider stalls, cost/metric and privacy/export
+order, owner-connection loss, lease expiry and process shutdown. Live capacity and
+outstanding external requests remain separate operational boundaries.
 
 The [additional Unity ILR sample](../sdk/unity/README.md#optional-levelplay-impression-revenue)
 is implemented after rc.2. Provider types are an explicit shim; the existing
@@ -113,7 +118,6 @@ for the completed integrated candidate.
 
 | Issue / workstream | Narrow acceptance |
 | --- | --- |
-| [#251](https://github.com/yubisuke/openmasu/issues/251): Multiple workers | Tenant-wide ordering and stop/recovery evidence before multi-replica claims |
 | [#253](https://github.com/yubisuke/openmasu/issues/253): Fraud bundle preview | Same synthetic evidence shows decision and metric effects before activation |
 
 ### Integration and distribution
