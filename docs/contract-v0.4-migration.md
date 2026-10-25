@@ -38,7 +38,9 @@ canonical bytes were checked independently before promotion; expected files
 are committed separately from behavior. Shared vectors and SQL/report/privacy
 tests cover multiple purchases and payers, partial/full refunds, exact reversal,
 unknown authority, retry, cutoff, missing FX and current-privacy replacement.
-No service, dependency, DB migration, workflow or action SHA changes.
+Forward-only migration 072 widens the existing metric-run undefined-reason
+constraint without rewriting rows. No service, dependency, table, workflow
+or action SHA changes.
 
 ## Daily recorded activity (0.4.25)
 

@@ -54,6 +54,10 @@ No current-rate lookup or client fallback is used.
 
 ## Calculate, schedule and read
 
+Apply the normal database migrations before enabling this profile. Migration
+072 adds the new undefined reason to the existing metric-run storage constraint;
+it changes no historical values or tables.
+
 Import `payerMetricDefinitions()` from `@openmasu/contracts/definitions` for the
 four closed definitions. [The synthetic schedule request](../examples/synthetic/payer-metrics.json)
 can be pasted into **Register a schedule** on the app's metric-schedule page.
