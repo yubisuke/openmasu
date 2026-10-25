@@ -10,6 +10,7 @@
   <ItemGroup>
     <Compile Include="..\com.openmasu.sdk\Runtime\*.cs" Link="Runtime\%(Filename)%(Extension)" />
     <Compile Include="..\com.openmasu.sdk\Samples~\AndroidMeasurement\SyntheticPurchaseSample.cs" Link="Samples\SyntheticPurchaseSample.cs" />
+    <Compile Include="..\com.openmasu.sdk\Samples~\LevelPlayRevenue\OpenMasuLevelPlayAdapter.cs" Link="Samples\OpenMasuLevelPlayAdapter.cs" />
     <Compile Include="..\com.openmasu.sdk\Editor\OpenMasuAndroidPostprocessor.cs" Link="Editor\OpenMasuAndroidPostprocessor.cs" />
     <Compile Include="..\com.openmasu.sdk\Editor\OpenMasuIOSPostprocessor.cs" Link="Editor\OpenMasuIOSPostprocessor.cs" />
   </ItemGroup>

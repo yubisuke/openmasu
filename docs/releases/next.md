@@ -44,10 +44,15 @@ declared synthetic scope. The publication receipt records the downloaded Android
 SDK/backend journey on JVM/Robolectric API 24 separately from the frozen release.
 It does not establish physical-device or all-platform onboarding acceptance.
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-29 of 35 child implementations complete, with 6 optional extensions remaining.
+30 of 35 child implementations complete, with 5 optional extensions remaining.
 Select further work from the [roadmap](../roadmap.md#next-product-sequence) and
 [acceptance crosswalk](../project-plan.md#next-product-slices) according to the
 intended usage.
+
+The optional [Unity LevelPlay ILR sample](../../sdk/unity/README.md#optional-levelplay-impression-revenue)
+adds per-ad background callbacks, explicit consent and stable impression identity
+through existing Android/iOS queues. Synthetic provider-shim/native/backend
+evidence is not actual provider or device execution. It is not in rc.2 assets.
 
 ## Separate operator evidence
 

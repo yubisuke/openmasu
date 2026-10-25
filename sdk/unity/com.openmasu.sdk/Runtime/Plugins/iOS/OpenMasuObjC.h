@@ -74,6 +74,10 @@ void openmasu_ios_track_max_revenue(
   int64_t request_id,
   OpenMasuCStringCallback callback
 );
+void openmasu_ios_track_ad_revenue(
+  const char *impression_id, const char *amount_unscaled, const char *precision,
+  const char *network, const char *ad_unit_id, const char *mediation_provider, const char *format
+);
 void openmasu_ios_start_session(int64_t request_id, OpenMasuCStringCallback callback);
 void openmasu_ios_set_collection_enabled(bool enabled);
 void openmasu_ios_reset_installation(int64_t request_id, OpenMasuCStringCallback callback);

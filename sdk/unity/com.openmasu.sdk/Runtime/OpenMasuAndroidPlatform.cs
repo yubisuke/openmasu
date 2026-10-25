@@ -5,7 +5,7 @@ using UnityEngine;
 namespace OpenMasu.Unity
 {
     public sealed class OpenMasuAndroidPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform,
-        IOpenMasuGooglePlayPurchasePlatform, IOpenMasuConsentPlatform
+        IOpenMasuGooglePlayPurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuAdRevenuePlatform
     {
         private AndroidJavaClass bridge;
         private bool disposed;
@@ -39,6 +39,9 @@ namespace OpenMasu.Unity
             string currency) =>
             EnsureBridge().CallStatic("trackRefund", transactionId, originalTransactionId, amountUnscaled, amountScale, currency);
         public void StartSession() => EnsureBridge().CallStatic("startSession");
+        public void TrackAdRevenue(OpenMasuAdRevenueEvent value) => EnsureBridge().CallStatic("trackAdRevenue",
+            value.ImpressionId, value.AmountUnscaled, value.RevenuePrecision, value.AdNetwork,
+            value.AdUnitId, value.MediationProvider, value.AdFormat);
         public void TrackGooglePlayProductPurchase(string purchaseToken, string productId, string transactionId,
             string amountUnscaled, int amountScale, string currency, Action<string> completion) =>
             EnsureBridge().CallStatic("trackGooglePlayProductPurchase", purchaseToken, productId, transactionId,

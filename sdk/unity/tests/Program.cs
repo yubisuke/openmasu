@@ -7,8 +7,14 @@ using OpenMasu.Unity;
 
 internal static partial class Program
 {
-    private static int Main()
+    private static int Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--levelplay-export")
+        {
+            ExerciseLevelPlayAdapter(args[1]);
+            return 0;
+        }
+        Require(args.Length == 0, "unknown probe arguments");
         var mainThread = Environment.CurrentManagedThreadId;
         var dispatcher = new OpenMasuDispatcher(20_000);
         using (var platform = new SyntheticPlatform())
@@ -47,6 +53,8 @@ internal static partial class Program
         Require(OpenMasuiOSPlatform.ActiveCallbackCount == 0, "iOS function-pointer callback leaked");
         ExerciseRevenuePlatformCompatibility();
         ExerciseProtectedPurchases(mainThread);
+        ExerciseAdRevenue();
+        ExerciseLevelPlayAdapter();
         ExerciseAppleConversionPlatformCompatibility();
         ExerciseAndroidManifestGeneration();
         ExerciseAndroidGradleSettings();

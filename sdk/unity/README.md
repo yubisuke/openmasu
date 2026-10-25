@@ -48,6 +48,40 @@ matching annotated tag names the exact green source commit.
 
 MAX integration must subscribe separately to Interstitial, Rewarded, Banner, and MRec revenue callbacks. The Unity bridge carries the callback's normalized `interstitial`, `rewarded`, `banner`, or `mrec` value into `extensions.ad_format` on both Android and iOS. Unknown formats remain explicit as `unknown`; they are never guessed from placement or ad-unit identifiers. The compile probe keeps the four-format subscription table and Android argument shape closed even when AppLovin is not present in the test environment.
 
+## Optional LevelPlay impression revenue
+
+Current source includes an optional [LevelPlay revenue sample](com.openmasu.sdk/Samples~/LevelPlayRevenue/README.md),
+not yet part of the published rc.2 assets. Import it only after resolving the host's
+LevelPlay 9.5+ Unity package. No mediation dependency is added to the standard
+OpenMasu assembly, and this adapter does not initialize, load or display ads.
+
+The host subscribes each rewarded/interstitial/banner object and owns unsubscription
+and destruction. After explicitly enabling collection, wait for a successful
+`UpdateConsent` acknowledgement (`Granted` or `NotRequired`), and keep pumping
+the existing dispatcher on the Unity main thread. Background callbacks enter the
+existing Android/iOS native revenue queue through `IOpenMasuAdRevenuePlatform`.
+Older platform implementations remain compatible; unsupported platforms refuse
+managed admission. A `true` managed admission is not a native or server receipt.
+
+Missing/non-finite/negative/overflowing money is refused, not zero-filled. USD
+micros use half-even rounding. Precision stays separate from trust: all callback
+revenue is `client_estimated`, even for auction-exact `BID`. Minimal fields and
+an opaque auction/unit/format identity are kept; raw `AllData` is never read.
+Repeated callbacks keep the same logical identity. Pending native duplicates do
+not add revenue; changed duplicates retain existing queue/ledger conflict rules,
+not an end-to-end exactly-once promise. Withdrawal and reset invalidate pending
+managed observations, while native consent barriers remain authoritative.
+
+The managed test uses a documented provider API shim, not the actual LevelPlay
+SDK. The source-SDK journey passes those exact observations through the shipping
+JNI bridge, reopened Room queue, signed loopback API, worker and a USD revenue
+cohort. Swift tests separately exercise native persistence and withdrawal.
+Actual provider resolution in a consumer project, both device platforms, eligible
+waterfalls and revenue completeness remain operator checks. Editor mock ads do
+not generate ILR callbacks. See the sample's dated primary references.
+
+## Measurement sample
+
 Import the `Android measurement sample` from Package Manager to obtain a small `MonoBehaviour` that initialises the bridge and exposes a synthetic custom-event button. Supply deployment credentials outside source control; the sample intentionally contains no endpoint, key, secret, campaign, or device identifier.
 
 `OpenMasuClient.ResetInstallationId` delegates to the native deletion-first

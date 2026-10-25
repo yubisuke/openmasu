@@ -56,7 +56,7 @@ guides document their configuration. Published-release evidence remains separate
 
 ## Next product slices
 
-Updated: 2026-10-25. Twenty-nine of 35 child implementations are complete; the 6 remaining
+Updated: 2026-10-25. Thirty of 35 child implementations are complete; the 5 remaining
 optional issues below map directly to the [roadmap sequence](roadmap.md#next-product-sequence).
 Numbers are tracking links, not required background knowledge.
 
@@ -88,12 +88,15 @@ provider metadata crawling and live provider completeness remain unverified.
 
 ### Optional extensions
 
+The [additional Unity ILR sample](../sdk/unity/README.md#optional-levelplay-impression-revenue)
+is implemented after rc.2. Provider types are an explicit shim; the existing
+native queue, signed ingestion and worker revenue path retain their boundaries.
+
 Implement only for the selected usage scope; these extensions are not required
 for the completed integrated candidate.
 
 | Issue / workstream | Narrow acceptance |
 | --- | --- |
-| [#238](https://github.com/yubisuke/openmasu/issues/238): Additional Unity ILR | Thin callback adapter into existing advertising revenue; unknown is not zero |
 | [#240](https://github.com/yubisuke/openmasu/issues/240): Engagement policy and purchase outcomes | Independent windows/inactivity and purchase-net definitions, not acquisition rewriting |
 | [#247](https://github.com/yubisuke/openmasu/issues/247): App-scoped access | Explicit app restrictions without weakening tenant isolation |
 | [#249](https://github.com/yubisuke/openmasu/issues/249): Retention expiry | Explicit-policy preview and bounded expiry with privacy-safe replay |

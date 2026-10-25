@@ -214,6 +214,35 @@ public final class OpenMasuUnityBridge {
     }
   }
 
+  public static void trackAdRevenue(String impressionId, String amountUnscaled, String precision,
+      String network, String adUnitId, String mediationProvider, String format) {
+    OpenMasuSdk current = requireSdk();
+    current.enqueueAdRevenue(adRevenuePayload(current.installationIdForMeasurement(), impressionId,
+        amountUnscaled, precision, network, adUnitId, mediationProvider, format), impressionId);
+  }
+
+  static org.json.JSONObject adRevenuePayload(String installationId, String impressionId,
+      String amountUnscaled, String precision, String network, String adUnitId,
+      String mediationProvider, String format) {
+    if (impressionId == null || !impressionId.matches("impression:[a-f0-9]{64}")
+        || amountUnscaled == null || !amountUnscaled.matches("0|[1-9][0-9]{0,28}")
+        || precision == null || !precision.matches("exact|estimated|publisher_defined|undefined")
+        || network == null || network.trim().isEmpty() || network.length() > 128
+        || adUnitId == null || !adUnitId.matches("[A-Za-z0-9._:-]{1,128}")
+        || mediationProvider == null || !mediationProvider.matches("[A-Za-z0-9._:-]{1,128}")
+        || format == null || !format.matches("rewarded|interstitial|banner|unknown"))
+      throw new IllegalArgumentException("ad_revenue_invalid");
+    try {
+      return new org.json.JSONObject().put("event_name", "ad_revenue")
+          .put("subject_scope", "installation_level").put("installation_id", installationId)
+          .put("impression_id", impressionId).put("amount_unscaled", amountUnscaled)
+          .put("amount_scale", 6).put("currency", "USD").put("currency_source", "reported")
+          .put("revenue_source", "client_estimated").put("revenue_precision", precision)
+          .put("ad_network", network).put("ad_unit_id", adUnitId).put("mediation_provider", mediationProvider)
+          .put("extensions", new org.json.JSONObject().put("ad_format", format));
+    } catch (org.json.JSONException error) { throw new IllegalArgumentException("ad_revenue_invalid"); }
+  }
+
   public static boolean trackMaxRevenue(double revenue, String precision, String networkName,
       String adUnitId, String placement, String networkPlacement) {
     return trackMaxRevenue(revenue, precision, networkName, adUnitId, "unknown", placement, networkPlacement);

@@ -7,7 +7,7 @@ using AOT;
 namespace OpenMasu.Unity
 {
     public sealed class OpenMasuiOSPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform,
-        IOpenMasuAppleConversionPlatform, IOpenMasuAppStorePurchasePlatform, IOpenMasuConsentPlatform
+        IOpenMasuAppleConversionPlatform, IOpenMasuAppStorePurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuAdRevenuePlatform
     {
         private delegate void NativeCallback(long requestId, IntPtr value);
         private static readonly NativeCallback Callback = OnNativeCallback;
@@ -119,6 +119,16 @@ namespace OpenMasu.Unity
 #else
             CompleteSynthetic(callbackId, "state=not_submitted&error=platform_unavailable");
 #endif
+        }
+
+        public void TrackAdRevenue(OpenMasuAdRevenueEvent value)
+        {
+            ThrowIfDisposed();
+#if UNITY_IOS && !UNITY_EDITOR
+            openmasu_ios_track_ad_revenue(value.ImpressionId, value.AmountUnscaled, value.RevenuePrecision,
+                value.AdNetwork, value.AdUnitId, value.MediationProvider, value.AdFormat);
+#endif
+            // Editor has no native persistence; do not synthesize a queue acknowledgement.
         }
 
         public static void TrackMaxRevenue(
@@ -294,6 +304,9 @@ namespace OpenMasu.Unity
             string currency,
             long requestId,
             NativeCallback callback);
+        [DllImport("__Internal")]
+        private static extern void openmasu_ios_track_ad_revenue(string impressionId, string amountUnscaled,
+            string precision, string network, string adUnitId, string mediationProvider, string format);
         [DllImport("__Internal")]
         private static extern void openmasu_ios_track_max_revenue(
             double revenue,

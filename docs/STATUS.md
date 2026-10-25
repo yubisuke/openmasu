@@ -59,9 +59,14 @@ Detailed limits belong to the [product guides](README.md), [product scope](produ
 ## Current development focus
 
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-29 of 35 child implementations complete; 6 optional extensions remain. The earlier
+30 of 35 child implementations complete; 5 optional extensions remain. The earlier
 integration plan is complete, not a second backlog. The dependency, controller,
 presentation, evaluator and ingestion foundations are also implemented.
+
+The optional [Unity ILR sample](../sdk/unity/README.md#optional-levelplay-impression-revenue)
+adds per-ad LevelPlay callbacks to existing native queues and revenue metrics.
+Its provider types use an explicit shim; actual provider/device qualification
+is unverified. This is source after rc.2, not a change to its published assets.
 
 [Daily recorded activity](calendar-activity.md) is implemented after rc.2; it is
 not included in that frozen release. Its UTC activity population is independent

@@ -14,6 +14,50 @@ import OpenMasuMax
 
 public typealias OpenMasuCStringCallback = @convention(c) (Int64, UnsafePointer<CChar>?) -> Void
 
+// The managed adapter already converted USD to exact integer micros. Keep the
+// native boundary narrow and reuse the core queue, consent barrier and event ID.
+enum AdRevenueBridge {
+  static func enqueue(sdk: OpenMasuSDK, impressionId: String, amount: String, precision: String,
+                      network: String, adUnitId: String, mediationProvider: String, format: String) async throws {
+    func matches(_ value: String, _ pattern: String) -> Bool {
+      guard let range = value.range(of: pattern, options: .regularExpression) else { return false }
+      return range.lowerBound == value.startIndex && range.upperBound == value.endIndex
+    }
+    guard matches(impressionId, "^impression:[a-f0-9]{64}$"), matches(amount, "^(0|[1-9][0-9]{0,28})$"),
+          ["exact", "estimated", "publisher_defined", "undefined"].contains(precision),
+          !network.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, network.count <= 128,
+          matches(adUnitId, "^[A-Za-z0-9._:-]{1,128}$"), matches(mediationProvider, "^[A-Za-z0-9._:-]{1,128}$"),
+          ["rewarded", "interstitial", "banner", "unknown"].contains(format)
+    else { throw OpenMasuError.invalidAttributes }
+    let installationId = try await sdk.installationIdForMeasurement()
+    try await sdk.enqueueAdRevenue(payload: [
+      "event_name": "ad_revenue", "subject_scope": "installation_level", "installation_id": installationId,
+      "impression_id": impressionId, "amount_unscaled": amount, "amount_scale": 6,
+      "currency": "USD", "currency_source": "reported", "revenue_source": "client_estimated",
+      "revenue_precision": precision, "ad_network": network, "ad_unit_id": adUnitId,
+      "mediation_provider": mediationProvider, "extensions": ["ad_format": format],
+    ], eventId: impressionId)
+  }
+}
+
+@_cdecl("openmasu_ios_track_ad_revenue")
+public func openmasuIOSTrackAdRevenue(
+  _ impressionId: UnsafePointer<CChar>?, _ amount: UnsafePointer<CChar>?, _ precision: UnsafePointer<CChar>?,
+  _ network: UnsafePointer<CChar>?, _ adUnitId: UnsafePointer<CChar>?,
+  _ mediationProvider: UnsafePointer<CChar>?, _ format: UnsafePointer<CChar>?
+) {
+  guard let sdk = BridgeState.get(), let impressionId, let amount, let precision, let network,
+        let adUnitId, let mediationProvider, let format else { return }
+  // Copy C memory before leaving the call; the caller owns its lifetime.
+  let impression = String(cString: impressionId), amountValue = String(cString: amount)
+  let precisionValue = String(cString: precision), networkValue = String(cString: network)
+  let unit = String(cString: adUnitId), provider = String(cString: mediationProvider), adFormat = String(cString: format)
+  Task {
+    try? await AdRevenueBridge.enqueue(sdk: sdk, impressionId: impression, amount: amountValue,
+      precision: precisionValue, network: networkValue, adUnitId: unit, mediationProvider: provider, format: adFormat)
+  }
+}
+
 private enum BridgeState {
   static let lock = NSLock()
   static var sdk: OpenMasuSDK?
