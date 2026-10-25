@@ -40,12 +40,14 @@ export function createSessionsControllers(dependencies: Pick<RequestHandlerDepen
       keyId: session.adminKeyId,
       tenantId: session.tenantId,
       role: session.role,
+      ...(session.appScope !== undefined ? { appScope: session.appScope } : {}),
     });
     dashboardHtml(response, 200, renderDashboard(buildDashboardView({
       apps,
       csrfToken: csrfToken(session.token),
       canOperate: roleAllows(session.role, "operate"),
       canAdminister: roleAllows(session.role, "administer"),
+      canManageTenant: roleAllows(session.role, "administer") && session.appScope === undefined,
     })));
     return;
   };

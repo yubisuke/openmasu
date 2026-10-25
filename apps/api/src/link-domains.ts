@@ -12,6 +12,7 @@ export async function registerLinkDomain(input: {
   readonly host: string;
   readonly now?: string;
 }): Promise<{ readonly host: string }> {
+  if (input.identity.appScope !== undefined) throw new Error("forbidden");
   const host = input.host.toLowerCase().replace(/\.$/, "");
   if (!hostPattern.test(host)) throw new Error("link_host_invalid");
   const now = input.now ?? new Date().toISOString();

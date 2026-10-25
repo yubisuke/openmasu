@@ -223,8 +223,11 @@ repository does not claim that its example durations are universally lawful.
 
 ## Authentication and authorization
 
-- Admin keys are tenant-scoped. App scope is an explicitly validated route
-  parameter.
+- Admin keys are tenant-wide by default, with an optional immutable single-app
+  restriction. The registered-app gate applies that restriction to API lists,
+  detail, exports, jobs and sessions; it never widens the role's capabilities.
+  Tenant-wide controls and privacy deletion refuse scoped keys. See
+  [operator access](operations/access.md) for issuance and retirement.
 - Dashboard login exchanges an admin key for an opaque, hashed, absolute-expiry
   session cookie.
 - Dashboard state-changing requests require a synchronizer CSRF token and

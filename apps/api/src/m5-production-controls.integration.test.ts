@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { createHash, scryptSync } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,17 +13,20 @@ import {
   createAppPool,
   createMigrationPool,
   createReaderPool,
+  createSeedPool,
   EncryptedFilePayloadStore,
   recordJobOutcome,
   uuidV7,
   withTenant,
 } from "@openmasu/runtime";
-import { ensureAdminKeys, verifyAdminKey, type AppAdminIdentity } from "./admin-auth.js";
+import { ensureAdminKeys, issueAdminKey, retireAdminKey, verifyAdminKey, type AppAdminIdentity } from "./admin-auth.js";
 import { createRequestHandler } from "./router.js";
 import { OperationalMetrics, renderOperationalMetrics } from "./operational-metrics.js";
 import { activateRuleBundle } from "./rule-bundles.js";
 import { issueDashboardSession, verifyDashboardSession } from "./session.js";
 import { resolveNonFraudBundle } from "../../worker/src/non-fraud-bundle-runtime.js";
+import { ingestFixture } from "../../worker/src/test-support/fixture-ingestion.js";
+import { computeSqlMetricRuns } from "../../worker/src/metrics/cohort.js";
 
 const suffix = `${Date.now()}`;
 const tenantId = `tenant-m5-${suffix}`;
@@ -609,5 +613,166 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
     ));
     assert.deepEqual(stored.rows[0].definition, definition);
     assert.equal(stored.rows[0].definition_digest, sha256Jcs(definition));
+  });
+  describe("optional app-scoped administration", { concurrency: false }, () => {
+    const sibling = `${appId}-sibling`, foreignTenant = `${tenantId}-foreign`, foreignApp = `${appId}-foreign`;
+    const cutoff = "2026-08-09T00:00:00.000Z";
+    type Issued = Awaited<ReturnType<typeof issueAdminKey>>;
+    let readA: Issued, readB: Issued, adminA: Issued, operatorA: Issued;
+    let cookie: string, foreignKey: string, legacyKey: string;
+    const runIds: string[][] = [];
+    const cli = (args: string[]) => {
+      const env: NodeJS.ProcessEnv = { ...process.env, OPENMASU_ADMIN_KEY: keys.admin };
+      delete env.OPENMASU_ADMIN_KEY_FILE;
+      return JSON.parse(execFileSync(process.execPath,
+        ["--import", "tsx", "apps/api/src/admin-key-cli.ts", ...args], { env, encoding: "utf8" }));
+    };
+    const bearer = (key: string, path: string, init: RequestInit = {}) => fetch(`${baseUrl}${path}`, {
+      ...init, headers: { authorization: `Bearer ${key}`, ...init.headers },
+    });
+    const page = (path: string, sessionCookie = cookie, init: RequestInit = {}) => fetch(`${baseUrl}${path}`, {
+      ...init, headers: { cookie: sessionCookie, ...init.headers }, redirect: "manual",
+    });
+    const reportPath = (app: string, suffix = "") => `/v1/reports/metrics?app_id=${app}&watermark_at_most=${cutoff}${suffix}`;
+
+    before(async () => {
+      // One reset, three app populations: real ledger writes and the actual SQL
+      // engine, not fabricated HTTP rows or a privileged mock reader.
+      const variants = [[tenantId, appId], [tenantId, sibling], [foreignTenant, foreignApp]].map(([tenant, app], index) => {
+        const fixture = JSON.parse(readFileSync("fixtures/v0.4/33-stage-b-cohort-metrics/input.json", "utf8")
+          .replaceAll('"tenant-a"', JSON.stringify(tenant)).replaceAll('"app-a"', JSON.stringify(app)));
+        for (const record of fixture.records) for (const field of ["record_id", "delivery_id", "event_id"]) record[field] += `-scope-${index}`;
+        for (const cost of fixture.cost_records) cost.cost_record_id += `-scope-${index}`;
+        fixture.metric_evaluations = [{ ...fixture.metric_evaluations[0], metric_run_id_prefix: `scope-${index}` }];
+        return fixture;
+      });
+      const seed = createSeedPool();
+      try {
+        await ingestFixture(`synthetic-app-scope-${suffix}`, { ...variants[0], records: undefined, server_context: undefined,
+          metric_evaluations: [], cost_records: variants.flatMap(input => input.cost_records),
+          batches: variants.map((input, index) => ({ batch_id: `scope-${index}`, server_context: input.server_context, records: input.records })),
+        }, appPool, seed);
+        for (const input of variants) runIds.push((await computeSqlMetricRuns(appPool, input)).map(run => run.metric_run_id));
+      } finally { await seed.end(); }
+      assert.ok(runIds.every(ids => ids.length === 7));
+      readA = cli(["issue", `--tenant=${tenantId}`, "--role=read_only", `--app=${appId}`]);
+      readB = await issueAdminKey(appPool, identities.admin, { role: "read_only", appScope: sibling });
+      operatorA = await issueAdminKey(appPool, identities.admin, { role: "operator", appScope: appId });
+      adminA = await issueAdminKey(appPool, identities.admin, { role: "admin", appScope: appId });
+      const session = await issueDashboardSession(appPool, tenantId, readA.key_id, 3600);
+      cookie = `openmasu_dashboard=${session.token}`;
+      foreignKey = `synthetic-foreign-owner-${suffix}-${"f".repeat(32)}`;
+      await ensureAdminKeys(appPool, { tenantId: foreignTenant, appId: foreignApp }, [foreignKey]);
+      // An old populated app_id was deployment metadata, not an app restriction.
+      legacyKey = `synthetic-legacy-reader-${suffix}-${"l".repeat(32)}`;
+      const legacyId = `key:${createHash("sha256").update(legacyKey).digest("hex").slice(0, 32)}`;
+      const salt = Buffer.alloc(16, 7);
+      await withTenant(appPool, tenantId, async client => {
+        await client.query(`INSERT INTO control.admin_keys (key_id,tenant_id,app_id,scrypt_salt,scrypt_digest,created_at,role)
+          VALUES ($1,$2,$3,$4,$5,$6,'read_only')`, [legacyId, tenantId, sibling, salt.toString("hex"),
+          scryptSync(legacyKey, salt, 32, { N: 16_384, r: 8, p: 1 }).toString("hex"), new Date().toISOString()]);
+        await client.query(`INSERT INTO control.admin_key_states (key_id,tenant_id,app_id,status,changed_at,artifact)
+          VALUES ($1,$2,$3,'active',$4,'{}')`, [legacyId, tenantId, sibling, new Date().toISOString()]);
+      });
+    });
+
+    it("app_scope_actual_reader_isolates_list_detail_export_cursor_and_foreign_tenant_without_weakening_legacy_keys", async () => {
+      const session = await verifyDashboardSession(readerPool, tenantId, cookie, "http://localhost:8080");
+      assert.equal(session?.appScope, appId);
+      const listed = await (await bearer(readA.admin_key, "/v1/admin/apps")).json() as { data: { app_id: string }[] };
+      assert.deepEqual(listed.data.map(row => row.app_id), [appId]);
+      assert.deepEqual((await (await bearer(legacyKey, "/v1/admin/apps")).json() as typeof listed).data.map(row => row.app_id), [appId, sibling].sort());
+      assert.equal((await verifyAdminKey(appPool, tenantId, `Bearer ${legacyKey}`))?.appScope, undefined);
+      assert.equal((await bearer(foreignKey, "/v1/admin/apps")).status, 401);
+      assert.equal((await bearer(readB.admin_key, reportPath(sibling))).status, 200);
+      const rows = await (await bearer(readA.admin_key, reportPath(appId))).json() as { data: { metric_run_id: string }[] };
+      assert.equal(rows.data.length, 7);
+      assert.ok(rows.data.every(row => runIds[0]!.includes(row.metric_run_id)));
+      assert.equal((await bearer(readA.admin_key, `/v1/admin/apps/${appId}/metrics/${encodeURIComponent(runIds[0]![0]!)}/explanation`)).status, 200);
+      const apiCsv = await bearer(readA.admin_key, reportPath(appId, "&format=csv"));
+      const dashboardCsv = await page(`/dashboard/apps/${appId}/cohorts.csv?watermark_at_most=${cutoff}`);
+      assert.equal(apiCsv.status, 200); assert.equal(dashboardCsv.status, 200);
+      assert.equal(await dashboardCsv.text(), await apiCsv.text());
+      const html = await (await page("/dashboard")).text();
+      assert.ok(html.includes(appId)); assert.ok(!html.includes(sibling) && !html.includes(foreignApp));
+      const cursorResponse = await bearer(keys.admin, reportPath(sibling, "&limit=1"));
+      const cursor = cursorResponse.headers.get("x-next-cursor"); assert.ok(cursor);
+      const crossed = await bearer(readA.admin_key, reportPath(appId, `&after=${encodeURIComponent(cursor)}`));
+      // Cross-app cursors are positions, never authorization capabilities.
+      if (crossed.status === 200) {
+        const data = await crossed.json() as typeof rows;
+        assert.ok(data.data.every(row => runIds[0]!.includes(row.metric_run_id)));
+      } else assert.equal(crossed.status, 400);
+      for (const makePath of [reportPath, (app: string) => `/v1/admin/apps/${app}/metrics/${encodeURIComponent(runIds[1]![0]!)}/explanation`,
+        (app: string) => reportPath(app, "&format=csv&export=true")]) {
+        const denied = await Promise.all([sibling, foreignApp, "missing-synthetic-app"].map(async app => {
+          const response = await bearer(readA.admin_key, makePath(app)); return [response.status, await response.text()];
+        }));
+        assert.equal(denied[0]![0], 404); assert.deepEqual(denied[0], denied[1]); assert.deepEqual(denied[0], denied[2]);
+      }
+      const deniedPages = await Promise.all([sibling, foreignApp, "missing-synthetic-app"].map(async app => {
+        const response = await page(`/dashboard/apps/${app}`); return [response.status, await response.text()];
+      }));
+      assert.equal(deniedPages[0]![0], 404); assert.deepEqual(deniedPages[0], deniedPages[1]); assert.deepEqual(deniedPages[0], deniedPages[2]);
+      const foreignRows = await withTenant(readerPool, tenantId, client => client.query(
+        "SELECT metric_run_id FROM ledger.metric_runs WHERE tenant_id=$1", [foreignTenant]));
+      assert.equal(foreignRows.rowCount, 0);
+    });
+
+    it("app_scope_applies_to_roles_jobs_mutations_and_tenant_wide_controls_in_API_and_dashboard", async () => {
+      const post = { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ platform: "android" }) };
+      assert.equal((await bearer(adminA.admin_key, `/v1/admin/apps/${appId}/sdk-keys`, post)).status, 201);
+      assert.equal((await bearer(operatorA.admin_key, `/v1/admin/apps/${appId}/sdk-keys`, post)).status, 403);
+      assert.equal((await bearer(readA.admin_key, `/v1/admin/apps/${appId}/sdk-keys`, post)).status, 403);
+      for (const feature of ["sdk-keys", "metric-schedules", "operator-bulk-exports", "metric-recalculations"]) {
+        assert.equal((await bearer(adminA.admin_key, `/v1/admin/apps/${appId}/${feature}`)).status, 200);
+        for (const method of ["GET", "POST"]) {
+          const results = await Promise.all([sibling, "missing-synthetic-app"].map(async app => {
+            const response = await bearer(adminA.admin_key, `/v1/admin/apps/${app}/${feature}`, method === "POST" ? post : { method });
+            return [response.status, await response.text()];
+          }));
+          assert.equal(results[0]![0], 404); assert.deepEqual(results[0], results[1]);
+        }
+      }
+      assert.equal((await bearer(operatorA.admin_key, `/v1/admin/apps/${sibling}/metric-recalculations`, post)).status, 404);
+      for (const path of ["/metrics", "/v1/admin/apps", "/v1/admin/link-domain"]) {
+        assert.equal((await bearer(adminA.admin_key, path, path === "/metrics" ? {} : post)).status, 403);
+      }
+      assert.equal((await bearer(adminA.admin_key, "/v1/admin/privacy-requests", { ...post, body: JSON.stringify({
+        tenant_id: tenantId, app_id: appId, requested_via: "tenant_admin_api", deletion_scope: "tenant", deletion_subject_ref: "synthetic-tenant",
+      }) })).status, 403);
+      const session = await issueDashboardSession(appPool, tenantId, adminA.key_id, 3600);
+      const adminCookie = `openmasu_dashboard=${session.token}`;
+      const html = await (await page(`/dashboard/apps/${appId}`, adminCookie)).text();
+      assert.match(html, /Issue successor key/); assert.doesNotMatch(html, /Register an app|Register a link domain/);
+      for (const path of ["/dashboard/apps", "/dashboard/link-domain"]) assert.equal((await page(path, adminCookie, { method: "POST" })).status, 403);
+      const actor = await verifyAdminKey(appPool, tenantId, `Bearer ${adminA.admin_key}`); assert.ok(actor);
+      await assert.rejects(() => issueAdminKey(appPool, actor, { role: "admin" }), /forbidden/);
+      await assert.rejects(() => retireAdminKey(appPool, actor, readB.key_id), /forbidden/);
+    });
+
+    it("app_scope_rotation_is_immutable_atomic_audited_and_revokes_existing_sessions", async () => {
+      const replacement = await issueAdminKey(appPool, identities.admin, { role: "read_only", appScope: appId });
+      await assert.rejects(() => issueAdminKey(appPool, identities.admin, { role: "read_only", appScope: appId }), /overlap exceeds/);
+      await assert.rejects(() => ensureAdminKeys(appPool, { tenantId, appId }, [{ key: readA.admin_key, role: "operator", appScope: appId }]), /role is immutable/);
+      await assert.rejects(() => ensureAdminKeys(appPool, { tenantId, appId }, [{ key: readA.admin_key, role: "read_only", appScope: sibling }]), /app scope is immutable/);
+      assert.equal(cli(["retire", `--tenant=${tenantId}`, `--key-id=${readA.key_id}`]).retired, true);
+      assert.equal((await bearer(readA.admin_key, reportPath(appId))).status, 401);
+      assert.equal((await page(`/dashboard/apps/${appId}`)).status, 401);
+      assert.equal(await verifyDashboardSession(readerPool, tenantId, cookie, "http://localhost:8080"), undefined);
+      assert.equal((await bearer(replacement.admin_key, reportPath(appId))).status, 200);
+      await ensureAdminKeys(appPool, { tenantId, appId }, [{ key: readA.admin_key, role: "read_only", appScope: appId }]);
+      assert.equal(await verifyAdminKey(appPool, tenantId, `Bearer ${readA.admin_key}`), undefined);
+      await assert.rejects(() => retireAdminKey(appPool, identities.admin, identities.admin.keyId), /last_tenant_admin/);
+      await assert.rejects(() => retireAdminKey(appPool, identities.admin, `key:${createHash("sha256").update(foreignKey).digest("hex").slice(0, 32)}`), /admin_key_not_found/);
+      const audit = await withTenant(readerPool, tenantId, client => client.query<{ action: string; target_ref: string; app_id: string; row: string }>(
+        `SELECT action,target_ref,app_id,row_to_json(audit_logs)::text AS row FROM ledger.audit_logs
+         WHERE target_scope='admin_key' ORDER BY action,target_ref`));
+      assert.equal(audit.rows.filter(row => row.action === "admin_key_issued").length, 5);
+      assert.equal(audit.rows.filter(row => row.action === "admin_key_retired").length, 1);
+      assert.ok(audit.rows.every(row => [appId, sibling].includes(row.app_id)));
+      const serialized = JSON.stringify(audit.rows);
+      for (const secret of [keys.admin, readA.admin_key, replacement.admin_key, "scrypt_digest", "scrypt_salt"]) assert.ok(!serialized.includes(secret));
+    });
   });
 });

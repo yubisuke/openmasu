@@ -104,6 +104,7 @@ export type DashboardView = {
   readonly csrfToken: string;
   readonly canOperate: boolean;
   readonly canAdminister: boolean;
+  readonly canManageTenant: boolean;
   readonly nextCursor?: string;
   readonly recordNextCursor?: string;
   readonly differenceNextCursor?: string;
@@ -149,6 +150,7 @@ export function presentDashboardView(input: {
   readonly csrfToken: string;
   readonly canOperate?: boolean;
   readonly canAdminister?: boolean;
+  readonly canManageTenant?: boolean;
 }, projection: { readonly rows: readonly MetricReportRow[]; readonly retention: ReturnType<typeof buildRetentionMatrices>; readonly acquisition: ReturnType<typeof buildAcquisitionKpiSets> }): DashboardView {
   const rows = projection.rows;
   const deterministicRows = rows.filter((row) => metricSeries(row.metric_name) === "cohort_or_activity");
@@ -194,6 +196,7 @@ export function presentDashboardView(input: {
     csrfToken: input.csrfToken,
     canOperate: input.canOperate ?? false,
     canAdminister: input.canAdminister ?? false,
+    canManageTenant: input.canManageTenant ?? input.canAdminister ?? false,
     ...(input.metrics?.next_cursor ? { nextCursor: input.metrics.next_cursor } : {}),
     ...(input.recordNextCursor ? { recordNextCursor: input.recordNextCursor } : {}),
     ...(input.differenceNextCursor ? { differenceNextCursor: input.differenceNextCursor } : {}),

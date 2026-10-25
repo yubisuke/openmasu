@@ -21,8 +21,8 @@ export async function requireRegisteredApp(
 ): Promise<AppAdminIdentity> {
   if (!identifierPattern.test(appId)) throw new AppNotFoundError();
   const result = await withTenant(pool, identity.tenantId, (client) => client.query(
-    "SELECT 1 FROM control.apps WHERE tenant_id=$1 AND app_id=$2",
-    [identity.tenantId, appId],
+    "SELECT 1 FROM control.apps WHERE tenant_id=$1 AND app_id=$2 AND ($3::text IS NULL OR app_id=$3)",
+    [identity.tenantId, appId, identity.appScope ?? null],
   ));
   if (result.rowCount !== 1) throw new AppNotFoundError();
   return { ...identity, appId };
@@ -33,8 +33,8 @@ export async function listApps(pool: Pool, identity: AdminIdentity): Promise<rea
     app_id: string;
     created_at: string;
   }>(
-    "SELECT app_id, created_at FROM control.apps WHERE tenant_id=$1 ORDER BY app_id",
-    [identity.tenantId],
+    "SELECT app_id, created_at FROM control.apps WHERE tenant_id=$1 AND ($2::text IS NULL OR app_id=$2) ORDER BY app_id",
+    [identity.tenantId, identity.appScope ?? null],
   ));
   return result.rows;
 }
@@ -56,6 +56,7 @@ export async function registerApp(input: {
   readonly redirector_base_url: string;
   readonly max_postback_base_url: string;
 }> {
+  if (input.identity.appScope !== undefined) throw new Error("forbidden");
   if (!identifierPattern.test(input.appId)) throw new Error("app_id_invalid");
   const now = input.now ?? new Date();
   const sdkPlatform = input.sdkPlatform ?? "android";

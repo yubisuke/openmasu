@@ -44,10 +44,15 @@ declared synthetic scope. The publication receipt records the downloaded Android
 SDK/backend journey on JVM/Robolectric API 24 separately from the frozen release.
 It does not establish physical-device or all-platform onboarding acceptance.
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-31 of 35 child implementations complete, with 4 optional extensions remaining.
+32 of 35 child implementations complete, with 3 optional extensions remaining.
 Select further work from the [roadmap](../roadmap.md#next-product-sequence) and
 [acceptance crosswalk](../project-plan.md#next-product-slices) according to the
 intended usage.
+
+[Optional app-scoped access](../operations/access.md) narrows existing role
+capabilities consistently across API and dashboard workflows. Existing keys keep
+tenant-wide access; scoped keys cannot use global controls. This source feature
+does not change the published SDKs or the event contract.
 
 The optional [Unity LevelPlay ILR sample](../../sdk/unity/README.md#optional-levelplay-impression-revenue)
 adds per-ad background callbacks, explicit consent and stable impression identity

@@ -92,7 +92,13 @@ The [explicit engagement policy](engagement-outcomes.md#explicit-outcome-window-
 is implemented after rc.2: independent outcome windows, recorded SDK inactivity
 and verified purchase/refund net preserve the historical 24h series. Unknown
 history is undefined, device-reported opens remain forgeable, and no acquisition
-or Apple aggregate identity is joined. The next extension is app-scoped access.
+or Apple aggregate identity is joined.
+
+[App-scoped access](operations/access.md) is implemented after rc.2: one optional
+app restriction narrows existing roles across API/session/list/export/job paths;
+legacy keys remain tenant-wide. Issuance, rotation and revocation reuse existing
+verifiers, sessions and audit storage, not a new IAM service. The next extension
+is explicit retention expiry.
 
 The [additional Unity ILR sample](../sdk/unity/README.md#optional-levelplay-impression-revenue)
 is implemented after rc.2. Provider types are an explicit shim; the existing
@@ -103,7 +109,6 @@ for the completed integrated candidate.
 
 | Issue / workstream | Narrow acceptance |
 | --- | --- |
-| [#247](https://github.com/yubisuke/openmasu/issues/247): App-scoped access | Explicit app restrictions without weakening tenant isolation |
 | [#249](https://github.com/yubisuke/openmasu/issues/249): Retention expiry | Explicit-policy preview and bounded expiry with privacy-safe replay |
 | [#251](https://github.com/yubisuke/openmasu/issues/251): Multiple workers | Tenant-wide ordering and stop/recovery evidence before multi-replica claims |
 | [#253](https://github.com/yubisuke/openmasu/issues/253): Fraud bundle preview | Same synthetic evidence shows decision and metric effects before activation |

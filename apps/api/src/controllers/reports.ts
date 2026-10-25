@@ -220,6 +220,7 @@ export function createReportsControllers(dependencies: Pick<RequestHandlerDepend
       measurementHealth: measurement,
       canOperate: roleAllows(session.role, "operate"),
       canAdminister: roleAllows(session.role, "administer"),
+      canManageTenant: roleAllows(session.role, "administer") && session.appScope === undefined,
       csrfToken: csrfToken(session.token),
     })));
   };
