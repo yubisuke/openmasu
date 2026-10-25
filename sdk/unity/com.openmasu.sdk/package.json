@@ -16,6 +16,11 @@
       "displayName": "iOS measurement sample",
       "description": "Initialises the iOS function-pointer bridge with deployment placeholders.",
       "path": "Samples~/iOSMeasurement"
+    },
+    {
+      "displayName": "Optional LevelPlay revenue adapter",
+      "description": "Explicit LevelPlay 9.5+ per-ad ILR binding; requires the host's provider package.",
+      "path": "Samples~/LevelPlayRevenue"
     }
   ]
 }

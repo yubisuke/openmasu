@@ -132,9 +132,14 @@ namespace OpenMasu.Unity
             if (!IsIdentifier(policyVersion)) throw new ArgumentException("consent_policy_version_invalid", nameof(policyVersion));
             if (completion == null) throw new ArgumentNullException(nameof(completion));
             var nativeState = state == OpenMasuConsentState.NotRequired ? "not_required" : state.ToString().ToLowerInvariant();
+            var revenueEpoch = BeginAdRevenueConsentChange();
             PurchasePlatform<IOpenMasuConsentPlatform>().UpdateConsent(nativeState, policyVersion,
-                OnceOnMainThread(value => completion(OpenMasuPurchaseResult.Fields(value)
-                    .TryGetValue("state", out var result) && result == "updated")));
+                OnceOnMainThread(value => {
+                    var updated = OpenMasuPurchaseResult.Fields(value).TryGetValue("state", out var result) && result == "updated";
+                    CompleteAdRevenueConsentChange(revenueEpoch,
+                        state == OpenMasuConsentState.Granted || state == OpenMasuConsentState.NotRequired, updated);
+                    completion(updated);
+                }));
         }
 
         private T PurchasePlatform<T>() where T : class

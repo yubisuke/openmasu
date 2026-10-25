@@ -76,6 +76,29 @@ jobs:
       - name: Compile and exercise the Unity bridge shim
         if: steps.scope.outputs.run_android == 'true'
         run: dotnet run --project sdk/unity/tests/UnityCompileProbe.csproj --configuration Release
+      - name: Exercise LevelPlay callback through native queue, signed ingestion and revenue cohort
+        if: steps.scope.outputs.run_android == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          db="openmasu-levelplay-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          trap 'docker rm --force "$db" >/dev/null 2>&1 || true' EXIT
+          docker run --detach --name "$db" --publish 127.0.0.1::5432 \
+            --env POSTGRES_DB=openmasu_levelplay_synthetic --env POSTGRES_PASSWORD=synthetic-levelplay postgres:17 >/dev/null
+          for attempt in $(seq 1 30); do
+            if docker exec "$db" pg_isready -U postgres -d openmasu_levelplay_synthetic >/dev/null; then break; fi
+            sleep 1
+          done
+          docker exec "$db" pg_isready -U postgres -d openmasu_levelplay_synthetic
+          port=$(docker port "$db" 5432/tcp | sed 's/.*://')
+          export OPENMASU_MIGRATION_DATABASE_URL="postgresql://postgres:synthetic-levelplay@127.0.0.1:$port/openmasu_levelplay_synthetic"
+          export OPENMASU_APP_DATABASE_PASSWORD=synthetic-levelplay-app
+          export OPENMASU_READER_DATABASE_PASSWORD=synthetic-levelplay-reader
+          export OPENMASU_SEED_DATABASE_PASSWORD=synthetic-levelplay-seed
+          export OPENMASU_APP_DATABASE_URL="postgresql://openmasu_app:$OPENMASU_APP_DATABASE_PASSWORD@127.0.0.1:$port/openmasu_levelplay_synthetic"
+          export OPENMASU_READER_DATABASE_URL="postgresql://openmasu_reader:$OPENMASU_READER_DATABASE_PASSWORD@127.0.0.1:$port/openmasu_levelplay_synthetic"
+          npm run db:migrate
+          OPENMASU_SYNTHETIC_LEVELPLAY=1 node --import tsx --test tools/levelplay-sdk-journey.sdk.test.ts
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: steps.scope.outputs.run_android == 'true'
         with:

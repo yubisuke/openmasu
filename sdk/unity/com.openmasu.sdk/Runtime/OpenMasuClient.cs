@@ -142,7 +142,12 @@ namespace OpenMasu.Unity
             this.dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         }
 
-        public void Initialize(OpenMasuOptions options) => platform.Initialize(options);
+        public void Initialize(OpenMasuOptions options)
+        {
+            ResetAdRevenueContext();
+            ChangeAdRevenueCollection(false);
+            platform.Initialize(options);
+        }
         public void TrackCustomEvent(string eventKey) => platform.TrackCustomEvent(eventKey);
         public void TrackPurchase(
             string transactionId,
@@ -196,9 +201,16 @@ namespace OpenMasu.Unity
         public void GetQueueHealth(Action<OpenMasuQueueHealth> completion) =>
             QueueHealthPlatform().GetQueueHealth(value =>
                 dispatcher.Post(() => completion(OpenMasuQueueHealth.Parse(value))));
-        public void SetCollectionEnabled(bool enabled) => platform.SetCollectionEnabled(enabled);
-        public void ResetInstallationId(Action<bool> completion) =>
+        public void SetCollectionEnabled(bool enabled)
+        {
+            ChangeAdRevenueCollection(enabled);
+            platform.SetCollectionEnabled(enabled);
+        }
+        public void ResetInstallationId(Action<bool> completion)
+        {
+            ResetAdRevenueContext();
             platform.ResetInstallationId(value => dispatcher.Post(() => completion(value)));
+        }
         public void PingFromBackground(string value, Action<string> completion) =>
             platform.PingFromBackground(value, result => dispatcher.Post(() => completion(result)));
         public void SetDeepLinkListener(Action<OpenMasuDeepLink> listener) =>
@@ -272,8 +284,13 @@ namespace OpenMasu.Unity
 
         public void Dispose()
         {
-            if (disposed) return;
-            disposed = true;
+            lock (adRevenueGate)
+            {
+                if (disposed) return;
+                disposed = true;
+                adRevenueEpoch++;
+                adRevenueConsentEnabled = false;
+            }
             if (unityDeepLinksAttached) Application.deepLinkActivated -= HandleDeepLink;
             platform.Dispose();
         }
