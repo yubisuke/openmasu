@@ -56,7 +56,7 @@ export function costArtifact(row: CostInput, reportSnapshotDigest: string): Reco
     throw Error("cost_coverage_scope_invalid");
   }
   const dimensions = dimensionObject(row);
-  return {
+  const artifact: Record<string, unknown> = {
     contract_version: "0.4.0",
     cost_record_id: `cost:${sha256([dimensions, row.as_of, row.amount_unscaled, row.currency, ...(row.coverage_scope ? [row.coverage_scope] : [])]).slice(0, 48)}`,
     tenant_id: row.tenant_id,
@@ -75,8 +75,14 @@ export function costArtifact(row: CostInput, reportSnapshotDigest: string): Reco
     source: row.source,
     as_of: row.as_of,
     report_snapshot_digest: reportSnapshotDigest,
-    dimension_digest: sha256(dimensions),
   };
+  // Contract dimensions describe the retained public grain, not the database
+  // revision key (which also contains scope and date).
+  artifact.dimension_digest = sha256(Object.fromEntries(
+    ["network", "campaign_id", "ad_group_id", "creative_id", "country", "reporting_time_zone"]
+      .filter(field => artifact[field] !== undefined).map(field => [field, artifact[field]]),
+  ));
+  return artifact;
 }
 
 export async function persistCostImport(pool: Pool, sourceId: string, rows: readonly CostInput[]): Promise<CostImportResult> {
@@ -123,7 +129,7 @@ export async function persistCostImportWithClient(client: PoolClient, sourceId: 
           artifact.cost_record_id, row.tenant_id, row.app_id, row.network,
           row.campaign_id ?? null, row.ad_group_id ?? null, row.country ?? null,
           row.date, row.amount_unscaled, row.amount_scale, row.currency, row.source,
-          row.as_of, reportDigest, artifact.dimension_digest, runId, jcs(artifact),
+          row.as_of, reportDigest, sha256(dimensionObject(row)), runId, jcs(artifact),
         ],
       );
       inserted += result.rowCount ?? 0;
