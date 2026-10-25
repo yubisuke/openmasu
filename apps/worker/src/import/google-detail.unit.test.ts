@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { it } from "node:test";
 import { EnvironmentSecretStore, normalizeGoogleCostDetail, normalizeCostRefreshDefinition, costAdapterCapability } from "@openmasu/runtime";
 import { fetchGoogleAds, type FetchLike } from "./adapters.js";
+import { costArtifact } from "./cost.js";
 
 const detail = { version:1,grain:"ad",coverage:"explicit_selection",country_scope:"all",selections:[
   { campaign_id:"43601",ad_group_id:"43602",provider_ad_id:"43603",creative_id:"synthetic-creative-one" } ] };
@@ -26,10 +27,14 @@ it("selected_google_costs_preserve_explicit_ad_binding_exact_micro_money_and_dec
       : [{ ...row,adGroupAd:undefined,segments:{ ...row.segments,geoTargetCountry:"geoTargetConstants/2840" } }] }]);
   },group);
   const grouped=await fetchGoogleAds(groupOptions); assert.equal(grouped[0].country,"US"); assert.equal(grouped[0].creative_id,undefined);
+  assert.equal(costArtifact(rows[0],"0".repeat(64)).coverage_scope,"matching_detail_only");
+  assert.throws(()=>costArtifact({...rows[0],ad_group_id:undefined},"0".repeat(64)),/cost_coverage_scope_invalid/);
 });
 it("selected_google_costs_reject_duplicate_unknown_parent_partial_and_unsupported_grains_before_returning_rows",async()=>{
   for(const bad of [{ ...detail,country_scope:"geo_country" },{ ...detail,grain:"campaign" },{ ...detail,selections:[...detail.selections,...detail.selections] },
-    { ...detail,selections:[{ campaign_id:"43601",ad_group_id:"43602",provider_ad_id:"43603" }] },{ ...detail,selections:Array(101).fill(detail.selections[0]) }]) assert.throws(()=>normalizeGoogleCostDetail(bad),/cost_detail_/);
+    { ...detail,selections:[{ campaign_id:"43601",ad_group_id:"43602",provider_ad_id:"43603" }] },
+    { ...detail,selections:[detail.selections[0],{...detail.selections[0],provider_ad_id:"43604"}] },
+    { ...detail,selections:Array(101).fill(detail.selections[0]) }]) assert.throws(()=>normalizeGoogleCostDetail(bad),/cost_detail_/);
   for(const response of [[{ results:[row,row] }],[{ results:[{ ...row,adGroupAd:{ ad:{ id:"43609" } } }] }],
     [{ results:[{ ...row,adGroup:undefined,adGroupAd:undefined }] }],[{ results:[row] },{ error:{ message:"synthetic partial failure" } }],
     [{ results:[row],nextPageToken:"synthetic-unread-page" }],[{ results:[{ ...row,segments:{ ...row.segments,geoTargetCountry:"geoTargetConstants/2840" } }] }]]) {

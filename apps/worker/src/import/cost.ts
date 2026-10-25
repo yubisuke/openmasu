@@ -51,6 +51,10 @@ export function prepareCostImportRows(rows: readonly CostInput[]): CostInput[] {
 }
 
 export function costArtifact(row: CostInput, reportSnapshotDigest: string): Record<string, unknown> {
+  if (row.coverage_scope !== undefined && (row.coverage_scope !== "matching_detail_only"
+      || typeof row.ad_group_id !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(row.ad_group_id))) {
+    throw Error("cost_coverage_scope_invalid");
+  }
   const dimensions = dimensionObject(row);
   return {
     contract_version: "0.4.0",

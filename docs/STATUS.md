@@ -59,7 +59,7 @@ Detailed limits belong to the [product guides](README.md), [product scope](produ
 ## Current development focus
 
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-27 of 35 child implementations complete; 8 optional extensions remain. The earlier
+28 of 35 child implementations complete; 7 optional extensions remain. The earlier
 integration plan is complete, not a second backlog. The dependency, controller,
 presentation, evaluator and ingestion foundations are also implemented.
 
@@ -79,6 +79,12 @@ fixed-cutoff, content-addressed results; missing/unknown/incomparable are not
 threshold breaches. Inputs remain operator deposited, with explicit expiry,
 deletion and conservative privacy suppression. No provider authentication,
 notification delivery or new service is introduced. This is after rc.2.
+
+[Selected Google detail costs](cost-refresh.md#explicit-google-ad-group-and-ad-costs)
+add bounded ad-group/ad acquisition and explicit creative binding. Selected child
+coverage is eligible only for its matching detail grouping, never an inferred
+parent or sibling denominator. Reader health describes configured capability,
+not provider completeness. This source addition is not in the rc.2 assets.
 
 The [minimal monitoring rules](operations/monitoring.md) are implemented with
 synthetic transition tests; receiver setup and live delivery remain external.

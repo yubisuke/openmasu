@@ -27,13 +27,19 @@ historical payers; zero-payer ARPPU is undefined. No SDK release is implied.
 storage, immutable revisions, fixed-cutoff worker results and explicit retention,
 deletion and privacy suppression. Inputs are operator deposited, not live fetched.
 
+[Google detail costs](../cost-refresh.md#explicit-google-ad-group-and-ad-costs)
+add explicit ad-group/ad selection and creative binding. Additive contract patch
+0.4.27 records matching-detail-only coverage without changing wire identity or
+earlier goldens. Selected spend cannot be allocated to parents or siblings.
+Live provider permissions, mapping correctness and completeness remain unverified.
+
 Integrated candidate acceptance
 ([#252](https://github.com/yubisuke/openmasu/issues/252)) is complete within its
 declared synthetic scope. The publication receipt records the downloaded Android
 SDK/backend journey on JVM/Robolectric API 24 separately from the frozen release.
 It does not establish physical-device or all-platform onboarding acceptance.
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-27 of 35 child implementations complete, with 8 optional extensions remaining.
+28 of 35 child implementations complete, with 7 optional extensions remaining.
 Select further work from the [roadmap](../roadmap.md#next-product-sequence) and
 [acceptance crosswalk](../project-plan.md#next-product-slices) according to the
 intended usage.

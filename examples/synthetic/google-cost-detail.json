@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "grain": "ad",
+  "coverage": "explicit_selection",
+  "country_scope": "all",
+  "selections": [
+    {
+      "campaign_id": "43601",
+      "ad_group_id": "43602",
+      "provider_ad_id": "43603",
+      "creative_id": "synthetic-creative-a"
+    },
+    {
+      "campaign_id": "43601",
+      "ad_group_id": "43604",
+      "provider_ad_id": "43605",
+      "creative_id": "synthetic-creative-b"
+    }
+  ]
+}

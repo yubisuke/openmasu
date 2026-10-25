@@ -67,7 +67,9 @@ grains and their campaign aggregates. A late revenue or settled commerce input
 uses the installation's selected click to find the same grains. Unrelated
 creatives are not recalculated. Each replacement supersedes a saved run;
 original artifacts and definitions remain unchanged. This connection does not
-add automatic all-history recalculation or broaden the supported cost adapters.
+add automatic all-history recalculation. The separately configured
+[Google detail-cost adapter](cost-refresh.md#explicit-google-ad-group-and-ad-costs)
+can supply selected detail costs without changing the metric definitions.
 
 ## Meaning and limitations
 
@@ -79,9 +81,14 @@ add automatic all-history recalculation or broaden the supported cost adapters.
 - Revisions, input watermarks, per-event FX, fraud population and privacy rules
   retain their existing meanings. Saved definitions include the new policy;
   an older definition/run is not automatically upgraded.
-- Previously persisted click facts without detail remain unknown. Existing
-  provider adapters do not promise creative-level cost or automatic metadata
-  discovery. Only provider-neutral manual CSV gains creative input here.
+- Previously persisted click facts without detail remain unknown. Provider-neutral
+  manual CSV accepts explicit creative input. The Google v25 adapter also accepts
+  bounded ad-group selections or explicitly mapped ad-to-creative selections;
+  it does not infer creative identity or discover a provider hierarchy.
+- Costs marked `coverage_scope=matching_detail_only` require this explicit detail
+  profile and a matching ad-group filter; ad costs also require a matching creative
+  filter. Selected child spend cannot supply a campaign, sibling or ad-group
+  rollup. Historical unmarked, disjoint costs retain the rollup behavior above.
 - Reporting, schedules and bounded cost/late-input correction use this same
   explicit profile. An operator must still import the relevant cost grain and
   choose the definitions; absence of detail is not a zero-valued creative.
