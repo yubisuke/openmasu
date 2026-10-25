@@ -166,6 +166,26 @@ describe("scheduled metric configuration", () => {
     assert.throws(() => normalize({ ...request, evaluations: [...request.evaluations, ...request.evaluations] }), /discovery_overlap/);
     assert.throws(() => normalize({ ...request, metric_definitions: [] }), /discovery_invalid/);
   });
+  it("discovers_only_explicit_detail_profiles_at_a_declared_bounded_grain", () => {
+    const request = {...body,metric_definitions:structuredClone(ACQUISITION_DETAIL_METRIC_DEFINITIONS),
+      evaluations:[{metric_names:["d7_roas"],date_dimension:"cohort_date",grouping:{network:"synthetic-network",campaign_id:"synthetic-campaign"},
+        campaign_discovery:{policy:"selected_acquisition_and_cost_v1",max_targets:10,grain:"creative"}}]};
+    const normalize=(value:any)=>normalizeMetricScheduleRequest(value,new Date("2026-08-10T12:00:00.000Z"));
+    for(const grain of ["ad_group","creative"]){
+      const selected={...request,evaluations:[{...request.evaluations[0],campaign_discovery:{...request.evaluations[0].campaign_discovery,grain}}]};
+      assert.deepEqual(normalize(selected),normalize(structuredClone(selected)));
+      assert.equal(normalize(selected).definition.evaluations[0].campaign_discovery?.grain,grain);
+    }
+    for(const grain of ["campaign","ad","all",null])assert.throws(()=>normalize({...request,evaluations:[{
+      ...request.evaluations[0],campaign_discovery:{...request.evaluations[0].campaign_discovery,grain}}]}),/discovery_invalid/);
+    for(const grouping of [{ad_group_id:"synthetic-fixed"},{creative_id:"synthetic-fixed"}])assert.throws(()=>normalize({
+      ...request,evaluations:[{...request.evaluations[0],grouping}]}),/discovery_invalid/);
+    assert.throws(()=>normalize({...request,metric_definitions:DISJOINT_COST_METRIC_DEFINITIONS}),/discovery_invalid/);
+    const legacy=normalizeMetricScheduleRequest({...body,metric_definitions:structuredClone(DISJOINT_COST_METRIC_DEFINITIONS),
+      evaluations:[{metric_names:["d0_roas"],date_dimension:"cohort_date",grouping:{},
+        campaign_discovery:{policy:"selected_acquisition_and_cost_v1",max_targets:10}}]},new Date("2026-08-10T12:00:00.000Z"));
+    assert.equal(Object.hasOwn(legacy.definition.evaluations[0].campaign_discovery!,"grain"),false);
+  });
   it("preserves selected commerce and its safe cost policy in scheduled definitions", () => {
     const request = { ...body, metric_definitions: structuredClone(SELECTED_COMMERCE_METRIC_DEFINITIONS),
       evaluations: [{ metric_names: ["d30_total_net_roas"], date_dimension: "cohort_date", grouping: {} }] };

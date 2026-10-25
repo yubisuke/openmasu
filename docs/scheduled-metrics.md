@@ -156,6 +156,50 @@ not be combined with discovery. Metric names must be disjoint across evaluations
 when discovery is enabled: do not include an overlapping manual total.
 Manual schedules without this field retain their definition digest and run IDs.
 
+### Discover selected ad groups or creatives
+
+The same private schedule option accepts optional `grain: "ad_group"` or
+`grain: "creative"`. Use the explicit
+[acquisition-detail definitions](acquisition-detail-metrics.md), not a legacy
+campaign definition. For example, replace an evaluation's static detail filters
+with this synthetic configuration:
+
+```json
+{
+  "metric_names": ["d7_roas"],
+  "date_dimension": "cohort_date",
+  "grouping": {"network": "synthetic-network", "campaign_id": "campaign-a"},
+  "campaign_discovery": {
+    "policy": "selected_acquisition_and_cost_v1",
+    "max_targets": 20,
+    "grain": "creative"
+  }
+}
+```
+
+This is bounded discovery from already recorded selected first-party clicks and
+corresponding cost evidence, not a provider metadata crawl or an inferred ID
+hierarchy. Each target retains its observed campaign/network/ad-group tuple and,
+for creative grain, explicit creative ID. A campaign/network/country/status
+filter may restrict it; fixed ad-group/creative filters cannot be combined with
+discovery. Platform/imported attribution and non-UTC definitions are unsupported
+for this detail option. Omitting `grain` preserves historical campaign discovery.
+
+Missing detail is counted as `unknown_detail`; cost with only a parent grain is
+counted as `parent_only_cost`. Both yield `partial_unknown`, never invented child
+targets or zero-valued observations. A matching-only creative cost cannot create
+an ad-group rollup. Known cost-only detail may create a target without claiming
+complete event delivery. Monetary eligibility still follows the ordinary cost
+engine, including matching-detail-only coverage, revisions and overlap refusal.
+
+The same immutable target receipt, watermark/digest, bounded limit, privacy fence
+and restart identity apply. New detail can enter a later date, not an already
+frozen target set. Overflow fails the date without a silently truncated success.
+The existing schedule form's advanced JSON and API both accept this option;
+there is no new scheduler, provider credential or background service.
+
+### Shared receipt and execution rules
+
 For each target date, the worker unions adopted acquisition-source campaign/network
 pairs and current cost campaign/network pairs at the fixed receipt watermark.
 It uses the same selected evidence join as the metric engine, not an arbitrary

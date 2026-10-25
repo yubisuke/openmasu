@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { after, beforeEach, describe, it } from "node:test";
-import { DISJOINT_COST_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import { ACQUISITION_DETAIL_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { jcs, sha256, type CandidateAttempt } from "@openmasu/attribution-core";
 import { createAppPool, createReaderPool, createSeedPool, withTenant } from "@openmasu/runtime";
 import { registerMetricSchedule, listMetricSchedules, disableMetricSchedule } from "../../api/src/metric-schedules.js";
@@ -11,6 +11,7 @@ import { ingestRuntimeBatch } from "./ingestion.js";
 import { ingestFixture } from "./test-support/fixture-ingestion.js";
 import { claimNextScheduledDate, processMetricSchedules } from "./metric-schedule-worker.js";
 import { processMetricRecalculations } from "./metric-recalculation-worker.js";
+import { persistCostImportWithClient } from "./import/cost.js";
 type Any = Record<string, any>;
 
 describe("bounded campaign discovery in the existing daily worker", { concurrency: false }, () => {
@@ -45,7 +46,8 @@ describe("bounded campaign discovery in the existing daily worker", { concurrenc
       FROM ledger.cost_records WHERE tenant_id=$1 AND app_id=$2 AND cost_record_id='cost-native-acquisition'`,
     [identity.tenantId, identity.appId, artifact.cost_record_id, campaign, date, artifact.as_of, artifact.dimension_digest, JSON.stringify(artifact)]));
   }
-  async function campaign(label: string, campaignId: string, days = 1, mode?: "organic" | "unattributed" | "unknown_nonorganic") {
+  async function campaign(label: string, campaignId: string, days = 1, mode?: "organic" | "unattributed" | "unknown_nonorganic",
+    detail?: {ad_group_id:string;creative_id?:string}) {
     const shifted = (value: string) => new Date(Date.parse(value) + days * 86_400_000).toISOString();
     const receivedAt = days ? "2026-08-13T00:00:00.000Z" : "2026-08-12T00:00:00.000Z";
     const records = input.records.slice(0, 3).map((source: Any) => {
@@ -55,6 +57,10 @@ describe("bounded campaign discovery in the existing daily worker", { concurrenc
       if (row.payload.installation_id) row.payload.installation_id = `installation:${label}`;
       if (row.payload.click_id) row.payload.click_id = `click-${label}_0000000000000000`;
       if (row.payload.campaign_id) row.payload.campaign_id = campaignId;
+      if(detail && row.event_name==="click") {
+        row.payload.ad_group_id=detail.ad_group_id;
+        if(detail.creative_id)row.payload.creative_id=detail.creative_id;else delete row.payload.creative_id;
+      }
       if (row.payload.redirector_click_at) row.payload.redirector_click_at = shifted(row.payload.redirector_click_at);
       if (row.payload.install_begin_at_server) row.payload.install_begin_at_server = shifted(row.payload.install_begin_at_server);
       if (mode && row.event_name === "install") {
@@ -72,6 +78,72 @@ describe("bounded campaign discovery in the existing daily worker", { concurrenc
     assert.equal(result.rejections.length, 0);
     history.push(...attempts);
   }
+
+  async function detailFixture() {
+    input=JSON.parse(readFileSync("fixtures/v0.4/63-selected-acquisition-detail/input.json","utf8")
+      .replaceAll('"tenant-a"',JSON.stringify(identity.tenantId)));
+    input.metric_evaluations=[];
+    await ingestFixture(`detail-discovery-${identity.tenantId}`,input,app,seed);
+    history=input.records.map((record:Any)=>({server:input.server_context,record,batch_id:"synthetic-initial-detail"}));
+  }
+  const detailSchedule=(grain:"ad_group"|"creative",max=10,start_date="2026-08-06",clock=first)=>registerMetricSchedule({pool:app,identity,now:clock,
+    body:{lag_days:6,start_date,fx_policy:input.fx_policy,metric_definitions:structuredClone(ACQUISITION_DETAIL_METRIC_DEFINITIONS),
+      evaluations:[{metric_names:["d7_roas"],date_dimension:"cohort_date",grouping:{},
+        campaign_discovery:{policy:"selected_acquisition_and_cost_v1",max_targets:max,grain}}]}});
+  const detailCost=(date:string,as_of:string,detail?:{ad_group_id:string;creative_id?:string})=>withTenant(app,identity.tenantId,
+    client=>persistCostImportWithClient(client,"synthetic-discovered-cost",[{
+      tenant_id:identity.tenantId,app_id:identity.appId,network:"synthetic-network",campaign_id:"campaign-a",date,as_of,
+      amount_unscaled:"10000000",amount_scale:6,currency:"USD",source:"imported_reported",...detail,
+      ...(detail?{coverage_scope:"matching_detail_only" as const}:{})}]));
+
+  it("detail_discovery_freezes_known_targets_restarts_identically_and_adds_a_new_creative_on_the_next_date",async()=>{
+    await detailFixture();
+    const schedule=await detailSchedule("creative");
+    const pending=await claimNextScheduledDate(app,schedule,first); assert.ok(pending?.targetSet);
+    assert.deepEqual(pending.targetSet.targets.map(row=>row.grouping.creative_id).sort(),["synthetic-creative-a","synthetic-creative-b"]);
+    const added={ad_group_id:"synthetic-group-c",creative_id:"synthetic-creative-c"};
+    await detailCost("2026-08-06","2026-08-12T00:00:00.000Z",added);
+    await processMetricSchedules(app,identity.tenantId,{now:first});
+    const original=await rows(); assert.equal(original.length,2); assert.ok(original.every(row=>row.value_unscaled==="2000000"));
+    await withTenant(app,identity.tenantId,client=>client.query(`UPDATE control.metric_schedule_checkpoints SET last_target_date=NULL,
+      pending_target_date=$3::date,pending_watermark=$4,pending_definition_digest=$5 WHERE tenant_id=$1 AND metric_schedule_id=$2`,
+      [identity.tenantId,schedule.metric_schedule_id,pending.targetDate,pending.watermark,pending.definitionDigest]));
+    assert.equal((await processMetricSchedules(app,identity.tenantId,{now:first})).replayedDates,1);
+    assert.equal(jcs(await rows()),jcs(original));
+    assert.equal((await listed())[0].latest_discovery?.target_digest,pending.targetSet.target_digest);
+    await campaign("detail-next","campaign-a",1,undefined,added);
+    await detailCost("2026-08-07","2026-08-13T00:00:00.000Z",added);
+    await processMetricSchedules(app,identity.tenantId,{now:next});
+    const daily=(await rows()).filter(row=>row.grouping.dimensions.cohort_date==="2026-08-07");
+    assert.equal(daily.length,1); assert.equal(daily[0].grouping.dimensions.creative_id,added.creative_id);
+    assert.equal(daily[0].value_unscaled,"2000000");
+    for(const row of original)assert.equal(jcs((await rows()).find(saved=>saved.metric_run_id===row.metric_run_id)),jcs(row));
+  });
+
+  it("detail_discovery_reports_unknown_and_parent_only_cost_and_refuses_overflow_and_post_freeze_privacy_changes",async()=>{
+    await detailFixture();
+    await campaign("detail-unknown","campaign-a",2,undefined,{ad_group_id:"synthetic-group-unknown"});
+    await detailCost("2026-08-08","2026-08-14T00:00:00.000Z");
+    const unknown=await detailSchedule("creative",10,"2026-08-08",new Date("2026-08-14T12:00:00.000Z"));
+    await processMetricSchedules(app,identity.tenantId,{now:new Date("2026-08-14T12:00:00.000Z")});
+    const receipt=(await listed())[0].latest_discovery!;
+    assert.equal(receipt.selection_state,"partial_unknown");
+    assert.equal((receipt.counts as Any).unknown_detail,1); assert.equal((receipt.counts as Any).parent_only_cost,1);
+    assert.equal((await rows()).length,0);
+    await disableMetricSchedule({pool:app,identity,metricScheduleId:unknown.metric_schedule_id});
+    const overflow=await detailSchedule("creative",1);
+    await assert.rejects(processMetricSchedules(app,identity.tenantId,{now:first}),/cycle_failed/);
+    assert.equal((await listed()).find(row=>row.metric_schedule_id===overflow.metric_schedule_id)?.safe_reason,"target_limit");
+    assert.equal((await rows()).length,0);
+    await disableMetricSchedule({pool:app,identity,metricScheduleId:overflow.metric_schedule_id});
+    const privacy=await detailSchedule("ad_group"); await claimNextScheduledDate(app,privacy,first);
+    await withTenant(app,identity.tenantId,client=>client.query(`INSERT INTO ledger.raw_payload_states
+      (tenant_id,app_id,record_id,lifecycle_status,changed_at,privacy_request_id)
+      VALUES ($1,$2,'click-63-a','redacted','2026-08-12T10:00:00.000Z','privacy:synthetic-detail-discovery')`,[identity.tenantId,identity.appId]));
+    await assert.rejects(processMetricSchedules(app,identity.tenantId,{now:first}),/cycle_failed/);
+    assert.equal((await listed()).find(row=>row.metric_schedule_id===privacy.metric_schedule_id)?.safe_reason,"privacy_unavailable");
+    assert.equal((await rows()).length,0);
+  });
 
   it("connects daily campaign discovery, the next campaign and late-input correction without a duplicate total", async () => {
     await register();

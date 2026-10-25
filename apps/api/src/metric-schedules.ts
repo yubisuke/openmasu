@@ -19,7 +19,7 @@ export type MetricScheduleDefinition = Readonly<{
     metric_names: readonly string[];
     date_dimension: "cohort_date" | "metric_date";
     grouping: JsonObject;
-    campaign_discovery?: Readonly<{ policy: "selected_acquisition_and_cost_v1"; max_targets: number }>;
+    campaign_discovery?: Readonly<{ policy: "selected_acquisition_and_cost_v1"; max_targets: number; grain?: "ad_group" | "creative" }>;
   }>[];
 }>;
 
@@ -243,24 +243,29 @@ export function normalizeMetricScheduleRequest(
           return metric?.acquisition_dimension_policy !== "selected_link_ad_group_creative"
             && !(["selected_verified_platform", "selected_imported_provider"].includes(String(metric?.acquisition_basis)) && grouping.creative_id === undefined);
         }))) throw new Error("metric_schedule_detail_profile_required");
-    let discovery: { policy: "selected_acquisition_and_cost_v1"; max_targets: number } | undefined;
+    let discovery: MetricScheduleDefinition["evaluations"][number]["campaign_discovery"];
     if (evaluation.campaign_discovery !== undefined) {
       const candidate = object(evaluation.campaign_discovery, "metric_schedule_discovery_invalid");
-      if (Object.keys(candidate).some(key => !["policy", "max_targets"].includes(key))
+      const detail = candidate.grain !== undefined;
+      if (Object.keys(candidate).some(key => !["policy", "max_targets", "grain"].includes(key))
           || candidate.policy !== "selected_acquisition_and_cost_v1"
+          || (detail && !["ad_group", "creative"].includes(String(candidate.grain)))
           || !Number.isSafeInteger(candidate.max_targets) || Number(candidate.max_targets) < 1 || Number(candidate.max_targets) > 100
-          || dateDimension !== "cohort_date" || grouping.campaign_id !== undefined || grouping.apple_conversion_bucket !== undefined
+          || dateDimension !== "cohort_date" || (!detail && grouping.campaign_id !== undefined)
+          || grouping.ad_group_id !== undefined || grouping.creative_id !== undefined || grouping.apple_conversion_bucket !== undefined
           || evaluation.metric_names.some(name => {
             const metric = suppliedDefinitions.find(value => value.metric_name === name);
             return !metric || metric.anchor_event !== "install" || metric.aggregation_time_zone !== "UTC"
-              || metric.acquisition_dimension_policy !== undefined
+              || (detail ? metric.acquisition_dimension_policy !== "selected_link_ad_group_creative"
+                || metric.acquisition_basis !== "selected_first_party_click" : metric.acquisition_dimension_policy !== undefined)
               || !["selected_first_party_click", "selected_verified_platform"].includes(String(metric.acquisition_basis))
               || ((metric.definition as JsonObject).calculation === "revenue_over_cost"
                 && metric.cost_selection_policy !== "reject_overlapping_grains");
           })) throw new Error("metric_schedule_discovery_invalid");
       const bases = new Set(evaluation.metric_names.map(name => suppliedDefinitions.find(value => value.metric_name === name)?.acquisition_basis));
       if (bases.size !== 1) throw new Error("metric_schedule_discovery_mixed_basis");
-      discovery = { policy: "selected_acquisition_and_cost_v1", max_targets: Number(candidate.max_targets) };
+      discovery = { policy: "selected_acquisition_and_cost_v1", max_targets: Number(candidate.max_targets),
+        ...(detail ? {grain:candidate.grain as "ad_group" | "creative"} : {}) };
     }
     return {
       metric_names: [...evaluation.metric_names].sort() as string[],
