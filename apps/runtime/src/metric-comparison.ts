@@ -1,6 +1,7 @@
 import type { OpenMasuMetricDefinitionV04 as MetricDefinition } from "../../../packages/contracts/src/generated/contract-types.js";
 import { cohortDayStart, addCalendarDays, canonicalDatedFxPolicy, isCalendarActivityMetric, isPayerMetric, isPayerMetricDefinition,
-  isCalendarActivityMetricDefinition, type DatedFxPolicyInput } from "@openmasu/contracts/definitions";
+  isCalendarActivityMetricDefinition, metricProfileMetadata, ENGAGEMENT_POLICY_BUNDLE, ENGAGEMENT_POLICY_VERSION,
+  ENGAGEMENT_POLICY_METRIC_NAMES, type DatedFxPolicyInput } from "@openmasu/contracts/definitions";
 
 /** Aggregate-only metadata. Never store a replay manifest or evidence IDs here. */
 export type ComparisonFx = {
@@ -55,6 +56,7 @@ export function captureMetricComparisonContext(
     ...(definition.cost_selection_policy ? { cost_selection_policy: definition.cost_selection_policy } : {}),
     ...(definition.refund_reversal_policy ? { refund_reversal_policy: definition.refund_reversal_policy } : {}),
     ...(definition.engagement_credit_policy ? { engagement_credit_policy: definition.engagement_credit_policy } : {}),
+    ...(definition.engagement_inactivity_days !== undefined ? { engagement_inactivity_days: definition.engagement_inactivity_days } : {}),
     rule_bundle_id: definition.rule_bundle_id, rule_bundle_version: definition.rule_bundle_version,
     rule_bundle_hash: definition.rule_bundle_hash,
   };
@@ -108,17 +110,31 @@ export function comparisonMeaning(context: MetricComparisonContext) {
     };
   }
   if (d.engagement_credit_policy) {
+    const explicit = d.rule_bundle_id === ENGAGEMENT_POLICY_BUNDLE;
+    if (explicit && (metricProfileMetadata(d)?.key !== "engagement_policy"
+        || d.metric_definition_version !== ENGAGEMENT_POLICY_VERSION
+        || !ENGAGEMENT_POLICY_METRIC_NAMES.some(name => name === d.metric_name)
+        || !Number.isInteger(d.engagement_inactivity_days) || d.engagement_inactivity_days! < 0 || d.engagement_inactivity_days! > 90
+        || !Number.isInteger(window.day) || window.day < 0 || window.day > 29)) return undefined;
+    if (!explicit && d.engagement_inactivity_days !== undefined) return undefined;
     if (d.anchor_event !== "deep_link_open" || d.engagement_credit_policy !== "latest_eligible_open_before_outcome"
-        || d.aggregation_time_zone !== "UTC" || window.type !== "elapsed" || window.day !== 0
+        || d.aggregation_time_zone !== "UTC" || window.type !== "elapsed" || (!explicit && window.day !== 0)
         || !["converted_installations", "revenue_sum"].includes(calculation)
         || (conversion && (!d.conversion_event_key || d.definition.numerator !== "converted_installations"))
-        || (revenue && (d.definition.numerator !== "revenue" || context.fx.target_currency !== d.currency || context.fx.target_scale !== d.amount_scale))) return undefined;
+        || (revenue && (!(explicit ? ["revenue", "purchase_net_revenue"].includes(d.definition.numerator) : d.definition.numerator === "revenue")
+          || context.fx.target_currency !== d.currency || context.fx.target_scale !== d.amount_scale))) return undefined;
     return {
       profile: context.profile, anchor_event: d.anchor_event, time_zone: "UTC", calculation,
       numerator: d.definition.numerator, denominator: null, cost_basis: null, aggregation: "cumulative",
       window: { ...window, boundary: "half_open" }, population: "server_resolved_non_organic_engagement",
       acquisition_basis: "server_resolved_deep_link", cost_selection_policy: "not_applicable", fraud_policy: "gross",
       engagement_credit_policy: d.engagement_credit_policy, evidence_trust: "device_reported_forgeable",
+      ...(explicit ? { engagement_inactivity_days: d.engagement_inactivity_days,
+        inactivity_evidence_policy: "recorded_sdk_install_prefix_and_activity", unknown_history_policy: "undefined_selected_population" } : {}),
+      ...(explicit && d.definition.numerator === "purchase_net_revenue" ? {
+        purchase_authority: "verified_settled_store_projections", refund_credit_policy: "original_purchase_open",
+        refund_reversal_policy: d.refund_reversal_policy,
+      } : {}),
       ...(conversion ? { conversion_event_key: d.conversion_event_key } : {}),
       grouping_dimensions: [...(d.grouping_dimensions ?? [])].sort(), privacy_state: context.privacy_state,
       value_type: d.value_type, currency: d.currency ?? null, amount_scale: d.amount_scale ?? null, ratio_scale: null,
