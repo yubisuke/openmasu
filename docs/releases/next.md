@@ -60,10 +60,11 @@ declared synthetic scope. The publication receipt records the downloaded Android
 SDK/backend journey on JVM/Robolectric API 24 separately from the frozen release.
 It does not establish physical-device or all-platform onboarding acceptance.
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-34 of 35 child implementations complete, with one optional extension remaining.
-Select further work from the [roadmap](../roadmap.md#next-product-sequence) and
-[acceptance crosswalk](../project-plan.md#next-product-slices) according to the
-intended usage.
+all 35 child implementations in current source. The
+[roadmap](../roadmap.md#next-product-sequence) and
+[acceptance crosswalk](../project-plan.md#next-product-slices) record the completed
+scope. Further work needs a concrete usage requirement; it is not an implied
+unfinished release gate.
 
 [Optional app-scoped access](../operations/access.md) narrows existing role
 capabilities consistently across API and dashboard workflows. Existing keys keep
