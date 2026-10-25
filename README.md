@@ -35,27 +35,23 @@ support. [Project status](docs/STATUS.md) lists their limits; the
 
 ## Source and release
 
-The source and SDK are configured for candidate `v0.3.0-rc.3`, including the
-completed 35-item functional plan. This candidate is published only if the matching annotated tag
-and GitHub Release identify the same green commit and verified assets.
-See the [candidate notes](docs/releases/v0.3.0-rc.3.md) for its scope and limits.
-
-`v0.3.0-rc.2` is the current published source and SDK release, marked as a
+`v0.3.0-rc.3` is the current published source and SDK release, marked as a
 prerelease. Download its SDK assets from the
-[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.2).
+[GitHub Release](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.3).
 Its annotated tag and eight verified assets identify source
-`d775cc950bdc06c0c929c9d17e2274ec4afbe9cf`; the
-[publication receipt](docs/validation/v0.3.0-rc.2-publication.md) records the
-2026-10-24 publication, exact-commit CI and public re-download checks.
+`2d689dc63546e5a2121fd0026d83f04aa8cc3f7d`; the
+[publication receipt](docs/validation/v0.3.0-rc.3-publication.md) records the
+2026-10-26 publication, exact-commit CI and public re-download checks.
 `v0.2.0` remains the latest stable source release. Later `main` commits are not
-evidence for that release or for rc.2.
+evidence for that release or for rc.3.
 
-The [frozen integration record](docs/validation/v0.3.0-rc.2-synthetic-evidence.md)
-describes the existing synthetic test owners. The downloaded rc.2 Android SDK
-also passed a first-use journey through its native queue and HTTP transport to
-the synthetic backend, a daily install value and saved analysis/CSV. The
-publication receipt records the later harness revision separately. This is
-JVM/Robolectric API 24 evidence, not physical-device or all-platform onboarding.
+This packages the completed 35-item functional plan, with
+[scope and compatibility notes](docs/releases/v0.3.0-rc.3.md).
+**Use a new disposable synthetic instance: upgrading an existing rc.2 ledger is
+not yet supported** ([follow-up](https://github.com/yubisuke/openmasu/issues/315)).
+Do not bypass the upgrade preflight or reset a ledger you need to keep.
+Downloaded native SDK evidence is recorded in the publication receipt; it is
+not physical-device or all-platform onboarding evidence.
 
 Current source includes additions through contract patch `v0.4.28`; the wire
 identity remains `0.4.0` with schema URNs ending in `:v0.4`. See

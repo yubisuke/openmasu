@@ -7,8 +7,9 @@ Supported frozen sources use PostgreSQL 17:
 | `v0.2.0` | `68b8c483a30c3804a216a655d964788d0204185f` | 48 | `d4c18ba078913cfefa420ea6adfcf3d7386994a614f3b197e6222276bc4905c6` |
 | `v0.3.0-rc.1` | `90a0f5fe56b75e8fdefd2f759e33b3ae538b79c2` | 55 | `dbff0d98396a48dfc9c25d66bcbaab373c344cd2bee43dea561be024d4842276` |
 
-The next supported target is the configured `v0.3.0-rc.3` source candidate,
-**only after its annotated tag and exact-commit full CI evidence are published**.
+The supported target is the published `v0.3.0-rc.3` source tag;
+its [publication receipt](../validation/v0.3.0-rc.3-publication.md)
+records the annotated tag and exact-commit full CI evidence.
 This path is a stopped-writer upgrade, not zero-downtime deployment.
 
 The published rc.2 is not yet a supported source in this preflight. It fails with

@@ -7,23 +7,19 @@ Implementation and synthetic verification are not live operational qualification
 
 | Line | Identity and evidence |
 | --- | --- |
-| Configured candidate | Source and SDK `v0.3.0-rc.3`; not published until exact-tag CI and downloadable assets are verified |
-| Published prerelease | `v0.3.0-rc.2` at `d775cc9`; eight verified SDK assets and exact-commit full CI |
-| Synthetic SDK onboarding | Published rc.2 Android SDK/backend journey passed on JVM/Robolectric API 24; later harness evidence is recorded separately |
+| Published prerelease | `v0.3.0-rc.3` at `2d689dc`; eight verified SDK assets and exact-commit full CI |
+| Synthetic SDK onboarding | Publication receipt records the downloaded Android SDK/backend journey separately from emulator and provider-shim evidence |
 | Latest stable source release | `v0.2.0`; later features belong to newer source, not this tag |
 | Current source | Contract patch ledger through v0.4.28; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 75 fixtures, 975 golden artifacts |
 
-The source and SDK are configured for candidate `v0.3.0-rc.3`; see its
-[scope](releases/v0.3.0-rc.3.md) and [evidence requirements](validation/v0.3.0-rc.3-synthetic-evidence.md).
-
-`v0.3.0-rc.2` is the current published source and SDK release, marked as a
-prerelease. Its [release page](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.2)
-and [publication receipt](validation/v0.3.0-rc.2-publication.md) identify source
-`d775cc950bdc06c0c929c9d17e2274ec4afbe9cf`, exact-commit CI and eight public
-assets re-downloaded and verified on 2026-10-24. The
-[frozen integration record](validation/v0.3.0-rc.2-synthetic-evidence.md) and
-[release notes](releases/v0.3.0-rc.2.md) retain their pre-publication evidence
-boundaries; the separate receipt records publication without rewriting them.
+`v0.3.0-rc.3` is the current published source and SDK release, marked as a
+prerelease. Its [release page](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.3)
+and [publication receipt](validation/v0.3.0-rc.3-publication.md) identify source
+`2d689dc63546e5a2121fd0026d83f04aa8cc3f7d`, exact-commit CI and eight public
+assets re-downloaded and verified on 2026-10-26. Frozen candidate notes and
+older release records remain unchanged. rc.2-to-current upgrade is explicitly
+unsupported pending [#315](https://github.com/yubisuke/openmasu/issues/315);
+use a new disposable synthetic instance rather than resetting an existing ledger.
 
 ## What the status means
 
@@ -73,35 +69,35 @@ presentation, evaluator and ingestion foundations are also implemented.
 definitions on the same bounded retained evidence, with gross/net effects and
 receipt-bound explicit activation. It never rewrites history or calls the
 displayed counts a detection rate. Missing historical rule inputs block impact
-claims and activation. This is source after rc.2, not a new SDK release.
+claims and activation. This is included in rc.3.
 
 The optional [Unity ILR sample](../sdk/unity/README.md#optional-levelplay-impression-revenue)
 adds per-ad LevelPlay callbacks to existing native queues and revenue metrics.
 Its provider types use an explicit shim; actual provider/device qualification
-is unverified. This is source after rc.2, not a change to its published assets.
+is unverified. This is included in rc.3; older assets remain unchanged.
 
-[Daily recorded activity](calendar-activity.md) is implemented after rc.2; it is
-not included in that frozen release. Its UTC activity population is independent
+[Daily recorded activity](calendar-activity.md) is included in rc.3.
+Its UTC activity population is independent
 of acquisition cohorts and does not establish human-level uniqueness.
 
 [Verified payer metrics](payer-metrics.md) add separate D7 settled transaction
 and paying-installation counts, payer rate and purchase-net ARPPU. They preserve
 historical payers after full refund, exclude advertising revenue and leave
 zero-payer money undefined. Store projections and privacy replay are synthetic
-evidence, not live store qualification; this addition is also after rc.2.
+evidence, not live store qualification; these metrics are included in rc.3.
 
 [Scheduled aggregate comparisons](recurring-comparisons.md) persist explicit
 definition revisions and aggregate-only operands. The existing worker produces
 fixed-cutoff, content-addressed results; missing/unknown/incomparable are not
 threshold breaches. Inputs remain operator deposited, with explicit expiry,
 deletion and conservative privacy suppression. No provider authentication,
-notification delivery or new service is introduced. This is after rc.2.
+notification delivery or new service is introduced. This is included in rc.3.
 
 [Selected Google detail costs](cost-refresh.md#explicit-google-ad-group-and-ad-costs)
 add bounded ad-group/ad acquisition and explicit creative binding. Selected child
 coverage is eligible only for its matching detail grouping, never an inferred
 parent or sibling denominator. Reader health describes configured capability,
-not provider completeness. This source addition is not in the rc.2 assets.
+not provider completeness. This is included in rc.3.
 
 [Recorded-detail discovery](scheduled-metrics.md#discover-selected-ad-groups-or-creatives)
 extends the same frozen daily target receipt to ad-group/creative tuples. Unknown
@@ -129,11 +125,11 @@ native preparation/submission and consent boundaries without claiming verificati
 from queued/pending callbacks. **Integrated candidate acceptance**
 ([#252](https://github.com/yubisuke/openmasu/issues/252)) is complete within its
 declared synthetic scope. Exact-commit platform gates, both published-source
-upgrade paths and rc.2 publication are verified. The downloaded Android SDK also
+upgrade paths and rc.3 publication are verified. The downloaded Android SDK also
 passed the native Room queue/HMAC HTTP path through durable backend processing
 to a daily install value and saved analysis/CSV on JVM/Robolectric API 24.
-The [publication receipt](validation/v0.3.0-rc.2-publication.md) records the later
-harness revision separately from the frozen SDK source. Existing fixture-projected
+The [publication receipt](validation/v0.3.0-rc.3-publication.md) records the SDK
+and harness at the same frozen source revision. Existing fixture-projected
 campaign/cost/revenue tests remain separate; no physical-device or all-platform
 onboarding acceptance is implied.
 The [roadmap](roadmap.md)
