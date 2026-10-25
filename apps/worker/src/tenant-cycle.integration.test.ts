@@ -74,6 +74,9 @@ async function setup() {
   const tenantId = `tenant-cycle-${uuidV7().slice(-12)}`, appId = "app-a";
   const input = JSON.parse(readFileSync("fixtures/v0.4/33-stage-b-cohort-metrics/input.json", "utf8").replaceAll("tenant-a", tenantId));
   input.metric_evaluations = [{ ...input.metric_evaluations[0], metric_names: ["d7_roas"], metric_run_id_prefix: "run-cycle" }];
+  // The cost job supplies the only denominator. Original fixture dimension
+  // digests belong to its original tenant and are not a second imported report.
+  input.cost_records = [];
   await ingestFixture(`cycle-${tenantId}`, { ...input, metric_evaluations: [] }, pool, seed);
   return { tenantId, appId, input };
 }
@@ -153,7 +156,7 @@ describe("cross-process tenant cycle coordination", { concurrency: false, timeou
     await registerOperatorBulkExportDestination({ pool, payloadStore: payloads,
       identity: { tenantId: test.tenantId, appId: test.appId, keyId: "synthetic-cycle-admin", role: "admin" },
       body: { endpoint_url: origin, bucket_name: "synthetic-cycle-bucket", object_prefix: "synthetic/cycle", region: "auto",
-        events: ["ad_revenue"], start_at: "2020-01-01T00:00:00.000Z", access_key_id: "SYNTHETICCYCLEKEY", secret_access_key: "synthetic-cycle-secret-key-0000000000" },
+        events: ["ad_revenue"], start_at: "2020-01-01T00:00:00.000Z", access_key_id: "SYNTHETICCYCLEKEY", secret_access_key: "synthetic/secret/access/key/0001" },
       destinationAllowlist: [origin], allowSyntheticLoopback: true });
     assert.equal(await discoverOperatorBulkExports(pool, payloads, test.tenantId), 1);
     const privacyPath = "/wait/privacy";
