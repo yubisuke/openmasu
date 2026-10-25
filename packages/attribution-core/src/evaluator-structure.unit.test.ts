@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import ts from "typescript";
 import * as publicCore from "./evaluator.js";
 import { TimestampInvalidError, time } from "./evaluation-utils.js";
+import { costCoverageMatchesGrouping } from "./cost-selection.js";
 import {
   FixtureArrayCandidateProvider, IndexedCandidateProvider,
   createFixtureCandidateProvider, createIndexedCandidateProvider,
@@ -20,10 +21,11 @@ describe("evaluator module boundaries", () => {
   it("preserves the public runtime exports and constructor identities", () => {
     assert.deepEqual(Object.keys(publicCore).sort(), [
       "FixtureArrayCandidateProvider", "IndexedCandidateProvider", "TimestampInvalidError",
-      "compareCandidateAttempts", "createFixtureCandidateProvider", "createIndexedCandidateProvider",
+      "compareCandidateAttempts", "costCoverageMatchesGrouping", "createFixtureCandidateProvider", "createIndexedCandidateProvider",
       "evaluate", "jcs", "roundHalfEven", "selectDisjointCosts", "sha256", "sortCandidateAttempts",
     ].sort());
     assert.equal(publicCore.TimestampInvalidError, TimestampInvalidError);
+    assert.equal(publicCore.costCoverageMatchesGrouping, costCoverageMatchesGrouping);
     assert.equal(publicCore.FixtureArrayCandidateProvider, FixtureArrayCandidateProvider);
     assert.equal(publicCore.IndexedCandidateProvider, IndexedCandidateProvider);
     assert.equal(publicCore.createFixtureCandidateProvider, createFixtureCandidateProvider);

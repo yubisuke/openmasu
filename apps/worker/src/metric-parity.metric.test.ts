@@ -636,7 +636,7 @@ describe("selected acquisition detail SQL parity", { concurrency: false }, () =>
     const runs=await computeSqlMetricRuns(app,input,true);
     assert.equal(jcs(runs),jcs(JSON.parse(readFileSync("fixtures/v0.4/74-selected-cost-coverage/expected_metric_runs.json","utf8"))));
       const historical={...input.cost_records.find((cost:Any)=>cost.ad_group_id&&!cost.creative_id),
-        cost_record_id:"coverage74-old-full-group",as_of:"2026-08-12T00:00:00.000Z",spend_unscaled:"8000000"};
+        cost_record_id:"coverage74-old-full-group",as_of:"2026-08-12T00:00:00.000Z",amount_unscaled:"8000000"};
       delete historical.coverage_scope;
       input.cost_records.push(historical);
       input.metric_evaluations=[{...input.metric_evaluations.find((evaluation:Any)=>evaluation.metric_run_id_prefix==="coverage74-campaign"),

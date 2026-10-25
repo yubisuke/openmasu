@@ -684,7 +684,7 @@ const scenarios: Array<[string, () => void]> = [
       }),expected),`scenario 74 independent ${suffix}`);
     const revised=structuredClone(input);
     const historical={...revised.cost_records.find((cost:Any)=>cost.ad_group_id&&!cost.creative_id),
-      cost_record_id:"coverage74-old-full-group",as_of:"2026-08-12T00:00:00.000Z",spend_unscaled:"8000000"};
+      cost_record_id:"coverage74-old-full-group",as_of:"2026-08-12T00:00:00.000Z",amount_unscaled:"8000000"};
     delete historical.coverage_scope;
     revised.cost_records.push(historical);
     revised.metric_evaluations=[{...revised.metric_evaluations.find((evaluation:Any)=>evaluation.metric_run_id_prefix==="coverage74-campaign"),
