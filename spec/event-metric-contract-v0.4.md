@@ -224,6 +224,8 @@ grain; no selected-child spend is added to it. Existing overlap checks still
 reject multiple overlapping eligible full-coverage grains. Absence preserves all
 historical cost selection and artifacts. The field is coverage metadata, not a
 new grouping dimension; the declared dimension digest remains unchanged.
+Select the latest revision at the watermark before testing this coverage. An
+ineligible current revision must not revive an older, less-restricted cost.
 
 The TypeScript, independent Python and SQL engines preserve this same admission
 at the saved input watermark and through replay. No schema URN, wire/package

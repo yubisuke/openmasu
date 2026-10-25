@@ -21,6 +21,12 @@ describe("explicit disjoint cost selection", () => {
     assert.equal(costCoverageMatchesGrouping(selected,{ ad_group_id:"group-a",creative_id:"synthetic-creative" },false),false);
     assert.equal(costCoverageMatchesGrouping({ ...selected,creative_id:null },{ ad_group_id:"group-a" },true),true);
     assert.equal(costCoverageMatchesGrouping(base,undefined,false),true);
+    const historical = child("group-a","8000000");
+    const revised = {...historical,cost_record_id:"selected-revision",as_of:"2026-08-13T00:00:00.000Z",coverage_scope:"matching_detail_only" as const};
+    assert.deepEqual(selectDisjointCosts([historical,revised],true,
+      cost=>costCoverageMatchesGrouping(cost,{campaign_id:base.campaign_id!},true)).rows,[],"ineligible latest coverage must not revive historical spend");
+    assert.deepEqual(selectDisjointCosts([historical,revised],true,
+      cost=>costCoverageMatchesGrouping(cost,{ad_group_id:"group-a"},true)).rows,[revised]);
   });
   it("flags parent 100 plus detail 40/60 but preserves all evidence candidates", () => {
     const input = [base, child("group-a", "40000000"), child("group-b", "60000000")];

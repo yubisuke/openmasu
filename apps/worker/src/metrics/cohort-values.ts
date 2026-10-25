@@ -314,17 +314,17 @@ async function totalNetRevenueValue(
        SELECT * FROM jsonb_to_recordset($12::jsonb)
          AS rate(currency text,rate_unscaled text,rate_scale integer,effective_date date,as_of text)
      ), current_cost AS (
-       SELECT * FROM (
-         SELECT DISTINCT ON (cost_key_digest) spend_unscaled, spend_scale, currency, cost_date AS date
+       SELECT spend_unscaled,spend_scale,currency,date FROM (
+         SELECT DISTINCT ON (cost_key_digest) spend_unscaled, spend_scale, currency, cost_date AS date, artifact
          FROM ledger.cost_records
-         WHERE $11::jsonb IS NULL AND tenant_id=$1 AND app_id=$2 AND as_of <= $3 AND NOT (artifact ? 'creative_id') AND NOT (artifact ? 'coverage_scope')
+         WHERE $11::jsonb IS NULL AND tenant_id=$1 AND app_id=$2 AND as_of <= $3 AND NOT (artifact ? 'creative_id')
            AND ($8::text IS NULL OR $8='non_organic')
            AND ($4::text IS NULL OR campaign_id=$4)
            AND ($5::text IS NULL OR network=$5)
            AND ($6::text IS NULL OR country=$6)
            AND ($7::date IS NULL OR cost_date=$7::date)
          ORDER BY cost_key_digest, as_of DESC, cost_record_id COLLATE "C" DESC
-       ) AS selected
+       ) AS selected WHERE NOT (artifact ? 'coverage_scope')
        UNION ALL
        SELECT * FROM jsonb_to_recordset($11::jsonb)
          AS supplied(spend_unscaled text, spend_scale integer, currency text, date date)
@@ -530,17 +530,17 @@ export async function metricValue(
            AND (${activityWindow})
        ),
        current_cost AS (
-         SELECT * FROM (
-           SELECT DISTINCT ON (cost_key_digest) spend_unscaled, spend_scale, currency, cost_date AS date
+         SELECT spend_unscaled,spend_scale,currency,date FROM (
+           SELECT DISTINCT ON (cost_key_digest) spend_unscaled, spend_scale, currency, cost_date AS date, artifact
            FROM ledger.cost_records
-           WHERE $19::jsonb IS NULL AND tenant_id=$1 AND app_id=$2 AND as_of <= $3 AND NOT (artifact ? 'creative_id') AND NOT (artifact ? 'coverage_scope')
+           WHERE $19::jsonb IS NULL AND tenant_id=$1 AND app_id=$2 AND as_of <= $3 AND NOT (artifact ? 'creative_id')
              AND ($16::text IS NULL OR $16='non_organic')
              AND ($4::text IS NULL OR campaign_id=$4)
              AND ($5::text IS NULL OR network=$5)
              AND ($6::text IS NULL OR country=$6)
              AND ($7::date IS NULL OR cost_date=$7::date)
            ORDER BY cost_key_digest, as_of DESC, cost_record_id COLLATE "C" DESC
-         ) AS selected
+         ) AS selected WHERE NOT (artifact ? 'coverage_scope')
          UNION ALL
          SELECT * FROM jsonb_to_recordset($19::jsonb)
            AS supplied(spend_unscaled text, spend_scale integer, currency text, date date)

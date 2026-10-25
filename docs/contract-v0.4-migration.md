@@ -17,6 +17,11 @@ dimension; dimension hashes do not acquire it. Runtime imported record identity
 includes it only when present, so a full and partial row cannot accidentally share
 an opaque record ID. Wire/package identity remains `0.4.0`, URNs remain `:v0.4`,
 and metric definitions remain independently versioned.
+Revision selection precedes coverage eligibility: a restricted latest row cannot
+revive a historical full row at the same explicit dated grain. The existing
+scenario and SQL parity case additionally exercise an old group cost of 8 followed
+by a matching-only group cost of 15; campaign ROAS remains undefined after the
+revision, independently checked in TypeScript/Python/SQL without new goldens.
 
 New fixture `74-selected-cost-coverage` reuses fixture63's unchanged synthetic
 events and eleven unchanged output families. Its independently constructed three

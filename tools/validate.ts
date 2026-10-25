@@ -666,7 +666,7 @@ if (!summaryOnly) {
 
 const scenarios: Array<[string, () => void]> = [
   ["74 selected child costs stay within matching detail coverage", () => {
-    const { output } = fixture("74-selected-cost-coverage");
+    const { input, output } = fixture("74-selected-cost-coverage");
     const expectations: Record<string,string[]> = {
       a:["1","20000000","6000000","2600000","2000000"],
       b:["1","40000000","12000000","no_attributed_cost","no_attributed_cost"],
@@ -682,6 +682,17 @@ const scenarios: Array<[string, () => void]> = [
         const row=output.metric_runs.find((run:Any)=>run.metric_run_id===`coverage74-${suffix}:${name}`);
         return row?.value_unscaled??row?.undefined_reason;
       }),expected),`scenario 74 independent ${suffix}`);
+    const revised=structuredClone(input);
+    const historical={...revised.cost_records.find((cost:Any)=>cost.ad_group_id&&!cost.creative_id),
+      cost_record_id:"coverage74-old-full-group",as_of:"2026-08-12T00:00:00.000Z",spend_unscaled:"8000000"};
+    delete historical.coverage_scope;
+    revised.cost_records.push(historical);
+    revised.metric_evaluations=[{...revised.metric_evaluations.find((evaluation:Any)=>evaluation.metric_run_id_prefix==="coverage74-campaign"),
+      input_received_at_watermark:"2026-08-13T00:00:00.000Z"}];
+    const actual=evaluate(revised), [independent]=pythonOutputs([revised]);
+    check(equal(actual,independent),"scenario 74 revised coverage TS/Python parity");
+    check(equal(actual.metric_runs.map((run:Any)=>run.value_unscaled??run.undefined_reason),expectations.campaign),
+      "scenario 74 latest restricted coverage revived old full spend");
   }],
   ["01 valid Install Referrer", () => {
     const value = fixture("01-valid-install-referrer").output;

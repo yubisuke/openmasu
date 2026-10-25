@@ -83,6 +83,8 @@ a campaign or ad-group denominator. A full parent remains independently eligible
 at its own grain, and ordinary overlap rejection remains. Missing coverage is
 `undefined/no_attributed_cost`. Current watermark, revision and saved-manifest
 recalculation keep this same policy; prior runs are never overwritten.
+Latest revisions are selected before coverage eligibility: a newly restricted
+revision cannot revive an older, apparently full-coverage cost as a denominator.
 
 Immutable schedule definitions retain the complete private selection and digest.
 Registration also saves a reader-safe `adapter_capability`: configured provider,

@@ -267,7 +267,6 @@ export function metricRuns(
       }
     const cohortScopes = new Set(selectedInstalls.map((install) => compositeKey([install.server.tenant_id, install.server.app_id])));
     const groupedCosts = cost_records.filter((cost) => {
-      if (!costCoverageMatchesGrouping(cost,evaluation.grouping,!!definition.acquisition_dimension_policy)) return false;
       if (definition.engagement_credit_policy || selectedDaily) return false;
       if (definition.calendar_cohort_policy && cost.reporting_time_zone !== definition.aggregation_time_zone) return false;
       const grouping = evaluation.grouping;
@@ -280,10 +279,12 @@ export function metricRuns(
         (grouping.cohort_date === undefined || cost.date === grouping.cohort_date);
     });
     const disjoint = definition.cost_selection_policy || definition.acquisition_dimension_policy
-      ? selectDisjointCosts(groupedCosts, !!definition.acquisition_dimension_policy) : undefined;
+      ? selectDisjointCosts(groupedCosts, !!definition.acquisition_dimension_policy,
+        cost => costCoverageMatchesGrouping(cost,evaluation.grouping,!!definition.acquisition_dimension_policy)) : undefined;
     const currentCosts = disjoint?.rows ?? [...new Map(groupedCosts
       .sort((a, b) => compareText(a.as_of, b.as_of) || compareText(a.cost_record_id, b.cost_record_id))
-      .map((cost) => [compositeKey([cost.tenant_id, cost.app_id, cost.dimension_digest]), cost])).values()];
+      .map((cost) => [compositeKey([cost.tenant_id, cost.app_id, cost.dimension_digest]), cost])).values()]
+        .filter(cost => costCoverageMatchesGrouping(cost,evaluation.grouping,false));
     const costSnapshotRows = sortByKey(currentCosts, (cost) => [cost.as_of, cost.cost_record_id]).map((cost) => [
       "cost", cost.as_of, cost.cost_record_id, cost.report_snapshot_digest, cost.dimension_digest,
     ]);

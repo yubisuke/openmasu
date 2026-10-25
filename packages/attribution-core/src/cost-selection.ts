@@ -30,7 +30,7 @@ export function costCoverageMatchesGrouping(cost: ScopedCost, grouping: Readonly
  * unknown coverage, not proven non-overlap. Do not arbitrarily prefer a parent
  * or its detail rows: preserve candidates and report unsafe overlap separately.
  */
-export function selectDisjointCosts<T extends ScopedCost>(input: readonly T[], includeCreative = false): {
+export function selectDisjointCosts<T extends ScopedCost>(input: readonly T[], includeCreative = false, eligible: (cost: T) => boolean = () => true): {
   rows: T[];
   overlapping: boolean;
 } {
@@ -42,7 +42,8 @@ export function selectDisjointCosts<T extends ScopedCost>(input: readonly T[], i
     const previous = revisions.get(key);
     if (!previous || revisionOrder(previous, row) < 0) revisions.set(key, row);
   }
-  const rows = [...revisions.values()].sort(revisionOrder);
+  // Eligibility never revives an older revision whose coverage is less restricted.
+  const rows = [...revisions.values()].filter(eligible).sort(revisionOrder);
   // Bounded nullable-dimension masks keep the overlap check linear in row count.
   // Each mask indexes its projections onto all subsets of its known dimensions.
   const cells = new Map<string, Map<number, Map<number, Set<string>>>>();
