@@ -728,7 +728,7 @@ describe("M5 RBAC and rule-bundle production controls", { concurrency: false }, 
         assert.equal((await bearer(adminA.admin_key, `/v1/admin/apps/${appId}/${feature}`)).status, 200);
         for (const method of ["GET", "POST"]) {
           const results = await Promise.all([sibling, "missing-synthetic-app"].map(async app => {
-            const response = await bearer(adminA.admin_key, `/v1/admin/apps/${app}/${feature}`, { ...post, method });
+            const response = await bearer(adminA.admin_key, `/v1/admin/apps/${app}/${feature}`, method === "POST" ? post : { method });
             return [response.status, await response.text()];
           }));
           assert.equal(results[0]![0], 404); assert.deepEqual(results[0], results[1]);
