@@ -95,8 +95,10 @@ export function buildMetricDefinitionsInput(config: Any, requestedDate: string, 
           || Object.keys(evaluation.grouping).some(key => !["campaign_id", "metric_date"].includes(key)))) {
         throw new Error("engagement_cli_requires_separate_anchor_evaluation");
       }
+      const engagementWindowDays = engagement ? Math.max(...selectedDefinitions.map((definition: Any) =>
+        Number(definition?.definition?.window?.day ?? 0) + 1)) : 0;
       const evaluationWatermark = requestedWatermark === undefined && engagement
-        ? new Date(Date.parse(date.watermark) + 86_400_000).toISOString() : watermark;
+        ? new Date(Date.parse(date.watermark) + engagementWindowDays * 86_400_000).toISOString() : watermark;
       return {
         metric_run_id_prefix: `manual:${date.day}:${sha256(requestedWatermark === undefined && !engagement ? [config, index] : [config, index, evaluationWatermark]).slice(0, 24)}`,
         input_received_at_watermark: evaluationWatermark,

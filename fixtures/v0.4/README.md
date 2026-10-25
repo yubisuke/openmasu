@@ -617,6 +617,16 @@ the registered declarative rule object; the expected values are not sourced
 from evaluator output. Candidate TS/Python bytes matched before promotion.
 All previous 70 inputs and 910 golden files remain unchanged.
 
+## Fixture 75: explicit recorded-inactivity engagement policy
+
+The [independent derivation](75-engagement-policy/README.md) covers all thirteen
+families and twelve metric runs. Three-day outcomes and a seven-day recorded
+SDK-inactivity gate distinguish eligible, active, unknown and empty populations.
+Campaign a has USD 2 advertising, one converter and verified USD 8 minus USD 3
+purchase net; the later active campaign cannot send its outcomes backwards.
+Definition-bound hashes and scoped evidence are independently constructed.
+The previous 74 inputs and 962 goldens remain unchanged.
+
 ## Adding a fixture procedure
 
 Fixture 67 is the independent [imported provider cohort derivation](67-imported-provider-acquisition/README.md).

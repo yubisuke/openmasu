@@ -20,6 +20,7 @@ import { syntheticConversionCases } from "../../../tools/synthetic-conversion-ca
 import { syntheticRefundReversalCases } from "../../../tools/synthetic-refund-reversal-cases.js";
 import { syntheticAcquisitionDetailCases } from "../../../tools/synthetic-acquisition-detail-cases.js";
 import { syntheticEngagementCases } from "../../../tools/synthetic-engagement-cases.js";
+import { syntheticEngagementPolicyCases } from "../../../tools/synthetic-engagement-policy-cases.js";
 import { syntheticDailyAcquisitionCases, dailyAcquisitionCaseRuns } from "../../../tools/synthetic-daily-acquisition-cases.js";
 import { persistAttribution } from "./ingestion/application.js";
 import { encodeMetricReport, supportsRecordCounts } from "../../api/src/reporting.js";
@@ -61,6 +62,8 @@ const datedFxCases = [...syntheticFxCases(datedFxSource), ...syntheticEngagement
 const acquisitionKpiSource: Any = JSON.parse(readFileSync("fixtures/v0.4/70-saved-acquisition-kpis/input.json", "utf8"));
 const acquisitionKpiCases = syntheticAcquisitionKpiCases(acquisitionKpiSource);
 const calendarActivitySource: Any = JSON.parse(readFileSync("fixtures/v0.4/72-calendar-activity/input.json", "utf8"));
+const engagementPolicySource: Any = JSON.parse(readFileSync("fixtures/v0.4/75-engagement-policy/input.json", "utf8"));
+const engagementPolicyCases = syntheticEngagementPolicyCases(engagementPolicySource);
 
 describe("verified payer SQL parity and saved reporting", { concurrency: false }, () => {
   const app = createAppPool(), seed = createSeedPool(), reader = createReaderPool();
@@ -605,6 +608,33 @@ describe("first-party engagement SQL parity", { concurrency: false }, () => {
   before(() => { app = createAppPool(); seed = createSeedPool(); });
   after(async () => { await app?.end(); await seed?.end(); });
   const baseline = JSON.parse(readFileSync("fixtures/v0.4/64-first-party-engagement/input.json", "utf8"));
+  for (const entry of engagementPolicyCases) it(entry.name, async () => {
+    await ingestFixture(`engagement-policy-${entry.name}`, entry.input, app, seed);
+    const runs = await computeSqlMetricRuns(app, entry.input, false, { tenant_id: "tenant-a", app_id: "app-a" });
+    assert.equal(jcs(runs), jcs(evaluate(entry.input).metric_runs));
+    assert.deepEqual(runs.map(run => run.value_unscaled ?? run.undefined_reason), entry.expected);
+  });
+  it("engagement_policy_persists_reviewed_bytes_and_binds_window_and_inactivity_in_saved_snapshots", async () => {
+    await ingestFixture("engagement-policy-saved", engagementPolicySource, app, seed);
+    const runs = await computeSqlMetricRuns(app, engagementPolicySource, true, { tenant_id: "tenant-a", app_id: "app-a" });
+    assert.equal(jcs(runs), jcs(JSON.parse(readFileSync("fixtures/v0.4/75-engagement-policy/expected_metric_runs.json", "utf8"))));
+    const rows = await withTenant(app, "tenant-a", async client => (await client.query(
+      "SELECT comparison_context FROM ledger.metric_runs WHERE metric_definition_version='0.4.28'",
+    )).rows);
+    assert.equal(rows.length, 12);
+    assert.ok(rows.every(row => row.comparison_context.definition.engagement_inactivity_days === 7
+      && row.comparison_context.definition.definition.window.day === 2));
+    for (const change of ["window", "inactivity"]) {
+      const changed = structuredClone(engagementPolicySource);
+      for (const d of changed.metric_definitions) {
+        if (change === "window") d.definition.window.day = 0;
+        else d.engagement_inactivity_days = 0;
+      }
+      const replay = await computeSqlMetricRuns(app, changed, false, { tenant_id: "tenant-a", app_id: "app-a" });
+      assert.ok(replay.every((run, index) => run.input_snapshot_id !== runs[index].input_snapshot_id));
+      assert.equal(jcs(replay), jcs(evaluate(changed).metric_runs));
+    }
+  });
   for (const entry of syntheticEngagementCases(baseline)) it(entry.name, async () => {
     await ingestFixture(`engagement-${entry.name}`, entry.input, app, seed);
     const runs = await computeSqlMetricRuns(app, entry.input, false, { tenant_id: "tenant-a", app_id: "app-a" });

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { buildMetricDefinitionsInput } from "./run.js";
-import { CALENDAR_ACTIVITY_METRIC_DEFINITIONS, engagementMetricDefinitions, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import { CALENDAR_ACTIVITY_METRIC_DEFINITIONS, engagementMetricDefinitions, engagementPolicyMetricDefinitions, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
 
 const config = (grouping: Record<string, string> = {}) => ({
   tenant_id: "tenant-synthetic",
@@ -67,6 +67,18 @@ describe("WO16 metric backfill CLI", () => {
     assert.equal(input.metric_evaluations[0].computed_at, "2026-08-02T00:00:00.000Z");
     assert.equal(input.metric_evaluations[0].grouping.cohort_date, "2026-08-01");
     assert.equal(input.metric_evaluations[0].privacy_state, "before");
+  });
+
+  it("engagement_policy_CLI_closes_the_declared_window_and_retains_explicit_backfill_cutoff", () => {
+    const metric_definitions = engagementPolicyMetricDefinitions({ windowDays: 3, minimumInactivityDays: 7, eventKey: "tutorial_complete" });
+    const source = { ...config(), metric_definitions,
+      evaluations: [{ metric_names: metric_definitions.map(d => d.metric_name), grouping: {} }] };
+    const evaluation = buildMetricDefinitionsInput(source, "2026-08-21").metric_evaluations[0];
+    assert.deepEqual(evaluation.grouping, { metric_date: "2026-08-21" });
+    assert.equal(evaluation.privacy_state, "after");
+    assert.equal(evaluation.input_received_at_watermark, "2026-08-25T00:00:00.000Z");
+    assert.equal(buildMetricDefinitionsInput(source, "2026-08-21", "2026-09-01T00:00:00.000Z")
+      .metric_evaluations[0].input_received_at_watermark, "2026-09-01T00:00:00.000Z");
   });
 
   it("uses current privacy state for operational selected-acquisition definitions", () => {

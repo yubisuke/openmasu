@@ -4,7 +4,7 @@ import { it } from "node:test";
 import { M1B_METRIC_DEFINITIONS, M3_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS, SELECTED_COMMERCE_METRIC_DEFINITIONS, REFUND_REVERSAL_METRIC_DEFINITIONS, customConversionMetricDefinitions } from "@openmasu/contracts";
 import { sha256 } from "@openmasu/attribution-core";
 import { captureMetricComparisonContext, comparisonMeaning, comparisonMaturity } from "./metric-comparison.js";
-import { engagementMetricDefinitions } from "@openmasu/contracts";
+import { engagementMetricDefinitions, engagementPolicyMetricDefinitions } from "@openmasu/contracts";
 import { importedAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
 import { calendarAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
 import { calendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
@@ -98,6 +98,35 @@ it("binds re-engagement comparison to open date credit and a conservative 24h ma
     { state: "unknown", closes_at: "2026-08-23T00:00:00.000Z" });
   assert.equal(comparisonMaturity(context, { metric_date: "2026-08-21" }, "2026-08-23T00:00:00.000Z").state, "window_elapsed");
   assert.equal(comparisonMaturity(context, { cohort_date: "2026-08-21" }, "2026-08-23T00:00:00.000Z").state, "unknown");
+});
+it("engagement_policy_context_preserves_zero_or_positive_inactivity_window_verified_net_and_distinct_meaning", () => {
+  const capture = (days: number, inactivity: number) => engagementPolicyMetricDefinitions({
+    windowDays: days, minimumInactivityDays: inactivity, eventKey: "tutorial_complete",
+  }).map(definition => captureMetricComparisonContext(run, definition, fx, "after", sha256));
+  const contexts = capture(3, 7), disabled = capture(3, 0), oneDay = capture(1, 7);
+  const declared = engagementPolicyMetricDefinitions({ windowDays: 3, minimumInactivityDays: 7, eventKey: "tutorial_complete" });
+  for (const [index, context] of contexts.entries()) {
+    assert.deepEqual(context.definition, declared[index]);
+    assert.equal(context.definition_digest, sha256(declared[index]));
+    assert.equal(context.definition.engagement_inactivity_days, 7);
+    assert.equal(context.definition_digest, sha256(context.definition));
+    assert.equal(disabled[index].definition.engagement_inactivity_days, 0);
+    for (const changed of [disabled[index], oneDay[index]]) {
+      assert.notEqual(changed.definition_digest, context.definition_digest);
+      assert.notDeepEqual(comparisonMeaning(changed), comparisonMeaning(context));
+    }
+    const meaning = comparisonMeaning(context);
+    assert.ok(meaning && "engagement_inactivity_days" in meaning);
+    assert.equal(meaning.engagement_inactivity_days, 7);
+    assert.equal(meaning.evidence_trust, "device_reported_forgeable");
+    assert.deepEqual(comparisonMaturity(context, { metric_date: "2026-08-21" }, "2026-08-24T23:59:59.999Z"),
+      { state: "unknown", closes_at: "2026-08-25T00:00:00.000Z" });
+    assert.equal(comparisonMaturity(context, { metric_date: "2026-08-21" }, "2026-08-25T00:00:00.000Z").state, "window_elapsed");
+  }
+  const net = comparisonMeaning(contexts[2]);
+  assert.ok(net && "refund_credit_policy" in net);
+  assert.equal(net.refund_credit_policy, "original_purchase_open");
+  assert.equal(net.refund_reversal_policy, "cancel_target_refund_at_watermark");
 });
 it("records explicit refund cancellation meaning without equating historical commerce definitions", () => {
   const capture = (d: typeof REFUND_REVERSAL_METRIC_DEFINITIONS[number]) => captureMetricComparisonContext(run, d, fx, "after", sha256);

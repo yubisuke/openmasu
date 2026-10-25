@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import { ACQUISITION_DETAIL_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS, SELECTED_COMMERCE_METRIC_DEFINITIONS, REFUND_REVERSAL_METRIC_DEFINITIONS, customConversionMetricDefinitions } from "@openmasu/contracts";
 import { metricScheduleTargetDate, normalizeMetricScheduleRequest } from "./metric-schedules.js";
 import { metricScheduleRequestDefinition } from "./metric-schedule-definition.js";
-import { engagementMetricDefinitions, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import { engagementMetricDefinitions, engagementPolicyMetricDefinitions, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { VERIFIED_PLATFORM_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 import { importedAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
 import { calendarAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
@@ -106,6 +106,16 @@ describe("scheduled metric configuration", () => {
       assert.throws(() => normalize({ ...request, evaluations: [{ ...request.evaluations[0], ...change }] }), /engagement_profile_required/);
     }
     assert.throws(() => normalize({ ...request, metric_definitions: request.metric_definitions.map(d => ({ ...d, engagement_credit_policy: undefined })) }), /definitions_invalid/);
+  });
+  it("engagement_policy_schedule_saves_explicit_history_and_requires_the_entire_declared_window", () => {
+    const metric_definitions = engagementPolicyMetricDefinitions({ windowDays: 3, minimumInactivityDays: 7, eventKey: "tutorial_complete" });
+    const request = { ...body, lag_days: 4, metric_definitions,
+      evaluations: [{ metric_names: metric_definitions.map(d => d.metric_name), date_dimension: "metric_date", grouping: {} }] };
+    const normalize = (value: any) => normalizeMetricScheduleRequest(value, new Date("2026-08-25T12:00:00.000Z"));
+    assert.deepEqual(normalize(request).definition.metric_definitions, metric_definitions);
+    assert.throws(() => normalize({ ...request, lag_days: 3 }), /engagement_profile_required/);
+    assert.throws(() => normalize({ ...request, evaluations: [{ ...request.evaluations[0],
+      metric_names: [...request.evaluations[0].metric_names, "aak_attributed_reengagements"] }] }), /engagement_profile_required/);
   });
   it("captures explicit detail definitions and groupings without implicit discovery or legacy upgrade", () => {
     const request = { ...body, metric_definitions: structuredClone(ACQUISITION_DETAIL_METRIC_DEFINITIONS),

@@ -86,18 +86,20 @@ describe("M3 zero-JavaScript dashboard", () => {
     assert.ok(!html.includes("<script"));
   });
   it("separates forgeable first-party engagement from install and Apple aggregate tables and charts", () => {
-    const names = ["d7_roas", "engagement_ad_revenue_24h_usd", "aak_attributed_reengagements"];
+    const names = ["d7_roas", "engagement_ad_revenue_24h_usd", "aak_attributed_reengagements",
+      "engagement_policy_ad_revenue_usd", "engagement_policy_custom_event_converters", "engagement_policy_purchase_net_usd"];
     const view = buildDashboardView({ apps: [], selectedAppId: "app-one", csrfToken: "synthetic",
       metrics: { data: names.map((metric_name, index) => metric({ metric_name, metric_run_id: `series:${index}` })) } });
     assert.deepEqual(view.deterministicRows.map(r => r.metric_name), [names[0]]);
-    assert.deepEqual(view.engagementRows.map(r => r.metric_name), [names[1]]);
+    assert.deepEqual(view.engagementRows.map(r => r.metric_name), [names[1], ...names.slice(3)]);
     assert.deepEqual(view.appleAggregateRows.map(r => r.metric_name), [names[2]]);
-    assert.equal(view.engagementCharts.length, 1);
+    assert.equal(view.engagementCharts.length, 4);
     const html = renderDashboard(view);
     assert.match(html, /Device-reported opens are forgeable/);
-    assert.match(html, /Do not add them to install acquisition or Apple aggregate results/);
+    assert.match(html, /Do not add these outcomes to install acquisition or Apple aggregate results/);
     const section = html.slice(html.indexOf('<section aria-label="First-party engagement outcomes">'), html.indexOf('<caption>Apple aggregate postback metrics'));
     assert.match(section, /data-metric-run-id="series:1"/);
+    for (const index of [3, 4, 5]) assert.ok(section.includes(`data-metric-run-id="series:${index}"`));
     assert.doesNotMatch(section, /data-metric-run-id="series:0"|data-metric-run-id="series:2"/);
   });
   it("aligns saved retention horizons and cohorts without conflating zero undefined missing or unelapsed windows", () => {

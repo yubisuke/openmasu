@@ -12,6 +12,7 @@ import { syntheticConversionCases } from "./synthetic-conversion-cases.js";
 import { syntheticRefundReversalCases } from "./synthetic-refund-reversal-cases.js";
 import { syntheticAcquisitionDetailCases } from "./synthetic-acquisition-detail-cases.js";
 import { syntheticEngagementCases } from "./synthetic-engagement-cases.js";
+import { syntheticEngagementPolicyCases } from "./synthetic-engagement-policy-cases.js";
 import { syntheticDailyAcquisitionCases, dailyAcquisitionCaseRuns, dailyAcquisitionPythonProbe } from "./synthetic-daily-acquisition-cases.js";
 import { syntheticPlatformAcquisitionCases } from "./synthetic-platform-acquisition-cases.js";
 import { syntheticImportedAcquisitionCases, importedAcquisitionCaseRuns, importedAcquisitionPythonProbe } from "./synthetic-imported-acquisition-cases.js";
@@ -346,7 +347,8 @@ function validateRegistryReferences(output: Any, label: string): void {
       "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
       "aak_attributed_reengagements",
     ]);
-    const expectedVersion = definition.rule_bundle_id === "metric-verified-payers" ? "0.4.26"
+    const expectedVersion = definition.rule_bundle_id === "metric-engagement-policy" ? "0.4.28"
+      : definition.rule_bundle_id === "metric-verified-payers" ? "0.4.26"
       : definition.rule_bundle_id === "metric-calendar-activity" ? "0.4.25"
       : definition.rule_bundle_id === "metric-standard-retention" ? "0.4.24"
       : definition.rule_bundle_id === "metric-acquisition-kpis" ? ACQUISITION_KPI_VERSION
@@ -610,7 +612,7 @@ if (!summaryOnly) {
       });
     }
     it("contains 72 fixture directories", () => {
-      check(fixtureDirs.length === 74, `expected 74 fixture directories, found ${fixtureDirs.length}`);
+      check(fixtureDirs.length === 75, `expected 75 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -665,6 +667,16 @@ if (!summaryOnly) {
 }
 
 const scenarios: Array<[string, () => void]> = [
+  ["75 explicit engagement policy separates inactive active unknown and original-purchase refund credit", () => {
+    const output = fixture("75-engagement-policy").output;
+    check(output.raw_records.length === 13 && output.corrections.length === 1, "scenario 75 admitted inventory");
+    check(equal(output.metric_runs.map((run: Any) => run.value_unscaled ?? run.undefined_reason), [
+      "2000000", "1", "5000000", "empty_cohort", "empty_cohort", "empty_cohort",
+      "insufficient_activity_history", "insufficient_activity_history", "insufficient_activity_history",
+      "empty_cohort", "empty_cohort", "empty_cohort",
+    ]), "scenario 75 independently derived population and money");
+    check(new Set(output.metric_runs.map((run: Any) => run.input_snapshot_id)).size === 3, "scenario 75 definition-bound snapshots");
+  }],
   ["74 selected child costs stay within matching detail coverage", () => {
     const { input, output } = fixture("74-selected-cost-coverage");
     const expectations: Record<string,string[]> = {
@@ -1178,8 +1190,8 @@ const scenarios: Array<[string, () => void]> = [
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 74 scenario assertions", () => {
-      check(scenarios.length === 74, "scenario assertion inventory must contain 74 entries");
+    it("contains 75 scenario assertions", () => {
+      check(scenarios.length === 75, "scenario assertion inventory must contain 75 entries");
     });
   });
 
@@ -1748,7 +1760,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 74 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 75 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1789,7 +1801,7 @@ const acceptance: Array<[string, () => void]> = [
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
   ["AC21 one command validates every schema registry fixture and golden", () => {
-    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 74 && outputArtifactCount === 74 * 13, "AC21");
+    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 75 && outputArtifactCount === 75 * 13, "AC21");
     checkDocumentationDrift(root, validationSummary());
   }],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {
@@ -2321,6 +2333,15 @@ if (!summaryOnly) {
         const output = evaluate(entry.input);
         check(equal(output.metric_runs.map(run => run.value_unscaled ?? run.undefined_reason), entry.expected), `${entry.name}: independent engagement arithmetic`);
         check(equal(output, python[index]), `${entry.name}: full independent parity`);
+      }
+    });
+    it("explicit_engagement_policy_keeps_unknown_history_purchase_net_and_original_refund_credit_in_TS_Python_parity", () => {
+      const cases = syntheticEngagementPolicyCases(fixture("75-engagement-policy").input);
+      const python = pythonOutputs(cases.map(entry => entry.input));
+      for (const [index, entry] of cases.entries()) {
+        const output = evaluate(entry.input);
+        check(equal(output.metric_runs.map(run => run.value_unscaled ?? run.undefined_reason), entry.expected), `${entry.name}: independent engagement policy arithmetic`);
+        check(equal(output, python[index]), `${entry.name}: full independent policy parity`);
       }
     });
     it("keeps selected detail unknown cost-grain privacy correction and legacy TS/Python parity", () => {

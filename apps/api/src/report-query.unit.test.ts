@@ -44,11 +44,14 @@ describe("M3 typed reporting query", () => {
     rejects("grouping_acquisition_campaign_state=all", "grouping_value_invalid");
   });
   it("keeps explicit engagement filters at open-date campaign grain", () => {
-    const prefix = "metric_name=engagement_ad_revenue_24h_usd&grouping_metric_date=2026-08-21";
-    assert.deepEqual(parse(`${prefix}&grouping_campaign_id=synthetic-return`).query.grouping,
-      { campaign_id: "synthetic-return", metric_date: "2026-08-21" });
-    for (const extra of ["grouping_cohort_date=2026-08-21", "grouping_country=JP", "grouping_creative_id=synthetic-creative", "grouping_attribution_status=non_organic"])
-      rejects(`${prefix}&${extra}`, "metric_series_mismatch");
+    for (const name of ["engagement_ad_revenue_24h_usd", "engagement_custom_event_converters_24h",
+      "engagement_policy_ad_revenue_usd", "engagement_policy_custom_event_converters", "engagement_policy_purchase_net_usd"]) {
+      const prefix = `metric_name=${name}&grouping_metric_date=2026-08-21`;
+      assert.deepEqual(parse(`${prefix}&grouping_campaign_id=synthetic-return`).query.grouping,
+        { campaign_id: "synthetic-return", metric_date: "2026-08-21" });
+      for (const extra of ["grouping_cohort_date=2026-08-21", "grouping_country=JP", "grouping_creative_id=synthetic-creative", "grouping_attribution_status=non_organic"])
+        rejects(`${prefix}&${extra}`, "metric_series_mismatch");
+    }
   });
   it("binds explicit detail filters and refuses identifiers outside their bounded grammar", () => {
     const query = parse("grouping_ad_group_id=synthetic-group-a&grouping_creative_id=synthetic-creative-a").query;

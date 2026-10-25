@@ -52,7 +52,7 @@ the synthetic backend, a daily install value and saved analysis/CSV. The
 publication receipt records the later harness revision separately. This is
 JVM/Robolectric API 24 evidence, not physical-device or all-platform onboarding.
 
-Current source includes additions through contract patch `v0.4.27`; the wire
+Current source includes additions through contract patch `v0.4.28`; the wire
 identity remains `0.4.0` with schema URNs ending in `:v0.4`. See
 [current status](docs/STATUS.md) and [post-release scope](docs/releases/next.md).
 Use the matching tag and its documentation when evaluating a published release.
@@ -120,8 +120,8 @@ python -m pip install --require-hashes --requirement requirements-contract.txt
 npm run validate
 ```
 
-It checks 28 schemas, 8 registries, 74 reviewed synthetic fixtures, 962 golden
-output artifacts, 74 scenario assertions, 27 acceptance criteria,
+It checks 28 schemas, 8 registries, 75 reviewed synthetic fixtures, 975 golden
+output artifacts, 75 scenario assertions, 27 acceptance criteria,
 TypeScript/Python determinism and RFC 8785 conformance, plus type, documentation,
 release-identity and public-data guardrails. It never regenerates goldens.
 Runtime, database and native SDK evidence have separate CI owners.

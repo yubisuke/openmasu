@@ -1,0 +1,782 @@
+{
+  "contract_version": "0.4.0",
+  "fx_policy": {
+    "policy_version": "fx-m7",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "1",
+        "rate_scale": 0,
+        "source": "synthetic-fixture-rate",
+        "as_of": "2026-08-21T06:00:00.000Z"
+      }
+    ]
+  },
+  "metric_definitions": [
+    {
+      "metric_definition_version": "0.4.28",
+      "anchor_event": "deep_link_open",
+      "aggregation_time_zone": "UTC",
+      "engagement_credit_policy": "latest_eligible_open_before_outcome",
+      "engagement_inactivity_days": 7,
+      "grouping_dimensions": [
+        "campaign_id",
+        "metric_date"
+      ],
+      "rule_bundle_id": "metric-engagement-policy",
+      "rule_bundle_version": "0.4.28",
+      "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+      "metric_name": "engagement_policy_custom_event_converters",
+      "value_type": "count",
+      "conversion_event_key": "tutorial_complete",
+      "definition": {
+        "calculation": "converted_installations",
+        "numerator": "converted_installations",
+        "window": {
+          "type": "elapsed",
+          "day": 2
+        }
+      }
+    },
+    {
+      "metric_definition_version": "0.4.28",
+      "anchor_event": "deep_link_open",
+      "aggregation_time_zone": "UTC",
+      "engagement_credit_policy": "latest_eligible_open_before_outcome",
+      "engagement_inactivity_days": 7,
+      "grouping_dimensions": [
+        "campaign_id",
+        "metric_date"
+      ],
+      "rule_bundle_id": "metric-engagement-policy",
+      "rule_bundle_version": "0.4.28",
+      "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+      "metric_name": "engagement_policy_ad_revenue_usd",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "revenue_sum",
+        "numerator": "revenue",
+        "window": {
+          "type": "elapsed",
+          "day": 2
+        }
+      }
+    },
+    {
+      "metric_definition_version": "0.4.28",
+      "anchor_event": "deep_link_open",
+      "aggregation_time_zone": "UTC",
+      "engagement_credit_policy": "latest_eligible_open_before_outcome",
+      "engagement_inactivity_days": 7,
+      "grouping_dimensions": [
+        "campaign_id",
+        "metric_date"
+      ],
+      "rule_bundle_id": "metric-engagement-policy",
+      "rule_bundle_version": "0.4.28",
+      "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+      "metric_name": "engagement_policy_purchase_net_usd",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "refund_reversal_policy": "cancel_target_refund_at_watermark",
+      "definition": {
+        "calculation": "revenue_sum",
+        "numerator": "purchase_net_revenue",
+        "window": {
+          "type": "elapsed",
+          "day": 2
+        }
+      }
+    }
+  ],
+  "metric_evaluations": [
+    {
+      "metric_run_id_prefix": "engagement75-a",
+      "metric_names": [
+        "engagement_policy_custom_event_converters",
+        "engagement_policy_ad_revenue_usd",
+        "engagement_policy_purchase_net_usd"
+      ],
+      "grouping": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-a"
+      },
+      "input_received_at_watermark": "2026-08-25T00:00:00.000Z",
+      "computed_at": "2026-08-25T00:00:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "after"
+    },
+    {
+      "metric_run_id_prefix": "engagement75-b",
+      "metric_names": [
+        "engagement_policy_custom_event_converters",
+        "engagement_policy_ad_revenue_usd",
+        "engagement_policy_purchase_net_usd"
+      ],
+      "grouping": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-b"
+      },
+      "input_received_at_watermark": "2026-08-25T00:00:00.000Z",
+      "computed_at": "2026-08-25T00:00:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "after"
+    },
+    {
+      "metric_run_id_prefix": "engagement75-c",
+      "metric_names": [
+        "engagement_policy_custom_event_converters",
+        "engagement_policy_ad_revenue_usd",
+        "engagement_policy_purchase_net_usd"
+      ],
+      "grouping": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-c"
+      },
+      "input_received_at_watermark": "2026-08-25T00:00:00.000Z",
+      "computed_at": "2026-08-25T00:00:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "after"
+    },
+    {
+      "metric_run_id_prefix": "engagement75-empty",
+      "metric_names": [
+        "engagement_policy_custom_event_converters",
+        "engagement_policy_ad_revenue_usd",
+        "engagement_policy_purchase_net_usd"
+      ],
+      "grouping": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-empty"
+      },
+      "input_received_at_watermark": "2026-08-25T00:00:00.000Z",
+      "computed_at": "2026-08-25T00:00:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "after"
+    }
+  ],
+  "privacy_requests": [],
+  "batches": [
+    {
+      "batch_id": "batch:open64-a",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T10:00:01.000Z",
+        "policy_digest": "policy-m7",
+        "deep_link_resolution": {
+          "status": "active",
+          "tracking_link_id": "link-64-a",
+          "campaign_id": "synthetic-engagement-a"
+        },
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "open64-a",
+          "delivery_id": "delivery:open64-a",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:open64-a",
+          "event_name": "deep_link_open",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T10:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T10:00:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "event_name": "deep_link_open",
+            "installation_id": "installation:engagement-75-x",
+            "open_source": "android_app_link",
+            "link_slug": "synthetic64a",
+            "destination_status": "delivered"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "batch:open64-b",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T12:00:01.000Z",
+        "policy_digest": "policy-m7",
+        "deep_link_resolution": {
+          "status": "active",
+          "tracking_link_id": "link-64-b",
+          "campaign_id": "synthetic-engagement-b"
+        },
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "open64-b",
+          "delivery_id": "delivery:open64-b",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:open64-b",
+          "event_name": "deep_link_open",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T12:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T12:00:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "event_name": "deep_link_open",
+            "installation_id": "installation:engagement-75-x",
+            "open_source": "android_app_link",
+            "link_slug": "synthetic64b",
+            "destination_status": "delivered"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "batch:open64-c",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T11:00:01.000Z",
+        "policy_digest": "policy-m7",
+        "deep_link_resolution": {
+          "status": "active",
+          "tracking_link_id": "link-64-c",
+          "campaign_id": "synthetic-engagement-c"
+        },
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "open64-c",
+          "delivery_id": "delivery:open64-c",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:open64-c",
+          "event_name": "deep_link_open",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T11:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T11:00:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "event_name": "deep_link_open",
+            "installation_id": "installation-64-y",
+            "open_source": "android_app_link",
+            "link_slug": "synthetic64c",
+            "destination_status": "delivered"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "batch:conversion64-a",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T10:30:01.000Z",
+        "policy_digest": "policy-m7",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "conversion64-a",
+          "delivery_id": "delivery:conversion64-a",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:conversion64-a",
+          "event_name": "custom_event",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T10:30:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T10:30:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "installation_id": "installation:engagement-75-x",
+            "event_key": "tutorial_complete"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "batch:conversion64-b",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T12:30:01.000Z",
+        "policy_digest": "policy-m7",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "conversion64-b",
+          "delivery_id": "delivery:conversion64-b",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:conversion64-b",
+          "event_name": "custom_event",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T12:30:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T12:30:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "installation_id": "installation:engagement-75-x",
+            "event_key": "tutorial_complete"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "batch:revenue64-before",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T09:00:01.000Z",
+        "policy_digest": "policy-m7",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "revenue64-before",
+          "delivery_id": "delivery:revenue64-before",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:revenue64-before",
+          "event_name": "ad_revenue",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T09:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T09:00:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "subject_scope": "installation_level",
+            "installation_id": "installation:engagement-75-x",
+            "ad_network": "synthetic-ad-network",
+            "revenue_source": "client_estimated",
+            "amount_unscaled": "9000000",
+            "amount_scale": 6,
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "batch:revenue64-a",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T10:30:01.000Z",
+        "policy_digest": "policy-m7",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "revenue64-a",
+          "delivery_id": "delivery:revenue64-a",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:revenue64-a",
+          "event_name": "ad_revenue",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T10:30:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T10:30:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "subject_scope": "installation_level",
+            "installation_id": "installation:engagement-75-x",
+            "ad_network": "synthetic-ad-network",
+            "revenue_source": "client_estimated",
+            "amount_unscaled": "2000000",
+            "amount_scale": 6,
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "batch:revenue64-b",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T12:30:01.000Z",
+        "policy_digest": "policy-m7",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "revenue64-b",
+          "delivery_id": "delivery:revenue64-b",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:revenue64-b",
+          "event_name": "ad_revenue",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T12:30:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T12:30:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "subject_scope": "installation_level",
+            "installation_id": "installation:engagement-75-x",
+            "ad_network": "synthetic-ad-network",
+            "revenue_source": "client_estimated",
+            "amount_unscaled": "3000000",
+            "amount_scale": 6,
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "batch:revenue64-boundary",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-22T12:00:01.000Z",
+        "policy_digest": "policy-m7",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "attribution",
+            "consent_required": false,
+            "policy_version": "consent-m7"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "revenue64-boundary",
+          "delivery_id": "delivery:revenue64-boundary",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.17",
+          "event_id": "event:revenue64-boundary",
+          "event_name": "ad_revenue",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-22T12:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-22T12:00:01.000Z",
+          "processing_purpose_id": "attribution",
+          "processing_sequence": 1,
+          "payload": {
+            "subject_scope": "installation_level",
+            "installation_id": "installation:engagement-75-x",
+            "ad_network": "synthetic-ad-network",
+            "revenue_source": "client_estimated",
+            "amount_unscaled": "9000000",
+            "amount_scale": 6,
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "engagement75:install75-x",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-01T00:00:01.000Z",
+        "policy_digest": "policy-v0.4.8",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "analytics",
+            "consent_required": false,
+            "policy_version": "consent-v0.4.8"
+          },
+          {
+            "processing_purpose_id": "revenue_measurement",
+            "consent_required": false,
+            "policy_version": "revenue-v0.4.8"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "install75-x",
+          "delivery_id": "delivery:install75-x",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.4.28",
+          "event_id": "event:install75-x",
+          "event_name": "install",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-01T00:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-01T00:00:01.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 1,
+          "payload": {
+            "installation_id": "installation:engagement-75-x",
+            "install_type": "first_install",
+            "referrer_status": "third_party",
+            "third_party_referrer_classification": "play_organic_marker",
+            "install_begin_at_server_status": "missing"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "engagement75:purchase75-a",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T11:00:01.000Z",
+        "policy_digest": "verified-commerce-v1",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "analytics",
+            "consent_required": false,
+            "policy_version": "consent-v0.4.8"
+          },
+          {
+            "processing_purpose_id": "revenue_measurement",
+            "consent_required": false,
+            "policy_version": "revenue-v0.4.8"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "purchase75-a",
+          "delivery_id": "delivery:purchase75-a",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "adapter:synthetic-verified-store",
+          "producer_version": "fixture-v0.4.28",
+          "event_id": "event:purchase75-a",
+          "event_name": "purchase",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T11:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T11:00:01.000Z",
+          "processing_purpose_id": "revenue_measurement",
+          "processing_sequence": 3,
+          "payload": {
+            "installation_id": "installation:engagement-75-x",
+            "transaction_id": "transaction75-a",
+            "original_transaction_id": "original75-a",
+            "amount_unscaled": "8000000",
+            "amount_scale": 6,
+            "currency": "USD",
+            "financial_status": "settled"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "engagement75:purchase75-b",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T13:00:01.000Z",
+        "policy_digest": "verified-commerce-v1",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "analytics",
+            "consent_required": false,
+            "policy_version": "consent-v0.4.8"
+          },
+          {
+            "processing_purpose_id": "revenue_measurement",
+            "consent_required": false,
+            "policy_version": "revenue-v0.4.8"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "purchase75-b",
+          "delivery_id": "delivery:purchase75-b",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "adapter:synthetic-verified-store",
+          "producer_version": "fixture-v0.4.28",
+          "event_id": "event:purchase75-b",
+          "event_name": "purchase",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T13:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T13:00:01.000Z",
+          "processing_purpose_id": "revenue_measurement",
+          "processing_sequence": 3,
+          "payload": {
+            "installation_id": "installation:engagement-75-x",
+            "transaction_id": "transaction75-b",
+            "original_transaction_id": "original75-b",
+            "amount_unscaled": "5000000",
+            "amount_scale": 6,
+            "currency": "USD",
+            "financial_status": "settled"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "engagement75:refund75-a",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-21T14:00:01.000Z",
+        "policy_digest": "verified-commerce-v1",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "analytics",
+            "consent_required": false,
+            "policy_version": "consent-v0.4.8"
+          },
+          {
+            "processing_purpose_id": "revenue_measurement",
+            "consent_required": false,
+            "policy_version": "revenue-v0.4.8"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "refund75-a",
+          "delivery_id": "delivery:refund75-a",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "adapter:synthetic-verified-store",
+          "producer_version": "fixture-v0.4.28",
+          "event_id": "event:refund75-a",
+          "event_name": "refund",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-21T14:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-21T14:00:01.000Z",
+          "processing_purpose_id": "revenue_measurement",
+          "processing_sequence": 9,
+          "payload": {
+            "installation_id": "installation:engagement-75-x",
+            "transaction_id": "refund-transaction75-a",
+            "original_transaction_id": "original75-a",
+            "amount_unscaled": "3000000",
+            "amount_scale": 6,
+            "currency": "USD",
+            "financial_status": "settled"
+          }
+        }
+      ]
+    }
+  ]
+}

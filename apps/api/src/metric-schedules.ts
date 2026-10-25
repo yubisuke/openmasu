@@ -230,7 +230,11 @@ export function normalizeMetricScheduleRequest(
     const engagement = evaluation.metric_names.some(name =>
       suppliedDefinitions.find(definition => definition.metric_name === name)?.engagement_credit_policy
       || ENGAGEMENT_METRIC_NAMES.has(name));
-    if (engagement && (dateDimension !== "metric_date" || lagDays < 2
+    const minimumEngagementLag = 1 + Math.max(1, ...evaluation.metric_names.map(name => {
+      const window = suppliedDefinitions.find(definition => definition.metric_name === name)?.definition.window as JsonObject | undefined;
+      return Number(window?.day ?? 0) + 1;
+    }));
+    if (engagement && (dateDimension !== "metric_date" || lagDays < minimumEngagementLag
         || Object.keys(grouping).some(key => key !== "campaign_id")
         || evaluation.campaign_discovery !== undefined
         || evaluation.metric_names.some(name => !suppliedDefinitions.find(definition => definition.metric_name === name)?.engagement_credit_policy)

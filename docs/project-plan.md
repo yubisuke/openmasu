@@ -88,6 +88,12 @@ provider metadata crawling and live provider completeness remain unverified.
 
 ### Optional extensions
 
+The [explicit engagement policy](engagement-outcomes.md#explicit-outcome-window-and-recorded-inactivity)
+is implemented after rc.2: independent outcome windows, recorded SDK inactivity
+and verified purchase/refund net preserve the historical 24h series. Unknown
+history is undefined, device-reported opens remain forgeable, and no acquisition
+or Apple aggregate identity is joined. The next extension is app-scoped access.
+
 The [additional Unity ILR sample](../sdk/unity/README.md#optional-levelplay-impression-revenue)
 is implemented after rc.2. Provider types are an explicit shim; the existing
 native queue, signed ingestion and worker revenue path retain their boundaries.
@@ -97,7 +103,6 @@ for the completed integrated candidate.
 
 | Issue / workstream | Narrow acceptance |
 | --- | --- |
-| [#240](https://github.com/yubisuke/openmasu/issues/240): Engagement policy and purchase outcomes | Independent windows/inactivity and purchase-net definitions, not acquisition rewriting |
 | [#247](https://github.com/yubisuke/openmasu/issues/247): App-scoped access | Explicit app restrictions without weakening tenant isolation |
 | [#249](https://github.com/yubisuke/openmasu/issues/249): Retention expiry | Explicit-policy preview and bounded expiry with privacy-safe replay |
 | [#251](https://github.com/yubisuke/openmasu/issues/251): Multiple workers | Tenant-wide ordering and stop/recovery evidence before multi-replica claims |

@@ -2,7 +2,7 @@ import { sha256 } from "./canonical.js";
 import { selectDisjointCosts, costCoverageMatchesGrouping } from "./cost-selection.js";
 import { cohortCalendarDayIndex, canonicalDatedFxPolicy, selectDatedFxRate, standardRetentionClosesAt, type CohortTimeZone, type DatedFxPolicyInput } from "@openmasu/contracts/definitions";
 import { selectPlatformAcquisition, platformAcquisitionDimensions, selectedPlatformProofRows } from "./platform-acquisition.js";
-import { engagementInputs, engagementSnapshotRows, engagementValue } from "./engagement-metrics.js";
+import { engagementInputs, engagementSnapshotRows, engagementValue, engagementPolicyValue } from "./engagement-metrics.js";
 import { REFERENCE_AD_REVENUE_METRIC_DEFINITIONS, isVerifiedPurchaseProjection } from "@openmasu/contracts/definitions";
 import { assertMetricDefinitionSeries } from "@openmasu/contracts/validation";
 import { attemptEvidenceKey, decisionFor, evidenceKey, sortCandidateAttempts } from "./candidates.js";
@@ -317,7 +317,7 @@ export function metricRuns(
           ? sum + money(item.record.payload, dateAt(item.record.occurred_at, "UTC", "occurred_at"))
           : sum;
       }, 0n);
-      const includesPurchaseNet = ["purchase_net_revenue", "total_net_revenue"].includes(
+      const includesPurchaseNet = !definition.engagement_credit_policy && ["purchase_net_revenue", "total_net_revenue"].includes(
         definition.definition.numerator,
       );
       const payerPurchases = payerProfile ? purchases.filter(item =>
@@ -396,10 +396,17 @@ export function metricRuns(
         if (definition.value_type === "money" && (fxPolicy.target_currency !== definition.currency || fxPolicy.target_scale !== definition.amount_scale)) {
           throw new Error("engagement_metric_fx_target_mismatch");
         }
-        value = engagementValue({ opens: engagement, visible, definition, grouping: evaluation.grouping,
-          available: attempt => evaluation.privacy_state !== "after" || !lifecycle.has(attemptEvidenceKey(attempt as Attempt)),
-          money: (payload, occurredAt) => money(payload, dateAt(occurredAt, "UTC", "occurred_at")) });
-        if (value === undefined) undefined_reason = "empty_cohort";
+        const args = { opens: engagement, visible, definition, grouping: evaluation.grouping,
+          available: (attempt: Any) => evaluation.privacy_state !== "after" || !lifecycle.has(attemptEvidenceKey(attempt as Attempt)),
+          money: (payload: Any, occurredAt: string) => money(payload, dateAt(occurredAt, "UTC", "occurred_at")) };
+        if (definition.rule_bundle_id === "metric-engagement-policy") {
+          const result = engagementPolicyValue({ ...args, included, refundTarget: refund => resolveRefundTarget(refund as Attempt, visible) });
+          if ("value" in result) value = result.value;
+          else undefined_reason = result.undefined_reason;
+        } else {
+          value = engagementValue(args);
+          if (value === undefined) undefined_reason = "empty_cohort";
+        }
       } else if (definition.definition.calculation === "revenue_sum") {
         value = selectedRevenueValue;
       } else if (costCalculation || definition.definition.calculation === "revenue_over_cost") {
@@ -579,6 +586,7 @@ export function metricRuns(
         metric_definition_version: definition.metric_definition_version,
         input_snapshot_id: definition.engagement_credit_policy ? sha256({
           record_snapshot_id: sha256(snapshotRows), engagement_inputs: engagementSnapshotRows(engagement, sha256),
+          ...(definition.rule_bundle_id === "metric-engagement-policy" ? { engagement_definition_digest: sha256(definition) } : {}),
         }) : imported ? sha256({
           record_and_cost_snapshot_id: sha256(snapshotRows), acquisition_attributions: acquisitionAttributionRows([...imported.values()]),
           imported_acquisition_contexts: importedContextRows(included, definition.import_provider!),

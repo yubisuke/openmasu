@@ -1899,7 +1899,8 @@
                   "overlapping_cost_grains",
                   "missing_fx_rate",
                   "observation_window_not_elapsed",
-                  "no_paying_installations"
+                  "no_paying_installations",
+                  "insufficient_activity_history"
                 ]
               },
               {
@@ -2202,7 +2203,8 @@
                     "overlapping_cost_grains",
                     "missing_fx_rate",
                     "observation_window_not_elapsed",
-                    "no_paying_installations"
+                    "no_paying_installations",
+                    "insufficient_activity_history"
                   ]
                 }
               }

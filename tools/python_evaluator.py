@@ -1401,6 +1401,39 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
                 or definition.get("fraud_policy", "gross") not in ("gross", "net")):
             raise ValueError("selected_daily_acquisition_profile_invalid")
         return
+    if ("engagement_inactivity_days" in definition or definition.get("rule_bundle_id") == "metric-engagement-policy"
+            or str(definition.get("metric_name", "")).startswith("engagement_policy_")):
+        metric = definition.get("metric_name")
+        names = ("engagement_policy_custom_event_converters", "engagement_policy_ad_revenue_usd", "engagement_policy_purchase_net_usd")
+        window = definition.get("definition", {}).get("window", {})
+        inactivity = definition.get("engagement_inactivity_days")
+        if (metric not in names or type(inactivity) is not int or not 0 <= inactivity <= 90
+                or type(window.get("day")) is not int or not 0 <= window["day"] <= 29):
+            raise ValueError("engagement_policy_profile_invalid")
+        count, purchase = metric == names[0], metric == names[2]
+        expected = {
+            "metric_name": metric, "metric_definition_version": "0.4.28", "anchor_event": "deep_link_open",
+            "aggregation_time_zone": "UTC", "engagement_credit_policy": "latest_eligible_open_before_outcome",
+            "engagement_inactivity_days": inactivity, "grouping_dimensions": ["campaign_id", "metric_date"],
+            "rule_bundle_id": "metric-engagement-policy", "rule_bundle_version": "0.4.28",
+            "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+            "value_type": "count" if count else "money",
+            "definition": {"calculation": "converted_installations" if count else "revenue_sum",
+                           "numerator": "converted_installations" if count else "purchase_net_revenue" if purchase else "revenue",
+                           "window": {"type": "elapsed", "day": window["day"]}},
+        }
+        if count:
+            event_key = definition.get("conversion_event_key")
+            if not isinstance(event_key, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", event_key):
+                raise ValueError("engagement_conversion_event_key_invalid")
+            expected["conversion_event_key"] = event_key
+        else:
+            expected |= {"currency": "USD", "amount_scale": 6}
+        if purchase:
+            expected["refund_reversal_policy"] = "cancel_target_refund_at_watermark"
+        if definition != expected:
+            raise ValueError("engagement_policy_profile_invalid")
+        return
     if ("engagement_credit_policy" in definition or definition.get("anchor_event") == "deep_link_open"
             or definition.get("metric_name") in ("engagement_custom_event_converters_24h", "engagement_ad_revenue_24h_usd")
             or definition.get("rule_bundle_id") == "metric-first-party-engagement"):
@@ -1925,6 +1958,107 @@ def engagement_value(opens: list[dict[str, Any]], visible: list[dict[str, Any]],
     return len(converted) if count else revenue
 
 
+def engagement_policy_value(opens: list[dict[str, Any]], included: list[dict[str, Any]], visible: list[dict[str, Any]],
+                            definition: dict[str, Any], evaluation: dict[str, Any], lifecycle: dict[tuple[str, str, str], str],
+                            money: Callable[[dict[str, Any], str], int]) -> tuple[int | None, str | None]:
+    grouping = evaluation.get("grouping", {})
+    if not isinstance(grouping.get("metric_date"), str) or set(grouping) - {"metric_date", "campaign_id"}:
+        raise ValueError("engagement_metric_requires_anchor_date")
+    inactivity = definition["engagement_inactivity_days"]
+    window = timedelta(days=definition["definition"]["window"]["day"] + 1)
+
+    def instant(item: dict[str, Any]) -> datetime:
+        return timestamp(item["record"]["occurred_at"], "occurred_at")
+
+    def identity(item: dict[str, Any]) -> tuple[str, str, str | None]:
+        return item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["payload"].get("installation_id")
+
+    def available(item: dict[str, Any]) -> bool:
+        return evaluation["privacy_state"] != "after" or attempt_evidence_key(item) not in lifecycle
+
+    def selected(row: dict[str, Any]) -> bool:
+        return (available(row["attempt"]) and row["attempt"]["record"]["occurred_at"][:10] == grouping["metric_date"]
+                and grouping.get("campaign_id", row["campaign"]) == row["campaign"])
+
+    states: dict[tuple[str, str, str], str] = {}
+    for row in opens:
+        anchor = row["attempt"]
+        state = "eligible"
+        if inactivity:
+            start = instant(anchor) - timedelta(days=inactivity)
+            history = [item for item in included if identity(item) == identity(anchor)
+                       and item["record"]["producer"] in ("sdk-android", "sdk-ios") and instant(item) < instant(anchor)]
+            activity = [item for item in history if instant(item) >= start
+                        and item["record"]["event_name"] in ("session_start", "custom_event", "deep_link_open")]
+            if any(available(item) for item in activity):
+                state = "active"
+            elif any(not available(item) for item in activity) or not any(
+                item["record"]["event_name"] == "install" and instant(item) <= start and available(item) for item in history
+            ):
+                state = "unknown"
+        states[attempt_evidence_key(anchor)] = state
+    population = [row for row in opens if selected(row)]
+    if any(states[attempt_evidence_key(row["attempt"])] == "unknown" for row in population):
+        return None, "insufficient_activity_history"
+    if not any(states[attempt_evidence_key(row["attempt"])] == "eligible" for row in population):
+        return None, "empty_cohort"
+    ordered = sorted(opens, key=lambda row: utf16_key(row["attempt"]["record"]["record_id"]))
+    ordered.sort(key=lambda row: instant(row["attempt"]), reverse=True)
+
+    def winner(item: dict[str, Any]) -> dict[str, Any] | None:
+        return next((row for row in ordered if identity(row["attempt"]) == identity(item) and instant(row["attempt"]) <= instant(item)), None)
+
+    def credited(row: dict[str, Any] | None, item: dict[str, Any]) -> bool:
+        return (row is not None and selected(row) and states[attempt_evidence_key(row["attempt"])] == "eligible"
+                and instant(item) < instant(row["attempt"]) + window)
+
+    def verified(item: dict[str, Any]) -> bool:
+        return item["record"]["producer"].startswith("adapter:") and item["server"]["policy_digest"] in (
+            "verified-commerce-v1", "google-play-product-verification-v1")
+
+    if definition["definition"]["numerator"] == "purchase_net_revenue":
+        purchases: dict[tuple[str, str, str], tuple[dict[str, Any], dict[str, Any]]] = {}
+        value = 0
+        def purchase_key(item: dict[str, Any]) -> tuple[str, str, str]:
+            return item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["record_id"]
+        for item in visible:
+            if item["record"]["event_name"] != "purchase" or item["record"]["payload"]["financial_status"] != "settled" or not verified(item):
+                continue
+            anchor = winner(item)
+            if credited(anchor, item):
+                purchases[purchase_key(item)] = item, anchor
+                value += money(item["record"]["payload"], day(item["record"]["occurred_at"], "UTC", "occurred_at"))
+        for item in visible:
+            if item["record"]["event_name"] != "refund" or item["record"]["payload"]["financial_status"] != "settled" or not verified(item):
+                continue
+            target = resolve_refund_target(item, visible)
+            original = purchases.get(purchase_key(target)) if target else None
+            if original is None or instant(item) < instant(original[0]) or not credited(original[1], item):
+                continue
+            if any(reversal["record"]["event_name"] == "refund" and reversal["record"]["payload"]["financial_status"] == "reversed"
+                   and verified(reversal) and reversal["server"]["tenant_id"] == item["server"]["tenant_id"]
+                   and reversal["server"]["app_id"] == item["server"]["app_id"]
+                   and reversal["record"]["payload"].get("reverses_refund_record_id") == item["record"]["record_id"] for reversal in visible):
+                continue
+            value -= money(item["record"]["payload"], day(item["record"]["occurred_at"], "UTC", "occurred_at"))
+        return value, None
+    count = definition["definition"]["calculation"] == "converted_installations"
+    converted, value = set(), 0
+    for item in visible:
+        record = item["record"]
+        if count:
+            if record["event_name"] != "custom_event" or record["payload"]["event_key"] != definition["conversion_event_key"]:
+                continue
+        elif record["event_name"] != "ad_revenue" or record["payload"].get("subject_scope") != "installation_level":
+            continue
+        if credited(winner(item), item):
+            if count:
+                converted.add(identity(item))
+            else:
+                value += money(record["payload"], day(record["occurred_at"], "UTC", "occurred_at"))
+    return len(converted) if count else value, None
+
+
 def metric_runs(
     value: dict[str, Any],
     attempts: list[dict[str, Any]],
@@ -2173,7 +2307,7 @@ def metric_runs(
                 and install["server"]["app_id"] == item["server"]["app_id"]
                 and install["record"]["payload"]["installation_id"] == item["record"]["payload"].get("installation_id")
                 and eligible_revenue(definition, install["record"], item["record"]) for install in eligible_installs)] if payer_profile else []
-            if definition["definition"]["numerator"] in {"purchase_net_revenue", "total_net_revenue"}:
+            if not definition.get("engagement_credit_policy") and definition["definition"]["numerator"] in {"purchase_net_revenue", "total_net_revenue"}:
                 for item in (payer_purchases if payer_profile else purchases):
                     installation = next((
                         candidate for candidate in eligible_installs
@@ -2247,9 +2381,12 @@ def metric_runs(
                 amount = len({(item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["payload"]["installation_id"])
                               for item in events}) if calculation == "active_installations_count" else len(events)
             elif definition.get("engagement_credit_policy"):
-                amount = engagement_value(engagement, visible, definition, evaluation, lifecycle, policy, money)
-                if amount is None:
-                    undefined_reason = "empty_cohort"
+                if definition.get("rule_bundle_id") == "metric-engagement-policy":
+                    amount, undefined_reason = engagement_policy_value(engagement, included, visible, definition, evaluation, lifecycle, money)
+                else:
+                    amount = engagement_value(engagement, visible, definition, evaluation, lifecycle, policy, money)
+                    if amount is None:
+                        undefined_reason = "empty_cohort"
             elif calculation == "revenue_sum":
                 amount = selected_revenue_value
             elif calculation == "revenue_over_cost" or cost_calculation:
@@ -2421,7 +2558,8 @@ def metric_runs(
                 "metric_run_id": f"{evaluation['metric_run_id_prefix']}:{metric_name}",
                 "metric_name": metric_name,
                 "metric_definition_version": definition["metric_definition_version"],
-                "input_snapshot_id": digest({"record_snapshot_id": digest(snapshot_rows), "engagement_inputs": engagement_snapshot_rows(engagement)})
+                "input_snapshot_id": digest({"record_snapshot_id": digest(snapshot_rows), "engagement_inputs": engagement_snapshot_rows(engagement),
+                                             **({"engagement_definition_digest": digest(definition)} if definition.get("rule_bundle_id") == "metric-engagement-policy" else {})})
                                      if definition.get("engagement_credit_policy") else digest({"record_and_cost_snapshot_id": digest(snapshot_rows),
                                              "acquisition_attributions": acquisition_attribution_rows(imported_attributions.values()),
                                              "imported_acquisition_contexts": imported_context_rows(included, provider)})

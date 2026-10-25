@@ -14,7 +14,7 @@ import {
   standardRetentionMetricDefinitions,
   calendarAcquisitionMetricDefinitions, COHORT_TIME_ZONES,
   SELECTED_COMMERCE_METRIC_DEFINITIONS, customConversionMetricDefinitions, engagementMetricDefinitions,
-  METRIC_PROFILE_METADATA, metricProfileMetadata,
+  METRIC_PROFILE_METADATA, metricProfileMetadata, engagementPolicyMetricDefinitions,
 } from "@openmasu/contracts/definitions";
 import type { OpenMasuMetricDefinitionV04 } from "@openmasu/contracts/types";
 import { validateMetricDefinition, validateScheduledMetricDefinition, assertMetricDefinitionSeries } from "@openmasu/contracts/validation";
@@ -86,6 +86,26 @@ async function boundaryResult(name: string, definition: Definition): Promise<Bou
 }
 
 describe("metric profile entry boundaries", () => {
+  it("engagement_policy_admission_binds_window_inactivity_and_verified_purchase_net_without_upgrading_24h", async () => {
+    const definitions = engagementPolicyMetricDefinitions({ windowDays: 3, minimumInactivityDays: 7, eventKey: "tutorial_complete" });
+    for (const definition of definitions) {
+      assert.deepEqual(await boundaryResult("engagement_policy/valid", definition), {
+        name: "engagement_policy/valid", schema: true, schedule: true, evaluator: true, sql: true,
+      });
+      for (const change of [{ engagement_inactivity_days: undefined }, { engagement_inactivity_days: -1 },
+        { engagement_inactivity_days: 91 }, { engagement_inactivity_days: true }, { fraud_policy: "net" },
+        { acquisition_basis: "selected_first_party_click" }, { rule_bundle_hash: "0".repeat(64) },
+        { rule_bundle_id: "metric-first-party-engagement" }, { metric_definition_version: "0.4.17" },
+        { definition: { ...definition.definition, window: { type: "elapsed", day: 30 } } }]) {
+        assert.deepEqual(await boundaryResult("engagement_policy/invalid", { ...definition, ...change } as Definition), {
+          name: "engagement_policy/invalid", schema: false, schedule: false, evaluator: false, sql: false,
+        });
+      }
+    }
+    assert.equal(validateMetricDefinition({ ...engagementMetricDefinitions("tutorial_complete")[0], engagement_inactivity_days: 0 }), false);
+    for (const [windowDays, minimumInactivityDays] of [[0, 7], [31, 7], [3, -1], [3, 91]])
+      assert.throws(() => engagementPolicyMetricDefinitions({ windowDays, minimumInactivityDays, eventKey: "tutorial_complete" }), /window_invalid/);
+  });
   it("payer_profile_is_closed_to_verified_store_purchase_counts_and_net_arppu", async () => {
     for (const definition of PAYER_METRIC_DEFINITIONS) {
       assert.deepEqual(await boundaryResult("payer/valid", definition), {
@@ -142,6 +162,8 @@ describe("metric profile entry boundaries", () => {
       ...ACQUISITION_KPI_METRIC_DEFINITIONS.map(definition => ({ name: "acquisition_kpis/valid", definition })),
       ...CALENDAR_ACTIVITY_METRIC_DEFINITIONS.map(definition => ({ name: "calendar_activity/valid", definition })),
       ...PAYER_METRIC_DEFINITIONS.map(definition => ({ name: "payer/valid", definition })),
+      ...engagementPolicyMetricDefinitions({ windowDays: 3, minimumInactivityDays: 7, eventKey: "tutorial_complete" })
+        .map(definition => ({ name: "engagement_policy/valid", definition })),
       ...SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS.map(definition => ({ name: "daily_acquisition/valid", definition })),
       ...VERIFIED_PLATFORM_METRIC_DEFINITIONS.map(definition => ({ name: "platform/valid", definition })),
       ...importedAcquisitionMetricDefinitions("synthetic-export").map(definition => ({ name: "imported/valid", definition })),
@@ -152,7 +174,7 @@ describe("metric profile entry boundaries", () => {
       ...COHORT_TIME_ZONES.flatMap(zone=>["selected_first_party_click","selected_verified_platform","selected_imported_provider"].flatMap(basis=>
         calendarAcquisitionMetricDefinitions(zone,basis as NonNullable<Definition["acquisition_basis"]>,basis === "selected_imported_provider" ? "synthetic-export" : undefined)
           .map(definition=>({name:"calendar/valid",definition}))))];
-    assert.equal(valid.length, 231 + ACQUISITION_KPI_METRIC_DEFINITIONS.length + CALENDAR_ACTIVITY_METRIC_DEFINITIONS.length + PAYER_METRIC_DEFINITIONS.length);
+    assert.equal(valid.length, 234 + ACQUISITION_KPI_METRIC_DEFINITIONS.length + CALENDAR_ACTIVITY_METRIC_DEFINITIONS.length + PAYER_METRIC_DEFINITIONS.length);
     const exercised = new Set<string>();
     for (const { name, definition } of valid) {
       assert.ok(validateMetricDefinition(definition), name);

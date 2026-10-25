@@ -1,0 +1,112 @@
+{
+  "tenant_id": "tenant-a",
+  "app_id": "app-a",
+  "fx_policy": {
+    "policy_version": "fx-m7",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "1",
+        "rate_scale": 0,
+        "source": "synthetic-fixture-rate",
+        "as_of": "2026-08-21T06:00:00.000Z"
+      }
+    ]
+  },
+  "metric_definitions": [
+    {
+      "metric_definition_version": "0.4.28",
+      "anchor_event": "deep_link_open",
+      "aggregation_time_zone": "UTC",
+      "engagement_credit_policy": "latest_eligible_open_before_outcome",
+      "engagement_inactivity_days": 7,
+      "grouping_dimensions": [
+        "campaign_id",
+        "metric_date"
+      ],
+      "rule_bundle_id": "metric-engagement-policy",
+      "rule_bundle_version": "0.4.28",
+      "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+      "metric_name": "engagement_policy_custom_event_converters",
+      "value_type": "count",
+      "conversion_event_key": "tutorial_complete",
+      "definition": {
+        "calculation": "converted_installations",
+        "numerator": "converted_installations",
+        "window": {
+          "type": "elapsed",
+          "day": 2
+        }
+      }
+    },
+    {
+      "metric_definition_version": "0.4.28",
+      "anchor_event": "deep_link_open",
+      "aggregation_time_zone": "UTC",
+      "engagement_credit_policy": "latest_eligible_open_before_outcome",
+      "engagement_inactivity_days": 7,
+      "grouping_dimensions": [
+        "campaign_id",
+        "metric_date"
+      ],
+      "rule_bundle_id": "metric-engagement-policy",
+      "rule_bundle_version": "0.4.28",
+      "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+      "metric_name": "engagement_policy_ad_revenue_usd",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "revenue_sum",
+        "numerator": "revenue",
+        "window": {
+          "type": "elapsed",
+          "day": 2
+        }
+      }
+    },
+    {
+      "metric_definition_version": "0.4.28",
+      "anchor_event": "deep_link_open",
+      "aggregation_time_zone": "UTC",
+      "engagement_credit_policy": "latest_eligible_open_before_outcome",
+      "engagement_inactivity_days": 7,
+      "grouping_dimensions": [
+        "campaign_id",
+        "metric_date"
+      ],
+      "rule_bundle_id": "metric-engagement-policy",
+      "rule_bundle_version": "0.4.28",
+      "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+      "metric_name": "engagement_policy_purchase_net_usd",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "refund_reversal_policy": "cancel_target_refund_at_watermark",
+      "definition": {
+        "calculation": "revenue_sum",
+        "numerator": "purchase_net_revenue",
+        "window": {
+          "type": "elapsed",
+          "day": 2
+        }
+      }
+    }
+  ],
+  "evaluations": [
+    {
+      "metric_names": [
+        "engagement_policy_custom_event_converters",
+        "engagement_policy_ad_revenue_usd",
+        "engagement_policy_purchase_net_usd"
+      ],
+      "grouping": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-a"
+      }
+    }
+  ]
+}

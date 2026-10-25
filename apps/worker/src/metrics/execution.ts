@@ -147,6 +147,7 @@ export async function executeMetricCalculation(
         metric_definition_version: definition.metric_definition_version,
         input_snapshot_id: definition.engagement_credit_policy ? sha256({
           record_snapshot_id: inputSnapshotId, engagement_inputs: engagementRows,
+          ...(definition.rule_bundle_id === "metric-engagement-policy" ? { engagement_definition_digest: sha256(definition) } : {}),
         }) : definition.import_provider ? sha256({
           record_and_cost_snapshot_id: inputSnapshotId, ...importSnapshots.get(definition.import_provider)!,
         }) : definition.acquisition_basis === "selected_verified_platform" ? sha256({

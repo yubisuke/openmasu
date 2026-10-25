@@ -5,6 +5,46 @@ Contract v0.4.0 completed the identity migration from the immutable
 contract identity but did not change field meaning, attribution behavior, metric
 arithmetic, ordering, hashing, privacy, or fraud semantics.
 
+## Explicit engagement policy and verified purchase net (0.4.28)
+
+Optional definition `engagement_inactivity_days` (0–90) is required only by the
+new closed `metric-engagement-policy` profile. Its three independently versioned
+metrics declare elapsed windows of 1–30 days; it adds `insufficient_activity_history`
+to metric-run undefined reasons and the corresponding PostgreSQL constraint
+through additive migration 075. Registered bundle/hash, full saved definition
+and new-profile-only definition-bound snapshot preserve reproducibility. No
+previous schema URN, wire/package identity, metric profile or snapshot changes.
+The new definition does not reinterpret the historical 24h engagement profile.
+
+Recorded SDK inactivity has explicit active/unknown/eligible states, not a human
+inactivity claim. Latest-open selection precedes grouping and eligibility.
+Verified partial refunds retain original-purchase open credit; exact verified
+target cancellation is recognized at the fixed receipt cutoff. No acquisition,
+Apple aggregate, cost, identity inference or automatic campaign discovery is added.
+See [the guide](engagement-outcomes.md#explicit-outcome-window-and-recorded-inactivity).
+
+Complete golden addition inventory: new `75-engagement-policy/input.json` and
+all thirteen `expected_*.json` families: raw_records, deliveries, logical_events,
+corrections, privacy_requests, privacy_tombstones, attributions,
+metric_definitions, metric_runs, cost_records, fraud_decisions, rejections and
+reconciliation. No earlier 74 inputs or 962 goldens change. Confirm with
+`git diff --name-status c04cb09f3b267b7911ee2026ddd2b35db6bafb8e -- fixtures/v0.4/`:
+only directory 75 and the shared README may differ.
+
+The [independent derivation](../fixtures/v0.4/75-engagement-policy/README.md)
+reviews every family. Nine fixture64 event shapes retain their admission and
+engagement-attribution templates; the new installation uses the required
+`installation:` namespace with independently recalculated payload hashes.
+Four new records use fixture73's reviewed
+admission shapes. Thirteen accepted records yield one refund correction and
+four attributions. Six definitions and twelve runs give campaign a ad/count/net
+2/1/5 (USD 8 minus 3), active campaign b empty, history-unknown c undefined,
+and an empty campaign undefined. Digests are calculated from declared canonical
+inputs and literal arithmetic, not evaluator output. All thirteen independent
+families matched TS/Python before promotion. New goldens are committed separately
+from behavior. Existing comparison/report encoders retain column positions;
+the generated limited HTTP schema receives only the additive undefined enum.
+
 ## Selected child cost coverage (0.4.27)
 
 Optional `coverage_scope=matching_detail_only` on cost records declares a partial

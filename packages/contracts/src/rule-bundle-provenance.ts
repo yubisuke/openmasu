@@ -20,6 +20,7 @@ export type NonFraudRuleBundleId =
   | "metric-refund-reversal"
   | "metric-acquisition-detail"
   | "metric-first-party-engagement"
+  | "metric-engagement-policy"
   | "metric-custom-conversion"
   | "metric-stage-m3"
   | "metric-purchase-net"
@@ -36,6 +37,19 @@ export type NonFraudRuleBundleDefinition = {
 };
 
 export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonFraudRuleBundleDefinition>> = {
+  "metric-engagement-policy": {
+    id: "metric-engagement-policy", version: "0.4.28", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["server-resolved-device-reported-forgeable-engagement", "explicit-half-open-1-to-30-day-window",
+      "latest-open-before-grouping-and-eligibility", "open-time-tie-record-id-ascending",
+      "explicit-0-to-90-day-recorded-inactivity", "sdk-install-prefix-before-lookback",
+      "sdk-session-custom-and-deep-link-activity", "insufficient-or-removed-history-is-unknown",
+      "unknown-selected-population-is-undefined", "active-or-removed-winner-never-falls-back",
+      "verified-settled-store-projections-only", "refund-follows-original-purchase-open",
+      "refund-own-time-inside-original-open-window", "cancel-exact-verified-refund-at-watermark",
+      "per-event-half-even-fx-before-net", "receipt-cutoff-and-current-privacy",
+      "separate-custom-ad-and-purchase-net-series", "never-rewrite-install-or-apple-aggregate"],
+  },
   "metric-verified-payers": {
     id: "metric-verified-payers", version: "0.4.26", kind: "metric",
     implementation: "reference-metric-v0.4",
