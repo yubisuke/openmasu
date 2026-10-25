@@ -19,6 +19,15 @@ export function acquisitionDimensions(payload: Any): {
   };
 }
 
+/** Existing normalized rule inputs only: no tokens, raw referrer, IP or UA. */
+function fraudInputEvidence(event: "click" | "install", payload: Any): Any {
+  if (event === "click") return { fraud_input_version: 1,replay_suspected: payload.replay_suspected === true,
+    redirector_time_status: payload.redirector_time_status ?? null };
+  const fields = ["click_id","referrer_status","referrer_click_at_server","referrer_click_at_server_status",
+    "install_begin_at_server","install_begin_at_server_status"];
+  return { fraud_input_version:1,...Object.fromEntries(fields.map(field=>[field,payload[field] ?? null])) };
+}
+
 /** Keep only the bounded server-decryption projection, never ciphertext or raw referrer data. */
 export function platformInstallEvidence(payload: Any): Any {
   if (payload.meta_referrer_status !== "decrypted" || !payload.extensions?.meta_decryption_key_id
@@ -79,6 +88,7 @@ export async function persistProjectionWithClient(
           campaignId, network, country, payload.site_id ?? null, payload.remote_click_ref ?? null,
           trackingLinkId,
           projected({
+            ...fraudInputEvidence("click",payload),
             ...(payload.click_id ? { click_id: payload.click_id } : {}),
             redirector_click_at: payload.redirector_click_at ?? null,
             campaign_id: campaignId,
@@ -111,6 +121,7 @@ export async function persistProjectionWithClient(
           payload.install_begin_at_server ?? null, attempt.record.occurred_at,
           campaignId, network, country,
           projected({
+            ...fraudInputEvidence("install",payload),
             installation_id: payload.installation_id,
             prior_installation_id: payload.prior_installation_id ?? null,
             install_type: payload.install_type,
@@ -309,6 +320,7 @@ export function bulkProjectionRows(
       if (attempt.record.producer === "redirector") { fallback.push(logical); continue; }
       const { campaignId, network, country } = acquisitionDimensions(payload);
       const artifact = {
+        ...fraudInputEvidence("click",payload),
         ...(payload.click_id ? { click_id: payload.click_id } : {}),
         redirector_click_at: payload.redirector_click_at ?? null,
         campaign_id: campaignId, network, country,
@@ -333,6 +345,7 @@ export function bulkProjectionRows(
         install_begin_at_server: payload.install_begin_at_server ?? null, occurred_at: attempt.record.occurred_at,
         campaign_id: campaignId, network, country,
         artifact: {
+          ...fraudInputEvidence("install",payload),
           installation_id: payload.installation_id, prior_installation_id: payload.prior_installation_id ?? null,
           install_type: payload.install_type, occurred_at: attempt.record.occurred_at,
           campaign_id: campaignId, network, country,

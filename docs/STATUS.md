@@ -61,9 +61,15 @@ Detailed limits belong to the [product guides](README.md), [product scope](produ
 ## Current development focus
 
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-34 of 35 child implementations complete; one optional extension remains. The earlier
+all 35 child implementations present in current source. The earlier
 integration plan is complete, not a second backlog. The dependency, controller,
 presentation, evaluator and ingestion foundations are also implemented.
+
+[Fraud policy preview](fraud-preview.md) compares registered active/candidate
+definitions on the same bounded retained evidence, with gross/net effects and
+receipt-bound explicit activation. It never rewrites history or calls the
+displayed counts a detection rate. Missing historical rule inputs block impact
+claims and activation. This is source after rc.2, not a new SDK release.
 
 The optional [Unity ILR sample](../sdk/unity/README.md#optional-levelplay-impression-revenue)
 adds per-ad LevelPlay callbacks to existing native queues and revenue metrics.

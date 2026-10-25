@@ -135,6 +135,10 @@ from a default flag, clock anomalies, and privacy-invasive signals. Controls
 include registered definitions and digests, composite bundle hashes, pure rules,
 explicit provisional time handling, gross/net separation, and a closed bounded
 signal set.
+The [policy preview](fraud-preview.md) adds bounded repeatable-read evidence,
+the tenant privacy fence and definition/predecessor/cutoff/evidence-bound
+activation receipts. It writes no preview state and blocks incomplete historical
+inputs; counterfactual counts never claim detection accuracy or rewrite history.
 
 <!-- threat-component:integrity-verifier -->
 **Integrity verifier:** forged provider response, raw token disclosure,

@@ -1,6 +1,6 @@
 # Post-rc.2 Scope
 
-Updated: 2026-10-25. This is a living record of remaining work after rc.2,
+Updated: 2026-10-25. This is a living record of current source after rc.2,
 not a new release note or a promise of a release date.
 
 ## Published baseline
@@ -14,7 +14,13 @@ remain frozen. The separate
 annotated tag, exact-commit full CI and eight verified public assets.
 `v0.2.0` remains the latest stable source release.
 
-## Remaining optional scope
+## Implemented source additions
+
+[Fraud policy preview](../fraud-preview.md) adds a read-only, bounded same-evidence
+comparison and receipt-bound public activation. It reuses existing pure fraud
+and metric projections; incomplete old rule inputs block impact claims and
+activation. Past decisions, contract wire identity and reviewed goldens stay
+unchanged. Counts are not measured fraud detection effectiveness.
 
 The [cost wire correction](../cost-refresh.md#cost-dimensions-and-row-identity)
 separates public dimension digests from internal scoped/date revision keys.

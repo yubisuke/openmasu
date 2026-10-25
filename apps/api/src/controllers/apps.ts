@@ -1,7 +1,9 @@
 import { registerAppleApp, registerConversionSchema } from "../apple-admin.js";
 import { AppNotFoundError, listApps, registerApp, requireRegisteredApp } from "../apps-admin.js";
 import { activateRuleBundle } from "../rule-bundles.js";
-import { recordDashboardAudit } from "../session.js";
+import { FraudPreviewError,parseFraudPreviewRequest,previewFraudBundle } from "../fraud-preview.js";
+import { renderFraudPreview } from "../dashboard/fraud-preview.js";
+import { recordDashboardAudit,csrfToken } from "../session.js";
 import { registerAppLinkIdentity, registerLinkDomain } from "../link-domains.js";
 import { configureGoogleDataManagerDestination } from "../google-data-manager-admin.js";
 import type { RequestHandlerDependencies } from "../http-types.js";
@@ -74,7 +76,7 @@ export function createAppsControllers(dependencies: Pick<RequestHandlerDependenc
         await registerConversionSchema({ pool: dependencies.pool, identity: appIdentity,
           schemaVersion: form.schema_version, definition: jsonFormValue(body, "definition_json") });
       } else if (route.handler === "dashboard_rule_bundle") {
-        await activateRuleBundle({ pool: dependencies.pool, identity: appIdentity, body: jsonFormValue(body, "definition_json") as Record<string, unknown> });
+        await activateRuleBundle({ pool: dependencies.pool, identity: appIdentity, body: jsonFormValue(body, "definition_json") as Record<string, unknown>,requirePreview:true });
       } else {
         await configureGoogleDataManagerDestination({ pool: dependencies.pool, identity: appIdentity, body: {
           operating_account_id: form.operating_account_id,
@@ -164,6 +166,7 @@ export function createAppsControllers(dependencies: Pick<RequestHandlerDependenc
             pool: dependencies.pool,
             identity: appIdentity,
             body,
+            requirePreview:true,
           });
       json(response, 201, result);
     } catch (error) {
@@ -171,14 +174,34 @@ export function createAppsControllers(dependencies: Pick<RequestHandlerDependenc
         json(response, 404, { error: "app_not_found" });
       } else {
         const message = error instanceof Error ? error.message : "admin_configuration_invalid";
-        const status = message.endsWith("_already_registered") || message === "rule_bundle_predecessor_mismatch" ? 409 : 400;
+        const status = message.endsWith("_already_registered") || message === "rule_bundle_predecessor_mismatch" || message === "fraud_preview_receipt_mismatch" || message === "fraud_preview_blocked" ? 409 : 400;
         json(response, status, { error: message });
       }
     }
     return;
   };
 
+  const adminFraudPreview=async ({response,target,identity,decoder}:AdminRequestContext):Promise<void>=>{
+    try {
+      const appIdentity=await requireRegisteredApp(dependencies.pool,identity,adminAppId(target.pathname) ?? "");
+      json(response,200,await previewFraudBundle(dependencies.pool,appIdentity,await decoder.json()));
+    } catch(error) {
+      json(response,error instanceof AppNotFoundError ? 404:400,{error:error instanceof AppNotFoundError ? "app_not_found"
+        : error instanceof FraudPreviewError ? error.message:"fraud_preview_unavailable"});
+    }
+  };
+  const dashboardFraudPreview=async ({request,response,session,appIdentity,decoder}:DashboardAppContext):Promise<void>=>{
+    const body=await decoder.form();
+    if (!await authorizeDashboardForm(dependencies,{request,response,session},body,"dashboard_configuration","app",appIdentity.appId)) return;
+    try {
+      const parsed=parseFraudPreviewRequest({definition:jsonFormValue(body,"definition_json"),watermark_at_most:body.get("watermark_at_most")});
+      const preview=await previewFraudBundle(dependencies.pool,appIdentity,parsed);
+      dashboardHtml(response,200,renderFraudPreview({appId:appIdentity.appId,csrfToken:csrfToken(session.token),request:parsed,preview}));
+    } catch(error) {dashboardHtml(response,400,renderConfigurationFailed({reason:error instanceof FraudPreviewError ? error.message:"fraud_preview_unavailable"}));}
+  };
   return {
+    admin_fraud_preview:{boundary:"admin",handle:adminFraudPreview},
+    dashboard_fraud_preview:{boundary:"dashboard_app",handle:dashboardFraudPreview},
     dashboard_apps_create: { boundary: "dashboard_tenant", handle: dashboardAppsCreate },
     dashboard_link_domain: { boundary: "dashboard_tenant", handle: dashboardLinkDomain },
     dashboard_app_link_identity: { boundary: "dashboard_app", handle: dashboardAppLinkIdentity },

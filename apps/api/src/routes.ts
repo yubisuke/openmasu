@@ -2,6 +2,8 @@ export type RouteAuth = "public" | "admin_bearer" | "sdk_hmac" | "server_hmac" |
 export type RouteCapability = "read" | "operate" | "administer";
 
 export type RouteHandler =
+  | "admin_fraud_preview"
+  | "dashboard_fraud_preview"
   | "admin_comparison_read"
   | "admin_comparison_mutate"
   | "dashboard_comparison_runs"
@@ -198,6 +200,7 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "admin_apple_registration", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/apple-registration$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_conversion_schema", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/conversion-schemas$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_rule_bundle", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/rule-bundles$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "admin_fraud_preview", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/rule-bundles\/preview$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_google_data_manager", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/google-data-manager$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_google_delivery_health", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/google-data-manager\/deliveries$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_operator_delivery_health", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-delivery-health$/, auth: "admin_bearer", mutates: false, capability: "read" },
@@ -246,6 +249,7 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_apple_registration", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/apple-registration$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_conversion_schema", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/conversion-schemas$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_rule_bundle", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/rule-bundles$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_fraud_preview", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/rule-bundles\/preview$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_google_data_manager", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/google-data-manager$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_app", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_analyses", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/analyses$/, auth: "dashboard_session", mutates: false, capability: "read" },

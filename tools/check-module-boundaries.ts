@@ -34,6 +34,7 @@ export const pureEntrypoints = [
   "apps/api/src/dashboard/metric-recalculations.ts",
   "apps/api/src/dashboard/metric-explanation.ts",
   "apps/api/src/dashboard/attribution-report.ts",
+  "apps/api/src/dashboard/fraud-preview.ts",
 ];
 export const productionIngestionEntrypoints = ["apps/worker/src/ingestion.ts", "apps/worker/src/main.ts"];
 const seedSupportModule = /^apps\/worker\/src\/(?:test-support\/|seed(?:-safety)?\.ts$|verify-parity\.ts$)/;

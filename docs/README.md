@@ -43,6 +43,8 @@ These documents describe current source unless they explicitly name a release.
   [scheduled aggregate comparisons](recurring-comparisons.md).
 - **Send selected events:** [operator webhooks](operator-event-webhooks.md),
   [bulk exports](operator-bulk-exports.md).
+- **Review fraud policy changes:** [bounded fraud preview](fraud-preview.md),
+  including evidence limits, gross/net effects and explicit receipt activation.
 - **Use APIs and SDKs:** [HTTP API](api/README.md),
   [Android](../sdk/android/README.md), [iOS](../sdk/ios/README.md),
   [Unity](../sdk/unity/README.md), [SDK distribution](sdk-distribution.md).

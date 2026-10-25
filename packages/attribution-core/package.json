@@ -5,6 +5,10 @@
   "description": "Pure OpenMasu contract evaluator",
   "type": "module",
   "exports": {
+    "./fraud-preview": {
+      "types": "./src/fraud-preview.ts",
+      "default": "./src/fraud-preview.ts"
+    },
     ".": {
       "types": "./src/evaluator.ts",
       "default": "./src/evaluator.ts"

@@ -1,6 +1,6 @@
 import { clickInjectionPolicyDigest, evaluateInstallRules, evaluateSourceDayWithBundle, fraudNumberParameter, fraudRuleAction } from "@openmasu/fraud-rules";
 import { sha256 } from "./canonical.js";
-import { boundFraudBundle, FRAUD_BUNDLE, FRAUD_BUNDLE_HASH, quarantineDeadline } from "./rule-bundles.js";
+import { boundFraudBundle, FRAUD_BUNDLE, FRAUD_BUNDLE_HASH, quarantineDeadline, type BoundFraudBundle } from "./rule-bundles.js";
 import { CONTRACT_VERSION, type Any, type Attempt, type Attribution, type EvaluationOutput, type FraudDecision } from "./evaluation-model.js";
 import { compositeKey, sortByKey } from "./evaluation-utils.js";
 
@@ -10,6 +10,7 @@ export function fraudArtifacts(
   acceptedCandidates: readonly Attempt[],
   attributionInstallAttempts: Attempt[],
   initialAttributions: Attribution[],
+  sourceOnlyBundle: BoundFraudBundle = { definition:FRAUD_BUNDLE,hash:FRAUD_BUNDLE_HASH },
 ): Pick<EvaluationOutput, "attributions" | "fraud_decisions"> & { excludedInstallationIds: Set<string> } {
   const transportFraud = acceptedUnique.flatMap((attempt): FraudDecision[] => {
     if (attempt.record.event_name !== "click"
@@ -97,7 +98,7 @@ export function fraudArtifacts(
   const sourceDayFraud = (input.source_day_aggregates ?? []).flatMap((aggregate: Any): FraudDecision[] => {
     const scopeAttempt = acceptedUnique.find((attempt) =>
       attempt.server.tenant_id === aggregate.tenant_id && attempt.server.app_id === aggregate.app_id);
-    const bound = scopeAttempt ? boundFraudBundle(scopeAttempt.server) : { definition: FRAUD_BUNDLE, hash: FRAUD_BUNDLE_HASH };
+    const bound = scopeAttempt ? boundFraudBundle(scopeAttempt.server) : sourceOnlyBundle;
     if (!bound) return [];
     const hit = evaluateSourceDayWithBundle({
       clicks: aggregate.clicks,
@@ -142,7 +143,7 @@ export function fraudArtifacts(
     const aggregate = aggregates[0];
     const scopeAttempt = acceptedUnique.find((attempt) =>
       attempt.server.tenant_id === aggregate.tenant_id && attempt.server.app_id === aggregate.app_id);
-    const bound = scopeAttempt ? boundFraudBundle(scopeAttempt.server) : { definition: FRAUD_BUNDLE, hash: FRAUD_BUNDLE_HASH };
+    const bound = scopeAttempt ? boundFraudBundle(scopeAttempt.server) : sourceOnlyBundle;
     const installCount = aggregates.reduce((sum, item) => sum + Number(item.installs ?? 0), 0);
     if (!bound || installCount === 0) continue;
     const negativeCount = aggregates.reduce((sum, item) => sum + Number(item.ctitNegativeCount ?? 0), 0);
