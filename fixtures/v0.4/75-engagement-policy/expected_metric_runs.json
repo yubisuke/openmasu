@@ -1,0 +1,1443 @@
+[
+  {
+    "metric_run_id": "engagement75-a:engagement_policy_ad_revenue_usd",
+    "metric_name": "engagement_policy_ad_revenue_usd",
+    "metric_definition_version": "0.4.28",
+    "input_snapshot_id": "f2912d00409267b2724370de9f1e6d51e67b63970aa736979c48a3b35a032414",
+    "input_received_at_watermark": "2026-08-25T00:00:00.000Z",
+    "input_ledger_position": "2026-08-22T12:00:01.000Z|revenue64-boundary",
+    "computed_at": "2026-08-25T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-engagement-policy",
+    "rule_bundle_version": "0.4.28",
+    "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "2000000",
+    "currency": "USD",
+    "amount_scale": 6,
+    "fx_rate_unscaled": "1",
+    "fx_rate_scale": 0,
+    "fx_rate_source": "synthetic-fixture-rate",
+    "fx_rate_as_of": "2026-08-21T06:00:00.000Z",
+    "fx_rate_snapshot_id": "d99ad4f7b6dccd97b8bdf3430dcd0cc068a6262645f61c32999f8523d362f5b2",
+    "fx_policy_version": "fx-m7",
+    "grouping": {
+      "dimensions": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-a"
+      },
+      "dimension_digest": "5358a0bddc6324aaf97f1b24ec4ecb4e263aca76db8a1a56000153fac557e391"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install75-x",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-before",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-boundary",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "engagement75-a:engagement_policy_custom_event_converters",
+    "metric_name": "engagement_policy_custom_event_converters",
+    "metric_definition_version": "0.4.28",
+    "input_snapshot_id": "f438b0ab8df6ab1b648875e43d15eea43cbaadac0260e1c09a00322a4d9cc00c",
+    "input_received_at_watermark": "2026-08-25T00:00:00.000Z",
+    "input_ledger_position": "2026-08-22T12:00:01.000Z|revenue64-boundary",
+    "computed_at": "2026-08-25T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-engagement-policy",
+    "rule_bundle_version": "0.4.28",
+    "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "value_unscaled": "1",
+    "grouping": {
+      "dimensions": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-a"
+      },
+      "dimension_digest": "5358a0bddc6324aaf97f1b24ec4ecb4e263aca76db8a1a56000153fac557e391"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install75-x",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-before",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-boundary",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "engagement75-a:engagement_policy_purchase_net_usd",
+    "metric_name": "engagement_policy_purchase_net_usd",
+    "metric_definition_version": "0.4.28",
+    "input_snapshot_id": "98d2e6c7a9eb1d51233fef25cd044de89df627df0536c55a61c430182e73011c",
+    "input_received_at_watermark": "2026-08-25T00:00:00.000Z",
+    "input_ledger_position": "2026-08-22T12:00:01.000Z|revenue64-boundary",
+    "computed_at": "2026-08-25T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-engagement-policy",
+    "rule_bundle_version": "0.4.28",
+    "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_unscaled": "5000000",
+    "currency": "USD",
+    "amount_scale": 6,
+    "fx_rate_unscaled": "1",
+    "fx_rate_scale": 0,
+    "fx_rate_source": "synthetic-fixture-rate",
+    "fx_rate_as_of": "2026-08-21T06:00:00.000Z",
+    "fx_rate_snapshot_id": "d99ad4f7b6dccd97b8bdf3430dcd0cc068a6262645f61c32999f8523d362f5b2",
+    "fx_policy_version": "fx-m7",
+    "grouping": {
+      "dimensions": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-a"
+      },
+      "dimension_digest": "5358a0bddc6324aaf97f1b24ec4ecb4e263aca76db8a1a56000153fac557e391"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install75-x",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-before",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-boundary",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "engagement75-b:engagement_policy_ad_revenue_usd",
+    "metric_name": "engagement_policy_ad_revenue_usd",
+    "metric_definition_version": "0.4.28",
+    "input_snapshot_id": "f2912d00409267b2724370de9f1e6d51e67b63970aa736979c48a3b35a032414",
+    "input_received_at_watermark": "2026-08-25T00:00:00.000Z",
+    "input_ledger_position": "2026-08-22T12:00:01.000Z|revenue64-boundary",
+    "computed_at": "2026-08-25T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-engagement-policy",
+    "rule_bundle_version": "0.4.28",
+    "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_state": "undefined",
+    "undefined_reason": "empty_cohort",
+    "grouping": {
+      "dimensions": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-b"
+      },
+      "dimension_digest": "004301de78803d69730389e4a6c50a3924172571d7c105f472dd4e9d4458ebc1"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install75-x",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-before",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-boundary",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "engagement75-b:engagement_policy_custom_event_converters",
+    "metric_name": "engagement_policy_custom_event_converters",
+    "metric_definition_version": "0.4.28",
+    "input_snapshot_id": "f438b0ab8df6ab1b648875e43d15eea43cbaadac0260e1c09a00322a4d9cc00c",
+    "input_received_at_watermark": "2026-08-25T00:00:00.000Z",
+    "input_ledger_position": "2026-08-22T12:00:01.000Z|revenue64-boundary",
+    "computed_at": "2026-08-25T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-engagement-policy",
+    "rule_bundle_version": "0.4.28",
+    "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "value_state": "undefined",
+    "undefined_reason": "empty_cohort",
+    "grouping": {
+      "dimensions": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-b"
+      },
+      "dimension_digest": "004301de78803d69730389e4a6c50a3924172571d7c105f472dd4e9d4458ebc1"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install75-x",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-before",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-boundary",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "engagement75-b:engagement_policy_purchase_net_usd",
+    "metric_name": "engagement_policy_purchase_net_usd",
+    "metric_definition_version": "0.4.28",
+    "input_snapshot_id": "98d2e6c7a9eb1d51233fef25cd044de89df627df0536c55a61c430182e73011c",
+    "input_received_at_watermark": "2026-08-25T00:00:00.000Z",
+    "input_ledger_position": "2026-08-22T12:00:01.000Z|revenue64-boundary",
+    "computed_at": "2026-08-25T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-engagement-policy",
+    "rule_bundle_version": "0.4.28",
+    "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_state": "undefined",
+    "undefined_reason": "empty_cohort",
+    "grouping": {
+      "dimensions": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-b"
+      },
+      "dimension_digest": "004301de78803d69730389e4a6c50a3924172571d7c105f472dd4e9d4458ebc1"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install75-x",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-before",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-boundary",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "engagement75-c:engagement_policy_ad_revenue_usd",
+    "metric_name": "engagement_policy_ad_revenue_usd",
+    "metric_definition_version": "0.4.28",
+    "input_snapshot_id": "f2912d00409267b2724370de9f1e6d51e67b63970aa736979c48a3b35a032414",
+    "input_received_at_watermark": "2026-08-25T00:00:00.000Z",
+    "input_ledger_position": "2026-08-22T12:00:01.000Z|revenue64-boundary",
+    "computed_at": "2026-08-25T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-engagement-policy",
+    "rule_bundle_version": "0.4.28",
+    "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_state": "undefined",
+    "undefined_reason": "insufficient_activity_history",
+    "grouping": {
+      "dimensions": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-c"
+      },
+      "dimension_digest": "2b2d52e62e94e169bfd2e242ca04da3a850186a62f03938e0ecbc2590918dc1b"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install75-x",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-before",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-boundary",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "engagement75-c:engagement_policy_custom_event_converters",
+    "metric_name": "engagement_policy_custom_event_converters",
+    "metric_definition_version": "0.4.28",
+    "input_snapshot_id": "f438b0ab8df6ab1b648875e43d15eea43cbaadac0260e1c09a00322a4d9cc00c",
+    "input_received_at_watermark": "2026-08-25T00:00:00.000Z",
+    "input_ledger_position": "2026-08-22T12:00:01.000Z|revenue64-boundary",
+    "computed_at": "2026-08-25T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-engagement-policy",
+    "rule_bundle_version": "0.4.28",
+    "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "value_state": "undefined",
+    "undefined_reason": "insufficient_activity_history",
+    "grouping": {
+      "dimensions": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-c"
+      },
+      "dimension_digest": "2b2d52e62e94e169bfd2e242ca04da3a850186a62f03938e0ecbc2590918dc1b"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install75-x",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-before",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-boundary",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "engagement75-c:engagement_policy_purchase_net_usd",
+    "metric_name": "engagement_policy_purchase_net_usd",
+    "metric_definition_version": "0.4.28",
+    "input_snapshot_id": "98d2e6c7a9eb1d51233fef25cd044de89df627df0536c55a61c430182e73011c",
+    "input_received_at_watermark": "2026-08-25T00:00:00.000Z",
+    "input_ledger_position": "2026-08-22T12:00:01.000Z|revenue64-boundary",
+    "computed_at": "2026-08-25T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-engagement-policy",
+    "rule_bundle_version": "0.4.28",
+    "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_state": "undefined",
+    "undefined_reason": "insufficient_activity_history",
+    "grouping": {
+      "dimensions": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-c"
+      },
+      "dimension_digest": "2b2d52e62e94e169bfd2e242ca04da3a850186a62f03938e0ecbc2590918dc1b"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install75-x",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-before",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-boundary",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "engagement75-empty:engagement_policy_ad_revenue_usd",
+    "metric_name": "engagement_policy_ad_revenue_usd",
+    "metric_definition_version": "0.4.28",
+    "input_snapshot_id": "f2912d00409267b2724370de9f1e6d51e67b63970aa736979c48a3b35a032414",
+    "input_received_at_watermark": "2026-08-25T00:00:00.000Z",
+    "input_ledger_position": "2026-08-22T12:00:01.000Z|revenue64-boundary",
+    "computed_at": "2026-08-25T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-engagement-policy",
+    "rule_bundle_version": "0.4.28",
+    "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_state": "undefined",
+    "undefined_reason": "empty_cohort",
+    "grouping": {
+      "dimensions": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-empty"
+      },
+      "dimension_digest": "4ee8d17f77204e1ca0188a8c213808d11b1a9f6c67f71329f9b9b1cde96676e5"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install75-x",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-before",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-boundary",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "engagement75-empty:engagement_policy_custom_event_converters",
+    "metric_name": "engagement_policy_custom_event_converters",
+    "metric_definition_version": "0.4.28",
+    "input_snapshot_id": "f438b0ab8df6ab1b648875e43d15eea43cbaadac0260e1c09a00322a4d9cc00c",
+    "input_received_at_watermark": "2026-08-25T00:00:00.000Z",
+    "input_ledger_position": "2026-08-22T12:00:01.000Z|revenue64-boundary",
+    "computed_at": "2026-08-25T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-engagement-policy",
+    "rule_bundle_version": "0.4.28",
+    "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "value_state": "undefined",
+    "undefined_reason": "empty_cohort",
+    "grouping": {
+      "dimensions": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-empty"
+      },
+      "dimension_digest": "4ee8d17f77204e1ca0188a8c213808d11b1a9f6c67f71329f9b9b1cde96676e5"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install75-x",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-before",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-boundary",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "engagement75-empty:engagement_policy_purchase_net_usd",
+    "metric_name": "engagement_policy_purchase_net_usd",
+    "metric_definition_version": "0.4.28",
+    "input_snapshot_id": "98d2e6c7a9eb1d51233fef25cd044de89df627df0536c55a61c430182e73011c",
+    "input_received_at_watermark": "2026-08-25T00:00:00.000Z",
+    "input_ledger_position": "2026-08-22T12:00:01.000Z|revenue64-boundary",
+    "computed_at": "2026-08-25T00:00:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-engagement-policy",
+    "rule_bundle_version": "0.4.28",
+    "rule_bundle_hash": "4f0f69a1c097d502f40c8c22421849c34581be1626052b31cf4a15a5c13bdab5",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "value_state": "undefined",
+    "undefined_reason": "empty_cohort",
+    "grouping": {
+      "dimensions": {
+        "metric_date": "2026-08-21",
+        "campaign_id": "synthetic-engagement-empty"
+      },
+      "dimension_digest": "4ee8d17f77204e1ca0188a8c213808d11b1a9f6c67f71329f9b9b1cde96676e5"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "conversion64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install75-x",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "open64-c",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase75-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund75-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-a",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-b",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-before",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "revenue64-boundary",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  }
+]
