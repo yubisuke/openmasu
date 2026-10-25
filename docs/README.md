@@ -57,8 +57,8 @@ For deployment and recovery, see [operator access](operations/access.md),
 [single-host operation](operations/single-host.md),
 [upgrades](operations/upgrade.md), [backup/restore](operations/backup-restore.md),
 [observability](operations/observability.md),
-[monitoring rules and recovery](operations/monitoring.md), [capacity](operations/capacity.md)
-and [release publishing](operations/release.md).
+[monitoring rules and recovery](operations/monitoring.md), [capacity](operations/capacity.md),
+[explicit retention](operations/retention.md) and [release publishing](operations/release.md).
 
 [Privacy and security](privacy-security.md) and the [threat model](threat-model.md)
 define the safety boundary. [Validation checklists](validation/README.md) separate

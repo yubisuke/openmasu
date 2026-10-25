@@ -16,6 +16,7 @@ type Row = {
 
 const privileges: Privilege[] = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"];
 const readerNoTableSelect = new Set([
+  "control.retention_items",
   "control.metric_correction_receipts",
   "control.apple_purchase_evidence",
   "control.apple_purchase_intents",
@@ -46,6 +47,7 @@ const readerNoTableSelect = new Set([
   "ephemeral.operator_bulk_export_batches",
 ]);
 const seedControlTruncate = new Set([
+  "control.retention_receipts", "control.retention_items",
   "control.comparison_definitions", "control.comparison_snapshots", "control.comparison_runs",
   "control.saved_analysis_views",
   "control.metric_correction_policies",
@@ -131,6 +133,7 @@ function expected(row: Row): Privilege[] {
     return row.role_name === "openmasu_seed" ? ["SELECT", "INSERT", "UPDATE", "DELETE"] : [];
   }
   if (row.role_name === "openmasu_app") {
+    if (qualified === "control.retention_items") return ["SELECT", "INSERT", "UPDATE"];
     if (["control.comparison_definitions","control.comparison_snapshots","control.comparison_runs"].includes(qualified)) return ["SELECT", "INSERT", "DELETE"];
     if (qualified === "control.saved_analysis_views") return ["SELECT", "INSERT", "DELETE"];
     if (["control.metric_correction_policies","control.metric_correction_receipts"].includes(qualified)) return ["SELECT", "INSERT", "UPDATE"];

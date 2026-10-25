@@ -1,5 +1,6 @@
 import type { PoolClient } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
+import { assertMetricRetentionAvailable } from "./retention-evidence.js";
 
 type Artifact = Record<string, unknown>;
 type ReplayArtifact = Artifact & {
@@ -111,6 +112,7 @@ export async function replayPrivacyMetricItem(
   const superseded = await client.query(`SELECT 1 FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2
     AND supersedes_metric_run_id=$3`, [item.tenant_id, item.app_id, item.source_metric_run_id]);
   if (superseded.rowCount) return undefined;
+  await assertMetricRetentionAvailable(client, item, item.source_metric_run_id);
   const manifest = await client.query<{ artifact: Artifact }>(`SELECT artifact FROM control.metric_replay_manifests
     WHERE tenant_id=$1 AND app_id=$2 AND source_metric_run_id=$3`, [item.tenant_id, item.app_id, item.source_metric_run_id]);
   const replay = manifest.rows[0]?.artifact ?? null;
@@ -150,7 +152,16 @@ export async function reapplyPrivacyMetricsWithClient(
     if (item.state === "completed") { recalculated += 1; continue; }
     if (item.state === "skipped") continue;
     if (["unavailable", "failed"].includes(item.state)) { unsupported += 1; continue; }
-    const replacementId = await replayPrivacyMetricItem(client, { ...item, completed_at: request.completed_at }, calculate);
+    let replacementId: string | undefined;
+    try { replacementId = await replayPrivacyMetricItem(client, { ...item, completed_at: request.completed_at }, calculate); }
+    catch (error) {
+      if (!(error instanceof Error) || error.message !== "input_unavailable") throw error;
+      await client.query(`UPDATE control.metric_recalculation_items SET state='unavailable',safe_reason='input_unavailable',
+        lease_token=NULL,lease_expires_at=NULL,updated_at=clock_timestamp()
+        WHERE tenant_id=$1 AND app_id=$2 AND recalculation_id=$3 AND source_metric_run_id=$4`,
+      [item.tenant_id,item.app_id,item.recalculation_id,item.source_metric_run_id]);
+      unsupported += 1; continue;
+    }
     await client.query(`UPDATE control.metric_recalculation_items SET state=$5,replacement_metric_run_id=$6,
       safe_reason=$7,lease_token=NULL,lease_expires_at=NULL,updated_at=clock_timestamp()
       WHERE tenant_id=$1 AND app_id=$2 AND recalculation_id=$3 AND source_metric_run_id=$4`,

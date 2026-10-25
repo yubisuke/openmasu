@@ -129,7 +129,7 @@ export function supportsRecordCounts(query: MetricQuery): boolean {
     && (query.metricNames === undefined || query.metricNames.every((name) => recordCountMetricNames.has(name)));
 }
 
-function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, comparisonContext: MetricComparisonContext | null, costUpdateState: MetricReportRow["cost_update_state"], lateInputUpdateState: MetricReportRow["late_input_update_state"], privacyChanged: boolean, privacyUpdateState: MetricReportRow["privacy_update_state"]): MetricReportRow {
+function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, comparisonContext: MetricComparisonContext | null, costUpdateState: MetricReportRow["cost_update_state"], lateInputUpdateState: MetricReportRow["late_input_update_state"], privacyChanged: boolean, privacyUpdateState: MetricReportRow["privacy_update_state"], retentionChanged = false): MetricReportRow {
   const valueState = artifact.value_state ?? "present";
   if (valueState === "present" && typeof artifact.value_unscaled !== "string") {
     throw new Error(`metric run ${artifact.metric_run_id} has no present value`);
@@ -161,7 +161,7 @@ function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, c
     rule_bundle_hash: artifact.rule_bundle_hash,
     aggregation_time_zone: artifact.aggregation_time_zone,
     computed_at: artifact.computed_at,
-    reproducibility_status: privacyChanged ? "redaction_affected" : artifact.reproducibility_status,
+    reproducibility_status: privacyChanged ? "redaction_affected" : retentionChanged ? "retention_affected" : artifact.reproducibility_status,
     supersedes_metric_run_id: artifact.supersedes_metric_run_id ?? null,
     input_ledger_position: artifact.input_ledger_position,
     grouping_digest: groupingDigest,
@@ -205,7 +205,7 @@ export async function metricReport(
 /** Reuse the ordinary keyset projection inside a caller-owned consistent read. */
 export async function metricReportOnClient(client: PoolClient, query: MetricQuery, checkEvidence = false): Promise<MetricReportPage> {
     const statement = buildMetricQuery(query, checkEvidence);
-    const result = await client.query<{ artifact: Any; grouping_digest: string; superseded: boolean; comparison_context: MetricComparisonContext | null; cost_update_state: MetricReportRow["cost_update_state"]; late_input_update_state: MetricReportRow["late_input_update_state"]; attribution_update_state: MetricReportRow["attribution_update_state"]; privacy_changed: boolean; privacy_update_state: MetricReportRow["privacy_update_state"]; evidence_unavailable?: boolean; import_receipt_observation?: ImportReceiptObservation }>(
+    const result = await client.query<{ artifact: Any; grouping_digest: string; superseded: boolean; comparison_context: MetricComparisonContext | null; cost_update_state: MetricReportRow["cost_update_state"]; late_input_update_state: MetricReportRow["late_input_update_state"]; attribution_update_state: MetricReportRow["attribution_update_state"]; privacy_changed: boolean; retention_changed: boolean; privacy_update_state: MetricReportRow["privacy_update_state"]; evidence_unavailable?: boolean; import_receipt_observation?: ImportReceiptObservation }>(
       statement.text,
       [...statement.values],
     );
@@ -221,6 +221,7 @@ export async function metricReportOnClient(client: PoolClient, query: MetricQuer
         row.late_input_update_state,
         row.privacy_changed,
         row.privacy_update_state,
+        row.retention_changed,
       );
       return { ...result, acquisition_kpi_set_key: acquisitionKpiSetKey(result, { tenantId: query.tenantId, appId: query.appId }), attribution_update_state:row.attribution_update_state??"no_recorded_request", ...metricFreshness({...result,attribution_update_state:row.attribution_update_state??"no_recorded_request"}, row.import_receipt_observation,
         Array.isArray(row.artifact.evidence_refs) ? row.artifact.evidence_refs.length : undefined) };

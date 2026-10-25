@@ -84,3 +84,14 @@ it("privacy_record_scope_lookup_preserves_each_app_and_rejects_missing_tenant_re
   rows.pop();
   await assert.rejects(readPrivacyRecordScopesWithClient(client, "tenant-synthetic", ids), /privacy_record_scope_missing/);
 });
+
+it("privacy_restore_keeps_expired_evidence_unavailable_without_inventing_a_recalculated_value",async()=>{
+  const calls:string[]=[];
+  const item={...request,state:"queued",recalculation_id:"synthetic-retention-recalculation",source_metric_run_id:replay.source_metric_run_id,replay_digest:sha256(replay)};
+  const client={query:async(text:string)=>{
+    calls.push(text);
+    return {rows:text.startsWith("SELECT item.*")?[item]:[],rowCount:text.includes("retention_state.lifecycle_status='purged'")?1:0};
+  }} as unknown as PoolClient;
+  assert.deepEqual(await reapplyPrivacyMetricsWithClient(client,{...request,completed_at:request.requested_at},async()=>{throw Error("expired sources must not be substituted");}),{recalculated:0,unsupported:1});
+  assert.ok(calls.some(text=>text.includes("state='unavailable',safe_reason='input_unavailable'")));
+});

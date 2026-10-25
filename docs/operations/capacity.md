@@ -7,6 +7,9 @@ reader. This CLI is deliberately not an HTTP route: whole-database totals can
 disclose activity across tenants. Do not grant BYPASSRLS to readers to use it.
 No master key is needed, no payload is opened, and no retention action occurs.
 
+Explicit [retention preview and bounded expiry](retention.md) is a separate,
+default-off operator command. Capacity observation never enables or runs it.
+
 The closed aggregate JSON contains observation times, scope, layer, count and
 bytes. Integer quantities are decimal strings to avoid precision loss. It does
 not contain tenant/app identifiers, database names, paths, file names, payload

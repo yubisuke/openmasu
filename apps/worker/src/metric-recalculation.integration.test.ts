@@ -240,7 +240,7 @@ describe("bounded cost correction recalculation", { concurrency: false }, () => 
     assert.deepEqual(await listMetricRecalculations(reader, { ...identity, tenantId: "tenant-other" }), []);
   });
 
-  it("retains redaction and retention boundaries and refuses an ordinary delta across changed privacy meaning", async () => {
+  it("retains redaction and retention boundaries without publishing a replacement from expired inputs", async () => {
     await requestMetricRecalculation(app, identity, request);
     await withTenant(app, tenantId, async client => {
       await client.query(`INSERT INTO ledger.raw_payload_states (tenant_id,app_id,record_id,lifecycle_status,changed_at,privacy_request_id)
@@ -248,17 +248,21 @@ describe("bounded cost correction recalculation", { concurrency: false }, () => 
       await client.query(`INSERT INTO ledger.raw_payload_states (tenant_id,app_id,record_id,lifecycle_status,changed_at)
         VALUES ($1,$2,'revenue-33-b','purged','2026-08-10T12:00:00.000Z')`, [tenantId, "app-a"]);
     });
-    assert.equal((await processMetricRecalculations(app, tenantId)).completed, 1);
-    const history = (await report()).data, replacement = history.find(row => row.supersedes_metric_run_id === oldId)!;
-    assert.equal(replacement.reproducibility_status, "redaction_affected");
-    assert.equal(replacement.value_unscaled, "250000"); // Per-event half-even: EUR 100.000001 * 0.5 => USD 50 / revised USD 200.
-    const snapshot = (row: typeof replacement) => reportToSnapshot({ data: [row] }, { source: "synthetic-correction",
+    const result=await processMetricRecalculations(app,tenantId);
+    assert.equal(result.completed,0);assert.equal(result.failed,1);
+    const status=(await listMetricRecalculations(reader,identity))[0];
+    assert.equal(status.state,"unavailable");assert.equal(status.safe_reason,"input_unavailable");
+    const history = (await report()).data;
+    assert.equal(history.find(row => row.supersedes_metric_run_id === oldId),undefined);
+    const original=history.find(row=>row.metric_run_id===oldId)!;
+    assert.equal(original.reproducibility_status,"redaction_affected");assert.equal(original.value_state,"unavailable");
+    const snapshot = (row: typeof original) => reportToSnapshot({ data: [row] }, { source: "synthetic-correction",
       conditions: { date_from: "2026-08-01", date_to: "2026-08-02", time_zone: "UTC", maturity: "unknown", aggregation: "cumulative",
         attribution_scope: "non_organic", metric_definition: "d7_roas@0.3.0", source_cutoff: row.input_received_at_watermark }, rows: [] });
-    // The acquisition gate is stricter than a numeric comparison: neither a
-    // superseded run nor a redaction-affected run can become an ordinary export.
-    assert.throws(() => snapshot(history.find(row => row.metric_run_id === oldId)!), /historical_or_affected_run/);
-    assert.throws(() => snapshot(replacement), /historical_or_affected_run/);
+    // Surviving facts are not a reproduced input set. Privacy withdraws the
+    // current value, expiry refuses replay, and the historical artifact remains.
+    assert.throws(() => snapshot(original), /historical_or_affected_run/);
+    assert.equal((await artifacts()).length,old.length);
     assert.equal((await artifacts()).find(row => row.metric_run_id === oldId)?.value_unscaled, "1500000");
   });
 });
