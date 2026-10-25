@@ -33,13 +33,18 @@ add explicit ad-group/ad selection and creative binding. Additive contract patch
 earlier goldens. Selected spend cannot be allocated to parents or siblings.
 Live provider permissions, mapping correctness and completeness remain unverified.
 
+[Recorded-detail discovery](../scheduled-metrics.md#discover-selected-ad-groups-or-creatives)
+reuses frozen daily target receipts for ad-group/creative tuples. Missing detail
+and parent-only cost are explicit partial observations, not fabricated targets;
+restarts retain the frozen set and later dates may adopt newly recorded detail.
+
 Integrated candidate acceptance
 ([#252](https://github.com/yubisuke/openmasu/issues/252)) is complete within its
 declared synthetic scope. The publication receipt records the downloaded Android
 SDK/backend journey on JVM/Robolectric API 24 separately from the frozen release.
 It does not establish physical-device or all-platform onboarding acceptance.
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-28 of 35 child implementations complete, with 7 optional extensions remaining.
+29 of 35 child implementations complete, with 6 optional extensions remaining.
 Select further work from the [roadmap](../roadmap.md#next-product-sequence) and
 [acceptance crosswalk](../project-plan.md#next-product-slices) according to the
 intended usage.

@@ -59,7 +59,7 @@ Detailed limits belong to the [product guides](README.md), [product scope](produ
 ## Current development focus
 
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-28 of 35 child implementations complete; 7 optional extensions remain. The earlier
+29 of 35 child implementations complete; 6 optional extensions remain. The earlier
 integration plan is complete, not a second backlog. The dependency, controller,
 presentation, evaluator and ingestion foundations are also implemented.
 
@@ -85,6 +85,12 @@ add bounded ad-group/ad acquisition and explicit creative binding. Selected chil
 coverage is eligible only for its matching detail grouping, never an inferred
 parent or sibling denominator. Reader health describes configured capability,
 not provider completeness. This source addition is not in the rc.2 assets.
+
+[Recorded-detail discovery](scheduled-metrics.md#discover-selected-ad-groups-or-creatives)
+extends the same frozen daily target receipt to ad-group/creative tuples. Unknown
+detail and parent-only costs remain explicit partial observations; overflow and
+post-freeze privacy changes prevent publication. This is not provider crawling,
+inferred hierarchy or a change to earlier campaign schedule identities.
 
 The [minimal monitoring rules](operations/monitoring.md) are implemented with
 synthetic transition tests; receiver setup and live delivery remain external.

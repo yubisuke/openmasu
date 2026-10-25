@@ -58,8 +58,10 @@ Each schedule evaluation has `date_dimension: "cohort_date"`; remove its
 static `cohort_date` from `grouping` and retain the desired ad-group/creative
 selection. Register through the existing application **Metric schedules** form
 or `POST /v1/admin/apps/<app>/metric-schedules`. A detail filter with a legacy
-definition is rejected, not silently promoted. Detail schedules require
-explicit selections; campaign discovery does not discover creative hierarchies.
+definition is rejected, not silently promoted. Detail schedules may keep explicit
+selections or opt into bounded
+[recorded-detail discovery](scheduled-metrics.md#discover-selected-ad-groups-or-creatives).
+Discovery does not crawl provider metadata or infer creative hierarchies.
 
 The existing bounded [recalculation workflow](metric-corrections.md) retains
 the saved detail policy. A corrected cost row selects only matching detail
