@@ -317,7 +317,7 @@ async function totalNetRevenueValue(
        SELECT * FROM (
          SELECT DISTINCT ON (cost_key_digest) spend_unscaled, spend_scale, currency, cost_date AS date
          FROM ledger.cost_records
-         WHERE $11::jsonb IS NULL AND tenant_id=$1 AND app_id=$2 AND as_of <= $3 AND NOT (artifact ? 'creative_id')
+         WHERE $11::jsonb IS NULL AND tenant_id=$1 AND app_id=$2 AND as_of <= $3 AND NOT (artifact ? 'creative_id') AND NOT (artifact ? 'coverage_scope')
            AND ($8::text IS NULL OR $8='non_organic')
            AND ($4::text IS NULL OR campaign_id=$4)
            AND ($5::text IS NULL OR network=$5)
@@ -533,7 +533,7 @@ export async function metricValue(
          SELECT * FROM (
            SELECT DISTINCT ON (cost_key_digest) spend_unscaled, spend_scale, currency, cost_date AS date
            FROM ledger.cost_records
-           WHERE $19::jsonb IS NULL AND tenant_id=$1 AND app_id=$2 AND as_of <= $3 AND NOT (artifact ? 'creative_id')
+           WHERE $19::jsonb IS NULL AND tenant_id=$1 AND app_id=$2 AND as_of <= $3 AND NOT (artifact ? 'creative_id') AND NOT (artifact ? 'coverage_scope')
              AND ($16::text IS NULL OR $16='non_organic')
              AND ($4::text IS NULL OR campaign_id=$4)
              AND ($5::text IS NULL OR network=$5)

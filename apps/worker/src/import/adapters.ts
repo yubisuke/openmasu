@@ -579,7 +579,7 @@ async function fetchSelectedGoogleDetails(context: GoogleRequestContext, scope: 
   return prepareCostImportRows(rows.map(row=>({ ...scope,network:"google-ads",campaign_id:row.campaignId,
     ad_group_id:row.adGroupId,...(row.creativeId?{ creative_id:row.creativeId }:{}),
     ...(row.countryId?{ country:googleCountry(countries[row.countryId],"selected detail resolved country") }:{}),
-    date:row.day,amount_unscaled:row.amount,amount_scale:6,currency:row.currency,source:"imported_reported" as const })));
+    date:row.day,amount_unscaled:row.amount,amount_scale:6,currency:row.currency,source:"imported_reported" as const,coverage_scope:"matching_detail_only" as const })));
 }
 
 export async function fetchGoogleAds(options: {

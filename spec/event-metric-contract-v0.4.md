@@ -210,6 +210,26 @@ Meta documents the outer `is_ct` mapping, the seconds unit for `actual_timestamp
 
 ## Money, FX, cost, and cohort metrics
 
+### Explicit partial cost coverage (additive patch 0.4.27)
+
+Optional cost-record `coverage_scope: matching_detail_only` declares explicitly
+selected child spend, not complete campaign or sibling coverage. It requires an
+`ad_group_id`. Such a row is eligible only in the existing explicit acquisition
+detail profile when the evaluation fixes the same ad group and, if the row has a
+creative, the same creative. It cannot supply a campaign, sibling, ad-group rollup
+of selected creatives, or historical non-detail-profile denominator. If no other
+eligible cost exists, ROAS is `undefined/no_attributed_cost`, not zero or an
+allocated parent amount. A full parent remains independently eligible at its own
+grain; no selected-child spend is added to it. Existing overlap checks still
+reject multiple overlapping eligible full-coverage grains. Absence preserves all
+historical cost selection and artifacts. The field is coverage metadata, not a
+new grouping dimension; the declared dimension digest remains unchanged.
+
+The TypeScript, independent Python and SQL engines preserve this same admission
+at the saved input watermark and through replay. No schema URN, wire/package
+version, existing metric definition or old golden changes. See the complete
+fixture and migration derivation before using this new field with older clients.
+
 Source money is:
 
 - `amount_unscaled`: nonnegative integer string

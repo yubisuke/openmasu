@@ -2099,6 +2099,11 @@ def metric_runs(
             }
             grouped_costs = [
                 cost for cost in costs
+                if cost.get("coverage_scope") is None or (
+                    definition.get("acquisition_dimension_policy") and cost.get("coverage_scope") == "matching_detail_only"
+                    and cost.get("ad_group_id") and evaluation.get("grouping", {}).get("ad_group_id") == cost["ad_group_id"]
+                    and (not cost.get("creative_id") or evaluation.get("grouping", {}).get("creative_id") == cost["creative_id"])
+                )
                 if not definition.get("engagement_credit_policy") and not selected_daily and cost["as_of"] <= evaluation["input_received_at_watermark"]
                 and (not definition.get("calendar_cohort_policy") or cost.get("reporting_time_zone") == definition["aggregation_time_zone"])
                 and ("creative_id" not in cost or definition.get("acquisition_dimension_policy"))

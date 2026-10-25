@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { selectDisjointCosts, type ScopedCost } from "./cost-selection.js";
+import { selectDisjointCosts, costCoverageMatchesGrouping, type ScopedCost } from "./cost-selection.js";
 
 type Cost = ScopedCost & { amount_unscaled: string };
 const base: Cost = {
@@ -12,6 +12,16 @@ const child = (id: string, amount: string): Cost => ({ ...base,
   cost_record_id: id, ad_group_id: id, amount_unscaled: amount });
 
 describe("explicit disjoint cost selection", () => {
+  it("selected_child_coverage_cannot_supply_a_campaign_or_unselected_sibling_denominator", () => {
+    const selected: Cost = { ...child("group-a","40000000"),creative_id:"synthetic-creative",coverage_scope:"matching_detail_only" };
+    assert.equal(costCoverageMatchesGrouping(selected,{ campaign_id:base.campaign_id! },true),false);
+    assert.equal(costCoverageMatchesGrouping(selected,{ ad_group_id:"group-a" },true),false);
+    assert.equal(costCoverageMatchesGrouping(selected,{ ad_group_id:"group-a",creative_id:"synthetic-creative" },true),true);
+    assert.equal(costCoverageMatchesGrouping(selected,{ ad_group_id:"group-a",creative_id:"synthetic-other" },true),false);
+    assert.equal(costCoverageMatchesGrouping(selected,{ ad_group_id:"group-a",creative_id:"synthetic-creative" },false),false);
+    assert.equal(costCoverageMatchesGrouping({ ...selected,creative_id:null },{ ad_group_id:"group-a" },true),true);
+    assert.equal(costCoverageMatchesGrouping(base,undefined,false),true);
+  });
   it("flags parent 100 plus detail 40/60 but preserves all evidence candidates", () => {
     const input = [base, child("group-a", "40000000"), child("group-b", "60000000")];
     const selection = selectDisjointCosts(input);

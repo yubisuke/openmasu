@@ -102,7 +102,7 @@ export async function currentCosts(
          tenant_id, app_id, cost_record_id, as_of,
          report_snapshot_digest, cost_key_digest
        FROM ledger.cost_records
-       WHERE tenant_id=$1 AND app_id=$2 AND as_of <= $3 AND NOT (artifact ? 'creative_id')
+       WHERE tenant_id=$1 AND app_id=$2 AND as_of <= $3 AND NOT (artifact ? 'creative_id') AND NOT (artifact ? 'coverage_scope')
          AND ($4::text IS NULL OR campaign_id=$4)
          AND ($5::text IS NULL OR network=$5)
          AND ($6::text IS NULL OR country=$6)
@@ -139,6 +139,8 @@ export async function disjointCosts(client: MetricClient, scope: MetricScope, wa
        AND ($6::text IS NULL OR country=$6) AND ($7::date IS NULL OR cost_date=$7::date)
        AND ($8::boolean OR NOT (artifact ? 'creative_id'))
        AND ($9::text IS NULL OR ad_group_id=$9) AND ($10::text IS NULL OR artifact->>'creative_id'=$10)
+       AND (NOT (artifact ? 'coverage_scope') OR ($8::boolean AND artifact->>'coverage_scope'='matching_detail_only'
+         AND $9::text IS NOT NULL AND ad_group_id=$9 AND (NOT (artifact ? 'creative_id') OR artifact->>'creative_id'=$10)))
        AND ($11::text IS NULL OR artifact->>'reporting_time_zone'=$11)
      ORDER BY network, cost_date, campaign_id, ad_group_id, country, (artifact->>'creative_id'), as_of DESC, cost_record_id COLLATE "C" DESC`,
     [scope.tenant_id, scope.app_id, watermark, grouping?.campaign_id ?? null, grouping?.network ?? null,

@@ -83,6 +83,7 @@ The v0.4 line adds independently exercised optional vocabulary and definitions:
 | 0.4.24 | opt-in D3/D14/D30 selected-cohort retention with optional `retention_maturity_policy` and `observation_window_not_elapsed`; bounded elapsed activity days, complete-window schedule lag, separate native/platform/imported populations and unchanged old D1/D7 |
 | 0.4.25 | closed opt-in UTC recorded activity: session-start/custom-event counts and distinct active installations; additive `active_installations_count` and activity event selectors only within the new profile; no acquisition join or period-unique claim |
 | 0.4.26 | closed opt-in verified payer cohort: transaction and installation counts, payer rate and purchase-net ARPPU; additive operations/numerators/denominator and `no_paying_installations`, unchanged historical commerce and revenue |
+| 0.4.27 | optional matching-detail-only cost coverage; explicitly selected child spend cannot become a parent/sibling denominator; absent metadata and historical definitions remain unchanged |
 
 Existing schema `$id` values remain on `v0.4`; existing event artifact version
 fields remain `0.4.0` where their schema did not change.

@@ -15,7 +15,7 @@ it("selected_google_costs_preserve_explicit_ad_binding_exact_micro_money_and_dec
   const fetch:FetchLike=async(_url,init)=>{ queries.push(JSON.parse(String(init?.body)).query); return Response.json([{ results:[structuredClone(row)] }]); };
   const rows=await fetchGoogleAds(options(fetch));
   assert.equal(queries.length,1); assert.match(queries[0],/FROM ad_group_ad/); assert.doesNotMatch(queries[0],/geo_target|geographic_view|campaign\.name|ad\.name/);
-  assert.equal(rows[0].creative_id,"synthetic-creative-one"); assert.equal(rows[0].amount_unscaled,"1250000"); assert.equal(rows[0].amount_scale,6); assert.equal(rows[0].country,undefined);
+  assert.equal(rows[0].creative_id,"synthetic-creative-one"); assert.equal(rows[0].amount_unscaled,"1250000"); assert.equal(rows[0].amount_scale,6); assert.equal(rows[0].country,undefined); assert.equal(rows[0].coverage_scope,"matching_detail_only");
   const normalized=normalizeCostRefreshDefinition({ provider:"google_ads",customer_id:"4300000000",currency:"USD",detail });
   assert.deepEqual(normalizeCostRefreshDefinition(normalized),normalized);
   assert.deepEqual(costAdapterCapability(normalized),{ version:1,provider:"google_ads",api_version:"v25",grain:"ad",coverage:"explicit_selection",country_scope:"all",creative_binding:"operator_explicit",selection_count:1,upstream_completeness:"unknown" });

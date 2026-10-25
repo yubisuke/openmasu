@@ -1,5 +1,5 @@
 import { sha256 } from "./canonical.js";
-import { selectDisjointCosts } from "./cost-selection.js";
+import { selectDisjointCosts, costCoverageMatchesGrouping } from "./cost-selection.js";
 import { cohortCalendarDayIndex, canonicalDatedFxPolicy, selectDatedFxRate, standardRetentionClosesAt, type CohortTimeZone, type DatedFxPolicyInput } from "@openmasu/contracts/definitions";
 import { selectPlatformAcquisition, platformAcquisitionDimensions, selectedPlatformProofRows } from "./platform-acquisition.js";
 import { engagementInputs, engagementSnapshotRows, engagementValue } from "./engagement-metrics.js";
@@ -267,6 +267,7 @@ export function metricRuns(
       }
     const cohortScopes = new Set(selectedInstalls.map((install) => compositeKey([install.server.tenant_id, install.server.app_id])));
     const groupedCosts = cost_records.filter((cost) => {
+      if (!costCoverageMatchesGrouping(cost,evaluation.grouping,!!definition.acquisition_dimension_policy)) return false;
       if (definition.engagement_credit_policy || selectedDaily) return false;
       if (definition.calendar_cohort_policy && cost.reporting_time_zone !== definition.aggregation_time_zone) return false;
       const grouping = evaluation.grouping;

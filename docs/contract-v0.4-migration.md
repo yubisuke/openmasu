@@ -5,6 +5,38 @@ Contract v0.4.0 completed the identity migration from the immutable
 contract identity but did not change field meaning, attribution behavior, metric
 arithmetic, ordering, hashing, privacy, or fraud semantics.
 
+## Selected child cost coverage (0.4.27)
+
+Optional `coverage_scope=matching_detail_only` on cost records declares a partial
+operator selection. The existing acquisition detail profile may use it only when
+its grouping fixes the row's ad group and, if present, creative. Campaigns and
+ad-group rollups do not silently inherit selected child spend. Other eligible
+full-cost rows retain their old behavior, including conservative overlap checks.
+Absence preserves every previous artifact and selection. The new field is not a
+dimension; dimension hashes do not acquire it. Runtime imported record identity
+includes it only when present, so a full and partial row cannot accidentally share
+an opaque record ID. Wire/package identity remains `0.4.0`, URNs remain `:v0.4`,
+and metric definitions remain independently versioned.
+
+New fixture `74-selected-cost-coverage` reuses fixture63's unchanged synthetic
+events and ten non-cost output families. Its independently constructed three
+costs are creative A = 10 at Aug12, group A = 15 at Aug13 (both matching-only),
+and a full campaign parent = 30 at Aug14. Hand arithmetic: A ad revenue 20 and
+purchase net 6; B ad revenue 40 and purchase net 12. Matching A creative has ad
+ROAS 2 and total-net ROAS 2.6. Group A before its own row and campaign/B with only
+selected A child money have undefined ROAS. Group A after its 15 cost has
+half-even ratios 1.333333 and 1.733333. The later full parent yields campaign
+ratios 2 and 2.6, without adding either selected child. Seven evaluations produce
+35 runs. All snapshot, grouping, proof and cost digests are constructed from
+immutable event artifacts and the stated canonical formulas, not evaluator output.
+
+Golden inventory: new input and all 13 new `expected_*.json` families under
+`74-selected-cost-coverage/`; no earlier 73 input or 949 golden changes. The two
+changed families relative to fixture63 are costs and metric runs; other families
+are copied from that immutable scenario because their evidence is unchanged.
+The TypeScript and Python candidate outputs matched all independently built
+families before promotion. Behavioral changes and new goldens are separate commits.
+
 ## Verified purchase and payer metrics (0.4.26)
 
 The closed opt-in `metric-verified-payers` profile adds transaction and
