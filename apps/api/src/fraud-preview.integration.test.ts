@@ -70,9 +70,12 @@ it("fraud_preview_uses_same_ledger_gross_net_blocks_substitution_and_stale_recei
     assert.deepEqual(await state(identity),before);
     const click=structuredClone(input.records.find((record:any)=>record.event_name==="click"));
     click.record_id="click-preview-new";click.delivery_id="delivery-preview-new";click.event_id="event-preview-new";
-    click.payload.click_id="click-id-preview-new";click.payload.bot_prefetch=false;
-    await ingestRuntimeBatch([{batch_id:"preview-new-arrival",server:input.server_context,record:click}],pool);
+    click.payload.click_id="synthetic_click_preview_new_0001";click.payload.bot_prefetch=false;
+    const arrival=await ingestRuntimeBatch([{batch_id:"preview-new-arrival",server:input.server_context,record:click}],pool);
+    assert.equal(arrival.validation_failures.length,0);assert.equal(arrival.rejections.length,0);
+    assert.equal(arrival.logical_events.length,1,"the stale-receipt probe must actually add accepted evidence");
     const afterArrival=await state(identity);
+    assert.equal(afterArrival.raw,before.raw+1);
     assert.equal((await api(`/v1/admin/apps/${appId}/rule-bundles`,activation(candidate))).status,409,"same values but different evidence requires a new receipt");
     assert.deepEqual(await state(identity),afterArrival);
     const fresh=await previewFraudBundle(pool,identity,request);assert.equal(fresh.can_activate,true);
