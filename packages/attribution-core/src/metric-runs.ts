@@ -3,7 +3,7 @@ import { selectDisjointCosts } from "./cost-selection.js";
 import { cohortCalendarDayIndex, canonicalDatedFxPolicy, selectDatedFxRate, standardRetentionClosesAt, type CohortTimeZone, type DatedFxPolicyInput } from "@openmasu/contracts/definitions";
 import { selectPlatformAcquisition, platformAcquisitionDimensions, selectedPlatformProofRows } from "./platform-acquisition.js";
 import { engagementInputs, engagementSnapshotRows, engagementValue } from "./engagement-metrics.js";
-import { REFERENCE_AD_REVENUE_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
+import { REFERENCE_AD_REVENUE_METRIC_DEFINITIONS, isVerifiedPurchaseProjection } from "@openmasu/contracts/definitions";
 import { assertMetricDefinitionSeries } from "@openmasu/contracts/validation";
 import { attemptEvidenceKey, decisionFor, evidenceKey, sortCandidateAttempts } from "./candidates.js";
 import { resolveRefundTarget } from "./ingestion-decisions.js";
@@ -217,8 +217,9 @@ export function metricRuns(
       const definition = definitionsByName.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
       const costCalculation = ["cost_sum", "cost_over_cohort"].includes(definition.definition.calculation);
-      const usesFx = costCalculation || ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(definition.definition.calculation);
-      if (fxPolicy.rate_selection && definition.value_type === "money"
+      const payerProfile = definition.rule_bundle_id === "metric-verified-payers";
+      const usesFx = costCalculation || ["revenue_sum", "revenue_over_cost", "revenue_over_cohort", "revenue_over_paying_installations"].includes(definition.definition.calculation);
+      if ((fxPolicy.rate_selection || payerProfile) && definition.value_type === "money"
           && (definition.currency !== fxPolicy.target_currency || definition.amount_scale !== fxPolicy.target_scale)) {
         throw new Error("dated_fx_target_mismatch");
       }
@@ -303,7 +304,7 @@ export function metricRuns(
       const eligibleInstalls = definition.fraud_policy === "net"
         ? selectedInstalls.filter((candidate) => !excludedInstallationIds.has(candidate.record.payload.installation_id))
         : selectedInstalls;
-      const revenueValue = definition.engagement_credit_policy || definition.conversion_event_key !== undefined
+      const revenueValue = payerProfile || definition.engagement_credit_policy || definition.conversion_event_key !== undefined
         || costCalculation || fxPolicy.rate_selection && (!usesFx || definition.definition.numerator === "purchase_net_revenue") ? 0n : revenue.reduce((sum, item) => {
         if (definition.import_provider && item.record.producer !== `import:${definition.import_provider}`) return sum;
         const installation = eligibleInstalls.find((candidate) =>
@@ -317,8 +318,14 @@ export function metricRuns(
       const includesPurchaseNet = ["purchase_net_revenue", "total_net_revenue"].includes(
         definition.definition.numerator,
       );
+      const payerPurchases = payerProfile ? purchases.filter(item =>
+        isVerifiedPurchaseProjection(item.record.producer, item.server.policy_digest)
+        && eligibleInstalls.some(installation => installation.server.tenant_id === item.server.tenant_id
+          && installation.server.app_id === item.server.app_id
+          && installation.record.payload.installation_id === item.record.payload.installation_id
+          && eligibleRevenue(definition, installation.record, item.record))) : [];
       const purchaseNetRevenueValue = includesPurchaseNet
-        ? purchases.reduce((sum, item) => {
+        ? (payerProfile ? payerPurchases : purchases).reduce((sum, item) => {
         const installation = eligibleInstalls.find((candidate) =>
           candidate.server.tenant_id === item.server.tenant_id && candidate.server.app_id === item.server.app_id &&
           candidate.record.payload.installation_id === item.record.payload.installation_id,
@@ -329,10 +336,13 @@ export function metricRuns(
       }, 0n) - refunds.reduce((sum, item) => {
         const target = resolveRefundTarget(item, visible);
         if (!target || target.record.payload.financial_status !== "settled") return sum;
+        if (payerProfile && (!isVerifiedPurchaseProjection(item.record.producer, item.server.policy_digest)
+            || !payerPurchases.includes(target))) return sum;
         if (definition.refund_reversal_policy && visible.some((reversal) =>
           reversal.record.event_name === "refund" && reversal.record.payload.financial_status === "reversed"
           && reversal.server.tenant_id === item.server.tenant_id && reversal.server.app_id === item.server.app_id
-          && reversal.record.payload.reverses_refund_record_id === item.record.record_id)) return sum;
+          && reversal.record.payload.reverses_refund_record_id === item.record.record_id
+          && (!payerProfile || isVerifiedPurchaseProjection(reversal.record.producer, reversal.server.policy_digest)))) return sum;
         const installation = eligibleInstalls.find((candidate) =>
           candidate.server.tenant_id === target.server.tenant_id && candidate.server.app_id === target.server.app_id &&
           candidate.record.payload.installation_id === target.record.payload.installation_id,
@@ -350,7 +360,24 @@ export function metricRuns(
       const cohortSize = BigInt(new Set(eligibleInstalls.map((install) => install.record.payload.installation_id)).size);
       let value: bigint | undefined;
       let undefined_reason: MetricRun["undefined_reason"];
-      if (definition.rule_bundle_id === "metric-calendar-activity") {
+      if (payerProfile) {
+        const key = (item: Attempt) => compositeKey([item.server.tenant_id, item.server.app_id, item.record.payload.installation_id]);
+        const payers = BigInt(new Set(payerPurchases.map(key)).size);
+        const population = BigInt(new Set(eligibleInstalls.map(key)).size);
+        switch (definition.definition.calculation) {
+          case "purchase_count": value = BigInt(payerPurchases.length); break;
+          case "paying_installations": value = payers; break;
+          case "paying_installations_over_cohort":
+            if (population === 0n) undefined_reason = "empty_cohort";
+            else value = roundHalfEven(payers * 1_000_000n, population);
+            break;
+          case "revenue_over_paying_installations":
+            if (payers === 0n) undefined_reason = "no_paying_installations";
+            else value = roundHalfEven(purchaseNetRevenueValue, payers);
+            break;
+          default: throw new Error(`unsupported payer calculation: ${metricName}`);
+        }
+      } else if (definition.rule_bundle_id === "metric-calendar-activity") {
         const metricDate = evaluation.grouping?.metric_date;
         if (metricDate === undefined || Object.keys(evaluation.grouping ?? {}).some(key => key !== "metric_date")) {
           throw new Error(`calendar_activity requires only metric_date grouping: ${metricName}`);

@@ -1082,6 +1082,45 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     await disableMetricSchedule({pool:appPool,identity:scope,metricScheduleId:registered.metric_schedule_id,now});
   });
 
+  it("payer_existing_schedule_form_worker_and_saved_JSON_CSV_preserve_verified_counts_and_installation_units", async () => {
+    const source = JSON.parse(readFileSync("fixtures/v0.4/73-verified-payers/input.json", "utf8"),
+      (key, value) => key === "tenant_id" ? tenantId : key === "app_id" ? appId : value);
+    await seedPool.query("TRUNCATE control.metric_schedules,control.metric_schedule_states,control.metric_schedule_checkpoints CASCADE");
+    await ingestFixture("payer73-schedule", source, appPool, seedPool);
+    const body = { ...JSON.parse(readFileSync("examples/synthetic/payer-metrics.json", "utf8")), start_date: "2026-08-01" };
+    const path = `/dashboard/apps/${appId}/metric-schedules`, cookie = `openmasu_dashboard=${session.token}`;
+    const response = await fetch(`${baseUrl}${path}`, { method: "POST", redirect: "manual",
+      headers: { cookie, origin: "http://localhost:8080", "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ csrf_token: csrfToken(session.token), request_json: JSON.stringify(body) }) });
+    assert.equal(response.status, 303);
+    const schedules = (await (await admin(`/v1/admin/apps/${appId}/metric-schedules`)).json() as { data: MetricScheduleRecord[] }).data;
+    const registered = schedules.find(row => row.status === "active")!;
+    assert.ok(registered); assert.equal(registered.definition.evaluations[0].date_dimension, "cohort_date");
+    const clock = new Date("2026-08-10T01:00:00.000Z");
+    assert.deepEqual(await processMetricSchedules(appPool, tenantId, { now: clock, maximumCatchupDates: 1 }),
+      { schedules: 1, completedDates: 1, replayedDates: 0, failedSchedules: 0 });
+    const query = { tenantId, appId, metricScheduleId: registered.metric_schedule_id, supersession: "latest" as const, limit: 200 };
+    const page = await metricReport(readerPool, reportIdentity, query);
+    assert.deepEqual(Object.fromEntries(page.data.map(row => [row.metric_name, row.value_unscaled])), {
+      cohort_arppu_d7_usd: "6000000", cohort_payer_rate_d7: "1000000", cohort_paying_installations_d7: "1", cohort_purchase_count_d7: "1",
+    });
+    assert.ok(page.data.every(row => row.grouping.cohort_date === "2026-08-01"
+      && row.comparison_context?.privacy_state === "after" && row.input_received_at_watermark === "2026-08-10T00:00:00.000Z"));
+    const selection = new URLSearchParams({ metric_schedule_id: registered.metric_schedule_id, format: "csv" });
+    const apiCsv = await admin(`/v1/reports/metrics?app_id=${appId}&${selection}`);
+    const dashboardCsv = await fetch(`${baseUrl}/dashboard/apps/${appId}/cohorts.csv?${selection}`, { headers: { cookie } });
+    assert.equal(apiCsv.status, 200); assert.equal(dashboardCsv.status, 200);
+    const csv = await apiCsv.text(); assert.equal(await dashboardCsv.text(), csv);
+    assert.equal(parseCsv(csv).length, 4);
+    const html = renderDashboard(buildDashboardView({ apps: [{ app_id: appId, created_at: "2026-08-01T00:00:00.000Z" }], selectedAppId: appId,
+      query, metrics: page, csrfToken: "synthetic-payer" }));
+    assert.match(html, /USD 6 per paying installation \(not person\)/);
+    assert.match(html, /1 settled purchase transactions/); assert.match(html, /1 paying installations \(not people\)/);
+    assert.equal((await processMetricSchedules(appPool, tenantId, { now: clock, maximumCatchupDates: 1 })).completedDates, 0);
+    assert.equal(jcs(await metricReport(readerPool, reportIdentity, query)), jcs(page));
+    await disableMetricSchedule({ pool: appPool, identity: reportIdentity, metricScheduleId: registered.metric_schedule_id, now: clock });
+  });
+
   it("calendar_activity_form_runs_saved_UTC_counts_and_exports_installation_units_without_period_sums", async () => {
     const source = JSON.parse(readFileSync("fixtures/v0.4/72-calendar-activity/input.json", "utf8"),
       (key, value) => key === "tenant_id" ? tenantId : key === "app_id" ? appId : value);

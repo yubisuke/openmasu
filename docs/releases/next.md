@@ -1,6 +1,6 @@
 # Post-rc.2 Scope
 
-Updated: 2026-10-24. This is a living record of remaining work after rc.2,
+Updated: 2026-10-25. This is a living record of remaining work after rc.2,
 not a new release note or a promise of a release date.
 
 ## Published baseline
@@ -19,6 +19,9 @@ annotated tag, exact-commit full CI and eight verified public assets.
 Current source now adds [daily recorded activity](../calendar-activity.md):
 three UTC metrics, schedules and saved CSV with explicit installation units.
 This post-rc.2 addition is not part of the published rc.2 assets or evidence.
+It also adds [verified payer metrics](../payer-metrics.md): D7 transactions,
+paying installations, payer rate and purchase-net ARPPU. Full refunds retain
+historical payers; zero-payer ARPPU is undefined. No SDK release is implied.
 
 Integrated candidate acceptance
 ([#252](https://github.com/yubisuke/openmasu/issues/252)) is complete within its
@@ -26,7 +29,7 @@ declared synthetic scope. The publication receipt records the downloaded Android
 SDK/backend journey on JVM/Robolectric API 24 separately from the frozen release.
 It does not establish physical-device or all-platform onboarding acceptance.
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-25 of 35 child implementations complete, with 10 optional extensions remaining.
+26 of 35 child implementations complete, with 9 optional extensions remaining.
 Select further work from the [roadmap](../roadmap.md#next-product-sequence) and
 [acceptance crosswalk](../project-plan.md#next-product-slices) according to the
 intended usage.

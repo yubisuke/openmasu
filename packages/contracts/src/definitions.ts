@@ -17,6 +17,8 @@ export {
 } from "./m1b-metric-definitions.js";
 export { M3_METRIC_DEFINITIONS, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "./m3-metric-definitions.js";
 export { calendarAcquisitionMetricDefinitions } from "./calendar-metric-definitions.js";
+export { PAYER_METRIC_BUNDLE, PAYER_METRIC_VERSION, PAYER_METRIC_DEFINITIONS,
+  payerMetricDefinitions, isPayerMetric, isPayerMetricDefinition, isVerifiedPurchaseProjection } from "./payer-metric-definitions.js";
 export { CALENDAR_ACTIVITY_BUNDLE, CALENDAR_ACTIVITY_VERSION, CALENDAR_ACTIVITY_METRIC_NAMES,
   CALENDAR_ACTIVITY_METRIC_DEFINITIONS, calendarActivityMetricDefinitions,
   isCalendarActivityMetric, isCalendarActivityMetricDefinition } from "./calendar-activity-definitions.js";

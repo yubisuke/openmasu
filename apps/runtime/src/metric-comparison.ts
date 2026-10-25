@@ -1,5 +1,5 @@
 import type { OpenMasuMetricDefinitionV04 as MetricDefinition } from "../../../packages/contracts/src/generated/contract-types.js";
-import { cohortDayStart, addCalendarDays, canonicalDatedFxPolicy, isCalendarActivityMetric,
+import { cohortDayStart, addCalendarDays, canonicalDatedFxPolicy, isCalendarActivityMetric, isPayerMetric, isPayerMetricDefinition,
   isCalendarActivityMetricDefinition, type DatedFxPolicyInput } from "@openmasu/contracts/definitions";
 
 /** Aggregate-only metadata. Never store a replay manifest or evidence IDs here. */
@@ -75,6 +75,24 @@ export function comparisonMeaning(context: MetricComparisonContext) {
   const revenue = ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(calculation);
   const cost = ["cost_sum", "cost_over_cohort"].includes(calculation);
   const conversion = ["converted_installations", "converted_installations_over_cohort"].includes(calculation);
+  if (isPayerMetric(d)) {
+    if (!isPayerMetricDefinition(d) || d.value_type === "money" &&
+        (context.fx.target_currency !== d.currency || context.fx.target_scale !== d.amount_scale)) return undefined;
+    return {
+      profile: context.profile, anchor_event: "install", time_zone: "UTC", calculation,
+      numerator: d.definition.numerator, denominator: d.definition.denominator ?? null,
+      cost_basis: null, aggregation: "cumulative", window: { ...window, boundary: "half_open" },
+      population: "native_cohort_verified_settled_store_projections", acquisition_basis: d.acquisition_basis,
+      cost_selection_policy: "not_applicable", fraud_policy: "gross",
+      grouping_dimensions: [...d.grouping_dimensions!].sort(), privacy_state: context.privacy_state,
+      payer_identity: "tenant_app_installation_not_person", refunded_payer: "retained_historical_purchase",
+      refund_reversal_policy: d.refund_reversal_policy, value_type: d.value_type,
+      currency: d.currency ?? null, amount_scale: d.amount_scale ?? null, ratio_scale: d.ratio_scale ?? null,
+      fx: d.value_type === "money" ? { target_currency: context.fx.target_currency, target_scale: context.fx.target_scale,
+        ...(context.fx.rate_selection ? { rate_selection: context.fx.rate_selection } : {}),
+        rounding_mode: context.fx.rounding_mode, conversion: "per_event_round_then_sum", rates: context.fx.rates } : null,
+    };
+  }
   if (isCalendarActivityMetric(d)) {
     if (!isCalendarActivityMetricDefinition(d)) return undefined;
     return {

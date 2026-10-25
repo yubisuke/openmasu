@@ -1898,7 +1898,8 @@
                   "empty_cohort",
                   "overlapping_cost_grains",
                   "missing_fx_rate",
-                  "observation_window_not_elapsed"
+                  "observation_window_not_elapsed",
+                  "no_paying_installations"
                 ]
               },
               {
@@ -2200,7 +2201,8 @@
                     "empty_cohort",
                     "overlapping_cost_grains",
                     "missing_fx_rate",
-                    "observation_window_not_elapsed"
+                    "observation_window_not_elapsed",
+                    "no_paying_installations"
                   ]
                 }
               }

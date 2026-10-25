@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-10-24. This page describes the current `main` source tree.
+Updated: 2026-10-25. This page describes the current `main` source tree.
 Implementation and synthetic verification are not live operational qualification.
 
 ## Release snapshot
@@ -10,7 +10,7 @@ Implementation and synthetic verification are not live operational qualification
 | Published prerelease | `v0.3.0-rc.2` at `d775cc9`; eight verified SDK assets and exact-commit full CI |
 | Synthetic SDK onboarding | Published rc.2 Android SDK/backend journey passed on JVM/Robolectric API 24; later harness evidence is recorded separately |
 | Latest stable source release | `v0.2.0`; later features belong to newer source, not this tag |
-| Current source | Contract patch ledger through v0.4.25; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 72 fixtures, 936 golden artifacts |
+| Current source | Contract patch ledger through v0.4.26; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 73 fixtures, 949 golden artifacts |
 
 `v0.3.0-rc.2` is the current published source and SDK release, marked as a
 prerelease. Its [release page](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.2)
@@ -59,13 +59,19 @@ Detailed limits belong to the [product guides](README.md), [product scope](produ
 ## Current development focus
 
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
-25 of 35 child implementations complete; 10 optional extensions remain. The earlier
+26 of 35 child implementations complete; 9 optional extensions remain. The earlier
 integration plan is complete, not a second backlog. The dependency, controller,
 presentation, evaluator and ingestion foundations are also implemented.
 
 [Daily recorded activity](calendar-activity.md) is implemented after rc.2; it is
 not included in that frozen release. Its UTC activity population is independent
 of acquisition cohorts and does not establish human-level uniqueness.
+
+[Verified payer metrics](payer-metrics.md) add separate D7 settled transaction
+and paying-installation counts, payer rate and purchase-net ARPPU. They preserve
+historical payers after full refund, exclude advertising revenue and leave
+zero-payer money undefined. Store projections and privacy replay are synthetic
+evidence, not live store qualification; this addition is also after rc.2.
 
 The [minimal monitoring rules](operations/monitoring.md) are implemented with
 synthetic transition tests; receiver setup and live delivery remain external.

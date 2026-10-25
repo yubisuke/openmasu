@@ -186,7 +186,11 @@ export type OpenMasuMetricDefinitionV04 = {
       | "converted_installations_over_cohort"
       | "cost_sum"
       | "cost_over_cohort"
-      | "active_installations_count";
+      | "active_installations_count"
+      | "purchase_count"
+      | "paying_installations"
+      | "paying_installations_over_cohort"
+      | "revenue_over_paying_installations";
     window: {
       type: "elapsed" | "calendar_day" | "activity_day";
       day: number;
@@ -199,8 +203,10 @@ export type OpenMasuMetricDefinitionV04 = {
       | "cohort_size"
       | "events"
       | "converted_installations"
-      | "cost";
-    denominator?: "cost" | "cohort_size";
+      | "cost"
+      | "purchases"
+      | "paying_installations";
+    denominator?: "cost" | "cohort_size" | "paying_installations";
     cost_basis?: "cohort_acquisition_day_current_snapshot";
   };
   /**
@@ -283,7 +289,8 @@ export type OpenMasuMetricRunV04 = {
     | "empty_cohort"
     | "overlapping_cost_grains"
     | "missing_fx_rate"
-    | "observation_window_not_elapsed";
+    | "observation_window_not_elapsed"
+    | "no_paying_installations";
   value_unscaled?: string;
   fraud_policy?: "gross" | "net";
   amount_scale?: number;

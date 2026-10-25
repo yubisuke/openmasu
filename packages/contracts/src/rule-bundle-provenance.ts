@@ -14,6 +14,7 @@ export type NonFraudRuleBundleId =
   | "metric-acquisition-kpis"
   | "metric-standard-retention"
   | "metric-calendar-activity"
+  | "metric-verified-payers"
   | "metric-disjoint-cost"
   | "metric-selected-commerce"
   | "metric-refund-reversal"
@@ -35,6 +36,16 @@ export type NonFraudRuleBundleDefinition = {
 };
 
 export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonFraudRuleBundleDefinition>> = {
+  "metric-verified-payers": {
+    id: "metric-verified-payers", version: "0.4.26", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["selected-native-first-party-gross-cohort", "utc-install-relative-half-open-d7",
+      "accepted-canonical-settled-store-projections-only", "server-producer-and-policy-not-client-extensions",
+      "count-transactions-separately-from-distinct-installations", "full-refund-does-not-erase-historical-payer",
+      "purchase-net-only-no-ad-revenue", "exact-refund-cancellation-at-watermark",
+      "per-event-fx-before-half-even-net-over-paying-installations", "zero-payers-undefined-arppu",
+      "receipt-cutoff-and-current-privacy", "no-person-identity-or-entitlement-claim"],
+  },
   "metric-calendar-activity": {
     id: "metric-calendar-activity", version: "0.4.25", kind: "metric",
     implementation: "reference-metric-v0.4",

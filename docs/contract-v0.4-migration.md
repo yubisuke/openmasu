@@ -5,6 +5,43 @@ Contract v0.4.0 completed the identity migration from the immutable
 contract identity but did not change field meaning, attribution behavior, metric
 arithmetic, ordering, hashing, privacy, or fraud semantics.
 
+## Verified purchase and payer metrics (0.4.26)
+
+The closed opt-in `metric-verified-payers` profile adds transaction and
+paying-installation counts, payer rate and purchase-net ARPPU. New calculations
+are `purchase_count`, `paying_installations`, `paying_installations_over_cohort`
+and `revenue_over_paying_installations`; `purchases` and `paying_installations`
+are additive numerators and `paying_installations` is an additive denominator.
+`no_paying_installations` is an additive undefined reason. Strict schema/profile
+admission confines these to four explicit versioned definitions. This preserves
+all previously conforming artifacts and is non-breaking. URNs `:v0.4`,
+wire/package `0.4.0`, registries and old metric/bundle versions are unchanged.
+
+Only existing server-owned, settled, installation-bound store projections enter
+the profile. Source policy/producer provenance does not reverify the store;
+client payload extensions cannot substitute. Historical payer membership survives
+full refunds; the ARPPU numerator is purchase-net only with exact cancellation,
+per-event FX and half-even arithmetic. Zero-payer ARPPU is absent, not zero.
+See [the guide](payer-metrics.md) for fixed window, scope, use and limits.
+
+Complete golden addition inventory: `73-verified-payers/input.json` and all 13
+new `expected_*.json` families: raw_records, deliveries, logical_events,
+corrections, privacy_requests, privacy_tombstones, attributions,
+metric_definitions, metric_runs, cost_records, fraud_decisions, rejections,
+reconciliation. Earlier 72 inputs and 936 goldens are unchanged.
+Confirm using `git diff --name-status e2f205a -- fixtures/v0.4/`: only directory
+73 and the shared README change. The [independent derivation](../fixtures/v0.4/73-verified-payers/README.md)
+records every family's construction and all 12 values, payload preservation,
+logical identity changes, source-policy snapshots and grouping/attribution hashes.
+No evaluator output is used to populate expected files. Candidate TS/Python
+canonical bytes were checked independently before promotion; expected files
+are committed separately from behavior. Shared vectors and SQL/report/privacy
+tests cover multiple purchases and payers, partial/full refunds, exact reversal,
+unknown authority, retry, cutoff, missing FX and current-privacy replacement.
+Forward-only migration 072 widens the existing metric-run undefined-reason
+constraint without rewriting rows. No service, dependency, table, workflow
+or action SHA changes.
+
 ## Daily recorded activity (0.4.25)
 
 The independent `metric-calendar-activity` bundle adds three closed UTC count

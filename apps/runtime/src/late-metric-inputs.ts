@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
 import { validateMetricDefinition } from "@openmasu/contracts/validation";
+import { isPayerMetricDefinition, isVerifiedPurchaseProjection } from "@openmasu/contracts/definitions";
 import { metricAcquisitionSql, metricAcquisitionJoinSql, metricAcquisitionDimensionSql } from "./platform-acquisition.js";
 import type { LateEventRecalculationRequest } from "./metric-recalculation.js";
 
@@ -10,6 +11,7 @@ type InputRow = {
   lifecycle: string; logical_event_id: string | null; installation_id: string | null;
   occurred_at: string | null; financial_status: string | null; target_available: boolean; refund_reversal: boolean; producer: string;
   event_key: string | null;
+  policy_digest: string | null; target_policy_digest: string | null; target_producer: string | null;
 };
 export type LateSelection = {
   rows: { metric_run_id: string; replay: Any | null; safe_reason: string | null }[];
@@ -25,7 +27,8 @@ export function supportsLateMetric(replay: Any): boolean {
     && ((["revenue_sum", "revenue_over_cohort", "revenue_over_cost"].includes(definition?.calculation)
       && ["revenue", "purchase_net_revenue", "total_net_revenue"].includes(definition.numerator))
       || (metric.rule_bundle_id === "metric-custom-conversion" && typeof metric.conversion_event_key === "string"
-        && ["converted_installations", "converted_installations_over_cohort"].includes(definition?.calculation)))
+        && ["converted_installations", "converted_installations_over_cohort"].includes(definition?.calculation))
+      || isPayerMetricDefinition(metric))
     && (definition.window?.type === "elapsed" || (metric.calendar_cohort_policy === "cumulative_revenue_on_day_activity"
       && definition.window?.type === "calendar_day")) && Number.isSafeInteger(definition.window.day)
     && definition.window.day >= 0 && definition.window.day <= 90
@@ -54,6 +57,7 @@ export async function selectLateMetricInputs(
   const result = await client.query<InputRow>(
     `SELECT raw.record_id,raw.payload_sha256,raw.event_name,raw.received_at,
        raw.payload_lifecycle_status AS lifecycle,logical.logical_event_id,logical.producer,
+       raw_policy.policy_digest,target_policy.policy_digest AS target_policy_digest,target_raw.producer AS target_producer,
        CASE raw.event_name WHEN 'ad_revenue' THEN revenue.installation_id
          WHEN 'purchase' THEN purchase.installation_id WHEN 'refund' THEN target.installation_id
          WHEN 'custom_event' THEN custom.installation_id END AS installation_id,custom.event_key,
@@ -75,6 +79,8 @@ export async function selectLateMetricInputs(
            AND cancelled_raw.received_at<=raw.received_at AND cancelled_raw.received_at<=$3
            AND cancelled_raw.payload_lifecycle_status='available')))) IS TRUE AS target_available
      FROM ledger.raw_records_current AS raw
+     JOIN ledger.raw_records AS raw_policy ON raw_policy.tenant_id=raw.tenant_id AND raw_policy.app_id=raw.app_id
+       AND raw_policy.record_id=raw.record_id
      LEFT JOIN ledger.logical_events AS logical ON logical.tenant_id=raw.tenant_id
        AND logical.app_id=raw.app_id AND logical.record_id=raw.record_id
      LEFT JOIN ledger.ad_revenue_facts AS revenue USING (logical_event_id)
@@ -85,6 +91,8 @@ export async function selectLateMetricInputs(
        AND target.record_id=refund.correction_target_record_id
      LEFT JOIN ledger.raw_records_current AS target_raw ON target_raw.tenant_id=target.tenant_id
        AND target_raw.app_id=target.app_id AND target_raw.record_id=target.record_id
+     LEFT JOIN ledger.raw_records AS target_policy ON target_policy.tenant_id=target.tenant_id
+       AND target_policy.app_id=target.app_id AND target_policy.record_id=target.record_id
      LEFT JOIN ledger.logical_events AS cancelled_logical ON cancelled_logical.tenant_id=raw.tenant_id
        AND cancelled_logical.app_id=raw.app_id AND cancelled_logical.record_id=refund.artifact->>'reverses_refund_record_id'
      LEFT JOIN ledger.refund_facts AS cancelled ON cancelled.logical_event_id=cancelled_logical.logical_event_id
@@ -134,7 +142,8 @@ export async function selectLateMetricInputs(
        AND ($6::text[] IS NULL OR mr.metric_name=ANY($6::text[]))
        AND ($7::text[] IS NULL OR mr.metric_run_id=ANY($7::text[]))
        AND (mr.comparison_context IS NULL OR mr.comparison_context->'definition'->'definition'->>'calculation'
-         IN ('revenue_sum','revenue_over_cohort','revenue_over_cost','converted_installations','converted_installations_over_cohort'))
+         IN ('revenue_sum','revenue_over_cohort','revenue_over_cost','converted_installations','converted_installations_over_cohort',
+           'purchase_count','paying_installations','paying_installations_over_cohort','revenue_over_paying_installations'))
        AND NOT EXISTS (SELECT 1 FROM ledger.metric_runs AS newer WHERE newer.tenant_id=mr.tenant_id
          AND newer.app_id=mr.app_id AND newer.supersedes_metric_run_id=mr.metric_run_id)
      ORDER BY mr.metric_run_id COLLATE "C" LIMIT 101`,
@@ -149,6 +158,11 @@ export async function selectLateMetricInputs(
     else if (row.evidence_unavailable) reason = "input_unavailable";
     else {
       const metric = row.replay.metric_definition;
+      const contributing = isPayerMetricDefinition(metric) ? eligible.filter(event =>
+        isVerifiedPurchaseProjection(event.producer, event.policy_digest ?? "")
+        && (event.event_name === "purchase" || metric.definition.numerator === "purchase_net_revenue"
+          && event.event_name === "refund" && isVerifiedPurchaseProjection(event.target_producer ?? "", event.target_policy_digest ?? ""))) : eligible;
+      if (!contributing.length) continue;
       const imported = metric.acquisition_basis === "selected_imported_provider";
       const contextDimensions = imported || metric.acquisition_basis === "selected_verified_platform";
       const mode = imported ? "selected_imported_provider" : metric.acquisition_basis === "selected_verified_platform";
@@ -177,6 +191,7 @@ export async function selectLateMetricInputs(
            AND ($15::text IS NULL OR changed.producer='import:'||$15::text)
            AND (($11='total_net_revenue' AND changed.event_name IN ('ad_revenue','purchase','refund'))
              OR ($11='purchase_net_revenue' AND changed.event_name IN ('purchase','refund'))
+             OR ($11 IN ('purchases','paying_installations') AND changed.event_name='purchase')
              OR ($11='revenue' AND changed.event_name='ad_revenue')
              OR ($11='converted_installations' AND changed.event_name='custom_event' AND changed.event_key=$16::text))
            AND control.canonical_timestamp_value(changed.occurred_at)>=install.occurred_at_ts
@@ -190,7 +205,7 @@ export async function selectLateMetricInputs(
            AND ($5::jsonb->>'attribution_status' IS NULL OR
              (CASE WHEN $7 THEN coalesce(acquisition.status,'unattributed') ELSE attribution.status END)=$5::jsonb->>'attribution_status')
            AND ($10='gross' OR (CASE WHEN $7 THEN acquisition.reason_code ELSE attribution.reason_code END) IS DISTINCT FROM 'fraud_excluded')
-         LIMIT 101`, [scope.tenantId, scope.appId, request.watermark, JSON.stringify(eligible),
+         LIMIT 101`, [scope.tenantId, scope.appId, request.watermark, JSON.stringify(contributing),
           JSON.stringify(row.replay.evaluation.grouping), metric.definition.window.day,
           !!metric.acquisition_basis, "after", metric.aggregation_time_zone,
           metric.fraud_policy ?? "gross", metric.definition.numerator, row.watermark,
