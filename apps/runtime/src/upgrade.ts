@@ -13,6 +13,10 @@ export const UPGRADE_SOURCES = Object.freeze([
     tag: "v0.3.0-rc.1", revision: "90a0f5fe56b75e8fdefd2f759e33b3ae538b79c2", postgresMajor: 17,
     migrationCount: 55, migrationDigest: "dbff0d98396a48dfc9c25d66bcbaab373c344cd2bee43dea561be024d4842276",
   }),
+  Object.freeze({
+    tag: "v0.3.0-rc.2", revision: "d775cc950bdc06c0c929c9d17e2274ec4afbe9cf", postgresMajor: 17,
+    migrationCount: 71, migrationDigest: "8ba324a5c82a46a20c95a01ec58cc4c93843ecff22fd3efb5a696cb468ee890c",
+  }),
 ]);
 function upgradeSource(tag: string): (typeof UPGRADE_SOURCES)[number] {
   const source = UPGRADE_SOURCES.find((candidate) => candidate.tag === tag);

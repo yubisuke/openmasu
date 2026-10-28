@@ -1,20 +1,24 @@
 # Upgrade without losing evidence
 
-Supported frozen sources use PostgreSQL 17:
+Current source recognizes these frozen PostgreSQL 17 upgrade sources:
 
 | Source tag | Source commit | Migrations | Migration inventory SHA-256 |
 | --- | --- | --- | --- |
 | `v0.2.0` | `68b8c483a30c3804a216a655d964788d0204185f` | 48 | `d4c18ba078913cfefa420ea6adfcf3d7386994a614f3b197e6222276bc4905c6` |
 | `v0.3.0-rc.1` | `90a0f5fe56b75e8fdefd2f759e33b3ae538b79c2` | 55 | `dbff0d98396a48dfc9c25d66bcbaab373c344cd2bee43dea561be024d4842276` |
+| `v0.3.0-rc.2` | `d775cc950bdc06c0c929c9d17e2274ec4afbe9cf` | 71 | `8ba324a5c82a46a20c95a01ec58cc4c93843ecff22fd3efb5a696cb468ee890c` |
 
-The supported target is the published `v0.3.0-rc.3` source tag;
+For the first two sources, the supported target is the published `v0.3.0-rc.3` source tag;
 its [publication receipt](../validation/v0.3.0-rc.3-publication.md)
 records the annotated tag and exact-commit full CI evidence.
 This path is a stopped-writer upgrade, not zero-downtime deployment.
 
-The published rc.2 is not yet a supported source in this preflight. It fails with
-`upgrade_source_unsupported`; do not relabel an rc.2 backup as rc.1 or bypass the
-check. A new disposable synthetic instance can evaluate rc.3 independently.
+The rc.2 source entry was added **after rc.3 publication**. It is exercised by
+the current source's existing backup/upgrade suite, but rc.3's frozen preflight
+still rejects rc.2 with `upgrade_source_unsupported`. Deployment from rc.2 must
+wait for a new annotated release containing this change and exact-source CI.
+An untagged current checkout is not a deployment target. Do not move the rc.3 tag,
+relabel a backup as rc.1, or bypass target/source checks.
 
 ## One ordered procedure
 
@@ -46,9 +50,9 @@ check. A new disposable synthetic instance can evaluate rc.3 independently.
    ```
 
    The migration digest hashes compact JSON of ordered `{version,name,checksum}`
-   rows for that source's frozen files (LF-normalized SQL SHA-256). For rc.1,
+   rows for that source's frozen files (LF-normalized SQL SHA-256). For rc.1 or rc.2,
    use its tag, peeled commit and digest from the table together; never mix
-   identities from the two sources. The preflight verifies
+   identities from different sources. The preflight verifies
    archive bytes, source identity, PostgreSQL major and a contiguous migration
    prefix. The snapshot label/time/key reference are an operator declaration,
    **not proof** of backup completeness, authenticity or correct secret custody.
@@ -61,6 +65,8 @@ check. A new disposable synthetic instance can evaluate rc.3 independently.
    ```
 
    Set `--from=v0.3.0-rc.1` for an rc.1 backup with the matching declaration.
+   For rc.2, use `--from=v0.3.0-rc.2` only with a future published target that
+   contains its source entry; the rc.3 command above does not support it.
    An untagged rc.3 checkout deliberately refuses this deployment preflight.
    Exit zero and `status: ready` are required. Output is aggregate-only and includes
    the target and applied/pending counts, not backup contents, key labels or paths.
@@ -101,15 +107,22 @@ table deletion or resurrection of deleted payloads is provided.
 ## Synthetic evidence
 
 One parameterized version-to-version case in `npm run test:backup-restore`
-(PostgreSQL 17 tools enabled in existing Runtime CI) covers both sources above.
+(PostgreSQL 17 tools enabled in existing Runtime CI) covers all three sources above.
 It loads each exact frozen tag's SQL files,
 inserts reviewed synthetic ledger/metric artifacts using only old columns, dumps
 and restores to a separate DB, checks the backup hashes, injects failure during
-migration after the first pending file, verifies rollback, resumes through the target, and reapplies deletion
+migration after the first pending file, verifies rollback, resumes through the current source, and reapplies deletion
 to a restored encrypted payload snapshot. The unrelated historical metric/ledger
 remain byte-identical; missing historical context is not reconstructed. JSON output records elapsed
 time and the isolated absent-writer boundary. No real recovery time, production
 durability, zero downtime or backup schedule is established by this test.
+
+For rc.2 the inventory contains 71 files, through `071_saved_analysis_views.sql`.
+The rehearsal commits migration 072, deliberately aborts 073 and asserts that
+`control.comparison_definitions` was not created. It then resumes through the
+remaining migrations and verifies a second migration run is a no-op. Wrong
+source identities, migration checksums and either archive checksum are rejected.
+No old SQL, contract golden or published SDK bytes are rewritten.
 
 Ownership behavior checked against PostgreSQL 17 primary documentation on 2026-10-02:
 

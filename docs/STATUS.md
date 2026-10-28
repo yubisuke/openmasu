@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-10-26. This page describes the current `main` source tree.
+Updated: 2026-10-28. This page describes the current `main` source tree.
 Implementation and synthetic verification are not live operational qualification.
 
 ## Release snapshot
@@ -17,9 +17,11 @@ prerelease. Its [release page](https://github.com/yubisuke/openmasu/releases/tag
 and [publication receipt](validation/v0.3.0-rc.3-publication.md) identify source
 `2d689dc63546e5a2121fd0026d83f04aa8cc3f7d`, exact-commit CI and eight public
 assets re-downloaded and verified on 2026-10-26. Frozen candidate notes and
-older release records remain unchanged. rc.2-to-current upgrade is explicitly
-unsupported pending [#315](https://github.com/yubisuke/openmasu/issues/315);
-use a new disposable synthetic instance rather than resetting an existing ledger.
+older release records remain unchanged. Current source adds rc.2 backup recognition
+and its existing-suite migration/privacy rehearsal
+([upgrade guide](operations/upgrade.md)). This is not in the frozen rc.3 release:
+deployment from rc.2 still requires a new annotated release. Use a new disposable
+synthetic instance for rc.3 rather than resetting an existing ledger.
 
 ## What the status means
 

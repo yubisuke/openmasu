@@ -9,7 +9,7 @@ const backup = { format: "openmasu-upgrade-backup-v1", source_tag: source.tag, s
   migration_digest: source.migrationDigest, database_sha256: "a".repeat(64), payload_sha256: "b".repeat(64), payload_snapshot_id: "synthetic:snapshot", master_key_ref: "synthetic:key", privacy_boundary_at: "2026-10-02T00:00:00.000Z" };
 it(`upgrade preflight accepts the frozen ${source.tag} source and closed backup declaration`, () => {
   assert.deepEqual(validateUpgradeBackup(backup, source.tag), backup);
-  for (const value of [{ ...backup, postgres_major: 16 }, { ...backup, source_revision: "b".repeat(40) }, { ...backup, extra: true }, { ...backup, payload_sha256: "bad" }, { ...backup, master_key_ref: null }, { ...backup, privacy_boundary_at: "2026-02-30T00:00:00.000Z" }]) assert.throws(() => validateUpgradeBackup(value, source.tag), /upgrade_backup_invalid/);
+  for (const value of [{ ...backup, postgres_major: 16 }, { ...backup, source_revision: "b".repeat(40) }, { ...backup, migration_digest: "b".repeat(64) }, { ...backup, extra: true }, { ...backup, payload_sha256: "bad" }, { ...backup, master_key_ref: null }, { ...backup, privacy_boundary_at: "2026-02-30T00:00:00.000Z" }]) assert.throws(() => validateUpgradeBackup(value, source.tag), /upgrade_backup_invalid/);
   for (const other of UPGRADE_SOURCES.filter((candidate) => candidate.tag !== source.tag)) assert.throws(() => validateUpgradeBackup({ ...backup, source_revision: other.revision, migration_digest: other.migrationDigest }, source.tag), /upgrade_backup_invalid/);
   assert.throws(() => validateUpgradeBackup(backup, "unknown"), /upgrade_source_unsupported/);
 });
