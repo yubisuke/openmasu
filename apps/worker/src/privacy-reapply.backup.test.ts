@@ -558,6 +558,7 @@ it(`upgrades the frozen ${upgradeSource.tag} backup, resumes a failed migration,
       await admin.query(`GRANT CONNECT,CREATE ON DATABASE "${name}" TO openmasu_owner`);
     }
     sourceClient = new Client({ connectionString: source.toString() }); await sourceClient.connect();
+    assert.equal(execFileSync("git", ["rev-parse", `${upgradeSource.tag}^{commit}`], { encoding: "utf8" }).trim(), upgradeSource.revision);
     const current = readMigrations();
     const frozen = current.slice(0, upgradeSource.migrationCount).map((migration) => ({ ...migration,
       source: execFileSync("git", ["show", `${upgradeSource.revision}:db/migrations/${migration.name}`], { encoding: "utf8" }).replaceAll("\r\n", "\n"),
@@ -596,6 +597,7 @@ it(`upgrades the frozen ${upgradeSource.tag} backup, resumes a failed migration,
       postgres_major: upgradeSource.postgresMajor, migration_digest: upgradeSource.migrationDigest, database_sha256: await fileDigest(dumpPath), payload_sha256: await fileDigest(payloadArchive),
       payload_snapshot_id: "synthetic:snapshot", master_key_ref: "synthetic:key", privacy_boundary_at: "2026-08-02T00:00:01.000Z" }, upgradeSource.tag);
     await verifyBackupFiles(backup, dumpPath, payloadArchive);
+    await assert.rejects(verifyBackupFiles({ ...backup, database_sha256: "b".repeat(64) }, dumpPath, payloadArchive), /upgrade_backup_checksum_mismatch/);
     await assert.rejects(verifyBackupFiles({ ...backup, payload_sha256: "b".repeat(64) }, dumpPath, payloadArchive), /upgrade_backup_checksum_mismatch/);
     // Restore through the privileged connection while retaining archive ownership.
     // COPY must not run as the FORCE-RLS owner, and later DDL needs its original owner.
@@ -610,8 +612,11 @@ it(`upgrades the frozen ${upgradeSource.tag} backup, resumes a failed migration,
     assert.equal((await targetClient.query("SELECT count(*)::int AS count FROM public.schema_migrations")).rows[0].count, committedCount);
     if (upgradeSource.tag === "v0.2.0") {
       assert.equal((await targetClient.query("SELECT has_column_privilege('openmasu_reader','control.google_data_manager_destinations','enabled','SELECT') AS allowed")).rows[0].allowed, false, "failed migration grant rolls back too");
-    } else {
+    } else if (upgradeSource.tag === "v0.3.0-rc.1") {
       assert.equal((await targetClient.query("SELECT count(*)::int AS count FROM pg_attribute WHERE attrelid='control.metric_recalculation_jobs'::regclass AND attname='trigger_kind' AND NOT attisdropped")).rows[0].count, 0, "failed migration column rolls back too");
+    } else {
+      assert.equal(upgradeSource.tag, "v0.3.0-rc.2");
+      assert.equal((await targetClient.query("SELECT to_regclass('control.comparison_definitions') AS relation")).rows[0].relation, null, "failed migration table rolls back too");
     }
     assert.equal((await upgradePreflight(targetClient, backup)).pending, current.length - committedCount);
     assert.equal(await migrateDatabase(targetClient), current.length - committedCount);

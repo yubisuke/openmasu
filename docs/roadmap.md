@@ -60,10 +60,12 @@ API 24, with SDK and harness revisions recorded in the receipt.
 
 ## Next product sequence
 
-The published rc.3 packages the completed source plan. The concrete next
-development item is the missing rc.2 upgrade source ([#315](https://github.com/yubisuke/openmasu/issues/315)),
-not another feature list. The existing synthetic first-use path produces saved
-comparison reports without provider setup. New work must address observed friction.
+The published rc.3 packages the completed source plan. Current source adds the
+rc.2 upgrade entry and extends the existing migration/privacy rehearsal
+([#315](https://github.com/yubisuke/openmasu/issues/315)); deployment availability
+awaits a new annotated release, not changes to rc.3's frozen bytes.
+The existing synthetic first-use path produces saved comparison reports without
+provider setup. New work must address observed friction, not another feature list.
 
 [Daily recorded activity](calendar-activity.md) is implemented in current source:
 UTC session starts, all custom events and distinct installations remain separate

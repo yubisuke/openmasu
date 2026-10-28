@@ -1,6 +1,6 @@
 # Work After rc.3
 
-Updated: 2026-10-26. This is the living follow-up list, not a release promise.
+Updated: 2026-10-28. This is the living follow-up list, not a release promise.
 
 ## Published baseline
 
@@ -12,14 +12,21 @@ full CI, eight verified public assets and downloaded Android SDK onboarding.
 The [frozen notes](v0.3.0-rc.3.md) describe the included functionality.
 All 35 child implementations in the
 [functional plan](https://github.com/yubisuke/openmasu/issues/218) are included.
-This documentation update adds no functionality or SDK bytes.
+Published SDK bytes remain unchanged.
+
+## Implemented after rc.3
+
+[#315](https://github.com/yubisuke/openmasu/issues/315) adds the frozen rc.2
+source (71 checksummed migrations) to the existing upgrade preflight and
+parameterized backup/restore rehearsal. It covers interrupted migration,
+unchanged historical artifacts and repeated privacy reapplication without a new
+service or CI suite. See [the upgrade guide](../operations/upgrade.md).
 
 ## Concrete next work
 
-- [#315](https://github.com/yubisuke/openmasu/issues/315): add a safe upgrade
-  from the published rc.2. The current preflight deliberately rejects that source
-  with `upgrade_source_unsupported`. Extend the existing backup/upgrade path;
-  never relabel an old backup, bypass preflight or reset a ledger to work around it.
+- Include the rc.2 upgrade change in the next annotated release with exact-source
+  CI. The published rc.3 still rejects that source with `upgrade_source_unsupported`;
+  do not bypass its preflight, move its tag or reset an existing ledger.
 - [PR #290](https://github.com/yubisuke/openmasu/pull/290): qualify the timezone
   data update separately against calendar boundaries. rc.3 retains the qualified
   version; it is not a missing release gate.

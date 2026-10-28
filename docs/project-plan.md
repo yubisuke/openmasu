@@ -132,9 +132,10 @@ comparison semantics. Do not treat a local bundle or a green source-only check
 as a published SDK.
 
 The current published prerelease is [rc.3](validation/v0.3.0-rc.3-publication.md),
-including the completed source plan. rc.2 upgrades remain unsupported until
-[#315](https://github.com/yubisuke/openmasu/issues/315) adds its frozen source and
-existing-suite evidence. The earlier integration release was `v0.3.0-rc.2`. Its
+including the completed source plan. Current source adds the frozen rc.2 upgrade
+entry and existing-suite rehearsal ([#315](https://github.com/yubisuke/openmasu/issues/315)).
+Deployment of that path still awaits a new annotated release; rc.3 is unchanged.
+The earlier integration release was `v0.3.0-rc.2`. Its
 [frozen integration record](validation/v0.3.0-rc.2-synthetic-evidence.md) reuses existing
 journey, correction/privacy, package-consumer and backup suites. It adds no
 service or parallel release harness. Frozen `v0.2.0` and `v0.3.0-rc.1` backups
@@ -156,7 +157,8 @@ not physical-device, all-platform onboarding or live-provider acceptance.
 The rc.3 delivery has matching source/SDKs, exact-commit full CI and verified
 public assets. Reuse the existing first-use walkthrough and record only observed
 usability or upgrade gaps as follow-ups. No extra feature or architecture milestone
-is implied. The observed rc.2 upgrade gap above is the next bounded implementation.
+is implied. The rc.2 upgrade implementation above awaits the next tagged
+distribution before it becomes an operator-supported deployment path.
 
 The [roadmap foundations](roadmap.md#next-development-foundations) are implemented.
 New HTTP work uses authenticated feature controllers and typed ViewModels;
