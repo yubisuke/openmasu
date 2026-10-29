@@ -330,8 +330,19 @@ class OpenMasuSdk private constructor(
 
   fun isCollectionEnabled(): Boolean = storage.deletionReceipt() == null && storage.collectionEnabled(defaultCollectionEnabled)
 
+  /** Local opt-in only; server expiry and synthetic-disposable deployment policy remain authoritative. */
+  fun setSyntheticValidationSession(token: String, expiresAtMs: Long) {
+    if (transport !is OpenMasuSyntheticValidationTransport) throw UnsupportedOperationException("synthetic_validation_transport_unsupported")
+    val session = SyntheticValidationSession(token, expiresAtMs)
+    require(session.isActive(System.currentTimeMillis())) { "synthetic_validation_session_invalid" }
+    storage.setSyntheticValidationSession(session)
+  }
+
+  fun clearSyntheticValidationSession() { storage.setSyntheticValidationSession(null) }
+
   @JvmOverloads
   fun resetInstallationId(onComplete: (Boolean) -> Unit = {}) {
+    clearSyntheticValidationSession()
     measurementRevision.incrementAndGet()
     val oldId = storage.installationId()
     // Enrollment already queued by initialize may not have completed yet.
@@ -377,7 +388,13 @@ class OpenMasuSdk private constructor(
       .getOrElse { backstopScheduler(context); return false }
     return if (runCatching {
       observeTransport(OpenMasuDiagnosticOperation.DELIVERY) {
-        if (transport is OpenMasuDiagnosticTransport) {
+        val session = storage.syntheticValidationSession()
+        if (session != null && session.isActive(System.currentTimeMillis())) {
+          val validation = transport as? OpenMasuSyntheticValidationTransport
+            ?: throw UnsupportedOperationException("synthetic_validation_transport_unsupported")
+          validation.deliverForSyntheticValidation(credential, batch, session.token)
+          true
+        } else if (transport is OpenMasuDiagnosticTransport) {
           transport.deliverWithDiagnostics(credential, batch)
           true
         } else transport.deliver(credential, batch)

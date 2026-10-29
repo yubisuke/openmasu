@@ -475,6 +475,34 @@ public func openmasuIOSStartSession(
   }
 }
 
+@_cdecl("openmasu_ios_set_synthetic_validation_session")
+public func openmasuIOSSetSyntheticValidationSession(
+  _ token: UnsafePointer<CChar>?, _ expiresAtMs: Int64, _ requestId: Int64, _ callbackValue: OpenMasuCStringCallback?
+) {
+  guard let sdk = BridgeState.get() else { callback(callbackValue, requestId: requestId, value: "not_initialized"); return }
+  guard let token else { callback(callbackValue, requestId: requestId, value: "invalid_session"); return }
+  let value = String(cString: token)
+  Task {
+    do {
+      try await sdk.setSyntheticValidationSession(token: value, expiresAtMs: expiresAtMs)
+      callback(callbackValue, requestId: requestId, value: "configured")
+    } catch OpenMasuSyntheticValidationError.invalidSession {
+      callback(callbackValue, requestId: requestId, value: "invalid_session")
+    } catch OpenMasuSyntheticValidationError.transportUnsupported {
+      callback(callbackValue, requestId: requestId, value: "unsupported")
+    } catch { callback(callbackValue, requestId: requestId, value: "native_failure") }
+  }
+}
+
+@_cdecl("openmasu_ios_clear_synthetic_validation_session")
+public func openmasuIOSClearSyntheticValidationSession(_ requestId: Int64, _ callbackValue: OpenMasuCStringCallback?) {
+  guard let sdk = BridgeState.get() else { callback(callbackValue, requestId: requestId, value: "not_initialized"); return }
+  Task {
+    do { try await sdk.clearSyntheticValidationSession(); callback(callbackValue, requestId: requestId, value: "cleared") }
+    catch { callback(callbackValue, requestId: requestId, value: "native_failure") }
+  }
+}
+
 @_cdecl("openmasu_ios_set_collection_enabled")
 public func openmasuIOSSetCollectionEnabled(_ enabled: Bool) {
   guard let sdk = BridgeState.get() else { return }

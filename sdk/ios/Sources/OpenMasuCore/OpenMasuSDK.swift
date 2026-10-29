@@ -341,7 +341,18 @@ public actor OpenMasuSDK {
     ))
   }
 
+  /// Local opt-in only; server expiry and deployment purpose remain authoritative.
+  public func setSyntheticValidationSession(token: String, expiresAtMs: Int64) throws {
+    guard transport is any OpenMasuSyntheticValidationTransport else { throw OpenMasuSyntheticValidationError.transportUnsupported }
+    let session = SyntheticValidationSession(token: token, expiresAtMs: expiresAtMs)
+    guard session.isActive(nowMs: Int64(Date().timeIntervalSince1970 * 1_000)) else { throw OpenMasuSyntheticValidationError.invalidSession }
+    try storage.setSyntheticValidationSession(session)
+  }
+
+  public func clearSyntheticValidationSession() throws { try storage.setSyntheticValidationSession(nil) }
+
   public func resetInstallationId() async throws {
+    try clearSyntheticValidationSession()
     guard !purchaseResetInFlight else { throw OpenMasuError.purchaseContextChanged }
     purchaseContextRevision &+= 1
     purchaseResetInFlight = true
@@ -413,7 +424,15 @@ public actor OpenMasuSDK {
     let events = try storage.pending(limit: 100)
     guard !events.isEmpty else { return }
     let credential = try await ensureCredential()
-    try await observeTransport(.delivery) { try await transport.deliver(credential: credential, events: events) }
+    let session = try storage.syntheticValidationSession()
+    try await observeTransport(.delivery) {
+      if let session, session.isActive(nowMs: Int64(Date().timeIntervalSince1970 * 1_000)) {
+        guard let validation = transport as? any OpenMasuSyntheticValidationTransport else { throw OpenMasuSyntheticValidationError.transportUnsupported }
+        try await validation.deliverForSyntheticValidation(credential: credential, events: events, sessionToken: session.token)
+      } else {
+        try await transport.deliver(credential: credential, events: events)
+      }
+    }
     try storage.delete(eventIds: events.map(\.eventId))
   }
 

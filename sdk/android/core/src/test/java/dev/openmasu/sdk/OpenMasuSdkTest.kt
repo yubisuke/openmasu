@@ -35,6 +35,65 @@ class OpenMasuSdkTest {
 
   @After fun tearDown() { created.forEach { it.close() } }
 
+  @Test fun `synthetic validation is explicit local bounded and cleared on withdrawal and reset`() {
+    val token = "A".repeat(43)
+    val transport = SyntheticValidationTransport()
+    val sdk = sdk(transport)
+    sdk.setCollectionEnabled(false)
+    sdk.setSyntheticValidationSession(token, System.currentTimeMillis() + 60_000)
+    assertEquals(0, transport.calls.get())
+    assertEquals(0, sdk.pendingCount())
+    assertFalse(context.getSharedPreferences(OpenMasuStorage.PREFERENCES, Context.MODE_PRIVATE).contains("installation_id"))
+    assertFalse(diagnostics(sdk).toString().contains(token))
+    sdk.clearSyntheticValidationSession()
+    assertEquals(0, transport.calls.get())
+    for ((badToken, expiry) in listOf(
+      "invalid" to System.currentTimeMillis() + 60_000,
+      ("A".repeat(42) + "B") to System.currentTimeMillis() + 60_000,
+      token to System.currentTimeMillis() - 1,
+      token to System.currentTimeMillis() + 3_600_000,
+    )) {
+      org.junit.Assert.assertThrows(IllegalArgumentException::class.java) { sdk.setSyntheticValidationSession(badToken, expiry) }
+    }
+    sdk.setCollectionEnabled(true)
+    sdk.startSession(); sdk.pendingCount()
+    assertEquals(1, transport.normalCalls.get())
+    sdk.setSyntheticValidationSession(token, System.currentTimeMillis() + 60_000)
+    sdk.startSession(); sdk.pendingCount()
+    assertEquals(listOf(token), transport.tokens.toList())
+    sdk.close(); created.remove(sdk)
+    val reopened = sdk(transport)
+    reopened.startSession(); reopened.pendingCount()
+    assertEquals(listOf(token, token), transport.tokens.toList())
+    val storage = OpenMasuStorage(context)
+    storage.setSyntheticValidationSession(SyntheticValidationSession(token, System.currentTimeMillis() - 1))
+    reopened.startSession(); reopened.pendingCount()
+    assertEquals(2, transport.normalCalls.get())
+    val preferences = context.getSharedPreferences(OpenMasuStorage.PREFERENCES, Context.MODE_PRIVATE)
+    assertFalse(preferences.contains("synthetic_validation_session"))
+    for (invalid in listOf("not-json", "{\"token\":\"invalid\",\"expires_at_ms\":${System.currentTimeMillis() + 60_000}}")) {
+      preferences.edit().putString("synthetic_validation_session", invalid).commit()
+      val callsBeforeRead = transport.calls.get()
+      assertEquals(null, storage.syntheticValidationSession())
+      assertFalse(preferences.contains("synthetic_validation_session"))
+      assertEquals(callsBeforeRead, transport.calls.get())
+    }
+    reopened.setSyntheticValidationSession(token, System.currentTimeMillis() + 60_000)
+    reopened.updateConsent("withdrawn", "synthetic-policy"); reopened.pendingCount()
+    assertEquals(null, storage.syntheticValidationSession())
+    assertTrue(diagnostics(reopened).consentBarrierActive)
+    assertEquals(2, transport.tokens.size)
+    reopened.setSyntheticValidationSession(token, System.currentTimeMillis() + 60_000)
+    assertTrue(resetResult(reopened))
+    assertEquals(null, storage.syntheticValidationSession())
+    assertEquals(2, transport.tokens.size)
+    val legacy = sdk(RecordingTransport(true))
+    org.junit.Assert.assertThrows(UnsupportedOperationException::class.java) {
+      legacy.setSyntheticValidationSession(token, System.currentTimeMillis() + 60_000)
+    }
+    legacy.clearSyntheticValidationSession()
+  }
+
   @Test fun `diagnostics read is local closed and does not create an identity or guess custom HTTP`() {
     val transport = RecordingTransport(false)
     val sdk = sdk(transport)
@@ -90,6 +149,7 @@ class OpenMasuSdkTest {
 
   @Test fun `HTTP diagnostics distinguish 401 429 202 and offline and survive a separate SDK instance`() {
     val status = AtomicInteger(401)
+    val captured = java.util.concurrent.CopyOnWriteArrayList<Pair<String, Map<String, String>>>()
     val server = java.net.ServerSocket(0, 4, java.net.InetAddress.getByName("127.0.0.1"))
     val serving = Thread {
       while (!server.isClosed) runCatching {
@@ -97,12 +157,16 @@ class OpenMasuSdkTest {
           socket.soTimeout = 2_000
           val reader = socket.getInputStream().bufferedReader()
           var length = 0
+          val headers = mutableMapOf<String, String>()
           while (true) {
             val line = reader.readLine() ?: break
             if (line.isEmpty()) break
+            if (line.contains(':')) headers[line.substringBefore(':').lowercase()] = line.substringAfter(':').trim()
             if (line.startsWith("Content-Length:", true)) length = line.substringAfter(':').trim().toInt()
           }
-          repeat(length) { reader.read() }
+          val requestBody = StringBuilder()
+          repeat(length) { requestBody.append(reader.read().toChar()) }
+          captured += requestBody.toString() to headers
           val body = "synthetic-private-provider-body"
           socket.getOutputStream().write("HTTP/1.1 ${status.get()} Synthetic\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n$body".toByteArray())
         }
@@ -114,13 +178,24 @@ class OpenMasuSdkTest {
       val sdk = sdk(HmacHttpTransport(config), configuration = config)
       sdk.startSession()
       sdk.pendingCount()
+      assertEquals(EventFactory.envelope(sdk.pendingEvents(), config.sdkVersion, config.wrapperVersion), captured.last().first)
       assertEquals(OpenMasuDiagnosticResult.AUTHENTICATION_REJECTED, diagnostics(sdk).lastResult)
       status.set(429)
       assertFalse(sdk.flushBlocking())
       assertEquals(OpenMasuDiagnosticResult.RATE_LIMITED, diagnostics(sdk).lastResult)
       assertEquals(OpenMasuHttpClass.HTTP_4XX, diagnostics(sdk).httpClass)
       status.set(202)
+      val validationToken = "A".repeat(43)
+      sdk.setSyntheticValidationSession(validationToken, System.currentTimeMillis() + 60_000)
+      assertFalse(sdk.pendingEvents().any { it.payloadJson.contains(validationToken) })
       assertTrue(sdk.flushBlocking())
+      val (signedBody, signedHeaders) = captured.last()
+      val envelope = JSONObject(signedBody)
+      assertEquals(validationToken, envelope.getString("validation_session_token"))
+      assertFalse(envelope.getJSONArray("records").toString().contains(validationToken))
+      val canonical = SdkRequestSigner.canonical("POST", "/v1/events/batch", config.sdkKeyId, "synthetic-key",
+        signedHeaders.getValue("x-openmasu-timestamp-ms").toLong(), signedHeaders.getValue("x-openmasu-nonce"), signedBody.toByteArray())
+      assertEquals(SdkRequestSigner.sign("synthetic-credential", canonical), signedHeaders["x-openmasu-signature"])
       val accepted = diagnostics(sdk)
       assertEquals(OpenMasuDiagnosticResult.ACCEPTED, accepted.lastResult)
       assertEquals(OpenMasuHttpClass.HTTP_2XX, accepted.httpClass)
@@ -971,6 +1046,25 @@ class OpenMasuSdkTest {
     fun resetInstalls(): List<QueuedEvent> = deliveredPayloads.flatten().filter {
       it.eventName == "install" && it.payloadJson.contains("\"install_origin\":\"identifier_reset\"")
     }
+  }
+
+  private class SyntheticValidationTransport : OpenMasuSyntheticValidationTransport {
+    val calls = AtomicInteger()
+    val normalCalls = AtomicInteger()
+    val tokens = java.util.concurrent.CopyOnWriteArrayList<String>()
+    override fun enroll(installationId: String): InstallationCredential {
+      calls.incrementAndGet()
+      return InstallationCredential("synthetic-key", "synthetic-secret")
+    }
+    override fun deliver(credential: InstallationCredential, events: List<QueuedEvent>): Boolean {
+      calls.incrementAndGet(); normalCalls.incrementAndGet(); return true
+    }
+    override fun deliverWithDiagnostics(credential: InstallationCredential, events: List<QueuedEvent>) { deliver(credential, events) }
+    override fun deliverForSyntheticValidation(credential: InstallationCredential, events: List<QueuedEvent>, sessionToken: String) {
+      calls.incrementAndGet(); tokens += sessionToken
+      assertFalse(events.any { it.payloadJson.contains(sessionToken) })
+    }
+    override fun deleteInstallation(credential: InstallationCredential, installationId: String): Boolean { calls.incrementAndGet(); return true }
   }
 
   private class RecordingTransport(private val deliverySucceeds: Boolean) : OpenMasuTransport {

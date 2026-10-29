@@ -242,6 +242,31 @@ payloads or provider response bodies. Diagnostic data is never uploaded by this
 API. See [measurement health](../../docs/measurement-health.md#local-sdk-diagnostics-are-separate)
 for the distinction between local retry state and server receipts.
 
+## Short-lived synthetic validation sessions
+
+After an administrator creates a short-lived session on a disposable synthetic
+deployment, call `client.SetSyntheticValidationSession(token, expiresAtMs, callback)`.
+Wait for the typed `OpenMasuSyntheticValidationResult.Configured` callback before
+deliberately sending synthetic events; callbacks require `PumpCallbacks()`.
+`Configured` confirms a local setting only, not connectivity or successful
+validation. Use `client.ClearSyntheticValidationSession(callback)` to remove it.
+Both methods are local-only and do not enroll, send, enable collection or override
+consent. Initialize the native SDK with collection disabled if no earlier send is
+intended, then enable it only under the host app's existing consent policy.
+
+Tokens are canonical unpadded base64url for 32 bytes (43 characters); expiry is an
+epoch-millisecond timestamp, in the future and at most 30 minutes away. Native
+SDKs validate both. The server restricts sessions to `synthetic_disposable` and
+enforces its own expiry. The optional `IOpenMasuSyntheticValidationPlatform`
+preserves custom-platform compatibility; unsupported platforms fail explicitly,
+and the Editor reports `PlatformUnavailable` rather than success.
+
+Only the HMAC-signed batch envelope carries the token. It never enters queue
+events, diagnostic snapshots or SDK logs. Withdrawal, denial and reset clear the
+setting; expiry resumes ordinary unlabelled batches under unchanged collection
+rules. HTTP 202 is admission only; follow validation receipts in the administrator
+UI. Use synthetic data exclusively and do not log or publish session tokens.
+
 ## Apple conversion updates
 
 On iOS, `OpenMasuClient.RecordAppleConversion` reaches the bundled

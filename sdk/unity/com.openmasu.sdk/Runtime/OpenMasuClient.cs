@@ -49,6 +49,16 @@ namespace OpenMasu.Unity
         void GetDiagnosticsSnapshot(Action<string> completion);
     }
 
+    public interface IOpenMasuSyntheticValidationPlatform
+    {
+        void SetSyntheticValidationSession(string token, long expiresAtMs, Action<string> completion);
+        void ClearSyntheticValidationSession(Action<string> completion);
+    }
+
+    public enum OpenMasuSyntheticValidationResult {
+        Configured, Cleared, InvalidSession, Unsupported, NotInitialized, NativeFailure, PlatformUnavailable,
+    }
+
     public enum OpenMasuDiagnosticOperation { None, Enrollment, Delivery, Deletion, DeletionStatus }
     public enum OpenMasuDiagnosticResult {
         NotAttempted, InFlight, Accepted, HttpResponse, AuthenticationRejected, RateLimited,
@@ -291,6 +301,37 @@ namespace OpenMasu.Unity
         {
             ChangeAdRevenueCollection(enabled);
             platform.SetCollectionEnabled(enabled);
+        }
+        public void SetSyntheticValidationSession(string token, long expiresAtMs, Action<OpenMasuSyntheticValidationResult> completion)
+        {
+            if (completion == null) throw new ArgumentNullException(nameof(completion));
+            SyntheticValidationPlatform().SetSyntheticValidationSession(token, expiresAtMs,
+                value => dispatcher.Post(() => completion(ParseSyntheticValidationResult(value))));
+        }
+        public void ClearSyntheticValidationSession(Action<OpenMasuSyntheticValidationResult> completion)
+        {
+            if (completion == null) throw new ArgumentNullException(nameof(completion));
+            SyntheticValidationPlatform().ClearSyntheticValidationSession(
+                value => dispatcher.Post(() => completion(ParseSyntheticValidationResult(value))));
+        }
+        private IOpenMasuSyntheticValidationPlatform SyntheticValidationPlatform()
+        {
+            var value = platform as IOpenMasuSyntheticValidationPlatform;
+            if (value == null) throw new NotSupportedException("openmasu_synthetic_validation_platform_unavailable");
+            return value;
+        }
+        private static OpenMasuSyntheticValidationResult ParseSyntheticValidationResult(string value)
+        {
+            switch (value)
+            {
+                case "configured": return OpenMasuSyntheticValidationResult.Configured;
+                case "cleared": return OpenMasuSyntheticValidationResult.Cleared;
+                case "invalid_session": return OpenMasuSyntheticValidationResult.InvalidSession;
+                case "unsupported": return OpenMasuSyntheticValidationResult.Unsupported;
+                case "not_initialized": return OpenMasuSyntheticValidationResult.NotInitialized;
+                case "platform_unavailable": return OpenMasuSyntheticValidationResult.PlatformUnavailable;
+                default: return OpenMasuSyntheticValidationResult.NativeFailure;
+            }
         }
         public void ResetInstallationId(Action<bool> completion)
         {

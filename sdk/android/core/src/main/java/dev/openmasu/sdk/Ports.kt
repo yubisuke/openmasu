@@ -66,6 +66,19 @@ interface OpenMasuDiagnosticTransport : OpenMasuTransport {
   fun deliverWithDiagnostics(credential: InstallationCredential, events: List<QueuedEvent>)
 }
 
+/** Explicit opt-in only. The token belongs to the batch envelope, never an event. */
+interface OpenMasuSyntheticValidationTransport : OpenMasuDiagnosticTransport {
+  fun deliverForSyntheticValidation(credential: InstallationCredential, events: List<QueuedEvent>, sessionToken: String)
+}
+
+internal class SyntheticValidationSession(val token: String, val expiresAtMs: Long) {
+  fun isActive(nowMs: Long): Boolean = validToken(token) && expiresAtMs > nowMs && expiresAtMs <= nowMs + MAX_TTL_MS
+  companion object {
+    const val MAX_TTL_MS = 30 * 60 * 1_000L
+    fun validToken(token: String): Boolean = token.matches(Regex("^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$"))
+  }
+}
+
 /** No URL, payload, response body, or underlying exception message is retained. */
 class OpenMasuTransportFailure private constructor(
   val result: OpenMasuDiagnosticResult,

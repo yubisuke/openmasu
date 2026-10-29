@@ -43,9 +43,29 @@ internal class OpenMasuStorage(context: Context) {
 
   fun applyConsentState(state: String) {
     when (state) {
-      "denied", "withdrawn" -> preferences.edit().putBoolean(KEY_CONSENT_BARRIER, true).commit()
+      "denied", "withdrawn" -> preferences.edit().putBoolean(KEY_CONSENT_BARRIER, true).remove("synthetic_validation_session").commit()
       "granted", "not_required" -> preferences.edit().putBoolean(KEY_CONSENT_BARRIER, false).commit()
     }
+  }
+
+  fun syntheticValidationSession(): SyntheticValidationSession? = synchronized(SYNTHETIC_VALIDATION_LOCK) {
+    val encoded = preferences.getString("synthetic_validation_session", null) ?: return@synchronized null
+    val session = runCatching {
+      val value = JSONObject(encoded)
+      SyntheticValidationSession(value.getString("token"), value.getLong("expires_at_ms"))
+    }.getOrNull()
+    if (session == null || !session.isActive(System.currentTimeMillis())) {
+      setSyntheticValidationSession(null)
+      null
+    } else session
+  }
+
+  fun setSyntheticValidationSession(value: SyntheticValidationSession?) = synchronized(SYNTHETIC_VALIDATION_LOCK) {
+    val edit = preferences.edit()
+    if (value == null) edit.remove("synthetic_validation_session")
+    else edit.putString("synthetic_validation_session", JSONObject()
+      .put("token", value.token).put("expires_at_ms", value.expiresAtMs).toString())
+    check(edit.commit()) { "synthetic_validation_storage_failed" }
   }
 
   fun resetInstallPending(): Boolean = preferences.getBoolean(KEY_RESET_INSTALL_PENDING, false)
@@ -125,6 +145,7 @@ internal class OpenMasuStorage(context: Context) {
   }
 
   companion object {
+    private val SYNTHETIC_VALIDATION_LOCK = Any()
     const val SUBTREE = "openmasu"
     const val PREFERENCES = "openmasu_private"
     const val SDK_VERSION = "0.3.0-rc.3"

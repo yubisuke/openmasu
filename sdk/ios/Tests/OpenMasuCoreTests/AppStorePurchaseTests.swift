@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 import XCTest
 @testable import OpenMasuCore
 
@@ -7,6 +8,65 @@ final class AppStorePurchaseTests: XCTestCase {
   private let compact = "syntheticHeader.syntheticPayload.syntheticSignature"
   private let intent = UUID(uuidString: "db636db3-5cdc-4c01-b651-960afc2a7372")!
   private let token = UUID(uuidString: "de78c851-3221-4f1c-b27f-2501e66aefb4")!
+
+  func testSyntheticValidationSessionIsLocalBoundedSignedAndNeverPartOfQueuedEvents() async throws {
+    let recorder = PurchaseRequestRecorder()
+    let (sdk, storage) = try httpSdk { request in
+      let body = try requestBody(request)
+      recorder.append(request, body)
+      return (202, Data("{\"validation_receipt\":{\"synthetic\":true}}".utf8))
+    }
+    let sessionToken = String(repeating: "A", count: 43)
+    let expiry = Int64(Date().timeIntervalSince1970 * 1_000) + 60_000
+    try await sdk.setCollectionEnabled(false)
+    try await sdk.setSyntheticValidationSession(token: sessionToken, expiresAtMs: expiry)
+    XCTAssertEqual(recorder.values().count, 0)
+    XCTAssertEqual(try storage.count(), 0)
+    let snapshot = try await sdk.diagnosticsSnapshot()
+    XCTAssertFalse(String(describing: snapshot).contains(sessionToken))
+    try await sdk.clearSyntheticValidationSession()
+    XCTAssertNil(try storage.syntheticValidationSession())
+    XCTAssertEqual(recorder.values().count, 0)
+    for (candidate, expires) in [("invalid", expiry), (String(repeating: "A", count: 42) + "B", expiry), (sessionToken, Int64(1)), (sessionToken, expiry + 3_600_000)] {
+      do { try await sdk.setSyntheticValidationSession(token: candidate, expiresAtMs: expires); XCTFail("invalid session accepted") }
+      catch OpenMasuSyntheticValidationError.invalidSession { }
+    }
+    try await sdk.setCollectionEnabled(true)
+    try await sdk.startSession()
+    let normal = try XCTUnwrap(JSONSerialization.jsonObject(with: recorder.values().last!.1) as? [String: Any])
+    XCTAssertEqual(Set(normal.keys), Set(["records"]))
+    try await sdk.setSyntheticValidationSession(token: sessionToken, expiresAtMs: expiry)
+    try await sdk.startSession()
+    let taggedRequest = recorder.values().last!
+    let tagged = try XCTUnwrap(JSONSerialization.jsonObject(with: taggedRequest.1) as? [String: Any])
+    XCTAssertEqual(tagged["validation_session_token"] as? String, sessionToken)
+    let records = try JSONSerialization.data(withJSONObject: tagged["records"]!)
+    XCTAssertFalse(String(decoding: records, as: UTF8.self).contains(sessionToken))
+    let canonical = SdkRequestSigner.canonical(method: "POST", path: "/v1/events/batch", sdkKeyId: "sdk-key:synthetic",
+      installationKeyId: "installation-key:synthetic", timestampMs: Int64(taggedRequest.0.value(forHTTPHeaderField: "x-openmasu-timestamp-ms")!)!,
+      nonce: taggedRequest.0.value(forHTTPHeaderField: "x-openmasu-nonce")!, body: taggedRequest.1)
+    XCTAssertEqual(taggedRequest.0.value(forHTTPHeaderField: "x-openmasu-signature"),
+      SdkRequestSigner.sign(secret: "synthetic-installation-secret-32-bytes", canonical: canonical))
+    XCTAssertEqual(try OpenMasuStorage(root: storage.root).syntheticValidationSession()?.token, sessionToken)
+    try storage.setSyntheticValidationSession(SyntheticValidationSession(token: sessionToken, expiresAtMs: 1))
+    try await sdk.startSession()
+    let expired = try XCTUnwrap(JSONSerialization.jsonObject(with: recorder.values().last!.1) as? [String: Any])
+    XCTAssertEqual(Set(expired.keys), Set(["records"]))
+    XCTAssertEqual(try storedValidationSessionCount(storage), 0)
+    try storage.setSyntheticValidationSession(SyntheticValidationSession(token: "invalid", expiresAtMs: expiry))
+    let callsBeforeRead = recorder.values().count
+    XCTAssertNil(try storage.syntheticValidationSession())
+    XCTAssertEqual(try storedValidationSessionCount(storage), 0)
+    XCTAssertEqual(recorder.values().count, callsBeforeRead)
+    try await sdk.setSyntheticValidationSession(token: sessionToken, expiresAtMs: expiry)
+    try await sdk.updateConsent(state: "withdrawn", policyVersion: "synthetic-validation-policy")
+    XCTAssertNil(try storage.syntheticValidationSession())
+    let afterWithdrawal = recorder.values().count
+    try await sdk.startSession()
+    XCTAssertEqual(recorder.values().count, afterWithdrawal)
+    let control = try XCTUnwrap(JSONSerialization.jsonObject(with: recorder.values().last!.1) as? [String: Any])
+    XCTAssertEqual(Set(control.keys), Set(["records"]))
+  }
 
   func testHTTPDiagnosticsDistinguishOffline401429And202WithoutResponseContent() async throws {
     let cases: [(Int, OpenMasuDiagnosticResult, OpenMasuHttpClass)] = [
@@ -298,6 +358,21 @@ final class AppStorePurchaseTests: XCTestCase {
       "/v1/installations", "/v1/events/batch",
     ])
     XCTAssertEqual(requests[0].1, requests[2].1, "the durable receipt is reused across status queries")
+  }
+
+  private func storedValidationSessionCount(_ storage: OpenMasuStorage) throws -> Int {
+    var database: OpaquePointer?
+    guard sqlite3_open_v2(storage.root.appendingPathComponent("queue.sqlite3").path, &database, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
+      throw OpenMasuError.storage("synthetic_test_database_open_failed")
+    }
+    defer { sqlite3_close(database) }
+    var statement: OpaquePointer?
+    guard sqlite3_prepare_v2(database, "SELECT count(*) FROM metadata WHERE key='synthetic_validation_session'", -1, &statement, nil) == SQLITE_OK else {
+      throw OpenMasuError.storage("synthetic_test_query_failed")
+    }
+    defer { sqlite3_finalize(statement) }
+    guard sqlite3_step(statement) == SQLITE_ROW else { throw OpenMasuError.storage("synthetic_test_count_failed") }
+    return Int(sqlite3_column_int(statement, 0))
   }
 
   private func configuration(endpoint: URL = URL(string: "http://127.0.0.1:1")!) -> OpenMasuConfiguration {

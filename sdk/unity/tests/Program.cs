@@ -53,6 +53,7 @@ internal static partial class Program
         Require(OpenMasuiOSPlatform.ActiveCallbackCount == 0, "iOS function-pointer callback leaked");
         ExerciseRevenuePlatformCompatibility();
         ExerciseLocalDiagnostics();
+        ExerciseSyntheticValidation();
         ExerciseProtectedPurchases(mainThread);
         ExerciseAdRevenue();
         ExerciseLevelPlayAdapter();
@@ -345,6 +346,10 @@ internal static partial class Program
             try { legacyClient.GetDiagnosticsSnapshot(_ => { }); }
             catch (NotSupportedException) { unavailable = true; }
             Require(unavailable, "legacy platform was treated as a diagnostics platform");
+            unavailable = false;
+            try { legacyClient.SetSyntheticValidationSession(new string('A', 43), 1, _ => { }); }
+            catch (NotSupportedException) { unavailable = true; }
+            Require(unavailable, "legacy platform silently accepted a synthetic validation session");
         }
 
         using (var platform = new SyntheticRevenuePlatform())
@@ -394,6 +399,25 @@ internal static partial class Program
         }
         Require(typeof(OpenMasuDiagnosticsSnapshot).GetProperties().All(property => property.PropertyType != typeof(string)),
             "diagnostic DTO exposes arbitrary strings");
+    }
+
+    private static void ExerciseSyntheticValidation()
+    {
+        using (var platform = new SyntheticRevenuePlatform())
+        using (var client = new OpenMasuClient(platform, new OpenMasuDispatcher(8)))
+        {
+            OpenMasuSyntheticValidationResult? result = null;
+            client.SetSyntheticValidationSession(new string('A', 43), DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 60_000, value => result = value);
+            Require(result == null, "synthetic session callback bypassed the Unity dispatcher");
+            client.PumpCallbacks();
+            Require(result == OpenMasuSyntheticValidationResult.Configured && platform.SyntheticSettingsCalls == 1 && platform.PurchaseCount == 0,
+                "typed session opt-in failed or started measurement");
+            result = null;
+            client.ClearSyntheticValidationSession(value => result = value);
+            client.PumpCallbacks();
+            Require(result == OpenMasuSyntheticValidationResult.Cleared && platform.SyntheticSettingsCalls == 2,
+                "typed session clear did not reach the native capability");
+        }
     }
 
     private static void ExerciseAppleConversionPlatformCompatibility()
@@ -491,6 +515,11 @@ internal static partial class Program
             while (diagnostics == null && DateTime.UtcNow < diagnosticDeadline) { client.PumpCallbacks(); Thread.Yield(); }
             Require(diagnostics != null && !diagnostics.Available && diagnostics.LastResult == OpenMasuDiagnosticResult.NotAttempted && diagnostics.LastAttemptAtMs == null,
                 "Editor diagnostics fabricated a device send result");
+            OpenMasuSyntheticValidationResult? validation = null;
+            client.SetSyntheticValidationSession(new string('A', 43), DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 60_000, value => validation = value);
+            var validationDeadline = DateTime.UtcNow.AddSeconds(5);
+            while (validation == null && DateTime.UtcNow < validationDeadline) { client.PumpCallbacks(); Thread.Yield(); }
+            Require(validation == OpenMasuSyntheticValidationResult.PlatformUnavailable, "Editor pretended to configure a device validation session");
             bool? conversionUpdated = null;
             client.RecordAppleConversion(
                 "purchase",
@@ -545,10 +574,17 @@ internal static partial class Program
         public void Dispose() => callbacks.Dispose();
     }
 
-    private sealed class SyntheticRevenuePlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform
+    private sealed class SyntheticRevenuePlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuSyntheticValidationPlatform
     {
         public int PurchaseCount { get; private set; }
         public int RefundCount { get; private set; }
+        public int SyntheticSettingsCalls { get; private set; }
+        public void SetSyntheticValidationSession(string token, long expiresAtMs, Action<string> completion)
+        {
+            SyntheticSettingsCalls++;
+            completion(token == new string('A', 43) && expiresAtMs > 0 ? "configured" : "invalid_session");
+        }
+        public void ClearSyntheticValidationSession(Action<string> completion) { SyntheticSettingsCalls++; completion("cleared"); }
         public void Initialize(OpenMasuOptions options) { }
         public void TrackCustomEvent(string eventKey) { }
         public void TrackPurchase(

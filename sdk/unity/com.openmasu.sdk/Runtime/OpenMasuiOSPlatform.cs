@@ -7,7 +7,7 @@ using AOT;
 namespace OpenMasu.Unity
 {
     public sealed class OpenMasuiOSPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform,
-        IOpenMasuAppleConversionPlatform, IOpenMasuAppStorePurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuAdRevenuePlatform, IOpenMasuDiagnosticsPlatform
+        IOpenMasuAppleConversionPlatform, IOpenMasuAppStorePurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuAdRevenuePlatform, IOpenMasuDiagnosticsPlatform, IOpenMasuSyntheticValidationPlatform
     {
         private delegate void NativeCallback(long requestId, IntPtr value);
         private static readonly NativeCallback Callback = OnNativeCallback;
@@ -183,6 +183,28 @@ namespace OpenMasu.Unity
 #endif
         }
 
+        public void SetSyntheticValidationSession(string token, long expiresAtMs, Action<string> completion)
+        {
+            ThrowIfDisposed();
+            var requestId = Register(completion);
+#if UNITY_IOS && !UNITY_EDITOR
+            openmasu_ios_set_synthetic_validation_session(token, expiresAtMs, requestId, Callback);
+#else
+            CompleteSynthetic(requestId, "platform_unavailable");
+#endif
+        }
+
+        public void ClearSyntheticValidationSession(Action<string> completion)
+        {
+            ThrowIfDisposed();
+            var requestId = Register(completion);
+#if UNITY_IOS && !UNITY_EDITOR
+            openmasu_ios_clear_synthetic_validation_session(requestId, Callback);
+#else
+            CompleteSynthetic(requestId, "platform_unavailable");
+#endif
+        }
+
         public void SetCollectionEnabled(bool enabled)
         {
             ThrowIfDisposed();
@@ -335,6 +357,10 @@ namespace OpenMasu.Unity
         private static extern void openmasu_ios_queue_health(long requestId, NativeCallback callback);
         [DllImport("__Internal")]
         private static extern void openmasu_ios_diagnostics(long requestId, NativeCallback callback);
+        [DllImport("__Internal")]
+        private static extern void openmasu_ios_set_synthetic_validation_session(string token, long expiresAtMs, long requestId, NativeCallback callback);
+        [DllImport("__Internal")]
+        private static extern void openmasu_ios_clear_synthetic_validation_session(long requestId, NativeCallback callback);
         [DllImport("__Internal")]
         private static extern void openmasu_ios_set_collection_enabled([MarshalAs(UnmanagedType.I1)] bool enabled);
         [DllImport("__Internal")]
