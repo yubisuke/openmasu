@@ -80,6 +80,11 @@ export function renderOperatorWebhookRegistered(input: { readonly destinationId:
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Operator webhook registered</title><link rel="stylesheet" href="/dashboard/app.css"></head><body><main><h1>Operator webhook registered</h1><p>Copy this signing secret now. It cannot be retrieved again.</p><dl><dt>Destination ID</dt><dd>${escapeHtml(input.destinationId)}</dd><dt>Endpoint</dt><dd>${escapeHtml(input.endpointUrl)}</dd><dt>Signing secret</dt><dd><code>${escapeHtml(input.signingSecret)}</code></dd></dl><p><a href="/dashboard/apps/${encodeURIComponent(input.appId)}">Return to the app dashboard</a></p></main></body></html>`;
 }
 
+export function renderOperatorWebhookSigningKeyIssued(input: { appId: string; destination_id: string; signing_revision: number;
+  previous_valid_until: string; signing_secret: string }): string {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Webhook signing key issued</title><link rel="stylesheet" href="/dashboard/app.css"></head><body><main><h1>Webhook signing key issued</h1><p>Copy this signing secret now; it cannot be retrieved again. Configure the receiver to accept both revisions during overlap. This page does not confirm receiver installation or receipt.</p><dl><dt>Destination ID</dt><dd>${escapeHtml(input.destination_id)}</dd><dt>Signing revision</dt><dd>${input.signing_revision}</dd><dt>Previous revision valid until (exclusive)</dt><dd>${escapeHtml(input.previous_valid_until)}</dd><dt>Signing secret</dt><dd><code>${escapeHtml(input.signing_secret)}</code></dd></dl><p>Subject, event and transaction references remain unchanged. Pending deliveries retain their original signing revision.</p><p><a href="/dashboard/apps/${encodeURIComponent(input.appId)}">Return to the app dashboard</a></p></main></body></html>`;
+}
+
 export function renderOperatorWebhookOperationFailed(input: { readonly reason: string }): string {
   return `<!doctype html><html lang="en"><body><h1>Operator webhook operation failed</h1><p>${escapeHtml(input.reason)}</p></body></html>`;
 }

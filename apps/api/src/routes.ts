@@ -58,6 +58,8 @@ export type RouteHandler =
   | "admin_operator_webhooks_list"
   | "admin_operator_webhooks_register"
   | "admin_operator_webhooks_disable"
+  | "admin_operator_webhooks_rotate"
+  | "admin_operator_webhooks_retire"
   | "admin_operator_bulk_exports_list"
   | "admin_operator_bulk_exports_register"
   | "admin_operator_bulk_exports_disable"
@@ -140,6 +142,8 @@ export type RouteHandler =
   | "dashboard_server_keys_retire"
   | "dashboard_operator_webhooks_register"
   | "dashboard_operator_webhooks_disable"
+  | "dashboard_operator_webhooks_rotate"
+  | "dashboard_operator_webhooks_retire"
   | "dashboard_operator_bulk_exports_register"
   | "dashboard_operator_bulk_exports_disable"
   | "dashboard_link_domain"
@@ -225,6 +229,8 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "admin_operator_webhooks_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-webhooks$/, auth: "admin_bearer", mutates: false, capability: "administer" },
   { handler: "admin_operator_webhooks_register", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-webhooks$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_operator_webhooks_disable", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-webhooks\/[^/]+\/disable$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "admin_operator_webhooks_rotate", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-webhooks\/[^/]+\/signing-keys$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "admin_operator_webhooks_retire", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-webhooks\/[^/]+\/signing-keys\/retire$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_operator_bulk_exports_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-bulk-exports$/, auth: "admin_bearer", mutates: false, capability: "administer" },
   { handler: "admin_operator_bulk_exports_register", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-bulk-exports$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_operator_bulk_exports_disable", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-bulk-exports\/[^/]+\/disable$/, auth: "admin_bearer", mutates: true, capability: "administer" },
@@ -299,6 +305,8 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_server_keys_retire", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/server-keys\/[^/]+\/retire$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_operator_webhooks_register", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/operator-webhooks$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_operator_webhooks_disable", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/operator-webhooks\/[^/]+\/disable$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_operator_webhooks_rotate", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/operator-webhooks\/[^/]+\/signing-keys$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_operator_webhooks_retire", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/operator-webhooks\/[^/]+\/signing-keys\/retire$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_operator_bulk_exports_register", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/operator-bulk-exports$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_operator_bulk_exports_disable", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/operator-bulk-exports\/[^/]+\/disable$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_link_domain", method: "POST", pattern: /^\/dashboard\/link-domain$/, auth: "dashboard_session", mutates: true, capability: "administer", tenantWideOnly: true },

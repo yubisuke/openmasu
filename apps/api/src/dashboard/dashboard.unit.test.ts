@@ -15,6 +15,7 @@ import { comparisonDigest } from "../cohort-comparison.js";
 import { buildRetentionMatrices } from "./retention-matrix.js";
 import { parseCsv } from "@openmasu/runtime/import-normalization";
 import { standardRetentionMetricDefinitions } from "@openmasu/contracts/definitions";
+import { renderOperatorWebhookSigningKeyIssued } from "./action-pages.js";
 
 function metric(overrides: Partial<MetricReportRow> = {}): MetricReportRow {
   return {
@@ -403,6 +404,10 @@ describe("M3 zero-JavaScript dashboard", () => {
         destination_id: "webhook:one", endpoint_url: "https://events.example.test/openmasu",
         events: ["custom_event"], status: "active" as const,
         created_at: "2026-08-20T00:00:00.000Z", status_changed_at: "2026-08-20T00:00:00.000Z",
+        signing_revision: 2, signing_revisions: [
+          { signing_revision: 2, state: "current" as const, created_at: "2026-08-21T00:00:00.000Z", valid_until: null, retired_at: null },
+          { signing_revision: 1, state: "expired" as const, created_at: "2026-08-20T00:00:00.000Z", valid_until: "2026-08-21T01:00:00.000Z", retired_at: null },
+        ],
       }],
       csrfToken: "synthetic-csrf",
     };
@@ -420,6 +425,17 @@ describe("M3 zero-JavaScript dashboard", () => {
     assert.match(admin, /Server-to-server keys/);
     assert.match(admin, /postback:first-party/);
     assert.match(admin, /Operator event webhooks/);
+    assert.match(admin, /Rotate signing key/);
+    assert.match(admin, /Retire signing revision 1/);
+    assert.doesNotMatch(admin, /Retire signing revision 2/);
+    assert.match(admin, /name="expected_revision" value="2"/);
+    assert.match(admin, /name="overlap_seconds" value="3600" min="0" max="86400"/);
+    assert.match(admin, /signing-keys\/retire/);
+    assert.doesNotMatch(operator, /Rotate signing key|Retire signing revision/);
+    const overlapping = renderDashboard(buildDashboardView({ ...base, canAdminister: true,
+      operatorWebhooks: base.operatorWebhooks.map(d => ({ ...d, signing_revisions: d.signing_revisions.map(k => k.signing_revision === 1 ? { ...k, state: "overlap" as const } : k) })) }));
+    assert.doesNotMatch(overlapping, /Rotate signing key/);
+    assert.match(overlapping, /Retire signing revision 1/);
     assert.match(admin, /name="purpose" value="comparison_notifications"/);
     assert.doesNotMatch(operator, /name="purpose" value="comparison_notifications"/);
     assert.match(admin, /events\.example\.test/);
@@ -433,6 +449,10 @@ describe("M3 zero-JavaScript dashboard", () => {
     assert.doesNotMatch(admin, />Activate rule bundle</);
     assert.equal(admin.includes("<script"), false);
     assert.equal(/\son[a-z]+\s*=/i.test(admin), false);
+    const issued = renderOperatorWebhookSigningKeyIssued({ appId: "app-one", destination_id: "webhook:one", signing_revision: 2,
+      previous_valid_until: "2026-08-21T01:00:00.000Z", signing_secret: "synthetic<secret>" });
+    assert.match(issued, /synthetic&lt;secret&gt;/); assert.match(issued, /cannot be retrieved again/);
+    assert.doesNotMatch(issued, /<script|javascript:|secret_ref/);
   });
 
   it("WO18 never renders SDK secrets in key metadata", () => {

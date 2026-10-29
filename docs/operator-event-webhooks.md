@@ -100,16 +100,78 @@ Content-Type: application/json
 }
 ```
 
-Registration returns the signing secret once. The list route never returns the
-secret or its protected reference:
+Registration returns `signing_revision: 1` and the signing secret once. New
+destinations use separate random keys for stable references and request signing.
+The list route returns the current revision and the latest 50 revision metadata
+entries (state, creation, overlap deadline and retirement time), never a secret
+or its protected reference:
 
 ```http
 GET /v1/admin/apps/app-synthetic/operator-webhooks
 Authorization: Bearer <tenant-admin-key>
 ```
 
-The endpoint and event set are immutable. To rotate a receiver or secret,
-register a new destination, update the receiver, and disable the old one:
+The endpoint and event set are immutable. To change the receiver or event set,
+register a new destination and disable the old one. To rotate only its signing
+secret **without changing subject/event/transaction references**, use the same
+destination:
+
+```http
+POST /v1/admin/apps/app-synthetic/operator-webhooks/<destination-id>/signing-keys
+Authorization: Bearer <tenant-admin-key>
+Content-Type: application/json
+
+{"expected_revision": 1, "overlap_seconds": 3600}
+```
+
+This returns the successor `signing_revision`, `created_at`,
+`previous_valid_until` and `signing_secret` once. Configure the receiver with the
+returned key immediately and accept the prior revision during overlap. New
+deliveries use the successor; already queued deliveries and retries keep their
+original revision, body, delivery ID and signature. The endpoint does not verify
+that the receiver installed the key. If the one-time response is lost, the key
+cannot be retrieved again; inspect metadata and explicitly retire/rotate again
+when permitted rather than assuming it was delivered.
+
+`expected_revision` must be the current positive integer revision. A stale
+revision returns `409` without another key or history entry. Overlap defaults to
+3,600 seconds and must be an integer from 0 through 86,400 (24 hours). The deadline
+is exclusive. Only the current and immediately previous signing keys can remain
+usable: a further rotation is rejected while the previous key overlaps. Wait for
+its deadline or explicitly retire it first:
+
+```http
+POST /v1/admin/apps/app-synthetic/operator-webhooks/<destination-id>/signing-keys/retire
+Authorization: Bearer <tenant-admin-key>
+Content-Type: application/json
+
+{"signing_revision": 1, "expected_revision": 2}
+```
+
+Retirement is final; it cannot retire the current key. Repeating retirement of an
+already retired revision is harmless and returns its original retirement time.
+Retirement suppresses remaining attempts bound to that revision and purges their
+protected bodies. At expiry, the worker refuses old-key transmission rather than
+silently signing an old request with the new key. Retrying the rotation operation
+cannot overwrite an existing revision. Concurrent lifecycle operations and
+dispatch use the same destination lock; a send already authorized under that
+lock may complete before retirement is acknowledged.
+
+The application dashboard exposes the same rotate/retire forms only to
+administrators. The list/history is metadata-only; POST success is the only
+one-time secret display. Registration, rotation and retirement are audited without
+secret values or receiver response bodies.
+
+Existing destinations migrate their original signing key to revision 1 and
+retain the same bytes as their immutable reference-HMAC key. **Retiring this
+legacy signing revision revokes signing authority but does not erase that shared
+reference key**: it remains protected until the whole destination is disabled.
+This preserves previously issued references. New destinations have independent
+reference keys; retired independent signing keys are purged. Expired-key use is
+blocked even before explicit retirement; retire expired revisions to purge their
+independent protected keys.
+
+To stop the destination completely:
 
 ```http
 POST /v1/admin/apps/app-synthetic/operator-webhooks/<destination-id>/disable
@@ -119,9 +181,11 @@ Content-Type: application/json
 {}
 ```
 
-Disabling appends lifecycle state, suppresses pending attempts, and purges the
-destination secret plus pending request bodies. Registration and disablement
-are audited without logging the secret or request body.
+Disabling appends lifecycle state, suppresses pending attempts, and purges every
+signing revision, the immutable reference key, and pending request bodies. It
+cannot be re-enabled. Repeating disable does not append another lifecycle state;
+it permits cleanup to be retried after an interrupted post-commit purge.
+Disablement is audited without logging the secret or request body.
 
 ## Verify a request
 
@@ -132,16 +196,19 @@ Content-Type: application/json
 User-Agent: OpenMasu-Operator-Webhook/1
 X-OpenMasu-Delivery-Id: <delivery UUID>
 X-OpenMasu-Attempt: <positive integer>
+X-OpenMasu-Key-Revision: <positive signing revision>
 X-OpenMasu-Signature: sha256=<lowercase hex HMAC>
 ```
 
 Compute HMAC-SHA-256 over the exact received body bytes using the UTF-8 bytes
-of the one-time signing secret. Compare the expected and received signature in
+of that delivery's revision-specific one-time signing secret. Select only a
+locally configured, currently accepted revision; the header is a key selector,
+not proof of authenticity. Compare the expected and received signature in
 constant time before parsing or acting on the JSON. Do not reconstruct or
 re-serialize JSON before verification.
 
-The same `delivery_id`, body bytes, and signature are used for every retry;
-only `X-OpenMasu-Attempt` changes. Receivers must use `delivery_id` as an
+The same `delivery_id`, body bytes, signing revision and signature are used for
+every allowed retry; only `X-OpenMasu-Attempt` changes. Receivers must use `delivery_id` as an
 idempotency key. A `2xx` response succeeds. `408`, `425`, `429`, `5xx`, DNS
 unavailability, transport failure, and timeout retry with bounded exponential
 delay. Redirects and other `4xx` responses fail terminally. The reference

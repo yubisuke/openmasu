@@ -6,6 +6,7 @@ import { acquirePrivacyTenantXactFence } from "./privacy-fence.js";
 import { comparisonPrivacyEpoch } from "./fixed-comparison.js";
 import { operatorWebhookReference } from "./webhook-security.js";
 import type { PayloadStore } from "./payload-store.js";
+import { webhookSigningRevision } from "./operator-webhook-signing.js";
 
 export const comparisonNotificationStates = ["within_threshold", "threshold_exceeded", "missing_input", "incomparable", "unknown"] as const;
 export type ComparisonNotificationState = typeof comparisonNotificationStates[number];
@@ -115,6 +116,8 @@ export async function discoverComparisonNotifications(pool: Pool, payloadStore: 
           [tenantId,scope.appId,row.comparison_id,row.state,now.toISOString()]);
         const transition = row.muted ? undefined : notificationTransition(row.state,row.last_enqueued_state,row.last_enqueued_at,now,row.cooldown_seconds);
         if (!transition) return false;
+        const signing = await webhookSigningRevision(client, scope, row.destination_id, undefined, now);
+        if (!signing) return false;
         const deliveryId = uuidV7(now.valueOf()), sequence = (BigInt(row.sequence)+1n).toString();
         const secret = await payloadStore.read(row.secret_ref);
         const body = comparisonNotificationBody({ deliveryId,appId:scope.appId,comparisonId:row.comparison_id,runId:row.run_id,
@@ -122,10 +125,10 @@ export async function discoverComparisonNotifications(pool: Pool, payloadStore: 
         written = await payloadStore.write({ ...scope,objectId:`comparison-notification-${deliveryId}` },body);
         await client.query(`INSERT INTO ephemeral.operator_webhook_deliveries(delivery_id,tenant_id,app_id,destination_id,event_name,
           request_ref,request_digest,state,attempts,next_attempt_at,created_at,updated_at,
-          comparison_id,comparison_run_id,comparison_epoch,comparison_state,comparison_sequence)
-          VALUES ($1,$2,$3,$4,'comparison_state_changed',$5,$6,'queued',0,$7,$13,$14,$8,$9,$10,$11,$12)`,
+          comparison_id,comparison_run_id,comparison_epoch,comparison_state,comparison_sequence,signing_revision)
+          VALUES ($1,$2,$3,$4,'comparison_state_changed',$5,$6,'queued',0,$7,$13,$14,$8,$9,$10,$11,$12,$15)`,
           [deliveryId,tenantId,scope.appId,row.destination_id,written,createHash("sha256").update(body).digest("hex"),now.toISOString(),row.comparison_id,row.run_id,row.privacy_epoch,row.state,sequence,
-            now.toISOString(),now.toISOString()]);
+            now.toISOString(),now.toISOString(),signing.signing_revision]);
         await client.query(`UPDATE control.comparison_notifications SET last_enqueued_state=$4,last_enqueued_at=$5,sequence=$6
           WHERE tenant_id=$1 AND app_id=$2 AND comparison_id=$3`,[tenantId,scope.appId,row.comparison_id,row.state,now.toISOString(),sequence]);
         return true;
