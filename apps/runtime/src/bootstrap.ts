@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { costRefreshEnabled } from "./cost-refresh.js";
+import { configurationBootstrapCommand, configurationJournalPath } from "./deployment-config.js";
 
 function secret(bytes = 32): string {
   return randomBytes(bytes).toString("base64url");
@@ -106,9 +107,16 @@ const appEnvPath = join(runtimeSecretRoot, "app", "runtime.env");
 const seedEnvPath = join(runtimeSecretRoot, "seed", "runtime.env");
 const postgresPasswordPath = join(runtimeSecretRoot, "postgres", "password");
 const repositoryEnvPath = join(repositoryRoot, ".env");
+const configurationPaths = { app: appEnvPath, repository: repositoryEnvPath };
+if (process.argv[2] === "config") {
+  await configurationBootstrapCommand(configurationPaths);
+  process.exit(process.exitCode ?? 0);
+}
+if (existsSync(configurationJournalPath(configurationPaths))) throw new Error("configuration_recovery_required");
 const existing = readEnvironment(repositoryEnvPath);
 const runtimePaths = [migrationEnvPath, appEnvPath, seedEnvPath, postgresPasswordPath];
 const runtimeExists = runtimePaths.every(existsSync);
+const protectedSettings = runtimeExists ? readEnvironment(appEnvPath) : {};
 if (!runtimeExists && runtimePaths.some(existsSync)) {
   throw new Error(`incomplete runtime secret set: ${runtimeSecretRoot}`);
 }
@@ -134,8 +142,8 @@ for (const purpose of [persistedPurpose, existing.OPENMASU_DEPLOYMENT_PURPOSE,
 }
 const removedSeedSettings = deploymentPurpose === "persistent"
   ? ["OPENMASU_SEED_DATABASE_PASSWORD", "OPENMASU_SEED_DATABASE_URL"] : [];
-const publicBaseUrl = process.env.OPENMASU_PUBLIC_BASE_URL ?? "http://localhost:8080";
-const redirectorBaseUrl = process.env.OPENMASU_REDIRECTOR_BASE_URL ?? "http://localhost:8090";
+const publicBaseUrl = protectedSettings.OPENMASU_PUBLIC_BASE_URL ?? process.env.OPENMASU_PUBLIC_BASE_URL ?? "http://localhost:8080";
+const redirectorBaseUrl = protectedSettings.OPENMASU_REDIRECTOR_BASE_URL ?? process.env.OPENMASU_REDIRECTOR_BASE_URL ?? "http://localhost:8090";
 const databaseHost = process.env.OPENMASU_DATABASE_HOST ?? "localhost";
 const databasePort = process.env.OPENMASU_DATABASE_PORT ?? "5432";
 const databaseName = process.env.OPENMASU_DATABASE_NAME ?? "openmasu";
@@ -143,14 +151,14 @@ const defaultTenantId = process.env.OPENMASU_MAX_TENANT_ID ?? "tenant-local";
 const defaultAppId = process.env.OPENMASU_MAX_APP_ID ?? "app-local";
 const workerConcurrency = boundedIntegerSetting(
   "OPENMASU_WORKER_CONCURRENCY",
-  process.env.OPENMASU_WORKER_CONCURRENCY ?? existing.OPENMASU_WORKER_CONCURRENCY,
+  protectedSettings.OPENMASU_WORKER_CONCURRENCY ?? process.env.OPENMASU_WORKER_CONCURRENCY ?? existing.OPENMASU_WORKER_CONCURRENCY,
   4,
   1,
   16,
 );
 const workerShutdownTimeout = boundedIntegerSetting(
   "OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS",
-  process.env.OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS
+  protectedSettings.OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS ?? process.env.OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS
     ?? existing.OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS,
   30_000,
   1_000,
@@ -158,21 +166,21 @@ const workerShutdownTimeout = boundedIntegerSetting(
 );
 const sdkInboxBatchLimit = boundedIntegerSetting(
   "OPENMASU_SDK_INBOX_BATCH_LIMIT",
-  process.env.OPENMASU_SDK_INBOX_BATCH_LIMIT ?? existing.OPENMASU_SDK_INBOX_BATCH_LIMIT,
+  protectedSettings.OPENMASU_SDK_INBOX_BATCH_LIMIT ?? process.env.OPENMASU_SDK_INBOX_BATCH_LIMIT ?? existing.OPENMASU_SDK_INBOX_BATCH_LIMIT,
   100,
   1,
   1_000,
 );
 const maxInboxBatchLimit = boundedIntegerSetting(
   "OPENMASU_MAX_INBOX_BATCH_LIMIT",
-  process.env.OPENMASU_MAX_INBOX_BATCH_LIMIT ?? existing.OPENMASU_MAX_INBOX_BATCH_LIMIT,
+  protectedSettings.OPENMASU_MAX_INBOX_BATCH_LIMIT ?? process.env.OPENMASU_MAX_INBOX_BATCH_LIMIT ?? existing.OPENMASU_MAX_INBOX_BATCH_LIMIT,
   100,
   1,
   1_000,
 );
 const adServicesProviderTimeout = boundedIntegerSetting(
   "OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS",
-  process.env.OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS
+  protectedSettings.OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS ?? process.env.OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS
     ?? existing.OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS,
   30_000,
   10,
@@ -180,7 +188,7 @@ const adServicesProviderTimeout = boundedIntegerSetting(
 );
 const adServicesClaimLease = boundedIntegerSetting(
   "OPENMASU_ADSERVICES_CLAIM_LEASE_MS",
-  process.env.OPENMASU_ADSERVICES_CLAIM_LEASE_MS
+  protectedSettings.OPENMASU_ADSERVICES_CLAIM_LEASE_MS ?? process.env.OPENMASU_ADSERVICES_CLAIM_LEASE_MS
     ?? existing.OPENMASU_ADSERVICES_CLAIM_LEASE_MS,
   300_000,
   1_000,

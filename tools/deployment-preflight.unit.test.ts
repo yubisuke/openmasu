@@ -6,6 +6,11 @@ import { deploymentPreflight, deploymentSecretNames, parsePrivateRuntimeEnvironm
 const version = deploymentReleaseVersion();
 const config = { format: "openmasu-single-host-v1", release_tag: `v${version}`, compose_project: "openmasu-service", api_origin: "https://metrics.example.invalid", redirector_origin: "https://links.example.invalid", destination_origins: ["https://app.example.invalid"], tls_termination: "operator_reverse_proxy", certificate_kind: "public_ca" };
 const env = { OPENMASU_PUBLIC_BASE_URL: config.api_origin, OPENMASU_REDIRECTOR_BASE_URL: config.redirector_origin, OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST: config.destination_origins.join(","), ...Object.fromEntries(deploymentSecretNames.map((name, index) => [name, `${index}a`.repeat(22)])) };
+it("requires seed credentials only for an explicitly disposable deployment", () => {
+  assert.equal(deploymentPreflight(config, { ...env, OPENMASU_DEPLOYMENT_PURPOSE: "persistent" }, version).status, "ready");
+  assert.ok(deploymentPreflight(config, { ...env, OPENMASU_DEPLOYMENT_PURPOSE: "synthetic_disposable" }, version).reasons.includes("required_secret_missing"));
+  assert.equal(deploymentPreflight(config, { ...env, OPENMASU_DEPLOYMENT_PURPOSE: "synthetic_disposable", OPENMASU_SEED_DATABASE_PASSWORD: "0123456789abcdef".repeat(3) }, version).status, "ready");
+});
 it("single-host preflight accepts declared HTTPS configuration but never certifies TLS or production", () => {
   const result = deploymentPreflight(config, env, version);
   assert.equal(result.status, "ready"); assert.equal(result.tls_verified, false); assert.equal(result.production_verified, false);

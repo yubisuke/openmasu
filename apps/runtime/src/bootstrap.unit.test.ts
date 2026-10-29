@@ -357,7 +357,7 @@ describe("runtime bootstrap environment", () => {
     assert.match(boundedInboxEnvironment, /^OPENMASU_ADSERVICES_CLAIM_LEASE_MS=90000$/m);
   });
 
-  it("reconciles non-secret worker controls in an existing runtime environment", () => {
+  it("preserves protected worker controls when inherited or checkout settings change without apply", () => {
     const appEnvironment = generatedAppEnvironment({
       workerConcurrency: "7",
       reconciledWorkerConcurrency: "1",
@@ -366,17 +366,17 @@ describe("runtime bootstrap environment", () => {
       reconciledAdServicesProviderTimeout: "12000",
       reconciledAdServicesClaimLease: "90000",
     });
-    assert.match(appEnvironment, /^OPENMASU_WORKER_CONCURRENCY=1$/m);
-    assert.doesNotMatch(appEnvironment, /^OPENMASU_WORKER_CONCURRENCY=7$/m);
+    assert.match(appEnvironment, /^OPENMASU_WORKER_CONCURRENCY=7$/m);
+    assert.doesNotMatch(appEnvironment, /^OPENMASU_WORKER_CONCURRENCY=1$/m);
     assert.match(appEnvironment, /^OPENMASU_ADMIN_KEY=[A-Za-z0-9_-]+$/m);
     assert.equal(appEnvironment.match(/^OPENMASU_WORKER_CONCURRENCY=/gm)?.length, 1);
-    assert.match(appEnvironment, /^OPENMASU_SDK_INBOX_BATCH_LIMIT=2$/m);
+    assert.match(appEnvironment, /^OPENMASU_SDK_INBOX_BATCH_LIMIT=100$/m);
     assert.equal(appEnvironment.match(/^OPENMASU_SDK_INBOX_BATCH_LIMIT=/gm)?.length, 1);
-    assert.match(appEnvironment, /^OPENMASU_MAX_INBOX_BATCH_LIMIT=3$/m);
+    assert.match(appEnvironment, /^OPENMASU_MAX_INBOX_BATCH_LIMIT=100$/m);
     assert.equal(appEnvironment.match(/^OPENMASU_MAX_INBOX_BATCH_LIMIT=/gm)?.length, 1);
-    assert.match(appEnvironment, /^OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS=12000$/m);
+    assert.match(appEnvironment, /^OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS=30000$/m);
     assert.equal(appEnvironment.match(/^OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS=/gm)?.length, 1);
-    assert.match(appEnvironment, /^OPENMASU_ADSERVICES_CLAIM_LEASE_MS=90000$/m);
+    assert.match(appEnvironment, /^OPENMASU_ADSERVICES_CLAIM_LEASE_MS=300000$/m);
     assert.equal(appEnvironment.match(/^OPENMASU_ADSERVICES_CLAIM_LEASE_MS=/gm)?.length, 1);
   });
 
