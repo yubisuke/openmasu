@@ -6,8 +6,9 @@ import { ENGAGEMENT_METRIC_NAMES, M1B_METRIC_DEFINITIONS, REFERENCE_AD_REVENUE_M
 import { validateScheduledMetricDefinition as validMetricDefinition, type ScheduledMetricDefinition } from "@openmasu/contracts/validation";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
-import { observedConversionKeys, expandConversionScheduleRequest, conversionCalculationKey } from "./custom-conversion-schedules.js";
+import { expandConversionScheduleRequest, conversionCalculationKey } from "./custom-conversion-schedules.js";
 import { expandRecommendedMetricSchedule, recommendedSchedulePreviewDigest } from "./recommended-metric-schedules.js";
+import { lockEventCatalog, rejectDeprecatedConversionKeys, selectableConversionKeys } from "./event-catalog.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -306,8 +307,9 @@ export async function registerMetricSchedule(input: Readonly<{
 }>): Promise<MetricScheduleRecord> {
   const now = input.now ?? new Date();
   return withTenant(input.pool, input.identity.tenantId, async client => {
+    await lockEventCatalog(client, input.identity);
     if (input.body.recommended_profile !== undefined) {
-      const body = expandRecommendedMetricSchedule(input.body, await observedConversionKeys(client, input.identity));
+      const body = expandRecommendedMetricSchedule(input.body, await selectableConversionKeys(client, input.identity, input.body.custom_conversion_event_keys ?? []));
       const normalized = normalizeMetricScheduleRequest(body, now);
       if (input.body.preview_digest !== recommendedSchedulePreviewDigest(normalized)) {
         throw new Error("metric_schedule_preview_stale");
@@ -315,19 +317,19 @@ export async function registerMetricSchedule(input: Readonly<{
       return saveMetricScheduleWithClient(client, input.identity, normalized, now);
     }
     const body = input.body.custom_conversion_event_keys !== undefined
-      ? expandConversionScheduleRequest(input.body, await observedConversionKeys(client, input.identity)) : input.body;
+      ? expandConversionScheduleRequest(input.body, await selectableConversionKeys(client, input.identity, input.body.custom_conversion_event_keys)) : input.body;
     return saveMetricScheduleWithClient(client, input.identity, normalizeMetricScheduleRequest(body, now), now);
   });
 }
 
 export function listCustomConversionKeys(pool: Pool, identity: AppAdminIdentity): Promise<string[]> {
-  return withTenant(pool, identity.tenantId, client => observedConversionKeys(client, identity));
+  return withTenant(pool, identity.tenantId, client => selectableConversionKeys(client, identity));
 }
 
 export async function previewRecommendedMetricSchedule(pool: Pool, identity: AppAdminIdentity, body: JsonObject,
   now = new Date()) {
   return withTenant(pool, identity.tenantId, async client => {
-    const expanded = expandRecommendedMetricSchedule(body, await observedConversionKeys(client, identity));
+    const expanded = expandRecommendedMetricSchedule(body, await selectableConversionKeys(client, identity, body.custom_conversion_event_keys ?? []));
     const normalized = normalizeMetricScheduleRequest(expanded, now);
     return { ...normalized, preview_digest: recommendedSchedulePreviewDigest(normalized),
       selection: { ...body, start_date: normalized.startDate } };
@@ -345,6 +347,9 @@ export async function saveMetricScheduleWithClient(
   replacement?: MetricScheduleReplacement,
 ): Promise<MetricScheduleRecord> {
   const createdAt = now.toISOString();
+  await lockEventCatalog(client, identity);
+  await rejectDeprecatedConversionKeys(client, identity, normalized.definition.metric_definitions
+    .flatMap(definition => typeof definition.conversion_event_key === "string" ? [definition.conversion_event_key] : []));
   const scheduleId = `metric-schedule:${uuidV7(now.valueOf())}`;
     await client.query(
       "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",

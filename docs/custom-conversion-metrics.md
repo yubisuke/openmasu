@@ -15,13 +15,14 @@ nine days, and an optional start cohort date. The ordinary durable worker then
 calculates each selected key's count and rate over the app-wide install cohort.
 Registration does not execute a run synchronously.
 
-The closed selection lists the first 100 available observed keys, in key order,
-for the authorized tenant/app; a request may select at most 50. It reads only
-accepted, currently available custom-event facts, not payloads or installation
-IDs. A key must already have been observed in this bounded selection. Unknown
-keys, duplicate selections, identifying scope fields and lag below nine days
-are rejected. If a key has not arrived yet or lies outside this convenience
-list, use an explicit advanced definition rather than pretending it was observed.
+The schedule page lists up to 100 selectable keys for the authorized tenant/app;
+a request may select at most 50. Use its **Event catalog** link to search by exact
+key prefix and page through all keys. Each catalog page also offers the same
+outcome and recommended-set forms. Registration looks up the selected keys
+directly, independently of the first page. Planned or active catalog keys are
+selectable before receipt, as are observed keys without catalog metadata.
+Deprecated keys are rejected even if observed. Unknown keys, duplicate selections,
+identifying scope fields and lag below nine days are rejected.
 
 The existing API exposes the same list in `custom_conversion_event_keys` from
 `GET /v1/admin/apps/<app-id>/metric-schedules`. Post a selection to the same
@@ -40,7 +41,54 @@ Do not combine this convenience request with raw `metric_definitions`,
 `evaluations` or an FX policy. The server expands it into the ordinary immutable
 schedule definition, digest, checkpoints and correction pathway. Its required
 FX-envelope identity is explicitly unused for counts/rates; it is not a live
-USD quote or a money-conversion policy. There is no new table or scheduler.
+USD quote or a money-conversion policy. It reuses the existing scheduler and
+calculation tables; catalog documentation is stored separately.
+
+## Plan and maintain the event catalog
+
+Open `/dashboard/apps/<app-id>/event-catalog` with an admin-role session. For each
+exact event key, record its display name, meaning, firing condition and lifecycle:
+`planned`, `active` or `deprecated`. Lifecycle is an operator declaration, not an
+automatic consequence of receiving an event. The lowercase key must match
+`^[a-z][a-z0-9_]{0,63}$`; uppercase keys are rejected rather than normalized.
+The reserved platform conversion-value event is not eligible. There are no aliases.
+
+The API uses `GET` and `POST /v1/admin/apps/<app-id>/event-catalog`. A synthetic
+create request is:
+
+```json
+{
+  "event_key": "tutorial_complete",
+  "expected_revision": 0,
+  "display_name": "Synthetic tutorial completion",
+  "meaning": "The synthetic tutorial has finished",
+  "firing_condition": "After the synthetic completion action is confirmed",
+  "lifecycle": "planned"
+}
+```
+
+Edits submit the complete metadata with the current `expected_revision`.
+Successful writes append a revision; stale or competing edits return 409 and
+must reload. Deprecation is a new revision, not deletion. Display names and other
+documentation never enter metric definitions, digests or saved comparison
+context. Changing a label does not rename a key or rewrite a saved run. Existing
+schedules continue unchanged after deprecation; explicitly disable them in the
+schedule controls if they should stop. New schedule registration, including
+recommended-set confirmation and advanced definitions, rejects a deprecated key.
+
+Listing accepts `prefix`, `after` (the previous page's `next_cursor`) and `limit`
+(default 50, maximum 100). Ordering is exact key order, with no offset or aliases.
+Each row has separate `observation_state`, `observed_count` and `last_received_at`.
+Counts are retained accepted logical events with available evidence, not distinct
+users, cohort converters or complete source delivery. Unobserved planned keys
+return `not_observed` with both observation values `null`, never a claimed zero.
+The documentation fields are bounded to 120 characters for the display name and
+1,000 each for meaning and firing condition. Keep personal data out of them.
+
+The catalog links to the app's synthetic SDK receipt validation page. That tool
+is available only in a disposable synthetic deployment, not a persistent
+database. Planning an outcome, registering a schedule or reading a computed zero
+is not evidence that the instrumentation works. Confirm receipt separately.
 
 For typed advanced setup, `keyedCustomConversionMetricDefinitions(eventKey)`
 from `@openmasu/contracts/definitions` returns
@@ -126,7 +174,8 @@ ignoring the key. Prior goldens and saved runs are not rewritten.
 Per-key names and the convenience schedule are source-only additions. They do
 not alter the v0.4.14 arithmetic or extend the event/metric wire schema. Contract
 patch 0.4.23, URNs, wire/package 0.4.0 and all reviewed golden artifacts stay
-unchanged; no new golden or migration entry is needed for this naming helper.
+unchanged; no new golden or contract migration entry is needed. The event catalog
+uses a separate additive runtime database migration, not a contract change.
 
 This is a synthetic implementation gate, not evidence of real event delivery,
 SDK deployment or a provider's conversion definition. No arbitrary attributes,

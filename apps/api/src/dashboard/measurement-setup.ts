@@ -38,7 +38,8 @@ export function renderMeasurementSetup(appId: string, csrf: string, keys: readon
     <label>Lag days <input type="number" name="lag_days" min="9" max="365" value="9" required></label>
     <label>Start cohort date (optional) <input type="date" name="start_date"></label>
     <label><input type="checkbox" name="include_retention" value="true" checked> Include D1 and D7 session-start retention</label>
-    ${keys.length ? `<fieldset><legend>Optional observed custom outcomes (up to 20)</legend>${keys.map(key => `<label><input type="checkbox" name="custom_conversion_event_keys" value="${escape(key)}">${escape(key)}</label>`).join("")}</fieldset>` : "<p>Optional custom outcomes become selectable after consented custom events are observed.</p>"}
+    ${keys.length ? `<fieldset><legend>Optional available custom outcomes (up to 20)</legend>${keys.map(key => `<label><input type="checkbox" name="custom_conversion_event_keys" value="${escape(key)}">${escape(key)}</label>`).join("")}</fieldset>` : "<p>Plan an event in the catalog to configure an outcome before receipt.</p>"}
+    <p><a href="${app}/event-catalog">Search all event keys and document firing conditions</a>. Planned and active catalog keys may be unobserved: absence is unknown, not a healthy zero. Deprecated keys are rejected again on confirmation.</p>
     <button type="submit">Preview recommended set</button></form>
     <p>Campaign discovery is capped at 20 targets per date. Organic and unattributed remain separate. Missing cost is undefined with a reason, not zero. Currency/FX mismatches fail calculation rather than inventing a conversion. Zero observed sessions does not prove complete activity delivery. Revenue conversion is USD identity only; non-USD inputs require deliberate advanced FX configuration. Preview and page reads never calculate or register a run.</p></section>`;
 }

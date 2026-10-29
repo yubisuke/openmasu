@@ -48,6 +48,7 @@ const readerNoTableSelect = new Set([
   "ephemeral.operator_bulk_export_batches",
 ]);
 const seedControlTruncate = new Set([
+  "control.event_catalog_revisions",
   "control.worker_heartbeats",
   "control.worker_tenant_cycles",
   "control.retention_receipts", "control.retention_items",

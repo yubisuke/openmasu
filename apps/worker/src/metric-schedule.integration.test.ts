@@ -49,6 +49,8 @@ import { signSdkRequest } from "../../api/src/sdk-auth.js";
 import { KeyedTokenBucket } from "../../api/src/rate-limit.js";
 import { processSdkInbox } from "./sdk-worker.js";
 import { createSyntheticValidation, syntheticValidationStatus } from "../../api/src/synthetic-validations.js";
+import { listEventCatalog, saveEventCatalogRevision } from "../../api/src/event-catalog.js";
+import { previewRecommendedMetricSchedule } from "../../api/src/metric-schedules.js";
 
 type Any = Record<string, any>;
 
@@ -784,9 +786,10 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     const schedule = (key: string) => ({ custom_conversion_event_keys: [key], start_date: "2026-08-06", lag_days: 9 });
     const query = { tenantId, appId, supersession: "latest" as const, limit: 200 };
     beforeEach(async () => {
-      await seedPool.query("TRUNCATE control.metric_schedules,control.metric_schedule_states,control.metric_schedule_checkpoints CASCADE");
+      await seedPool.query("TRUNCATE control.event_catalog_revisions,control.metric_schedules,control.metric_schedule_states,control.metric_schedule_checkpoints CASCADE");
       await ingestFixture(`two-key-schedules-${randomBytes(6).toString("hex")}`, source, appPool, seedPool);
     });
+    after(async () => { await seedPool.query("TRUNCATE control.event_catalog_revisions"); });
     it("two_keys_register_compute_correct_and_export_without_mixing_or_rewriting_the_other_key", async () => {
       for (const key of ["signup_complete", "tutorial_complete"]) {
         const registered = await admin(`/v1/admin/apps/${appId}/metric-schedules`, {
@@ -801,6 +804,14 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
       const saved = async (id: string) => withTenant(readerPool, tenantId, async client =>
         jcs((await client.query("SELECT artifact FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2 AND metric_run_id=$3", [tenantId, appId, id])).rows[0].artifact));
       const signupBytes = await Promise.all(signup.map(row => saved(row.metric_run_id)));
+      const metadata = { event_key: "signup_complete", expected_revision: 0, display_name: "Synthetic signup",
+        meaning: "Complete the synthetic signup", firing_condition: "After synthetic confirmation", lifecycle: "planned" };
+      await saveEventCatalogRevision(appPool, reportIdentity, metadata);
+      await saveEventCatalogRevision(appPool, reportIdentity, { ...metadata, expected_revision: 1,
+        display_name: "Renamed synthetic label", lifecycle: "active" });
+      await saveEventCatalogRevision(appPool, reportIdentity, { ...metadata, expected_revision: 2, lifecycle: "deprecated" });
+      assert.deepEqual(await Promise.all(signup.map(row => saved(row.metric_run_id))), signupBytes,
+        "metadata labels and deprecation do not rewrite saved metric meaning");
       const original = source.records.find((row: Any) => row.event_name === "custom_event");
       const late = { ...structuredClone(original), record_id: "two-key-late-tutorial", delivery_id: "delivery:two-key-late-tutorial",
         event_id: "event:two-key-late-tutorial", received_at: "2026-08-16T00:00:00.000Z",
@@ -851,6 +862,87 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
       assert.deepEqual(await listCustomConversionKeys(readerPool, { ...reportIdentity, tenantId: "foreign-tenant" }), []);
       const html = await fetch(`${baseUrl}/dashboard/apps/${appId}/metric-schedules`, { headers: { cookie: `openmasu_dashboard=${session.token}` } });
       assert.equal(html.status, 200); assert.match(await html.text(), /name="custom_conversion_event_keys" value="signup_complete"/);
+    });
+
+    it("event_catalog_pages_beyond_100_and_admits_unobserved_plans_without_claiming_zero", async () => {
+      const path = `/v1/admin/apps/${appId}/event-catalog`;
+      const metadata = { event_key: "planned_new", expected_revision: 0, display_name: "Synthetic plan",
+        meaning: "Finish the synthetic step", firing_condition: "After explicit confirmation", lifecycle: "planned" };
+      assert.equal((await fetch(`${baseUrl}${path}`)).status, 401);
+      for (const event_key of ["Planned_new", "openmasu.conversion_value_updated"]) {
+        assert.equal((await admin(path, { method: "POST", body: JSON.stringify({ ...metadata, event_key }) })).status, 400);
+      }
+      assert.equal((await admin(path, { method: "POST", body: JSON.stringify(metadata) })).status, 201);
+      const observed = await admin(`${path}?prefix=planned_new`);
+      const planned = (await observed.json() as Any).data[0];
+      assert.equal(planned.lifecycle, "planned"); assert.equal(planned.observation_state, "not_observed");
+      assert.equal(planned.observed_count, null); assert.equal(planned.last_received_at, null);
+      const foreign = { ...reportIdentity, appId: "foreign-app" };
+      assert.deepEqual((await listEventCatalog(readerPool, foreign, { prefix: "", after: "", limit: 50 })).data, []);
+      assert.deepEqual((await listEventCatalog(readerPool, { ...reportIdentity, tenantId: "foreign-tenant" }, { prefix: "", after: "", limit: 50 })).data, []);
+      assert.equal((await withTenant(readerPool, "foreign-tenant", client => client.query(
+        "SELECT event_key FROM control.event_catalog_current WHERE tenant_id=$1 AND app_id=$2", [tenantId, appId]))).rowCount, 0,
+      "RLS hides the actual tenant even when SQL explicitly requests it");
+      assert.equal((await admin("/v1/admin/apps/foreign-app/event-catalog", { method: "POST", body: JSON.stringify(metadata) })).status, 404);
+      await assert.rejects(withTenant(readerPool, tenantId, client => client.query(
+        "INSERT INTO control.event_catalog_revisions SELECT * FROM control.event_catalog_revisions LIMIT 1")), { code: "42501" });
+      await assert.rejects(withTenant(appPool, tenantId, client => client.query(
+        "UPDATE control.event_catalog_revisions SET display_name='changed' WHERE tenant_id=$1", [tenantId])), { code: "42501" });
+      await withTenant(appPool, tenantId, client => client.query(`INSERT INTO control.event_catalog_revisions
+        (tenant_id,app_id,event_key,revision,display_name,meaning,firing_condition,lifecycle)
+        SELECT $1,$2,'planned_'||lpad(n::text,3,'0'),1,'Synthetic event','Synthetic meaning','Synthetic confirmation','planned'
+        FROM generate_series(0,100) AS n`, [tenantId, appId]));
+      const first = await (await admin(`${path}?prefix=planned_&limit=100`)).json() as Any;
+      assert.equal(first.data.length, 100); assert.equal(first.next_cursor, "planned_099");
+      const second = await (await admin(`${path}?prefix=planned_&limit=100&after=${first.next_cursor}`)).json() as Any;
+      assert.deepEqual(second.data.map((row: Any) => row.event_key), ["planned_100", "planned_new"]);
+      assert.equal(second.next_cursor, null);
+      assert.ok(!(await listCustomConversionKeys(readerPool, reportIdentity)).includes("planned_100"));
+      const html = await fetch(`${baseUrl}/dashboard/apps/${appId}/event-catalog?prefix=planned_100`,
+        { headers: { cookie: `openmasu_dashboard=${session.token}` } });
+      assert.equal(html.status, 200); const rendered = await html.text();
+      assert.match(rendered, /name="custom_conversion_event_keys" value="planned_100"/);
+      assert.match(rendered, /Not observed — count and last receipt unknown/);
+      const form = new URLSearchParams({ csrf_token: csrfToken(session.token), custom_conversion_event_keys: "planned_100",
+        lag_days: "9", start_date: "2026-08-06" });
+      const registered = await fetch(`${baseUrl}/dashboard/apps/${appId}/metric-schedules`, { method: "POST", redirect: "manual",
+        headers: { cookie: `openmasu_dashboard=${session.token}`, origin: "http://localhost:8080", "content-type": "application/x-www-form-urlencoded" }, body: form });
+      assert.equal(registered.status, 303);
+      assert.equal((await admin(`/v1/admin/apps/${appId}/metric-schedules`, { method: "POST", body: JSON.stringify(schedule("planned_new")) })).status, 201);
+      const stillUnknown = (await (await admin(`${path}?prefix=planned_new`)).json() as Any).data[0];
+      assert.equal(stillUnknown.observed_count, null, "schedule registration is not observation");
+    });
+
+    it("event_catalog_revision_conflicts_and_deprecation_block_new_confirmation_but_not_saved_meaning", async () => {
+      const path = `/v1/admin/apps/${appId}/event-catalog`;
+      const metadata = { event_key: "signup_complete", expected_revision: 0, display_name: "Synthetic signup",
+        meaning: "Synthetic signup completion", firing_condition: "After synthetic confirmation", lifecycle: "active" };
+      const creates = await Promise.all([1, 2].map(() => admin(path, { method: "POST", body: JSON.stringify(metadata) })));
+      assert.deepEqual(creates.map(row => row.status).sort(), [201, 409]);
+      const list = await (await admin(`${path}?prefix=signup_complete`)).json() as Any;
+      assert.equal(list.data[0].observation_state, "observed"); assert.ok(BigInt(list.data[0].observed_count) > 0n);
+      assert.ok(list.data[0].last_received_at);
+      const request = { recommended_profile: "native_d7_v1", acquisition_basis: "selected_first_party_click",
+        target_currency: "USD", cutoff_policy: "utc_start_of_worker_day", include_retention: true,
+        lag_days: 9, start_date: "2026-08-06", custom_conversion_event_keys: ["signup_complete"] };
+      const preview = await previewRecommendedMetricSchedule(readerPool, reportIdentity, request, clock);
+      const form = new URLSearchParams({ csrf_token: csrfToken(session.token), ...Object.fromEntries(
+        Object.entries({ ...metadata, expected_revision: 1, display_name: "Renamed synthetic label" }).map(([key,value]) => [key,String(value)])) });
+      const edit = await fetch(`${baseUrl}/dashboard/apps/${appId}/event-catalog`, { method: "POST", redirect: "manual",
+        headers: { cookie: `openmasu_dashboard=${session.token}`, origin: "http://localhost:8080", "content-type": "application/x-www-form-urlencoded" }, body: form });
+      assert.equal(edit.status, 303);
+      const afterLabel = await previewRecommendedMetricSchedule(readerPool, reportIdentity, request, clock);
+      assert.equal(afterLabel.preview_digest, preview.preview_digest);
+      assert.equal(jcs(afterLabel.definition), jcs(preview.definition));
+      assert.equal((await admin(path, { method: "POST", body: JSON.stringify({ ...metadata, expected_revision: 2, lifecycle: "deprecated" }) })).status, 201);
+      const rejected = await admin(`/v1/admin/apps/${appId}/metric-schedules`, { method: "POST",
+        body: JSON.stringify({ ...request, preview_digest: preview.preview_digest }) });
+      assert.equal(rejected.status, 400); assert.equal((await rejected.json() as Any).error, "custom_conversion_event_key_deprecated");
+      assert.equal((await admin(`/v1/admin/apps/${appId}/metric-schedules`, { method: "POST", body: JSON.stringify(schedule("signup_complete")) })).status, 400);
+      assert.ok(!(await listCustomConversionKeys(readerPool, reportIdentity)).includes("signup_complete"), "deprecated wins over observed");
+      const history = await withTenant(readerPool, tenantId, client => client.query(
+        "SELECT revision FROM control.event_catalog_revisions WHERE tenant_id=$1 AND app_id=$2 AND event_key=$3 ORDER BY revision", [tenantId, appId, "signup_complete"]));
+      assert.deepEqual(history.rows.map(row => row.revision), [1, 2, 3]);
     });
   });
 

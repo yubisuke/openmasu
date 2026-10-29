@@ -7,7 +7,7 @@ const fields = ["recommended_profile", "acquisition_basis", "target_currency", "
   "lag_days", "start_date", "include_retention", "custom_conversion_event_keys", "preview_digest"];
 
 /** Select existing factories only. Profile labels never authorize a new calculation. */
-export function expandRecommendedMetricSchedule(body: Json, observedKeys: readonly string[]): Json {
+export function expandRecommendedMetricSchedule(body: Json, selectableKeys: readonly string[]): Json {
   if (Object.keys(body).some(key => !fields.includes(key))) throw new Error("recommended_schedule_field_forbidden");
   if (body.recommended_profile !== "native_d7_v1") throw new Error("recommended_metric_set_unsupported");
   if (body.acquisition_basis !== "selected_first_party_click") throw new Error("recommended_acquisition_basis_unsupported");
@@ -21,7 +21,7 @@ export function expandRecommendedMetricSchedule(body: Json, observedKeys: readon
       || keys.some(key => typeof key !== "string" || !/^[a-z][a-z0-9_]{0,63}$/.test(key))) {
     throw new Error("custom_conversion_event_keys_invalid");
   }
-  if (keys.some(key => !observedKeys.includes(key))) throw new Error("custom_conversion_event_key_unknown");
+  if (keys.some(key => !selectableKeys.includes(key))) throw new Error("custom_conversion_event_key_unknown");
   const definitions = [
     ...ACQUISITION_KPI_METRIC_DEFINITIONS,
     ...(body.include_retention ? SELECTED_ACQUISITION_METRIC_DEFINITIONS.filter(definition =>
