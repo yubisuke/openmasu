@@ -9,6 +9,7 @@ import type { FraudAuditRow } from "../fraud-reporting.js";
 import type { GoogleDeliveryHealth } from "../google-delivery-health.js";
 import type { OperatorDeliveryHealth } from "../operator-delivery-health.js";
 import type { MeasurementHealth } from "../measurement-health.js";
+import type { TrackingLinkFilters } from "../tracking-link-query.js";
 import { metricCharts } from "./metric-charts.js";
 import type { buildRetentionMatrices } from "./retention-matrix.js";
 import type { buildAcquisitionKpiSets } from "../acquisition-kpis.js";
@@ -36,6 +37,8 @@ export type DashboardTrackingLink = {
   readonly status: "active" | "paused" | "archived";
   readonly created_at: string;
 };
+
+export type DashboardTrackingLinkList = Readonly<{ filters: TrackingLinkFilters; continued: boolean; nextUrl?: string }>;
 
 export type DashboardSdkKey = {
   readonly sdk_key_id: string;
@@ -93,6 +96,7 @@ export type DashboardView = {
   readonly appleAggregateCharts: readonly DashboardChart[];
   readonly engagementCharts: readonly DashboardChart[];
   readonly trackingLinks: readonly DashboardTrackingLink[];
+  readonly trackingLinkList?: DashboardTrackingLinkList;
   readonly sdkKeys: readonly DashboardSdkKey[];
   readonly serverKeys: readonly DashboardServerKey[];
   readonly operatorWebhooks: readonly DashboardOperatorWebhook[];
@@ -139,6 +143,7 @@ export function presentDashboardView(input: {
   readonly differences?: DifferenceAuditPage;
   readonly differenceNextCursor?: string;
   readonly trackingLinks?: readonly DashboardTrackingLink[];
+  readonly trackingLinkList?: DashboardTrackingLinkList;
   readonly sdkKeys?: readonly DashboardSdkKey[];
   readonly serverKeys?: readonly DashboardServerKey[];
   readonly operatorWebhooks?: readonly DashboardOperatorWebhook[];
@@ -174,9 +179,8 @@ export function presentDashboardView(input: {
     deterministicCharts: charts.filter((chart) => metricSeries(chart.metric_name) === "cohort_or_activity"),
     appleAggregateCharts: charts.filter((chart) => metricSeries(chart.metric_name) === "apple_aggregate"),
     engagementCharts: charts.filter((chart) => metricSeries(chart.metric_name) === "first_party_engagement"),
-    trackingLinks: [...(input.trackingLinks ?? [])].sort((left, right) =>
-      right.created_at.localeCompare(left.created_at, "en")
-      || left.tracking_link_id.localeCompare(right.tracking_link_id, "en")),
+    trackingLinks: [...(input.trackingLinks ?? [])],
+    ...(input.trackingLinkList ? { trackingLinkList: input.trackingLinkList } : {}),
     sdkKeys: [...(input.sdkKeys ?? [])].sort((left, right) =>
       right.created_at.localeCompare(left.created_at, "en")
       || left.sdk_key_id.localeCompare(right.sdk_key_id, "en")),

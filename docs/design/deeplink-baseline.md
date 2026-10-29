@@ -48,6 +48,32 @@ Public Android `assetlinks.json` and Apple
 registered applications. They are public routes and never use IP allowlists or
 click-path classification.
 
+## Finding older measurement links
+
+The measurement-links dashboard and `GET /v1/admin/tracking-links?app_id=...`
+share exact `status` (`active`, `paused`, `archived`), `campaign_id` and `slug`
+filters. Empty filters mean all values. `limit` defaults to 200 and accepts
+1–200; unknown or repeated parameters are rejected. The API preserves `data`
+and adds `next_cursor` only when another matching page exists. Continue with
+the same filters and limit plus `cursor=<next_cursor>`; a missing cursor is a
+new search, not a continuation. The dashboard provides the equivalent GET form
+and next-page link without JavaScript.
+
+Pages order by creation time descending, then link ID in PostgreSQL `C` order.
+The first page captures the app's recorded lifecycle-sequence boundary; later
+pages do not incorporate newer lifecycle revisions or newly registered links.
+This is a bounded recorded-state selection, not a database-wide exported
+transaction snapshot. Start a new search to see later lifecycle changes.
+Pause, resume, archive and routing previews always check current state.
+
+Cursor HMACs use a dedicated domain separator with the existing deployment
+installation-digest key. They bind tenant, app, exact filters, page size,
+sequence boundary and last position. Invalid signatures or changed scope/filter
+return 400; a missing deployment key makes required continuation unavailable
+(503), never a silently truncated success. Rotating that key invalidates old
+cursors. Authorization is still checked on every request; a cursor grants no
+access. No new service, signing credential, or persisted report is introduced.
+
 ## Direct delivery
 
 Android App Links and iOS Universal Links pass a closed OpenMasu destination to

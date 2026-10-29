@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import { assertAllowedDestination, assertDeepLinkValue, buildDeferredReferrer, randomSlug } from "@openmasu/redirector-core";
 import { uuidV7, withTenant } from "@openmasu/runtime";
 import { recordDashboardAudit, recordDashboardAuditWithClient } from "./session.js";
+import { decodeTrackingLinkCursor, encodeTrackingLinkCursor, trackingLinkFilters, type TrackingLinkQuery } from "./tracking-link-query.js";
 
 type Any = Record<string, any>;
 
@@ -27,8 +28,16 @@ export async function listTrackingLinks(
   pool: Pool,
   tenantId: string,
   appId: string,
-): Promise<readonly TrackingLinkRecord[]> {
-  const result = await withTenant(pool, tenantId, (client) => client.query<{
+  query: TrackingLinkQuery = { limit: 200 },
+  cursorKey?: string,
+): Promise<{ readonly data: readonly TrackingLinkRecord[]; readonly next_cursor?: string }> {
+  const cursor = decodeTrackingLinkCursor(query, tenantId, appId, cursorKey);
+  return withTenant(pool, tenantId, async (client) => {
+    const stateSequence = cursor?.state_sequence ?? (await client.query<{ state_sequence: string }>(
+      `SELECT coalesce(max(tracking_link_state_seq),0)::text AS state_sequence
+         FROM control.tracking_link_states WHERE tenant_id=$1 AND app_id=$2`, [tenantId, appId],
+    )).rows[0].state_sequence;
+    const result = await client.query<{
     tracking_link_id: string;
     slug: string;
     destination_kind: "play_store" | "custom_https";
@@ -57,15 +66,28 @@ export async function listTrackingLinks(
           WHERE candidate.tenant_id=link.tenant_id
             AND candidate.app_id=link.app_id
             AND candidate.tracking_link_id=link.tracking_link_id
+            AND candidate.tracking_link_state_seq <= $3::bigint
           ORDER BY candidate.tracking_link_state_seq DESC
           LIMIT 1
        ) AS state ON true
       WHERE link.tenant_id=$1 AND link.app_id=$2
+        AND ($4::text IS NULL OR state.status=$4)
+        AND ($5::text IS NULL OR link.campaign_id=$5)
+        AND ($6::text IS NULL OR link.slug=$6)
+        AND ($7::text IS NULL OR link.created_at < $7
+          OR (link.created_at=$7 AND link.tracking_link_id COLLATE "C" > $8::text COLLATE "C"))
       ORDER BY link.created_at DESC, link.tracking_link_id COLLATE "C"
-      LIMIT 200`,
-    [tenantId, appId],
-  ));
-  return result.rows.map((row) => ({
+      LIMIT $9`,
+    [tenantId, appId, stateSequence, query.status ?? null, query.campaign_id ?? null, query.slug ?? null,
+      cursor?.after.created_at ?? null, cursor?.after.tracking_link_id ?? null, query.limit + 1],
+  );
+  const rows = result.rows.slice(0, query.limit);
+  const last = rows.at(-1);
+  const nextCursor = result.rows.length > query.limit && last ? encodeTrackingLinkCursor({
+    version: 1, tenant_id: tenantId, app_id: appId, filters: trackingLinkFilters(query), state_sequence: stateSequence,
+    after: { created_at: last.created_at, tracking_link_id: last.tracking_link_id },
+  }, cursorKey) : undefined;
+  return { ...(nextCursor ? { next_cursor: nextCursor } : {}), data: rows.map((row) => ({
     tracking_link_id: row.tracking_link_id,
     slug: row.slug,
     destination_kind: row.destination_kind,
@@ -81,7 +103,8 @@ export async function listTrackingLinks(
     deferred_deep_link_ttl_seconds: row.deferred_deep_link_ttl_seconds,
     created_at: row.created_at,
     status: row.status,
-  }));
+  })) };
+  });
 }
 
 export async function createTrackingLink(input: {

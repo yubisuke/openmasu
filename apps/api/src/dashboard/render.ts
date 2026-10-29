@@ -45,10 +45,16 @@ function list(values: readonly string[]): string {
 
 function trackingLinks(view: DashboardView): string {
   if (!view.selectedAppId) return "";
+  const path = `/dashboard/apps/${encodeURIComponent(view.selectedAppId)}/tracking-links`;
+  const filters = view.trackingLinkList?.filters ?? { limit: 200 };
+  const search = `<form method="get" action="${path}"><label>Status <select name="status"><option value="">All states</option>${["active", "paused", "archived"].map(status => `<option value="${status}"${filters.status === status ? " selected" : ""}>${status}</option>`).join("")}</select></label><label>Campaign ID (exact) <input name="campaign_id" maxlength="128" value="${escapeHtml(filters.campaign_id ?? "")}"></label><label>Slug (exact) <input name="slug" maxlength="64" value="${escapeHtml(filters.slug ?? "")}"></label><label>Links per page <input type="number" name="limit" min="1" max="200" value="${filters.limit}"></label><button type="submit">Search links</button> <a href="${path}">Start a new search</a></form>`;
+  const next = view.trackingLinkList?.nextUrl
+    ? `<p><a rel="next" href="${escapeHtml(view.trackingLinkList.nextUrl)}">Next measurement-links page</a> — more matching links remain.</p>`
+    : "<p>No further matching links in this selection.</p>";
   if (view.trackingLinks.length === 0) {
-    return "<section><h2>Measurement links</h2><p>No measurement links are registered.</p></section>";
+    return `<section><h2>Measurement links</h2>${search}<p>${view.trackingLinkList?.continued ? "No further measurement links match this selection." : "No measurement links match this filter."}</p>${next}</section>`;
   }
-  return `<section><h2>Measurement links</h2><table><caption>Registered measurement links</caption><thead><tr><th scope="col">Measurement URL</th><th scope="col">Destination</th><th scope="col">Network</th><th scope="col">Campaign</th><th scope="col">Ad group</th><th scope="col">Creative</th><th scope="col">Status</th><th scope="col">Created at</th><th scope="col">Lifecycle</th></tr></thead><tbody>${view.trackingLinks.map((link) => {
+  return `<section><h2>Measurement links</h2>${search}<p>Newest creation time first, then link ID in byte order. Lifecycle states are bounded by the first page's recorded state sequence; start a new search for later changes. Actions always check the current lifecycle state.</p><table><caption>Registered measurement links — ${view.trackingLinks.length} on this page</caption><thead><tr><th scope="col">Measurement URL</th><th scope="col">Destination</th><th scope="col">Network</th><th scope="col">Campaign</th><th scope="col">Ad group</th><th scope="col">Creative</th><th scope="col">Status</th><th scope="col">Created at</th><th scope="col">Lifecycle</th></tr></thead><tbody>${view.trackingLinks.map((link) => {
     const base = `/dashboard/apps/${encodeURIComponent(view.selectedAppId!)}/tracking-links/${encodeURIComponent(link.tracking_link_id)}`;
     const actions = !view.canOperate || link.status === "archived" ? "—" : [
       link.status === "active" ? `<form method="post" action="${base}/pause"><input type="hidden" name="csrf_token" value="${escapeHtml(view.csrfToken)}"><button type="submit">Pause</button></form>` : "",
@@ -56,7 +62,7 @@ function trackingLinks(view: DashboardView): string {
       `<form method="post" action="${base}/archive"><input type="hidden" name="csrf_token" value="${escapeHtml(view.csrfToken)}"><button type="submit">Archive</button></form>`,
     ].join("");
     return `<tr><th scope="row"><a href="${escapeHtml(link.measurement_url)}">${escapeHtml(link.measurement_url)}</a></th><td>${escapeHtml(link.destination_url)}</td><td>${escapeHtml(link.network ?? "—")}</td><td>${escapeHtml(link.campaign_id ?? "—")}</td><td>${escapeHtml(link.ad_group_id ?? "—")}</td><td>${escapeHtml(link.creative_id ?? "—")}</td><td>${escapeHtml(link.status)}</td><td>${escapeHtml(link.created_at)}</td><td><a href="${base}/preview?platform=android">Preview without recording a click</a>${actions}</td></tr>`;
-  }).join("")}</tbody></table><p>Allowed transitions: active to paused or archived; paused to active or archived. Resume keeps the same measurement URL and destination; archived is terminal.</p></section>`;
+  }).join("")}</tbody></table>${next}<p>Allowed transitions: active to paused or archived; paused to active or archived. Resume keeps the same measurement URL and destination; archived is terminal.</p></section>`;
 }
 
 function sdkKeys(view: DashboardView): string {

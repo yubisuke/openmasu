@@ -67,6 +67,7 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
       dashboardLoginBucket: new KeyedTokenBucket(options.loginRate ?? 100, options.loginBurst ?? 100),
       dashboardLoginGlobalBucket: new TokenBucket(100, 100),
       trackingDestinationAllowlist: options.trackingOrigins ?? ["https://links.synthetic.example"],
+      privacySubjectDigestKey: "synthetic-m3-tracking-list-cursor-key",
     });
   }
 
@@ -885,6 +886,59 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     const previewForeign = await fetch(`${baseUrl}/v1/admin/apps/${otherApp}/tracking-links/${linkId}/preview?platform=android`, { headers });
     assert.equal(previewUnknown.status, 404); assert.equal(previewForeign.status, 404);
     assert.equal(await previewUnknown.text(), await previewForeign.text());
+  });
+
+  it("pages 205 tracking links with scoped signed cursors and keeps older lifecycle controls reachable", async () => {
+    const listApp = `app-link-pages-${suffix}`, otherApp = `app-link-other-${suffix}`;
+    await withTenant(appPool, tenantId, async client => {
+      await client.query("INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ($1,$2,$4),($1,$3,$4)",
+        [tenantId, listApp, otherApp, "2026-10-29T00:00:00.000Z"]);
+      await client.query(`INSERT INTO control.tracking_links
+        (tracking_link_id,tenant_id,app_id,slug,destination_kind,destination_url,campaign_id,created_at,artifact)
+        SELECT 'link:pages:' || $3 || ':' || lpad(n::text,3,'0'),$1,$2,'pages_' || $3 || '_' || lpad(n::text,3,'0'),
+          'custom_https','https://links.synthetic.example/',CASE WHEN n%2=0 THEN 'campaign-even' ELSE 'campaign-odd' END,
+          CASE WHEN n<100 THEN '2026-10-29T00:00:00.000Z' ELSE '2026-10-28T00:00:00.000Z' END,'{}'::jsonb
+        FROM generate_series(0,204) AS n`, [tenantId, listApp, suffix]);
+      await client.query(`INSERT INTO control.tracking_link_states (tracking_link_id,tenant_id,app_id,status,changed_at,artifact)
+        SELECT tracking_link_id,tenant_id,app_id,'active',created_at,'{}'::jsonb FROM control.tracking_links WHERE tenant_id=$1 AND app_id=$2`, [tenantId, listApp]);
+    });
+    const headers = { authorization: `Bearer ${adminKeyA}` };
+    const api = `${baseUrl}/v1/admin/tracking-links`;
+    const first = await fetch(`${api}?app_id=${listApp}`, { headers }); assert.equal(first.status, 200);
+    type Page = { data: { tracking_link_id: string; status: string; campaign_id: string }[]; next_cursor?: string };
+    const page = await first.json() as Page; assert.equal(page.data.length, 200); assert.ok(page.next_cursor);
+    const oldLink = `link:pages:${suffix}:204`, lifecycle = `${baseUrl}/v1/admin/apps/${listApp}/tracking-links/${encodeURIComponent(oldLink)}`;
+    assert.equal((await fetch(`${lifecycle}/pause`, { method: "POST", headers })).status, 200);
+    const created = await fetch(api, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify({
+      app_id: listApp, destination_kind: "custom_https", destination_url: "https://links.synthetic.example/", campaign_id: "campaign-new",
+    }) }); assert.equal(created.status, 201);
+    const continuation = new URLSearchParams({ app_id: listApp, cursor: page.next_cursor! });
+    const lastResponse = await fetch(`${api}?${continuation}`, { headers }); assert.equal(lastResponse.status, 200);
+    const last = await lastResponse.json() as Page; assert.equal(last.data.length, 5); assert.equal(last.next_cursor, undefined);
+    const ids = [...page.data, ...last.data].map(row => row.tracking_link_id);
+    assert.equal(new Set(ids).size, 205); assert.deepEqual(ids, Array.from({ length: 205 }, (_, n) => `link:pages:${suffix}:${String(n).padStart(3, "0")}`));
+    assert.equal(last.data.find(row => row.tracking_link_id === oldLink)?.status, "active", "continuation retains the initial lifecycle boundary");
+    for (const changes of [{ cursor: `x${page.next_cursor!.slice(1)}` }, { app_id: otherApp }, { status: "paused" }, { limit: "73" }]) {
+      const invalid = new URLSearchParams(continuation); for (const [key, value] of Object.entries(changes)) invalid.set(key, value);
+      assert.equal((await fetch(`${api}?${invalid}`, { headers })).status, 400);
+    }
+    const exact = await fetch(`${api}?${new URLSearchParams({ app_id: listApp, status: "paused", campaign_id: "campaign-even", slug: `pages_${suffix}_204` })}`, { headers });
+    assert.equal(exact.status, 200); assert.deepEqual((await exact.json() as Page).data.map(row => row.tracking_link_id), [oldLink]);
+    const empty = await fetch(`${api}?app_id=${listApp}&campaign_id=absent-campaign`, { headers }); assert.equal(empty.status, 200);
+    assert.deepEqual(await empty.json(), { data: [] });
+    const sessionCookie = cookie(await login(adminKeyA));
+    const htmlFirst = await fetch(`${baseUrl}/dashboard/apps/${listApp}/tracking-links`, { headers: { cookie: sessionCookie } });
+    assert.equal(htmlFirst.status, 200); assert.match(await htmlFirst.text(), /Next measurement-links page/);
+    const htmlLast = await fetch(`${baseUrl}/dashboard/apps/${listApp}/tracking-links?${new URLSearchParams({ cursor: page.next_cursor! })}`, { headers: { cookie: sessionCookie } });
+    assert.equal(htmlLast.status, 200); assert.match(await htmlLast.text(), new RegExp(`${encodeURIComponent(oldLink)}/pause`));
+    const current = await fetch(`${baseUrl}/dashboard/apps/${listApp}/tracking-links?status=paused`, { headers: { cookie: sessionCookie } });
+    assert.match(await current.text(), new RegExp(`${encodeURIComponent(oldLink)}/resume`));
+    const reset = await fetch(`${baseUrl}/dashboard/apps/${listApp}/tracking-links/${encodeURIComponent(oldLink)}/resume`, {
+      method: "POST", redirect: "manual", headers: { cookie: sessionCookie, origin: configuredOrigin, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ csrf_token: csrfToken(readDashboardToken(sessionCookie, configuredOrigin)!) }),
+    }); assert.equal(reset.status, 303);
+    const invalidHtml = await fetch(`${baseUrl}/dashboard/apps/${otherApp}/tracking-links?${new URLSearchParams({ cursor: page.next_cursor! })}`, { headers: { cookie: sessionCookie } });
+    assert.equal(invalidHtml.status, 400);
   });
 
   it("WO13 creates tracking links for configured origins and rejects unconfigured origins", async () => {

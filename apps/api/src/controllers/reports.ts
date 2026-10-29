@@ -26,6 +26,7 @@ import { applePostbackReport, AppleReportError, parseAppleReportQuery } from "..
 import { renderApplePostbackReport } from "../dashboard/apple-postback-report.js";
 import { csrfToken, verifyCsrfToken } from "../session.js";
 import { listTrackingLinks } from "../tracking-links.js";
+import { parseTrackingLinkQuery, trackingLinkFilters, trackingLinkPageUrl, TrackingLinkQueryError, type TrackingLinkQuery } from "../tracking-link-query.js";
 import { listSdkKeys } from "../sdk-auth.js";
 import { listServerKeys } from "../server-auth.js";
 import { listOperatorWebhookDestinations } from "../operator-webhooks-admin.js";
@@ -38,7 +39,7 @@ import { csrfOriginAccepted } from "../http-security.js";
 import { dashboardHeaders } from "../http-responses.js";
 import { renderAttributionReportNotCompleted, renderComparisonNotCompleted, renderMetricRunNotFound, renderExportLimitExceeded } from "../dashboard/action-pages.js";
 
-export function createReportsControllers(dependencies: Pick<RequestHandlerDependencies, "readerPool" | "dashboard" | "reportMaximumRows" | "reportMaximumExportRows" | "redirectorBaseUrl">) {
+export function createReportsControllers(dependencies: Pick<RequestHandlerDependencies, "readerPool" | "dashboard" | "reportMaximumRows" | "reportMaximumExportRows" | "redirectorBaseUrl" | "privacySubjectDigestKey">) {
   const dashboardCostJoinability = async ({ response, target, appId, appIdentity, pool }: DashboardAppContext): Promise<void> => {
     try {
       const report = [...target.searchParams].length ? await costJoinabilityReport(pool, appIdentity, parseCostJoinabilityQuery(target.searchParams)) : undefined;
@@ -143,7 +144,15 @@ export function createReportsControllers(dependencies: Pick<RequestHandlerDepend
   };
 
   const dashboardApp = async ({ response, target, route, session, sessionIdentity, appId, appIdentity }: DashboardAppContext): Promise<void> => {
-    const params = dashboardReportParams(target.searchParams);
+    let trackingQuery: TrackingLinkQuery = { limit: 200 };
+    try {
+      if (route.handler === "dashboard_tracking_links_list") trackingQuery = parseTrackingLinkQuery(target.searchParams);
+    } catch (error) {
+      if (!(error instanceof TrackingLinkQueryError)) throw error;
+      dashboardHtml(response, error.statusCode, `<!doctype html><html lang="en"><body><h1>Measurement links unavailable</h1><p>${error.code}</p><p>Start a new link search. No partial results were returned.</p></body></html>`);
+      return;
+    }
+    const params = dashboardReportParams(route.handler === "dashboard_tracking_links_list" ? new URLSearchParams() : target.searchParams);
     let declaredAggregation: string | undefined;
     if (route.handler === "dashboard_comparison_export") {
       const declarations = params.getAll("comparison_aggregation");
@@ -202,8 +211,15 @@ export function createReportsControllers(dependencies: Pick<RequestHandlerDepend
     }
 
     const apps = await listApps(dependencies.readerPool, sessionIdentity);
-    const trackingLinks = (await listTrackingLinks(dependencies.readerPool, appIdentity.tenantId, appIdentity.appId))
-      .map((link) => listedTrackingLink(dependencies.redirectorBaseUrl, link));
+    let trackingPage: Awaited<ReturnType<typeof listTrackingLinks>>;
+    try {
+      trackingPage = await listTrackingLinks(dependencies.readerPool, appIdentity.tenantId, appIdentity.appId, trackingQuery, dependencies.privacySubjectDigestKey);
+    } catch (error) {
+      if (!(error instanceof TrackingLinkQueryError)) throw error;
+      dashboardHtml(response, error.statusCode, `<!doctype html><html lang="en"><body><h1>Measurement links unavailable</h1><p>${error.code}</p><p>Start a new link search. No partial results were returned.</p></body></html>`);
+      return;
+    }
+    const trackingLinks = trackingPage.data.map((link) => listedTrackingLink(dependencies.redirectorBaseUrl, link));
     const sdkKeys = await listSdkKeys(dependencies.readerPool, appIdentity);
     const serverKeys = await listServerKeys(dependencies.readerPool, appIdentity);
     const operatorWebhooks = await listOperatorWebhookDestinations(dependencies.readerPool, appIdentity);
@@ -232,6 +248,8 @@ export function createReportsControllers(dependencies: Pick<RequestHandlerDepend
       differences: storedDifferences,
       ...(storedDifferences.next_cursor ? { differenceNextCursor: storedDifferences.next_cursor } : {}),
       trackingLinks,
+      trackingLinkList: { filters: trackingLinkFilters(trackingQuery), continued: Boolean(trackingQuery.cursor),
+        ...(trackingPage.next_cursor ? { nextUrl: trackingLinkPageUrl(appId, trackingQuery, trackingPage.next_cursor) } : {}) },
       sdkKeys,
       serverKeys,
       operatorWebhooks,
