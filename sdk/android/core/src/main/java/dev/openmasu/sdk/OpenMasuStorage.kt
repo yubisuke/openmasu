@@ -31,6 +31,23 @@ internal class OpenMasuStorage(context: Context) {
   }
 
   fun resetInstallPending(): Boolean = preferences.getBoolean(KEY_RESET_INSTALL_PENDING, false)
+  fun deletionReceipt(): String? = preferences.getString("deletion_receipt", null)
+  @Synchronized fun beginDeletion(): String = deletionReceipt() ?: ByteArray(32).also {
+    java.security.SecureRandom().nextBytes(it)
+  }.joinToString("") { "%02x".format(it) }.also {
+    check(preferences.edit().putString("deletion_receipt", it).commit()) { "reset_persist_failed" }
+  }
+
+  /** One preferences commit switches identity and clears the pre-deletion fence. */
+  fun completeDeletion(receipt: String): String {
+    if (deletionReceipt() != receipt) return installationId()
+    val replacement = "installation:${UUID.randomUUID()}"
+    check(preferences.edit().putString(KEY_INSTALLATION_ID, replacement)
+      .remove(KEY_INSTALLATION_KEY_ID).remove(KEY_INSTALLATION_SECRET).remove(KEY_SEQUENCE)
+      .putBoolean(KEY_RESET_INSTALL_PENDING, true).putBoolean(KEY_REFERRER_CONSUMED, true)
+      .putBoolean(KEY_DEFERRED_DESTINATION_CONSUMED, true).remove("deletion_receipt").commit()) { "reset_persist_failed" }
+    return replacement
+  }
   fun markResetInstallPending() { preferences.edit().putBoolean(KEY_RESET_INSTALL_PENDING, true).commit() }
   fun clearResetInstallPending() { preferences.edit().remove(KEY_RESET_INSTALL_PENDING).commit() }
 

@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
-import { appendDurableBatch, uuidV7, type PayloadStore } from "@openmasu/runtime";
+import { createHash } from "node:crypto";
+import { appendDurableBatch, uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 import { executePrivacyRequest, privacyResponseStatus, type PrivacyRequestBody } from "./privacy.js";
 import { assertDsarResponseSafe, generateDsarResponse, parseDsarRequest } from "./dsar.js";
 import { type KeyedTokenBucket } from "./rate-limit.js";
@@ -347,6 +348,10 @@ export async function handleDevicePrivacy(
   let value: Any;
   try { value = parseJsonBody<Any>(body); }
   catch { return writeJson(response, 400, { error: "malformed_json" }); }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return writeJson(response, 400, { error: "malformed_json" });
+  if (value.status_receipt !== undefined && (typeof value.status_receipt !== "string" || !/^[a-f0-9]{64}$/.test(value.status_receipt))) {
+    return writeJson(response, 400, { error: "privacy_receipt_invalid" });
+  }
   const subject = typeof value.installation_id === "string" ? value.installation_id : "";
   if (!subject || installationIdDigest(dependencies.config, subject) !== identity.installationIdDigest) {
     await recordSdkAudit(dependencies.pool, dependencies.config, {
@@ -368,13 +373,40 @@ export async function handleDevicePrivacy(
     deletion_scope: "installation",
     deletion_subject_ref: subject,
   };
+  try {
   const artifact = await executePrivacyRequest(dependencies.pool, {
     tenantId: identity.tenantId, appId: identity.appId,
     actorType: "sdk_installation", actorRef: `sdk_installation:${identity.installationKeyId}`,
     requesterAuthRef: `sdk_auth:${auditLogId}`, installationKeyId: identity.installationKeyId,
     deletionSubjectDigest: identity.installationIdDigest,
+    statusReceiptDigest: value.status_receipt === undefined ? undefined
+      : createHash("sha256").update(value.status_receipt).digest("hex"),
   }, privacyBody, dependencies.payloadStore);
-  writeJson(response, privacyResponseStatus(artifact), artifact);
+  writeJson(response, privacyResponseStatus(artifact), value.status_receipt === undefined ? artifact : { status: artifact.status });
+  } catch (error) {
+    const status = (error as { statusCode?: number }).statusCode;
+    if (status === 401 || status === 409) return writeJson(response, status, { error: status === 401 ? "unauthorized" : "privacy_receipt_conflict" });
+    throw error;
+  }
+}
+
+/** Receipt possession grants only this bounded status projection, even after revocation. */
+export async function handleDevicePrivacyStatus(request: IncomingMessage, response: ServerResponse, dependencies: SdkRouteDependencies): Promise<void> {
+  if (!dependencies.privacyBucket.allow("deletion-status")) return writeJson(response, 429, { error: "rate_limited" });
+  let value: Any;
+  try { value = parseJsonBody<Any>(await readRawBody(request, 1024)); }
+  catch { return writeJson(response, 400, { error: "malformed_json" }); }
+  if (!value || Object.keys(value).length !== 1 || typeof value.status_receipt !== "string" || !/^[a-f0-9]{64}$/.test(value.status_receipt)) {
+    return writeJson(response, 400, { error: "privacy_receipt_invalid" });
+  }
+  const digest = createHash("sha256").update(value.status_receipt).digest("hex");
+  const row = await withTenant(dependencies.pool, dependencies.config.tenantId, async client => (await client.query<{ status: string }>(
+    `SELECT status FROM control.privacy_deletion_jobs
+      WHERE tenant_id=$1 AND app_id=$2 AND status_receipt_digest=$3
+        AND status_receipt_expires_at > clock_timestamp()`,
+    [dependencies.config.tenantId, dependencies.config.appId, digest],
+  )).rows[0]);
+  writeJson(response, row ? 200 : 404, row ? { status: row.status } : { error: "not_found" });
 }
 
 export async function handleDeviceDsar(

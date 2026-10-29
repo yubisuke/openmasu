@@ -89,6 +89,11 @@ reset flow. Android and iOS use `POST /v1/privacy/installation`; the server
 retains `POST /v1/privacy/on-device` only as an authenticated compatibility
 alias.
 
+The callback stays `false` while deletion is pending; it does not mean that the
+old installation is usable. Native SDKs durably resume status checks after restart
+and stop collection until deletion is confirmed. Retry reset to observe completion;
+the replacement identity is created once, preserving consent and collection settings.
+
 ## Settled commerce events
 
 These generic helpers report client-declared commerce. They do not establish store verification.

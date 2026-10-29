@@ -38,6 +38,14 @@ interface OpenMasuTransport {
   fun deleteInstallation(credential: InstallationCredential, installationId: String): Boolean
 }
 
+enum class DeletionStatus { MISSING, PROCESSING, COMPLETED }
+
+/** Optional capability; legacy custom transports retain synchronous deletion semantics. */
+interface OpenMasuDeletionTransport : OpenMasuTransport {
+  fun beginDeletion(credential: InstallationCredential, installationId: String, receipt: String): DeletionStatus
+  fun deletionStatus(receipt: String): DeletionStatus
+}
+
 internal object DisabledPlayReferrerReader : PlayReferrerReader {
   override fun read() = PlayReferrerEvidence("unavailable", "service_unavailable")
 }

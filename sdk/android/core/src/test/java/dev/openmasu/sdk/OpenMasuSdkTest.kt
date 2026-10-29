@@ -682,8 +682,93 @@ class OpenMasuSdkTest {
     assertEquals(oldId, sdk.installationId())
   }
 
+  @Test fun `pending deletion survives reopen and blocks collection until one replacement is ready`() {
+    val transport = ReceiptTransport()
+    val sdk = sdk(transport)
+    sdk.initialize()
+    await { transport.deliveries.get() == 1 }
+    val oldId = sdk.installationId()
+    transport.deliverySucceeds = false
+    sdk.startSession()
+    await { sdk.pendingCount() == 1 }
+
+    assertFalse(resetResult(sdk))
+    val receipt = OpenMasuStorage(context).deletionReceipt()
+    assertEquals(64, receipt?.length)
+    assertEquals(oldId, sdk.installationId())
+    assertEquals(0, sdk.pendingCount())
+    assertFalse(sdk.isCollectionEnabled())
+    val deliveriesBeforeGrant = transport.deliveries.get()
+    sdk.updateConsent("granted", "synthetic-policy-granted")
+    sdk.setCollectionEnabled(false)
+    sdk.setCollectionEnabled(true)
+    sdk.startSession()
+    assertEquals(0, sdk.pendingCount())
+    assertFalse(sdk.isCollectionEnabled())
+    assertEquals(deliveriesBeforeGrant, transport.deliveries.get())
+
+    sdk.close()
+    created.remove(sdk)
+    val reopened = sdk(transport)
+    reopened.initialize()
+    assertEquals(0, reopened.pendingCount())
+    assertEquals(receipt, OpenMasuStorage(context).deletionReceipt())
+    assertEquals(oldId, reopened.installationId())
+    transport.deliverySucceeds = true
+    transport.state = DeletionStatus.COMPLETED
+    assertTrue(reopened.flushBlocking())
+    val replacement = reopened.installationId()
+    assertNotEquals(oldId, replacement)
+    assertEquals(null, OpenMasuStorage(context).deletionReceipt())
+    assertTrue(reopened.flushBlocking())
+    assertEquals(replacement, reopened.installationId())
+    assertEquals(1, transport.beginCalls.get())
+    assertEquals(listOf(oldId, replacement), transport.enrolledInstallations)
+    assertEquals(1, transport.resetInstalls().size)
+  }
+
+  @Test fun `lost deletion response recovers by receipt without resubmitting deletion`() {
+    val transport = ReceiptTransport().apply { completeOnBegin = true; loseBeginResponse = true }
+    val sdk = sdk(transport)
+    sdk.initialize()
+    await { transport.deliveries.get() == 1 }
+    val oldId = sdk.installationId()
+    assertFalse(resetResult(sdk))
+    assertEquals(oldId, sdk.installationId())
+    val receipt = OpenMasuStorage(context).deletionReceipt()
+    sdk.close()
+    created.remove(sdk)
+
+    val reopened = sdk(transport)
+    reopened.initialize()
+    assertTrue(reopened.flushBlocking())
+    assertNotEquals(oldId, reopened.installationId())
+    assertEquals(receipt, transport.receipt)
+    assertEquals(1, transport.beginCalls.get())
+    assertEquals(2, transport.enrolledInstallations.size)
+    assertEquals(1, transport.resetInstalls().size)
+  }
+
+  @Test fun `completed deletion does not repeat when replacement enrollment is retried`() {
+    val transport = ReceiptTransport().apply { completeOnBegin = true }
+    val sdk = sdk(transport)
+    sdk.initialize()
+    await { transport.deliveries.get() == 1 }
+    val oldId = sdk.installationId()
+    transport.enrollmentFailures.set(1)
+    assertFalse(resetResult(sdk))
+    val replacement = sdk.installationId()
+    assertNotEquals(oldId, replacement)
+    assertTrue(OpenMasuStorage(context).resetInstallPending())
+    assertTrue(resetResult(sdk))
+    assertEquals(replacement, sdk.installationId())
+    assertEquals(1, transport.beginCalls.get())
+    assertEquals(listOf(oldId, replacement, replacement), transport.enrolledInstallations)
+    assertEquals(1, transport.resetInstalls().size)
+  }
+
   private fun sdk(
-    transport: RecordingTransport,
+    transport: OpenMasuTransport,
     playReader: PlayReferrerReader = PlayReferrerReader { PlayReferrerEvidence("none", "ok") },
     metaReader: MetaReferrerReader = MetaReferrerReader { MetaReferrerEvidence("provider_unavailable") },
     configuration: OpenMasuConfiguration = OpenMasuConfiguration("http://127.0.0.1", "sdk-key:synthetic", "synthetic-secret"),
@@ -719,6 +804,56 @@ class OpenMasuSdkTest {
     submit { result.set(it); completed.countDown() }
     assertTrue(completed.await(5, TimeUnit.SECONDS))
     return result.get()
+  }
+
+  private fun resetResult(sdk: OpenMasuSdk): Boolean {
+    val result = AtomicReference<Boolean>()
+    val completed = CountDownLatch(1)
+    sdk.resetInstallationId { result.set(it); completed.countDown() }
+    assertTrue(completed.await(5, TimeUnit.SECONDS))
+    return result.get()
+  }
+
+  private class ReceiptTransport : OpenMasuDeletionTransport {
+    val beginCalls = AtomicInteger()
+    val deliveries = AtomicInteger()
+    val enrollmentFailures = AtomicInteger()
+    val enrolledInstallations = mutableListOf<String>()
+    private val deliveredPayloads = mutableListOf<List<QueuedEvent>>()
+    @Volatile var state = DeletionStatus.MISSING
+    @Volatile var receipt: String? = null
+    @Volatile var completeOnBegin = false
+    @Volatile var loseBeginResponse = false
+    @Volatile var deliverySucceeds = true
+
+    override fun enroll(installationId: String): InstallationCredential {
+      enrolledInstallations += installationId
+      if (enrollmentFailures.get() > 0) {
+        enrollmentFailures.decrementAndGet()
+        error("synthetic_enrollment_failure")
+      }
+      return InstallationCredential("installation-key:synthetic", "synthetic-installation-secret")
+    }
+    override fun deliver(credential: InstallationCredential, events: List<QueuedEvent>): Boolean {
+      deliveredPayloads += events
+      deliveries.incrementAndGet()
+      return deliverySucceeds
+    }
+    override fun beginDeletion(credential: InstallationCredential, installationId: String, receipt: String): DeletionStatus {
+      beginCalls.incrementAndGet()
+      check(this.receipt == null || this.receipt == receipt)
+      this.receipt = receipt
+      state = if (completeOnBegin) DeletionStatus.COMPLETED else DeletionStatus.PROCESSING
+      if (loseBeginResponse) error("synthetic_lost_response")
+      return state
+    }
+    override fun deletionStatus(receipt: String): DeletionStatus =
+      if (this.receipt == receipt) state else DeletionStatus.MISSING
+    override fun deleteInstallation(credential: InstallationCredential, installationId: String): Boolean =
+      error("receipt_capability_must_be_used")
+    fun resetInstalls(): List<QueuedEvent> = deliveredPayloads.flatten().filter {
+      it.eventName == "install" && it.payloadJson.contains("\"install_origin\":\"identifier_reset\"")
+    }
   }
 
   private class RecordingTransport(private val deliverySucceeds: Boolean) : OpenMasuTransport {

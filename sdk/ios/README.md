@@ -231,6 +231,14 @@ a new identifier and does not fetch AdServices again. The SDK uses the canonical
 `POST /v1/privacy/installation` route; the server also retains the older
 `POST /v1/privacy/on-device` route as an authenticated compatibility alias.
 
+Reset journals a receipt before sending. While the server reports `processing`,
+the SDK throws `resetPending` and keeps collection and normal delivery stopped.
+Initialize, flush, or a repeated reset resumes checking after restart; only
+confirmed completion creates one replacement installation. Consent and explicit
+collection disablement are preserved. Custom transports can opt into
+`OpenMasuDeletionTransport`; legacy transports must complete deletion synchronously
+before returning success. See the [receipt protocol](../../docs/privacy-security.md#sdk-deletion-receipts).
+
 The bundled privacy manifest declares tracking disabled and documents the SDK's
 linked device identifier, product interaction, purchase history, and advertising
 data categories. Operators must verify the final application manifest and App

@@ -33,6 +33,7 @@ export type PrivacyIdentity = {
   requesterAuthRef: string;
   installationKeyId?: string;
   deletionSubjectDigest: string;
+  statusReceiptDigest?: string;
 };
 
 type AppPrivacyIdentity = AppAdminIdentity & { deletionSubjectDigest: string };
@@ -143,11 +144,37 @@ export async function executePrivacyRequest(
     throw error;
   }
   const completedAt = currentTimestamp(now);
-  const requestId = `privacy:${uuidV7(now?.valueOf())}`;
+  const receiptDigest = "statusReceiptDigest" in identity ? identity.statusReceiptDigest : undefined;
+  if (receiptDigest !== undefined && !/^[a-f0-9]{64}$/.test(receiptDigest)) throw new Error("privacy_receipt_invalid");
+  const requestId = receiptDigest
+    ? `privacy:receipt:${sha256([body.tenant_id, body.app_id, receiptDigest]).slice(0, 48)}`
+    : `privacy:${uuidV7(now?.valueOf())}`;
   const subjectDigest = identity.deletionSubjectDigest;
   if (!/^[a-f0-9]{64}$/.test(subjectDigest)) throw new Error("privacy_subject_digest_invalid");
   const prepared = await withTenant(pool, body.tenant_id, async (client) => {
     await acquirePrivacyTenantXactFence(client, body.tenant_id, "exclusive");
+    if (receiptDigest) {
+      const existing = (await client.query<{ actor_ref: string; subject_digest: string; status: string }>(
+        `SELECT actor_ref, artifact_template->>'deletion_subject_digest' AS subject_digest, status
+           FROM control.privacy_deletion_jobs
+          WHERE tenant_id=$1 AND app_id=$2 AND status_receipt_digest=$3`,
+        [body.tenant_id, body.app_id, receiptDigest],
+      )).rows[0];
+      if (existing) {
+        if (!("actorRef" in identity) || existing.actor_ref !== identity.actorRef || existing.subject_digest !== subjectDigest) {
+          throw Object.assign(new Error("privacy_receipt_conflict"), { statusCode: 409 });
+        }
+        return { processingArtifact: { privacy_request_id: requestId, status: existing.status } };
+      }
+      // Authentication preceded this fence. Reject a second concurrent deletion
+      // using a different receipt after the first request revoked the credential.
+      const active = await client.query(
+        `SELECT 1 FROM control.installation_credentials_current
+          WHERE tenant_id=$1 AND app_id=$2 AND installation_key_id=$3 AND status='active'`,
+        [body.tenant_id, body.app_id, "installationKeyId" in identity ? identity.installationKeyId : null],
+      );
+      if (!active.rowCount) throw Object.assign(new Error("installation_credential_inactive"), { statusCode: 401 });
+    }
     const records = await affectedRecordIds(client, body);
     // Serialize deletion recognition with tenant-scoped projection and provider fences.
     // If deletion takes the lock first, no pending request can cross the boundary;
@@ -673,12 +700,13 @@ export async function executePrivacyRequest(
     await client.query(
       `INSERT INTO control.privacy_deletion_jobs (
         privacy_request_id,tenant_id,app_id,status,requested_at,artifact_template,
-        actor_type,actor_ref,request_digest,updated_at
-      ) VALUES ($1,$2,$3,'processing',$4,$5::jsonb,$6,$7,$8,$4)`,
+        actor_type,actor_ref,request_digest,updated_at,status_receipt_digest,status_receipt_expires_at
+      ) VALUES ($1,$2,$3,'processing',$4,$5::jsonb,$6,$7,$8,$4,$9,$10)`,
       [requestId, body.tenant_id, body.app_id, completedAt, JSON.stringify(artifactTemplate),
         "actorType" in identity ? identity.actorType : "admin_key",
         "actorRef" in identity ? identity.actorRef : `admin_key:${identity.keyId}`,
-        sha256(body)],
+        sha256(body), receiptDigest ?? null,
+        receiptDigest ? new Date(Date.parse(completedAt) + 30 * 86_400_000).toISOString() : null],
     );
     for (const reference of protectedReferences) {
       await client.query(

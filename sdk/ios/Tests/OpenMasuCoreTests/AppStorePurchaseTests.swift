@@ -216,6 +216,50 @@ final class AppStorePurchaseTests: XCTestCase {
     XCTAssertEqual(preparations, 0)
   }
 
+  func testDeletionReceiptHttpResponsesResumeWithoutRevokedCredentials() async throws {
+    let recorder = PurchaseRequestRecorder()
+    let (sdk, storage) = try httpSdk { request in
+      let body = try requestBody(request)
+      recorder.append(request, body)
+      XCTAssertEqual(request.httpMethod, "POST")
+      XCTAssertNil(request.url?.query)
+      let object = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+      switch request.url!.path {
+      case "/v1/privacy/installation/status":
+        XCTAssertEqual(Set(object.keys), Set(["status_receipt"]))
+        XCTAssertEqual((object["status_receipt"] as? String)?.count, 64)
+        for header in ["authorization", "x-openmasu-signature", "x-openmasu-installation-key-id", "x-openmasu-sdk-key-id"] {
+          XCTAssertNil(request.value(forHTTPHeaderField: header), "receipt status must not rely on revoked credentials")
+        }
+        let lookups = recorder.values().filter { $0.0.url!.path.hasSuffix("/status") }.count
+        return lookups == 1 ? (404, Data("{}".utf8)) : (200, Data("{\"status\":\"completed\"}".utf8))
+      case "/v1/privacy/installation":
+        XCTAssertEqual(Set(object.keys), Set(["installation_id", "status_receipt"]))
+        XCTAssertEqual(request.value(forHTTPHeaderField: "x-openmasu-installation-key-id"), "installation-key:synthetic")
+        XCTAssertNotNil(request.value(forHTTPHeaderField: "x-openmasu-signature"))
+        return (202, Data("{\"status\":\"processing\"}".utf8))
+      case "/v1/installations":
+        return (201, Data("{\"installation_key_id\":\"installation-key:replacement\",\"installation_secret\":\"synthetic-replacement-secret\"}".utf8))
+      case "/v1/events/batch":
+        return (202, Data("{}".utf8))
+      default:
+        XCTFail("unexpected synthetic route")
+        return (500, Data("{}".utf8))
+      }
+    }
+    let oldId = try storage.installationId()
+    await assertError(.resetPending) { try await sdk.resetInstallationId() }
+    XCTAssertEqual(try storage.installationId(), oldId)
+    try await sdk.resetInstallationId()
+    XCTAssertNotEqual(try storage.installationId(), oldId)
+    let requests = recorder.values()
+    XCTAssertEqual(requests.map { $0.0.url!.path }, [
+      "/v1/privacy/installation/status", "/v1/privacy/installation", "/v1/privacy/installation/status",
+      "/v1/installations", "/v1/events/batch",
+    ])
+    XCTAssertEqual(requests[0].1, requests[2].1, "the durable receipt is reused across status queries")
+  }
+
   private func configuration(endpoint: URL = URL(string: "http://127.0.0.1:1")!) -> OpenMasuConfiguration {
     OpenMasuConfiguration(endpoint: endpoint, sdkKeyId: "sdk-key:synthetic", sdkSecret: "synthetic-sdk-secret-32-bytes")
   }

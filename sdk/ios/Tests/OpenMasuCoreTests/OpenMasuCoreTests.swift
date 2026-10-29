@@ -491,6 +491,108 @@ final class OpenMasuCoreTests: XCTestCase {
     XCTAssertEqual(resumedInstallationId, pendingInstallationId)
   }
 
+  func testPendingDeletionSurvivesReopenAndBlocksCollectionUntilOneReplacementIsReady() async throws {
+    let root = temporaryDirectory("receipt-pending")
+    let transport = ReceiptTransport()
+    let sdk = try OpenMasuSDK(configuration: configuration(defaultEnabled: true), storageRoot: root, transport: transport)
+    try await sdk.initialize()
+    let oldId = try await sdk.installationIdForMeasurement()
+    await transport.setDeliveryFailure(true)
+    do { try await sdk.startSession(); XCTFail("synthetic delivery must leave the old queue pending") }
+    catch { XCTAssertEqual(error as? OpenMasuError, .transport(503)) }
+    let queuedBeforeReset = try await sdk.pendingCount()
+    XCTAssertEqual(queuedBeforeReset, 1)
+    do { try await sdk.resetInstallationId(); XCTFail("deletion is still processing") }
+    catch { XCTAssertEqual(error as? OpenMasuError, .resetPending) }
+    let receipt = try OpenMasuStorage(root: root).deletionJournal()?.receipt
+    XCTAssertEqual(receipt?.count, 64)
+    let retainedId = try await sdk.installationIdForMeasurement()
+    XCTAssertEqual(retainedId, oldId)
+    let deliveriesBeforeGrant = await transport.deliveredPayloads().count
+    try await sdk.updateConsent(state: "granted", policyVersion: "synthetic-policy-granted")
+    try await sdk.setCollectionEnabled(false)
+    do { try await sdk.setCollectionEnabled(true); XCTFail("enabling collection must not bypass deletion") }
+    catch { XCTAssertEqual(error as? OpenMasuError, .resetPending) }
+    try await sdk.startSession()
+    let enabled = try await sdk.isCollectionEnabled()
+    let remaining = try await sdk.pendingCount()
+    let deliveriesAfterGrant = await transport.deliveredPayloads().count
+    XCTAssertFalse(enabled)
+    XCTAssertEqual(remaining, 0)
+    XCTAssertEqual(deliveriesAfterGrant, deliveriesBeforeGrant)
+
+    let reopened = try OpenMasuSDK(configuration: configuration(defaultEnabled: true), storageRoot: root, transport: transport)
+    do { try await reopened.initialize(); XCTFail("reopening must retain the pending deletion") }
+    catch { XCTAssertEqual(error as? OpenMasuError, .resetPending) }
+    XCTAssertEqual(try OpenMasuStorage(root: root).deletionJournal()?.receipt, receipt)
+    await transport.setDeliveryFailure(false)
+    await transport.completeDeletion()
+    try await reopened.flush()
+    let replacement = try await reopened.installationIdForMeasurement()
+    XCTAssertNotEqual(replacement, oldId)
+    XCTAssertNil(try OpenMasuStorage(root: root).deletionJournal())
+    try await reopened.flush()
+    let stableReplacement = try await reopened.installationIdForMeasurement()
+    let beginCalls = await transport.beginCount()
+    let enrolled = await transport.enrolledInstallations()
+    let resets = await transport.resetInstalls()
+    XCTAssertEqual(stableReplacement, replacement)
+    XCTAssertEqual(beginCalls, 1)
+    XCTAssertEqual(enrolled, [oldId, replacement])
+    XCTAssertEqual(resets.count, 1)
+  }
+
+  func testLostDeletionResponseRecoversByReceiptWithoutResubmittingDeletion() async throws {
+    let root = temporaryDirectory("receipt-response-lost")
+    let transport = ReceiptTransport(completeOnBegin: true, loseBeginResponse: true)
+    let sdk = try OpenMasuSDK(configuration: configuration(defaultEnabled: true), storageRoot: root, transport: transport)
+    try await sdk.initialize()
+    let oldId = try await sdk.installationIdForMeasurement()
+    do { try await sdk.resetInstallationId(); XCTFail("the accepted response is lost") }
+    catch { XCTAssertEqual(error as? OpenMasuError, .transport(503)) }
+    let retainedId = try await sdk.installationIdForMeasurement()
+    XCTAssertEqual(retainedId, oldId)
+    let receipt = try OpenMasuStorage(root: root).deletionJournal()?.receipt
+
+    let reopened = try OpenMasuSDK(configuration: configuration(defaultEnabled: true), storageRoot: root, transport: transport)
+    try await reopened.initialize()
+    try await reopened.flush()
+    let replacement = try await reopened.installationIdForMeasurement()
+    let acceptedReceipt = await transport.acceptedReceipt()
+    let beginCalls = await transport.beginCount()
+    let enrolled = await transport.enrolledInstallations()
+    let resets = await transport.resetInstalls()
+    XCTAssertNotEqual(replacement, oldId)
+    XCTAssertEqual(acceptedReceipt, receipt)
+    XCTAssertEqual(beginCalls, 1)
+    XCTAssertEqual(enrolled.count, 2)
+    XCTAssertEqual(resets.count, 1)
+  }
+
+  func testCompletedDeletionDoesNotRepeatWhenReplacementEnrollmentIsRetried() async throws {
+    let transport = ReceiptTransport(completeOnBegin: true)
+    let sdk = try OpenMasuSDK(
+      configuration: configuration(defaultEnabled: true),
+      storageRoot: temporaryDirectory("receipt-enrollment-retry"), transport: transport
+    )
+    try await sdk.initialize()
+    let oldId = try await sdk.installationIdForMeasurement()
+    await transport.failNextEnrollment()
+    do { try await sdk.resetInstallationId(); XCTFail("replacement enrollment is temporarily unavailable") }
+    catch { XCTAssertEqual(error as? OpenMasuError, .transport(503)) }
+    let replacement = try await sdk.installationIdForMeasurement()
+    XCTAssertNotEqual(replacement, oldId)
+    try await sdk.resetInstallationId()
+    let stableReplacement = try await sdk.installationIdForMeasurement()
+    let beginCalls = await transport.beginCount()
+    let enrolled = await transport.enrolledInstallations()
+    let resets = await transport.resetInstalls()
+    XCTAssertEqual(stableReplacement, replacement)
+    XCTAssertEqual(beginCalls, 1)
+    XCTAssertEqual(enrolled, [oldId, replacement, replacement])
+    XCTAssertEqual(resets.count, 1)
+  }
+
   func testM4A29RevenueReusesImpressionIdentifierAsEventIdentifier() async throws {
     let transport = RecordingTransport(deliveryFailure: true)
     let sdk = try OpenMasuSDK(
@@ -809,6 +911,60 @@ private actor RecordingTransport: OpenMasuTransport {
   func deliveredPayloads() -> [[QueuedEvent]] { payloads }
   func setDeliveryFailure(_ value: Bool) { failDelivery = value }
   func failNextEnrollment() { enrollmentFailures += 1 }
+}
+
+private actor ReceiptTransport: OpenMasuDeletionTransport {
+  private var receipt: String?
+  private var state = DeletionStatus.missing
+  private var begins = 0
+  private var enrolled: [String] = []
+  private var payloads: [[QueuedEvent]] = []
+  private var enrollmentFailures = 0
+  private var failDelivery = false
+  private let completeOnBegin: Bool
+  private let loseBeginResponse: Bool
+
+  init(completeOnBegin: Bool = false, loseBeginResponse: Bool = false) {
+    self.completeOnBegin = completeOnBegin
+    self.loseBeginResponse = loseBeginResponse
+  }
+  func enroll(installationId: String) async throws -> InstallationCredential {
+    enrolled.append(installationId)
+    if enrollmentFailures > 0 {
+      enrollmentFailures -= 1
+      throw OpenMasuError.transport(503)
+    }
+    return .init(keyId: "installation-key:synthetic", secret: "synthetic-installation-secret-32-bytes")
+  }
+  func deliver(credential: InstallationCredential, events: [QueuedEvent]) async throws {
+    payloads.append(events)
+    if failDelivery { throw OpenMasuError.transport(503) }
+  }
+  func deleteInstallation(credential: InstallationCredential, installationId: String) async throws {
+    XCTFail("receipt capability must be used")
+    throw OpenMasuError.transport(500)
+  }
+  func beginDeletion(credential: InstallationCredential, installationId: String, receipt: String) async throws -> DeletionStatus {
+    begins += 1
+    XCTAssertTrue(self.receipt == nil || self.receipt == receipt)
+    self.receipt = receipt
+    state = completeOnBegin ? .completed : .processing
+    if loseBeginResponse { throw OpenMasuError.transport(503) }
+    return state
+  }
+  func deletionStatus(receipt: String) async throws -> DeletionStatus { self.receipt == receipt ? state : .missing }
+  func completeDeletion() { state = .completed }
+  func setDeliveryFailure(_ value: Bool) { failDelivery = value }
+  func failNextEnrollment() { enrollmentFailures += 1 }
+  func acceptedReceipt() -> String? { receipt }
+  func beginCount() -> Int { begins }
+  func enrolledInstallations() -> [String] { enrolled }
+  func deliveredPayloads() -> [[QueuedEvent]] { payloads }
+  func resetInstalls() -> [QueuedEvent] {
+    payloads.flatMap { $0 }.filter {
+      $0.eventName == "install" && $0.payloadJson.contains("\"install_origin\":\"identifier_reset\"")
+    }
+  }
 }
 
 private final class CountingTokenProvider: AdServicesTokenProviding, @unchecked Sendable {
