@@ -836,6 +836,31 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     assert.equal("app_id" in apiLinksBody.data[0], false);
     assert.equal("artifact" in apiLinksBody.data[0], false);
 
+    const linkId = encodeURIComponent(String(apiLinksBody.data[0].tracking_link_id));
+    const previewUrl = `${baseUrl}/v1/admin/apps/${newAppId}/tracking-links/${linkId}/preview`;
+    const previewReader = `synthetic-link-reader-${suffix}-${"p".repeat(32)}`;
+    await ensureAdminKeys(appPool, { tenantId, appId }, [{ key: previewReader, role: "read_only" }]);
+    const previewHeaders = { authorization: `Bearer ${previewReader}` };
+    const counts = () => withTenant(readerPool, tenantId, async client => (await client.query(`SELECT
+      (SELECT count(*) FROM ledger.ingest_batches WHERE tenant_id=$1) AS batches,
+      (SELECT count(*) FROM ledger.raw_records WHERE tenant_id=$1) AS raw,
+      (SELECT count(*) FROM ledger.event_deliveries WHERE tenant_id=$1) AS deliveries,
+      (SELECT count(*) FROM ledger.click_facts WHERE tenant_id=$1) AS clicks,
+      (SELECT count(*) FROM ledger.audit_logs WHERE tenant_id=$1) AS audits`, [tenantId])).rows[0]);
+    const beforePreview = await counts();
+    const androidPreview = await fetch(`${previewUrl}?platform=android`, { headers: previewHeaders });
+    assert.equal(androidPreview.status, 200);
+    const preview = await androidPreview.json() as { preview_only: boolean; destination: string; click_id_placeholder: string; fallback_reason: string | null };
+    assert.equal(preview.preview_only, true); assert.equal(preview.fallback_reason, null);
+    assert.match(preview.click_id_placeholder, /^synthetic_preview_/); assert.equal(preview.click_id_placeholder.length, 44);
+    assert.equal((await fetch(`${previewUrl}?platform=ios`, { headers: previewHeaders }).then(response => response.json()) as { fallback_reason: string }).fallback_reason, "platform_not_supported");
+    assert.equal((await fetch(`${previewUrl}?platform=android&path=%2F..%2Funsafe`, { headers: previewHeaders }).then(response => response.json()) as { fallback_reason: string }).fallback_reason, "invalid_deep_link_path");
+    assert.equal((await fetch(`${previewUrl}?platform=android&next=https://unsafe.example`, { headers: previewHeaders })).status, 400);
+    assert.equal((await fetch(`${previewUrl}?platform=android`)).status, 401);
+    const previewHtml = await fetch(`${baseUrl}/dashboard/apps/${newAppId}/tracking-links/${linkId}/preview?platform=android`, { headers: { cookie: dashboardCookie } });
+    assert.equal(previewHtml.status, 200); assert.match(await previewHtml.text(), /Preview without recording a click/);
+    assert.deepEqual(await counts(), beforePreview, "preview does not write receipt, click, delivery or audit evidence");
+
     const emptyReport = await fetch(`${baseUrl}/v1/reports/metrics?app_id=${newAppId}&format=json`, { headers });
     assert.equal(emptyReport.status, 200);
     assert.deepEqual(await emptyReport.json(), { data: [] });
@@ -856,6 +881,10 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     assert.equal(unknownLinks.status, 404);
     assert.equal(crossTenantLinks.status, 404);
     assert.equal(await unknownLinks.text(), await crossTenantLinks.text());
+    const previewUnknown = await fetch(`${baseUrl}/v1/admin/apps/missing-${suffix}/tracking-links/${linkId}/preview?platform=android`, { headers });
+    const previewForeign = await fetch(`${baseUrl}/v1/admin/apps/${otherApp}/tracking-links/${linkId}/preview?platform=android`, { headers });
+    assert.equal(previewUnknown.status, 404); assert.equal(previewForeign.status, 404);
+    assert.equal(await previewUnknown.text(), await previewForeign.text());
   });
 
   it("WO13 creates tracking links for configured origins and rejects unconfigured origins", async () => {

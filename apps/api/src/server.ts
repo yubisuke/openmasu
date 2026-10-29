@@ -110,6 +110,7 @@ const server = createServer(createRequestHandler({
       .split(",").map((value) => value.trim()).filter(Boolean),
   },
   referrerMaximumEncodedCharacters: Number(process.env.OPENMASU_REFERRER_MAX_ENCODED_CHARS ?? "512"),
+  redirectorFallbackUrl: process.env.OPENMASU_REDIRECTOR_FALLBACK_URL ?? "https://play.google.com/store",
   applePostback: {
     pool,
     payloadStore,

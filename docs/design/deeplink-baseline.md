@@ -12,6 +12,22 @@ iOS deferred deep linking.
 
 ## Link ownership and destinations
 
+Operators can preview a registered link without recording a click from its
+dashboard **Preview without recording a click** link, or read
+`GET /v1/admin/apps/<app-id>/tracking-links/<link-id>/preview?platform=android`.
+The explicit platform is `android`, `ios` or `other`; optional `path` uses the
+same bounded direct-path grammar, and `dlp_<name>` accepts only registered
+parameter names. Duplicate/unknown query fields are refused. Invalid parameter
+values are dropped by the ordinary binder and shown as a count.
+
+The reader-only projection uses the live shared resolver and configured fallback
+URL/referrer budget. It shows destination, paused/archived/platform/path fallback,
+permitted parameters and deferred-payload budget, with a fixed 44-character
+synthetic click placeholder. It does not contact the destination or create a
+click, install, outbox entry or job. Custom HTTPS links retain their stored URL;
+preview does not invent path/query forwarding. Preview is not a test of an
+installed app, public association, real device or store.
+
 Each tenant registers a link host that is unique across the deployment. A
 single-tenant deployment may use an explicit fixed-tenant mode. Link creation
 accepts only a closed destination grammar and an allowlisted HTTPS or supported

@@ -223,12 +223,10 @@ export function createRedirectorHandler(dependencies: RedirectorDependencies): R
         catch { return send(response, fallback); }
         return send(response, result);
       }
-      if (link.destination_kind === "play_store" && !/Android/i.test(request.headers["user-agent"] ?? "")) {
-        return send(response, fallback);
-      }
       try {
         const result = resolveRedirect({
           link,
+          platform: /Android/i.test(request.headers["user-agent"] ?? "") ? "android" : "other",
           fallbackDestination: dependencies.fallbackUrl,
           now: (dependencies.clock ?? (() => new Date()))().toISOString(),
           ...(remoteClickRef ? { remoteClickRef } : {}),
