@@ -1,0 +1,421 @@
+{
+  "contract_version": "0.4.0",
+  "fx_policy": {
+    "policy_version": "fx-v0.1",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "100000000",
+        "rate_scale": 8,
+        "source": "synthetic-fixture-rate",
+        "as_of": "2026-08-12T00:00:00.000Z"
+      }
+    ]
+  },
+  "metric_evaluations": [],
+  "reconciliation_inputs": [],
+  "privacy_requests": [],
+  "batches": [
+    {
+      "batch_id": "window76-click",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-09-02T00:00:00.000Z",
+        "policy_digest": "policy-v0.1",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "analytics",
+            "consent_required": false,
+            "policy_version": "consent-v0.1"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "window76-click",
+          "delivery_id": "delivery:window76-click",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "redirector",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:window76-click",
+          "event_name": "click",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-01T00:00:00.000Z",
+          "occurred_at_source": "server",
+          "received_at": "2026-09-02T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 1,
+          "payload": {
+            "click_id": "window76-click_0000000000",
+            "tracking_link_id": "window76-link",
+            "campaign_id": "window76-campaign",
+            "redirector_click_at": "2026-08-01T00:00:00.000Z",
+            "redirector_time_status": "available"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "window76-1",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-09-02T00:00:00.000Z",
+        "policy_digest": "policy-v0.1",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "analytics",
+            "consent_required": false,
+            "policy_version": "consent-v0.1"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": [],
+        "first_party_attribution_bundle": {
+          "rule_bundle_id": "attribution-first-party-window",
+          "rule_bundle_version": "0.4.29",
+          "rule_bundle_hash": "131a7690020c426b42ba91a9fc1b28e3c679da00b37ccd40146c66939a391cac",
+          "definition_digest": "131a7690020c426b42ba91a9fc1b28e3c679da00b37ccd40146c66939a391cac",
+          "definition": {
+            "id": "attribution-first-party-window",
+            "version": "0.4.29",
+            "kind": "attribution",
+            "implementation": "first-party-install-referrer-v0.4.29",
+            "lookback_days": 1,
+            "rules": [
+              "accepted-unique-exact-click-reference",
+              "redirector-to-play-server-half-open-window",
+              "install-original-receipt-revision",
+              "never-reinterpret-imported-platform-or-engagement"
+            ]
+          },
+          "rule_bundle_revision_id": "window76-revision-1"
+        }
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "window76-1-before",
+          "delivery_id": "delivery:window76-1-before",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:window76-1-before",
+          "event_name": "install",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-01T23:59:59.999Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-09-02T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 1,
+          "payload": {
+            "installation_id": "installation:window76-1-before",
+            "install_type": "first_install",
+            "referrer_status": "available",
+            "click_id": "window76-click_0000000000",
+            "install_begin_at_server_status": "available",
+            "install_begin_at_server": "2026-08-01T23:59:59.999Z",
+            "protected_referrer_evidence_ref": "protected:referrer:window76-1-before"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "window76-1-exact",
+          "delivery_id": "delivery:window76-1-exact",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:window76-1-exact",
+          "event_name": "install",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-02T00:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-09-02T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 1,
+          "payload": {
+            "installation_id": "installation:window76-1-exact",
+            "install_type": "first_install",
+            "referrer_status": "available",
+            "click_id": "window76-click_0000000000",
+            "install_begin_at_server_status": "available",
+            "install_begin_at_server": "2026-08-02T00:00:00.000Z",
+            "protected_referrer_evidence_ref": "protected:referrer:window76-1-exact"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "window76-1-after",
+          "delivery_id": "delivery:window76-1-after",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:window76-1-after",
+          "event_name": "install",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-02T00:00:00.001Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-09-02T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 1,
+          "payload": {
+            "installation_id": "installation:window76-1-after",
+            "install_type": "first_install",
+            "referrer_status": "available",
+            "click_id": "window76-click_0000000000",
+            "install_begin_at_server_status": "available",
+            "install_begin_at_server": "2026-08-02T00:00:00.001Z",
+            "protected_referrer_evidence_ref": "protected:referrer:window76-1-after"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "window76-7",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-09-02T00:00:00.000Z",
+        "policy_digest": "policy-v0.1",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "analytics",
+            "consent_required": false,
+            "policy_version": "consent-v0.1"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": [],
+        "first_party_attribution_bundle": {
+          "rule_bundle_id": "attribution-first-party-window",
+          "rule_bundle_version": "0.4.29",
+          "rule_bundle_hash": "dbb3bd7349b259a7b9e5398c5309a4e1dcb9b060d8fbf52e9d5069b5b1254a36",
+          "definition_digest": "dbb3bd7349b259a7b9e5398c5309a4e1dcb9b060d8fbf52e9d5069b5b1254a36",
+          "definition": {
+            "id": "attribution-first-party-window",
+            "version": "0.4.29",
+            "kind": "attribution",
+            "implementation": "first-party-install-referrer-v0.4.29",
+            "lookback_days": 7,
+            "rules": [
+              "accepted-unique-exact-click-reference",
+              "redirector-to-play-server-half-open-window",
+              "install-original-receipt-revision",
+              "never-reinterpret-imported-platform-or-engagement"
+            ]
+          },
+          "rule_bundle_revision_id": "window76-revision-7"
+        }
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "window76-7-before",
+          "delivery_id": "delivery:window76-7-before",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:window76-7-before",
+          "event_name": "install",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-07T23:59:59.999Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-09-02T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 1,
+          "payload": {
+            "installation_id": "installation:window76-7-before",
+            "install_type": "first_install",
+            "referrer_status": "available",
+            "click_id": "window76-click_0000000000",
+            "install_begin_at_server_status": "available",
+            "install_begin_at_server": "2026-08-07T23:59:59.999Z",
+            "protected_referrer_evidence_ref": "protected:referrer:window76-7-before"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "window76-7-exact",
+          "delivery_id": "delivery:window76-7-exact",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:window76-7-exact",
+          "event_name": "install",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-08T00:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-09-02T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 1,
+          "payload": {
+            "installation_id": "installation:window76-7-exact",
+            "install_type": "first_install",
+            "referrer_status": "available",
+            "click_id": "window76-click_0000000000",
+            "install_begin_at_server_status": "available",
+            "install_begin_at_server": "2026-08-08T00:00:00.000Z",
+            "protected_referrer_evidence_ref": "protected:referrer:window76-7-exact"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "window76-7-after",
+          "delivery_id": "delivery:window76-7-after",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:window76-7-after",
+          "event_name": "install",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-08T00:00:00.001Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-09-02T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 1,
+          "payload": {
+            "installation_id": "installation:window76-7-after",
+            "install_type": "first_install",
+            "referrer_status": "available",
+            "click_id": "window76-click_0000000000",
+            "install_begin_at_server_status": "available",
+            "install_begin_at_server": "2026-08-08T00:00:00.001Z",
+            "protected_referrer_evidence_ref": "protected:referrer:window76-7-after"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "window76-30",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-09-02T00:00:00.000Z",
+        "policy_digest": "policy-v0.1",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "analytics",
+            "consent_required": false,
+            "policy_version": "consent-v0.1"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": [],
+        "first_party_attribution_bundle": {
+          "rule_bundle_id": "attribution-first-party-window",
+          "rule_bundle_version": "0.4.29",
+          "rule_bundle_hash": "ec391eeaae029ee2686eb8a2aeb22b0dd1d763a8435d3c9fad145c6b03a0d705",
+          "definition_digest": "ec391eeaae029ee2686eb8a2aeb22b0dd1d763a8435d3c9fad145c6b03a0d705",
+          "definition": {
+            "id": "attribution-first-party-window",
+            "version": "0.4.29",
+            "kind": "attribution",
+            "implementation": "first-party-install-referrer-v0.4.29",
+            "lookback_days": 30,
+            "rules": [
+              "accepted-unique-exact-click-reference",
+              "redirector-to-play-server-half-open-window",
+              "install-original-receipt-revision",
+              "never-reinterpret-imported-platform-or-engagement"
+            ]
+          },
+          "rule_bundle_revision_id": "window76-revision-30"
+        }
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "window76-30-before",
+          "delivery_id": "delivery:window76-30-before",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:window76-30-before",
+          "event_name": "install",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-30T23:59:59.999Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-09-02T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 1,
+          "payload": {
+            "installation_id": "installation:window76-30-before",
+            "install_type": "first_install",
+            "referrer_status": "available",
+            "click_id": "window76-click_0000000000",
+            "install_begin_at_server_status": "available",
+            "install_begin_at_server": "2026-08-30T23:59:59.999Z",
+            "protected_referrer_evidence_ref": "protected:referrer:window76-30-before"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "window76-30-exact",
+          "delivery_id": "delivery:window76-30-exact",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:window76-30-exact",
+          "event_name": "install",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-31T00:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-09-02T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 1,
+          "payload": {
+            "installation_id": "installation:window76-30-exact",
+            "install_type": "first_install",
+            "referrer_status": "available",
+            "click_id": "window76-click_0000000000",
+            "install_begin_at_server_status": "available",
+            "install_begin_at_server": "2026-08-31T00:00:00.000Z",
+            "protected_referrer_evidence_ref": "protected:referrer:window76-30-exact"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "window76-30-after",
+          "delivery_id": "delivery:window76-30-after",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:window76-30-after",
+          "event_name": "install",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-31T00:00:00.001Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-09-02T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 1,
+          "payload": {
+            "installation_id": "installation:window76-30-after",
+            "install_type": "first_install",
+            "referrer_status": "available",
+            "click_id": "window76-click_0000000000",
+            "install_begin_at_server_status": "available",
+            "install_begin_at_server": "2026-08-31T00:00:00.001Z",
+            "protected_referrer_evidence_ref": "protected:referrer:window76-30-after"
+          }
+        }
+      ]
+    }
+  ]
+}

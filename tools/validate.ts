@@ -611,8 +611,8 @@ if (!summaryOnly) {
         }
       });
     }
-    it("contains 72 fixture directories", () => {
-      check(fixtureDirs.length === 75, `expected 75 fixture directories, found ${fixtureDirs.length}`);
+    it("contains 76 fixture directories", () => {
+      check(fixtureDirs.length === 76, `expected 76 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -667,6 +667,36 @@ if (!summaryOnly) {
 }
 
 const scenarios: Array<[string, () => void]> = [
+  ["76 closed first-party windows bind exclusive boundaries without reinterpreting the default", () => {
+    const { input, output } = fixture("76-first-party-attribution-windows");
+    check(output.raw_records.length === 10 && output.attributions.length === 9
+      && output.deliveries.every((row: Any) => row.ingestion_status === "accepted"), "scenario 76 admitted inventory");
+    const hashes: Record<number, string> = {
+      1: "131a7690020c426b42ba91a9fc1b28e3c679da00b37ccd40146c66939a391cac",
+      7: "dbb3bd7349b259a7b9e5398c5309a4e1dcb9b060d8fbf52e9d5069b5b1254a36",
+      30: "ec391eeaae029ee2686eb8a2aeb22b0dd1d763a8435d3c9fad145c6b03a0d705",
+    };
+    for (const days of [1, 7, 30]) for (const boundary of ["before", "exact", "after"]) {
+      const recordId = `window76-${days}-${boundary}`;
+      const row = output.attributions.find((item: Any) => item.subject_ref === `installation:${recordId}`);
+      check(row?.reason_code === (boundary === "before" ? "valid_install_referrer" : "window_expired"),
+        `scenario 76 ${days}-day ${boundary} exclusive boundary`);
+      check(row.rule_bundle_id === "attribution-first-party-window" && row.rule_bundle_version === "0.4.29"
+        && row.rule_bundle_hash === hashes[days]
+        && row.attribution_id === `attr:window:${sha256(["tenant-a", "app-a", recordId, hashes[days]])}`,
+        `scenario 76 ${days}-day complete definition binding`);
+    }
+    const historical = structuredClone(input);
+    for (const batch of historical.batches) delete batch.server_context.first_party_attribution_bundle;
+    const defaultOutput = evaluate(historical);
+    check(defaultOutput.attributions.filter((row: Any) => row.status === "non_organic").length === 4
+      && defaultOutput.attributions.every((row: Any) => row.rule_bundle_id === "attribution-default"
+        && row.attribution_id === `attr:${row.subject_ref.slice("installation:".length)}`),
+    "scenario 76 absence preserves historical seven-day policy and IDs");
+    for (const family of Object.keys(output).filter((key) => key !== "attributions")) {
+      check(equal(output[family], (defaultOutput as Any)[family]), `scenario 76 unchanged non-attribution ${family}`);
+    }
+  }],
   ["75 explicit engagement policy separates inactive active unknown and original-purchase refund credit", () => {
     const output = fixture("75-engagement-policy").output;
     check(output.raw_records.length === 13 && output.corrections.length === 1, "scenario 75 admitted inventory");
@@ -1190,8 +1220,8 @@ const scenarios: Array<[string, () => void]> = [
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 75 scenario assertions", () => {
-      check(scenarios.length === 75, "scenario assertion inventory must contain 75 entries");
+    it("contains 76 scenario assertions", () => {
+      check(scenarios.length === 76, "scenario assertion inventory must contain 76 entries");
     });
   });
 
@@ -1760,7 +1790,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 75 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 76 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1801,7 +1831,7 @@ const acceptance: Array<[string, () => void]> = [
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
   ["AC21 one command validates every schema registry fixture and golden", () => {
-    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 75 && outputArtifactCount === 75 * 13, "AC21");
+    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 76 && outputArtifactCount === 76 * 13, "AC21");
     checkDocumentationDrift(root, validationSummary());
   }],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {

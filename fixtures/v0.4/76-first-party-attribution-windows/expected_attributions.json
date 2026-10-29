@@ -1,0 +1,275 @@
+[
+  {
+    "attribution_id": "attr:window:03fbfb7e135f3f70a3d29c72860144471109948b94d4f230a59ac39b23093af4",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:window76-30-after",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "window76-30-after",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-31T00:00:00.001Z",
+    "decided_at": "2026-09-02T00:00:00.000Z",
+    "input_cutoff_at": "2026-09-02T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-first-party-window",
+    "rule_bundle_version": "0.4.29",
+    "rule_bundle_hash": "ec391eeaae029ee2686eb8a2aeb22b0dd1d763a8435d3c9fad145c6b03a0d705",
+    "status": "unattributed",
+    "method": "none",
+    "model": "none",
+    "reason_code": "window_expired"
+  },
+  {
+    "attribution_id": "attr:window:0da70d47d8768ade5c644be53bdc22b34c96613635b3d3f5c7e9532850f673fb",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:window76-1-after",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "window76-1-after",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-02T00:00:00.001Z",
+    "decided_at": "2026-09-02T00:00:00.000Z",
+    "input_cutoff_at": "2026-09-02T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-first-party-window",
+    "rule_bundle_version": "0.4.29",
+    "rule_bundle_hash": "131a7690020c426b42ba91a9fc1b28e3c679da00b37ccd40146c66939a391cac",
+    "status": "unattributed",
+    "method": "none",
+    "model": "none",
+    "reason_code": "window_expired"
+  },
+  {
+    "attribution_id": "attr:window:3f57593950483751fd1a19b3702a5a8c94f2868708e50288b49f572baa6b22c3",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:window76-7-after",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "window76-7-after",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-08T00:00:00.001Z",
+    "decided_at": "2026-09-02T00:00:00.000Z",
+    "input_cutoff_at": "2026-09-02T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-first-party-window",
+    "rule_bundle_version": "0.4.29",
+    "rule_bundle_hash": "dbb3bd7349b259a7b9e5398c5309a4e1dcb9b060d8fbf52e9d5069b5b1254a36",
+    "status": "unattributed",
+    "method": "none",
+    "model": "none",
+    "reason_code": "window_expired"
+  },
+  {
+    "attribution_id": "attr:window:72072ddda73ecf4bf7642e30e03b8d0736d2f32e0a948c6186d32f563906dc60",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:window76-30-before",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "window76-click",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "window76-30-before",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-30T23:59:59.999Z",
+    "decided_at": "2026-09-02T00:00:00.000Z",
+    "input_cutoff_at": "2026-09-02T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-first-party-window",
+    "rule_bundle_version": "0.4.29",
+    "rule_bundle_hash": "ec391eeaae029ee2686eb8a2aeb22b0dd1d763a8435d3c9fad145c6b03a0d705",
+    "status": "non_organic",
+    "method": "install_referrer",
+    "model": "last_click",
+    "reason_code": "valid_install_referrer"
+  },
+  {
+    "attribution_id": "attr:window:7736ee5380a068bac28793e8abf9608c55dd1bf01588e52c2d19463deda09270",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:window76-30-exact",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "window76-30-exact",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-31T00:00:00.000Z",
+    "decided_at": "2026-09-02T00:00:00.000Z",
+    "input_cutoff_at": "2026-09-02T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-first-party-window",
+    "rule_bundle_version": "0.4.29",
+    "rule_bundle_hash": "ec391eeaae029ee2686eb8a2aeb22b0dd1d763a8435d3c9fad145c6b03a0d705",
+    "status": "unattributed",
+    "method": "none",
+    "model": "none",
+    "reason_code": "window_expired"
+  },
+  {
+    "attribution_id": "attr:window:9350c508d9031537d8ee5f63e6dd930d264678c567ec8bad26e91b8f2fe0f0dc",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:window76-7-exact",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "window76-7-exact",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-08T00:00:00.000Z",
+    "decided_at": "2026-09-02T00:00:00.000Z",
+    "input_cutoff_at": "2026-09-02T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-first-party-window",
+    "rule_bundle_version": "0.4.29",
+    "rule_bundle_hash": "dbb3bd7349b259a7b9e5398c5309a4e1dcb9b060d8fbf52e9d5069b5b1254a36",
+    "status": "unattributed",
+    "method": "none",
+    "model": "none",
+    "reason_code": "window_expired"
+  },
+  {
+    "attribution_id": "attr:window:a1656fba2ba174344ed007c4567d5474c07a2ceb9431cb7337764a739d557151",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:window76-7-before",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "window76-click",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "window76-7-before",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-07T23:59:59.999Z",
+    "decided_at": "2026-09-02T00:00:00.000Z",
+    "input_cutoff_at": "2026-09-02T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-first-party-window",
+    "rule_bundle_version": "0.4.29",
+    "rule_bundle_hash": "dbb3bd7349b259a7b9e5398c5309a4e1dcb9b060d8fbf52e9d5069b5b1254a36",
+    "status": "non_organic",
+    "method": "install_referrer",
+    "model": "last_click",
+    "reason_code": "valid_install_referrer"
+  },
+  {
+    "attribution_id": "attr:window:bbbbd2908b5104aa3baeb35d654e68bd759857932d8c611bf0572a49168756ea",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:window76-1-before",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "window76-click",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "window76-1-before",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-01T23:59:59.999Z",
+    "decided_at": "2026-09-02T00:00:00.000Z",
+    "input_cutoff_at": "2026-09-02T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-first-party-window",
+    "rule_bundle_version": "0.4.29",
+    "rule_bundle_hash": "131a7690020c426b42ba91a9fc1b28e3c679da00b37ccd40146c66939a391cac",
+    "status": "non_organic",
+    "method": "install_referrer",
+    "model": "last_click",
+    "reason_code": "valid_install_referrer"
+  },
+  {
+    "attribution_id": "attr:window:c1d0486ffc5517cc29c4d22c65512cd87533b65b2f8a1f543c38378780858d2f",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "subject_scope": "installation_level",
+    "subject_ref": "installation:window76-1-exact",
+    "reason_code_version": "0.4.0",
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "window76-1-exact",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "effective_at": "2026-08-02T00:00:00.000Z",
+    "decided_at": "2026-09-02T00:00:00.000Z",
+    "input_cutoff_at": "2026-09-02T00:00:00.000Z",
+    "finality": "final",
+    "rule_bundle_id": "attribution-first-party-window",
+    "rule_bundle_version": "0.4.29",
+    "rule_bundle_hash": "131a7690020c426b42ba91a9fc1b28e3c679da00b37ccd40146c66939a391cac",
+    "status": "unattributed",
+    "method": "none",
+    "model": "none",
+    "reason_code": "window_expired"
+  }
+]

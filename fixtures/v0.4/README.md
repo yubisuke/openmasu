@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 74 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 76 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -626,6 +626,18 @@ Campaign a has USD 2 advertising, one converter and verified USD 8 minus USD 3
 purchase net; the later active campaign cannot send its outcomes backwards.
 Definition-bound hashes and scoped evidence are independently constructed.
 The previous 74 inputs and 962 goldens remain unchanged.
+
+## Fixture 76: versioned first-party attribution windows
+
+The [independent derivation](76-first-party-attribution-windows/README.md)
+constructs all thirteen families for ten accepted records and nine attributions.
+Each 1/7/30-day policy accepts only the instant before its upper boundary;
+exact equality and the following millisecond expire. Complete closed definitions
+and new attribution IDs bind SHA-256/JCS provenance without changing historical
+seven-day results or imported/platform/engagement rules. Candidate TypeScript
+and Python match the independently constructed families at combined JCS SHA-256
+`7d436dd90947f7af74277f01637ddbd99ad4a39c7ba17218f7c2d3cf0d0d7b9d`.
+The previous 75 inputs and 975 golden files remain unchanged.
 
 ## Adding a fixture procedure
 
