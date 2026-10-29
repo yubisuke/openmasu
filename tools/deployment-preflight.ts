@@ -19,7 +19,7 @@ export const deploymentSecretNames = [
   "OPENMASU_ADMIN_KEY", "OPENMASU_PAYLOAD_MASTER_KEY", "OPENMASU_SDK_KEY",
   "OPENMASU_INSTALLATION_DIGEST_KEY", "OPENMASU_MAX_EVENT_KEY", "OPENMASU_MAX_PATH_SECRET",
   "OPENMASU_POSTGRES_BOOTSTRAP_PASSWORD", "OPENMASU_APP_DATABASE_PASSWORD",
-  "OPENMASU_READER_DATABASE_PASSWORD", "OPENMASU_SEED_DATABASE_PASSWORD",
+  "OPENMASU_READER_DATABASE_PASSWORD",
 ] as const;
 
 function publicOrigin(value: unknown): boolean {
@@ -66,8 +66,10 @@ export function deploymentPreflight(input: unknown, environment: Readonly<Record
     if (environment.OPENMASU_PUBLIC_BASE_URL !== config.api_origin || environment.OPENMASU_REDIRECTOR_BASE_URL !== config.redirector_origin) reasons.push("runtime_public_url_mismatch");
     const actual = (environment.OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST ?? "").split(",").map((value) => value.trim()).filter(Boolean).sort();
     if (JSON.stringify(actual) !== JSON.stringify([...config.destination_origins].sort())) reasons.push("runtime_allowlist_mismatch");
-    if (deploymentSecretNames.some((name) => !environment[name])) reasons.push("required_secret_missing");
-    else if (deploymentSecretNames.some((name) => Buffer.byteLength(environment[name]) < 32 || /^(?:synthetic|example|change-me|placeholder)/i.test(environment[name]))) reasons.push("required_secret_unsafe");
+    const requiredSecrets: readonly string[] = environment.OPENMASU_DEPLOYMENT_PURPOSE === "synthetic_disposable"
+      ? [...deploymentSecretNames, "OPENMASU_SEED_DATABASE_PASSWORD"] : deploymentSecretNames;
+    if (requiredSecrets.some((name) => !environment[name])) reasons.push("required_secret_missing");
+    else if (requiredSecrets.some((name) => Buffer.byteLength(environment[name]) < 32 || /^(?:synthetic|example|change-me|placeholder)/i.test(environment[name]))) reasons.push("required_secret_unsafe");
   }
   return { status: reasons.length ? "refused" : "ready", reasons, scope: "single_host_configuration", tls_verified: false, production_verified: false };
 }

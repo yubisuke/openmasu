@@ -5,6 +5,7 @@ import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runDeploymentConfiguration, type ConfigurationCommand } from "./deployment-config.js";
 
 type PilotArguments = { disposable: true; load: boolean };
 type CommandResult = { status: number | null; stdout: string; stderr: string };
@@ -78,6 +79,7 @@ export function plannedSyntheticPilotSteps(load: boolean): string[] {
     "resume_runtime",
     "stable_worker",
     "normal_restart",
+    "deployment_configuration",
     "dependency_readiness",
     "worker_crash_recovery",
     "intentional_stop",
@@ -201,11 +203,12 @@ export async function runSyntheticRuntimePilot(
   assert.ok(!process.env.DOCKER_HOST && !process.env.DOCKER_CONTEXT, "remote Docker hosts and contexts are not allowed");
 
   const childEnvironment = syntheticProcessEnvironment(process.env);
-  const execute = (command: string, commandArgs: readonly string[], cwd = root): CommandResult => {
+  const execute = (command: string, commandArgs: readonly string[], cwd = root, input?: string): CommandResult => {
     const result = spawnSync(command, [...commandArgs], {
       cwd,
       encoding: "utf8",
       env: childEnvironment,
+      input,
       maxBuffer: 64 * 1024 * 1024,
     });
     return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
@@ -329,6 +332,35 @@ export async function runSyntheticRuntimePilot(
     runStep("normal_restart", [...compose, "up", "-d", "--wait"]);
     try { assertRestartPreserved(beforeRestart, restartSnapshot()); }
     catch { steps.set("normal_restart", "failed"); throw new PilotStepError("normal_restart"); }
+    const configurationFile = join(control, "configuration-patch.json");
+    const configure = (mode: ConfigurationCommand["mode"], receipt?: string) => runDeploymentConfiguration({
+      mode, receipt, project, envFile: envPath, file: configurationFile,
+    }, { cwd: staging, run: (args, input) => execute("docker", args, staging, input) }) as {
+      status: string; receipt: string; changes: Array<{ name: string; before: string; after: string }>;
+    };
+    try {
+      writeFileSync(configurationFile, JSON.stringify({
+        OPENMASU_PUBLIC_BASE_URL: "https://api.config.synthetic.example",
+        OPENMASU_REDIRECTOR_BASE_URL: "https://links.config.synthetic.example",
+        OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST: "https://destination.config.synthetic.example",
+      }));
+      const plan = configure("plan"); assert.equal(plan.status, "planned");
+      assert.throws(() => configure("apply", plan.receipt), /configuration_writers_must_be_stopped/);
+      const originalConfiguration = Object.fromEntries(plan.changes.map(change => [change.name, change.before]));
+      runStep("deployment_configuration", [...compose, "stop", "api", "worker", "redirector"]);
+      assert.equal(configure("apply", plan.receipt).status, "applied");
+      runStep("deployment_configuration", [...compose, "up", "-d", "--wait"]);
+      assertRestartPreserved(beforeRestart, restartSnapshot());
+      runVerifiedStep("deployment_configuration", [...compose, "exec", "-T", "api",
+        ...shell("set -a && . /run/openmasu/app/runtime.env && set +a && node --import tsx tools/test-support/deployment-config-probe.ts")],
+      result => assert.equal(result.stdout.trim(), "Synthetic deployment configuration passed: allowed=201 denied=400 public_origin=bound."));
+      writeFileSync(configurationFile, JSON.stringify(originalConfiguration));
+      const restorePlan = configure("plan");
+      runStep("deployment_configuration", [...compose, "stop", "api", "worker", "redirector"]);
+      assert.equal(configure("apply", restorePlan.receipt).status, "applied");
+      runStep("deployment_configuration", [...compose, "up", "-d", "--wait"]);
+      assertRestartPreserved(beforeRestart, restartSnapshot());
+    } catch { throw new PilotStepError("deployment_configuration"); }
     const healthProbe = (status: number) => [
       ...compose, "exec", "-T", "api", "node", "--input-type=module", "-e",
       `import assert from 'node:assert/strict'; for(const port of [8080,8090]) { const host=port===8080?'127.0.0.1':'redirector'; for(const path of ['/health','/ready']) { const r=await fetch('http://'+host+':'+port+path,{signal:AbortSignal.timeout(2500)}); assert.equal(r.status,path==='/health'?200:${status}); const body=await r.json(); assert.deepEqual(body,{status:path==='/health'?'ok':${status}===200?'ready':'not_ready'}); } }`,
