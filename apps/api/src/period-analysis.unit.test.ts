@@ -8,7 +8,7 @@ import { analysisQuery, savedAnalysisInput, previousAnalysisQuery, dailyAnalysis
 import { buildPeriodAnalysis, encodePeriodAnalysisCsv } from "./period-analysis.js";
 import { renderPeriodAnalysis } from "./dashboard/saved-analysis.js";
 import type { MetricReportRow } from "./reporting.js";
-import { acquisitionKpiRole, basisAcquisitionKpiDefinitions, calendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
+import { acquisitionKpiRole, basisAcquisitionKpiDefinitions, horizonAcquisitionKpiDefinitions, calendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
 import { calendarActivityUnit } from "./metric-series.js";
 type Any = Record<string, any>;
 const identity = { tenantId: "tenant-a", appId: "app-a", keyId: "synthetic-analysis", role: "admin" as const };
@@ -191,6 +191,34 @@ it("acquisition_period_and_daily_alignment_keep_identical_campaigns_separate_by_
     assert.ok(html.includes(text),text); assert.ok(csv.includes(text),text);
   }
   assert.equal(csv.split(/\r?\n/).filter(line=>line.includes(",acquisition_period_summary,")).length,32);
+});
+
+it("acquisition_period_horizons_keep_native_D7_identity_and_separate_D0_D30_JSON_HTML_and_CSV", () => {
+  const original = periodOperands();
+  const convert = (source: readonly MetricReportRow[], day: 0 | 30): MetricReportRow[] => source.map(row => {
+    const definition = horizonAcquisitionKpiDefinitions(day).find(d => acquisitionKpiRole(d.metric_name) === acquisitionKpiRole(row.metric_name))!;
+    const metric_run_id = `d${day}:${row.metric_run_id}`;
+    return { ...structuredClone(row), metric_run_id, metric_name: definition.metric_name,
+      metric_definition_version: definition.metric_definition_version, rule_bundle_id: definition.rule_bundle_id,
+      rule_bundle_hash: definition.rule_bundle_hash, policy_versions: [`rule_bundle:${definition.rule_bundle_version}`],
+      input_received_at_watermark: "2026-09-10T00:00:00.000Z",
+      comparison_context: captureMetricComparisonContext({ metric_run_id, input_snapshot_id: row.input_snapshot_id },
+        definition, input.fx_policy, "before", sha256) };
+  });
+  const extend = (source: readonly MetricReportRow[]) => [...source, ...convert(source, 0), ...convert(source, 30)];
+  const analysis = buildPeriodAnalysis(twoDayQuery, extend(original.current), extend(original.previous));
+  assert.equal(analysis.summaries.length, 3); assert.equal(analysis.rows.length, 48);
+  assert.deepEqual(analysis.summaries.map(s => s.horizon).sort((a, b) => a - b), [0, 7, 30]);
+  assert.ok(analysis.summaries.every(s => s.current.state === "ready" && s.current.values!.ad_roas.value_unscaled === "1473684"));
+  assert.deepEqual(analysis.summaries.find(s => s.horizon === 7), buildPeriodAnalysis(twoDayQuery, original.current, original.previous).summaries[0]);
+  assert.deepEqual(analysis.summaries.filter(s => s.horizon !== 7).map(s => s.dimensions.acquisition_horizon).sort(), ["D0", "D30"]);
+  const saved = { view_id: "synthetic-horizons", name: "Synthetic horizon periods", selection: params.toString(),
+    display: "all" as const, created_at: "2026-09-10T00:00:00.000Z" };
+  const html = renderPeriodAnalysis(identity.appId, saved, analysis), csv = encodePeriodAnalysisCsv(analysis, "all");
+  for (const day of [0, 7, 30]) {
+    assert.ok(html.includes(`acquisition_d${day}_ad_roas`)); assert.ok(csv.includes(`acquisition_d${day}_ad_roas`));
+  }
+  assert.equal(csv.split(/\r?\n/).filter(line => line.includes(",acquisition_period_summary,")).length, 24);
 });
 
 it("acquisition_period_sums_integer_operands_before_weighted_CPI_ROAS_and_preserves_daily_rows_and_provenance", () => {

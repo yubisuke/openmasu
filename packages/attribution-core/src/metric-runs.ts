@@ -3,7 +3,7 @@ import { selectDisjointCosts, costCoverageMatchesGrouping } from "./cost-selecti
 import { cohortCalendarDayIndex, canonicalDatedFxPolicy, selectDatedFxRate, standardRetentionClosesAt, type CohortTimeZone, type DatedFxPolicyInput } from "@openmasu/contracts/definitions";
 import { selectPlatformAcquisition, platformAcquisitionDimensions, selectedPlatformProofRows } from "./platform-acquisition.js";
 import { engagementInputs, engagementSnapshotRows, engagementValue, engagementPolicyValue } from "./engagement-metrics.js";
-import { REFERENCE_AD_REVENUE_METRIC_DEFINITIONS, isVerifiedPurchaseProjection } from "@openmasu/contracts/definitions";
+import { REFERENCE_AD_REVENUE_METRIC_DEFINITIONS, isVerifiedPurchaseProjection, horizonAcquisitionKpiClosesAt } from "@openmasu/contracts/definitions";
 import { assertMetricDefinitionSeries } from "@openmasu/contracts/validation";
 import { attemptEvidenceKey, decisionFor, evidenceKey, sortCandidateAttempts } from "./candidates.js";
 import { resolveRefundTarget } from "./ingestion-decisions.js";
@@ -216,7 +216,7 @@ export function metricRuns(
     for (const metricName of selectedNames) {
       const definition = definitionsByName.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
-      if (definition.rule_bundle_id === "metric-basis-acquisition-kpis"
+      if (["metric-basis-acquisition-kpis", "metric-horizon-acquisition-kpis"].includes(definition.rule_bundle_id)
           && (!evaluation.grouping?.cohort_date || Object.keys(evaluation.grouping)
             .some(key => !definition.grouping_dimensions?.includes(key as never)))) {
         throw new Error("acquisition_kpi_grouping_invalid");
@@ -370,7 +370,11 @@ export function metricRuns(
       const cohortSize = BigInt(new Set(eligibleInstalls.map((install) => install.record.payload.installation_id)).size);
       let value: bigint | undefined;
       let undefined_reason: MetricRun["undefined_reason"];
-      if (payerProfile) {
+      const horizonClosesAt = horizonAcquisitionKpiClosesAt(definition, evaluation.grouping?.cohort_date);
+      const immatureHorizon = !!horizonClosesAt && Date.parse(evaluation.input_received_at_watermark) < Date.parse(horizonClosesAt);
+      if (immatureHorizon) {
+        undefined_reason = "observation_window_not_elapsed";
+      } else if (payerProfile) {
         const key = (item: Attempt) => compositeKey([item.server.tenant_id, item.server.app_id, item.record.payload.installation_id]);
         const payers = BigInt(new Set(payerPurchases.map(key)).size);
         const population = BigInt(new Set(eligibleInstalls.map(key)).size);
@@ -569,6 +573,10 @@ export function metricRuns(
       if (missingFx && usesFx && undefined_reason !== "overlapping_cost_grains") {
         value = undefined;
         undefined_reason = "missing_fx_rate";
+      }
+      if (immatureHorizon) {
+        value = undefined;
+        undefined_reason = "observation_window_not_elapsed";
       }
       if (definition.rule_bundle_id !== "metric-calendar-activity" && !definition.engagement_credit_policy && definition.definition.calculation !== "event_count" && evaluation.grouping?.metric_date !== undefined) {
         throw new Error(`metric_date grouping is reserved for event_count: ${metricName}`);

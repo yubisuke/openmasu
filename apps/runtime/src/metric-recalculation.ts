@@ -1,5 +1,6 @@
 import { sha256 } from "@openmasu/attribution-core/canonical";
-import { ACQUISITION_KPI_ROLES, BASIS_ACQUISITION_KPI_BUNDLE, acquisitionKpiRole } from "@openmasu/contracts/definitions";
+import { ACQUISITION_KPI_ROLES, BASIS_ACQUISITION_KPI_BUNDLE, HORIZON_ACQUISITION_KPI_BUNDLE,
+  acquisitionKpiRole } from "@openmasu/contracts/definitions";
 import { validateMetricDefinition } from "@openmasu/contracts/validation";
 import { acquisitionKpiSetKey } from "./acquisition-kpi-key.js";
 import { captureMetricComparisonContext } from "./metric-comparison.js";
@@ -58,7 +59,7 @@ export function normalizeMetricRecalculationRequest(value: unknown): MetricRecal
 export const metricCostScopePredicate = `
   ((mr.comparison_context->'definition'->'definition'->>'calculation'='revenue_over_cost'
     AND mr.comparison_context->'definition'->'definition'->>'cost_basis'='cohort_acquisition_day_current_snapshot')
-    OR mr.comparison_context->'definition'->>'rule_bundle_id'='${BASIS_ACQUISITION_KPI_BUNDLE}')
+    OR mr.comparison_context->'definition'->>'rule_bundle_id' IN ('${BASIS_ACQUISITION_KPI_BUNDLE}','${HORIZON_ACQUISITION_KPI_BUNDLE}'))
   AND mr.grouping->>'cohort_date' IS NOT NULL
   AND coalesce(mr.grouping->>'attribution_status','non_organic')='non_organic'
   AND cost.tenant_id=mr.tenant_id AND cost.app_id=mr.app_id
@@ -84,21 +85,24 @@ type CorrectionSelection = { metric_run_id: string; replay: Any | null; safe_rea
 export function correctionMetricNames(names?: readonly string[]): string[] | undefined {
   if (!names) return undefined;
   const expanded = new Set(names);
-  for (const name of names) if (/^(platform_|imported_)acquisition_d7_/.test(name) && acquisitionKpiRole(name)) {
-    const prefix = name.startsWith("platform_") ? "platform_" : "imported_";
-    for (const role of ACQUISITION_KPI_ROLES) expanded.add(`${prefix}acquisition_d7_${role}`);
+  for (const name of names) {
+    const prefix = /^((?:platform_|imported_)acquisition_d7|acquisition_d(?:0|30))_/.exec(name)?.[1];
+    if (prefix && acquisitionKpiRole(name)) for (const role of ACQUISITION_KPI_ROLES) expanded.add(`${prefix}_${role}`);
   }
   return [...expanded].sort();
 }
 
-export function isBasisAcquisitionReplay(replay: Any | null): boolean {
-  return !!replay?.metric_definition && replay.metric_definition.rule_bundle_id === BASIS_ACQUISITION_KPI_BUNDLE
+function companionBundle(value: unknown): boolean {
+  return value === BASIS_ACQUISITION_KPI_BUNDLE || value === HORIZON_ACQUISITION_KPI_BUNDLE;
+}
+export function isCompanionAcquisitionReplay(replay: Any | null): boolean {
+  return !!replay?.metric_definition && companionBundle(replay.metric_definition.rule_bundle_id)
     && validateMetricDefinition(replay.metric_definition);
 }
 
 function companionKey(row: CorrectionCandidate, scope: { tenantId: string; appId: string }): string | null {
   const artifact = row.artifact;
-  if (!artifact || row.comparison_context?.definition?.rule_bundle_id !== BASIS_ACQUISITION_KPI_BUNDLE) return null;
+  if (!artifact || !companionBundle(row.comparison_context?.definition?.rule_bundle_id)) return null;
   // Reuse the report's set identity; do not infer companions from campaign or metric names alone.
   return acquisitionKpiSetKey({ ...artifact, grouping: artifact.grouping?.dimensions ?? {},
     grouping_digest: row.grouping_digest, comparison_context: row.comparison_context,
@@ -119,7 +123,7 @@ export function expandAcquisitionCompanions(scope: { tenantId: string; appId: st
   const output = new Map(selected.map(row => [row.metric_run_id, row]));
   for (const seed of selected) {
     const candidate = candidates.find(row => row.metric_run_id === seed.metric_run_id);
-    if (candidate?.comparison_context?.definition?.rule_bundle_id !== BASIS_ACQUISITION_KPI_BUNDLE) continue;
+    if (!candidate || !companionBundle(candidate.comparison_context?.definition?.rule_bundle_id)) continue;
     const key = keys.get(seed.metric_run_id);
     const companions = key ? candidates.filter(row => keys.get(row.metric_run_id) === key) : [candidate];
     const roles = new Set(companions.map(row => acquisitionKpiRole(row.artifact?.metric_name ?? "")));
@@ -129,7 +133,7 @@ export function expandAcquisitionCompanions(scope: { tenantId: string; appId: st
       if (!reason && (replay?.version !== 1 || !replay.evaluation || !replay.fx_policy)) reason = "replay_unavailable";
       if (!reason) {
         try {
-          if (!isBasisAcquisitionReplay(replay) || replay!.source_metric_run_id !== row.metric_run_id
+          if (!isCompanionAcquisitionReplay(replay) || replay!.source_metric_run_id !== row.metric_run_id
             || sha256(replay!.evaluation.grouping ?? {}) !== row.grouping_digest
             || replay!.evaluation.input_received_at_watermark !== row.artifact!.input_received_at_watermark
             || sha256(captureMetricComparisonContext(row.artifact as { metric_run_id: string; input_snapshot_id: string },

@@ -41,6 +41,10 @@ recurring comparisons with saved-run operands and explicit thresholds. Optional
 retained evidence before activation; old receipts keep their rule revision.
 Saved D7 KPI sets now separate native, verified-platform and exact imported
 provider populations, including bounded same-set cost/late corrections.
+Native UTC D0/D30 sets add closed revenue horizons without changing cohort,
+cost or FX selection. All eight roles remain undefined before cohort-date
+midnight plus 2/32 days; schedules enforce those lags, corrections stay bounded
+to complete same-horizon sets, and historical D7 identities remain unchanged.
 These source additions do not change the frozen rc.3 distribution.
 
 ## Implemented integration work

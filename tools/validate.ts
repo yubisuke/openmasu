@@ -21,6 +21,7 @@ import { syntheticFxCases, syntheticEngagementFxCases, datedFxFixtureValues } fr
 import { validDatedFxPolicy, canonicalDatedFxPolicy, ACQUISITION_KPI_VERSION } from "@openmasu/contracts/definitions";
 import { syntheticAcquisitionKpiCases, acquisitionKpiExpected } from "./synthetic-acquisition-kpi-cases.js";
 import { syntheticBasisAcquisitionKpiCases, basisAcquisitionKpiFixtureValues } from "./synthetic-basis-acquisition-kpi-cases.js";
+import { syntheticAcquisitionHorizonCases, acquisitionHorizonFixtureValues } from "./synthetic-acquisition-horizon-cases.js";
 import { syntheticPayerCases } from "./synthetic-payer-cases.js";
 import { PAYER_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 
@@ -348,7 +349,8 @@ function validateRegistryReferences(output: Any, label: string): void {
       "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
       "aak_attributed_reengagements",
     ]);
-    const expectedVersion = definition.rule_bundle_id === "metric-basis-acquisition-kpis" ? "0.4.30"
+    const expectedVersion = definition.rule_bundle_id === "metric-horizon-acquisition-kpis" ? "0.4.31"
+      : definition.rule_bundle_id === "metric-basis-acquisition-kpis" ? "0.4.30"
       : definition.rule_bundle_id === "metric-engagement-policy" ? "0.4.28"
       : definition.rule_bundle_id === "metric-verified-payers" ? "0.4.26"
       : definition.rule_bundle_id === "metric-calendar-activity" ? "0.4.25"
@@ -614,7 +616,7 @@ if (!summaryOnly) {
       });
     }
     it("contains 77 fixture directories", () => {
-      check(fixtureDirs.length === 77, `expected 77 fixture directories, found ${fixtureDirs.length}`);
+      check(fixtureDirs.length === 78, `expected 78 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -669,6 +671,18 @@ if (!summaryOnly) {
 }
 
 const scenarios: Array<[string, () => void]> = [
+  ["78 native D0 and D30 acquisition sets preserve D7 and never turn immature windows into zero", () => {
+    const { input, output } = fixture("78-acquisition-horizons");
+    check(output.raw_records.length === 19 && output.deliveries.length === 19 && output.logical_events.length === 19
+      && output.attributions.length === 6 && output.cost_records.length === 3, "scenario 78 admitted inventory");
+    check(output.metric_runs.length === 32 && equal(output.metric_runs.map((run: Any) => run.value_unscaled ?? run.undefined_reason),
+      acquisitionKpiExpected(input, acquisitionHorizonFixtureValues)), "scenario 78 independent horizon arithmetic");
+    const mature = output.metric_runs.filter((run: Any) => !run.metric_run_id.includes("immature"));
+    check(new Set(mature.map((run: Any) => run.input_snapshot_id)).size === 1,
+      "scenario 78 same population cost and receipt snapshot across mature horizons");
+    check(output.metric_runs.filter((run: Any) => run.metric_run_id.includes("immature")).every((run: Any) =>
+      run.value_state === "undefined" && run.undefined_reason === "observation_window_not_elapsed"), "scenario 78 maturity is not zero");
+  }],
   ["77 basis-separated acquisition KPIs retain exact imported commerce and never borrow a platform population", () => {
     const { input, output } = fixture("77-basis-acquisition-kpis");
     check(output.raw_records.length === 16 && output.deliveries.length === 17
@@ -1238,7 +1252,7 @@ if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
     it("contains 77 scenario assertions", () => {
-      check(scenarios.length === 77, "scenario assertion inventory must contain 77 entries");
+      check(scenarios.length === 78, "scenario assertion inventory must contain 78 entries");
     });
   });
 
@@ -1807,7 +1821,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 77 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 78 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1848,7 +1862,7 @@ const acceptance: Array<[string, () => void]> = [
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
   ["AC21 one command validates every schema registry fixture and golden", () => {
-    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 77 && outputArtifactCount === 77 * 13, "AC21");
+    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 78 && outputArtifactCount === 78 * 13, "AC21");
     checkDocumentationDrift(root, validationSummary());
   }],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {
@@ -2299,6 +2313,21 @@ const validRevenue = {
 };
 if (!summaryOnly) {
   describe("semantic mutations", () => {
+    it("native_horizon_KPIs_keep_maturity_boundaries_receipts_and_missing_cost_in_independent_TS_Python_parity", () => {
+      const cases = syntheticAcquisitionHorizonCases(fixture("78-acquisition-horizons").input);
+      const python = pythonOutputs(cases.map(entry => entry.input));
+      for (const [index, entry] of cases.entries()) {
+        const output = evaluate(entry.input);
+        check(equal(output.metric_runs.map(run => run.value_unscaled ?? run.undefined_reason), entry.expected), `${entry.name}: independent arithmetic`);
+        check(equal(output, python[index]), `${entry.name}: independent artifact parity`);
+      }
+      for (const grouping of [undefined, { cohort_date: "2026-08-06", ad_group_id: "synthetic-undeclared" }]) {
+        const invalid = structuredClone(cases[0].input);
+        invalid.metric_evaluations[0].grouping = grouping;
+        check(!capture(() => evaluate(invalid)).ok && !pythonBatch([invalid])[0].ok,
+          "horizon KPI evaluation requires a valid cohort date and only declared axes");
+      }
+    });
     it("basis_acquisition_KPIs_keep_provider_commerce_missing_cost_and_verified_platform_in_independent_TS_Python_parity", () => {
       const cases = syntheticBasisAcquisitionKpiCases(fixture("77-basis-acquisition-kpis").input,
         fixture("66-verified-platform-acquisition").input);

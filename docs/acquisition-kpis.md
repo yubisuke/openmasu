@@ -1,6 +1,6 @@
 # Same-set acquisition KPIs
 
-Read install count, acquisition-day cost, CPI, D7 advertising revenue, settled
+Read install count, acquisition-day cost, CPI, advertising revenue, settled
 purchase net, their total, advertising ROAS and total-net ROAS together. Each
 value is saved by the existing cohort engine. The dashboard never divides
 unrelated rows or fetches a second dataset to fill a cell.
@@ -29,6 +29,36 @@ ordinary metric table. Money uses USD scale 6; ratios use scale 6 multipliers.
 Numerator/denominator and summand links point to the actual saved run details.
 JSON/CSV append `acquisition_kpi_set_key`; old CSV columns keep their order.
 Legacy reports, definitions and results remain readable without relabeling.
+
+## Select a native D0 or D30 horizon
+
+The native first-party panel supports explicit D0, D7 and D30 sets. D0 and D30
+use `acquisition_d0_*` and `acquisition_d30_*`, respectively: definition version
+`0.4.31`, bundle `metric-horizon-acquisition-kpis`. The existing D7 definitions,
+hashes and keys are unchanged. No existing schedule changes its horizon.
+
+Code constructing a private definitions file or schedule request can use
+`horizonAcquisitionKpiDefinitions(0)` or `horizonAcquisitionKpiDefinitions(30)` from
+`@openmasu/contracts/definitions`. Select all eight roles from that returned
+family and keep the same explicit cohort grouping, cutoff and FX policy. These
+profiles are native first-party click acquisition, UTC install cohorts and USD
+scale 6 only; they do not introduce platform/imported D0 or D30, arbitrary
+windows, calendar-zone or re-engagement calculations.
+
+Each elapsed window begins at the installation's timestamp and ends before
+`install_at + (horizon + 1) days`. Thus D0 is the first 24 hours, not an install
+calendar day. D30 includes elapsed day 30, but excludes the exact 31-day endpoint.
+The final possible installation on a cohort date makes the conservative maturity
+bound `cohort_date + (horizon + 2) UTC days`: two days for D0, nine for D7 and
+32 for D30. New D0/D30 schedules require `cohort_date` and lag at least 2/32.
+An immature new-horizon calculation does not become a decision-ready set.
+
+The typed KPI set includes `horizon: 0 | 7 | 30`. The panel labels every row D0,
+D7 or D30 and uses horizon-neutral column names. New D0/D30 keys use
+`saved-acquisition-horizon-v1` and bind the window; they cannot fill a missing
+D7 role or each other's roles. Period/daily presentation dimensions add
+`acquisition_horizon: D0 | D30` only for the new profiles. Native D7 and the
+existing platform/imported D7 dimensions and keys remain unchanged.
 
 ## Select a separate platform or imported-provider set
 
@@ -79,7 +109,7 @@ persisted metric run is created.
 Each campaign and all other non-date dimensions stay separate. A period needs
 exactly one complete eight-role set per selected date, identical role-specific
 meaning (including currency, FX, basis, definition/bundle, fraud/privacy, window
-and grain), and each date's conservative nine-day maturity. Snapshot IDs and
+and grain), and each date's horizon-specific conservative maturity. Snapshot IDs and
 watermarks may differ across dates. Missing/duplicate dates or roles,
 correction-pending, superseded and privacy-unavailable evidence block the side.
 Missing cost or FX is not zero; there is no partial sum.
@@ -89,6 +119,8 @@ presentation dimensions include `acquisition_basis` and, where applicable,
 `import_provider`; these are report labels, not new event-contract grouping fields.
 Legacy native daily/period identity is unchanged. Incomplete or unverified new
 contexts cannot borrow native rows or another provider's operands.
+Native D0 and D30 also remain separate: even identical campaign labels, input
+snapshots and costs do not authorize summing or comparing different horizons.
 
 Sum the integer operands first, then use the existing half-even arithmetic:
 
@@ -115,7 +147,7 @@ aggregates. Saved-source completeness remains **unknown**, even for ready sums.
 
 - The native set uses **selected native first-party click** acquisition; the
   explicit platform and imported-provider sets use their separately selected
-  evidence populations. All use UTC install dates, elapsed D7 revenue and current
+  evidence populations. All use UTC install dates, their explicit elapsed horizon and current
   disjoint acquisition-day costs. Apple aggregate, re-engagement, calendar-zone
   and detail-grain profiles are not included in this KPI panel.
 - Cost sums individually converted rows. CPI is
@@ -137,7 +169,7 @@ aggregates. Saved-source completeness remains **unknown**, even for ready sums.
   Counts deliberately retain the same cost snapshot even though count arithmetic
   needs no FX. Different keys, duplicate/missing roles and partial keyset pages
   are not joined. Unknown saved context remains only in the ordinary report.
-- Cohort date plus nine UTC days conservatively closes D7. Immature,
+- Cohort date plus horizon + 2 UTC days conservatively closes the window. Immature,
   superseded, privacy-unavailable and recorded pending/revised sets are blocked.
   A ready set means saved meaning agrees, **not** that all provider inputs have
   arrived or that a campaign is profitable. [Freshness observations](metric-freshness.md)
@@ -145,7 +177,7 @@ aggregates. Saved-source completeness remains **unknown**, even for ready sums.
 
 ## Bounded saved corrections
 
-New platform/imported sets use the existing cost and late-input correction jobs.
+New platform/imported D7 and native D0/D30 sets use the existing cost and late-input correction jobs.
 Selecting one new-profile metric expands to its fixed eight roles within the
 same captured selection. The set key, replay definition, FX, source snapshot,
 privacy mode and cutoff must agree; missing or ambiguous companions are
@@ -155,6 +187,10 @@ captured page: it does not fetch companions from another page or scan history.
 Select a smaller complete date range when a set cannot fit those bounds.
 Current deletion/retention and unavailable replay evidence remain authoritative.
 The historical native correction behavior is unchanged.
+The new native horizon is part of companion selection. A D0 selection never
+adds D30 runs, and a late event or refund outside D0 can affect D30 without
+rewriting D0. A cost revision can affect both only when both horizons were
+selected. The old native D7 correction behavior is not silently expanded.
 
 The [native independent oracle](../fixtures/v0.4/70-saved-acquisition-kpis/README.md)
 hand-calculates two campaigns, organic and cost-only rows. TS/Python/SQL share

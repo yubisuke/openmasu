@@ -5,6 +5,8 @@ export const ACQUISITION_KPI_VERSION = "0.4.23";
 export const ACQUISITION_KPI_BUNDLE = "metric-acquisition-kpis";
 export const BASIS_ACQUISITION_KPI_VERSION = "0.4.30";
 export const BASIS_ACQUISITION_KPI_BUNDLE = "metric-basis-acquisition-kpis";
+export const HORIZON_ACQUISITION_KPI_VERSION = "0.4.31";
+export const HORIZON_ACQUISITION_KPI_BUNDLE = "metric-horizon-acquisition-kpis";
 export const ACQUISITION_KPI_ROLES = ["installs", "cost", "cpi", "ad_revenue", "purchase_net", "total_net", "ad_roas", "total_roas"] as const;
 export type AcquisitionKpiRole = (typeof ACQUISITION_KPI_ROLES)[number];
 const operations = {
@@ -40,7 +42,33 @@ export const ACQUISITION_KPI_METRIC_DEFINITIONS: readonly OpenMasuMetricDefiniti
 
 export function acquisitionKpiRole(metricName: string): AcquisitionKpiRole | undefined {
   return ACQUISITION_KPI_ROLES.find(role =>
-    ["", "platform_", "imported_"].some(prefix => metricName === `${prefix}acquisition_d7_${role}`));
+    ["", "platform_", "imported_"].some(prefix => metricName === `${prefix}acquisition_d7_${role}`)
+    || [0, 30].some(day => metricName === `acquisition_d${day}_${role}`));
+}
+
+export function acquisitionKpiHorizon(metricName: string): 0 | 7 | 30 | undefined {
+  if (!acquisitionKpiRole(metricName)) return undefined;
+  return Number(/acquisition_d(0|7|30)_/.exec(metricName)![1]) as 0 | 7 | 30;
+}
+
+export function horizonAcquisitionKpiClosesAt(definition: Pick<OpenMasuMetricDefinitionV04, "rule_bundle_id" | "definition">,
+  cohortDate?: string): string | undefined {
+  if (definition.rule_bundle_id !== HORIZON_ACQUISITION_KPI_BUNDLE) return undefined;
+  if (!cohortDate || !/^\d{4}-\d{2}-\d{2}$/.test(cohortDate) || !Number.isFinite(Date.parse(cohortDate))
+      || new Date(cohortDate).toISOString().slice(0, 10) !== cohortDate) throw new Error("acquisition_kpi_cohort_date_required");
+  return new Date(Date.parse(cohortDate) + (definition.definition.window.day + 2) * 86_400_000).toISOString();
+}
+
+/** New native horizons; the original D7 definitions and identities stay frozen. */
+export function horizonAcquisitionKpiDefinitions(day: 0 | 30): OpenMasuMetricDefinitionV04[] {
+  if (day !== 0 && day !== 30) throw new Error("acquisition_kpi_horizon_invalid");
+  return ACQUISITION_KPI_METRIC_DEFINITIONS.map(definition => ({
+    ...structuredClone(definition), metric_name: definition.metric_name.replace("_d7_", `_d${day}_`),
+    metric_definition_version: HORIZON_ACQUISITION_KPI_VERSION,
+    definition: { ...structuredClone(definition.definition), window: { type: "elapsed", day } },
+    rule_bundle_id: HORIZON_ACQUISITION_KPI_BUNDLE, rule_bundle_version: HORIZON_ACQUISITION_KPI_VERSION,
+    rule_bundle_hash: nonFraudBundleHash(HORIZON_ACQUISITION_KPI_BUNDLE),
+  }));
 }
 
 /** Closed D7 profiles; provider identity is explicit and never inferred from a campaign. */

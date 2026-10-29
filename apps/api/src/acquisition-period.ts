@@ -1,5 +1,5 @@
 import { roundHalfEven } from "@openmasu/attribution-core";
-import { ACQUISITION_KPI_ROLES, acquisitionKpiRole, type AcquisitionKpiRole } from "@openmasu/contracts/definitions";
+import { ACQUISITION_KPI_ROLES, acquisitionKpiHorizon, acquisitionKpiRole, type AcquisitionKpiRole } from "@openmasu/contracts/definitions";
 import { comparisonMeaning } from "@openmasu/runtime/metric-comparison";
 import { buildAcquisitionKpiSets, type AcquisitionKpiScope } from "./acquisition-kpis.js";
 import { comparisonDigest, parseComparisonContext } from "./cohort-comparison.js";
@@ -22,11 +22,12 @@ export type AcquisitionPeriodSide = {
 };
 type Comparison = { status: "compared" | "incomparable"; reason: string | null; delta_current_minus_previous: string | null };
 export type AcquisitionPeriodSummary = {
+  horizon: 0 | 7 | 30;
   dimensions: Record<string, string>; current: AcquisitionPeriodSide; previous: AcquisitionPeriodSide;
   comparisons: Record<AcquisitionKpiRole, Comparison>;
 };
 
-/** Only complete, compatible D7 sets within one acquisition basis/provider supply period operands. */
+/** Only complete, compatible sets within one horizon and acquisition basis/provider supply period operands. */
 function side(scope: AcquisitionKpiScope, from: string, to: string, rows: readonly MetricReportRow[]): AcquisitionPeriodSide {
   const expectedDays = (Date.parse(to) - Date.parse(from)) / 86_400_000;
   const days = Array.from({ length: expectedDays }, (_, i) => new Date(Date.parse(from) + i * 86_400_000).toISOString().slice(0, 10));
@@ -115,7 +116,8 @@ export function buildAcquisitionPeriods(scope: AcquisitionKpiScope, currentRange
       return [role, { status: why ? "incomparable" : "compared", reason: why,
         delta_current_minus_previous: why ? null : (BigInt(av!.value_unscaled!) - BigInt(bv!.value_unscaled!)).toString() }];
     })) as Record<AcquisitionKpiRole, Comparison>;
-    return { dimensions: group.dimensions, current: a, previous: b, comparisons };
+    return { horizon: acquisitionKpiHorizon((group.current[0] ?? group.previous[0]).metric_name)!,
+      dimensions: group.dimensions, current: a, previous: b, comparisons };
   });
 }
 
@@ -123,7 +125,7 @@ export function buildAcquisitionPeriods(scope: AcquisitionKpiScope, currentRange
 export function acquisitionPeriodRows(summaries: readonly AcquisitionPeriodSummary[], display: "all" | "exceptions") {
   return summaries.flatMap(summary => ACQUISITION_KPI_ROLES.map(role => ({ summary, role,
     metric_name: `${summary.dimensions.acquisition_basis === "selected_imported_provider" ? "imported_"
-      : summary.dimensions.acquisition_basis === "selected_verified_platform" ? "platform_" : ""}acquisition_d7_${role}`, current: summary.current.values?.[role] ?? null,
+      : summary.dimensions.acquisition_basis === "selected_verified_platform" ? "platform_" : ""}acquisition_d${summary.horizon}_${role}`, current: summary.current.values?.[role] ?? null,
     previous: summary.previous.values?.[role] ?? null, ...summary.comparisons[role],
   }))).filter(row => display === "all" || row.status !== "compared");
 }

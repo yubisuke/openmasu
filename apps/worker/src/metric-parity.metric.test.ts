@@ -39,6 +39,7 @@ import { syntheticFxCases, syntheticEngagementFxCases } from "../../../tools/syn
 import { requestMetricRecalculation } from "../../api/src/metric-recalculations.js";
 import { syntheticAcquisitionKpiCases } from "../../../tools/synthetic-acquisition-kpi-cases.js";
 import { syntheticBasisAcquisitionKpiCases } from "../../../tools/synthetic-basis-acquisition-kpi-cases.js";
+import { syntheticAcquisitionHorizonCases } from "../../../tools/synthetic-acquisition-horizon-cases.js";
 import { buildAcquisitionKpiSets } from "../../api/src/acquisition-kpis.js";
 import { buildDashboardView } from "../../api/src/dashboard/view.js";
 import { renderDashboard } from "../../api/src/dashboard/render.js";
@@ -68,6 +69,30 @@ const engagementPolicyCases = syntheticEngagementPolicyCases(engagementPolicySou
 const basisAcquisitionKpiSource: Any = JSON.parse(readFileSync("fixtures/v0.4/77-basis-acquisition-kpis/input.json", "utf8"));
 const basisAcquisitionKpiCases = syntheticBasisAcquisitionKpiCases(basisAcquisitionKpiSource,
   JSON.parse(readFileSync("fixtures/v0.4/66-verified-platform-acquisition/input.json", "utf8")));
+const acquisitionHorizonSource: Any = JSON.parse(readFileSync("fixtures/v0.4/78-acquisition-horizons/input.json", "utf8"));
+const acquisitionHorizonCases = syntheticAcquisitionHorizonCases(acquisitionHorizonSource);
+
+describe("native acquisition horizon SQL parity", { concurrency: false }, () => {
+  const app = createAppPool(), seed = createSeedPool();
+  after(async () => { await Promise.all([app.end(), seed.end()]); });
+  for (const [index, entry] of acquisitionHorizonCases.entries()) it(entry.name, async () => {
+    await ingestFixture(`horizon-kpi78-${index}`, entry.input, app, seed);
+    const actual = await computeSqlMetricRuns(app, entry.input, false);
+    assert.deepEqual(actual.map(run => run.value_unscaled ?? run.undefined_reason), entry.expected, entry.name);
+    assertPlatformRunParity(actual, evaluate(entry.input).metric_runs, entry.name);
+    if (index === 0) assertPlatformRunParity(actual, JSON.parse(readFileSync(
+      "fixtures/v0.4/78-acquisition-horizons/expected_metric_runs.json", "utf8")), "independent horizon golden");
+    for (const evaluation of entry.input.metric_evaluations) {
+      const rows = actual.filter(run => run.metric_run_id.startsWith(`${evaluation.metric_run_id_prefix}:`));
+      assert.equal(rows.length, 8);
+      assert.equal(new Set(rows.map(run => run.input_snapshot_id)).size, 1, "one same-horizon input snapshot");
+      for (const row of rows.filter(run => run.undefined_reason === "observation_window_not_elapsed")) {
+        assert.equal(row.value_state, "undefined");
+        assert.equal(row.value_unscaled, undefined, "an immature horizon is not a recorded zero");
+      }
+    }
+  });
+});
 
 describe("same-set imported and verified-platform acquisition KPI SQL parity", { concurrency: false }, () => {
   const app = createAppPool(), seed = createSeedPool();

@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 77 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 78 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -648,6 +648,34 @@ its CPI is USD4 and total ROAS 1.75. Organic, unattributed and missing populatio
 stay separate. A platform control with matching cost but no verified install
 cannot borrow the imported population. Previous 76 inputs and 988 golden artifacts
 are unchanged. SQL and both evaluators use the same synthetic source evidence.
+
+## Fixture 78: native acquisition KPI horizons
+
+The [independent derivation](78-acquisition-horizons/README.md) constructs the
+thirteen new expected families: 19 raw records, deliveries and logical events
+each; six attributions; three costs and three refund corrections; 27 definitions;
+and 32 metric runs. Privacy requests/tombstones, fraud, rejections and
+reconciliation are empty. All earlier 77 inputs and 1001 golden artifacts,
+including fixtures 76 and 77, remain unchanged.
+
+In role order `(installs, cost, CPI, ad revenue, purchase net, total net,
+ad ROAS, total ROAS)`, the independent mature baseline is:
+
+| Horizon | Expected values (USD money; scale-6 money and ratios) |
+| --- | --- |
+| D0 | `3, 10, 3.333333, 6, 8, 14, 0.6, 1.4` |
+| D7 | `3, 10, 3.333333, 6, 6, 12, 0.6, 1.2` |
+| D30 | `3, 10, 3.333333, 10, 9, 19, 1, 1.9` |
+
+The three mature sets share the same cohort, selected acquisition-day costs,
+captured FX and receipt snapshot. Only revenue occurrence windows differ:
+`[install_at, install_at + (day + 1) days)`. D7 keeps its existing `0.4.23`
+definition identity. D0/D30 bind `metric-horizon-acquisition-kpis` version
+`0.4.31`, hash
+`80d2d996192549069189e77812566f2805c6f22a5f427ba86ce863b91ccd7447`.
+The fourth evaluation is an immature D30 set: all eight runs omit a value and
+emit `undefined/observation_window_not_elapsed`, rather than zero. Conservative
+daily-cohort maturity is UTC midnight plus 2 days for D0 and 32 days for D30.
 
 ## Adding a fixture procedure
 

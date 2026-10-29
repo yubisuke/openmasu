@@ -17,7 +17,7 @@ store or production qualification. Those remain separate operator evidence.
 ## Completed contract and product milestones
 
 The contract gate preserves deterministic artifacts across 28 schemas,
-8 registries, and 77 reviewed synthetic fixtures. Patch definitions and
+8 registries, and 78 reviewed synthetic fixtures. Patch definitions and
 derivations are in the [specification](../spec/event-metric-contract-v0.4.md)
 and [fixture guide](../fixtures/v0.4/README.md).
 
@@ -28,7 +28,7 @@ ownership. Completion refers to their declared synthetic scope.
 | --- | --- |
 | Contract v0.2 | Coherent event, attribution, metric and reconciliation contract |
 | Contract v0.3 | Android/platform referrer, revenue and device-producer vocabulary |
-| Contract v0.4 | OpenMasu identity and additive patch ledger, currently through v0.4.30 |
+| Contract v0.4 | OpenMasu identity and additive patch ledger, currently through v0.4.31 |
 | Shadow ledger and import foundation | Durable admission, atomic ledger writes, explicit three-family imports and privacy controls |
 | Cohort metrics and difference audit | SQL/reference parity, saved snapshots, exact arithmetic and aggregate exports |
 | Android, Unity, and redirector | SDK queues, credentials, redirect evidence and synthetic bridges |
@@ -48,8 +48,9 @@ ownership. Completion refers to their declared synthetic scope.
 The current source connects selected acquisition evidence, safe cost grain,
 commerce, late-input corrections, daily schedules, saved calculation evidence,
 dashboard comparison and cohort presentation. Later additions include explicit
-platform/imported profiles, qualified calendar cohorts, fixed FX, same-set KPIs,
-standard retention, multiple outcomes, guided setup and safe ingest recovery.
+platform/imported profiles, qualified calendar cohorts, fixed FX, native
+D0/D7/D30 and basis-separated D7 same-set KPIs, standard retention, multiple
+outcomes, guided setup and safe ingest recovery.
 
 The prior integration plan is complete. It must not be reused as a future
 backlog. `v0.3.0-rc.3` is the published source and SDK prerelease; see the
@@ -76,6 +77,9 @@ Declared events, complete-period KPI totals, cost join diagnostics/backfill,
 inert link preview/resume and saved-run recurring comparison operands now extend
 that workflow. The optional [first-party window](attribution-window.md) profile
 uses evidence-bound preview and activation without changing historical rules.
+Saved native D0/D30 KPI sets retain the same cohort, cost and FX meaning as D7,
+with complete-window schedule lags and bounded same-horizon companion corrections;
+old D7 definitions and saved artifacts remain unchanged.
 Follow open child dependencies in the backlog, not the closed functional plan.
 Provider access and privacy-policy decisions remain a separate owner boundary.
 

@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { after,beforeEach,describe,it } from "node:test";
 import { jcs,sha256,type CandidateAttempt } from "@openmasu/attribution-core";
-import { basisAcquisitionKpiDefinitions } from "@openmasu/contracts/definitions";
+import { basisAcquisitionKpiDefinitions, horizonAcquisitionKpiDefinitions } from "@openmasu/contracts/definitions";
 import { createAppPool,createReaderPool,createSeedPool,withTenant } from "@openmasu/runtime";
 import { saveMetricCorrectionPolicy,metricCorrectionStatus } from "../../api/src/metric-correction-policy.js";
 import { listMetricRecalculations, requestMetricRecalculation } from "../../api/src/metric-recalculations.js";
@@ -159,6 +159,53 @@ describe("opt-in receipt-driven bounded automatic metric corrections",{concurren
     assert.equal((await listMetricRecalculations(reader, identity)).filter(j => j.trigger_kind === "late_events" && j.state === "completed").length, 8);
     const stored = await artifacts();
     for (const original of before) assert.equal(jcs(stored.find(r => r.metric_run_id === original.metric_run_id)), jcs(original));
+  });
+
+  it("corrects only in-window horizon companions for late revenue and explicitly selected cost horizons without rewriting native D7", async () => {
+    const fixture = JSON.parse(readFileSync("fixtures/v0.4/70-saved-acquisition-kpis/input.json", "utf8")
+      .replaceAll('"tenant-a"', JSON.stringify(identity.tenantId)));
+    const d0 = horizonAcquisitionKpiDefinitions(0), d30 = horizonAcquisitionKpiDefinitions(30);
+    const names = [...d0, ...d30].map(d => d.metric_name), costs = fixture.cost_records;
+    const native = { ...fixture.metric_evaluations[0], metric_run_id_prefix: "synthetic-horizon-frozen-d7", privacy_state: "after" };
+    const horizon = { ...native, metric_run_id_prefix: "synthetic-horizon-initial", metric_names: names,
+      input_received_at_watermark: "2026-09-07T00:00:00.000Z", computed_at: "2026-09-07T00:00:00.000Z" };
+    fixture.metric_definitions.push(...d0, ...d30); fixture.metric_evaluations = []; fixture.cost_records = [];
+    await ingestFixture(`synthetic-horizon-${identity.tenantId}`, fixture, app, seed);
+    for (const cost of costs) await persistCostImport(app, "synthetic-horizon-original-cost", [cost]);
+    const before = await computeSqlMetricRuns(app, { ...fixture, metric_evaluations: [native, horizon] }, true);
+    assert.equal(before.length, 24);
+    const record = { ...structuredClone(fixture.records.find((r: Any) => r.record_id === "kpi70-ad-a")),
+      record_id: "synthetic-horizon-late", event_id: "synthetic-horizon-late", delivery_id: "synthetic-horizon-late",
+      occurred_at: "2026-08-08T00:00:00.000Z", received_at: "2026-09-08T00:00:00.000Z" };
+    const attempts = fixture.records.map((record: Any) => ({ record, server: fixture.server_context, batch_id: "synthetic-horizon-original" }));
+    const admitted = await ingestRuntimeBatch([{ record, server: { ...fixture.server_context, received_at: record.received_at },
+      batch_id: "synthetic-horizon-late" }], app, attempts);
+    assert.equal(admitted.rejections.length, 0);
+    const late = await requestMetricRecalculation(app, identity, { trigger_kind: "late_events", source_record_ids: [record.record_id],
+      date_from: "2026-08-06", date_to: "2026-08-06", watermark: record.received_at,
+      metric_names: ["acquisition_d0_ad_roas", "acquisition_d30_ad_roas"] });
+    assert.equal(late.selected_runs, 8);
+    assert.deepEqual(await processMetricRecalculations(app, identity.tenantId, 10), { completed: 8, skipped: 0, fenced: 0, failed: 0 });
+    const afterLate = await artifacts(), replacements = afterLate.filter(r => r.supersedes_metric_run_id);
+    assert.equal(replacements.length, 8); assert.ok(replacements.every(r => r.metric_name.startsWith("acquisition_d30_")));
+    assert.equal(new Set(replacements.map(r => r.input_snapshot_id)).size, 1);
+    assert.ok(replacements.every(r => r.input_received_at_watermark === record.received_at));
+    for (const run of before) assert.equal(jcs(afterLate.find(r => r.metric_run_id === run.metric_run_id)), jcs(run));
+    const revised = await persistCostImport(app, "synthetic-horizon-cost-revision", [{ ...costs[0],
+      amount_unscaled: "20", as_of: "2026-09-09T00:00:00.000Z" }]);
+    const corrected = await requestMetricRecalculation(app, identity, { cost_import_run_id: revised.import_run_id,
+      date_from: "2026-08-06", date_to: "2026-08-06", watermark: "2026-09-10T00:00:00.000Z",
+      metric_names: ["acquisition_d0_cost", "acquisition_d30_cost"] });
+    assert.equal(corrected.selected_runs, 16);
+    assert.equal((await processMetricRecalculations(app, identity.tenantId, 10)).completed, 10);
+    assert.equal((await processMetricRecalculations(app, identity.tenantId, 10)).completed, 6);
+    const latest = (await metricReport(reader, identity, { tenantId: identity.tenantId, appId: identity.appId,
+      metricNames: names, supersession: "latest", limit: 100 })).data;
+    assert.equal(latest.length, 16); assert.equal(new Set(latest.map(r => r.acquisition_kpi_set_key)).size, 2);
+    assert.ok(latest.every(r => r.acquisition_kpi_set_key && r.input_received_at_watermark === "2026-09-10T00:00:00.000Z"));
+    const final = await artifacts();
+    assert.ok(!final.some(r => r.supersedes_metric_run_id?.startsWith("synthetic-horizon-frozen-d7:")));
+    for (const run of before) assert.equal(jcs(final.find(r => r.metric_run_id === run.metric_run_id)), jcs(run));
   });
 
   it("drains more than 100 committed inputs and a paged run manifest across pause, resume and concurrent workers without duplicates",async()=>{

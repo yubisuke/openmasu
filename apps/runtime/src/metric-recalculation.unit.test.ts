@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
 import { sha256 } from "@openmasu/attribution-core/canonical";
-import { basisAcquisitionKpiDefinitions } from "@openmasu/contracts/definitions";
+import { basisAcquisitionKpiDefinitions, horizonAcquisitionKpiDefinitions } from "@openmasu/contracts/definitions";
 import { captureMetricComparisonContext } from "./metric-comparison.js";
 import { correctionMetricNames, expandAcquisitionCompanions, normalizeMetricRecalculationRequest,
   type CorrectionCandidate } from "./metric-recalculation.js";
@@ -41,11 +41,12 @@ it("discovers input only within one explicit bounded receipt interval, never an 
 });
 
 const scope = { tenantId: "tenant-synthetic-kpi", appId: "app-synthetic-kpi" };
-function companionRows(provider = "synthetic-export"): CorrectionCandidate[] {
+function companionRows(provider = "synthetic-export", day?: 0 | 30): CorrectionCandidate[] {
   const grouping = { network: "synthetic-network", campaign_id: "synthetic-campaign", cohort_date: "2026-08-01" };
   const fx = { policy_version: "synthetic-fx", target_currency: "USD", target_scale: 6, rounding_mode: "half_even" as const,
     rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0, as_of: "2026-08-01T00:00:00.000Z" }] };
-  return basisAcquisitionKpiDefinitions("selected_imported_provider", provider).map(definition => {
+  const definitions = day === undefined ? basisAcquisitionKpiDefinitions("selected_imported_provider", provider) : horizonAcquisitionKpiDefinitions(day);
+  return definitions.map(definition => {
     const artifact = { ...definition, metric_run_id: `synthetic:${definition.metric_name}`, input_snapshot_id: "a".repeat(64),
       grouping: { dimensions: grouping }, input_received_at_watermark: "2026-08-10T00:00:00.000Z",
       value_state: "present", value_unscaled: "1", fx_policy_version: fx.policy_version };
@@ -57,6 +58,19 @@ function companionRows(provider = "synthetic-export"): CorrectionCandidate[] {
   });
 }
 const seed = (row: CorrectionCandidate) => ({ metric_run_id: row.metric_run_id, replay: row.replay, safe_reason: null });
+
+it("corrects only the selected complete horizon and never borrows D0 roles for D30 or upgrades frozen D7", () => {
+  const d0 = companionRows("synthetic-export", 0), d30 = companionRows("synthetic-export", 30), candidates = [...d0, ...d30];
+  for (const rows of [d0, d30]) {
+    const result = expandAcquisitionCompanions(scope, candidates, [seed(rows[6])]);
+    assert.equal(result.length, 8); assert.ok(result.every(row => row.safe_reason === null));
+    assert.deepEqual(result.map(row => row.metric_run_id).sort(), rows.map(row => row.metric_run_id).sort());
+    assert.deepEqual(correctionMetricNames([rows[6].artifact!.metric_name]), rows.map(row => row.artifact!.metric_name).sort());
+  }
+  assert.ok(expandAcquisitionCompanions(scope, [...d0.slice(0, 4), ...d30.slice(4)], [seed(d30[6])])
+    .every(row => row.safe_reason === "unsupported_definition"));
+  assert.deepEqual(correctionMetricNames(["acquisition_d7_ad_roas"]), ["acquisition_d7_ad_roas"]);
+});
 
 it("corrects all eight saved basis-KPI companions without rewriting their cutoff, FX, privacy or definitions", () => {
   const rows = companionRows(), before = structuredClone(rows);
