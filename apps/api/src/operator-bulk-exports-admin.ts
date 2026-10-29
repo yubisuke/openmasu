@@ -277,9 +277,9 @@ export async function rotateOperatorBulkExportCredentials(options: Readonly<{
         [options.identity.tenantId, options.identity.appId, options.destinationId, credentialRef, sha256(protectedCredentials), changedAt],
       )).rows[0]!.revision;
       await client.query(
-        `UPDATE ephemeral.operator_bulk_export_batches SET next_attempt_at=$4,safe_reason=NULL,updated_at=$4
+        `UPDATE ephemeral.operator_bulk_export_batches SET next_attempt_at=$4,safe_reason=NULL,updated_at=$5
           WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3 AND state='retry' AND safe_reason='credentials_rejected'`,
-        [options.identity.tenantId, options.identity.appId, options.destinationId, changedAt],
+        [options.identity.tenantId, options.identity.appId, options.destinationId, changedAt, changedAt],
       );
       await audit(client, { identity: options.identity, destinationId: options.destinationId,
         action: "operator_bulk_export_credentials_rotated", occurredAt: changedAt,

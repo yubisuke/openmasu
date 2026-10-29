@@ -95,8 +95,10 @@ it("first_party_window_preview_confirm_keeps_history_and_late_install_receipt_re
     click.payload.click_id=install.payload.click_id;
     const late=await ingestRuntimeBatch([{batch_id:"window-new-receipt",server:{...input.server_context,received_at:click.received_at},record:click}],pool,
       [{...historical,history_state:{payload_sha256:admitted.raw_records[0].payload_sha256,semantic_available:true,ledger_position:"synthetic"}}]);
-    assert.equal(late.attributions[0].rule_bundle_hash,firstPartyWindowHash(definition),"late evidence uses the original receipt revision, not current 30 days");
-    assert.equal(late.attributions[0].reason_code,"window_expired");
+    assert.deepEqual(late.attributions,[],"provider-only historical installs are not newly emitted by click ingestion");
+    const originalInstall=await withTenant(pool,tenantId,client=>client.query("SELECT artifact FROM ledger.attribution_results WHERE tenant_id=$1 AND attribution_id=$2",
+      [tenantId,admitted.attributions[0].attribution_id]));
+    assert.deepEqual(originalInstall.rows[0].artifact,admitted.attributions[0],"late click ingestion preserves the recorded one-day install; SDK late re-evaluation is covered separately");
     const retained=await withTenant(pool,tenantId,client=>client.query("SELECT artifact FROM ledger.attribution_results WHERE tenant_id=$1 AND attribution_id=$2",[tenantId,originals.rows[0].artifact.attribution_id]));
     assert.deepEqual(retained.rows,originals.rows,"activation preserves the existing default attribution bytes");
     await assert.rejects(activateRuleBundle({pool,identity,body:activation(next,changed)}),/predecessor_mismatch/);

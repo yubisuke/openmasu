@@ -290,9 +290,10 @@ describe("operator-owned S3-compatible bulk event exports", { concurrency: false
     const rotation = await admin(credentialPath, { method: "POST", body: JSON.stringify({
       expected_revision: "0", access_key_id: "SYNTHETICREPLACEMENT", secret_access_key: "synthetic/replacement/secret/0002",
     }) });
-    assert.equal(rotation.status, 200);
     const rotatedText = await rotation.text();
-    const rotated = JSON.parse(rotatedText) as { credential_revision: string };
+    const rotated = JSON.parse(rotatedText) as { credential_revision: string; error?: string };
+    assert.equal(rotation.status, 200, typeof rotated.error === "string" && /^operator_bulk_[a-z_]+$/.test(rotated.error)
+      ? rotated.error : "unexpected credential replacement response");
     assert.notEqual(rotated.credential_revision, "0");
     const after = await withTenant(pool, tenantId, async client => (await client.query(
       `SELECT destination.bucket_name,destination.object_prefix,destination.reference_secret_ref,
