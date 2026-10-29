@@ -22,7 +22,7 @@ describe("evaluator module boundaries", () => {
     assert.deepEqual(Object.keys(publicCore).sort(), [
       "FixtureArrayCandidateProvider", "IndexedCandidateProvider", "TimestampInvalidError",
       "compareCandidateAttempts", "costCoverageMatchesGrouping", "createFixtureCandidateProvider", "createIndexedCandidateProvider",
-      "evaluate", "jcs", "roundHalfEven", "selectDisjointCosts", "sha256", "sortCandidateAttempts",
+      "evaluate", "jcs", "previewAcceptedFirstPartyAttribution", "roundHalfEven", "selectDisjointCosts", "sha256", "sortCandidateAttempts",
     ].sort());
     assert.equal(publicCore.TimestampInvalidError, TimestampInvalidError);
     assert.equal(publicCore.costCoverageMatchesGrouping, costCoverageMatchesGrouping);
