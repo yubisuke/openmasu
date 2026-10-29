@@ -43,6 +43,7 @@ export type RequestHandlerDependencies = {
     allowSyntheticLoopback?: boolean;
   }>;
   readonly referrerMaximumEncodedCharacters?: number;
+  readonly redirectorFallbackUrl?: string;
   readonly reportMaximumRows?: number;
   readonly reportMaximumExportRows?: number;
   readonly applePostback?: ApplePostbackReceiverDependencies;

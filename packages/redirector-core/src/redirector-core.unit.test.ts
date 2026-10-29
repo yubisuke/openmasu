@@ -12,6 +12,7 @@ import {
   prefetchEvidence,
   randomClickId,
   randomSlug,
+  redirectFallbackReason,
   resolveRedirect,
   type TrackingLink,
 } from "./index.js";
@@ -29,6 +30,16 @@ const activeLink: TrackingLink = {
 };
 
 describe("redirector core", () => {
+  it("uses the same explicit platform fallback for live routing and non-recording previews", () => {
+    for (const platform of ["android", "ios", "other"] as const) {
+      const result = resolveRedirect({ link: activeLink, platform, fallbackDestination: "https://synthetic.example/fallback",
+        now: "2026-10-29T00:00:00.000Z", clickId: "synthetic_preview_".padEnd(44, "_") });
+      assert.equal(!!result.click, platform === "android");
+      assert.equal(redirectFallbackReason(activeLink, platform), platform === "android" ? undefined : "platform_not_supported");
+    }
+    assert.equal(redirectFallbackReason({ ...activeLink, status: "paused" }, "android"), "link_paused");
+    assert.equal(redirectFallbackReason({ ...activeLink, status: "archived" }, "android"), "link_archived");
+  });
   it("generates 72-bit slugs and unbiased 264-bit click identifiers", () => {
     assert.match(randomSlug((size) => Buffer.alloc(size, 1)), /^[A-Za-z0-9_-]{12}$/);
     assert.match(randomClickId((size) => Buffer.alloc(size, 2)), /^[A-Za-z0-9_-]{44}$/);

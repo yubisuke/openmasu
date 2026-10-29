@@ -155,6 +155,15 @@ export function fallbackResponse(fallbackDestination: string): RedirectResolutio
   };
 }
 
+export type RedirectPlatform = "android" | "ios" | "other";
+export function redirectFallbackReason(link: TrackingLink | undefined, platform?: RedirectPlatform):
+  "link_not_found" | "link_paused" | "link_archived" | "platform_not_supported" | undefined {
+  if (!link) return "link_not_found";
+  if (link.status !== "active") return link.status === "paused" ? "link_paused" : "link_archived";
+  if (platform !== undefined && link.destination_kind === "play_store" && platform !== "android") return "platform_not_supported";
+  return undefined;
+}
+
 export function resolveRedirect(options: {
   link?: TrackingLink;
   fallbackDestination: string;
@@ -166,8 +175,9 @@ export function resolveRedirect(options: {
   deepLinkParams?: Readonly<Record<string, string>>;
   referrerMaximumEncodedCharacters?: number;
   deepLinkValue?: string;
+  platform?: RedirectPlatform;
 }): RedirectResolution {
-  if (!options.link || options.link.status !== "active") return fallbackResponse(options.fallbackDestination);
+  if (!options.link || redirectFallbackReason(options.link, options.platform)) return fallbackResponse(options.fallbackDestination);
   const clickId = options.clickId ?? randomClickId();
   const deferred = buildDeferredReferrer({
     clickId,

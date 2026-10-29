@@ -2,6 +2,8 @@ export type RouteAuth = "public" | "admin_bearer" | "sdk_hmac" | "privacy_receip
 export type RouteCapability = "read" | "operate" | "administer";
 
 export type RouteHandler =
+  | "admin_tracking_link_preview"
+  | "dashboard_tracking_link_preview"
   | "admin_event_catalog_list"
   | "admin_event_catalog_save"
   | "dashboard_event_catalog_list"
@@ -152,6 +154,8 @@ function exactPathPattern(path: string): RegExp {
 }
 
 export const routes: readonly RouteDefinition[] = [
+  { handler: "admin_tracking_link_preview", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/tracking-links\/[^/]+\/preview$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "dashboard_tracking_link_preview", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/tracking-links\/[^/]+\/preview$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "admin_event_catalog_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/event-catalog$/, auth: "admin_bearer", mutates: false, capability: "administer" },
   { handler: "admin_event_catalog_save", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/event-catalog$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "dashboard_event_catalog_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/event-catalog$/, auth: "dashboard_session", mutates: false, capability: "administer" },

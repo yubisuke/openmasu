@@ -1,15 +1,39 @@
 import { AppNotFoundError, requireRegisteredApp } from "../apps-admin.js";
 import { recordDashboardAudit } from "../session.js";
 import { createTrackingLink, listTrackingLinks, transitionTrackingLink } from "../tracking-links.js";
+import { previewTrackingLink } from "../tracking-link-preview.js";
+import { renderTrackingLinkPreview } from "../dashboard/tracking-link-preview.js";
 import type { RequestHandlerDependencies } from "../http-types.js";
 import type { DashboardAppContext, AdminRequestContext } from "./context.js";
 import { json, dashboardHtml } from "../http-responses.js";
-import { adminAppId, trackingLinkAction, publicReason, measurementLink, listedTrackingLink } from "../http-paths.js";
+import { adminAppId, decodedPathPart, trackingLinkAction, publicReason, measurementLink, listedTrackingLink } from "../http-paths.js";
 import { authorizeDashboardForm } from "../http-security.js";
 import { dashboardHeaders } from "../http-responses.js";
 import { renderTrackingLinkTransitionFailed, renderTrackingLinkCreated, renderTrackingLinkCreationFailed } from "../dashboard/action-pages.js";
 
-export function createTrackingControllers(dependencies: Pick<RequestHandlerDependencies, "pool" | "dashboard" | "trackingDestinationAllowlist" | "referrerMaximumEncodedCharacters" | "redirectorBaseUrl">) {
+export function createTrackingControllers(dependencies: Pick<RequestHandlerDependencies, "pool" | "dashboard" | "trackingDestinationAllowlist" | "referrerMaximumEncodedCharacters" | "redirectorBaseUrl" | "redirectorFallbackUrl">) {
+  const previewConfiguration = { fallbackUrl: dependencies.redirectorFallbackUrl ?? "https://play.google.com/store",
+    referrerMaximumEncodedCharacters: dependencies.referrerMaximumEncodedCharacters };
+  const previewId = (path: string) => decodedPathPart(path, /\/tracking-links\/([^/]+)\/preview$/) ?? "";
+  const previewError = (error: unknown) => error instanceof AppNotFoundError
+    || error instanceof Error && error.message === "tracking_link_not_found" ? { status: 404, reason: "not_found" }
+    : error instanceof Error && ["tracking_preview_input_invalid", "tracking_preview_platform_required"].includes(error.message)
+      ? { status: 400, reason: error.message } : { status: 503, reason: "tracking_preview_unavailable" };
+  const adminTrackingLinkPreview = async ({ response, target, pool, identity }: AdminRequestContext): Promise<void> => {
+    try {
+      const app = await requireRegisteredApp(pool, identity, adminAppId(target.pathname) ?? "");
+      json(response, 200, await previewTrackingLink(pool, app, previewId(target.pathname), target.searchParams, previewConfiguration));
+    } catch (error) { const failure = previewError(error); json(response, failure.status, { error: failure.reason }); }
+  };
+  const dashboardTrackingLinkPreview = async ({ response, target, pool, appIdentity }: DashboardAppContext): Promise<void> => {
+    try {
+      dashboardHtml(response, 200, renderTrackingLinkPreview(appIdentity.appId,
+        await previewTrackingLink(pool, appIdentity, previewId(target.pathname), target.searchParams, previewConfiguration)));
+    } catch (error) {
+      const failure = previewError(error);
+      dashboardHtml(response, failure.status, `<!doctype html><html lang="en"><head><title>Preview unavailable</title></head><body><h1>Preview unavailable</h1><p>${failure.reason}</p></body></html>`);
+    }
+  };
   const dashboardTrackingLinkTransition = async ({ request, response, target, pool, session, appId, appIdentity, decoder }: DashboardAppContext): Promise<void> => {
     const body = await decoder.form();
     const action = trackingLinkAction(target.pathname);
@@ -120,6 +144,8 @@ export function createTrackingControllers(dependencies: Pick<RequestHandlerDepen
   };
 
   return {
+    admin_tracking_link_preview: { boundary: "admin", handle: adminTrackingLinkPreview },
+    dashboard_tracking_link_preview: { boundary: "dashboard_app", handle: dashboardTrackingLinkPreview },
     dashboard_tracking_link_transition: { boundary: "dashboard_app", handle: dashboardTrackingLinkTransition },
     dashboard_tracking_links_create: { boundary: "dashboard_app", handle: dashboardTrackingLinksCreate },
     admin_tracking_links: { boundary: "admin", handle: adminTrackingLinks },
