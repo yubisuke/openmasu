@@ -441,8 +441,11 @@ describe("SDK auxiliary queue recovery", () => {
       const hash=firstPartyWindowHash(definition);
       await client.query(`INSERT INTO control.rule_bundle_revisions(rule_bundle_revision_id,tenant_id,app_id,rule_bundle_id,
         rule_bundle_version,rule_bundle_hash,definition,definition_digest,supersedes_rule_bundle_revision_id,activated_at,actor_ref,artifact)
-        VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$6,$8,$9,'synthetic-window-test','{}'::jsonb)`,
-      [id,input.tenantId,input.appId,definition.id,definition.version,hash,JSON.stringify(definition),previous ?? null,at]);
+        VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$6,$8,$9,'synthetic-window-test',$10::jsonb)`,
+      [id,input.tenantId,input.appId,definition.id,definition.version,hash,JSON.stringify(definition),previous ?? null,at,
+        JSON.stringify({rule_bundle_revision_id:id,rule_bundle_id:definition.id,rule_bundle_version:definition.version,
+          rule_bundle_hash:hash,definition_digest:hash,activated_at:at,
+          ...(previous ? {supersedes_rule_bundle_revision_id:previous}:{})})]);
     });
     const firstId=`window-one-${run}`,secondId=`window-thirty-${run}`;
     await register(one,"2026-08-01T00:00:00.000Z",firstId);

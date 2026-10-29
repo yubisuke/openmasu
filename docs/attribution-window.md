@@ -24,6 +24,9 @@ remains the default until an administrator explicitly activates the new family.
 
 The settings page displays the effective window, exact hash and activation time.
 No new service, environment setting, scheduler or automatic backfill is involved.
+Switching back to a previously used window also appends a new activation; its
+definition hash stays the same, but its revision and effective time are new.
+This allows a reviewed 1-day → 30-day → 1-day sequence without rewriting history.
 
 ## API
 

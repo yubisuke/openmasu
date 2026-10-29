@@ -131,8 +131,8 @@ export async function ingestRuntimeBatch(
     const recorded = attempt.history_state ? attempt.server.recorded_attribution_bundle : undefined;
     if (recorded) {
       window = recorded.rule_bundle_id === "attribution-first-party-window"
-        ? windowRevisions.find(revision => revision.ruleBundleHash === recorded.rule_bundle_hash
-          && revision.ruleBundleVersion === recorded.rule_bundle_version) : undefined;
+        ? firstPartyWindowAtReceipt(windowRevisions.filter(revision => revision.ruleBundleHash === recorded.rule_bundle_hash
+          && revision.ruleBundleVersion === recorded.rule_bundle_version), attempt.server.received_at) : undefined;
       if (recorded.rule_bundle_id === "attribution-first-party-window" && !window) throw new Error("attribution_window_recorded_revision_missing");
     }
     if (window) nonFraudBindings.set(`${window.ruleBundleId}:${window.ruleBundleHash}`, window);

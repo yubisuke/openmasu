@@ -16,6 +16,10 @@ describe("WO20 persisted non-fraud provenance", () => {
     assert.equal(firstPartyWindowAtReceipt([thirty,one],one.activatedAt),one);
     assert.equal(firstPartyWindowAtReceipt([one,thirty],"2026-08-09T23:59:59.999Z"),one);
     assert.equal(firstPartyWindowAtReceipt([one,thirty],thirty.activatedAt),thirty);
+    const returned={...revision(1,"2026-08-20T00:00:00.000Z"),ruleBundleRevisionId:"window-one-returned"};
+    assert.equal(firstPartyWindowAtReceipt([returned,thirty,one],"2026-08-09T23:59:59.999Z"),one);
+    assert.equal(firstPartyWindowAtReceipt([returned,thirty,one],"2026-08-15T00:00:00.000Z"),thirty);
+    assert.equal(firstPartyWindowAtReceipt([returned,thirty,one],returned.activatedAt),returned);
     assert.throws(()=>firstPartyWindowAtReceipt([one],"invalid"),/receipt_invalid/);
   });
   const binding = {

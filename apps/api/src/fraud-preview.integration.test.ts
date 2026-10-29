@@ -100,6 +100,14 @@ it("first_party_window_preview_confirm_keeps_history_and_late_install_receipt_re
     const retained=await withTenant(pool,tenantId,client=>client.query("SELECT artifact FROM ledger.attribution_results WHERE tenant_id=$1 AND attribution_id=$2",[tenantId,originals.rows[0].artifact.attribution_id]));
     assert.deepEqual(retained.rows,originals.rows,"activation preserves the existing default attribution bytes");
     await assert.rejects(activateRuleBundle({pool,identity,body:activation(next,changed)}),/predecessor_mismatch/);
+    const returnPreview=await previewAttributionWindow(pool,identity,request);
+    const restored=await activateRuleBundle({pool,identity,body:activation(returnPreview),now:new Date("2026-08-17T00:00:00.000Z"),requirePreview:true});
+    assert.equal(restored.rule_bundle_hash,first.rule_bundle_hash,"returning to one day keeps its definition hash");
+    assert.notEqual(restored.rule_bundle_revision_id,first.rule_bundle_revision_id,"returning creates a new activation, not a historical rewrite");
+    const revisions=await withTenant(pool,tenantId,client=>client.query(`SELECT rule_bundle_hash,rule_bundle_revision_id,supersedes_rule_bundle_revision_id
+      FROM control.rule_bundle_revisions WHERE tenant_id=$1 AND app_id=$2 AND rule_bundle_id=$3 ORDER BY activated_at`,[tenantId,appId,definition.id]));
+    assert.deepEqual(revisions.rows.map(row=>row.rule_bundle_hash),[firstPartyWindowHash(definition),firstPartyWindowHash(changed),firstPartyWindowHash(definition)]);
+    assert.equal(revisions.rows[2].supersedes_rule_bundle_revision_id,revisions.rows[1].rule_bundle_revision_id);
     const seven=firstPartyWindowDefinition(7),stale=await previewAttributionWindow(pool,identity,{...request,definition:seven});
     const another=structuredClone(input.records.find((row:any)=>row.event_name==="install"));
     Object.assign(another,{record_id:"window-backfilled-install",event_id:"window-backfilled-install",delivery_id:"window-backfilled-install"});
