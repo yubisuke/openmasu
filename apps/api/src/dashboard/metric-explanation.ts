@@ -22,7 +22,8 @@ export function renderMetricExplanation(appId: string, value: MetricExplanation)
     ] : []),
     item("Numerator composition", `${evidence.operands.ad_revenue_unscaled} + ${evidence.operands.purchase_revenue_unscaled} - ${evidence.operands.refund_deduction_unscaled}${evidence.version === 3 ? ` + ${evidence.operands.refund_reversal_unscaled}` : ""} = ${evidence.operands.revenue_unscaled} target units`),
   ] : [];
-  const detail = evidence ? `<h2>Recorded calculation</h2><dl>${[
+  const joinabilityLink = `<p><a href="/dashboard/apps/${encodeURIComponent(appId)}/cost-joinability">Inspect cost/acquisition dimensions and current acquisition receipts</a> (read-only; no inferred binding or allocation)</p>`;
+  const detail = evidence ? `${joinabilityLink}<h2>Recorded calculation</h2><dl>${[
     item("Evidence version", evidence.version), ...components,
     item(evidence.version !== 1 ? "Numerator: total net revenue" : "Numerator: accepted ad revenue", `${evidence.target_currency} ${exactDecimal(evidence.operands.revenue_unscaled, evidence.target_scale)}`),
     item("Denominator: selected acquisition cost", `${evidence.target_currency} ${exactDecimal(evidence.operands.cost_unscaled, evidence.target_scale)}`),
@@ -48,7 +49,7 @@ export function renderMetricExplanation(appId: string, value: MetricExplanation)
     item("Formula", evidence.operands.cost_unscaled === "0" ? "undefined: no_attributed_cost"
       : `half_even(${evidence.operands.revenue_unscaled} × 10^${evidence.ratio_scale} / ${evidence.operands.cost_unscaled})`),
   ].join("")}</dl><p>A closed occurrence-time window does not prove all delayed inputs have arrived. Revenue uses accepted installation-level events in the recorded window. Cost uses one latest row per acquisition-day cost key at the watermark. Exclusion reasons were not recorded individually and are unavailable.</p>`
-    : `<h2>Calculation evidence unavailable</h2><p>${escapeHtml(value.evidence_state)}. Only saved run provenance is shown. Missing operands are not zero.</p>`;
+    : `${joinabilityLink}<h2>Calculation evidence unavailable</h2><p>${escapeHtml(value.evidence_state)}. Only saved run provenance is shown. Missing operands are not zero.</p>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Metric explanation — OpenMasu</title><link rel="stylesheet" href="/dashboard/app.css"></head><body><main><h1>${escapeHtml(run.metric_name)}</h1><p>${escapeHtml(result)}</p><p><a href="/dashboard/apps/${encodeURIComponent(appId)}">Return to app metrics</a></p><h2>Saved run</h2><dl>${[
     item("Run", run.metric_run_id), item("Definition version", run.metric_definition_version),
     item("Grouping", JSON.stringify(run.grouping)), item("Input snapshot", run.input_snapshot_id),

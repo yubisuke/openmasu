@@ -24,6 +24,7 @@ import { requestMetricRecalculation } from "../../api/src/metric-recalculations.
 import { processMetricRecalculations } from "./metric-recalculation-worker.js";
 import { metricReport } from "../../api/src/reporting.js";
 import { jcs } from "@openmasu/attribution-core/canonical";
+import { costJoinabilityReport } from "../../api/src/cost-joinability.js";
 
 const pool = createAppPool();
 const reader = createReaderPool();
@@ -142,6 +143,14 @@ describe("durable bounded cost refresh", { concurrency: false }, () => {
     const health=(await listCostSchedules(reader,identity))[0];
     assert.equal(health.adapter_capability.grain,"ad"); assert.equal(health.adapter_capability.coverage,"explicit_selection");
     for(const forbidden of ["43601","43602","43603",request.customer_id,"selections","access_token"]) assert.equal(JSON.stringify(health).includes(forbidden),false);
+    const joinability=await costJoinabilityReport(reader,identity,{date_from:"2026-08-06",date_to:"2026-08-07",watermark_at_most:"2026-08-12T00:00:00.000Z"});
+    assert.equal(joinability.coverage.selected_child_requires_exact_detail,1);
+    assert.equal(joinability.coverage.parent_grain,0);
+    assert.equal(joinability.dimensions.find(row=>row.dimension==="creative_id")!.both_observed_exact_key,1);
+    assert.ok(joinability.dimensions.find(row=>row.dimension==="creative_id")!.acquisition_only>0);
+    assert.ok(joinability.saved_metric_reasons.some(row=>row.reason==="no_attributed_cost"));
+    assert.equal(joinability.current_receipts.data[0].creative_binding,"operator_explicit");
+    for(const forbidden of ["43601","43602","43603",request.customer_id,"access_token","synthetic-creative-a"]) assert.equal(JSON.stringify(joinability).includes(forbidden),false);
     const before=await counts();
     await due(first.cost_schedule_id);
     assert.equal((await processCostRefreshes(pool,identity.tenantId,options(mock("20000000",true),new Date("2026-08-13T00:00:00.000Z")))).failed,1);
@@ -400,6 +409,14 @@ describe("durable bounded cost refresh", { concurrency: false }, () => {
     assert.equal((await processCostRefreshes(pool, identity.tenantId, options(source("0", { empty: true }).fetcher, new Date("2026-08-24T00:00:00.000Z")))).empty, 1);
     assert.deepEqual(await counts(), { costs: 2, runs: 2 });
     assert.equal((await listCostSchedules(reader, identity))[0].last_outcome, "empty");
+    const diagnostic = await costJoinabilityReport(reader, identity, { date_from: "2026-08-20", date_to: "2026-08-21",
+      watermark_at_most: "2026-08-22T00:00:00.000Z" });
+    assert.equal(diagnostic.current_cost_rows, 1, "an old-cutoff observation survives a later empty refresh");
+    assert.equal(diagnostic.current_receipts.temporal_scope, "current_not_as_of_cutoff");
+    assert.equal(diagnostic.current_receipts.data[0].last_outcome, "empty");
+    assert.equal(diagnostic.current_receipts.data[0].last_row_count, 0);
+    assert.ok(diagnostic.current_receipts.data[0].last_success_at! > diagnostic.selection.watermark_at_most);
+    assert.equal(diagnostic.dimensions.find(row => row.dimension === "campaign_id")!.state, "cost_only");
     const current = await withTenant(pool, identity.tenantId, (client) => client.query(
       "SELECT spend_unscaled::text FROM ledger.cost_records_current WHERE tenant_id=$1", [identity.tenantId],
     ));

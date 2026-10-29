@@ -91,6 +91,8 @@ export type RouteHandler =
   | "dashboard_ingest_recovery_list"
   | "dashboard_ingest_recovery_request"
   | "admin_attribution_report"
+  | "admin_cost_joinability"
+  | "dashboard_cost_joinability"
   | "admin_apple_postbacks"
   | "dashboard_apple_postbacks"
   | "dashboard_attribution_report"
@@ -241,6 +243,8 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_ingest_recovery_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/ingest-recovery$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_ingest_recovery_request", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/ingest-recovery$/, auth: "dashboard_session", mutates: true, capability: "operate" },
   { handler: "admin_attribution_report", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/attribution$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "admin_cost_joinability", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/cost-joinability$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "dashboard_cost_joinability", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/cost-joinability$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "admin_apple_postbacks", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/apple-postbacks$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_metric_explanation", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/metrics\/[^/]+\/explanation$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "dashboard_root", method: "GET", pattern: /^\/dashboard\/?$/, auth: "public", mutates: false },

@@ -12,12 +12,13 @@ import { requestMetricRecalculation } from "../../api/src/metric-recalculations.
 import { metricReport } from "../../api/src/reporting.js";
 import { createRequestHandler } from "../../api/src/router.js";
 import { csrfToken, issueDashboardSession } from "../../api/src/session.js";
-import { persistCostImport } from "./import/cost.js";
+import { persistCostImport, type CostInput } from "./import/cost.js";
 import { ingestRuntimeBatch } from "./ingestion.js";
 import { ingestFixture } from "./test-support/fixture-ingestion.js";
 import { processMetricRecalculations } from "./metric-recalculation-worker.js";
 import { processMetricSchedules } from "./metric-schedule-worker.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
+import { costJoinabilityReport } from "../../api/src/cost-joinability.js";
 
 type Any = Record<string, any>;
 
@@ -65,6 +66,51 @@ describe("selected acquisition detail operator workflow", { concurrency: false }
     "SELECT artifact FROM ledger.metric_runs WHERE tenant_id=$1 AND app_id=$2 ORDER BY metric_run_id",
     [identity.tenantId, identity.appId],
   )).rows.map(row => row.artifact));
+
+  it("reader_cost_joinability_uses_selected_native_keys_cutoff_and_current_privacy_without_rewriting_metrics", async () => {
+    await computeSqlMetricRuns(app, input, true);
+    const original = jcs(await saved());
+    const query = { date_from: "2026-08-06", date_to: "2026-08-07", watermark_at_most: "2026-08-13T00:00:00.000Z" };
+    const report = await costJoinabilityReport(reader, identity, query);
+    assert.equal(report.acquisition_basis, "selected_first_party_click");
+    assert.equal(report.upstream_completeness, "unknown");
+    assert.ok(report.dimensions.find(row => row.dimension === "creative_id")!.both_observed_exact_key > 0);
+    assert.ok(report.dimensions.find(row => row.dimension === "creative_id")!.missing_acquisition_dimension > 0);
+    assert.equal((await costJoinabilityReport(reader, identity, { ...query, watermark_at_most: "2026-08-01T00:00:00.000Z" })).current_cost_rows, 0);
+    const parent: CostInput = { ...(costs[0] as CostInput), ad_group_id: undefined, creative_id: undefined,
+      as_of: "2026-08-12T12:00:00.000Z", amount_unscaled: "30000000" };
+    await persistCostImport(app, "synthetic-parent-observation", [parent]);
+    const withParent = await costJoinabilityReport(reader, identity, query);
+    assert.equal(withParent.coverage.parent_grain, 1);
+    assert.equal(withParent.coverage.overlapping_unrestricted_grains, true);
+    const readKey = `synthetic-cost-diagnostic-reader-${randomBytes(32).toString("base64url")}`;
+    await ensureAdminKeys(app, identity, [{ key: readKey, role: "read_only" }]);
+    const counts = () => withTenant(reader, identity.tenantId, async client => (await client.query(
+      `SELECT (SELECT count(*)::integer FROM ledger.cost_records WHERE tenant_id=$1) AS costs,
+        (SELECT count(*)::integer FROM ledger.metric_runs WHERE tenant_id=$1) AS metrics,
+        (SELECT count(*)::integer FROM ledger.audit_logs WHERE tenant_id=$1) AS audits`, [identity.tenantId])).rows[0]);
+    const before = await counts();
+    const route = `/v1/admin/apps/app-a/cost-joinability?${new URLSearchParams(query)}`;
+    assert.equal((await fetch(`${base}${route}`)).status, 401);
+    const response = await fetch(`${base}${route}`, { headers: { authorization: `Bearer ${readKey}` } });
+    assert.equal(response.status, 200); assert.deepEqual(await response.json(), withParent);
+    const htmlResponse = await page(`/dashboard/apps/app-a/cost-joinability?${new URLSearchParams(query)}`);
+    assert.equal(htmlResponse.status, 200); const html = await htmlResponse.text();
+    assert.match(html, /parent_grain/); assert.match(html, /not historical cutoff evidence/);
+    assert.equal((await admin(`${route}&installation_id=forbidden`)).status, 400);
+    assert.equal((await admin(route.replace("apps/app-a", "apps/another-app"))).status, 404);
+    assert.equal((await costJoinabilityReport(reader, { ...identity, tenantId: "tenant-unrelated" }, query)).native_installations, 0);
+    assert.deepEqual(await counts(), before); assert.equal(jcs(await saved()), original);
+    const selectedClick = input.records.find((row: Any) => row.event_name === "click" && row.payload.creative_id === "synthetic-creative-a");
+    assert.ok(selectedClick);
+    await withTenant(app, identity.tenantId, client => client.query(`INSERT INTO ledger.raw_payload_states
+      (tenant_id,app_id,record_id,lifecycle_status,changed_at) VALUES ($1,$2,$3,'redacted',$4)`,
+      [identity.tenantId, identity.appId, selectedClick.record_id, "2026-08-14T00:00:00.000Z"]));
+    const afterPrivacy = await costJoinabilityReport(reader, identity, query);
+    assert.ok(afterPrivacy.dimensions.find(row => row.dimension === "creative_id")!.both_observed_exact_key
+      < withParent.dimensions.find(row => row.dimension === "creative_id")!.both_observed_exact_key);
+    assert.equal(jcs(await saved()), original, "current privacy removes selected source semantics without rewriting historical artifacts");
+  });
 
   it("preserves detail selection across API, HTML and identical CSV, and captures link dimensions in the existing form", async () => {
     await computeSqlMetricRuns(app, input, true);
