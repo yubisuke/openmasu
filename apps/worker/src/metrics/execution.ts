@@ -85,7 +85,7 @@ export async function executeMetricCalculation(
     for (const metricName of evaluation.metric_names ?? []) {
       const definition = definitions.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
-      if (definition.rule_bundle_id === "metric-basis-acquisition-kpis"
+      if (["metric-basis-acquisition-kpis", "metric-horizon-acquisition-kpis"].includes(definition.rule_bundle_id)
           && (!grouping?.cohort_date || Object.keys(grouping)
             .some(key => !definition.grouping_dimensions?.includes(key as never)))) {
         throw new Error("acquisition_kpi_grouping_invalid");

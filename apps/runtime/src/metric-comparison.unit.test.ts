@@ -9,10 +9,24 @@ import { importedAcquisitionMetricDefinitions } from "@openmasu/contracts/defini
 import { calendarAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
 import { calendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
 import { payerMetricDefinitions } from "@openmasu/contracts/definitions";
+import { horizonAcquisitionKpiDefinitions, ACQUISITION_KPI_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 
 const fx = { policy_version: "synthetic", target_currency: "USD", target_scale: 6, rounding_mode: "half_even" as const,
   rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0, as_of: "2026-01-01T00:00:00.000Z", source: "not-in-reader-projection" }] };
 const run = { metric_run_id: "synthetic", input_snapshot_id: "a".repeat(64) };
+it("native_horizon_comparisons_require_the_complete_window_for_all_roles_and_keep_old_D7_count_meaning", () => {
+  for (const [day, closesAt] of [[0, "2026-08-08T00:00:00.000Z"], [30, "2026-09-07T00:00:00.000Z"]] as const) {
+    for (const definition of horizonAcquisitionKpiDefinitions(day)) {
+      const context = captureMetricComparisonContext(run, definition, fx, "after", sha256);
+      assert.ok(comparisonMeaning(context));
+      assert.deepEqual(comparisonMaturity(context, { cohort_date: "2026-08-06" }, new Date(Date.parse(closesAt) - 1).toISOString()),
+        { state: "unknown", closes_at: closesAt });
+      assert.equal(comparisonMaturity(context, { cohort_date: "2026-08-06" }, closesAt).state, "window_elapsed");
+    }
+  }
+  const oldCount = captureMetricComparisonContext(run, ACQUISITION_KPI_METRIC_DEFINITIONS[0], fx, "after", sha256);
+  assert.equal(comparisonMaturity(oldCount, { cohort_date: "2026-08-06" }, "2026-08-07T00:00:00.000Z").state, "window_elapsed");
+});
 it("payer_comparison_keeps_verified_population_historical_payers_net_money_and_D7_scope", () => {
   for (const definition of payerMetricDefinitions()) {
     const context = captureMetricComparisonContext(run, definition, fx, "after", sha256);

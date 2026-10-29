@@ -5,6 +5,45 @@ Contract v0.4.0 completed the identity migration from the immutable
 contract identity but did not change field meaning, attribution behavior, metric
 arithmetic, ordering, hashing, privacy, or fraud semantics.
 
+## Native acquisition KPI horizons (0.4.31)
+
+Independent `metric-horizon-acquisition-kpis` definitions add only native UTC
+D0/D30 eight-role sets, named `acquisition_d0_*` and `acquisition_d30_*`.
+Definition and bundle version `0.4.31` binds JCS/SHA-256
+`80d2d996192549069189e77812566f2805c6f22a5f427ba86ce863b91ccd7447`.
+Only the elapsed revenue horizon changes: cohort membership, acquisition-day
+costs, captured FX and USD scale-6 arithmetic retain their existing meaning.
+All eight roles emit `undefined/observation_window_not_elapsed` before the saved
+cutoff reaches cohort-date UTC midnight plus 2/32 days. Schedules require the
+corresponding minimum lag; bounded corrections append complete same-horizon
+companion sets without changing old runs.
+
+Complete new golden inventory under `78-acquisition-horizons/`:
+
+- `expected_raw_records.json`, `expected_deliveries.json`,
+  `expected_logical_events.json`, `expected_corrections.json`;
+- `expected_privacy_requests.json`, `expected_privacy_tombstones.json`,
+  `expected_attributions.json`, `expected_metric_definitions.json`;
+- `expected_metric_runs.json`, `expected_cost_records.json`,
+  `expected_fraud_decisions.json`, `expected_rejections.json`,
+  `expected_reconciliation.json`;
+- new `input.json` and [independent derivation](../fixtures/v0.4/78-acquisition-horizons/README.md).
+
+The thirteen new expected files contain 19 raw records/deliveries/logical events
+each, six attributions, three costs, three refund corrections, 27 definitions
+and 32 runs; the remaining families are empty. The independently derived
+D0/D7/D30 values and immature fourth set are summarized in the
+[fixture guide](../fixtures/v0.4/README.md#fixture-78-native-acquisition-kpi-horizons).
+New goldens are reviewed separately from behavior changes, not sourced from
+evaluator output.
+
+All 77 prior inputs and 1001 expected files, including fixtures 76 and 77, remain
+unchanged. The fixture diff against this patch's parent must contain only
+directory 78 and the shared fixture README. Native D7 `0.4.23` and
+platform/imported D7 `0.4.30` definitions, hashes and saved set identities stay
+frozen. There is no schema URN, event vocabulary, wire/package `0.4.0` or
+database migration change. See [acquisition KPIs](acquisition-kpis.md).
+
 ## Basis-separated acquisition KPI sets (0.4.30)
 
 Independent `metric-basis-acquisition-kpis` definitions add the eight saved D7

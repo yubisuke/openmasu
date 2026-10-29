@@ -1,11 +1,12 @@
 import { acquisitionKpiObservation, type AcquisitionKpiScope, type AcquisitionKpiBasis } from "@openmasu/runtime/acquisition-kpi-key";
 export { acquisitionKpiSetKey, type AcquisitionKpiScope } from "@openmasu/runtime/acquisition-kpi-key";
-import { ACQUISITION_KPI_BUNDLE, ACQUISITION_KPI_VERSION, ACQUISITION_KPI_ROLES,
+import { ACQUISITION_KPI_ROLES,
   acquisitionKpiRole, type AcquisitionKpiRole } from "@openmasu/contracts/definitions";
 import type { MetricReportRow } from "./reporting.js";
 
 export type AcquisitionKpiSet = {
   key: string;
+  horizon: 0 | 7 | 30;
   basis: AcquisitionKpiBasis;
   importProvider: string | null;
   grouping: Readonly<Record<string, string>>;
@@ -43,7 +44,7 @@ export function buildAcquisitionKpiSets(rows: readonly MetricReportRow[], partia
       row.attribution_update_state, row.privacy_update_state].includes("recalculation_pending") || row.cost_update_state === "input_revised");
     const reason = unavailable ? "historical_or_unavailable" : pending ? "recalculation_pending"
       : Date.parse(first.row.input_received_at_watermark) < Date.parse(first.closesAt) ? "window_not_elapsed" : null;
-    sets.push({ key, basis: first.basis, importProvider: first.provider, grouping: first.row.grouping, watermark: first.row.input_received_at_watermark,
+    sets.push({ key, horizon: first.horizon, basis: first.basis, importProvider: first.provider, grouping: first.row.grouping, watermark: first.row.input_received_at_watermark,
       closesAt: first.closesAt, inputSnapshotId: first.row.input_snapshot_id, fxDigest: first.fxDigest,
       state: reason ? "blocked" : "ready", reason, rows: setRows,
       operands: { cpi: { numerator: setRows.cost.metric_run_id, denominator: setRows.installs.metric_run_id },

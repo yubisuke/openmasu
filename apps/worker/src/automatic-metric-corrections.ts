@@ -1,7 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
 import { acquirePrivacyTenantXactFence, correctionCutoff, correctionMetricNames, expandAcquisitionCompanions,
-  isBasisAcquisitionReplay, metricCostScopePredicate, normalizeMetricCorrectionPolicy,
+  isCompanionAcquisitionReplay, metricCostScopePredicate, normalizeMetricCorrectionPolicy,
   metricAcquisitionSql, metricAcquisitionJoinSql, metricAcquisitionDimensionSql, selectLateMetricInputs, supportsLateMetric, supportsAttributionMetric, withTenant,
   type MetricCorrectionPolicy } from "@openmasu/runtime";
 
@@ -115,10 +115,10 @@ async function enqueuePage(client: PoolClient, r: Receipt, policy: MetricCorrect
     [scope.tenantId,scope.appId,r.source_ref,current.map(row=>row.metric_run_id)]);
     const ids=new Set(matches.rows.map(row=>row.metric_run_id));
     selected=current.filter(row=>ids.has(row.metric_run_id)).map(row=>({metric_run_id:row.metric_run_id,replay:row.replay,
-      safe_reason:row.replay?.version===1 && (supportsLateMetric(row.replay) || isBasisAcquisitionReplay(row.replay)) ? null : "unsupported_definition"}));
+      safe_reason:row.replay?.version===1 && (supportsLateMetric(row.replay) || isCompanionAcquisitionReplay(row.replay)) ? null : "unsupported_definition"}));
   } else if (r.source_kind === "attribution_revision") {
     for (const row of current) {
-      if (row.replay?.version!==1 || !(supportsAttributionMetric(row.replay) || isBasisAcquisitionReplay(row.replay)) || !["selected_first_party_click","selected_verified_platform","selected_imported_provider"].includes(row.replay.metric_definition.acquisition_basis)) {
+      if (row.replay?.version!==1 || !(supportsAttributionMetric(row.replay) || isCompanionAcquisitionReplay(row.replay)) || !["selected_first_party_click","selected_verified_platform","selected_imported_provider"].includes(row.replay.metric_definition.acquisition_basis)) {
         selected.push({metric_run_id:row.metric_run_id,replay:row.replay,safe_reason:"unsupported_definition"});
       } else if (await attributionMatches(client,scope,row,revision.artifact,watermark)) {
         selected.push({metric_run_id:row.metric_run_id,replay:row.replay,safe_reason:null});

@@ -211,7 +211,8 @@ export function comparisonMaturity(context: MetricComparisonContext, grouping: R
   }
   // Installs may occur anywhere within the cohort date. Use its exclusive end,
   // plus the complete elapsed/activity window, never an inferred install time.
-  const days = calculation === "event_count" || isCalendarActivityMetric(d) || calculation === "cohort_size" ? 1 : d.definition.window.day + 2;
+  const days = d.rule_bundle_id === "metric-horizon-acquisition-kpis" ? d.definition.window.day + 2
+    : calculation === "event_count" || isCalendarActivityMetric(d) || calculation === "cohort_size" ? 1 : d.definition.window.day + 2;
   const closesAt = new Date(Date.parse(day) - offset + days * 86_400_000).toISOString();
   return { state: Date.parse(watermark) >= Date.parse(closesAt) ? "window_elapsed" : "unknown",
     closes_at: closesAt } as const;

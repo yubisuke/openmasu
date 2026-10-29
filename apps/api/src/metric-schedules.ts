@@ -2,7 +2,7 @@ import type { Pool, PoolClient } from "pg";
 import { sha256Jcs } from "@openmasu/fraud-rules";
 import { uuidV7, withTenant, type MetricScheduleReplacement } from "@openmasu/runtime";
 import { ENGAGEMENT_METRIC_NAMES, M1B_METRIC_DEFINITIONS, REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
-  BASIS_ACQUISITION_KPI_BUNDLE, cohortLocalDate, addCalendarDays, validDatedFxPolicy, canonicalDatedFxPolicy, type CohortTimeZone } from "@openmasu/contracts/definitions";
+  BASIS_ACQUISITION_KPI_BUNDLE, HORIZON_ACQUISITION_KPI_BUNDLE, cohortLocalDate, addCalendarDays, validDatedFxPolicy, canonicalDatedFxPolicy, type CohortTimeZone } from "@openmasu/contracts/definitions";
 import { validateScheduledMetricDefinition as validMetricDefinition, type ScheduledMetricDefinition } from "@openmasu/contracts/validation";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
@@ -203,8 +203,14 @@ export function normalizeMetricScheduleRequest(
       throw new Error("metric_schedule_calendar_profile_required");
     }
     const grouping = normalizedGrouping(evaluation.grouping);
-    if (evaluation.metric_names.some(name => suppliedDefinitions.find(definition => definition.metric_name === name)?.rule_bundle_id === BASIS_ACQUISITION_KPI_BUNDLE)
-      && (dateDimension !== "cohort_date" || lagDays < 9)) throw new Error("metric_schedule_acquisition_kpi_profile_required");
+    const acquisitionDays = evaluation.metric_names.flatMap(name => {
+      const metric = suppliedDefinitions.find(definition => definition.metric_name === name);
+      return metric && [BASIS_ACQUISITION_KPI_BUNDLE, HORIZON_ACQUISITION_KPI_BUNDLE].includes(metric.rule_bundle_id)
+        ? [Number((metric.definition.window as JsonObject).day)] : [];
+    });
+    if (acquisitionDays.length && (dateDimension !== "cohort_date" || lagDays < Math.max(...acquisitionDays) + 2)) {
+      throw new Error("metric_schedule_acquisition_kpi_profile_required");
+    }
     const retentionDays = evaluation.metric_names.flatMap(name => {
       const metric = suppliedDefinitions.find(definition => definition.metric_name === name);
       return metric?.retention_maturity_policy ? [Number(metric.definition.window && (metric.definition.window as JsonObject).day)] : [];

@@ -8,7 +8,7 @@ import { buildAcquisitionKpiSets, acquisitionKpiSetKey } from "./acquisition-kpi
 import { buildDashboardView } from "./dashboard/view.js";
 import { renderDashboard } from "./dashboard/render.js";
 import type { MetricReportRow } from "./reporting.js";
-import { acquisitionKpiRole, basisAcquisitionKpiDefinitions } from "@openmasu/contracts/definitions";
+import { acquisitionKpiRole, basisAcquisitionKpiDefinitions, horizonAcquisitionKpiDefinitions } from "@openmasu/contracts/definitions";
 type Any = Record<string, any>;
 const scope = { tenantId: "tenant-a", appId: "app-a" };
 const query = { ...scope, supersession: "latest" as const, limit: 200 };
@@ -34,6 +34,41 @@ function basisRows(source: readonly MetricReportRow[], basis: "selected_verified
       comparison_context:captureMetricComparisonContext({metric_run_id,input_snapshot_id:row.input_snapshot_id},definition,input.fx_policy,"before",sha256) };
   });
 }
+
+function horizonRows(source: readonly MetricReportRow[], day: 0 | 30, watermark: string): MetricReportRow[] {
+  const definitions = horizonAcquisitionKpiDefinitions(day);
+  return source.map(row => {
+    const definition = definitions.find(d => acquisitionKpiRole(d.metric_name) === acquisitionKpiRole(row.metric_name))!;
+    const metric_run_id = `d${day}:${row.metric_run_id}`;
+    return { ...structuredClone(row), metric_run_id, metric_name: definition.metric_name,
+      metric_definition_version: definition.metric_definition_version, rule_bundle_id: definition.rule_bundle_id,
+      rule_bundle_hash: definition.rule_bundle_hash, policy_versions: [`rule_bundle:${definition.rule_bundle_version}`],
+      input_received_at_watermark: watermark,
+      comparison_context: captureMetricComparisonContext({ metric_run_id, input_snapshot_id: row.input_snapshot_id },
+        definition, input.fx_policy, "before", sha256) };
+  });
+}
+
+it("acquisition_horizons_keep_D0_D7_D30_sets_labels_and_exact_maturity_separate", () => {
+  const native = rows().filter(row => row.metric_run_id.startsWith("kpi70-a:"));
+  const d0 = horizonRows(native, 0, "2026-08-08T00:00:00.000Z"), d30 = horizonRows(native, 30, "2026-09-07T00:00:00.000Z");
+  const result = buildAcquisitionKpiSets([...native, ...d0, ...d30], false, scope);
+  assert.deepEqual(result.sets.map(set => set.horizon).sort((a, b) => a - b), [0, 7, 30]);
+  assert.equal(new Set(result.sets.map(set => set.key)).size, 3);
+  assert.ok(result.sets.every(set => set.state === "ready"));
+  assert.equal(result.sets.find(set => set.horizon === 0)!.closesAt, "2026-08-08T00:00:00.000Z");
+  assert.equal(result.sets.find(set => set.horizon === 30)!.closesAt, "2026-09-07T00:00:00.000Z");
+  for (const [day, closes] of [[0, "2026-08-08T00:00:00.000Z"], [30, "2026-09-07T00:00:00.000Z"]] as const) {
+    const early = horizonRows(native, day, new Date(Date.parse(closes) - 1).toISOString());
+    assert.equal(buildAcquisitionKpiSets(early, false, scope).sets[0].reason, "window_not_elapsed");
+  }
+  assert.equal(buildAcquisitionKpiSets([...d0.slice(0, 4), ...d30.slice(4)], false, scope).sets.length, 0);
+  const html = renderDashboard(buildDashboardView({ apps: [], selectedAppId: "app-a", query,
+    metrics: { data: [...native, ...d0, ...d30] }, csrfToken: "synthetic" }));
+  for (const day of [0, 7, 30]) assert.match(html, new RegExp(`data-acquisition-horizon="D${day}"`));
+  assert.match(html, /<th scope="col">Ad revenue \(USD\)<\/th>/);
+  assert.doesNotMatch(html, /<th scope="col">D7/);
+});
 
 it("acquisition_KPI_projection_aligns_eight_saved_roles_and_operand_run_refs_without_dividing", () => {
   const source = rows(), result = buildAcquisitionKpiSets(source, false, scope);

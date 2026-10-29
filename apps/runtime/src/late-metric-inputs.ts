@@ -3,7 +3,7 @@ import { sha256 } from "@openmasu/attribution-core/canonical";
 import { validateMetricDefinition } from "@openmasu/contracts/validation";
 import { isPayerMetricDefinition, isVerifiedPurchaseProjection } from "@openmasu/contracts/definitions";
 import { metricAcquisitionSql, metricAcquisitionJoinSql, metricAcquisitionDimensionSql } from "./platform-acquisition.js";
-import { correctionMetricNames, expandAcquisitionCompanions, isBasisAcquisitionReplay,
+import { correctionMetricNames, expandAcquisitionCompanions, isCompanionAcquisitionReplay,
   type CorrectionCandidate, type LateEventRecalculationRequest } from "./metric-recalculation.js";
 
 type Any = Record<string, any>;
@@ -143,7 +143,7 @@ export async function selectLateMetricInputs(
        AND mr.grouping->>'cohort_date' BETWEEN $4 AND $5
        AND ($6::text[] IS NULL OR mr.metric_name=ANY($6::text[]))
        AND ($7::text[] IS NULL OR mr.metric_run_id=ANY($7::text[]))
-       AND (mr.comparison_context IS NULL OR mr.comparison_context->'definition'->>'rule_bundle_id'='metric-basis-acquisition-kpis'
+       AND (mr.comparison_context IS NULL OR mr.comparison_context->'definition'->>'rule_bundle_id' IN ('metric-basis-acquisition-kpis','metric-horizon-acquisition-kpis')
          OR mr.comparison_context->'definition'->'definition'->>'calculation'
          IN ('revenue_sum','revenue_over_cohort','revenue_over_cost','converted_installations','converted_installations_over_cohort',
            'purchase_count','paying_installations','paying_installations_over_cohort','revenue_over_paying_installations'))
@@ -156,7 +156,7 @@ export async function selectLateMetricInputs(
   for (const row of candidates.rows) {
     if (!committedReceipt && !eligible.some(event => event.received_at > row.watermark)) continue;
     // Counts/cost/CPI are companions, not individually affected by a revenue event.
-    if (isBasisAcquisitionReplay(row.replay) && !supportsLateMetric(row.replay!)) continue;
+    if (isCompanionAcquisitionReplay(row.replay) && !supportsLateMetric(row.replay!)) continue;
     let reason: string | null = null;
     if (row.replay?.version !== 1 || !row.replay.evaluation || !row.replay.fx_policy) reason = "replay_unavailable";
     else if (!supportsLateMetric(row.replay)) reason = "unsupported_definition";

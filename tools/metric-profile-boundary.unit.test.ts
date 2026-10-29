@@ -6,7 +6,7 @@ import {
   M1B_METRIC_DEFINITIONS, M3_METRIC_DEFINITIONS, REFERENCE_AD_REVENUE_METRIC_DEFINITIONS,
   REFUND_REVERSAL_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS,
   SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS,
-  ACQUISITION_KPI_METRIC_DEFINITIONS, basisAcquisitionKpiDefinitions,
+  ACQUISITION_KPI_METRIC_DEFINITIONS, basisAcquisitionKpiDefinitions, horizonAcquisitionKpiDefinitions,
   CALENDAR_ACTIVITY_METRIC_DEFINITIONS, isCalendarActivityMetricDefinition,
   PAYER_METRIC_DEFINITIONS,
   VERIFIED_PLATFORM_METRIC_DEFINITIONS,
@@ -168,6 +168,7 @@ describe("metric profile entry boundaries", () => {
       ...engagementPolicyMetricDefinitions({ windowDays: 3, minimumInactivityDays: 7, eventKey: "tutorial_complete" })
         .map(definition => ({ name: "engagement_policy/valid", definition })),
       ...SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS.map(definition => ({ name: "daily_acquisition/valid", definition })),
+      ...([0, 30] as const).flatMap(day => horizonAcquisitionKpiDefinitions(day).map(definition => ({ name: "horizon_acquisition_kpis/valid", definition }))),
       ...VERIFIED_PLATFORM_METRIC_DEFINITIONS.map(definition => ({ name: "platform/valid", definition })),
       ...importedAcquisitionMetricDefinitions("synthetic-export").map(definition => ({ name: "imported/valid", definition })),
       ...(["selected_first_party_click", "selected_verified_platform", "selected_imported_provider"] as const)
@@ -177,7 +178,7 @@ describe("metric profile entry boundaries", () => {
       ...COHORT_TIME_ZONES.flatMap(zone=>["selected_first_party_click","selected_verified_platform","selected_imported_provider"].flatMap(basis=>
         calendarAcquisitionMetricDefinitions(zone,basis as NonNullable<Definition["acquisition_basis"]>,basis === "selected_imported_provider" ? "synthetic-export" : undefined)
           .map(definition=>({name:"calendar/valid",definition}))))];
-    assert.equal(valid.length, 250 + ACQUISITION_KPI_METRIC_DEFINITIONS.length + CALENDAR_ACTIVITY_METRIC_DEFINITIONS.length + PAYER_METRIC_DEFINITIONS.length);
+    assert.equal(valid.length, 266 + ACQUISITION_KPI_METRIC_DEFINITIONS.length + CALENDAR_ACTIVITY_METRIC_DEFINITIONS.length + PAYER_METRIC_DEFINITIONS.length);
     const exercised = new Set<string>();
     for (const { name, definition } of valid) {
       assert.ok(validateMetricDefinition(definition), name);
@@ -229,6 +230,28 @@ describe("metric profile entry boundaries", () => {
     const independent = basisAcquisitionKpiDefinitions("selected_verified_platform");
     independent[0].definition.window.day = 30;
     assert.equal(ACQUISITION_KPI_METRIC_DEFINITIONS[0].definition.window.day, 7);
+  });
+
+  it("keeps native acquisition horizon names, days and bundle binding closed without changing D7", () => {
+    const original = sha256(ACQUISITION_KPI_METRIC_DEFINITIONS);
+    for (const day of [0, 30] as const) for (const definition of horizonAcquisitionKpiDefinitions(day)) {
+      assert.ok(validateMetricDefinition(definition));
+      assert.ok(validateScheduledMetricDefinition(definition));
+      assert.doesNotThrow(() => assertMetricDefinitionSeries(definition));
+      assert.equal(metricProfileMetadata(definition)?.evaluationValidation, "schema_profile");
+      for (const change of [{ rule_bundle_hash: "0".repeat(64) }, { metric_definition_version: "0.4.23" },
+        { acquisition_basis: "selected_verified_platform" }, { import_provider: "synthetic-provider" },
+        { metric_name: definition.metric_name.replace(`_d${day}_`, "_d7_") },
+        { definition: { ...definition.definition, window: { type: "elapsed", day: 7 } } }]) {
+        const invalid = { ...structuredClone(definition), ...change } as Definition;
+        assert.equal(validateMetricDefinition(invalid), false);
+        assert.equal(validateScheduledMetricDefinition(invalid), false);
+        assert.throws(() => assertMetricDefinitionSeries(invalid), /metric_definition_series_mismatch/);
+      }
+    }
+    assert.throws(() => horizonAcquisitionKpiDefinitions(7 as 0), /acquisition_kpi_horizon_invalid/);
+    horizonAcquisitionKpiDefinitions(0)[0].definition.window.day = 9;
+    assert.equal(sha256(ACQUISITION_KPI_METRIC_DEFINITIONS), original);
   });
 
   it("rejects malformed and unregistered closed profiles before schedule database writes", async () => {

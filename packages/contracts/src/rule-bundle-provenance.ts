@@ -39,6 +39,7 @@ export type NonFraudRuleBundleId =
   | "metric-selected-daily-acquisition"
   | "metric-acquisition-kpis"
   | "metric-basis-acquisition-kpis"
+  | "metric-horizon-acquisition-kpis"
   | "metric-standard-retention"
   | "metric-calendar-activity"
   | "metric-verified-payers"
@@ -64,6 +65,16 @@ export type NonFraudRuleBundleDefinition = {
 };
 
 export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonFraudRuleBundleDefinition>> = {
+  "metric-horizon-acquisition-kpis": {
+    id: "metric-horizon-acquisition-kpis", version: "0.4.31", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["native-utc-elapsed-d0-or-d30-eight-role-cohort-set", "same-input-cost-fx-and-attribution-snapshot",
+      "all-roles-undefined-before-cohort-date-plus-horizon-plus-two-days", "cohort-acquisition-day-current-snapshot",
+      "reject-overlapping-cost-grains", "cost-sum-and-half-even-cost-over-cohort",
+      "missing-cost-and-empty-cohort-are-not-zero-cpi", "separate-ad-purchase-net-and-total-net",
+      "captured-fx-watermark-privacy-and-fraud", "bounded-correction-of-complete-same-horizon-sets",
+      "preserve-native-d7-and-platform-imported-d7-identities"],
+  },
   "metric-basis-acquisition-kpis": {
     id: "metric-basis-acquisition-kpis", version: "0.4.30", kind: "metric",
     implementation: "reference-metric-v0.4",

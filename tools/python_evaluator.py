@@ -1313,18 +1313,21 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
         if prefix is None or day not in (3, 14, 30) or isinstance(day, bool) or policy not in (None, "gross", "net") or definition != expected:
             raise ValueError(f"metric_definition_series_mismatch:{definition['metric_name']}")
         return
-    if (definition.get("rule_bundle_id") in {"metric-acquisition-kpis", "metric-basis-acquisition-kpis"} or re.match(r"^(platform_|imported_)?acquisition_d7_", definition["metric_name"])
+    if (definition.get("rule_bundle_id") in {"metric-acquisition-kpis", "metric-basis-acquisition-kpis", "metric-horizon-acquisition-kpis"} or re.match(r"^(platform_|imported_)?acquisition_d(0|7|30)_", definition["metric_name"])
             or definition["definition"]["calculation"] in {"cost_sum", "cost_over_cohort"}):
         operations = {"installs": ("cohort_size", "cohort_size", "count"), "cost": ("cost_sum", "cost", "money"),
                       "cpi": ("cost_over_cohort", "cost", "money"), "ad_revenue": ("revenue_sum", "revenue", "money"),
                       "purchase_net": ("revenue_sum", "purchase_net_revenue", "money"), "total_net": ("revenue_sum", "total_net_revenue", "money"),
                       "ad_roas": ("revenue_over_cost", "revenue", "ratio"), "total_roas": ("revenue_over_cost", "total_net_revenue", "ratio")}
         prefix = "imported_" if definition["metric_name"].startswith("imported_") else "platform_" if definition["metric_name"].startswith("platform_") else ""
-        role = definition["metric_name"].removeprefix(prefix + "acquisition_d7_")
+        match = re.fullmatch(r"acquisition_d(0|7|30)_(.+)", definition["metric_name"].removeprefix(prefix))
+        if not match or prefix and match[1] != "7":
+            raise ValueError("invalid acquisition KPI horizon")
+        day, role = int(match[1]), match[2]
         if role not in operations:
             raise ValueError("invalid acquisition KPI role")
         calculation, numerator, value_type = operations[role]
-        operation: dict[str, Any] = {"calculation": calculation, "numerator": numerator, "window": {"type": "elapsed", "day": 7}}
+        operation: dict[str, Any] = {"calculation": calculation, "numerator": numerator, "window": {"type": "elapsed", "day": day}}
         if calculation in {"cost_sum", "cost_over_cohort", "revenue_over_cost"}:
             operation["cost_basis"] = "cohort_acquisition_day_current_snapshot"
         if calculation == "cost_over_cohort":
@@ -1340,6 +1343,10 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
             expected.update(currency="USD", amount_scale=6)
         elif value_type == "ratio":
             expected["ratio_scale"] = 6
+        if day != 7:
+            expected.update(metric_definition_version="0.4.31", rule_bundle_version="0.4.31",
+                            rule_bundle_id="metric-horizon-acquisition-kpis",
+                            rule_bundle_hash="80d2d996192549069189e77812566f2805c6f22a5f427ba86ce863b91ccd7447")
         if prefix:
             expected.update(metric_definition_version="0.4.30", rule_bundle_version="0.4.30",
                             rule_bundle_id="metric-basis-acquisition-kpis",
@@ -2213,7 +2220,7 @@ def metric_runs(
             if metric_name not in definitions_by_name:
                 raise ValueError(f"unknown metric definition: {metric_name}")
             definition = definitions_by_name[metric_name]
-            if (definition.get("rule_bundle_id") == "metric-basis-acquisition-kpis"
+            if (definition.get("rule_bundle_id") in {"metric-basis-acquisition-kpis", "metric-horizon-acquisition-kpis"}
                     and (not evaluation.get("grouping", {}).get("cohort_date")
                          or set(evaluation.get("grouping", {})) - set(definition.get("grouping_dimensions", [])))):
                 raise ValueError("acquisition_kpi_grouping_invalid")
@@ -2402,7 +2409,16 @@ def metric_runs(
             calculation = definition["definition"]["calculation"]
             amount: int | None = None
             undefined_reason: str | None = None
-            if payer_profile:
+            horizon_close = None
+            if definition.get("rule_bundle_id") == "metric-horizon-acquisition-kpis":
+                cohort_date = evaluation["grouping"]["cohort_date"]
+                if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", cohort_date):
+                    raise ValueError("acquisition_kpi_cohort_date_required")
+                horizon_close = datetime.fromisoformat(cohort_date).replace(tzinfo=timezone.utc) + timedelta(days=definition["definition"]["window"]["day"] + 2)
+            immature_horizon = horizon_close is not None and timestamp(evaluation["input_received_at_watermark"], "input_received_at_watermark") < horizon_close
+            if immature_horizon:
+                undefined_reason = "observation_window_not_elapsed"
+            elif payer_profile:
                 key = lambda item: (item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["payload"]["installation_id"])
                 payers = len({key(item) for item in payer_purchases})
                 population = len({key(item) for item in eligible_installs})
@@ -2601,6 +2617,8 @@ def metric_runs(
                 raise ValueError(f"unsupported metric calculation: {calculation}")
             if missing_fx and uses_fx and undefined_reason != "overlapping_cost_grains":
                 amount, undefined_reason = None, "missing_fx_rate"
+            if immature_horizon:
+                amount, undefined_reason = None, "observation_window_not_elapsed"
             if definition.get("rule_bundle_id") != "metric-calendar-activity" and not definition.get("engagement_credit_policy") and calculation != "event_count" and evaluation.get("grouping", {}).get("metric_date") is not None:
                 raise ValueError(f"metric_date grouping is reserved for event_count: {metric_name}")
             run = {
