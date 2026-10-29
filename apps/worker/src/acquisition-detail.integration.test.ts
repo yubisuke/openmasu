@@ -74,8 +74,9 @@ describe("selected acquisition detail operator workflow", { concurrency: false }
     const report = await costJoinabilityReport(reader, identity, query);
     assert.equal(report.acquisition_basis, "selected_first_party_click");
     assert.equal(report.upstream_completeness, "unknown");
-    assert.ok(report.dimensions.find(row => row.dimension === "creative_id")!.both_observed_exact_key > 0);
-    assert.ok(report.dimensions.find(row => row.dimension === "creative_id")!.missing_acquisition_dimension > 0);
+    assert.equal(report.dimensions.find(row => row.dimension === "creative_id")!.both_observed_exact_key, 2);
+    assert.equal(report.dimensions.find(row => row.dimension === "creative_id")!.missing_acquisition_dimension, 0,
+      "both selected clicks in fixture 63 have complete synthetic creative dimensions");
     assert.equal((await costJoinabilityReport(reader, identity, { ...query, watermark_at_most: "2026-08-01T00:00:00.000Z" })).current_cost_rows, 0);
     const parent: CostInput = { ...(costs[0] as CostInput), ad_group_id: undefined, creative_id: undefined,
       as_of: "2026-08-12T12:00:00.000Z", amount_unscaled: "30000000" };
