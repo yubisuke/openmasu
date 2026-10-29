@@ -185,9 +185,9 @@ export async function transitionTrackingLink(input: {
   readonly appId: string;
   readonly trackingLinkId: string;
   readonly actorRef: string;
-  readonly status: "paused" | "archived";
+  readonly status: "active" | "paused" | "archived";
   readonly now?: Date;
-}): Promise<{ readonly tracking_link_id: string; readonly status: "paused" | "archived"; readonly changed_at: string }> {
+}): Promise<{ readonly tracking_link_id: string; readonly status: "active" | "paused" | "archived"; readonly changed_at: string }> {
   const now = input.now ?? new Date();
   const changedAt = now.toISOString();
   const result = await withTenant(input.pool, input.tenantId, async (client) => {
@@ -204,7 +204,7 @@ export async function transitionTrackingLink(input: {
     if (!status) throw new Error("tracking_link_not_found");
     const allowed = status === "active"
       ? new Set(["paused", "archived"])
-      : status === "paused" ? new Set(["archived"]) : new Set<string>();
+      : status === "paused" ? new Set(["active", "archived"]) : new Set<string>();
     if (!allowed.has(input.status)) throw new Error("tracking_link_transition_invalid");
     await client.query(
       `INSERT INTO control.tracking_link_states (
@@ -217,7 +217,7 @@ export async function transitionTrackingLink(input: {
       tenantId: input.tenantId,
       appId: input.appId,
       actorRef: input.actorRef,
-      action: `tracking_link_${input.status}`,
+      action: input.status === "active" ? "tracking_link_resumed" : `tracking_link_${input.status}`,
       targetScope: "tracking_link",
       targetRef: input.trackingLinkId,
       outcome: "succeeded",

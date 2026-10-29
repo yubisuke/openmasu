@@ -983,6 +983,19 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
       method: "POST", headers, body: "{}",
     });
     assert.equal(pause.status, 200);
+    const resumePath = `/v1/admin/apps/${lifecycleApp}/tracking-links/${encodeURIComponent(linkBody.tracking_link_id)}/resume`;
+    assert.equal((await fetch(`${baseUrl}${resumePath.replace(lifecycleApp, appId)}`, { method: "POST", headers, body: "{}" })).status, 404);
+    const resumeReader = `synthetic-resume-reader-${suffix}-${"r".repeat(32)}`;
+    await ensureAdminKeys(appPool, { tenantId, appId }, [{ key: resumeReader, role: "read_only" }]);
+    assert.equal((await fetch(`${baseUrl}${resumePath}`, { method: "POST", headers: { authorization: `Bearer ${resumeReader}` } })).status, 403);
+    const resumeCookie = cookie(await login(adminKeyA));
+    const dashboardResume = `${baseUrl}/dashboard/apps/${lifecycleApp}/tracking-links/${encodeURIComponent(linkBody.tracking_link_id)}/resume`;
+    const resumeForm = new URLSearchParams({ csrf_token: csrfToken(resumeCookie.slice(resumeCookie.indexOf("=") + 1)) });
+    assert.equal((await fetch(dashboardResume, { method: "POST", headers: { cookie: resumeCookie, origin: "https://outside.synthetic.invalid" }, body: resumeForm })).status, 403);
+    assert.equal((await fetch(dashboardResume, { method: "POST", headers: { cookie: resumeCookie, origin: configuredOrigin }, body: resumeForm, redirect: "manual" })).status, 303);
+    assert.equal((await fetch(`${baseUrl}${resumePath.replace(/resume$/, "pause")}`, { method: "POST", headers, body: "{}" })).status, 200);
+    const race = await Promise.all([1, 2].map(() => fetch(`${baseUrl}${resumePath}`, { method: "POST", headers, body: "{}" })));
+    assert.deepEqual(race.map(response => response.status).sort(), [200, 409], "one concurrent resume appends one transition");
     const archive = await fetch(`${baseUrl}/v1/admin/apps/${lifecycleApp}/tracking-links/${encodeURIComponent(linkBody.tracking_link_id)}/archive`, {
       method: "POST", headers, body: "{}",
     });
@@ -991,6 +1004,7 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
       method: "POST", headers, body: "{}",
     });
     assert.equal(repeated.status, 409);
+    assert.equal((await fetch(`${baseUrl}${resumePath}`, { method: "POST", headers, body: "{}" })).status, 409);
 
     const history = await withTenant(appPool, tenantId, async (client) => {
       const states = await client.query<{ status: string }>(
@@ -1002,16 +1016,17 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
       const audits = await client.query<{ action: string; row_text: string }>(
         `SELECT action, row_to_json(audit_logs)::text AS row_text FROM ledger.audit_logs
           WHERE tenant_id=$1 AND app_id=$2
-            AND action IN ('sdk_key_issued','sdk_key_retired','tracking_link_paused','tracking_link_archived')
+            AND action IN ('sdk_key_issued','sdk_key_retired','tracking_link_paused','tracking_link_resumed','tracking_link_archived')
           ORDER BY occurred_at, audit_log_id`,
         [tenantId, lifecycleApp],
       );
       return { states: states.rows, audits: audits.rows };
     });
-    assert.deepEqual(history.states.map((state) => state.status), ["active", "paused", "archived"]);
+    assert.deepEqual(history.states.map((state) => state.status), ["active", "paused", "active", "paused", "active", "archived"]);
     assert.equal(history.audits.some((audit) => audit.row_text.includes(first.sdk_key) || audit.row_text.includes(second.sdk_key)), false);
     assert.equal(history.audits.some((audit) => audit.action === "sdk_key_retired"), true);
     assert.equal(history.audits.some((audit) => audit.action === "tracking_link_paused"), true);
+    assert.equal(history.audits.filter((audit) => audit.action === "tracking_link_resumed").length, 2);
     assert.equal(history.audits.some((audit) => audit.action === "tracking_link_archived"), true);
   });
 });

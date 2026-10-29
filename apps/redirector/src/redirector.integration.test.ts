@@ -14,7 +14,7 @@ import {
   type PayloadStore,
 } from "@openmasu/runtime";
 import { decodeInstallReferrer } from "@openmasu/redirector-core";
-import { createTrackingLink } from "../../api/src/tracking-links.js";
+import { createTrackingLink, transitionTrackingLink } from "../../api/src/tracking-links.js";
 import { registerAppLinkIdentity, registerLinkDomain } from "../../api/src/link-domains.js";
 import { createRedirectorHandler } from "./handler.js";
 
@@ -276,6 +276,9 @@ describe("M2a redirector HTTP shell", () => {
       };
     };
     const unknown = await request("/r/UnknownSlug0_");
+    const batches = () => withTenant(pool, tenantId, async client => (await client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM ledger.ingest_batches WHERE tenant_id=$1", [tenantId])).rows[0].n);
+    const beforePause = await batches();
     await withTenant(pool, tenantId, (client) => client.query(
       `INSERT INTO control.tracking_link_states (
         tracking_link_id, tenant_id, app_id, status, changed_at, artifact
@@ -284,6 +287,17 @@ describe("M2a redirector HTTP shell", () => {
       [tenantId, slug, new Date().toISOString(), JSON.stringify({ status: "paused" })],
     ).then(() => undefined));
     assert.deepEqual(await request(`/r/${slug}`), unknown);
+    assert.equal(await batches(), beforePause, "paused links do not record a click");
+    const storedLink = await withTenant(pool, tenantId, async client => (await client.query<{ tracking_link_id: string; destination_url: string }>(
+      "SELECT tracking_link_id,destination_url FROM control.tracking_links WHERE tenant_id=$1 AND app_id=$2 AND slug=$3", [tenantId, appId, slug])).rows[0]);
+    await transitionTrackingLink({ pool, tenantId, appId, trackingLinkId: storedLink.tracking_link_id, actorRef: "synthetic:operator", status: "active" });
+    const resumed = await request(`/r/${slug}`);
+    assert.equal(resumed.status, 302);
+    const location = new URL(resumed.headers.find(([name]) => name === "location")![1]);
+    location.searchParams.delete("referrer");
+    const destination = new URL(storedLink.destination_url); destination.searchParams.delete("referrer");
+    assert.equal(location.href, destination.href, "resume preserves the same slug and configured destination");
+    assert.equal(await batches(), beforePause + 1);
     await withTenant(pool, tenantId, (client) => client.query(
       `INSERT INTO control.tracking_link_states (
         tracking_link_id, tenant_id, app_id, status, changed_at, artifact

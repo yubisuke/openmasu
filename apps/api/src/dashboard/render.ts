@@ -52,10 +52,11 @@ function trackingLinks(view: DashboardView): string {
     const base = `/dashboard/apps/${encodeURIComponent(view.selectedAppId!)}/tracking-links/${encodeURIComponent(link.tracking_link_id)}`;
     const actions = !view.canOperate || link.status === "archived" ? "—" : [
       link.status === "active" ? `<form method="post" action="${base}/pause"><input type="hidden" name="csrf_token" value="${escapeHtml(view.csrfToken)}"><button type="submit">Pause</button></form>` : "",
+      link.status === "paused" ? `<form method="post" action="${base}/resume"><input type="hidden" name="csrf_token" value="${escapeHtml(view.csrfToken)}"><button type="submit">Resume</button></form>` : "",
       `<form method="post" action="${base}/archive"><input type="hidden" name="csrf_token" value="${escapeHtml(view.csrfToken)}"><button type="submit">Archive</button></form>`,
     ].join("");
     return `<tr><th scope="row"><a href="${escapeHtml(link.measurement_url)}">${escapeHtml(link.measurement_url)}</a></th><td>${escapeHtml(link.destination_url)}</td><td>${escapeHtml(link.network ?? "—")}</td><td>${escapeHtml(link.campaign_id ?? "—")}</td><td>${escapeHtml(link.ad_group_id ?? "—")}</td><td>${escapeHtml(link.creative_id ?? "—")}</td><td>${escapeHtml(link.status)}</td><td>${escapeHtml(link.created_at)}</td><td><a href="${base}/preview?platform=android">Preview without recording a click</a>${actions}</td></tr>`;
-  }).join("")}</tbody></table><p>Allowed transitions: active to paused or archived; paused to archived; archived is terminal.</p></section>`;
+  }).join("")}</tbody></table><p>Allowed transitions: active to paused or archived; paused to active or archived. Resume keeps the same measurement URL and destination; archived is terminal.</p></section>`;
 }
 
 function sdkKeys(view: DashboardView): string {

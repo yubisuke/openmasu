@@ -12,6 +12,15 @@ iOS deferred deep linking.
 
 ## Link ownership and destinations
 
+An operator can **Pause**, **Resume**, or **Archive** a measurement link from the
+dashboard. `POST /v1/admin/apps/<app-id>/tracking-links/<link-id>/resume` resumes
+only a paused link, keeping its slug, destination and original link record.
+Pause emits no click; the first ordinary open after resume records a click again.
+Archived links remain terminal. Concurrent or repeated resume has one successful
+transition and a conflict for the other operation, not duplicate history. Each
+successful transition and its audit entry are committed atomically; the existing
+app scope, operate capability and dashboard CSRF protections apply.
+
 Operators can preview a registered link without recording a click from its
 dashboard **Preview without recording a click** link, or read
 `GET /v1/admin/apps/<app-id>/tracking-links/<link-id>/preview?platform=android`.
