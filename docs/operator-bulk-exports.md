@@ -103,6 +103,30 @@ POST /v1/admin/apps/<app-id>/operator-bulk-exports/<destination-id>/disable
 Disablement is irreversible. It suppresses and purges pending encrypted object
 bodies and purges the destination credentials.
 
+## Replace credentials without restarting the export
+
+Use **Replace credentials** on an active destination in the app dashboard, or
+`POST /v1/admin/apps/<app-id>/operator-bulk-exports/<destination-id>/credentials`.
+Send `expected_revision` from the destination list (initial value `"0"`),
+`access_key_id`, `secret_access_key`, and optionally `session_token`. Both keys
+are required on every replacement; an omitted or empty session token clears
+the previous token. Other fields are rejected. Never put credentials in a URL.
+
+The operation appends a credential revision under the same destination lock
+used by the sender. The destination, bucket, prefix, events, start boundary,
+reference key, checkpoint and any pending object key/bytes stay unchanged.
+A stale revision returns `operator_bulk_credential_revision_stale` without
+writes. A failed update rolls back the revision and wake-up together and purges
+the newly staged credential object; the previous credentials remain selected.
+No credential values, references or digests are returned or added to audit
+differences. Revision numbers and change timestamps are safe metadata.
+
+Replacement is local configuration, not a storage probe. Superseded credentials
+remain encrypted until destination disablement purges all revisions; only the
+latest revision is selected. Revoke old credentials with your storage provider
+after confirming the new credentials work. This does not restore bodies that
+were already purged by a terminal failure before credential recovery existed.
+
 ## Delivery and recovery
 
 The worker advances `(received_at, record_id)` and deletion-sequence cursors
@@ -112,8 +136,13 @@ key, a signed `HeadObject` must return the same digest before OpenMasu treats it
 as success. A different object at that key is a terminal conflict.
 
 Timeouts, throttling, selected conflict responses, and server errors use the
-durable bounded retry schedule. Redirects, invalid endpoints, authorization
-failures, digest conflicts, and malformed protected state fail closed. Pending
+durable bounded retry schedule. HTTP 401/403 pauses the same batch in `retry`
+with safe reason `credentials_rejected`, retaining its encrypted object and
+unchanged checkpoint. Automatic attempts stop until explicit credential
+replacement; a replacement resumes that object, not an earlier event range.
+A repeated rejection pauses again. Attempts remain cumulative (capped at the
+stored maximum); replacement does not grant a fresh transient-error budget.
+Redirects, invalid endpoints, digest conflicts, and malformed protected state fail closed. Pending
 objects stay encrypted and are purged after success, terminal failure,
 disablement, or privacy suppression.
 

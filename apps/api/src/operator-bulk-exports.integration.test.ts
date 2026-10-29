@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { after, before, describe, it } from "node:test";
+import type { Pool } from "pg";
 import { createAppPool, EncryptedFilePayloadStore, withTenant } from "@openmasu/runtime";
 import {
   discoverOperatorBulkExports,
@@ -18,6 +19,7 @@ import { ensureAdminKeys } from "./admin-auth.js";
 import { KeyedTokenBucket } from "./rate-limit.js";
 import { createRequestHandler } from "./router.js";
 import { signServerRequest } from "./server-auth.js";
+import { rotateOperatorBulkExportCredentials } from "./operator-bulk-exports-admin.js";
 
 const run = randomBytes(6).toString("hex");
 const tenantId = `tenant-bulk-${run}`;
@@ -38,6 +40,9 @@ let serverKeyId = "";
 let serverSecret = "";
 let destinationId = "";
 const objects: Buffer[] = [];
+const objectPaths: string[] = [];
+const usedReplacement: boolean[] = [];
+const hadSessionToken: boolean[] = [];
 let responses = [500, 200, 200];
 
 function event(eventId: string, installationId: string) {
@@ -102,6 +107,9 @@ describe("operator-owned S3-compatible bulk event exports", { concurrency: false
       const chunks: Buffer[] = [];
       for await (const chunk of request) chunks.push(Buffer.from(chunk));
       objects.push(Buffer.concat(chunks));
+      objectPaths.push(request.url!);
+      usedReplacement.push(String(request.headers.authorization).includes("Credential=SYNTHETICREPLACEMENT/"));
+      hadSessionToken.push(request.headers["x-amz-security-token"] !== undefined);
       response.writeHead(responses.shift() ?? 200).end();
     });
     storage.listen(0, "127.0.0.1");
@@ -243,6 +251,139 @@ describe("operator-owned S3-compatible bulk event exports", { concurrency: false
     ]) assert.equal(healthText.includes(forbidden), false, forbidden);
   });
 
+  it("replaces rejected credentials atomically and resumes the identical object without replaying earlier events", async () => {
+    const scope = [tenantId, appId, destinationId];
+    const before = await withTenant(pool, tenantId, async client => (await client.query(
+      `SELECT destination.bucket_name,destination.object_prefix,destination.reference_secret_ref,
+         checkpoint.event_received_at,checkpoint.event_record_id,checkpoint.deletion_seq::text
+       FROM control.operator_bulk_export_destinations AS destination
+       JOIN control.operator_bulk_export_checkpoints AS checkpoint USING(tenant_id,app_id,destination_id)
+       WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3`, scope)).rows[0]);
+    const priorManifest = ndjson(objects[0]!)[0]!;
+    const priorEvent = ndjson(objects[0]!)[1]!.event as Record<string, unknown>;
+    assert.equal((await submit(`event:bulk-rotation:${run}`, `installation:bulk-delivery:${run}`)).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+    const now = new Date();
+    responses = [403, 200];
+    assert.equal(await discoverOperatorBulkExports(pool, payloadStore, tenantId, { now }), 1);
+    const attempt = () => processOperatorBulkExports(pool, payloadStore, tenantId, {
+      enabled: true, destinationAllowlist: [storageOrigin], allowSyntheticLoopback: true,
+      now: () => new Date(now.valueOf() + 120_000),
+    });
+    const firstObject = objects.length;
+    assert.deepEqual(await attempt(), { processed: 1 });
+    assert.deepEqual(await attempt(), { processed: 0 });
+    assert.equal(await discoverOperatorBulkExports(pool, payloadStore, tenantId, { now }), 0);
+    const pending = await withTenant(pool, tenantId, async client => (await client.query(
+      `SELECT object_ref,state,safe_reason FROM ephemeral.operator_bulk_export_batches
+       WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3 AND state='retry'`, scope)).rows[0]);
+    assert.equal(pending.safe_reason, "credentials_rejected");
+    assert.deepEqual(await payloadStore.read(pending.object_ref), objects[firstObject]);
+    const credentialPath = `/v1/admin/apps/${appId}/operator-bulk-exports/${encodeURIComponent(destinationId)}/credentials`;
+    assert.equal((await admin(credentialPath, { method: "POST", body: JSON.stringify({
+      expected_revision: "0", access_key_id: "SYNTHETICREPLACEMENT",
+    }) })).status, 400, "partial replacement is rejected");
+    assert.equal((await admin(credentialPath, { method: "POST", body: JSON.stringify({
+      expected_revision: "0", access_key_id: "SYNTHETICREPLACEMENT", secret_access_key: "synthetic/replacement/secret/0002",
+      object_prefix: "must-not-change",
+    }) })).status, 400, "immutable settings are rejected");
+    const rotation = await admin(credentialPath, { method: "POST", body: JSON.stringify({
+      expected_revision: "0", access_key_id: "SYNTHETICREPLACEMENT", secret_access_key: "synthetic/replacement/secret/0002",
+    }) });
+    assert.equal(rotation.status, 200);
+    const rotatedText = await rotation.text();
+    const rotated = JSON.parse(rotatedText) as { credential_revision: string };
+    assert.notEqual(rotated.credential_revision, "0");
+    const after = await withTenant(pool, tenantId, async client => (await client.query(
+      `SELECT destination.bucket_name,destination.object_prefix,destination.reference_secret_ref,
+         checkpoint.event_received_at,checkpoint.event_record_id,checkpoint.deletion_seq::text
+       FROM control.operator_bulk_export_destinations AS destination
+       JOIN control.operator_bulk_export_checkpoints AS checkpoint USING(tenant_id,app_id,destination_id)
+       WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3`, scope)).rows[0]);
+    assert.deepEqual(after, before);
+    assert.equal((await admin(credentialPath, { method: "POST", body: JSON.stringify({
+      expected_revision: "0", access_key_id: "SYNTHETICREPLACEMENT", secret_access_key: "synthetic/replacement/secret/0002",
+    }) })).status, 409);
+    assert.deepEqual(await attempt(), { processed: 1 });
+    assert.equal(objectPaths[firstObject], objectPaths[firstObject + 1]);
+    assert.deepEqual(objects[firstObject], objects[firstObject + 1]);
+    assert.equal(usedReplacement[firstObject], false);
+    assert.equal(usedReplacement[firstObject + 1], true);
+    assert.equal(hadSessionToken[firstObject], true);
+    assert.equal(hadSessionToken[firstObject + 1], false, "omitted token does not inherit the old tuple");
+    const resumed = ndjson(objects[firstObject + 1]!);
+    assert.deepEqual(resumed[0]!.cursor_before, priorManifest.cursor_after);
+    assert.equal(resumed.length, 2, "only the new event is exported");
+    const resumedEvent = resumed[1]!.event as Record<string, unknown>;
+    assert.ok(priorEvent.subject_ref);
+    assert.equal(resumedEvent.subject_ref, priorEvent.subject_ref);
+    assert.notEqual(resumedEvent.event_ref, priorEvent.event_ref);
+    assert.equal(await discoverOperatorBulkExports(pool, payloadStore, tenantId, { now }), 0);
+    const listedText = await (await admin(`/v1/admin/apps/${appId}/operator-bulk-exports`)).text();
+    const audits = await withTenant(pool, tenantId, async client => (await client.query(
+      `SELECT * FROM ledger.audit_logs WHERE tenant_id=$1 AND app_id=$2 AND target_ref=$3`, scope)).rows);
+    const publicEvidence = rotatedText + listedText + JSON.stringify(audits);
+    for (const forbidden of ["SYNTHETICREPLACEMENT", "synthetic/replacement/secret/0002", "credential_ref", "credential_digest"]) {
+      assert.equal(publicEvidence.includes(forbidden), false);
+    }
+    responses = [200];
+  });
+
+  it("rolls back credential revision and batch wake-up together when the final audit write fails", async () => {
+    assert.equal((await submit(`event:bulk-rollback:${run}`, `installation:bulk-rollback:${run}`)).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+    const now = new Date();
+    responses = [401, 200];
+    assert.equal(await discoverOperatorBulkExports(pool, payloadStore, tenantId, { now }), 1);
+    const process = () => processOperatorBulkExports(pool, payloadStore, tenantId, {
+      enabled: true, destinationAllowlist: [storageOrigin], allowSyntheticLoopback: true,
+      now: () => new Date(now.valueOf() + 120_000),
+    });
+    assert.deepEqual(await process(), { processed: 1 });
+    const batchState = () => withTenant(pool, tenantId, async client => (await client.query(
+      `SELECT * FROM ephemeral.operator_bulk_export_batches
+        WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3 AND state='retry'`,
+      [tenantId, appId, destinationId])).rows);
+    const pendingBefore = await batchState();
+    assert.equal(pendingBefore[0].safe_reason, "credentials_rejected");
+    const before = await (await admin(`/v1/admin/apps/${appId}/operator-bulk-exports`)).json() as {
+      data: Array<{ destination_id: string; credential_revision: string }>;
+    };
+    const revision = before.data.find(row => row.destination_id === destinationId)!.credential_revision;
+    let stagedRef = "";
+    const failingPool = { connect: async () => {
+      const client = await pool.connect();
+      return {
+        query: async (query: string, values?: unknown[]) => {
+          if (query.includes("INSERT INTO ledger.audit_logs")) throw new Error("synthetic/replacement/secret/0003");
+          return client.query(query, values);
+        },
+        release: () => client.release(),
+      };
+    } } as unknown as Pool;
+    await assert.rejects(rotateOperatorBulkExportCredentials({ pool: failingPool,
+      payloadStore: { write: async (scope, bytes) => { stagedRef = await payloadStore.write(scope, bytes); return stagedRef; },
+        read: ref => payloadStore.read(ref), purge: ref => payloadStore.purge(ref), scanFor: value => payloadStore.scanFor(value) },
+      identity: { keyId: "synthetic-admin", tenantId, appId, role: "admin" }, destinationId,
+      body: { expected_revision: revision, access_key_id: "SYNTHETICFAILEDKEY", secret_access_key: "synthetic/replacement/secret/0003" },
+    }), { message: "operator_bulk_credential_update_failed" });
+    assert.ok(stagedRef);
+    await assert.rejects(payloadStore.read(stagedRef));
+    assert.deepEqual(await (await admin(`/v1/admin/apps/${appId}/operator-bulk-exports`)).json(), before);
+    assert.deepEqual(await batchState(), pendingBefore);
+    assert.deepEqual(await process(), { processed: 0 });
+    const refs = await withTenant(pool, tenantId, async client => (await client.query(
+      `SELECT credential_ref FROM control.operator_bulk_export_credential_revisions WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3`,
+      [tenantId, appId, destinationId])).rows);
+    assert.equal(refs.some(row => row.credential_ref === stagedRef), false);
+    await rotateOperatorBulkExportCredentials({ pool, payloadStore,
+      identity: { keyId: "synthetic-admin", tenantId, appId, role: "admin" }, destinationId,
+      body: { expected_revision: revision, access_key_id: "SYNTHETICREPLACEMENT", secret_access_key: "synthetic/replacement/secret/0002" },
+    });
+    assert.deepEqual(await process(), { processed: 1 });
+    responses = [200];
+  });
+
   it("suppresses a pending object at privacy recognition and emits a destination-scoped deletion next", async () => {
     const eventId = `event:bulk-privacy:${run}`;
     const installationId = `installation:bulk-privacy:${run}`;
@@ -289,10 +430,15 @@ describe("operator-owned S3-compatible bulk event exports", { concurrency: false
     assert.match(String(deletionLines[1]!.subject_ref), /^[a-f0-9]{64}$/);
     assert.equal(JSON.stringify(deletionLines).includes(installationId), false);
 
+    const credentialRefs = await withTenant(pool, tenantId, async client => (await client.query<{ credential_ref: string }>(
+      `SELECT credential_ref FROM control.operator_bulk_export_destinations WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3
+       UNION ALL SELECT credential_ref FROM control.operator_bulk_export_credential_revisions WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3`,
+      [tenantId, appId, destinationId])).rows);
     const disabled = await admin(
       `/v1/admin/apps/${appId}/operator-bulk-exports/${encodeURIComponent(destinationId)}/disable`,
       { method: "POST", body: "{}" },
     );
     assert.equal(disabled.status, 200);
+    for (const { credential_ref: reference } of credentialRefs) await assert.rejects(payloadStore.read(reference));
   });
 });

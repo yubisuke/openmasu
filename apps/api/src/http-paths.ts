@@ -52,7 +52,7 @@ export function operatorWebhookDestinationId(pathname: string): string | undefin
 }
 
 export function operatorBulkExportDestinationId(pathname: string): string | undefined {
-  return decodedPathPart(pathname, /\/operator-bulk-exports\/([^/]+)\/disable$/);
+  return decodedPathPart(pathname, /\/operator-bulk-exports\/([^/]+)\/(?:disable|credentials)$/);
 }
 
 export function metricScheduleId(pathname: string): string | undefined {

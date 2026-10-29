@@ -61,6 +61,9 @@ export type RouteHandler =
   | "admin_operator_bulk_exports_list"
   | "admin_operator_bulk_exports_register"
   | "admin_operator_bulk_exports_disable"
+  | "admin_operator_bulk_exports_rotate"
+  | "dashboard_operator_bulk_exports_credentials"
+  | "dashboard_operator_bulk_exports_rotate"
   | "admin_metric_schedules_list"
   | "admin_metric_schedules_register"
   | "admin_metric_schedules_disable"
@@ -225,6 +228,9 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "admin_operator_bulk_exports_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-bulk-exports$/, auth: "admin_bearer", mutates: false, capability: "administer" },
   { handler: "admin_operator_bulk_exports_register", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-bulk-exports$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_operator_bulk_exports_disable", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-bulk-exports\/[^/]+\/disable$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "admin_operator_bulk_exports_rotate", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-bulk-exports\/[^/]+\/credentials$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "dashboard_operator_bulk_exports_credentials", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/operator-bulk-exports\/[^/]+\/credentials$/, auth: "dashboard_session", mutates: false, capability: "administer" },
+  { handler: "dashboard_operator_bulk_exports_rotate", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/operator-bulk-exports\/[^/]+\/credentials$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "admin_metric_schedules_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-schedules$/, auth: "admin_bearer", mutates: false, capability: "administer" },
   { handler: "admin_metric_schedules_register", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-schedules$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_metric_schedules_disable", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-schedules\/[^/]+\/disable$/, auth: "admin_bearer", mutates: true, capability: "administer" },

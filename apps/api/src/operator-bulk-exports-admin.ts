@@ -26,6 +26,8 @@ export type OperatorBulkExportDestination = Readonly<{
   status: "active" | "disabled";
   created_at: string;
   status_changed_at: string;
+  credential_revision: string;
+  credential_changed_at: string;
 }>;
 
 const sha256 = (value: Buffer | string): string => createHash("sha256").update(value).digest("hex");
@@ -189,6 +191,8 @@ export async function registerOperatorBulkExportDestination(options: Readonly<{
         status: "active",
         created_at: createdAt,
         status_changed_at: createdAt,
+        credential_revision: "0",
+        credential_changed_at: createdAt,
       };
     });
   } catch (error) {
@@ -206,22 +210,91 @@ export async function listOperatorBulkExportDestinations(
 ): Promise<readonly OperatorBulkExportDestination[]> {
   return withTenant(pool, identity.tenantId, async (client) => (await client.query<OperatorBulkExportDestination>(
     `SELECT destination_id,tenant_id,app_id,endpoint_url,bucket_name,object_prefix,region,
-            events,start_at,status,created_at,status_changed_at
+            events,start_at,status,created_at,status_changed_at,credential_revision,credential_changed_at
        FROM (
          SELECT DISTINCT ON (base.destination_id)
                 base.destination_id,base.tenant_id,base.app_id,base.endpoint_url,
                 base.bucket_name,base.object_prefix,base.region,
                 base.allowed_events AS events,base.start_at,state.status,base.created_at,
-                state.changed_at AS status_changed_at
+                state.changed_at AS status_changed_at,
+                COALESCE(credential.credential_revision_seq::text,'0') AS credential_revision,
+                COALESCE(credential.changed_at,base.created_at) AS credential_changed_at
            FROM control.operator_bulk_export_destinations AS base
            JOIN control.operator_bulk_export_destination_states AS state
              USING (destination_id,tenant_id,app_id)
+           LEFT JOIN LATERAL (
+             SELECT credential_revision_seq,changed_at FROM control.operator_bulk_export_credential_revisions
+              WHERE tenant_id=base.tenant_id AND app_id=base.app_id AND destination_id=base.destination_id
+              ORDER BY credential_revision_seq DESC LIMIT 1
+           ) AS credential ON true
           WHERE base.tenant_id=$1 AND base.app_id=$2
           ORDER BY base.destination_id,state.destination_state_seq DESC
        ) AS current
       ORDER BY created_at DESC,destination_id COLLATE "C"`,
     [identity.tenantId, identity.appId],
   )).rows);
+}
+
+export async function rotateOperatorBulkExportCredentials(options: Readonly<{
+  pool: Pool; payloadStore: PayloadStore; identity: AppIdentity; destinationId: string;
+  body: Record<string, unknown>; now?: Date;
+}>): Promise<Readonly<{ destination_id: string; credential_revision: string; changed_at: string }>> {
+  if (Object.keys(options.body).some((key) => !["expected_revision", "access_key_id", "secret_access_key", "session_token"].includes(key))) {
+    throw new Error("operator_bulk_credential_fields_invalid");
+  }
+  const expected = text(options.body.expected_revision, /^(0|[1-9][0-9]{0,18})$/, 19, "operator_bulk_credential_revision_invalid");
+  // Replace the complete tuple. An omitted session token clears it; it never inherits an old token.
+  const protectedCredentials = credentials(options.body);
+  const now = options.now ?? new Date();
+  if (!Number.isFinite(now.valueOf())) throw new Error("operator_bulk_changed_at_invalid");
+  const changedAt = now.toISOString();
+  let credentialRef: string | undefined;
+  try {
+    return await withTenant(options.pool, options.identity.tenantId, async (client) => {
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('openmasu:operator-bulk-destination:' || $1 || ':' || $2 || ':' || $3,0))",
+        [options.identity.tenantId, options.identity.appId, options.destinationId],
+      );
+      const current = (await client.query<{ status: string; revision: string }>(
+        `SELECT status,COALESCE((SELECT credential_revision_seq::text
+           FROM control.operator_bulk_export_credential_revisions AS credential
+          WHERE credential.tenant_id=destination.tenant_id AND credential.app_id=destination.app_id
+            AND credential.destination_id=destination.destination_id
+          ORDER BY credential_revision_seq DESC LIMIT 1),'0') AS revision
+         FROM control.operator_bulk_export_destinations_current AS destination
+        WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3`,
+        [options.identity.tenantId, options.identity.appId, options.destinationId],
+      )).rows[0];
+      if (!current) throw new Error("operator_bulk_destination_not_found");
+      if (current.status !== "active") throw new Error("operator_bulk_destination_not_active");
+      if (current.revision !== expected) throw new Error("operator_bulk_credential_revision_stale");
+      credentialRef = await options.payloadStore.write({ tenantId: options.identity.tenantId,
+        appId: options.identity.appId, objectId: `operator-bulk-credentials-${uuidV7(now.valueOf())}` }, protectedCredentials);
+      const revision = (await client.query<{ revision: string }>(
+        `INSERT INTO control.operator_bulk_export_credential_revisions
+         (tenant_id,app_id,destination_id,credential_ref,credential_digest,changed_at)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING credential_revision_seq::text AS revision`,
+        [options.identity.tenantId, options.identity.appId, options.destinationId, credentialRef, sha256(protectedCredentials), changedAt],
+      )).rows[0]!.revision;
+      await client.query(
+        `UPDATE ephemeral.operator_bulk_export_batches SET next_attempt_at=$4,safe_reason=NULL,updated_at=$4
+          WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3 AND state='retry' AND safe_reason='credentials_rejected'`,
+        [options.identity.tenantId, options.identity.appId, options.destinationId, changedAt],
+      );
+      await audit(client, { identity: options.identity, destinationId: options.destinationId,
+        action: "operator_bulk_export_credentials_rotated", occurredAt: changedAt,
+        digest: requestDigest({ destination_id: options.destinationId, credential_revision: revision }) });
+      return { destination_id: options.destinationId, credential_revision: revision, changed_at: changedAt };
+    });
+  } catch (error) {
+    if (credentialRef) {
+      try { await options.payloadStore.purge(credentialRef); }
+      catch { throw new Error("operator_bulk_credential_cleanup_failed"); }
+    }
+    // Database/storage exceptions may contain protected parameters. Never forward them to the HTTP audit boundary.
+    if (error instanceof Error && /^operator_bulk_(destination_not_(found|active)|credential_revision_stale)$/.test(error.message)) throw error;
+    throw new Error("operator_bulk_credential_update_failed");
+  }
 }
 
 export async function disableOperatorBulkExportDestination(options: Readonly<{
@@ -302,7 +375,13 @@ export async function disableOperatorBulkExportDestination(options: Readonly<{
       occurredAt: changedAt,
       digest: requestDigest({ destination_id: options.destinationId, status: "disabled" }),
     });
-    return [destination.credential_ref, destination.reference_secret_ref, ...pending.rows.map((row) => row.object_ref)];
+    const revisions = await client.query<{ credential_ref: string }>(
+      `SELECT credential_ref FROM control.operator_bulk_export_credential_revisions
+        WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3`,
+      [options.identity.tenantId, options.identity.appId, options.destinationId],
+    );
+    return [destination.credential_ref, destination.reference_secret_ref,
+      ...revisions.rows.map((row) => row.credential_ref), ...pending.rows.map((row) => row.object_ref)];
   });
   for (const reference of protectedRefs) await options.payloadStore.purge(reference);
   return { destination_id: options.destinationId, status: "disabled", changed_at: changedAt };

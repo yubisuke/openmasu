@@ -34,6 +34,7 @@ const readerNoTableSelect = new Set([
   "control.operator_webhook_destinations",
   "control.operator_webhook_destination_states",
   "control.operator_bulk_export_destinations",
+  "control.operator_bulk_export_credential_revisions",
   "control.operator_bulk_export_destination_states",
   "control.operator_bulk_export_checkpoints",
   "control.metric_replay_manifests",
@@ -48,6 +49,7 @@ const readerNoTableSelect = new Set([
   "ephemeral.operator_bulk_export_batches",
 ]);
 const seedControlTruncate = new Set([
+  "control.operator_bulk_export_credential_revisions",
   "control.comparison_notifications",
   "control.cost_backfills", "control.cost_backfill_days",
   "control.event_catalog_revisions",
@@ -276,12 +278,18 @@ try {
        ('control', 'operator_webhook_destination_states'),
        ('ephemeral', 'operator_webhook_deliveries'),
        ('control', 'operator_bulk_export_destinations'),
+       ('control', 'operator_bulk_export_credential_revisions'),
        ('control', 'operator_bulk_export_destination_states'),
        ('ephemeral', 'operator_bulk_export_batches')
      )
      ORDER BY table_schema, table_name, ordinal_position
   `);
   const expectedReaderOperatorColumns = new Set([
+    "control.operator_bulk_export_credential_revisions.credential_revision_seq",
+    "control.operator_bulk_export_credential_revisions.tenant_id",
+    "control.operator_bulk_export_credential_revisions.app_id",
+    "control.operator_bulk_export_credential_revisions.destination_id",
+    "control.operator_bulk_export_credential_revisions.changed_at",
     "control.operator_webhook_destinations.destination_id",
     "control.operator_webhook_destinations.tenant_id",
     "control.operator_webhook_destinations.app_id",
