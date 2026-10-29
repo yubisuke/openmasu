@@ -14,6 +14,19 @@ import {
 } from "./routes.js";
 
 describe("declarative API route security", () => {
+  it("separates managed mapping administration, private previews, and reader metadata", () => {
+    for (const [method, suffix, handler, capability, mutates] of [
+      ["GET", "", "admin_import_mappings_list", "read", false],
+      ["POST", "", "admin_import_mappings_register", "administer", true],
+      ["POST", "/preview", "admin_import_mappings_preview", "operate", true],
+    ] as const) {
+      const route = matchRoute(method, `/v1/admin/apps/app-a/import-mappings${suffix}`);
+      assert.ok(route);
+      assert.deepEqual([route.handler, route.auth, route.capability, route.mutates], [handler, "admin_bearer", capability, mutates]);
+    }
+    assert.equal(matchRoute("GET", "/v1/admin/apps/app-a/import-mappings/preview"), undefined);
+    assert.equal(matchRoute("DELETE", "/v1/admin/apps/app-a/import-mappings"), undefined);
+  });
   it("C04 keeps cookie and bearer credentials in disjoint namespaces", () => {
     for (const route of routes) {
       if (route.pattern.test("/v1/probe")) assert.notEqual(route.auth, "dashboard_session");

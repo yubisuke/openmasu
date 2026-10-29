@@ -28,6 +28,14 @@
     "./validation": {
       "types": "./src/validation.ts",
       "default": "./src/validation.ts"
+    },
+    "./import-mapping": {
+      "types": "./src/import-mapping.ts",
+      "default": "./src/import-mapping.ts"
+    },
+    "./import-mapping-headers": {
+      "types": "./src/import-mapping-headers.ts",
+      "default": "./src/import-mapping-headers.ts"
     }
   },
   "scripts": {

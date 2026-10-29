@@ -46,6 +46,12 @@ cost or FX selection. All eight roles remain undefined before cohort-date
 midnight plus 2/32 days; schedules enforce those lags, corrections stay bounded
 to complete same-horizon sets, and historical D7 identities remain unchanged.
 These source additions do not change the frozen rc.3 distribution.
+The [private CSV mapping registry](import-mappings.md#private-saved-csv-mapping-revisions)
+adds app-scoped immutable sequential revisions, protected definitions and
+counts-only header drift. Explicit revision selection, idempotent registration
+and read-only preview preserve the existing CLI and DSL semantics. Browser CSV
+upload and confirmation-bound execution remain follow-up work; a saved mapping
+does not itself import data or establish provider comparability.
 Outbound webhooks keep stable event/subject references while rotating the signing
 key on the same destination. Bounded overlap, explicit retirement and queued
 revision binding reuse the existing encrypted outbox and administrator controls.
