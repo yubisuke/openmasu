@@ -218,6 +218,70 @@ an explicitly configured [automatic correction policy](automatic-metric-correcti
 without that opt-in policy, refreshing cost alone does not update a
 previously saved metric.
 
+## Recover selected cost days
+
+Open an app's **Recover missing cost days** dashboard page, choose its active
+registered cost schedule and an inclusive UTC date range, then select the days
+to recover. **Preview selected dates** shows the fixed configuration digest,
+provider, currency, acquisition limits, existing day states and `as_of` before
+**Confirm recovery** queues work. Nothing is fetched or queued by inspection or
+preview. The `operate` capability and the normal session/CSRF protection are
+required for confirmation; a read-only user can inspect the history.
+
+The equivalent app-scoped API is:
+
+- `GET /v1/admin/apps/<app>/cost-backfills`: safe schedule configuration and the
+  latest 20 requests, with per-day results.
+- `POST /v1/admin/apps/<app>/cost-backfills/preview`: a closed request containing
+  `cost_schedule_id` and `dates` (1–31 unique ISO dates within a 31-day span).
+  Dates must respect the schedule's existing lag. An optional `retry_of` receipt
+  restricts selection to that request's failed days.
+- `POST /v1/admin/apps/<app>/cost-backfills`: send the preview's `confirmation`
+  object unchanged. Its scoped digest binds the dates, configuration revision,
+  limits, observed day states and fixed `as_of`. A changed preview is rejected;
+  an identical confirmation returns the existing receipt without creating work.
+
+For example, preview a synthetic schedule with
+`{"cost_schedule_id":"cost-schedule:synthetic","dates":["2026-08-19","2026-08-20","2026-08-21"]}`.
+The identifier must be replaced by a schedule registered in that deployment;
+this example does not provision an account or credentials. No customer IDs,
+selection IDs, secret references or provider response bodies are returned by
+this surface. The private immutable definition still controls the exact account
+and detail selection. Its digest, not a visible display label, binds recovery.
+
+Confirmed days run inside the existing cost-refresh worker, using the same
+provider authentication, token renewal, acquisition bounds and publication
+transaction. `OPENMASU_COST_REFRESH_ENABLED=off` leaves recovery queued without
+reading credentials or contacting a provider. There is no new queue or worker.
+Recovery and daily refresh share the existing per-schedule lease: only one can
+acquire at a time. Recovery never advances or replaces the daily cursor or its
+pending range. Stopping the schedule stops queued/retrying recovery and fences
+an in-flight result. A daily refresh that completes a selected day after preview
+can make recovery `skipped/covered_by_refresh`, with no second publication.
+
+Day results distinguish `queued`, `processing`, transient `retry`, terminal
+`failed`, `complete`, `empty`, `stopped` and `skipped`. A reported zero-cost row
+is `complete` with a row count; `empty` means a valid response with no rows and
+creates no cost revision. `not_recorded` in a preview means there is no day
+receipt, **not** that cost is zero or absent. Historical daily refreshes retained
+range-level results only; an `acquired_range` cannot invent a per-day row count
+or complete provider coverage. Failed acquisition is not an empty response.
+
+Each day has at most three automatic attempts. **Retry only these failed days**
+creates a new receipt linked to its original, retains the original `as_of` and
+configuration, and never requeues that request's successful or empty days.
+Terminal results remain immutable. Provider responses can change between
+attempts; this is local idempotent publication, not an upstream exactly-once or
+historical-snapshot guarantee. The 31-day span is a workload limit, not a claim
+about a provider's retention or the oldest retrievable date. Source retention
+and completeness remain unknown; rejection or unavailable replay stays explicit.
+
+Nonempty recovery records the ordinary cost import revision. Use that revision
+with [saved metric corrections](metric-corrections.md), or the separately enabled
+[automatic correction policy](automatic-metric-corrections.md), to update a
+saved denominator. Recovery alone does not change saved ROAS or bypass the
+existing privacy, retention, currency, timezone and detail-grain checks.
+
 ## Private secrets
 
 `OPENMASU_COST_REFRESH_SECRETS_FILE` points to a bounded operator-owned JSON

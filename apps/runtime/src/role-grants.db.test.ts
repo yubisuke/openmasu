@@ -48,6 +48,7 @@ const readerNoTableSelect = new Set([
   "ephemeral.operator_bulk_export_batches",
 ]);
 const seedControlTruncate = new Set([
+  "control.cost_backfills", "control.cost_backfill_days",
   "control.event_catalog_revisions",
   "control.worker_heartbeats",
   "control.worker_tenant_cycles",
@@ -145,6 +146,7 @@ function expected(row: Row): Privilege[] {
     return row.role_name === "openmasu_seed" ? ["SELECT", "INSERT", "UPDATE", "DELETE"] : [];
   }
   if (row.role_name === "openmasu_app") {
+    if (qualified === "control.cost_backfill_days") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.worker_heartbeats") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.worker_tenant_cycles") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.retention_items") return ["SELECT", "INSERT", "UPDATE"];

@@ -13,6 +13,8 @@ import {
 } from "@openmasu/runtime";
 import { ensureAdminKeys, type AppAdminIdentity } from "../../api/src/admin-auth.js";
 import { registerCostSchedule, listCostSchedules, disableCostSchedule } from "../../api/src/cost-schedules.js";
+import { confirmCostBackfill, listCostBackfills, previewCostBackfill } from "../../api/src/cost-backfills.js";
+import { issueDashboardSession, csrfToken } from "../../api/src/session.js";
 import { createRequestHandler } from "../../api/src/router.js";
 import { processCostRefreshes } from "./cost-refresh-worker.js";
 import { CostRefreshAuth } from "./cost-refresh-auth.js";
@@ -156,7 +158,9 @@ describe("durable bounded cost refresh", { concurrency: false }, () => {
     assert.equal((await processCostRefreshes(pool,identity.tenantId,options(mock("20000000",true),new Date("2026-08-13T00:00:00.000Z")))).failed,1);
     assert.deepEqual(await counts(),before,"an incomplete stream cannot publish its valid prefix");
     await disableCostSchedule(pool,identity,first.cost_schedule_id);
-    await register({...request,detail});
+    const recoverySchedule=await register({...request,detail});
+    const recovery=await previewCostBackfill(reader,identity,{cost_schedule_id:recoverySchedule.cost_schedule_id,dates:["2026-08-06"]},new Date("2026-08-13T00:00:00.000Z"));
+    await confirmCostBackfill(pool,identity,recovery.confirmation,new Date("2026-08-13T00:00:00.000Z"));
     assert.equal((await processCostRefreshes(pool,identity.tenantId,options(mock("15000000"),new Date("2026-08-13T00:00:00.000Z")))).completed,1);
     const revision=await withTenant(reader,identity.tenantId,async c=>(await c.query("SELECT import_run_id FROM control.import_runs WHERE tenant_id=$1 AND app_id=$2 ORDER BY started_at DESC LIMIT 1",[identity.tenantId,identity.appId])).rows[0]);
     const requested=await requestMetricRecalculation(pool,identity,{date_from:"2026-08-06",date_to:"2026-08-06",metric_names:["d7_roas","d30_total_net_roas"],cost_import_run_id:revision.import_run_id,watermark:"2026-08-13T00:00:00.000Z"});
@@ -180,6 +184,93 @@ describe("durable bounded cost refresh", { concurrency: false }, () => {
     assert.equal((await listCostSchedules(reader, identity))[0].last_outcome, "complete");
     await processCostRefreshes(pool, identity.tenantId, options(() => { throw new Error("replay must not fetch"); }));
     assert.deepEqual(await counts(), { costs: 1, runs: 1 });
+  });
+  it("confirms three missing cost days once and retries only the failed day with the original as-of", async () => {
+    const schedule = await register();
+    await withTenant(pool, identity.tenantId, client => client.query(`UPDATE control.cost_schedule_checkpoints
+      SET next_run_at=clock_timestamp()+interval '1 day' WHERE tenant_id=$1 AND cost_schedule_id=$2`, [identity.tenantId, schedule.cost_schedule_id]));
+    const daily = async () => withTenant(reader, identity.tenantId, async client => (await client.query(`SELECT state,last_target_date,
+      pending_since,pending_until,pending_as_of,pending_definition_digest,attempts,next_run_at FROM control.cost_schedule_checkpoints
+      WHERE tenant_id=$1 AND cost_schedule_id=$2`, [identity.tenantId, schedule.cost_schedule_id])).rows[0]);
+    const originalDaily = await daily();
+    const plan = await previewCostBackfill(reader, identity, { cost_schedule_id: schedule.cost_schedule_id,
+      dates: ["2026-08-19", "2026-08-20", "2026-08-21"] }, now);
+    assert.deepEqual(plan.days.map(day => [day.state, day.row_count]), [["not_recorded", null], ["not_recorded", null], ["not_recorded", null]]);
+    const confirmations = await Promise.all([confirmCostBackfill(pool, identity, plan.confirmation, now), confirmCostBackfill(pool, identity, plan.confirmation, now)]);
+    assert.deepEqual(confirmations.map(row => row.replayed).sort(), [false, true]);
+    const acquired: string[] = [];
+    const datedSource = (failMiddle: boolean): FetchLike => async (url, init) => {
+      const query: string = JSON.parse(String(init?.body)).query;
+      const day = /BETWEEN '(\d{4}-\d\d-\d\d)' AND '\1'/.exec(query)?.[1];
+      if (day) acquired.push(day);
+      if (day === "2026-08-20" && failMiddle) return new Response("synthetic-private-rejection", { status: 400 });
+      const response = await source(day === "2026-08-19" ? "0" : "2500000", { empty: day === "2026-08-21" }).fetcher(url, init);
+      const batches = await response.json() as any[];
+      for (const batch of batches) for (const row of batch.results) if (row.segments) row.segments.date = day;
+      return Response.json(batches);
+    };
+    assert.deepEqual(await processCostRefreshes(pool, identity.tenantId, { ...options(datedSource(true)), maximumSchedules: 3 }),
+      { completed: 1, empty: 1, failed: 1, fenced: 0 });
+    const initial = (await listCostBackfills(reader, identity)).jobs[0];
+    assert.deepEqual(initial.days.map(day => [day.state, day.row_count]), [["complete", 1], ["failed", null], ["empty", 0]]);
+    assert.equal(initial.days[1].safe_reason, "source_rejected");
+    assert.deepEqual(await counts(), { costs: 1, runs: 1 });
+    const costRows = () => withTenant(reader, identity.tenantId, async client => (await client.query(
+      "SELECT cost_record_id,artifact FROM ledger.cost_records WHERE tenant_id=$1 ORDER BY cost_record_id", [identity.tenantId])).rows);
+    const zero = (await costRows())[0]; assert.equal(zero.artifact.amount_unscaled, "0");
+    assert.deepEqual(await daily(), originalDaily, "backfill must not move the daily cursor or replace its pending range");
+    assert.equal((await confirmCostBackfill(pool, identity, plan.confirmation, now)).replayed, true);
+    await assert.rejects(previewCostBackfill(reader, identity, { cost_schedule_id: schedule.cost_schedule_id,
+      dates: ["2026-08-19"], retry_of: plan.receipt }, now), /cost_backfill_retry_selection_invalid/);
+    const retry = await previewCostBackfill(reader, identity, { cost_schedule_id: schedule.cost_schedule_id,
+      dates: ["2026-08-20"], retry_of: plan.receipt }, new Date("2026-08-23T00:00:00.000Z"));
+    assert.equal(retry.as_of, plan.as_of);
+    await confirmCostBackfill(pool, identity, retry.confirmation, new Date("2026-08-23T00:00:00.000Z"));
+    acquired.length = 0;
+    assert.equal((await processCostRefreshes(pool, identity.tenantId, options(datedSource(false)))).completed, 1);
+    assert.deepEqual([...new Set(acquired)], ["2026-08-20"]);
+    assert.deepEqual(await counts(), { costs: 2, runs: 2 });
+    const recovered = (await listCostBackfills(reader, identity)).jobs;
+    assert.deepEqual(recovered.find(job => job.receipt === plan.receipt)!.days, initial.days);
+    assert.equal(recovered.find(job => job.receipt === retry.receipt)!.parent_receipt, plan.receipt);
+    assert.equal(jcs((await costRows()).find(row => row.cost_record_id === zero.cost_record_id)), jcs(zero));
+    assert.ok((await costRows()).every(row => row.artifact.as_of === plan.as_of));
+    assert.deepEqual(await daily(), originalDaily);
+    await processCostRefreshes(pool, identity.tenantId, options(() => { throw new Error("completed days must not fetch again"); }));
+    assert.deepEqual(await counts(), { costs: 2, runs: 2 });
+    await assert.rejects(withTenant(pool, identity.tenantId, client => client.query(
+      "UPDATE control.cost_backfill_days SET state='queued' WHERE tenant_id=$1 AND receipt=$2", [identity.tenantId, plan.receipt])), /immutable/);
+    assert.deepEqual((await listCostBackfills(reader, { ...identity, tenantId: "tenant-cost-unrelated" })).jobs, []);
+    await assert.rejects(previewCostBackfill(reader, { ...identity, appId: "app-unrelated" }, { cost_schedule_id: schedule.cost_schedule_id,
+      dates: ["2026-08-20"] }, now), /cost_schedule_not_found/);
+  });
+  it("rejects stale cost-backfill previews and fences a stopped recovery against daily and concurrent acquisition", async () => {
+    const schedule = await register();
+    const selection = { cost_schedule_id: schedule.cost_schedule_id, dates: ["2026-08-20"] };
+    const plan = await previewCostBackfill(reader, identity, selection, now);
+    const stale = await previewCostBackfill(reader, identity, selection, new Date(now.getTime() + 1));
+    await assert.rejects(confirmCostBackfill(pool, identity, { ...plan.confirmation, dates: ["2026-08-19"] }, now), /cost_backfill_preview_stale/);
+    await confirmCostBackfill(pool, identity, plan.confirmation, now);
+    await assert.rejects(confirmCostBackfill(pool, identity, stale.confirmation, new Date(now.getTime() + 1)), /cost_backfill_preview_stale/);
+    let release!: () => void, started!: () => void;
+    const entered = new Promise<void>(resolve => { started = resolve; });
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    let first = true;
+    const mock = source();
+    const pending = processCostRefreshes(pool, identity.tenantId, options(async (url, init) => {
+      if (first) { first = false; started(); await blocked; }
+      return mock.fetcher(url, init);
+    }));
+    await entered;
+    try {
+      assert.deepEqual(await processCostRefreshes(pool, identity.tenantId, options(() => { throw new Error("daily and recovery share the active lease"); })),
+        { completed: 0, empty: 0, failed: 0, fenced: 0 });
+      await disableCostSchedule(pool, identity, schedule.cost_schedule_id);
+    } finally { release(); }
+    assert.equal((await pending).fenced, 1);
+    assert.deepEqual(await counts(), { costs: 0, runs: 0 });
+    assert.equal((await listCostBackfills(reader, identity)).jobs[0].days[0].state, "stopped");
+    await assert.rejects(previewCostBackfill(reader, identity, selection, now), /cost_schedule_not_active/);
   });
   it("renews Google credentials for next-day scheduled cost and preserves history when the grant is revoked", async () => {
     const schedule = await register();
@@ -491,15 +582,15 @@ describe("durable bounded cost refresh", { concurrency: false }, () => {
     }), /synthetic fault/);
     assert.deepEqual(await counts(), { costs: 0, runs: 0 });
   });
-  it("keeps the health API reader-only and excludes private definition and cross-tenant scope", async () => {
+  it("keeps health and cost-backfill previews reader-only and confirms recovery through authenticated API and CSRF-protected HTML", async () => {
     const key = "synthetic-cost-admin-key-at-least-thirty-two-bytes";
     const root = mkdtempSync(join(tmpdir(), "openmasu-cost-api-"));
-    await ensureAdminKeys(pool, { tenantId: identity.tenantId, appId: identity.appId }, [key]);
+    const [adminKeyId] = await ensureAdminKeys(pool, { tenantId: identity.tenantId, appId: identity.appId }, [key]);
     const server = createServer(createRequestHandler({
       pool, readerPool: reader, payloadStore: new EncryptedFilePayloadStore(root, "synthetic-cost-master-key-at-least-thirty-two-bytes"),
       maxConfig: { tenantId: identity.tenantId, appId: identity.appId, pathSecret: "synthetic-path", eventKey: "synthetic-event", tokenMode: "all_with_event_fallback", maxParameters: 40, maxQueryBytes: 8192 },
       publicBaseUrl: "http://localhost:8080", redirectorBaseUrl: "http://localhost:8090",
-      dashboard: { enabled: false, publicBaseUrl: "http://localhost:8080", tenantId: identity.tenantId, sessionTtlSeconds: 43_200 },
+      dashboard: { enabled: true, publicBaseUrl: "http://localhost:8080", tenantId: identity.tenantId, sessionTtlSeconds: 43_200 },
     }));
     server.listen(0, "127.0.0.1"); await once(server, "listening");
     const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1/admin/apps`;
@@ -515,6 +606,47 @@ describe("durable bounded cost refresh", { concurrency: false }, () => {
       for (const forbidden of [request.customer_id, "customer_id", "definition\"", "access_token", "developer_token", "secret", "lease_token"]) assert.equal(body.includes(forbidden), false);
       await assert.rejects(withTenant(reader, identity.tenantId, (client) => client.query("SELECT definition FROM control.cost_schedules")), /permission denied/);
       assert.deepEqual(await listCostSchedules(reader, { ...identity, tenantId: "tenant-cost-unrelated" }), []);
+      const recoveryBase = `${base}/${identity.appId}/cost-backfills`;
+      const headers = { authorization: `Bearer ${key}`, "content-type": "application/json" };
+      const preview = await fetch(`${recoveryBase}/preview`, { method: "POST", headers,
+        body: JSON.stringify({ cost_schedule_id: schedule.cost_schedule_id, dates: ["2026-08-20"] }) });
+      assert.equal(preview.status, 200);
+      const planned = await preview.json() as { receipt: string; confirmation: Record<string, unknown>; days: { state: string }[] };
+      assert.equal(planned.days[0].state, "not_recorded");
+      const list = await fetch(recoveryBase, { headers }); assert.equal(list.status, 200);
+      const listed = await list.text();
+      for (const forbidden of [request.customer_id, "customer_id", "definition\"", "access_token", "developer_token", "secret", "lease_token"]) assert.equal(listed.includes(forbidden), false);
+      assert.deepEqual((await listCostBackfills(reader, identity)).jobs, [], "a preview must not insert a receipt");
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const confirmed = await fetch(recoveryBase, { method: "POST", headers, body: JSON.stringify(planned.confirmation) });
+        assert.equal(confirmed.status, 202);
+        assert.equal((await confirmed.json() as { replayed: boolean }).replayed, attempt > 0);
+      }
+      const session = await issueDashboardSession(pool, identity.tenantId, adminKeyId, 43_200);
+      const dashboardBase = base.replace("/v1/admin/apps", `/dashboard/apps/${identity.appId}/cost-backfills`);
+      const cookie = { cookie: `openmasu_dashboard=${session.token}` };
+      const browse = await fetch(`${dashboardBase}?cost_schedule_id=${encodeURIComponent(schedule.cost_schedule_id)}&date_from=2026-08-19&date_to=2026-08-20`, { headers: cookie });
+      assert.equal(browse.status, 200);
+      const page = await browse.text();
+      assert.match(page, /name="dates" value="2026-08-19"/);
+      assert.doesNotMatch(page, /name="dates" value="2026-08-20"/);
+      assert.doesNotMatch(page, /<script|javascript:/i);
+      const form = new URLSearchParams({ cost_schedule_id: schedule.cost_schedule_id, dates: "2026-08-19" });
+      const postForm = (path: string, body: URLSearchParams, origin = "http://localhost:8080") => fetch(path, { method: "POST", redirect: "manual",
+        headers: { ...cookie, origin, "content-type": "application/x-www-form-urlencoded" }, body });
+      assert.equal((await postForm(`${dashboardBase}/preview`, form)).status, 403);
+      form.set("csrf_token", csrfToken(session.token));
+      assert.equal((await postForm(`${dashboardBase}/preview`, form, "https://unrelated.example")).status, 403);
+      const htmlPreview = await postForm(`${dashboardBase}/preview`, form); assert.equal(htmlPreview.status, 200);
+      const html = await htmlPreview.text();
+      const confirmation = new URLSearchParams();
+      for (const match of html.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)">/g)) confirmation.append(match[1], match[2]);
+      assert.match(confirmation.get("receipt") ?? "", /^[a-f0-9]{64}$/);
+      assert.equal((await listCostBackfills(reader, identity)).jobs.length, 1, "HTML preview also uses only the reader pool");
+      const saved = await postForm(dashboardBase, confirmation); assert.equal(saved.status, 303);
+      assert.match(saved.headers.get("location") ?? "", /\/cost-backfills#[a-f0-9]{64}$/);
+      assert.equal((await listCostBackfills(reader, identity)).jobs.length, 2);
+      const foreign = await fetch(`${base}/app-cost-unrelated/cost-backfills`, { headers }); assert.equal(foreign.status, 404);
       const stopped = await fetch(`${base}/${identity.appId}/cost-schedules/${encodeURIComponent(schedule.cost_schedule_id)}/disable`, {
         method: "POST", headers: { authorization: `Bearer ${key}` },
       });

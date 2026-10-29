@@ -124,3 +124,4 @@ export function uuidV7(now = Date.now()): string {
 export { appendDurableBatch, type DurableBatchInput } from "./ingest-batch.js";
 export { importedAcquisitionSnapshot } from "./imported-acquisition.js";
 export { appleObservationValues, projectApplePostbackObservation, type AppleObservation } from "./apple-postback-observations.js";
+export * from "./cost-backfill.js";

@@ -2,6 +2,12 @@ export type RouteAuth = "public" | "admin_bearer" | "sdk_hmac" | "privacy_receip
 export type RouteCapability = "read" | "operate" | "administer";
 
 export type RouteHandler =
+  | "admin_cost_backfills_list"
+  | "admin_cost_backfills_preview"
+  | "admin_cost_backfills_confirm"
+  | "dashboard_cost_backfills_list"
+  | "dashboard_cost_backfills_preview"
+  | "dashboard_cost_backfills_confirm"
   | "admin_tracking_link_preview"
   | "dashboard_tracking_link_preview"
   | "admin_event_catalog_list"
@@ -157,6 +163,12 @@ function exactPathPattern(path: string): RegExp {
 }
 
 export const routes: readonly RouteDefinition[] = [
+  { handler: "admin_cost_backfills_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/cost-backfills$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "admin_cost_backfills_preview", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/cost-backfills\/preview$/, auth: "admin_bearer", mutates: false, capability: "operate" },
+  { handler: "admin_cost_backfills_confirm", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/cost-backfills$/, auth: "admin_bearer", mutates: true, capability: "operate" },
+  { handler: "dashboard_cost_backfills_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/cost-backfills$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_cost_backfills_preview", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/cost-backfills\/preview$/, auth: "dashboard_session", mutates: false, capability: "operate" },
+  { handler: "dashboard_cost_backfills_confirm", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/cost-backfills$/, auth: "dashboard_session", mutates: true, capability: "operate" },
   { handler: "admin_tracking_link_preview", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/tracking-links\/[^/]+\/preview$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "dashboard_tracking_link_preview", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/tracking-links\/[^/]+\/preview$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "admin_event_catalog_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/event-catalog$/, auth: "admin_bearer", mutates: false, capability: "administer" },

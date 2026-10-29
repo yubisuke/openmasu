@@ -39,6 +39,9 @@ describe("declarative API route security", () => {
   it("C03 declares every read-only route without mutation authority", () => {
     assert.equal(routes.filter((route) => !route.mutates).every((route) => route.method === "GET"
       || (route.method === "POST" && route.handler === "device_privacy_status" && route.auth === "privacy_receipt")
+      || (route.method === "POST" && route.capability === "operate"
+        && ((route.handler === "admin_cost_backfills_preview" && route.auth === "admin_bearer")
+          || (route.handler === "dashboard_cost_backfills_preview" && route.auth === "dashboard_session")))
       || (route.method === "POST" && route.capability === "administer"
         && ((route.handler === "admin_metric_schedules_preview_replacement" && route.auth === "admin_bearer")
           || (["dashboard_metric_schedules_preview_replacement", "dashboard_metric_schedules_preview_recommended"].includes(route.handler)

@@ -82,10 +82,13 @@ export async function disableCostSchedule(pool: Pool, identity: AppAdminIdentity
        VALUES ($1,$2,$3,'disabled',$4)`, [scheduleId, identity.tenantId, identity.appId, now.toISOString()],
     );
     await client.query(
-      `UPDATE control.cost_schedule_checkpoints SET state='stopped',lease_token=NULL,lease_expires_at=NULL,
+      `UPDATE control.cost_schedule_checkpoints SET state='stopped',lease_token=NULL,lease_expires_at=NULL,backfill_receipt=NULL,backfill_day=NULL,
          updated_at=clock_timestamp() WHERE tenant_id=$1 AND app_id=$2 AND cost_schedule_id=$3`,
       [identity.tenantId, identity.appId, scheduleId],
     );
+    await client.query(`UPDATE control.cost_backfill_days SET state='stopped',safe_reason='schedule_stopped',updated_at=clock_timestamp()
+      WHERE tenant_id=$1 AND app_id=$2 AND cost_schedule_id=$3 AND state IN ('queued','processing','retry')`,
+    [identity.tenantId, identity.appId, scheduleId]);
     await recordDashboardAuditWithClient(client, {
       tenantId: identity.tenantId, appId: identity.appId, actorRef: `admin_key:${identity.keyId}`,
       action: "cost_schedule_disabled", targetScope: "app", targetRef: scheduleId, outcome: "succeeded", now,
