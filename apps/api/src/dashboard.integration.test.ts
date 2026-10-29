@@ -34,6 +34,7 @@ const tenantId = `tenant-m3-${suffix}`;
 const appId = `app-m3-${suffix}`;
 const adminKeyA = `synthetic-m3-admin-key-a-${suffix}-${"a".repeat(32)}`;
 const adminKeyB = `synthetic-m3-admin-key-b-${suffix}-${"b".repeat(32)}`;
+const readerKey = `synthetic-m3-reader-${suffix}-${"r".repeat(32)}`;
 const configuredOrigin = "http://localhost:8080";
 
 describe("M3 dashboard identity and control plane", { concurrency: false }, () => {
@@ -104,7 +105,7 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     readerPool = createReaderPool();
     payloadRoot = mkdtempSync(join(tmpdir(), "openmasu-m3-"));
     payloadStore = new EncryptedFilePayloadStore(payloadRoot, "synthetic-m3-master-key-000000000000000000000000");
-    await ensureAdminKeys(appPool, { tenantId, appId }, [adminKeyA, adminKeyB]);
+    await ensureAdminKeys(appPool, { tenantId, appId }, [adminKeyA, adminKeyB, { key: readerKey, role: "read_only" }]);
     ({ server, baseUrl } = await start());
   });
 
@@ -139,8 +140,7 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     assert.equal((await fetch(path, { method: "POST", headers: { cookie: sessionCookie, origin: "https://untrusted.synthetic.invalid" }, body: form })).status, 403);
     const issued = await fetch(path, { method: "POST", headers: { cookie: sessionCookie, origin: configuredOrigin }, body: form });
     assert.equal(issued.status, 201); assert.match(await issued.text(), /Session token — shown once/);
-    const readOnly = `synthetic-validation-reader-${suffix}-${"r".repeat(32)}`;
-    await ensureAdminKeys(appPool, { tenantId, appId }, [{ key: readOnly, role: "read_only" }]);
+    const readOnly = readerKey;
     assert.equal((await fetch(endpoint, { method: "POST", headers: { authorization: `Bearer ${readOnly}`, "content-type": "application/json" }, body: "{}" })).status, 403);
     assert.equal((await fetch(`${endpoint}/${created.session_id}`, { headers: { authorization: `Bearer ${readOnly}` } })).status, 200);
     assert.equal((await fetch(`${endpoint}/${created.session_id}/close`, { method: "POST", headers })).status, 200);
@@ -895,8 +895,7 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
 
     const linkId = encodeURIComponent(String(apiLinksBody.data[0].tracking_link_id));
     const previewUrl = `${baseUrl}/v1/admin/apps/${newAppId}/tracking-links/${linkId}/preview`;
-    const previewReader = `synthetic-link-reader-${suffix}-${"p".repeat(32)}`;
-    await ensureAdminKeys(appPool, { tenantId, appId }, [{ key: previewReader, role: "read_only" }]);
+    const previewReader = readerKey;
     const previewHeaders = { authorization: `Bearer ${previewReader}` };
     const counts = () => withTenant(readerPool, tenantId, async client => (await client.query(`SELECT
       (SELECT count(*) FROM ledger.ingest_batches WHERE tenant_id=$1) AS batches,
@@ -1095,8 +1094,7 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     assert.equal(pause.status, 200);
     const resumePath = `/v1/admin/apps/${lifecycleApp}/tracking-links/${encodeURIComponent(linkBody.tracking_link_id)}/resume`;
     assert.equal((await fetch(`${baseUrl}${resumePath.replace(lifecycleApp, appId)}`, { method: "POST", headers, body: "{}" })).status, 404);
-    const resumeReader = `synthetic-resume-reader-${suffix}-${"r".repeat(32)}`;
-    await ensureAdminKeys(appPool, { tenantId, appId }, [{ key: resumeReader, role: "read_only" }]);
+    const resumeReader = readerKey;
     assert.equal((await fetch(`${baseUrl}${resumePath}`, { method: "POST", headers: { authorization: `Bearer ${resumeReader}` } })).status, 403);
     const resumeCookie = cookie(await login(adminKeyA));
     const dashboardResume = `${baseUrl}/dashboard/apps/${lifecycleApp}/tracking-links/${encodeURIComponent(linkBody.tracking_link_id)}/resume`;

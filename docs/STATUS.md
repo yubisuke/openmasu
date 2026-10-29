@@ -54,7 +54,7 @@ qualification is stated. No row establishes production readiness.
 | Deep links and re-engagement | Deterministic direct links on both OSes, Android deferred links; preserved 24-hour outcomes plus explicit-window/recorded-inactivity and verified purchase-net profiles | No iOS deferred links or engagement ROAS; recorded inactivity is not human inactivity, insufficient history stays unknown, device-reported opens can be forged |
 | Fraud controls | Recorded public rules, registered fraud bundle hashes, diagnostics and synthetic Integrity/App Attest verification | No physical-device-farm or reset-fraud guarantee; private threshold calibration and live platform projects unverified |
 | Privacy and recovery | Role isolation, protected payloads, deletion, saved-manifest metric replay; matched backup/freshness and isolated restore CLI with all-tenant privacy reapplication and a dedicated synthetic gate | External recipients retain their own deletion duty; live recovery time, authoritative boundary custody and secret custody unverified |
-| Outbound delivery | Default-off signed webhooks, S3-compatible bulk exports and bounded Google conversion delivery with local fencing/health | Live quotas and permissions unverified; no provider-side exactly-once guarantee |
+| Outbound delivery | Default-off signed webhooks, explicit aggregate-comparison notifications, S3-compatible bulk exports with credential rotation and bounded Google conversion delivery with local fencing/health | Live quotas and permissions unverified; HTTP acceptance is not human acknowledgement; no provider-side exactly-once guarantee |
 | Runtime and operation | Cross-process tenant-cycle ordering and commit fencing, bounded inbox slices, authenticated logs/metrics, five optional monitoring rules and recovery runbooks, operator-scheduled backup commands, upgrade and single-host procedures | Live multi-replica capacity, backup scheduling and alert delivery remain unverified; in-flight external requests cannot be recalled |
 
 Detailed limits belong to the [product guides](README.md), [product scope](product-scope.md),
@@ -72,6 +72,12 @@ CPI/ROAS, cost join diagnostics and bounded backfill, inert link preview/resume,
 typed recurring comparison setup, saved-run left operands and explicit threshold
 policies. The [first-party window guide](attribution-window.md) describes the
 optional 1/7/30-day profile and its retained-evidence activation boundary.
+Comparison state notifications reuse the existing durable webhook sender with
+explicit opt-in, cooldown and mute. [Deletion progress](operations/privacy-deletion.md)
+separates physical purge from recorded metric replay. [Inbox admission limits](operations/capacity.md)
+refuse new work before payload storage when explicitly enabled; existing accepted
+receipts remain durable. [Export credential rotation](operator-bulk-exports.md)
+resumes authentication-blocked batches without changing their object or cursor.
 These additions do not change the frozen rc.3 release or establish live-provider
 access. SDK receipt acceptance remains distinct from server measurement results.
 The corresponding product guides carry operation-specific limits; PRs carry
