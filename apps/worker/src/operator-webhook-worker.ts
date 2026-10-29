@@ -3,6 +3,7 @@ import { request as httpRequest, type RequestOptions } from "node:http";
 import { request as httpsRequest } from "node:https";
 import type { LookupFunction } from "node:net";
 import type { Pool, PoolClient } from "pg";
+import { comparisonNotificationEligible, lockComparisonNotifications } from "@openmasu/runtime/recurring-comparisons";
 import {
   operatorWebhookReference,
   operatorWebhookSignature,
@@ -47,6 +48,7 @@ type DeliveryRow = {
   secret_ref: string;
   app_id: string;
   record_id: string;
+  comparison_id: string | null;
   request_ref: string;
   request_digest: string;
   state: "queued" | "retry";
@@ -440,8 +442,8 @@ export async function processOperatorWebhookDeliveries(
     let purgeRef: string | undefined;
     let appId: string | undefined;
     await withTenant(pool, tenantId, async (client) => {
-      const candidate = await client.query<{ record_id: string; app_id: string; destination_id: string }>(
-        `SELECT record_id,app_id,destination_id
+      const candidate = await client.query<{ record_id: string; comparison_id: string | null; app_id: string; destination_id: string }>(
+        `SELECT record_id,comparison_id,app_id,destination_id
            FROM ephemeral.operator_webhook_deliveries
           WHERE tenant_id=$1 AND delivery_id=$2
             AND state IN ('queued','retry') AND next_attempt_at <= $3`,
@@ -450,7 +452,8 @@ export async function processOperatorWebhookDeliveries(
       if (!candidate.rows[0]) return;
       // Privacy deletion takes this advisory lock before it locks delivery rows.
       // Use the same order here so the privacy/dispatch race cannot deadlock.
-      await lockRecord(client, candidate.rows[0].record_id);
+      if (candidate.rows[0].comparison_id) await lockComparisonNotifications(client, tenantId);
+      else await lockRecord(client, candidate.rows[0].record_id);
       await lockDestination(
         client,
         tenantId,
@@ -459,7 +462,7 @@ export async function processOperatorWebhookDeliveries(
       );
       const selected = await client.query<DeliveryRow>(
         `SELECT delivery.delivery_id::text,delivery.destination_id,destination.endpoint_url,
-                destination.secret_ref,delivery.app_id,delivery.record_id,delivery.request_ref,
+                destination.secret_ref,delivery.app_id,delivery.record_id,delivery.comparison_id,delivery.request_ref,
                 delivery.request_digest,delivery.state,delivery.attempts,delivery.created_at,
                 destination.status AS destination_status,
                 raw.payload_lifecycle_status,raw.withdrawal_recognized_at,
@@ -473,7 +476,7 @@ export async function processOperatorWebhookDeliveries(
            JOIN control.operator_webhook_destinations_current AS destination
              ON destination.tenant_id=base.tenant_id AND destination.app_id=base.app_id
             AND destination.destination_id=base.destination_id
-           JOIN ledger.raw_records_current AS raw
+           LEFT JOIN ledger.raw_records_current AS raw
              ON raw.tenant_id=delivery.tenant_id AND raw.app_id=delivery.app_id
             AND raw.record_id=delivery.record_id
           WHERE delivery.tenant_id=$1 AND delivery.delivery_id=$2
@@ -487,6 +490,8 @@ export async function processOperatorWebhookDeliveries(
       const attempt = row.attempts + 1;
       const suppressed = row.destination_status !== "active"
         ? "destination_disabled"
+        : row.comparison_id
+          ? await comparisonNotificationEligible(client, { tenantId,appId:row.app_id }, row.delivery_id, now) ? undefined : "comparison_suppressed"
         : row.payload_lifecycle_status !== "available" || row.withdrawal_recognized_at || row.tombstoned
           ? "privacy_suppressed"
           : undefined;

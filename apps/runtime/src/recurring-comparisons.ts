@@ -10,6 +10,7 @@ import { assertSnapshotPeriod, boundedComparisonSnapshot, comparisonWatermark, p
   recurringComparisonLimits as limits, recurringComparisonResult, type ComparisonDefinition } from "./recurring-comparison-model.js";
 import { parseComparisonThresholdPolicy } from "./recurring-comparison-threshold.js";
 export * from "./recurring-comparison-model.js";
+export * from "./comparison-notifications.js";
 
 type Scope = { tenantId: string; appId: string };
 export type SavedComparison = { comparison_id: string; name: string; definition: ComparisonDefinition;
@@ -111,7 +112,15 @@ export async function readComparisons(pool: Pool, scope: Scope, now = new Date()
       FROM control.comparison_runs run JOIN control.comparison_definitions d USING(tenant_id,app_id,comparison_id)
       WHERE run.tenant_id=$1 AND run.app_id=$2 AND d.privacy_epoch=$3 AND d.deleted_at IS NULL AND run.expires_at>$4
       ORDER BY run.target_date DESC,run.created_at DESC,run.run_id LIMIT 200`, [scope.tenantId, scope.appId, epoch, now.toISOString()])).rows;
-    return { plans: plans.map(plan => ({ ...plan, privacy_state: pending || plan.privacy_epoch !== epoch ? "suppressed" : "current" })), runs };
+    const notifications = pending ? [] : (await client.query(`SELECT n.comparison_id,n.destination_id,n.enabled,n.muted,n.cooldown_seconds,
+      n.observed_state,n.last_enqueued_state,n.last_enqueued_at FROM control.comparison_notifications n
+      JOIN control.comparison_definitions d USING(tenant_id,app_id,comparison_id)
+      WHERE n.tenant_id=$1 AND n.app_id=$2 AND d.privacy_epoch=$3 AND d.deleted_at IS NULL ORDER BY n.comparison_id LIMIT 100`,[scope.tenantId,scope.appId,epoch])).rows;
+    const notificationReceipts = pending ? [] : (await client.query(`SELECT q.delivery_id,q.comparison_id,q.comparison_state,q.state,q.attempts,q.last_http_status,q.safe_reason,q.updated_at
+      FROM ephemeral.operator_webhook_deliveries q JOIN control.comparison_definitions d USING(tenant_id,app_id,comparison_id)
+      WHERE q.tenant_id=$1 AND q.app_id=$2 AND d.privacy_epoch=$3 AND d.deleted_at IS NULL
+      ORDER BY q.updated_at DESC,q.delivery_id DESC LIMIT 100`,[scope.tenantId,scope.appId,epoch])).rows;
+    return { plans: plans.map(plan => ({ ...plan, privacy_state: pending || plan.privacy_epoch !== epoch ? "suppressed" : "current" })), runs, notifications, notificationReceipts };
   });
 }
 export async function readComparisonRun(pool: Pool, scope: Scope, id: string, now = new Date()) {

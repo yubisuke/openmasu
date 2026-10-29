@@ -33,6 +33,10 @@ it("typed recurring forms preserve the JSON service command and review without s
   assert.doesNotMatch(html, /<script|javascript:|\son\w+=/i);
   const page = renderRecurringComparisons("app-a", { plans: [], runs: [] }, "synthetic-csrf", true);
   assert.match(page, /name="left_snapshot"/); assert.doesNotMatch(page, /textarea|Command JSON/);
+  assert.doesNotMatch(page, /name="action" value="notifications"/);
+  const adminPage=renderRecurringComparisons("app-a",{plans:[],runs:[]},"synthetic-csrf",true,undefined,true);
+  assert.match(adminPage,/name="action" value="notifications"/); assert.match(adminPage,/name="destination_id"/);
+  assert.match(adminPage,/HTTP acceptance is a delivery receipt, not human acknowledgement/);
 });
 it("typed recurring preview uses existing meaning, maturity, bounds and exact fields", async () => {
   const changed = syntheticComparisonRegistration();

@@ -64,7 +64,10 @@ export async function registerOperatorWebhookDestination(options: Readonly<{
     allowSyntheticLoopback: options.allowSyntheticLoopback,
     lookup: options.lookup,
   });
-  const events = normalizeOperatorWebhookEvents(options.body.events);
+  const comparisonOnly = options.body.purpose === "comparison_notifications";
+  if (options.body.purpose !== undefined && !comparisonOnly) throw Error("operator_webhook_purpose_invalid");
+  if (comparisonOnly && options.body.events !== undefined && (!Array.isArray(options.body.events) || options.body.events.length !== 0)) throw Error("operator_webhook_events_invalid");
+  const events = comparisonOnly ? [] : normalizeOperatorWebhookEvents(options.body.events);
   const now = options.now ?? new Date();
   if (!Number.isFinite(now.valueOf())) throw new Error("operator_webhook_created_at_invalid");
   const createdAt = now.toISOString();

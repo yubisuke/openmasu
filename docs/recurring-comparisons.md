@@ -3,7 +3,8 @@
 Save two aggregate snapshots and an immutable comparison definition in an
 operator-controlled PostgreSQL deployment. The existing worker compares each UTC
 target date at its fixed receipt cutoff. This is optional private runtime storage,
-not a new service, provider connection or notification system.
+not a new service or provider connection. Optional aggregate state-change alerts
+reuse the existing operator webhook delivery path; they are off by default.
 
 The left operand can instead come directly from an explicitly selected saved
 metric schedule. This avoids exporting and uploading the server's report each
@@ -180,6 +181,81 @@ and row states are retained beside threshold outcomes. Identical normalized
 operands, revision and date produce the same canonical result bytes and run ID;
 wall-clock timestamps are storage metadata outside the canonical result.
 
+## Optional aggregate state-change notifications
+
+An administrator can register a **comparison-only** destination on the app page,
+then use **State-change notifications** on Scheduled aggregate comparisons to
+bind its destination ID to one active comparison revision. This is the same
+operator webhook transport and deployment allowlist: HTTPS only, exact allowed
+origin, public-address DNS validation on each attempt, pinned connection address,
+no redirects, bounded body/timeout, and HMAC-SHA256 over the exact request bytes.
+There is no email integration, SaaS SDK or separate notification service.
+`OPENMASU_OPERATOR_WEBHOOKS_ENABLED=on` is required for worker delivery. A
+comparison-only destination does not subscribe to any event stream. The existing
+five event types and ordinary event delivery behavior are unchanged.
+Comparison discovery follows ordinary delivery, so new transitions are sent on
+the next enabled delivery cycle and a comparison enqueue failure cannot prevent
+that cycle's ordinary event dispatch.
+
+API registration uses the ordinary destination endpoint with an explicit purpose:
+
+```json
+{"endpoint_url":"https://receiver.example.invalid/comparisons","purpose":"comparison_notifications"}
+```
+
+The signing secret is returned once and stored encrypted. The comparison command
+uses `POST /v1/admin/apps/:app/comparisons`; only an administrator may submit it:
+
+```json
+{"action":"notifications","comparison_id":"synthetic-revision","destination_id":"webhook:synthetic-destination","enabled":true,"muted":false,"cooldown_seconds":300}
+```
+
+Cooldown is explicitly 60–86400 seconds. Replace settings with the same command;
+`muted:true` temporarily suppresses attempts, and `enabled:false` disables the
+subscription. A replacement comparison revision requires its own opt-in. URLs
+and credentials cannot be supplied through comparison settings. Operator/read-only
+roles cannot configure notifications, and cross-app destinations are unavailable.
+
+The worker reads the newest retained result for the newest UTC target date.
+Late changes to an older date do not replace that current state. Initial
+`within_threshold` produces no alert. `threshold_exceeded`, `missing_input`,
+`incomparable` and `unknown` each produce an `attention` transition; none of the
+last three is relabeled a threshold breach or a match. Returning to
+`within_threshold` after an enqueued attention transition produces `recovered`.
+This describes the measured state, not whether a person saw the previous alert.
+
+Repeated discovery, worker restart and unchanged daily states create no new
+notification. Cooldown coalesces transitions into the latest observed state;
+intermediate states can be omitted. Muting still observes results but does not
+enqueue; unmuting is not an instruction to resend the last enqueued state. A
+terminal delivery failure remains a failed receipt rather than creating a new
+notification ID every worker cycle. Registering and explicitly selecting a new
+destination resets its state baseline; sequence numbers still increase.
+
+The closed `openmasu.comparison_notification.v1` body contains a delivery ID,
+emission time, app ID, destination-scoped opaque comparison/result references,
+target date, state, transition and optional previous state. It contains **no
+metric values, grouping labels, raw/event/installation IDs, snapshot contents,
+arbitrary names or provider response bodies**. Treat even aggregate state and
+timing as private operational metadata. Receiver copies cannot be recalled.
+
+Requests use the existing encrypted durable outbox. A retry preserves the exact
+body, delivery ID and signature. A receiver must deduplicate by delivery ID:
+network ambiguity can still deliver the same request more than once. A 2xx
+receipt means HTTP acceptance only, **not human acknowledgement**. Bounded recent
+delivery receipts expose state, attempts, HTTP status and safe reason, not bodies
+or secrets, through the existing reader-only comparison list/page.
+
+Every comparison dispatch holds the tenant privacy fence and rechecks the
+current revision, privacy epoch, destination, subscription and latest result
+state. Privacy changes, replacement/deletion, expired source results, stale
+queued states, mute and disable suppress subsequent attempts. The existing
+worker delivery cycle suppresses/purges queued bodies when enabled; disabling a
+destination suppresses pending deliveries and purges bodies/secret immediately.
+If worker delivery is off or stopped, queued encrypted bodies remain until it
+runs or an administrator disables the destination; no background cleanup SLA is
+implied. GET does not update notification settings, receipts or observations.
+
 ## Storage, retention and privacy
 
 Limits: 20 active revisions per tenant, at most 366 target dates, lag 1–366 days,
@@ -213,5 +289,7 @@ operator's original files, previous downloads or external recipient copies.
 
 Synthetic acceptance covers stored byte identity, next-date deltas, late operands,
 changed definitions, replacement history, conflicts, role/CSRF/RLS, expiry and
-privacy suppression including stale-row restoration. No live provider, real data,
-device, alert delivery or production retention qualification is claimed.
+privacy suppression including stale-row restoration. A synthetic loopback
+receiver exercises signed retry identity, missing/recovery/incomparable states,
+cooldown, mute, failed receipts and privacy suppression. No live provider, real
+data, device, external receiver or production retention qualification is claimed.

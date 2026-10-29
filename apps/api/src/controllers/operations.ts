@@ -81,6 +81,7 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
           body: {
             endpoint_url: body.get("endpoint_url") ?? "",
             events: body.getAll("events"),
+            ...(body.has("purpose") ? { purpose: body.get("purpose") } : {}),
           },
           destinationAllowlist: dependencies.operatorWebhooks.destinationAllowlist,
           allowSyntheticLoopback: dependencies.operatorWebhooks.allowSyntheticLoopback,

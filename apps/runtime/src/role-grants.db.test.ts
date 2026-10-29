@@ -48,6 +48,7 @@ const readerNoTableSelect = new Set([
   "ephemeral.operator_bulk_export_batches",
 ]);
 const seedControlTruncate = new Set([
+  "control.comparison_notifications",
   "control.cost_backfills", "control.cost_backfill_days",
   "control.event_catalog_revisions",
   "control.worker_heartbeats",
@@ -146,6 +147,7 @@ function expected(row: Row): Privilege[] {
     return row.role_name === "openmasu_seed" ? ["SELECT", "INSERT", "UPDATE", "DELETE"] : [];
   }
   if (row.role_name === "openmasu_app") {
+    if (qualified === "control.comparison_notifications") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.cost_backfill_days") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.worker_heartbeats") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.worker_tenant_cycles") return ["SELECT", "INSERT", "UPDATE"];
@@ -292,6 +294,8 @@ try {
     "control.operator_webhook_destination_states.status",
     "control.operator_webhook_destination_states.changed_at",
     "ephemeral.operator_webhook_deliveries.delivery_id",
+    "ephemeral.operator_webhook_deliveries.comparison_id",
+    "ephemeral.operator_webhook_deliveries.comparison_state",
     "ephemeral.operator_webhook_deliveries.tenant_id",
     "ephemeral.operator_webhook_deliveries.app_id",
     "ephemeral.operator_webhook_deliveries.destination_id",

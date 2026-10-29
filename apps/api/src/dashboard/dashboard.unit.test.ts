@@ -420,6 +420,8 @@ describe("M3 zero-JavaScript dashboard", () => {
     assert.match(admin, /Server-to-server keys/);
     assert.match(admin, /postback:first-party/);
     assert.match(admin, /Operator event webhooks/);
+    assert.match(admin, /name="purpose" value="comparison_notifications"/);
+    assert.doesNotMatch(operator, /name="purpose" value="comparison_notifications"/);
     assert.match(admin, /events\.example\.test/);
     assert.match(admin, />Disable</);
     assert.match(admin, /Register a link domain/);

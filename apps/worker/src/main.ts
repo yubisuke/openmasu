@@ -38,7 +38,7 @@ import {
   processCommerceReadbacks,
 } from "./commerce-readback-worker.js";
 import { processMetricSchedules } from "./metric-schedule-worker.js";
-import { processRecurringComparisons } from "@openmasu/runtime/recurring-comparisons";
+import { processRecurringComparisons, discoverComparisonNotifications } from "@openmasu/runtime/recurring-comparisons";
 import { processCostRefreshes } from "./cost-refresh-worker.js";
 import { processMetricRecalculations } from "./metric-recalculation-worker.js";
 import { planAutomaticMetricCorrections } from "./automatic-metric-corrections.js";
@@ -305,6 +305,9 @@ async function processTenantCycle(tenantId: string, pool: Pool, schedulerPool: P
         timeoutMilliseconds: Number(process.env.OPENMASU_OPERATOR_WEBHOOK_TIMEOUT_MS ?? "5000"),
         maximumAttempts: Number(process.env.OPENMASU_OPERATOR_WEBHOOK_MAX_ATTEMPTS ?? "8"),
       });
+      // A comparison enqueue failure must not prevent ordinary event dispatch.
+      // Newly queued comparison transitions are sent on the next delivery cycle.
+      await discoverComparisonNotifications(pool, payloadStore, tenantId);
     }
   });
   await runWorkerJob(tenantId, "operator_bulk_export", async () => {

@@ -1,5 +1,5 @@
 import { depositComparisonSnapshot, deleteComparison, readComparisons, readComparisonRun, registerComparison,
-  recurringComparisonLimits, prepareComparisonRegistration } from "@openmasu/runtime/recurring-comparisons";
+  recurringComparisonLimits, prepareComparisonRegistration, configureComparisonNotifications } from "@openmasu/runtime/recurring-comparisons";
 import { jcs } from "@openmasu/attribution-core/canonical";
 import type { RequestHandlerDependencies } from "../http-types.js";
 import type { DashboardAppContext, AdminRequestContext } from "./context.js";
@@ -26,11 +26,12 @@ export function createComparisonsControllers(dependencies: Pick<RequestHandlerDe
       }
       assertRoleAllows(identity.role, "operate");
       const body = JSON.parse((await rawBody(request, maximumBody)).toString("utf8"));
-      const result = await mutate(scope, body);
+      const result = await mutate(scope, body, roleAllows(identity.role, "administer"));
       json(response, 200, result);
-    } catch (error) { json(response, error instanceof AppNotFoundError ? 404 : 400, { error: error instanceof AppNotFoundError ? "not_found" : reason(error) }); }
+    } catch (error) { const forbidden = error instanceof Error && error.message === "forbidden";
+      json(response, error instanceof AppNotFoundError ? 404 : forbidden ? 403 : 400, { error: error instanceof AppNotFoundError ? "not_found" : forbidden ? "forbidden" : reason(error) }); }
   };
-  const mutate = async (scope: Parameters<typeof registerComparison>[1] & { keyId: string }, body: Record<string, unknown>) => {
+  const mutate = async (scope: Parameters<typeof registerComparison>[1] & { keyId: string }, body: Record<string, unknown>, canAdminister: boolean) => {
     if (!body || typeof body !== "object" || Array.isArray(body)) throw Error("comparison_input_invalid");
     const action = body.action;
     let result: unknown;
@@ -47,6 +48,11 @@ export function createComparisonsControllers(dependencies: Pick<RequestHandlerDe
       if (Object.keys(body).sort().join(",") !== "action,comparison_id" || typeof body.comparison_id !== "string") throw Error("comparison_input_invalid");
       targetRef = body.comparison_id;
       result = { deleted: await deleteComparison(dependencies.pool, scope, targetRef) };
+    } else if (action === "notifications") {
+      if (!canAdminister) throw Error("forbidden");
+      const { action: _action, ...settings } = body;
+      result = await configureComparisonNotifications(dependencies.pool, scope, settings);
+      targetRef = String(settings.comparison_id);
     } else throw Error("comparison_action_invalid");
     await recordDashboardAudit(dependencies.pool, { tenantId: scope.tenantId, appId: scope.appId, actorRef: `admin_key:${scope.keyId}`,
       action: `comparison_${action}`, targetScope: "app", targetRef, outcome: "succeeded" });
@@ -78,13 +84,19 @@ export function createComparisonsControllers(dependencies: Pick<RequestHandlerDe
           return;
         }
         let command: Record<string, unknown>;
-        if (form.has("confirmation_digest")) command = confirmedComparisonForm(form);
+        if (form.get("action") === "notifications") {
+          const keys = ["csrf_token","action","comparison_id","destination_id","enabled","muted","cooldown_seconds"];
+          if ([...form.keys()].some(key => !keys.includes(key)) || keys.some(key => form.getAll(key).length !== 1)
+              || !["true","false"].includes(String(form.get("enabled"))) || !["true","false"].includes(String(form.get("muted")))) throw Error("comparison_input_invalid");
+          command = { action: "notifications",comparison_id:form.get("comparison_id"),destination_id:form.get("destination_id"),
+            enabled:form.get("enabled") === "true",muted:form.get("muted") === "true",cooldown_seconds:Number(form.get("cooldown_seconds")) };
+        } else if (form.has("confirmation_digest")) command = confirmedComparisonForm(form);
         else {
           if ([...form.keys()].some(key => !["csrf_token", "command"].includes(key)) || form.getAll("command").length !== 1
               || typeof form.get("command") !== "string") throw Error("comparison_input_invalid");
           command = JSON.parse(form.get("command") as string);
         }
-        const result = await mutate(appIdentity, command) as { comparison_id?: string };
+        const result = await mutate(appIdentity, command, roleAllows(session.role, "administer")) as { comparison_id?: string };
         const id = result.comparison_id ?? (typeof command.comparison_id === "string" ? command.comparison_id : "");
         response.writeHead(303, { ...dashboardHeaders, location: `/dashboard/apps/${encodeURIComponent(appId)}/comparisons${id ? `#comparison-${encodeURIComponent(id)}` : ""}` }).end(); return;
       }
@@ -95,8 +107,9 @@ export function createComparisonsControllers(dependencies: Pick<RequestHandlerDe
         response.writeHead(200, { ...dashboardHeaders, "content-type": "application/json", "content-disposition": 'attachment; filename="openmasu-comparison.json"' });
         response.end(`${jcs(result)}\n`); return;
       }
-      dashboardHtml(response, 200, renderRecurringComparisons(appId, await readComparisons(pool, appIdentity), csrfToken(session.token), roleAllows(session.role, "operate")));
-    } catch (error) { dashboardHtml(response, 400, renderRecurringComparisons(appId, { plans: [], runs: [] }, csrfToken(session.token), false, reason(error))); }
+      dashboardHtml(response, 200, renderRecurringComparisons(appId, await readComparisons(pool, appIdentity), csrfToken(session.token), roleAllows(session.role, "operate"), undefined, roleAllows(session.role, "administer")));
+    } catch (error) { dashboardHtml(response, error instanceof Error && error.message === "forbidden" ? 403 : 400,
+      renderRecurringComparisons(appId, { plans: [], runs: [] }, csrfToken(session.token), false, reason(error))); }
   };
   return {
     admin_comparison_read: { boundary: "admin", handle: admin },
