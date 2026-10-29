@@ -61,6 +61,7 @@ type LedgerHistoryRow = {
   timeliness: string | null;
   fact_payload: Any | null;
   fraud_exclusion_id: string | null;
+  attribution_binding: Any | null;
 };
 
 type AuxiliaryQueueFunctions = {
@@ -489,7 +490,8 @@ async function relevantLedgerHistory(
                 WHEN 'refund' THEN refund.artifact
                 ELSE NULL
               END AS fact_payload,
-              excluded.fraud_decision_id AS fraud_exclusion_id
+              excluded.fraud_decision_id AS fraud_exclusion_id,
+              original_attribution.binding AS attribution_binding
          FROM candidate_records AS candidate
          CROSS JOIN history_watermark AS watermark
          JOIN ledger.raw_records_current AS raw
@@ -510,6 +512,16 @@ async function relevantLedgerHistory(
          LEFT JOIN ledger.refund_facts AS refund
            ON refund.tenant_id=logical.tenant_id AND refund.app_id=logical.app_id
           AND refund.logical_event_id=logical.logical_event_id
+         LEFT JOIN LATERAL (
+           SELECT jsonb_build_object('rule_bundle_id',attribution.artifact->>'rule_bundle_id',
+             'rule_bundle_version',attribution.artifact->>'rule_bundle_version',
+             'rule_bundle_hash',attribution.artifact->>'rule_bundle_hash') AS binding
+           FROM ledger.attribution_results attribution
+           WHERE raw.event_name='install' AND attribution.tenant_id=raw.tenant_id AND attribution.app_id=raw.app_id
+             AND attribution.subject_scope='installation_level' AND attribution.subject_ref=install.installation_id
+             AND attribution.artifact->'evidence_refs' @> jsonb_build_array(jsonb_build_object('ref',raw.record_id))
+           ORDER BY attribution.decided_at,attribution.attribution_id COLLATE "C" LIMIT 1
+         ) AS original_attribution ON true
          LEFT JOIN LATERAL (
            SELECT fraud.fraud_decision_id
              FROM ledger.fraud_decisions AS fraud
@@ -544,6 +556,7 @@ async function relevantLedgerHistory(
           tenant_id: row.tenant_id,
           app_id: row.app_id,
           received_at: row.received_at,
+          ...(row.attribution_binding ? { recorded_attribution_bundle: row.attribution_binding } : {}),
           fraud_actions_enabled: process.env.OPENMASU_FRAUD_ENABLED !== "0",
           processing_purposes: [],
           withdrawals: [],

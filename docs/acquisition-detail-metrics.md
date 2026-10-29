@@ -73,6 +73,47 @@ add automatic all-history recalculation. The separately configured
 [Google detail-cost adapter](cost-refresh.md#explicit-google-ad-group-and-ad-costs)
 can supply selected detail costs without changing the metric definitions.
 
+## Inspect cost/acquisition joinability
+
+Open **Cost/acquisition dimensions** from the app report or a saved metric's
+explanation. The reader-only API is
+`GET /v1/admin/apps/<app>/cost-joinability?date_from=2026-08-06&date_to=2026-08-07&watermark_at_most=2026-08-12T00:00:00.000Z`.
+These dates are synthetic. Choose a UTC cohort/cost date range (end exclusive)
+and canonical millisecond UTC receipt/decision cutoff. No provider is contacted.
+
+The report counts retained native installations and latest visible cost
+revisions. Only a uniquely selected first-party click supplies acquisition
+network/campaign/ad-group/creative dimensions; imported, verified-platform,
+aggregate Apple and re-engagement populations are not equated to this basis.
+Current privacy applies even at an older cutoff. Counts show exact keys observed
+on both sides, only one side, or missing. Keys include the date, network and
+known parent IDs; country keys include date/network/campaign. A same-named
+campaign on another network cannot match. Separate dimension matches do not
+prove that an entire tuple, currency, time zone or denominator is compatible.
+
+Parent/ad-group/creative grain, undeclared coverage, restricted selected children,
+unrestricted-grain overlap and missing/non-UTC reporting time zones are shown
+separately. Latest revisions are selected before coverage restrictions; an old
+unrestricted revision is not revived. Parent grain is not proof of full provider
+coverage, and selected children cannot become parent or sibling denominators.
+The report does not infer bindings from names or allocate spend. It lists supported
+refusal reasons from saved native runs and links back to saved explanations,
+registered link settings and reader-safe cost schedule receipts. It neither
+recalculates nor rewrites any metric.
+
+**Current acquisition receipts are separate from historical cutoff observations.**
+They describe the latest scheduler outcome and configured adapter capability,
+not the selected campaign/period's completeness. A later empty response can coexist
+with older retained cost; it is not zero spend. CLI imports do not create a
+schedule. Historical success or configured binding capability does not certify
+current joinability. Upstream completeness stays unknown.
+
+The read is privacy-fenced and bounded to 31 days, 10,000 retained source rows
+or cost revisions per side, 1,000 saved metric rows and 100 current schedules,
+with a five-second database-statement timeout. Oversized/unavailable selections
+return no partial report. Responses contain aggregate counts and safe schedule
+metadata, not installation/click IDs, mapping/account credentials or raw payload.
+
 ## Meaning and limitations
 
 - Select explicit ad-group/creative values inside `evaluation.grouping`.

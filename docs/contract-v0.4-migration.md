@@ -5,6 +5,52 @@ Contract v0.4.0 completed the identity migration from the immutable
 contract identity but did not change field meaning, attribution behavior, metric
 arithmetic, ordering, hashing, privacy, or fraud semantics.
 
+## Versioned first-party attribution windows (0.4.29)
+
+Optional authenticated `first_party_attribution_bundle` adds a closed independent
+`attribution-first-party-window` family. Its complete 0.4.29 definition selects
+1, 7 or 30 days only for native SDK first-party Install Referrer decisions.
+Definition and bundle digests are SHA-256 of RFC 8785 bytes; new attribution IDs
+bind tenant, app, installation record and bundle hash. Missing/invalid/ambiguous
+evidence, admission, fraud and current privacy remain authoritative. Imported,
+platform, organic, other producer, aggregate and engagement attribution retain
+their existing rules. No prior result, schema URN, wire/package `0.4.0` identity,
+registry, metric definition or historical seven-day default changes.
+
+The operator explicitly previews and activates a registered revision. Runtime
+keeps the policy effective at the installation's original receipt, including
+late-click evaluation; no historical recomputation is implicit. The bounded
+preview is a counterfactual, not a metric correction. See the
+[first-party attribution window guide](attribution-window.md).
+
+Complete new golden inventory under `76-first-party-attribution-windows/`:
+
+- `expected_raw_records.json`, `expected_deliveries.json`,
+  `expected_logical_events.json`, `expected_corrections.json`;
+- `expected_privacy_requests.json`, `expected_privacy_tombstones.json`,
+  `expected_attributions.json`, `expected_metric_definitions.json`;
+- `expected_metric_runs.json`, `expected_cost_records.json`,
+  `expected_fraud_decisions.json`, `expected_rejections.json`,
+  `expected_reconciliation.json`;
+- the new `input.json`, independent `README.md` and shared fixture README.
+
+There are **zero existing golden changes**: all 75 previous inputs and 975
+expected files remain unchanged. Against the commit immediately before this
+patch, `git diff --name-status <base> -- fixtures/v0.4/` must list only directory
+76 and the shared README. Expected files are committed separately from behavior;
+the validation command remains read-only.
+
+The [independent derivation](../fixtures/v0.4/76-first-party-attribution-windows/README.md)
+constructs all thirteen families. Ten accepted records produce nine decisions:
+for each profile, the millisecond before the exclusive end is attributed and
+the exact/after cases expire. Ten payload hashes and nine policy-bound IDs are
+calculated from literal inputs using generic JCS/SHA-256, not evaluator output.
+The three reference metric definitions retain fixture04's reviewed bytes;
+there are no metric evaluations or other requested artifact families.
+Candidate TypeScript and Python match all independently constructed families
+at combined JCS SHA-256
+`7d436dd90947f7af74277f01637ddbd99ad4a39c7ba17218f7c2d3cf0d0d7b9d`.
+
 ## Explicit engagement policy and verified purchase net (0.4.28)
 
 Optional definition `engagement_inactivity_days` (0–90) is required only by the

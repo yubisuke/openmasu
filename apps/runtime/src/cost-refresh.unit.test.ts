@@ -7,6 +7,7 @@ import {
   costRefreshEnabled, costRefreshRange, costRefreshSecretName,
   loadCostRefreshSecrets, normalizeCostRefreshDefinition,
 } from "./cost-refresh.js";
+import { costBackfillDates, costBackfillAsOf, costBackfillReceipt, normalizeCostBackfillRequest } from "./cost-backfill.js";
 
 const request = { provider: "google_ads", customer_id: "4300000000", currency: "USD" };
 describe("bounded cost refresh configuration", () => {
@@ -77,5 +78,33 @@ describe("bounded cost refresh configuration", () => {
       writeFileSync(registry, JSON.stringify({ "private-must-not-leak": { value: "secret", file: "private-path" } }));
       assert.throws(() => loadCostRefreshSecrets(registry), { message: "cost_refresh_secret_registry_invalid" });
     } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+  it("bounds selected backfill dates and rejects invented fields without echoing their values", () => {
+    const selection = { cost_schedule_id: "cost-schedule:synthetic", dates: ["2026-08-21", "2026-08-19"] };
+    assert.deepEqual(normalizeCostBackfillRequest(selection).dates, ["2026-08-19", "2026-08-21"]);
+    assert.equal(costBackfillDates("2026-08-01", "2026-08-31").length, 31);
+    for (const value of [[], ["2026-08-19", "2026-08-19"], ["2026-02-30"], ["2026-08-01", "2026-09-01"]]) {
+      assert.throws(() => normalizeCostBackfillRequest({ ...selection, dates: value }), /^Error: cost_backfill_/);
+    }
+    assert.throws(() => normalizeCostBackfillRequest({ ...selection, account: "synthetic-private-account" }), { message: "cost_backfill_request_invalid" });
+    assert.throws(() => normalizeCostBackfillRequest({ ...selection, retry_of: "invalid" }), { message: "cost_backfill_request_invalid" });
+    assert.throws(() => costBackfillDates("2026-08-02", "2026-08-01"), { message: "cost_backfill_dates_invalid" });
+  });
+  it("binds backfill receipts to scope, dates, limits and observed states at a canonical fixed as-of", () => {
+    const clock = new Date("2026-08-22T00:00:00.000Z");
+    assert.equal(costBackfillAsOf(clock.toISOString(), clock), clock.toISOString());
+    for (const value of ["2026-08-22", "2026-08-22T00:00:00Z", "2026-08-23T00:00:00.000Z"]) {
+      assert.throws(() => costBackfillAsOf(value, clock), { message: "cost_backfill_as_of_invalid" });
+    }
+    const plan = { cost_schedule_id: "cost-schedule:synthetic", dates: ["2026-08-20"], definition_digest: "a".repeat(64),
+      as_of: clock.toISOString(), configuration: { provider: "google_ads" as const, api_version: "v25", currency: "USD", lag_days: 1, limits: { maxRows: 10 } },
+      days: [{ date: "2026-08-20", state: "not_recorded", eligible: true, row_count: null, import_run_id: null, safe_reason: null, history_ref: null }] };
+    const scope = { tenantId: "tenant-synthetic", appId: "app-synthetic" }, hash = costBackfillReceipt(scope, plan);
+    assert.equal(costBackfillReceipt(scope, JSON.parse(JSON.stringify(plan))), hash);
+    const otherOperator = { ...scope, keyId: "synthetic-other-admin" };
+    assert.equal(costBackfillReceipt(otherOperator, plan), hash, "the receipt is app-scoped, not tied to one operator key");
+    assert.notEqual(costBackfillReceipt({ ...scope, appId: "other-app" }, plan), hash);
+    assert.notEqual(costBackfillReceipt(scope, { ...plan, configuration: { ...plan.configuration, limits: { maxRows: 11 } } }), hash);
+    assert.notEqual(costBackfillReceipt(scope, { ...plan, days: [{ ...plan.days[0], state: "queued", eligible: false }] }), hash);
   });
 });

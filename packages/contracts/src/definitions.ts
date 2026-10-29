@@ -40,6 +40,9 @@ export {
   type MetricProfileMetadata,
 } from "./metric-profiles.js";
 export {
+  FIRST_PARTY_WINDOW_BUNDLE, FIRST_PARTY_WINDOW_VERSION, FIRST_PARTY_WINDOW_DAYS,
+  firstPartyWindowDefinition, validateFirstPartyWindowDefinition, firstPartyWindowHash,
+  type FirstPartyWindowDefinition, type FirstPartyWindowDays,
   NON_FRAUD_RULE_BUNDLES,
   nonFraudBundleHash,
   validateNonFraudBundleDefinition,

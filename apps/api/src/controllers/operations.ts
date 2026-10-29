@@ -9,7 +9,8 @@ import { roleAllows } from "../authorization.js";
 import { IngestRecoveryError, listIngestRecovery, requestIngestRecovery } from "../ingest-recovery.js";
 import { renderIngestRecovery } from "../dashboard/ingest-recovery.js";
 import { disableOperatorWebhookDestination, listOperatorWebhookDestinations, registerOperatorWebhookDestination } from "../operator-webhooks-admin.js";
-import { disableOperatorBulkExportDestination, listOperatorBulkExportDestinations, registerOperatorBulkExportDestination } from "../operator-bulk-exports-admin.js";
+import { disableOperatorBulkExportDestination, listOperatorBulkExportDestinations, registerOperatorBulkExportDestination, rotateOperatorBulkExportCredentials } from "../operator-bulk-exports-admin.js";
+import { renderBulkExportCredentials } from "../dashboard/bulk-export-credentials.js";
 import type { RequestHandlerDependencies } from "../http-types.js";
 import type { DashboardAppContext, AdminRequestContext } from "./context.js";
 import { json, dashboardHtml } from "../http-responses.js";
@@ -81,6 +82,7 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
           body: {
             endpoint_url: body.get("endpoint_url") ?? "",
             events: body.getAll("events"),
+            ...(body.has("purpose") ? { purpose: body.get("purpose") } : {}),
           },
           destinationAllowlist: dependencies.operatorWebhooks.destinationAllowlist,
           allowSyntheticLoopback: dependencies.operatorWebhooks.allowSyntheticLoopback,
@@ -118,8 +120,15 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
   };
 
   const dashboardOperatorBulkExportsRegister = async ({ request, response, target, route, pool, session, appId, appIdentity, decoder }: DashboardAppContext): Promise<void> => {
-    const body = await decoder.form();
     const destinationId = operatorBulkExportDestinationId(target.pathname);
+    if (route.handler === "dashboard_operator_bulk_exports_credentials") {
+      const destination = (await listOperatorBulkExportDestinations(pool, appIdentity))
+        .find((row) => row.destination_id === destinationId && row.status === "active");
+      if (!destination) { dashboardHtml(response, 404, renderBulkExportOperationFailed({ reason: "not_found" })); return; }
+      dashboardHtml(response, 200, renderBulkExportCredentials(destination, csrfToken(session.token)));
+      return;
+    }
+    const body = await decoder.form();
     if (!await authorizeDashboardForm(dependencies, { request, response, session }, body, "dashboard_operator_bulk_export_mutation", "bulk_export_destination", destinationId ?? "bulk:new")) return;
     try {
       if (route.handler === "dashboard_operator_bulk_exports_register") {
@@ -145,7 +154,13 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
         dashboardHtml(response, 201, renderBulkExportRegistered({ appId: appIdentity.appId }));
       } else {
         if (!destinationId) throw new Error("operator_bulk_destination_not_found");
-        await disableOperatorBulkExportDestination({
+        if (route.handler === "dashboard_operator_bulk_exports_rotate") {
+          await rotateOperatorBulkExportCredentials({
+            pool: dependencies.pool, payloadStore: dependencies.payloadStore, identity: appIdentity, destinationId,
+            body: { expected_revision: body.get("expected_revision"), access_key_id: body.get("access_key_id"),
+              secret_access_key: body.get("secret_access_key"), session_token: body.get("session_token") ?? "" },
+          });
+        } else await disableOperatorBulkExportDestination({
           pool: dependencies.pool,
           payloadStore: dependencies.payloadStore,
           identity: appIdentity,
@@ -310,6 +325,13 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
       }
       const destinationId = operatorBulkExportDestinationId(target.pathname);
       if (!destinationId) throw new Error("operator_bulk_destination_not_found");
+      if (route.handler === "admin_operator_bulk_exports_rotate") {
+        json(response, 200, await rotateOperatorBulkExportCredentials({
+          pool: dependencies.pool, payloadStore: dependencies.payloadStore, identity: appIdentity,
+          destinationId, body: await decoder.json(),
+        }));
+        return;
+      }
       json(response, 200, await disableOperatorBulkExportDestination({
         pool: dependencies.pool,
         payloadStore: dependencies.payloadStore,
@@ -331,7 +353,7 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
           outcome: "failed",
           reasonCode: reason,
         });
-        json(response, reason === "operator_bulk_destination_not_active" ? 409 : 400, { error: reason });
+        json(response, ["operator_bulk_destination_not_active", "operator_bulk_credential_revision_stale"].includes(reason) ? 409 : 400, { error: reason });
       }
     }
     return;
@@ -346,6 +368,8 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
     dashboard_operator_webhooks_disable: { boundary: "dashboard_app", handle: dashboardOperatorWebhooksRegister },
     dashboard_operator_bulk_exports_register: { boundary: "dashboard_app", handle: dashboardOperatorBulkExportsRegister },
     dashboard_operator_bulk_exports_disable: { boundary: "dashboard_app", handle: dashboardOperatorBulkExportsRegister },
+    dashboard_operator_bulk_exports_credentials: { boundary: "dashboard_app", handle: dashboardOperatorBulkExportsRegister },
+    dashboard_operator_bulk_exports_rotate: { boundary: "dashboard_app", handle: dashboardOperatorBulkExportsRegister },
     operational_metrics: { boundary: "admin", handle: operationalMetrics },
     admin_google_delivery_health: { boundary: "admin", handle: adminGoogleDeliveryHealth },
     admin_measurement_health: { boundary: "admin", handle: adminMeasurementHealth },
@@ -357,5 +381,6 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
     admin_operator_bulk_exports_list: { boundary: "admin", handle: adminOperatorBulkExportsList },
     admin_operator_bulk_exports_register: { boundary: "admin", handle: adminOperatorBulkExportsList },
     admin_operator_bulk_exports_disable: { boundary: "admin", handle: adminOperatorBulkExportsList },
+    admin_operator_bulk_exports_rotate: { boundary: "admin", handle: adminOperatorBulkExportsList },
   } as const;
 }

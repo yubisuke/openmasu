@@ -438,6 +438,7 @@ export async function processOperatorBulkExports(
   const due = await withTenant(pool, tenantId, (client) => client.query<{ batch_id: string }>(
     `SELECT batch_id::text FROM ephemeral.operator_bulk_export_batches
       WHERE tenant_id=$1 AND state IN ('queued','retry') AND next_attempt_at <= $2
+        AND safe_reason IS DISTINCT FROM 'credentials_rejected'
       ORDER BY next_attempt_at,batch_id LIMIT 20`,
     [tenantId, now.toISOString()],
   ));
@@ -460,7 +461,8 @@ export async function processOperatorBulkExports(
                 batch.event_received_at_after,batch.event_record_id_after,
                 batch.deletion_seq_before::text,batch.deletion_seq_after::text,
                 destination.endpoint_url,destination.bucket_name,destination.object_prefix,
-                destination.region,destination.credential_ref,destination.credential_digest,
+                destination.region,COALESCE(credential.credential_ref,destination.credential_ref) AS credential_ref,
+                COALESCE(credential.credential_digest,destination.credential_digest) AS credential_digest,
                 destination.reference_secret_ref,destination.status,
                 checkpoint.event_received_at,checkpoint.event_record_id,checkpoint.deletion_seq::text
            FROM ephemeral.operator_bulk_export_batches AS batch
@@ -468,15 +470,21 @@ export async function processOperatorBulkExports(
              USING (destination_id,tenant_id,app_id)
            JOIN control.operator_bulk_export_checkpoints AS checkpoint
              USING (destination_id,tenant_id,app_id)
+           LEFT JOIN LATERAL (
+             SELECT credential_ref,credential_digest FROM control.operator_bulk_export_credential_revisions
+              WHERE tenant_id=batch.tenant_id AND app_id=batch.app_id AND destination_id=batch.destination_id
+              ORDER BY credential_revision_seq DESC LIMIT 1
+           ) AS credential ON true
           WHERE batch.tenant_id=$1 AND batch.batch_id=$2
             AND batch.state IN ('queued','retry') AND batch.next_attempt_at <= $3
+            AND batch.safe_reason IS DISTINCT FROM 'credentials_rejected'
           FOR UPDATE OF batch,checkpoint`,
         [tenantId, batchId, now.toISOString()],
       );
       const row = selected.rows[0];
       if (!row) return;
       appId = row.app_id;
-      const attempt = row.attempts + 1;
+      const attempt = Math.min(row.attempts + 1, 32);
       if (row.status !== "active") {
         await client.query(
           `UPDATE ephemeral.operator_bulk_export_batches
@@ -541,6 +549,10 @@ export async function processOperatorBulkExports(
       if (delivery.outcome === "stored" || delivery.outcome === "already_present") {
         state = "succeeded";
         reason = delivery.outcome;
+      } else if (delivery.httpStatus === 401 || delivery.httpStatus === 403) {
+        // Keep the exact object/cursor, but never retry rejected credentials until an explicit rotation.
+        state = "retry";
+        reason = "credentials_rejected";
       } else if (delivery.outcome === "terminal" || attempt >= maximumAttempts) {
         state = "failed";
         reason = delivery.outcome === "terminal" ? delivery.reason : "retry_exhausted";

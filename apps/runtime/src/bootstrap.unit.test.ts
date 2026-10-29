@@ -17,6 +17,8 @@ function generatedAppEnvironment(options: {
   readonly maxInboxBatchLimit?: string;
   readonly adServicesProviderTimeout?: string;
   readonly adServicesClaimLease?: string;
+  readonly inboxAdmissionEnabled?: string;
+  readonly inboxAppBytes?: string;
   readonly reconciledWorkerConcurrency?: string;
   readonly reconciledSdkInboxBatchLimit?: string;
   readonly reconciledMaxInboxBatchLimit?: string;
@@ -32,6 +34,8 @@ function generatedAppEnvironment(options: {
     OPENMASU_RUNTIME_SECRET_ROOT: runtimeRoot,
   };
   delete environment.OPENMASU_DEPLOYMENT_PURPOSE;
+  environment.OPENMASU_INBOX_ADMISSION_ENABLED = options.inboxAdmissionEnabled ?? "off";
+  environment.OPENMASU_INBOX_APP_MAX_BYTES = options.inboxAppBytes ?? "268435456";
   if (options.allowlist === undefined) delete environment.OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST;
   else environment.OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST = options.allowlist;
   if (options.costRefreshEnabled === undefined) delete environment.OPENMASU_COST_REFRESH_ENABLED;
@@ -388,5 +392,19 @@ describe("runtime bootstrap environment", () => {
       }),
       /must be shorter than OPENMASU_ADSERVICES_CLAIM_LEASE_MS/,
     );
+  });
+
+  it("forwards opt-in durable inbox capacity settings and rejects invalid bounds", () => {
+    const environment = generatedAppEnvironment({ inboxAdmissionEnabled: "on", inboxAppBytes: "65536" });
+    assert.match(environment, /^OPENMASU_INBOX_ADMISSION_ENABLED=on$/m);
+    assert.match(environment, /^OPENMASU_INBOX_APP_MAX_BYTES=65536$/m);
+    assert.match(environment, /^OPENMASU_INBOX_GLOBAL_MAX_BATCHES=100000$/m);
+    assert.match(environment, /^OPENMASU_INBOX_RESUME_PERCENT=80$/m);
+    assert.match(environment, /^OPENMASU_INBOX_RETRY_AFTER_SECONDS=30$/m);
+    assert.throws(() => generatedAppEnvironment({ inboxAdmissionEnabled: "invalid" }), /configuration_invalid/);
+    assert.throws(() => generatedAppEnvironment({ inboxAppBytes: "0" }), /OPENMASU_INBOX_APP_MAX_BYTES/);
+    const compose = readFileSync("compose.yaml", "utf8");
+    assert.match(compose, /OPENMASU_INBOX_ADMISSION_ENABLED: \$\{OPENMASU_INBOX_ADMISSION_ENABLED:-off\}/);
+    assert.match(compose, /OPENMASU_INBOX_GLOBAL_MAX_BYTES: \$\{OPENMASU_INBOX_GLOBAL_MAX_BYTES:-2147483648\}/);
   });
 });

@@ -7,7 +7,10 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import { createAppPool, EncryptedFilePayloadStore, withTenant } from "@openmasu/runtime";
+import { createAppPool, createReaderPool, EncryptedFilePayloadStore, withTenant } from "@openmasu/runtime";
+import { registerComparison, processRecurringComparisons, depositComparisonSnapshot, discoverComparisonNotifications,
+  readComparisons } from "@openmasu/runtime/recurring-comparisons";
+import { syntheticComparisonRegistration, syntheticRecurringSnapshot } from "../../../tools/synthetic-recurring-comparison.js";
 import {
   discoverOperatorWebhookDeliveries,
   processOperatorWebhookDeliveries,
@@ -29,6 +32,8 @@ const payloadStore = new EncryptedFilePayloadStore(
   `synthetic-webhook-master-${randomBytes(32).toString("base64url")}`,
 );
 const pool = createAppPool();
+const readerPool = createReaderPool();
+const operatorKey = `synthetic-webhook-operator-${randomBytes(32).toString("base64url")}`;
 let api: ReturnType<typeof createServer>;
 let receiver: ReturnType<typeof createServer>;
 let apiBaseUrl = "";
@@ -38,6 +43,7 @@ let serverSecret = "";
 let webhookSigningSecret = "";
 const received: Array<{ path: string; body: Buffer; signature: string; deliveryId: string }> = [];
 let deliverStatuses = [500, 204];
+let comparisonStatuses = [500, 204];
 let raceGate: {
   entered: Promise<void>;
   release: Promise<void>;
@@ -125,7 +131,8 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
         raceGate.markEntered();
         await raceGate.release;
       }
-      const status = request.url === "/deliver" ? (deliverStatuses.shift() ?? 204) : 204;
+      const status = request.url === "/deliver" ? (deliverStatuses.shift() ?? 204)
+        : request.url === "/comparison" ? (comparisonStatuses.shift() ?? 204) : 204;
       response.writeHead(status);
       response.end();
     });
@@ -133,7 +140,7 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
     await once(receiver, "listening");
     receiverOrigin = `http://127.0.0.1:${(receiver.address() as AddressInfo).port}`;
 
-    await ensureAdminKeys(pool, { tenantId, appId }, [adminKey]);
+    await ensureAdminKeys(pool, { tenantId, appId }, [adminKey,{ key:operatorKey,role:"operator" }]);
     api = createServer(createRequestHandler({
       pool,
       readerPool: pool,
@@ -181,7 +188,93 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
     receiver.close();
     await Promise.all([once(api, "close"), once(receiver, "close")]);
     await pool.end();
+    await readerPool.end();
     rmSync(payloadRoot, { recursive: true, force: true });
+  });
+
+  it("comparison notifications reuse durable signed delivery, deduplicate state, coalesce cooldown, and suppress mute and privacy", async () => {
+    const scope = { tenantId,appId }, commandPath = `/v1/admin/apps/${appId}/comparisons`;
+    const clock = (day:number,seconds=0) => new Date(Date.parse(`2026-10-${String(day).padStart(2,"0")}T00:00:00Z`)+seconds*1000);
+    const created = await admin(`/v1/admin/apps/${appId}/operator-webhooks`, { method:"POST",body:JSON.stringify({
+      purpose:"comparison_notifications",endpoint_url:`${receiverOrigin}/comparison` }) });
+    assert.equal(created.status,201);
+    const destination=await created.json() as { destination_id:string;signing_secret:string;events:string[] };
+    assert.deepEqual(destination.events,[]);
+    const saved=await registerComparison(pool,scope,{ ...syntheticComparisonRegistration(),first_date:"2026-10-01",last_date:"2026-10-05",retention_days:90,
+      left_snapshot:syntheticRecurringSnapshot("2026-10-01"),right_snapshot:syntheticRecurringSnapshot("2026-10-01","2000000") },clock(10));
+    await processRecurringComparisons(pool,tenantId,clock(10));
+    assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(10)),0,"off without explicit configuration");
+    const settings={ action:"notifications",comparison_id:saved.comparison_id,destination_id:destination.destination_id,enabled:true,muted:false,cooldown_seconds:60 };
+    const configure=(extra:Record<string,unknown>={})=>admin(commandPath,{method:"POST",body:JSON.stringify({...settings,...extra})});
+    assert.equal((await admin(commandPath,{method:"POST",headers:{authorization:`Bearer ${operatorKey}`},body:JSON.stringify(settings)})).status,403);
+    assert.equal((await configure({destination_id:"webhook:unavailable"})).status,400);
+    assert.equal((await configure()).status,200);
+    assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(10)),1);
+    const queuedTimestamp=await withTenant(pool,tenantId,async c=>(await c.query<{
+      next_attempt_at:Date;created_at:string;updated_at:string;
+    }>(`SELECT next_attempt_at,created_at,updated_at FROM ephemeral.operator_webhook_deliveries
+      WHERE tenant_id=$1 AND app_id=$2 AND comparison_id=$3`,[tenantId,appId,saved.comparison_id])).rows);
+    assert.equal(queuedTimestamp.length,1);
+    assert.equal(queuedTimestamp[0].next_attempt_at.toISOString(),clock(10).toISOString());
+    assert.equal(queuedTimestamp[0].created_at,clock(10).toISOString());
+    assert.equal(queuedTimestamp[0].updated_at,clock(10).toISOString());
+    assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(10)),0);
+    const dispatch=(now:Date,extra:Record<string,unknown>={})=>processOperatorWebhookDeliveries(pool,payloadStore,tenantId,{
+      enabled:true,destinationAllowlist:[receiverOrigin],allowSyntheticLoopback:true,now:()=>now,...extra });
+    assert.equal((await dispatch(clock(10))).processed,1);
+    assert.equal((await dispatch(clock(10,61))).processed,1);
+    const attempts=received.filter(entry=>entry.path==="/comparison");
+    assert.equal(attempts.length,2); assert.equal(attempts[0].deliveryId,attempts[1].deliveryId);
+    assert.deepEqual(attempts[0].body,attempts[1].body);
+    assert.equal(attempts[0].signature,`sha256=${createHmac("sha256",Buffer.from(destination.signing_secret)).update(attempts[0].body).digest("hex")}`);
+    assert.equal(JSON.parse(attempts[0].body.toString()).state,"threshold_exceeded");
+    assert.doesNotMatch(attempts[0].body.toString(),/value_unscaled|grouping|installation_id|record_id|payload|Synthetic daily/);
+    assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(10,120)),0,"worker restart uses saved transition state");
+    const readerState=await readComparisons(readerPool,scope,clock(10,120));
+    assert.equal(readerState.notificationReceipts[0].state,"succeeded");
+    assert.equal(readerState.notificationReceipts[0].attempts,2);
+    assert.deepEqual(await readComparisons(readerPool,{...scope,appId:"unavailable"},clock(10)),{plans:[],runs:[],notifications:[],notificationReceipts:[]});
+    await assert.rejects(withTenant(readerPool,tenantId,c=>c.query("UPDATE control.comparison_notifications SET muted=true WHERE comparison_id=$1",[saved.comparison_id])),{code:"42501"});
+
+    await processRecurringComparisons(pool,tenantId,clock(11));
+    assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(11)),1);
+    assert.equal((await configure({muted:true})).status,200);
+    const receivedBeforeMute=received.length;
+    assert.equal((await dispatch(clock(11))).processed,1);
+    assert.equal(received.length,receivedBeforeMute);
+    assert.equal((await readComparisons(readerPool,scope,clock(11))).notificationReceipts[0].state,"suppressed");
+    assert.equal((await configure()).status,200);
+    assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(11,1)),0,"unmute is not a resend");
+    for (const side of ["left","right"] as const) await depositComparisonSnapshot(pool,scope,saved.comparison_id,"2026-10-02",side,syntheticRecurringSnapshot("2026-10-02"),clock(11,1));
+    await processRecurringComparisons(pool,tenantId,clock(11,1));
+    assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(11,1)),0,"cooldown retains no extra outbox ID");
+    assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(11,61)),1);
+    await dispatch(clock(11,61));
+    assert.equal(JSON.parse(received.at(-1)!.body.toString()).transition,"recovered");
+
+    const altered=syntheticRecurringSnapshot("2026-10-03");
+    await depositComparisonSnapshot(pool,scope,saved.comparison_id,"2026-10-03","left",altered,clock(12));
+    await depositComparisonSnapshot(pool,scope,saved.comparison_id,"2026-10-03","right",{source:altered.source,conditions:{...altered.conditions,metric_definition:"d7_roas@synthetic-other"},rows:altered.rows},clock(12));
+    await processRecurringComparisons(pool,tenantId,clock(12));
+    assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(12)),1);
+    comparisonStatuses=[400]; await dispatch(clock(12));
+    const uncertain=JSON.parse(received.at(-1)!.body.toString());
+    assert.equal(uncertain.state,"incomparable"); assert.equal(uncertain.transition,"attention");
+    assert.equal((await readComparisons(readerPool,scope,clock(12))).notificationReceipts[0].state,"failed");
+    assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(12,61)),0,"terminal receipt is not another notification");
+
+    await processRecurringComparisons(pool,tenantId,clock(13));
+    assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(13)),1);
+    const pending=await withTenant(pool,tenantId,async c=>(await c.query<{request_ref:string}>("SELECT request_ref FROM ephemeral.operator_webhook_deliveries WHERE comparison_id=$1 AND state='queued'",[saved.comparison_id])).rows[0]);
+    const privacy=await admin("/v1/admin/privacy-requests",{method:"POST",body:JSON.stringify({tenant_id:tenantId,app_id:appId,
+      requested_via:"tenant_admin_api",deletion_scope:"installation",deletion_subject_ref:`installation:synthetic-comparison-privacy:${run}`})});
+    assert.equal(privacy.status,201);
+    const beforePrivacy=received.length;
+    assert.equal((await dispatch(clock(13))).processed,1); assert.equal(received.length,beforePrivacy);
+    await assert.rejects(payloadStore.read(pending.request_ref));
+    assert.deepEqual((await readComparisons(readerPool,scope,clock(13))).notificationReceipts,[]);
+    assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(13)),0);
+    assert.equal((await admin(`/v1/admin/apps/${appId}/operator-webhooks/${encodeURIComponent(destination.destination_id)}/disable`,{method:"POST",body:"{}"})).status,200);
   });
 
   it("registers and lists an app-scoped destination while returning the signing secret once", async () => {

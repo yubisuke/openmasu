@@ -33,6 +33,7 @@ import { processCommerceReadbacks } from "../../worker/src/commerce-readback-wor
 import { createRequestHandler } from "./router.js";
 import { recordCommerceNotification } from "./commerce-notifications.js";
 import { executePrivacyRequest, privacySubjectDigest } from "./privacy.js";
+import { privacyJobProgress } from "./privacy-job-reports.js";
 import { KeyedTokenBucket } from "./rate-limit.js";
 import { parseMetricQuery } from "./report-query.js";
 import { encodeMetricReport, metricReport } from "./reporting.js";
@@ -858,6 +859,105 @@ describe("M2a signed SDK ingestion", () => {
     installationSecret = value.installation_secret;
     assert.match(installationKeyId, /^installation-key:/);
     assert.ok(installationSecret.length >= 43);
+  });
+
+  it("backpressures a stopped SDK inbox before acceptance, recovers every 202 and preserves the privacy lock order", async () => {
+    const scope = { tenantId: `tenant-admission-${run}`, appId: `app-admission-${run}` };
+    const key = `sdk-admission-${run}`, secret = `synthetic-admission-secret-${run}`;
+    const config = { ...authConfig, ...scope };
+    await ensureSdkKeys(pool, payloadStore, scope, [{ keyId: key, secret }]);
+    const isolatedServer = createServer(createRequestHandler({
+      pool, readerPool: pool, payloadStore,
+      maxConfig: { ...scope, pathSecret: "synthetic-path", eventKey: "synthetic-event-key", tokenMode: "all_with_event_fallback", maxParameters: 40, maxQueryBytes: 8192 },
+      publicBaseUrl: "http://localhost:8080", redirectorBaseUrl: "http://localhost:8090",
+      dashboard: { enabled: false, publicBaseUrl: "http://localhost:8080", tenantId: scope.tenantId, sessionTtlSeconds: 43200 },
+      sdk: { pool, payloadStore, config, maximumBytes: 65536, maximumEvents: 100,
+        enrollmentBucket: new KeyedTokenBucket(100, 100), installationBucket: new KeyedTokenBucket(100, 100),
+        appBucket: new KeyedTokenBucket(100, 100), privacyBucket: new KeyedTokenBucket(100, 100) },
+    }));
+    isolatedServer.listen(0, "127.0.0.1"); await once(isolatedServer, "listening");
+    const address = `http://127.0.0.1:${(isolatedServer.address() as AddressInfo).port}`;
+    const previous = {
+      OPENMASU_INBOX_ADMISSION_ENABLED: process.env.OPENMASU_INBOX_ADMISSION_ENABLED,
+      OPENMASU_INBOX_APP_MAX_BATCHES: process.env.OPENMASU_INBOX_APP_MAX_BATCHES,
+      OPENMASU_INBOX_APP_MAX_BYTES: process.env.OPENMASU_INBOX_APP_MAX_BYTES,
+      OPENMASU_INBOX_GLOBAL_MAX_BATCHES: process.env.OPENMASU_INBOX_GLOBAL_MAX_BATCHES,
+      OPENMASU_INBOX_GLOBAL_MAX_BYTES: process.env.OPENMASU_INBOX_GLOBAL_MAX_BYTES,
+      OPENMASU_INBOX_RESUME_PERCENT: process.env.OPENMASU_INBOX_RESUME_PERCENT,
+      OPENMASU_INBOX_RETRY_AFTER_SECONDS: process.env.OPENMASU_INBOX_RETRY_AFTER_SECONDS,
+    };
+    Object.assign(process.env, { OPENMASU_INBOX_ADMISSION_ENABLED: "on", OPENMASU_INBOX_APP_MAX_BATCHES: "1",
+      OPENMASU_INBOX_APP_MAX_BYTES: "1000000", OPENMASU_INBOX_GLOBAL_MAX_BATCHES: "1000000000",
+      OPENMASU_INBOX_GLOBAL_MAX_BYTES: String(Number.MAX_SAFE_INTEGER), OPENMASU_INBOX_RESUME_PERCENT: "50",
+      OPENMASU_INBOX_RETRY_AFTER_SECONDS: "11" });
+    const installation = `installation:admission-${run}`;
+    let credential: { installation_key_id: string; installation_secret: string } | undefined;
+    const post = (path: string, value: unknown) => {
+      const body = Buffer.from(JSON.stringify(value)), timestampMs = Date.now(), nonce = randomBytes(18).toString("base64url");
+      const enrollment = path === "/v1/installations";
+      const installationKey = enrollment ? undefined : credential!.installation_key_id;
+      return fetch(`${address}${path}`, { method: "POST", headers: {
+        "content-type": "application/json", "x-openmasu-sdk-key-id": key,
+        "x-openmasu-installation-key-id": installationKey ?? "-", "x-openmasu-timestamp-ms": String(timestampMs),
+        "x-openmasu-nonce": nonce, "x-openmasu-signature": signSdkRequest(enrollment ? secret : credential!.installation_secret,
+          { method: "POST", path, sdkKeyId: key, installationKeyId: installationKey, timestampMs, nonce, body }),
+      }, body: body.toString("utf8") });
+    };
+    try {
+      const enrollment = await post("/v1/installations", { installation_id: installation });
+      assert.equal(enrollment.status, 201); credential = await enrollment.json() as typeof credential;
+      const event = (number: number) => ({ records: [sourceEvent(`event:admission-${run}-${number}`, "session_start",
+        { installation_id: installation, session_id: `session:admission-${run}-${number}` }, new Date().toISOString())] });
+      const accepted = await post("/v1/events/batch", event(1)); assert.equal(accepted.status, 202);
+      const receipt = await accepted.json() as { ingest_batch_id: string };
+      const refused = await post("/v1/events/batch", event(2));
+      assert.equal(refused.status, 429); assert.equal(refused.headers.get("retry-after"), "11");
+      assert.deepEqual(await refused.json(), { error: "inbox_app_capacity" });
+      assert.equal(await processSdkInbox(pool, payloadStore, scope.tenantId), 1);
+      const retried = await post("/v1/events/batch", event(2)); assert.equal(retried.status, 202);
+      assert.equal(await processSdkInbox(pool, payloadStore, scope.tenantId), 1);
+      const evidence = await withTenant(pool, scope.tenantId, async (client) => ({
+        batches: (await client.query("SELECT ingest_batch_id,status,reason_code FROM ledger.ingest_batches_current WHERE app_id=$1", [scope.appId])).rows,
+        events: (await client.query("SELECT event_id FROM ledger.raw_records WHERE app_id=$1 ORDER BY event_id", [scope.appId])).rows,
+      }));
+      assert.equal(evidence.batches.length, 2);
+      assert.ok(evidence.batches.some((batch) => batch.ingest_batch_id === receipt.ingest_batch_id));
+      assert.ok(evidence.batches.every((batch) => batch.status === "processed" && batch.reason_code === null));
+      assert.deepEqual(evidence.events.map((row) => row.event_id), [`event:admission-${run}-1`, `event:admission-${run}-2`]);
+
+      const started = deferred(), released = deferred();
+      const blockingStore: PayloadStore = { read: (ref) => payloadStore.read(ref), purge: (ref) => payloadStore.purge(ref),
+        scanFor: (value) => payloadStore.scanFor(value), write: async (object, body) => {
+          const ref = await payloadStore.write(object, body); started.resolve(); await released.promise; return ref;
+        } };
+      const subjectDigest = installationIdDigest(config, installation);
+      const append = appendDurableBatch(pool, blockingStore, { ...scope, producer: "sdk-android", body: Buffer.from(JSON.stringify(event(3))),
+        eventCount: 1, receivedAt: new Date().toISOString(), sdkKeyId: key,
+        installationKeyId: credential!.installation_key_id, subjectDigest });
+      await within(started.promise, "enabled admission payload write");
+      const deletion = executePrivacyRequest(pool, { ...scope, actorType: "sdk_installation",
+        actorRef: `sdk_installation:${credential!.installation_key_id}`, requesterAuthRef: "sdk_auth:synthetic-admission",
+        installationKeyId: credential!.installation_key_id, deletionSubjectDigest: subjectDigest,
+      }, { tenant_id: scope.tenantId, app_id: scope.appId, requested_via: "on_device_sdk",
+        deletion_scope: "installation", deletion_subject_ref: installation }, payloadStore);
+      try { await waitForBlockedAdvisoryLock(scope.tenantId); } finally { released.resolve(); }
+      await within(append, "accepted append before deletion recognition");
+      assert.equal((await within(deletion, "privacy deletion after admitted append")).status, "completed");
+      assert.equal(await processSdkInbox(pool, payloadStore, scope.tenantId), 1);
+      assert.equal((await post("/v1/events/batch", event(4))).status, 401);
+      const freshEnrollment = await post("/v1/installations", { installation_id: `${installation}-fresh` });
+      assert.equal(freshEnrollment.status, 201); credential = await freshEnrollment.json() as typeof credential;
+      const freshEvent = { records: [sourceEvent(`event:admission-${run}-5`, "session_start",
+        { installation_id: `${installation}-fresh`, session_id: `session:admission-${run}-5` }, new Date().toISOString())] };
+      assert.equal((await post("/v1/events/batch", freshEvent)).status, 202, "privacy-purged bodies do not keep the app latched");
+      assert.equal(await processSdkInbox(pool, payloadStore, scope.tenantId), 1);
+    } finally {
+      for (const [name, value] of Object.entries(previous)) {
+        if (value === undefined) Reflect.deleteProperty(process.env, name);
+        else Object.assign(process.env, { [name]: value });
+      }
+      isolatedServer.close(); await once(isolatedServer, "close");
+    }
   });
 
   it("WO19 accepts a fully verified App Store notification once and queues bounded read-back", async () => {
@@ -3152,7 +3252,9 @@ describe("M2a signed SDK ingestion", () => {
     assert.equal((await signed("/v1/events/batch", { records: [sourceEvent(`event:after-delete:${run}`, "session_start", { installation_id: installationId, session_id: `session:after-delete:${run}` })] }, { secret: installationSecret, installationKeyId })).status, 401);
   });
 
-  it("recovers idempotently when purge succeeds but its verification read fails transiently", async () => {
+  it("recovers idempotently when purge succeeds but its verification read fails transiently", async (t) => {
+    const reader = createReaderPool();
+    t.after(() => reader.end());
     const crashInstallationId = `installation:privacy-crash-${run}`;
     const statusReceipt = randomBytes(32).toString("hex");
     const statusReceiptDigest = createHash("sha256").update(statusReceipt).digest("hex");
@@ -3258,6 +3360,47 @@ describe("M2a signed SDK ingestion", () => {
     assert.equal(Number(prepared.receipt.lifetime_seconds), 30 * 86_400);
     assert.equal(prepared.receipt.artifact.includes(statusReceipt), false);
     assert.equal(prepared.receipt.artifact.includes("status_receipt"), false);
+    const progressState = () => withTenant(pool, tenantId, async client => ({
+      job: (await client.query("SELECT status,updated_at,completed_at FROM control.privacy_deletion_jobs WHERE privacy_request_id=$1", [processing.privacy_request_id])).rows,
+      purges: (await client.query("SELECT status,attempts,last_error_code,updated_at FROM control.privacy_payload_purges WHERE privacy_request_id=$1 ORDER BY reference_digest", [processing.privacy_request_id])).rows,
+      metrics: (await client.query(`SELECT i.source_metric_run_id,i.state,i.safe_reason,i.attempts,i.updated_at FROM control.metric_recalculation_jobs r
+        JOIN control.metric_recalculation_items i USING(tenant_id,app_id,recalculation_id)
+        WHERE r.privacy_request_id=$1 ORDER BY i.source_metric_run_id`, [processing.privacy_request_id])).rows,
+    }));
+    const beforeRead = await progressState();
+    // The preceding deletion case retains a legacy run with neither evidence_refs
+    // nor a replay manifest. Each new app-scoped deletion conservatively withdraws
+    // it: absent dependency evidence cannot establish that this subject is unrelated.
+    assert.deepEqual(beforeRead.metrics.map(({ source_metric_run_id, state, safe_reason }) =>
+      ({ source_metric_run_id, state, safe_reason })), [{
+      source_metric_run_id: `metric:before-delete:${run}`, state: "unavailable", safe_reason: "replay_unavailable",
+    }]);
+    const progress = await privacyJobProgress(reader, { tenantId, appId }, processing.privacy_request_id);
+    assert.equal(progress.data.length, 1);
+    assert.equal(progress.data[0].payload.state, "retry_pending");
+    assert.equal(progress.data[0].payload.failed, "1");
+    assert.equal(progress.data[0].payload.completed_at, null);
+    assert.deepEqual(progress.data[0].recalculation, {
+      state: "unavailable", total: "1", completed: "0", pending: "0", failed: "0", unavailable: "1",
+    });
+    assert.equal(progress.data[0].all_recorded_steps_completed, false);
+    const listing = await privacyJobProgress(reader, { tenantId, appId });
+    assert.deepEqual(listing.data.find(row => row.request_id === processing.privacy_request_id), progress.data[0]);
+    assert.deepEqual(await progressState(), beforeRead, "reader progress cannot advance purge or metric jobs");
+    for (const forbidden of [crashInstallationId, statusReceipt, statusReceiptDigest, secretRef,
+      credential.installation_secret, "deletion_subject", "payload_ref", "record_id", "artifact_template"]) {
+      assert.equal(JSON.stringify(progress).includes(forbidden), false, forbidden);
+    }
+    assert.deepEqual(await privacyJobProgress(reader, { tenantId, appId: `${appId}-other` }, processing.privacy_request_id),
+      { data: [], has_more: false });
+    assert.deepEqual(await privacyJobProgress(reader, { tenantId: `${tenantId}-other`, appId }, processing.privacy_request_id),
+      { data: [], has_more: false });
+    for (const table of ["privacy_deletion_jobs", "privacy_payload_purges"]) {
+      await assert.rejects(withTenant(reader, tenantId, client => client.query(`SELECT * FROM control.${table} LIMIT 1`)), /permission denied/);
+    }
+    const definer = await withTenant(reader, tenantId, client => client.query(
+      "SELECT pg_get_userbyid(proowner) AS owner,prosecdef FROM pg_proc WHERE oid='control.privacy_job_progress(text,text)'::regprocedure"));
+    assert.deepEqual(definer.rows, [{ owner: "openmasu_owner", prosecdef: true }]);
     assert.ok((await listRuntimeWorkTenants(pool)).includes(tenantId),
       "the tenant discovery boundary must expose durable privacy work to the worker");
     assert.equal((await signed("/v1/events/batch", { records: [sourceEvent(
@@ -3288,6 +3431,15 @@ describe("M2a signed SDK ingestion", () => {
       )).rows[0].count),
     }));
     assert.deepEqual(completed, { jobs: 1, artifacts: 1, audits: 1 });
+    const completedProgress = await privacyJobProgress(reader, { tenantId, appId }, processing.privacy_request_id);
+    assert.equal(completedProgress.data[0].payload.state, "completed");
+    assert.equal(completedProgress.data[0].payload.purged, completedProgress.data[0].payload.total);
+    assert.equal(completedProgress.data[0].payload.failed, "0");
+    assert.ok(completedProgress.data[0].payload.completed_at);
+    assert.deepEqual(completedProgress.data[0].recalculation, progress.data[0].recalculation,
+      "payload recovery cannot recreate the legacy run's missing replay evidence");
+    assert.equal(completedProgress.data[0].all_recorded_steps_completed, false,
+      "physical purge alone is not proof of metric replay completion");
     const completedStatus = await privacyStatus(statusReceipt);
     assert.equal(completedStatus.status, 200);
     assert.deepEqual(await completedStatus.json(), { status: "completed" });

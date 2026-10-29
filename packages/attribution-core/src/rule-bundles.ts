@@ -1,10 +1,23 @@
 import { DEFAULT_FRAUD_BUNDLE, fraudBundleHash, fraudNumberParameter, sha256Jcs, type FraudBundle } from "@openmasu/fraud-rules";
-import { nonFraudBundleHash } from "@openmasu/contracts/definitions";
+import { nonFraudBundleHash, firstPartyWindowHash, validateFirstPartyWindowDefinition } from "@openmasu/contracts/definitions";
 import { REFERENCE_RULE_VERSION, type Any } from "./evaluation-model.js";
 import { time } from "./evaluation-utils.js";
 
 export const FRAUD_BUNDLE: FraudBundle = DEFAULT_FRAUD_BUNDLE;
 export const FRAUD_BUNDLE_HASH = fraudBundleHash(FRAUD_BUNDLE);
+
+export function boundFirstPartyWindow(server: Any) {
+  const bound = server.first_party_attribution_bundle;
+  if (bound === undefined) return undefined;
+  const definition = validateFirstPartyWindowDefinition(bound.definition);
+  const hash = firstPartyWindowHash(definition);
+  if (bound.rule_bundle_id !== definition.id || bound.rule_bundle_version !== definition.version
+    || bound.definition_digest !== hash || bound.rule_bundle_hash !== hash) {
+    throw new Error("attribution_window_binding_mismatch");
+  }
+  return { days: definition.lookback_days, rule_bundle_id: definition.id,
+    rule_bundle_version: definition.version, rule_bundle_hash: hash };
+}
 
 export function boundNonFraudBundle(server: Any, id: "attribution-default" | "apple-postback-default"): {
   rule_bundle_id: string; rule_bundle_version: string; rule_bundle_hash: string;

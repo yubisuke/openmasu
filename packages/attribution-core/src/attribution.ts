@@ -1,5 +1,6 @@
-import { decisionFor, evidenceKey, type CandidateProvider } from "./candidates.js";
-import { boundNonFraudBundle } from "./rule-bundles.js";
+import { decisionFor, evidenceKey, IndexedCandidateProvider, type CandidateProvider } from "./candidates.js";
+import { boundNonFraudBundle, boundFirstPartyWindow } from "./rule-bundles.js";
+import { sha256Jcs } from "@openmasu/fraud-rules";
 import { CONTRACT_VERSION, type Attribution, type Attempt, type Decisions, type EvidenceRef, type LifecycleStatus } from "./evaluation-model.js";
 import { DAY_MS, sortByKey, time } from "./evaluation-utils.js";
 
@@ -116,6 +117,14 @@ function makeAttribution(
   if (payload.referrer_status === "unsupported") return result("unattributed", "none", "none", "install_referrer_unsupported");
   if (payload.referrer_status === "unavailable") return result("unattributed", "none", "none", "install_referrer_unavailable");
   if (payload.referrer_status === "not_applicable") return result("unattributed", "none", "none", "platform_referrer_not_available");
+  // Only the native first-party path adopts this opt-in family. Platform,
+  // imported, organic and engagement results retain their original identities.
+  const window = ["sdk-android", "sdk-ios"].includes(install.producer) ? boundFirstPartyWindow(server) : undefined;
+  if (window) {
+    Object.assign(base, { rule_bundle_id: window.rule_bundle_id, rule_bundle_version: window.rule_bundle_version,
+      rule_bundle_hash: window.rule_bundle_hash,
+      attribution_id: `attr:window:${sha256Jcs([server.tenant_id, server.app_id, install.record_id, window.rule_bundle_hash])}` });
+  }
   const clicks = candidates.clickCandidates(server.tenant_id, server.app_id, payload.click_id).filter((candidate) =>
     decisionFor(decisions, candidate).ingestion_status === "accepted" &&
     decisionFor(decisions, candidate).duplicate_resolution === "unique",
@@ -136,10 +145,25 @@ function makeAttribution(
   }
   const delta = time(payload.install_begin_at_server, "install_begin_at_server") -
     time(click.record.payload.redirector_click_at, "redirector_click_at");
-  if (delta < 0 || delta >= 7 * DAY_MS) return result("unattributed", "none", "none", "window_expired");
+  if (delta < 0 || delta >= (window?.days ?? 7) * DAY_MS) return result("unattributed", "none", "none", "window_expired");
   return result("non_organic", "install_referrer", "last_click", "valid_install_referrer", {
     evidence_refs: [evidence(click.record.record_id), evidence(install.record_id)],
   });
+}
+
+/** Read-only what-if over accepted, unique, available scoped ledger projections.
+ * The caller owns admission/privacy and the fixed receipt cutoff. No ingestion,
+ * fraud decision or stored metric is recomputed by this helper. */
+export function previewAcceptedFirstPartyAttribution(attempts: readonly Attempt[]): Attribution[] {
+  if (new Set(attempts.map(attempt => `${attempt.server.tenant_id}\0${attempt.server.app_id}`)).size > 1
+    || new Set(attempts.map(attempt => attempt.record.record_id)).size !== attempts.length
+    || attempts.some(attempt => !attempt.history_state || attempt.history_state.semantic_available !== true)) {
+    throw new Error("attribution_preview_evidence_invalid");
+  }
+  const candidates = new IndexedCandidateProvider(attempts);
+  return sortByKey(attempts.filter(attempt => attempt.record.event_name === "install")
+    .map(attempt => makeAttribution(attempt, candidates, new Map(), new Map())),
+  attribution => [attribution.subject_ref, attribution.attribution_id]);
 }
 
 function makeAggregatePostbackAttribution(

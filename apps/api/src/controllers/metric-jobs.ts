@@ -7,6 +7,8 @@ import { renderRecommendedMetricSchedulePreview } from "../dashboard/measurement
 import { measurementHealth } from "../measurement-health.js";
 import { previewMetricScheduleReplacement, replaceMetricSchedule } from "../metric-schedule-replacements.js";
 import { disableCostSchedule, listCostSchedules, registerCostSchedule } from "../cost-schedules.js";
+import { confirmCostBackfill, listCostBackfills, previewCostBackfill } from "../cost-backfills.js";
+import { costBackfillBrowseQuery, costBackfillForm, renderCostBackfills, renderCostBackfillPreview } from "../dashboard/cost-backfills.js";
 import { listMetricRecalculations, requestMetricRecalculation } from "../metric-recalculations.js";
 import { metricCorrectionStatus, saveMetricCorrectionPolicy } from "../metric-correction-policy.js";
 import { renderMetricRecalculations } from "../dashboard/metric-recalculations.js";
@@ -26,6 +28,43 @@ const scheduleConflict = (reason: string): boolean => ["metric_schedule_not_acti
   "metric_schedule_supersession_target_conflict"].includes(reason);
 
 export function createMetricJobsControllers(dependencies: Pick<RequestHandlerDependencies, "readerPool" | "pool" | "dashboard">) {
+  const costBackfillFailure = (error: unknown) => {
+    const reason = publicReason(error, "cost_backfill_unavailable");
+    return { reason: error instanceof AppNotFoundError ? "not_found" : reason,
+      status: error instanceof AppNotFoundError || ["cost_schedule_not_found", "cost_backfill_not_found"].includes(reason) ? 404
+        : ["cost_backfill_preview_stale", "cost_backfill_configuration_changed", "cost_schedule_not_active"].includes(reason) ? 409 : 400 };
+  };
+  const adminCostBackfill = async ({ response, target, route, pool, identity, decoder }: AdminRequestContext): Promise<void> => {
+    try {
+      const scope = await requireRegisteredApp(pool, identity, adminAppId(target.pathname) ?? "");
+      if (target.searchParams.size) throw new Error("cost_backfill_request_invalid");
+      if (route.handler === "admin_cost_backfills_list") json(response, 200, await listCostBackfills(pool, scope));
+      else if (route.handler === "admin_cost_backfills_preview") json(response, 200, await previewCostBackfill(pool, scope, await decoder.json()));
+      else json(response, 202, await confirmCostBackfill(pool, scope, await decoder.json()));
+    } catch (error) { const result = costBackfillFailure(error); json(response, result.status, { error: result.reason }); }
+  };
+  const dashboardCostBackfill = async ({ request, response, target, route, pool, session, appId, appIdentity, decoder }: DashboardAppContext): Promise<void> => {
+    try {
+      if (route.handler === "dashboard_cost_backfills_list") {
+        const selection = costBackfillBrowseQuery(target.searchParams);
+        dashboardHtml(response, 200, renderCostBackfills(appId, await listCostBackfills(pool, appIdentity), csrfToken(session.token),
+          roleAllows(session.role, "operate"), selection ? await previewCostBackfill(pool, appIdentity, selection) : undefined));
+      } else {
+        const form = await decoder.form();
+        if (!await authorizeDashboardForm(dependencies, { request, response, session }, form, "cost_backfill", "app", appId)) return;
+        if (target.searchParams.size) throw new Error("cost_backfill_request_invalid");
+        const confirm = route.handler === "dashboard_cost_backfills_confirm", body = costBackfillForm(form, confirm);
+        if (!confirm) dashboardHtml(response, 200, renderCostBackfillPreview(appId, await previewCostBackfill(pool, appIdentity, body), csrfToken(session.token)));
+        else {
+          const saved = await confirmCostBackfill(pool, appIdentity, body);
+          response.writeHead(303, { ...dashboardHeaders, location: `/dashboard/apps/${encodeURIComponent(appId)}/cost-backfills#${saved.receipt}` }).end();
+        }
+      }
+    } catch (error) {
+      const result = costBackfillFailure(error);
+      dashboardHtml(response, result.status, renderMetricScheduleOperationFailed({ reason: result.reason, appId }));
+    }
+  };
   const dashboardMetricRecalculationsList = async ({ response, session, appId, appIdentity }: DashboardAppContext): Promise<void> => {
     dashboardHtml(response, 200, renderMetricRecalculations(appId,
       await listMetricRecalculations(dependencies.readerPool, appIdentity), csrfToken(session.token), roleAllows(session.role, "operate"),
@@ -229,6 +268,12 @@ export function createMetricJobsControllers(dependencies: Pick<RequestHandlerDep
   };
 
   return {
+    admin_cost_backfills_list: { boundary: "admin", handle: adminCostBackfill },
+    admin_cost_backfills_preview: { boundary: "admin", handle: adminCostBackfill },
+    admin_cost_backfills_confirm: { boundary: "admin", handle: adminCostBackfill },
+    dashboard_cost_backfills_list: { boundary: "dashboard_app", handle: dashboardCostBackfill },
+    dashboard_cost_backfills_preview: { boundary: "dashboard_app", handle: dashboardCostBackfill },
+    dashboard_cost_backfills_confirm: { boundary: "dashboard_app", handle: dashboardCostBackfill },
     dashboard_metric_recalculations_list: { boundary: "dashboard_app", handle: dashboardMetricRecalculationsList },
     dashboard_metric_recalculations_preview: { boundary: "dashboard_app", handle: dashboardMetricRecalculationsPreview },
     dashboard_metric_recalculations_request: { boundary: "dashboard_app", handle: dashboardMetricRecalculationsPreview },

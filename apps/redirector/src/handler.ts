@@ -11,7 +11,7 @@ import {
   type RedirectResolution,
   type TrackingLink,
 } from "@openmasu/redirector-core";
-import { appendDurableBatch, uuidV7, withTenant, serveRuntimeHealth, type PayloadStore } from "@openmasu/runtime";
+import { appendDurableBatch, InboxCapacityError, uuidV7, withTenant, serveRuntimeHealth, type PayloadStore } from "@openmasu/runtime";
 
 export type RedirectRateLimiter = {
   allow(key: string): boolean;
@@ -104,6 +104,13 @@ function sendAssociation(response: ServerResponse, body: Buffer, cacheSeconds: n
 function send(response: ServerResponse, result: RedirectResolution): void {
   response.writeHead(result.status, result.headers);
   response.end(result.body);
+}
+
+function capacityResponse(response: ServerResponse, error: unknown): boolean {
+  if (!(error instanceof InboxCapacityError)) return false;
+  response.writeHead(error.status, { "retry-after": String(error.retryAfterSeconds), "cache-control": "no-store" });
+  response.end();
+  return true;
 }
 
 async function persistClick(dependencies: RedirectorDependencies, result: RedirectResolution): Promise<void> {
@@ -220,7 +227,7 @@ export function createRedirectorHandler(dependencies: RedirectorDependencies): R
           ...(clientClass ? { clientClass } : {}),
         });
         try { await persistClick(dependencies, result); }
-        catch { return send(response, fallback); }
+        catch (error) { if (!capacityResponse(response, error)) send(response, fallback); return; }
         return send(response, result);
       }
       try {
@@ -238,8 +245,8 @@ export function createRedirectorHandler(dependencies: RedirectorDependencies): R
         });
         await persistClick(dependencies, result);
         send(response, result);
-      } catch {
-        send(response, fallback);
+      } catch (error) {
+        if (!capacityResponse(response, error)) send(response, fallback);
       }
     })();
   };

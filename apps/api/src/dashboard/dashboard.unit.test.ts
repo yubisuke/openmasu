@@ -407,16 +407,21 @@ describe("M3 zero-JavaScript dashboard", () => {
       csrfToken: "synthetic-csrf",
     };
     const readOnly = renderDashboard(buildDashboardView(base));
-    assert.doesNotMatch(readOnly, /Issue successor key|Register a link domain|>Pause<|>Archive</);
+    assert.doesNotMatch(readOnly, /Issue successor key|Register a link domain|>Pause<|>Resume<|>Archive</);
     const operator = renderDashboard(buildDashboardView({ ...base, canOperate: true }));
     assert.match(operator, />Pause</);
     assert.match(operator, />Archive</);
+    const paused = { ...base, trackingLinks: base.trackingLinks.map(link => ({ ...link, status: "paused" as const })) };
+    assert.match(renderDashboard(buildDashboardView({ ...paused, canOperate: true })), />Resume</);
+    assert.doesNotMatch(renderDashboard(buildDashboardView(paused)), />Resume</);
     assert.doesNotMatch(operator, /Issue successor key|Register a link domain/);
     const admin = renderDashboard(buildDashboardView({ ...base, canOperate: true, canAdminister: true }));
     assert.match(admin, /Issue successor key/);
     assert.match(admin, /Server-to-server keys/);
     assert.match(admin, /postback:first-party/);
     assert.match(admin, /Operator event webhooks/);
+    assert.match(admin, /name="purpose" value="comparison_notifications"/);
+    assert.doesNotMatch(operator, /name="purpose" value="comparison_notifications"/);
     assert.match(admin, /events\.example\.test/);
     assert.match(admin, />Disable</);
     assert.match(admin, /Register a link domain/);

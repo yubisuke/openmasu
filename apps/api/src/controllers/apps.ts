@@ -3,6 +3,9 @@ import { AppNotFoundError, listApps, registerApp, requireRegisteredApp } from ".
 import { activateRuleBundle } from "../rule-bundles.js";
 import { FraudPreviewError,parseFraudPreviewRequest,previewFraudBundle } from "../fraud-preview.js";
 import { renderFraudPreview } from "../dashboard/fraud-preview.js";
+import { FIRST_PARTY_WINDOW_BUNDLE, firstPartyWindowDefinition, type FirstPartyWindowDays } from "@openmasu/contracts/definitions";
+import { AttributionWindowPreviewError, parseAttributionWindowRequest, previewAttributionWindow, attributionWindowSettings } from "../attribution-window-preview.js";
+import { renderAttributionWindowSettings, renderAttributionWindowPreview } from "../dashboard/attribution-window.js";
 import { recordDashboardAudit,csrfToken } from "../session.js";
 import { registerAppLinkIdentity, registerLinkDomain } from "../link-domains.js";
 import { configureGoogleDataManagerDestination } from "../google-data-manager-admin.js";
@@ -174,7 +177,8 @@ export function createAppsControllers(dependencies: Pick<RequestHandlerDependenc
         json(response, 404, { error: "app_not_found" });
       } else {
         const message = error instanceof Error ? error.message : "admin_configuration_invalid";
-        const status = message.endsWith("_already_registered") || message === "rule_bundle_predecessor_mismatch" || message === "fraud_preview_receipt_mismatch" || message === "fraud_preview_blocked" ? 409 : 400;
+        const status = message.endsWith("_already_registered") || message === "rule_bundle_predecessor_mismatch" || message === "fraud_preview_receipt_mismatch" || message === "fraud_preview_blocked"
+          || message === "attribution_window_receipt_mismatch" || message === "attribution_window_preview_blocked" ? 409 : 400;
         json(response, status, { error: message });
       }
     }
@@ -184,22 +188,39 @@ export function createAppsControllers(dependencies: Pick<RequestHandlerDependenc
   const adminFraudPreview=async ({response,target,identity,decoder}:AdminRequestContext):Promise<void>=>{
     try {
       const appIdentity=await requireRegisteredApp(dependencies.pool,identity,adminAppId(target.pathname) ?? "");
-      json(response,200,await previewFraudBundle(dependencies.pool,appIdentity,await decoder.json()));
+      const body = await decoder.json();
+      json(response,200,(body.definition as Record<string,unknown> | undefined)?.id === FIRST_PARTY_WINDOW_BUNDLE
+        ? await previewAttributionWindow(dependencies.pool,appIdentity,body)
+        : await previewFraudBundle(dependencies.pool,appIdentity,body));
     } catch(error) {
       json(response,error instanceof AppNotFoundError ? 404:400,{error:error instanceof AppNotFoundError ? "app_not_found"
-        : error instanceof FraudPreviewError ? error.message:"fraud_preview_unavailable"});
+        : error instanceof FraudPreviewError || error instanceof AttributionWindowPreviewError ? error.message:"fraud_preview_unavailable"});
     }
   };
   const dashboardFraudPreview=async ({request,response,session,appIdentity,decoder}:DashboardAppContext):Promise<void>=>{
     const body=await decoder.form();
     if (!await authorizeDashboardForm(dependencies,{request,response,session},body,"dashboard_configuration","app",appIdentity.appId)) return;
     try {
+      if (body.get("preview_kind") === "first_party_window") {
+        const days = Number(body.get("lookback_days"));
+        if (![1,7,30].includes(days)) throw new AttributionWindowPreviewError("attribution_window_days_invalid");
+        const request = parseAttributionWindowRequest({ definition:firstPartyWindowDefinition(days as FirstPartyWindowDays),
+          date_from:body.get("date_from"),date_to:body.get("date_to"),watermark_at_most:body.get("watermark_at_most") });
+        const preview = await previewAttributionWindow(dependencies.pool,appIdentity,request);
+        dashboardHtml(response,200,renderAttributionWindowPreview({appId:appIdentity.appId,csrfToken:csrfToken(session.token),request,preview}));
+        return;
+      }
       const parsed=parseFraudPreviewRequest({definition:jsonFormValue(body,"definition_json"),watermark_at_most:body.get("watermark_at_most")});
       const preview=await previewFraudBundle(dependencies.pool,appIdentity,parsed);
       dashboardHtml(response,200,renderFraudPreview({appId:appIdentity.appId,csrfToken:csrfToken(session.token),request:parsed,preview}));
-    } catch(error) {dashboardHtml(response,400,renderConfigurationFailed({reason:error instanceof FraudPreviewError ? error.message:"fraud_preview_unavailable"}));}
+    } catch(error) {dashboardHtml(response,400,renderConfigurationFailed({reason:error instanceof FraudPreviewError || error instanceof AttributionWindowPreviewError ? error.message:"fraud_preview_unavailable"}));}
+  };
+  const dashboardAttributionWindow = async ({response,pool,session,appIdentity}:DashboardAppContext):Promise<void> => {
+    dashboardHtml(response,200,renderAttributionWindowSettings({appId:appIdentity.appId,csrfToken:csrfToken(session.token),
+      current:await attributionWindowSettings(pool,appIdentity)}));
   };
   return {
+    dashboard_attribution_window:{boundary:"dashboard_app",handle:dashboardAttributionWindow},
     admin_fraud_preview:{boundary:"admin",handle:adminFraudPreview},
     dashboard_fraud_preview:{boundary:"dashboard_app",handle:dashboardFraudPreview},
     dashboard_apps_create: { boundary: "dashboard_tenant", handle: dashboardAppsCreate },

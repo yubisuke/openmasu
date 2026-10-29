@@ -31,6 +31,7 @@ import {
 } from "./integrity-verifier.js";
 import { processSdkInbox } from "./sdk-worker.js";
 import { SELECTED_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
+import { firstPartyWindowDefinition, firstPartyWindowHash } from "@openmasu/contracts/definitions";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
 import { buildMetricDefinitionsInput } from "./metrics/run.js";
 import { persistCostImport } from "./import/cost.js";
@@ -427,6 +428,55 @@ describe("SDK auxiliary queue recovery", () => {
       [input.tenantId, input.appId, original[0].metric_run_id],
     )).rows[0].artifact);
     assert.deepEqual(saved, original[0]);
+  });
+
+  it("keeps original first-party window revision through durable late-click processing and selected SQL metrics", async () => {
+    const input:Scope={...scope("window-history","sdk-android"),receivedAt:"2026-08-06T00:00:00.000Z"};
+    const clickId=`click_${randomBytes(18).toString("base64url")}`,campaign=`window-campaign-${run}`;
+    const one=firstPartyWindowDefinition(1),thirty=firstPartyWindowDefinition(30);
+    // Synthetic immutable revision setup; API preview/confirmation is covered by
+    // first_party_window_preview_confirm_keeps_history_and_late_install_receipt_revision.
+    const register=async(definition:typeof one,at:string,id:string,previous?:string)=>withTenant(pool,input.tenantId,async client=>{
+      await client.query("INSERT INTO control.apps(tenant_id,app_id,created_at) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[input.tenantId,input.appId,at]);
+      const hash=firstPartyWindowHash(definition);
+      await client.query(`INSERT INTO control.rule_bundle_revisions(rule_bundle_revision_id,tenant_id,app_id,rule_bundle_id,
+        rule_bundle_version,rule_bundle_hash,definition,definition_digest,supersedes_rule_bundle_revision_id,activated_at,actor_ref,artifact)
+        VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$6,$8,$9,'synthetic-window-test',$10::jsonb)`,
+      [id,input.tenantId,input.appId,definition.id,definition.version,hash,JSON.stringify(definition),previous ?? null,at,
+        JSON.stringify({rule_bundle_revision_id:id,rule_bundle_id:definition.id,rule_bundle_version:definition.version,
+          rule_bundle_hash:hash,definition_digest:hash,activated_at:at,
+          ...(previous ? {supersedes_rule_bundle_revision_id:previous}:{})})]);
+    });
+    const firstId=`window-one-${run}`,secondId=`window-thirty-${run}`;
+    await register(one,"2026-08-01T00:00:00.000Z",firstId);
+    const install=record(input,"window-old-install","install",{installation_id:`installation:window-old-${run}`,install_type:"first_install",
+      referrer_status:"available",click_id:clickId,install_begin_at_server_status:"available",install_begin_at_server:input.receivedAt,
+      protected_referrer_evidence_ref:`protected:window-${run}`});
+    await append(input,install);assert.equal(await processSdkInbox(pool,payloadStore,input.tenantId),1);
+    const saved=await withTenant(pool,input.tenantId,client=>client.query("SELECT artifact FROM ledger.attribution_results WHERE tenant_id=$1 AND app_id=$2",[input.tenantId,input.appId]));
+    assert.equal(saved.rows[0].artifact.rule_bundle_hash,firstPartyWindowHash(one));
+    await register(thirty,"2026-08-07T00:00:00.000Z",secondId,firstId);
+    const late:Scope={...input,producer:"redirector",receivedAt:"2026-08-08T00:00:00.000Z"};
+    const click=record(late,"window-late-click","click",{click_id:clickId,tracking_link_id:`window-link-${run}`,campaign_id:campaign,
+      network:"synthetic-network",redirector_click_at:"2026-08-01T00:00:00.000Z",redirector_time_status:"available"});
+    await append(late,click);assert.equal(await processSdkInbox(pool,payloadStore,input.tenantId),1);
+    const old=await withTenant(pool,input.tenantId,client=>client.query("SELECT artifact FROM ledger.attribution_results WHERE tenant_id=$1 AND app_id=$2",[input.tenantId,input.appId]));
+    assert.deepEqual(old.rows,saved.rows,"the late click cannot reinterpret the old one-day install as a 30-day conversion");
+    const fresh:Scope={...input,receivedAt:"2026-08-09T00:00:00.000Z"};
+    const newInstall=record(fresh,"window-new-install","install",{installation_id:`installation:window-new-${run}`,install_type:"first_install",
+      referrer_status:"available",click_id:clickId,install_begin_at_server_status:"available",install_begin_at_server:input.receivedAt,
+      protected_referrer_evidence_ref:`protected:window-new-${run}`});
+    await append(fresh,newInstall);assert.equal(await processSdkInbox(pool,payloadStore,input.tenantId),1);
+    const results=await withTenant(pool,input.tenantId,client=>client.query("SELECT artifact FROM ledger.attribution_results WHERE tenant_id=$1 AND app_id=$2 AND subject_ref=$3",[input.tenantId,input.appId,`installation:window-new-${run}`]));
+    assert.equal(results.rows[0].artifact.reason_code,"valid_install_referrer");
+    assert.equal(results.rows[0].artifact.rule_bundle_hash,firstPartyWindowHash(thirty));
+    const watermark="2026-08-10T00:00:00.000Z",metricInput={metric_definitions:SELECTED_ACQUISITION_METRIC_DEFINITIONS,
+      fx_policy:{policy_version:"synthetic-window-fx",target_currency:"USD",target_scale:6,rounding_mode:"half_even",
+        rates:[{currency:"USD",rate_unscaled:"1",rate_scale:0,source:"synthetic-1-to-1",as_of:watermark}]},
+      metric_evaluations:[{metric_run_id_prefix:`window-metric-${run}`,input_received_at_watermark:watermark,computed_at:watermark,
+        data_freshness:"complete",privacy_state:"after",metric_names:["cohort_install_count"],grouping:{campaign_id:campaign}}]};
+    const metrics=await computeSqlMetricRuns(pool,metricInput,false,{tenant_id:input.tenantId,app_id:input.appId});
+    assert.equal(metrics[0].value_unscaled,"1","only the separately admitted 30-day install qualifies for selected campaign metrics");
   });
 
   it("recovers an AdServices queue failure after base persistence and stays terminal-idempotent", async () => {

@@ -31,11 +31,11 @@ export function decodedPathPart(pathname: string, pattern: RegExp): string | und
   try { return decodeURIComponent(match[1]); } catch { return undefined; }
 }
 
-export function trackingLinkAction(pathname: string): { trackingLinkId: string; status: "paused" | "archived" } | undefined {
-  const match = /\/tracking-links\/([^/]+)\/(pause|archive)$/.exec(pathname);
+export function trackingLinkAction(pathname: string): { trackingLinkId: string; status: "active" | "paused" | "archived" } | undefined {
+  const match = /\/tracking-links\/([^/]+)\/(pause|resume|archive)$/.exec(pathname);
   if (!match) return undefined;
   try {
-    return { trackingLinkId: decodeURIComponent(match[1]), status: match[2] === "pause" ? "paused" : "archived" };
+    return { trackingLinkId: decodeURIComponent(match[1]), status: match[2] === "pause" ? "paused" : match[2] === "resume" ? "active" : "archived" };
   } catch { return undefined; }
 }
 
@@ -52,7 +52,7 @@ export function operatorWebhookDestinationId(pathname: string): string | undefin
 }
 
 export function operatorBulkExportDestinationId(pathname: string): string | undefined {
-  return decodedPathPart(pathname, /\/operator-bulk-exports\/([^/]+)\/disable$/);
+  return decodedPathPart(pathname, /\/operator-bulk-exports\/([^/]+)\/(?:disable|credentials)$/);
 }
 
 export function metricScheduleId(pathname: string): string | undefined {

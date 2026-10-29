@@ -1,6 +1,7 @@
 import { AppNotFoundError, requireRegisteredApp } from "../apps-admin.js";
 import { recordDashboardAudit } from "../session.js";
 import { createTrackingLink, listTrackingLinks, transitionTrackingLink } from "../tracking-links.js";
+import { parseTrackingLinkQuery, TrackingLinkQueryError } from "../tracking-link-query.js";
 import { previewTrackingLink } from "../tracking-link-preview.js";
 import { renderTrackingLinkPreview } from "../dashboard/tracking-link-preview.js";
 import type { RequestHandlerDependencies } from "../http-types.js";
@@ -11,7 +12,7 @@ import { authorizeDashboardForm } from "../http-security.js";
 import { dashboardHeaders } from "../http-responses.js";
 import { renderTrackingLinkTransitionFailed, renderTrackingLinkCreated, renderTrackingLinkCreationFailed } from "../dashboard/action-pages.js";
 
-export function createTrackingControllers(dependencies: Pick<RequestHandlerDependencies, "pool" | "dashboard" | "trackingDestinationAllowlist" | "referrerMaximumEncodedCharacters" | "redirectorBaseUrl" | "redirectorFallbackUrl">) {
+export function createTrackingControllers(dependencies: Pick<RequestHandlerDependencies, "pool" | "dashboard" | "trackingDestinationAllowlist" | "referrerMaximumEncodedCharacters" | "redirectorBaseUrl" | "redirectorFallbackUrl" | "privacySubjectDigestKey">) {
   const previewConfiguration = { fallbackUrl: dependencies.redirectorFallbackUrl ?? "https://play.google.com/store",
     referrerMaximumEncodedCharacters: dependencies.referrerMaximumEncodedCharacters };
   const previewId = (path: string) => decodedPathPart(path, /\/tracking-links\/([^/]+)\/preview$/) ?? "";
@@ -133,11 +134,12 @@ export function createTrackingControllers(dependencies: Pick<RequestHandlerDepen
   const adminTrackingLinksList = async ({ response, target, pool, identity }: AdminRequestContext): Promise<void> => {
     try {
       const appIdentity = await requireRegisteredApp(pool, identity, target.searchParams.get("app_id") ?? "");
-      const data = (await listTrackingLinks(pool, appIdentity.tenantId, appIdentity.appId))
-        .map((link) => listedTrackingLink(dependencies.redirectorBaseUrl, link));
-      json(response, 200, { data });
+      const page = await listTrackingLinks(pool, appIdentity.tenantId, appIdentity.appId,
+        parseTrackingLinkQuery(target.searchParams, true), dependencies.privacySubjectDigestKey);
+      json(response, 200, { ...page, data: page.data.map((link) => listedTrackingLink(dependencies.redirectorBaseUrl, link)) });
     } catch (error) {
       if (error instanceof AppNotFoundError) json(response, 404, { error: "app_not_found" });
+      else if (error instanceof TrackingLinkQueryError) json(response, error.statusCode, { error: error.code });
       else throw error;
     }
     return;

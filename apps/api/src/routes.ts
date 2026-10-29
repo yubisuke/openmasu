@@ -2,6 +2,12 @@ export type RouteAuth = "public" | "admin_bearer" | "sdk_hmac" | "privacy_receip
 export type RouteCapability = "read" | "operate" | "administer";
 
 export type RouteHandler =
+  | "admin_cost_backfills_list"
+  | "admin_cost_backfills_preview"
+  | "admin_cost_backfills_confirm"
+  | "dashboard_cost_backfills_list"
+  | "dashboard_cost_backfills_preview"
+  | "dashboard_cost_backfills_confirm"
   | "admin_tracking_link_preview"
   | "dashboard_tracking_link_preview"
   | "admin_event_catalog_list"
@@ -17,10 +23,14 @@ export type RouteHandler =
   | "dashboard_synthetic_validation_close"
   | "admin_fraud_preview"
   | "dashboard_fraud_preview"
+  | "dashboard_attribution_window"
+  | "admin_privacy_jobs"
+  | "dashboard_privacy_jobs"
   | "admin_comparison_read"
   | "admin_comparison_mutate"
   | "dashboard_comparison_runs"
   | "dashboard_comparison_runs_mutate"
+  | "dashboard_comparison_runs_preview"
   | "health"
   | "ready"
   | "operational_metrics"
@@ -51,6 +61,9 @@ export type RouteHandler =
   | "admin_operator_bulk_exports_list"
   | "admin_operator_bulk_exports_register"
   | "admin_operator_bulk_exports_disable"
+  | "admin_operator_bulk_exports_rotate"
+  | "dashboard_operator_bulk_exports_credentials"
+  | "dashboard_operator_bulk_exports_rotate"
   | "admin_metric_schedules_list"
   | "admin_metric_schedules_register"
   | "admin_metric_schedules_disable"
@@ -91,6 +104,8 @@ export type RouteHandler =
   | "dashboard_ingest_recovery_list"
   | "dashboard_ingest_recovery_request"
   | "admin_attribution_report"
+  | "admin_cost_joinability"
+  | "dashboard_cost_joinability"
   | "admin_apple_postbacks"
   | "dashboard_apple_postbacks"
   | "dashboard_attribution_report"
@@ -154,6 +169,12 @@ function exactPathPattern(path: string): RegExp {
 }
 
 export const routes: readonly RouteDefinition[] = [
+  { handler: "admin_cost_backfills_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/cost-backfills$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "admin_cost_backfills_preview", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/cost-backfills\/preview$/, auth: "admin_bearer", mutates: false, capability: "operate" },
+  { handler: "admin_cost_backfills_confirm", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/cost-backfills$/, auth: "admin_bearer", mutates: true, capability: "operate" },
+  { handler: "dashboard_cost_backfills_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/cost-backfills$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_cost_backfills_preview", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/cost-backfills\/preview$/, auth: "dashboard_session", mutates: false, capability: "operate" },
+  { handler: "dashboard_cost_backfills_confirm", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/cost-backfills$/, auth: "dashboard_session", mutates: true, capability: "operate" },
   { handler: "admin_tracking_link_preview", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/tracking-links\/[^/]+\/preview$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "dashboard_tracking_link_preview", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/tracking-links\/[^/]+\/preview$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "admin_event_catalog_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/event-catalog$/, auth: "admin_bearer", mutates: false, capability: "administer" },
@@ -171,6 +192,7 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "admin_comparison_mutate", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/comparisons$/, auth: "admin_bearer", mutates: true, capability: "operate" },
   { handler: "dashboard_comparison_runs", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/(?:comparisons|comparison-runs\/[^/]+\.json)$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_comparison_runs_mutate", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/comparisons$/, auth: "dashboard_session", mutates: true, capability: "operate" },
+  { handler: "dashboard_comparison_runs_preview", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/comparisons\/preview$/, auth: "dashboard_session", mutates: false, capability: "operate" },
   { handler: "health", method: "GET", pattern: /^\/health$/, auth: "public", mutates: false },
   { handler: "ready", method: "GET", pattern: /^\/ready$/, auth: "public", mutates: false },
   { handler: "operational_metrics", method: "GET", pattern: /^\/metrics$/, auth: "admin_bearer", mutates: false, capability: "read", tenantWideOnly: true },
@@ -206,6 +228,9 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "admin_operator_bulk_exports_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-bulk-exports$/, auth: "admin_bearer", mutates: false, capability: "administer" },
   { handler: "admin_operator_bulk_exports_register", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-bulk-exports$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_operator_bulk_exports_disable", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-bulk-exports\/[^/]+\/disable$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "admin_operator_bulk_exports_rotate", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-bulk-exports\/[^/]+\/credentials$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "dashboard_operator_bulk_exports_credentials", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/operator-bulk-exports\/[^/]+\/credentials$/, auth: "dashboard_session", mutates: false, capability: "administer" },
+  { handler: "dashboard_operator_bulk_exports_rotate", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/operator-bulk-exports\/[^/]+\/credentials$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "admin_metric_schedules_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-schedules$/, auth: "admin_bearer", mutates: false, capability: "administer" },
   { handler: "admin_metric_schedules_register", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-schedules$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_metric_schedules_disable", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/metric-schedules\/[^/]+\/disable$/, auth: "admin_bearer", mutates: true, capability: "administer" },
@@ -223,7 +248,7 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_metric_recalculations_request", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/metric-recalculations$/, auth: "dashboard_session", mutates: true, capability: "operate" },
   { handler: "admin_tracking_links_list", method: "GET", pattern: /^\/v1\/admin\/tracking-links$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_tracking_links", method: "POST", pattern: /^\/v1\/admin\/tracking-links$/, auth: "admin_bearer", mutates: true, capability: "operate" },
-  { handler: "admin_tracking_link_transition", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/tracking-links\/[^/]+\/(?:pause|archive)$/, auth: "admin_bearer", mutates: true, capability: "operate" },
+  { handler: "admin_tracking_link_transition", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/tracking-links\/[^/]+\/(?:pause|resume|archive)$/, auth: "admin_bearer", mutates: true, capability: "operate" },
   { handler: "admin_link_domain", method: "POST", pattern: /^\/v1\/admin\/link-domain$/, auth: "admin_bearer", mutates: true, capability: "administer", tenantWideOnly: true },
   { handler: "admin_app_link_identity", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/link-identity$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_privacy", method: "POST", pattern: /^\/v1\/admin\/privacy-requests$/, auth: "admin_bearer", mutates: true, capability: "operate" },
@@ -241,6 +266,8 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_ingest_recovery_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/ingest-recovery$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_ingest_recovery_request", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/ingest-recovery$/, auth: "dashboard_session", mutates: true, capability: "operate" },
   { handler: "admin_attribution_report", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/attribution$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "admin_cost_joinability", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/cost-joinability$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "dashboard_cost_joinability", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/cost-joinability$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "admin_apple_postbacks", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/apple-postbacks$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_metric_explanation", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/metrics\/[^/]+\/explanation$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "dashboard_root", method: "GET", pattern: /^\/dashboard\/?$/, auth: "public", mutates: false },
@@ -265,7 +292,7 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_metric_schedules_replace", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/metric-schedules\/[^/]+\/replace$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_tracking_links_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/tracking-links$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_tracking_links_create", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/tracking-links$/, auth: "dashboard_session", mutates: true, capability: "operate" },
-  { handler: "dashboard_tracking_link_transition", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/tracking-links\/[^/]+\/(?:pause|archive)$/, auth: "dashboard_session", mutates: true, capability: "operate" },
+  { handler: "dashboard_tracking_link_transition", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/tracking-links\/[^/]+\/(?:pause|resume|archive)$/, auth: "dashboard_session", mutates: true, capability: "operate" },
   { handler: "dashboard_sdk_keys_issue", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/sdk-keys$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_sdk_keys_retire", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/sdk-keys\/[^/]+\/retire$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_server_keys_issue", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/server-keys$/, auth: "dashboard_session", mutates: true, capability: "administer" },
@@ -280,6 +307,9 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_conversion_schema", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/conversion-schemas$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_rule_bundle", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/rule-bundles$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_fraud_preview", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/rule-bundles\/preview$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_attribution_window", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/attribution-window$/, auth: "dashboard_session", mutates: false, capability: "administer" },
+  { handler: "admin_privacy_jobs", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/privacy-jobs(?:\/[^/]+)?$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "dashboard_privacy_jobs", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/privacy-jobs(?:\/[^/]+)?$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_google_data_manager", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/google-data-manager$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_app", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_analyses", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/analyses$/, auth: "dashboard_session", mutates: false, capability: "read" },

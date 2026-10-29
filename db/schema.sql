@@ -5491,3 +5491,340 @@ GRANT SELECT,INSERT ON control.event_catalog_revisions TO openmasu_app;
 GRANT SELECT ON control.event_catalog_current TO openmasu_app;
 GRANT SELECT ON control.event_catalog_revisions,control.event_catalog_current TO openmasu_reader;
 GRANT TRUNCATE ON control.event_catalog_revisions TO openmasu_seed;
+
+-- 086_cost_backfills.sql
+-- Only fixed, non-secret acquisition limits are exposed to read-only previews.
+CREATE FUNCTION control.cost_backfill_configuration(definition jsonb) RETURNS jsonb
+LANGUAGE sql IMMUTABLE STRICT AS $$
+  SELECT jsonb_build_object('provider',definition->'provider','api_version',definition->'api_version',
+    'currency',definition->'currency','lag_days',definition->'lag_days','limits',definition->'limits')
+$$;
+ALTER TABLE control.cost_schedules ADD COLUMN backfill_configuration jsonb
+  GENERATED ALWAYS AS (control.cost_backfill_configuration(definition)) STORED;
+GRANT SELECT(backfill_configuration) ON control.cost_schedules TO openmasu_reader;
+
+CREATE TABLE control.cost_backfills (
+  receipt text PRIMARY KEY CHECK (receipt ~ '^[a-f0-9]{64}$'),
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  cost_schedule_id control.identifier NOT NULL,
+  definition_digest text NOT NULL CHECK (definition_digest ~ '^[a-f0-9]{64}$'),
+  as_of control.canonical_timestamp NOT NULL,
+  parent_receipt text,
+  plan jsonb NOT NULL CHECK (jsonb_typeof(plan)='object' AND octet_length(plan::text)<=65536),
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  UNIQUE (tenant_id,app_id,cost_schedule_id,receipt),
+  FOREIGN KEY (tenant_id,app_id,cost_schedule_id) REFERENCES control.cost_schedules(tenant_id,app_id,cost_schedule_id),
+  FOREIGN KEY (tenant_id,app_id,cost_schedule_id,parent_receipt) REFERENCES control.cost_backfills(tenant_id,app_id,cost_schedule_id,receipt)
+);
+CREATE TABLE control.cost_backfill_days (
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  cost_schedule_id control.identifier NOT NULL,
+  receipt text NOT NULL,
+  target_date date NOT NULL,
+  state text NOT NULL DEFAULT 'queued' CHECK (state IN ('queued','processing','retry','complete','empty','failed','stopped','skipped')),
+  attempts integer NOT NULL DEFAULT 0 CHECK (attempts BETWEEN 0 AND 3),
+  next_attempt_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  safe_reason text CHECK (safe_reason IN ('source_unavailable','source_rejected','source_invalid','acquisition_timeout',
+    'retry_exhausted','reauth_required','schedule_stopped','configuration_changed','covered_by_refresh')),
+  row_count integer CHECK (row_count BETWEEN 0 AND 100000),
+  import_run_id uuid,
+  snapshot_digest text CHECK (snapshot_digest ~ '^[a-f0-9]{64}$'),
+  updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  PRIMARY KEY (receipt,target_date),
+  UNIQUE (tenant_id,app_id,cost_schedule_id,receipt,target_date),
+  FOREIGN KEY (tenant_id,app_id,cost_schedule_id,receipt) REFERENCES control.cost_backfills(tenant_id,app_id,cost_schedule_id,receipt)
+);
+ALTER TABLE control.cost_schedule_checkpoints ADD COLUMN backfill_receipt text;
+ALTER TABLE control.cost_schedule_checkpoints ADD COLUMN backfill_day date;
+ALTER TABLE control.cost_schedule_checkpoints ADD CONSTRAINT cost_backfill_claim_pair
+  CHECK ((backfill_receipt IS NULL)=(backfill_day IS NULL));
+ALTER TABLE control.cost_schedule_checkpoints ADD CONSTRAINT cost_backfill_claim_scope
+  FOREIGN KEY (tenant_id,app_id,cost_schedule_id,backfill_receipt,backfill_day)
+  REFERENCES control.cost_backfill_days(tenant_id,app_id,cost_schedule_id,receipt,target_date);
+CREATE INDEX cost_backfill_due ON control.cost_backfill_days(tenant_id,state,next_attempt_at);
+CREATE INDEX cost_backfill_history ON control.cost_backfills(tenant_id,app_id,created_at DESC,receipt);
+CREATE INDEX cost_backfill_day_scope ON control.cost_backfill_days(tenant_id,app_id,cost_schedule_id,target_date);
+ALTER TABLE control.cost_backfills ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control.cost_backfills FORCE ROW LEVEL SECURITY;
+ALTER TABLE control.cost_backfill_days ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control.cost_backfill_days FORCE ROW LEVEL SECURITY;
+CREATE POLICY cost_backfills_tenant ON control.cost_backfills
+  USING (tenant_id=current_setting('openmasu.tenant_id',true)) WITH CHECK (tenant_id=current_setting('openmasu.tenant_id',true));
+CREATE POLICY cost_backfill_days_tenant ON control.cost_backfill_days
+  USING (tenant_id=current_setting('openmasu.tenant_id',true)) WITH CHECK (tenant_id=current_setting('openmasu.tenant_id',true));
+CREATE TRIGGER cost_backfills_append_only BEFORE UPDATE OR DELETE ON control.cost_backfills
+  FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
+CREATE FUNCTION control.guard_cost_backfill_day() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF (NEW.tenant_id,NEW.app_id,NEW.cost_schedule_id,NEW.receipt,NEW.target_date)
+    IS DISTINCT FROM (OLD.tenant_id,OLD.app_id,OLD.cost_schedule_id,OLD.receipt,OLD.target_date)
+    OR (OLD.state IN ('complete','empty','failed','stopped','skipped') AND NEW IS DISTINCT FROM OLD) THEN
+    RAISE EXCEPTION 'cost backfill identity and terminal results are immutable';
+  END IF;
+  RETURN NEW;
+END
+$$;
+CREATE TRIGGER cost_backfill_day_identity BEFORE UPDATE ON control.cost_backfill_days
+  FOR EACH ROW EXECUTE FUNCTION control.guard_cost_backfill_day();
+REVOKE ALL ON control.cost_backfills,control.cost_backfill_days FROM PUBLIC;
+GRANT SELECT,INSERT ON control.cost_backfills TO openmasu_app;
+GRANT SELECT,INSERT,UPDATE ON control.cost_backfill_days TO openmasu_app;
+GRANT SELECT ON control.cost_backfills,control.cost_backfill_days TO openmasu_reader;
+GRANT TRUNCATE ON control.cost_backfills,control.cost_backfill_days TO openmasu_seed;
+
+-- 087_comparison_local_operand.sql
+-- Provenance belongs to the storage receipt, never to operator-supplied snapshot JSON.
+ALTER TABLE control.comparison_snapshots ADD COLUMN provenance jsonb NOT NULL
+  DEFAULT '{"source":"operator_uploaded"}'::jsonb
+  CHECK (jsonb_typeof(provenance)='object' AND octet_length(provenance::text)<=2048
+    AND provenance->>'source' IN ('operator_uploaded','server_saved_runs'));
+
+-- 088_comparison_notifications.sql
+-- Empty event selection is reserved by registration for aggregate comparison notifications.
+ALTER TABLE control.operator_webhook_destinations DROP CONSTRAINT operator_webhook_destinations_allowed_events_check;
+ALTER TABLE control.operator_webhook_destinations ADD CONSTRAINT operator_webhook_destinations_allowed_events_check CHECK (
+  cardinality(allowed_events) BETWEEN 0 AND 5
+  AND allowed_events <@ ARRAY['session_start','custom_event','purchase','refund','ad_revenue']::text[]
+);
+
+CREATE TABLE control.comparison_notifications (
+  tenant_id control.identifier NOT NULL,
+  app_id control.identifier NOT NULL,
+  comparison_id control.identifier PRIMARY KEY,
+  destination_id control.identifier NOT NULL,
+  enabled boolean NOT NULL DEFAULT true,
+  muted boolean NOT NULL DEFAULT false,
+  cooldown_seconds integer NOT NULL CHECK (cooldown_seconds BETWEEN 60 AND 86400),
+  observed_state text CHECK (observed_state IN ('within_threshold','threshold_exceeded','missing_input','incomparable','unknown')),
+  last_enqueued_state text CHECK (last_enqueued_state IN ('within_threshold','threshold_exceeded','missing_input','incomparable','unknown')),
+  last_enqueued_at timestamptz,
+  sequence bigint NOT NULL DEFAULT 0 CHECK (sequence>=0),
+  updated_at timestamptz NOT NULL,
+  FOREIGN KEY (tenant_id,app_id,comparison_id) REFERENCES control.comparison_definitions(tenant_id,app_id,comparison_id),
+  FOREIGN KEY (tenant_id,app_id,destination_id) REFERENCES control.operator_webhook_destinations(tenant_id,app_id,destination_id)
+);
+ALTER TABLE control.comparison_notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control.comparison_notifications FORCE ROW LEVEL SECURITY;
+CREATE POLICY comparison_notifications_tenant ON control.comparison_notifications
+  USING (tenant_id=current_setting('openmasu.tenant_id',true)) WITH CHECK (tenant_id=current_setting('openmasu.tenant_id',true));
+REVOKE ALL ON control.comparison_notifications FROM PUBLIC;
+GRANT SELECT,INSERT,UPDATE ON control.comparison_notifications TO openmasu_app;
+GRANT SELECT ON control.comparison_notifications TO openmasu_reader;
+GRANT TRUNCATE ON control.comparison_notifications TO openmasu_seed;
+
+ALTER TABLE ephemeral.operator_webhook_deliveries
+  ALTER COLUMN logical_event_id DROP NOT NULL,
+  ALTER COLUMN record_id DROP NOT NULL,
+  ADD COLUMN comparison_id control.identifier,
+  ADD COLUMN comparison_run_id text,
+  ADD COLUMN comparison_epoch text,
+  ADD COLUMN comparison_state text,
+  ADD COLUMN comparison_sequence bigint,
+  ADD CONSTRAINT operator_webhook_comparison_scope_fk FOREIGN KEY (tenant_id,app_id,comparison_id)
+    REFERENCES control.comparison_definitions(tenant_id,app_id,comparison_id),
+  ADD CONSTRAINT operator_webhook_comparison_sequence_unique UNIQUE(comparison_id,comparison_sequence);
+ALTER TABLE ephemeral.operator_webhook_deliveries DROP CONSTRAINT operator_webhook_deliveries_event_name_check;
+ALTER TABLE ephemeral.operator_webhook_deliveries ADD CONSTRAINT operator_webhook_delivery_subject_check CHECK (
+  (event_name IN ('session_start','custom_event','purchase','refund','ad_revenue')
+    AND logical_event_id IS NOT NULL AND record_id IS NOT NULL
+    AND comparison_id IS NULL AND comparison_run_id IS NULL AND comparison_epoch IS NULL AND comparison_state IS NULL AND comparison_sequence IS NULL)
+  OR (event_name='comparison_state_changed' AND logical_event_id IS NULL AND record_id IS NULL
+    AND comparison_id IS NOT NULL AND comparison_run_id IS NOT NULL AND comparison_epoch IS NOT NULL
+    AND comparison_state IS NOT NULL AND comparison_sequence IS NOT NULL
+    AND comparison_run_id ~ '^[a-f0-9]{64}$' AND comparison_epoch ~ '^[a-f0-9]{32}$'
+    AND comparison_state IN ('within_threshold','threshold_exceeded','missing_input','incomparable','unknown') AND comparison_sequence>0)
+);
+GRANT SELECT(comparison_id,comparison_state) ON ephemeral.operator_webhook_deliveries TO openmasu_reader;
+CREATE INDEX operator_webhook_comparison_receipts_idx ON ephemeral.operator_webhook_deliveries
+  (tenant_id,app_id,updated_at DESC,delivery_id DESC) WHERE comparison_id IS NOT NULL;
+
+-- 089_privacy_job_progress.sql
+-- Reader-facing projection, not access to subjects, protected references or raw artifacts.
+-- migrateDatabase creates this under SET LOCAL ROLE openmasu_owner, a NOLOGIN,
+-- NOBYPASSRLS owner. Explicit tenant/app predicates remain mandatory because
+-- existing owner-only discovery policies can see work queues across tenants.
+-- No SELECT permission on either private privacy table is granted to readers.
+CREATE INDEX privacy_deletion_jobs_progress_idx
+  ON control.privacy_deletion_jobs (tenant_id,app_id,requested_at DESC,privacy_request_id COLLATE "C" DESC);
+
+CREATE FUNCTION control.privacy_job_progress(_app_id text, _request_id text DEFAULT NULL)
+RETURNS TABLE (
+  privacy_request_id text, requested_at text, completed_at text, payload_state text,
+  payload_total bigint, payload_purged bigint, payload_failed bigint,
+  metric_total bigint, metric_completed bigint, metric_pending bigint, metric_failed bigint,
+  metric_unavailable bigint
+)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+  SELECT j.privacy_request_id::text,j.requested_at::text,j.completed_at::text,j.status,
+    p.total,p.purged,p.failed,m.total,m.completed,m.pending,m.failed,m.unavailable
+  FROM (
+    SELECT privacy_request_id,tenant_id,app_id,requested_at,completed_at,status
+    FROM control.privacy_deletion_jobs
+    WHERE tenant_id=current_setting('openmasu.tenant_id',true) AND app_id=_app_id
+      AND (_request_id IS NULL OR privacy_request_id=_request_id)
+    ORDER BY requested_at DESC,privacy_request_id COLLATE "C" DESC LIMIT 51
+  ) j
+  CROSS JOIN LATERAL (
+    SELECT count(*) AS total,count(*) FILTER(WHERE status='purged') AS purged,
+      count(*) FILTER(WHERE status='queued' AND last_error_code IS NOT NULL) AS failed
+    FROM control.privacy_payload_purges
+    WHERE tenant_id=j.tenant_id AND app_id=j.app_id AND privacy_request_id=j.privacy_request_id
+  ) p
+  CROSS JOIN LATERAL (
+    SELECT count(*) AS total,count(*) FILTER(WHERE i.state='completed') AS completed,
+      count(*) FILTER(WHERE i.state IN ('queued','processing','retry')) AS pending,
+      count(*) FILTER(WHERE i.state='failed') AS failed,
+      count(*) FILTER(WHERE i.state IN ('skipped','unavailable')) AS unavailable
+    FROM control.metric_recalculation_jobs r
+    JOIN control.metric_recalculation_items i USING(tenant_id,app_id,recalculation_id)
+    WHERE r.tenant_id=j.tenant_id AND r.app_id=j.app_id AND r.privacy_request_id=j.privacy_request_id
+      AND r.trigger_kind='privacy_deletion'
+  ) m
+  ORDER BY j.requested_at DESC,j.privacy_request_id COLLATE "C" DESC
+$$;
+REVOKE ALL ON FUNCTION control.privacy_job_progress(text,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION control.privacy_job_progress(text,text) TO openmasu_app,openmasu_reader;
+
+-- 090_inbox_admission.sql
+-- Capacity is the unresolved durable inbox, not retained history or fraud risk.
+-- NULL means a pre-upgrade body whose plaintext byte size was not recorded.
+ALTER TABLE ledger.ingest_batches ADD COLUMN body_bytes bigint CHECK (body_bytes >= 0);
+
+CREATE TABLE control.inbox_admission_states (
+  scope_key text PRIMARY KEY,
+  blocked boolean NOT NULL
+);
+ALTER TABLE control.inbox_admission_states ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control.inbox_admission_states FORCE ROW LEVEL SECURITY;
+CREATE POLICY inbox_admission_owner ON control.inbox_admission_states
+  TO openmasu_owner USING (true) WITH CHECK (true);
+REVOKE ALL ON control.inbox_admission_states FROM PUBLIC, openmasu_app, openmasu_reader, openmasu_seed;
+GRANT TRUNCATE ON control.inbox_admission_states TO openmasu_seed;
+CREATE POLICY privacy_payload_purges_admission_owner ON control.privacy_payload_purges
+  FOR SELECT TO openmasu_owner USING (true);
+CREATE INDEX privacy_payload_purges_admission_idx ON control.privacy_payload_purges (tenant_id,app_id,payload_ref)
+  WHERE status='purged';
+
+-- Only the decision leaves this boundary: ordinary readers cannot obtain
+-- cross-tenant totals or invoke the admission function. Existing SELECT-only
+-- owner policies on ingest batches/states allow the bounded aggregate here.
+CREATE FUNCTION control.admit_inbox_batch(
+  _tenant_id text, _app_id text, _body_bytes bigint,
+  _app_count bigint, _app_bytes bigint, _global_count bigint, _global_bytes bigint,
+  _resume_percent integer
+) RETURNS text
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog
+AS $$
+DECLARE
+  app_key text := jsonb_build_array(_tenant_id, _app_id)::text;
+  global_count bigint;
+  global_bytes numeric;
+  app_count bigint;
+  app_bytes numeric;
+  unknown_bytes boolean;
+  global_blocked boolean;
+  app_blocked boolean;
+BEGIN
+  IF _tenant_id IS DISTINCT FROM current_setting('openmasu.tenant_id', true)
+    OR _app_id IS NULL OR _body_bytes IS NULL OR _body_bytes < 0
+    OR least(_app_count, _app_bytes, _global_count, _global_bytes) < 1
+    OR _app_count IS NULL OR _app_bytes IS NULL OR _global_count IS NULL OR _global_bytes IS NULL
+    OR _resume_percent IS NULL OR _resume_percent NOT BETWEEN 1 AND 99 THEN
+    RAISE EXCEPTION 'inbox_admission_scope_or_policy_invalid';
+  END IF;
+  -- Held through payload creation and the batch/state INSERT commit. The
+  -- caller acquires its shared privacy tenant fence BEFORE this global lock.
+  PERFORM pg_advisory_xact_lock(hashtextextended('openmasu:inbox-admission:v1', 0));
+  INSERT INTO control.inbox_admission_states VALUES ('global', false), (app_key, false)
+    ON CONFLICT DO NOTHING;
+
+  SELECT count(*), coalesce(sum(batch.body_bytes), 0),
+    count(*) FILTER (WHERE batch.tenant_id=_tenant_id AND batch.app_id=_app_id),
+    coalesce(sum(batch.body_bytes) FILTER (WHERE batch.tenant_id=_tenant_id AND batch.app_id=_app_id), 0),
+    coalesce(bool_or(batch.body_bytes IS NULL), false)
+  INTO global_count, global_bytes, app_count, app_bytes, unknown_bytes
+  FROM ledger.ingest_batches AS batch
+  JOIN LATERAL (
+    SELECT state.status, state.reason_code FROM ledger.ingest_batch_states AS state
+    WHERE state.ingest_batch_id=batch.ingest_batch_id
+      AND state.tenant_id=batch.tenant_id AND state.app_id=batch.app_id
+    ORDER BY state.ingest_batch_state_seq DESC LIMIT 1
+  ) AS latest ON true
+  WHERE (latest.status IN ('pending', 'failed')
+    OR (latest.status='processed' AND latest.reason_code='post_processing_pending'))
+    AND NOT EXISTS (
+      SELECT 1 FROM control.privacy_payload_purges AS purge
+      WHERE purge.tenant_id=batch.tenant_id AND purge.app_id=batch.app_id
+        AND purge.payload_ref=batch.body_ref AND purge.status='purged'
+    );
+  IF unknown_bytes THEN RETURN 'inbox_capacity_unknown'; END IF;
+
+  SELECT blocked INTO global_blocked FROM control.inbox_admission_states WHERE scope_key='global';
+  SELECT blocked INTO app_blocked FROM control.inbox_admission_states WHERE scope_key=app_key;
+  global_blocked := global_blocked AND NOT (global_count <= floor(_global_count::numeric*_resume_percent/100)
+    AND global_bytes <= floor(_global_bytes::numeric*_resume_percent/100));
+  app_blocked := app_blocked AND NOT (app_count <= floor(_app_count::numeric*_resume_percent/100)
+    AND app_bytes <= floor(_app_bytes::numeric*_resume_percent/100));
+  UPDATE control.inbox_admission_states SET blocked=global_blocked WHERE scope_key='global';
+  UPDATE control.inbox_admission_states SET blocked=app_blocked WHERE scope_key=app_key;
+  IF global_blocked OR global_count+1 > _global_count OR global_bytes+_body_bytes > _global_bytes THEN
+    UPDATE control.inbox_admission_states SET blocked=true WHERE scope_key='global';
+    RETURN 'inbox_global_capacity';
+  END IF;
+  IF app_blocked OR app_count+1 > _app_count OR app_bytes+_body_bytes > _app_bytes THEN
+    UPDATE control.inbox_admission_states SET blocked=true WHERE scope_key=app_key;
+    RETURN 'inbox_app_capacity';
+  END IF;
+  UPDATE control.inbox_admission_states
+    SET blocked=(global_count+1 >= _global_count OR global_bytes+_body_bytes >= _global_bytes)
+    WHERE scope_key='global';
+  UPDATE control.inbox_admission_states
+    SET blocked=(app_count+1 >= _app_count OR app_bytes+_body_bytes >= _app_bytes)
+    WHERE scope_key=app_key;
+  RETURN 'accepted';
+END
+$$;
+REVOKE ALL ON FUNCTION control.admit_inbox_batch(text,text,bigint,bigint,bigint,bigint,bigint,integer) FROM PUBLIC, openmasu_reader, openmasu_seed;
+GRANT EXECUTE ON FUNCTION control.admit_inbox_batch(text,text,bigint,bigint,bigint,bigint,bigint,integer) TO openmasu_app;
+
+-- 091_operator_bulk_credentials.sql
+CREATE TABLE control.operator_bulk_export_credential_revisions (
+  credential_revision_seq bigint GENERATED ALWAYS AS IDENTITY (SEQUENCE NAME control.operator_bulk_credential_revision_seq) PRIMARY KEY,
+  tenant_id text NOT NULL,
+  app_id text NOT NULL,
+  destination_id text NOT NULL,
+  credential_ref text NOT NULL,
+  credential_digest text NOT NULL CHECK (credential_digest ~ '^[a-f0-9]{64}$'),
+  changed_at control.canonical_timestamp NOT NULL,
+  FOREIGN KEY (tenant_id,app_id,destination_id)
+    REFERENCES control.operator_bulk_export_destinations(tenant_id,app_id,destination_id)
+);
+CREATE INDEX operator_bulk_credentials_current ON control.operator_bulk_export_credential_revisions
+  (tenant_id,app_id,destination_id,credential_revision_seq DESC);
+ALTER TABLE control.operator_bulk_export_credential_revisions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control.operator_bulk_export_credential_revisions FORCE ROW LEVEL SECURITY;
+CREATE POLICY operator_bulk_credentials_tenant ON control.operator_bulk_export_credential_revisions
+  USING (tenant_id=current_setting('openmasu.tenant_id',true))
+  WITH CHECK (tenant_id=current_setting('openmasu.tenant_id',true));
+CREATE TRIGGER operator_bulk_credentials_append_only BEFORE UPDATE OR DELETE
+  ON control.operator_bulk_export_credential_revisions
+  FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
+-- Remove the owner's default reader table grant before exposing status columns.
+REVOKE ALL ON control.operator_bulk_export_credential_revisions FROM PUBLIC,openmasu_reader;
+GRANT SELECT,INSERT ON control.operator_bulk_export_credential_revisions TO openmasu_app;
+GRANT SELECT (credential_revision_seq,tenant_id,app_id,destination_id,changed_at)
+  ON control.operator_bulk_export_credential_revisions TO openmasu_reader;
+GRANT TRUNCATE ON control.operator_bulk_export_credential_revisions TO openmasu_seed;
+GRANT USAGE,SELECT ON SEQUENCE control.operator_bulk_credential_revision_seq TO openmasu_app;
+
+-- 092_first_party_window_activations.sql
+-- Window profiles share a contract version; their full definition hashes identify
+-- their meaning. Each explicit activation (including 1 -> 30 -> 1) needs its own
+-- immutable revision and receipt time. Other bundle families retain version uniqueness.
+ALTER TABLE control.rule_bundle_revisions
+  DROP CONSTRAINT rule_bundle_revisions_tenant_id_app_id_rule_bundle_id_rule__key;
+CREATE UNIQUE INDEX rule_bundle_version_once_except_first_party_window
+  ON control.rule_bundle_revisions(tenant_id,app_id,rule_bundle_id,rule_bundle_version)
+  WHERE rule_bundle_id <> 'attribution-first-party-window';

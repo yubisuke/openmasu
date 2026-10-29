@@ -1,4 +1,5 @@
 import type { RequestListener } from "node:http";
+import { InboxCapacityError } from "@openmasu/runtime";
 import { AppNotFoundError, requireRegisteredApp } from "./apps-admin.js";
 import { routeAllows } from "./authorization.js";
 import { ComparisonExportError } from "./comparison-export.js";
@@ -90,7 +91,12 @@ export function createRequestHandler(dependencies: RequestHandlerDependencies): 
           throw error;
         }
       }
-    })().catch(() => {
+    })().catch((error) => {
+      if (error instanceof InboxCapacityError && !response.headersSent) {
+        response.setHeader("retry-after", String(error.retryAfterSeconds));
+        json(response, error.status, { error: error.reason });
+        return;
+      }
       internalError = true;
       if (!response.headersSent) json(response, 500, { error: "internal_error" });
       else response.end();

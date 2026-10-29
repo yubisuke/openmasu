@@ -34,7 +34,15 @@
     "./metric-comparison": {
       "types": "./src/metric-comparison.ts",
       "default": "./src/metric-comparison.ts"
-    }
+    },
+    "./report-snapshot": "./src/report-snapshot.ts",
+    "./metric-series": "./src/metric-series.ts",
+    "./metric-freshness-query": "./src/metric-freshness-query.ts",
+    "./comparison-export": "./src/comparison-export.ts",
+    "./fixed-comparison": "./src/fixed-comparison.ts",
+    "./metric-report-query": "./src/metric-report-query.ts",
+    "./metric-report-read": "./src/metric-report-read.ts",
+    "./acquisition-kpi-key": "./src/acquisition-kpi-key.ts"
   },
   "scripts": {
     "db:migrate": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/runtime/src/migrate.ts",

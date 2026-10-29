@@ -13,6 +13,7 @@ import { aggregateCsvToSnapshot, reportToSnapshot } from "./report-to-snapshot.j
 import { renderComparison } from "./cohort-comparison-html.js";
 import { syntheticExternalComparisonCases, syntheticExternalComparisonPair } from "./synthetic-external-comparison-cases.js";
 import type { ExternalCohortDeclaration } from "../apps/api/src/external-calculation-declaration.js";
+import { metricFreshness } from "@openmasu/runtime/metric-freshness";
 
 const fixture = JSON.parse(readFileSync("fixtures/v0.4/33-stage-b-cohort-metrics/input.json", "utf8"));
 const golden = JSON.parse(readFileSync("fixtures/v0.4/33-stage-b-cohort-metrics/expected_metric_runs.json", "utf8"))
@@ -178,6 +179,16 @@ it("rejects same-name but different denominator window refund FX outcome and mat
     ["dated-purchase-refund-FX", "fx", d => { d.fx!.rates[1].rate_unscaled = "14"; }],
     ["dated-purchase-refund-FX", "fx", d => { d.fx!.rounding_mode = "half_up"; }],
     ["calendar-Tokyo-LTV", "window", d => { d.window.type = "elapsed"; d.calendar_cohort_policy = null; d.cohort_date_basis = null; d.cost_reporting_time_zone = null; }],
+    ["native-acquisition-installs", "acquisition_basis", d => { d.acquisition_basis = "recorded_dimensions"; }],
+    ["native-acquisition-cost", "cost_basis", d => { d.cost_basis = null; }],
+    ["native-acquisition-cost", "cost_selection_policy", d => { d.cost_selection_policy = "legacy_dimension_digest_latest"; }],
+    ["native-acquisition-cost", "grouping_dimensions", d => { d.grouping_dimensions = [...d.grouping_dimensions, "ad_group_id"]; }],
+    ["native-acquisition-cost", "fx", d => { d.fx!.conversion = "per_event_round_then_sum"; }],
+    ["native-acquisition-cost", "fx", d => { d.fx!.rates[0].as_of = "2026-08-13T00:00:00.000Z"; }],
+    ["native-acquisition-cpi", "denominator", d => { d.denominator = null; }],
+    ["native-acquisition-cpi", "denominator", d => { d.denominator = "cost"; }],
+    ["native-acquisition-cpi", "window", d => { d.window.day = 0; }],
+    ["native-acquisition-cpi", "final_rounding", d => { d.final_rounding = "half_up"; }],
   ];
   for (const [name, field, mutate] of mutations) {
     const entry = cases.find(c => c.name === name)!, { saved, mapping, csv } = syntheticExternalComparisonPair(entry);
@@ -199,7 +210,8 @@ it("rejects same-name but different denominator window refund FX outcome and mat
 
 it("keeps money zero undefined missing and immature retention separate across the expanded bridge", () => {
   const cases = syntheticExternalComparisonCases();
-  for (const name of ["cohort_purchase_net_revenue_d30_usd", "retention-distinct-installations", "conversion-distinct-installations"]) {
+  for (const name of ["cohort_purchase_net_revenue_d30_usd", "retention-distinct-installations", "conversion-distinct-installations",
+    "native-acquisition-installs", "native-acquisition-cost", "native-acquisition-cpi"]) {
     const entry = cases.find(c => c.name === name)!, { saved, mapping } = syntheticExternalComparisonPair(entry);
     assert.equal(compare(saved, aggregateCsvToSnapshot(Buffer.from("value,unused\n,synthetic\n"), mapping)).rows[0].status, "undefined");
     const zero = aggregateCsvToSnapshot(Buffer.from("value\n0\n"), mapping);
@@ -225,8 +237,9 @@ it("keeps money zero undefined missing and immature retention separate across th
   assert.equal(externalWindowMaturity(calendar, "2026-08-07", "2026-08-14T15:00:00Z"), "window_elapsed");
 });
 
-it("uses the expanded money projection in ordinary CSV and saved-report CLIs with identical JSON and HTML", () => {
-  const entry = syntheticExternalComparisonCases().find(c => c.name === "dated-purchase-refund-FX")!;
+for (const name of ["dated-purchase-refund-FX", "native-acquisition-installs", "native-acquisition-cost", "native-acquisition-cpi"]) {
+it(`uses ${name} in ordinary CSV and saved-report CLIs with identical JSON and HTML`, () => {
+  const entry = syntheticExternalComparisonCases().find(c => c.name === name)!;
   const pair = syntheticExternalComparisonPair(entry), directory = mkdtempSync(join(tmpdir(), "openmasu-synthetic-family-"));
   try {
     const file = (name: string, value: unknown) => { const path = join(directory, name); writeFileSync(path, typeof value === "string" ? value : JSON.stringify(value)); return path; };
@@ -242,4 +255,73 @@ it("uses the expanded money projection in ordinary CSV and saved-report CLIs wit
     const html = run("compare-cohorts", ["--external-declared", "--html", ...paths]); assert.equal(html.status, 0, html.stderr);
     assert.equal(html.stdout, renderComparison(JSON.parse(output.stdout)));
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+}
+
+it("requires explicit distinct cohort counts and CPI denominators without accepting raw install-event counts", () => {
+  const cases = syntheticExternalComparisonCases();
+  const count = cases.find(entry => entry.name === "native-acquisition-installs")!;
+  const pair = syntheticExternalComparisonPair(count);
+  assert.equal(pair.mapping.value.scale, 0); assert.equal(pair.mapping.value.currency.constant, "none");
+  for (const patch of [{ calculation: "event_count" }, { numerator: "events" }, { denominator: "raw_install_events" },
+    { currency: "USD" }, { amount_scale: 0 }, { ratio_scale: 0 }, { fx: declaration().fx }]) {
+    assert.throws(() => parseExternalDeclaration({ ...count.declaration, ...patch }));
+  }
+  assert.throws(() => aggregateCsvToSnapshot(Buffer.from("value\n1.5\n"), pair.mapping), /number_invalid/);
+  assert.throws(() => aggregateCsvToSnapshot(Buffer.from("value\n3\n"), { ...pair.mapping, value: { ...pair.mapping.value, scale: 1 } }), /mapping_calculation_mismatch/);
+  assert.equal(externalWindowMaturity(count.declaration, "2026-08-06", "2026-08-06T23:59:59.999999Z"), "unknown");
+  assert.equal(externalWindowMaturity(count.declaration, "2026-08-06", "2026-08-07T00:00:00Z"), "window_elapsed");
+  const cpi = cases.find(entry => entry.name === "native-acquisition-cpi")!.declaration;
+  const missing = { ...cpi } as Record<string, unknown>; delete missing.denominator;
+  assert.throws(() => parseExternalDeclaration(missing), /fields/);
+  assert.equal(externalWindowMaturity(cpi, "2026-08-06", "2026-08-14T23:59:59.999999Z"), "unknown");
+  assert.equal(externalWindowMaturity(cpi, "2026-08-06", "2026-08-15T00:00:00Z"), "window_elapsed");
+  // The legacy declaration's allowed conversion vocabulary is unchanged.
+  assert.throws(() => parseExternalDeclaration({ ...declaration(), fx: { ...declaration().fx, conversion: "per_cost_row_round_then_sum" } }));
+});
+
+it("supports an explicitly captured single-rate cost snapshot without broadening legacy ROAS declarations", () => {
+  const entry = structuredClone(syntheticExternalComparisonCases().find(item => item.name === "native-acquisition-cost")!);
+  const rates = [{ currency: "USD", rate_unscaled: "1", rate_scale: 0, as_of: "2026-08-12T00:00:00.000Z" }];
+  entry.input.fx_policy = { policy_version: "synthetic-legacy-cost", target_currency: "USD", target_scale: 6,
+    rounding_mode: "half_even", rates };
+  entry.declaration.fx = { target_currency: "USD", target_scale: 6, rounding_mode: "half_even",
+    conversion: "per_cost_row_round_then_sum", rates };
+  const pair = syntheticExternalComparisonPair(entry);
+  assert.equal(pair.run.value_unscaled, "10000000");
+  const result = compare(pair.saved, aggregateCsvToSnapshot(Buffer.from(pair.csv), pair.mapping));
+  assert.equal(result.status, "external_declared_comparison"); assert.equal(result.rows[0].delta_right_minus_left, "0");
+});
+
+it("keeps external cost currency scale date timezone cutoff and saved revision differences incomparable", () => {
+  const entry = syntheticExternalComparisonCases().find(c => c.name === "native-acquisition-cpi")!;
+  for (const kind of ["currency", "scale", "date", "timezone", "cutoff"] as const) {
+    const pair = syntheticExternalComparisonPair(entry), mapping = structuredClone(pair.mapping), d = mapping.external_calculation;
+    if (kind === "currency") {
+      d.currency = "EUR"; d.fx!.target_currency = "EUR"; mapping.value.currency.constant = "EUR";
+      // Explicit identity rates are required for every declared target date.
+      d.fx!.rates = d.fx!.rates.map(rate => ({ ...rate, currency: "EUR" }));
+    }
+    if (kind === "scale") { d.amount_scale = 3; d.fx!.target_scale = 3; mapping.value.scale = 3; }
+    if (kind === "date") {
+      mapping.conditions.date_from = "2026-08-07"; mapping.conditions.date_to = "2026-08-08";
+      mapping.grouping.cohort_date = { constant: "2026-08-07" };
+    }
+    if (kind === "timezone") { d.time_zone = "Asia/Tokyo"; mapping.conditions.time_zone = "Asia/Tokyo"; }
+    if (kind === "cutoff") mapping.conditions.source_cutoff = "2026-08-17T00:00:00.000Z";
+    const result = compare(pair.saved, aggregateCsvToSnapshot(Buffer.from(pair.csv), mapping));
+    assert.equal(result.status, "incomparable", kind); assert.deepEqual(result.rows, [], kind);
+  }
+  for (const state of ["recalculation_pending", "input_revised"] as const) {
+    for (const name of ["native-acquisition-cost", "native-acquisition-cpi"]) {
+      const pair = syntheticExternalComparisonPair(syntheticExternalComparisonCases().find(c => c.name === name)!);
+      const saved = structuredClone(pair.saved);
+      saved.freshness_observations = [{ key: saved.rows[0].key,
+        observations: metricFreshness({ ...pair.report.data[0], cost_update_state: state }) }];
+      const result = compare(saved, aggregateCsvToSnapshot(Buffer.from(pair.csv), pair.mapping));
+      assert.equal(result.status, "incomparable"); assert.deepEqual(result.rows, []);
+      assert.ok(result.assurance.left.missing.includes("cost_revision_pending"));
+      assert.equal(result.assurance.right.acquisition.upstream_completeness, "unknown");
+    }
+  }
 });

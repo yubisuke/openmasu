@@ -1,15 +1,54 @@
 import type { Pool } from "pg";
-import { NON_FRAUD_RULE_BUNDLES, nonFraudBundleHash, validateNonFraudBundleDefinition } from "@openmasu/contracts/definitions";
+import { NON_FRAUD_RULE_BUNDLES, nonFraudBundleHash, validateNonFraudBundleDefinition,
+  FIRST_PARTY_WINDOW_BUNDLE, validateFirstPartyWindowDefinition, firstPartyWindowHash,
+  type FirstPartyWindowDefinition } from "@openmasu/contracts/definitions";
 import type { NonFraudRuleBundleId } from "@openmasu/contracts/types";
 import { withTenant } from "@openmasu/runtime";
 
 export type BoundNonFraudBundle = {
   readonly ruleBundleRevisionId?: string;
-  readonly ruleBundleId: NonFraudRuleBundleId;
+  readonly ruleBundleId: NonFraudRuleBundleId | typeof FIRST_PARTY_WINDOW_BUNDLE;
   readonly ruleBundleVersion: string;
   readonly ruleBundleHash: string;
   readonly definitionDigest: string;
 };
+
+export type FirstPartyWindowRevision = BoundNonFraudBundle & {
+  readonly definition: FirstPartyWindowDefinition;
+  readonly activatedAt: string;
+};
+
+/** Immutable revisions, not the current view: late evidence keeps the install's
+ * original receipt policy. The absent opt-in family means the historical default. */
+export async function firstPartyWindowRevisions(pool: Pool, tenantId: string, appId: string): Promise<FirstPartyWindowRevision[]> {
+  const result = await withTenant(pool, tenantId, client => client.query<{
+    rule_bundle_revision_id: string; rule_bundle_version: string; rule_bundle_hash: string;
+    definition: unknown; definition_digest: string; activated_at: string;
+  }>(`SELECT rule_bundle_revision_id,rule_bundle_version,rule_bundle_hash,definition,definition_digest,activated_at
+      FROM control.rule_bundle_revisions WHERE tenant_id=$1 AND app_id=$2 AND rule_bundle_id=$3
+      ORDER BY activated_at DESC,rule_bundle_revision_id COLLATE "C" DESC`, [tenantId, appId, FIRST_PARTY_WINDOW_BUNDLE]));
+  return result.rows.map(row => {
+    const definition = validateFirstPartyWindowDefinition(row.definition), hash = firstPartyWindowHash(definition);
+    if (row.rule_bundle_version !== definition.version || row.rule_bundle_hash !== hash || row.definition_digest !== hash) {
+      throw new Error("attribution_window_binding_mismatch");
+    }
+    return { ruleBundleRevisionId: row.rule_bundle_revision_id, ruleBundleId: FIRST_PARTY_WINDOW_BUNDLE,
+      ruleBundleVersion: definition.version, ruleBundleHash: hash, definitionDigest: hash,
+      definition, activatedAt: row.activated_at };
+  });
+}
+
+export function firstPartyWindowAtReceipt(revisions: readonly FirstPartyWindowRevision[], receivedAt: string) {
+  const receipt = Date.parse(receivedAt);
+  if (!Number.isFinite(receipt)) throw new Error("attribution_window_receipt_invalid");
+  return [...revisions].filter(revision => Date.parse(revision.activatedAt) <= receipt)
+    .sort((left, right) => Date.parse(right.activatedAt) - Date.parse(left.activatedAt)
+      || (left.ruleBundleRevisionId! < right.ruleBundleRevisionId! ? 1 : -1))[0];
+}
+
+export function firstPartyWindowServerContext(binding: FirstPartyWindowRevision) {
+  return { ...nonFraudServerContext(binding), definition: binding.definition };
+}
 
 export async function resolveNonFraudBundle(
   pool: Pool,

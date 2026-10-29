@@ -34,6 +34,13 @@ The closed functional plan is historical evidence, not the current checklist.
 Provider approval and privacy-policy decisions require owner direction; they are
 not ordinary implementation tasks.
 
+The daily-workflow crosswalk now includes declared-event setup, same-set period
+KPI totals, cost join diagnostics/backfill, inert link preview/resume and typed
+recurring comparisons with saved-run operands and explicit thresholds. Optional
+[first-party window selection](attribution-window.md) is previewed against
+retained evidence before activation; old receipts keep their rule revision.
+These source additions do not change the frozen rc.3 distribution.
+
 ## Implemented integration work
 
 The earlier integration plan and structural preparation are complete.

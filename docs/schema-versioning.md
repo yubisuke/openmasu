@@ -85,6 +85,7 @@ The v0.4 line adds independently exercised optional vocabulary and definitions:
 | 0.4.26 | closed opt-in verified payer cohort: transaction and installation counts, payer rate and purchase-net ARPPU; additive operations/numerators/denominator and `no_paying_installations`, unchanged historical commerce and revenue |
 | 0.4.27 | optional matching-detail-only cost coverage; explicitly selected child spend cannot become a parent/sibling denominator; absent metadata and historical definitions remain unchanged |
 | 0.4.28 | opt-in explicit 1–30-day engagement windows, optional recorded-inactivity configuration and verified purchase/refund net; additive `insufficient_activity_history`, definition-bound snapshots only for the new profile, unchanged historical 24h results |
+| 0.4.29 | optional closed first-party attribution binding for 1/7/30-day native SDK Install Referrer policies; complete definition hashes and separate attribution IDs, original-receipt revision retention, unchanged default/platform/imported/engagement behavior |
 
 Existing schema `$id` values remain on `v0.4`; existing event artifact version
 fields remain `0.4.0` where their schema did not change.

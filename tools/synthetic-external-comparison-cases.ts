@@ -78,6 +78,23 @@ export function syntheticExternalComparisonCases() {
       time_zone: "Asia/Tokyo", window: { type: "calendar_day", day: 7, boundary: "half_open" }, acquisition_basis: "selected_first_party_click", privacy_state: "after",
       calendar_cohort_policy: "cumulative_revenue_on_day_activity", cohort_date_basis: "installation_local_date", cost_reporting_time_zone: "same_as_aggregation_time_zone", refund_policy: null,
       fx: { ...declared().fx!, rates: [{ currency: "USD", rate_unscaled: "100000000", rate_scale: 8, as_of: "2026-08-01T00:00:00.000Z" }] } } });
+  const acquisition = fixture("70-saved-acquisition-kpis");
+  acquisition.metric_evaluations = acquisition.metric_evaluations.filter((e: Any) => e.metric_run_id_prefix === "kpi70-a");
+  // The independently reviewed campaign has three distinct installations and
+  // USD 10 cost: half-even(10000000 / 3) = 3333333 micro-USD per installation.
+  for (const [role, calculation, expected] of [["installs", "cohort_size", "3"], ["cost", "cost_sum", "10000000"],
+    ["cpi", "cost_over_cohort", "3333333"]] as const) {
+    const count = role === "installs";
+    cases.push({ name: `native-acquisition-${role}`, input: acquisition, metricName: `acquisition_d7_${role}`, expected,
+      declaration: { ...declared(), calculation, numerator: count ? "cohort_size" : "cost",
+        denominator: role === "cpi" ? "cohort_size" : null, window: { type: "elapsed", day: 7, boundary: "half_open" },
+        acquisition_basis: "selected_first_party_click", cost_selection_policy: "reject_overlapping_grains",
+        cost_basis: count ? null : "cohort_acquisition_day_current_snapshot", refund_policy: null,
+        value_type: count ? "count" : "money", currency: count ? null : "USD", amount_scale: count ? null : 6,
+        fx: count ? null : { target_currency: "USD", target_scale: 6, rounding_mode: "half_even",
+          conversion: "per_cost_row_round_then_sum", rate_selection: "utc_event_date_and_cost_date",
+          cost_conversion: "per_cost_row_round_then_sum", rates: structuredClone(acquisition.fx_policy.rates) } } });
+  }
   return cases;
 }
 
@@ -95,7 +112,9 @@ export function syntheticExternalComparisonPair(entry: ReturnType<typeof synthet
     policy_versions: [`rule_bundle:${run.rule_bundle_version}`, `fx:${context.fx.policy_version}`] }] };
   const mapping = { version: 1, source: "synthetic-external-family", conditions: { ...template.conditions },
     grouping: Object.fromEntries(Object.entries(grouping).map(([key, value]) => [key, { constant: value }])),
-    value: { column: "value", input: "integer", scale: 6, currency: { constant: entry.declaration.value_type === "money" ? "USD" : "none" },
+    value: { column: "value", input: "integer",
+      scale: entry.declaration.value_type === "count" ? 0 : entry.declaration.amount_scale ?? entry.declaration.ratio_scale!,
+      currency: { constant: entry.declaration.value_type === "money" ? entry.declaration.currency! : "none" },
       undefined: { marker: "", reason: { constant: "empty_cohort" } } }, external_calculation: structuredClone(entry.declaration) };
   return { run, context, template, report, mapping, saved: reportToSnapshot(report, template), csv: `value\n${entry.expected}\n` };
 }

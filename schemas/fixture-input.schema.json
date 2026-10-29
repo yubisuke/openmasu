@@ -323,8 +323,32 @@
           }
         },
         "fraud_enabled": { "type": "boolean", "default": true },
+        "first_party_attribution_bundle": { "$ref": "#/$defs/firstPartyAttributionBundleContext" },
         "fraud_rule_bundle": { "$ref": "#/$defs/fraudRuleBundleContext" },
         "fraud_actions_enabled": { "type": "boolean", "default": false }
+      }
+    },
+    "firstPartyAttributionBundleContext": {
+      "type": "object", "additionalProperties": false,
+      "required": ["rule_bundle_id", "rule_bundle_version", "rule_bundle_hash", "definition_digest", "definition"],
+      "properties": {
+        "rule_bundle_revision_id": { "$ref": "common.schema.json#/$defs/id" },
+        "rule_bundle_id": { "const": "attribution-first-party-window" },
+        "rule_bundle_version": { "const": "0.4.29" },
+        "rule_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "definition_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "definition": {
+          "type": "object", "additionalProperties": false,
+          "required": ["id", "version", "kind", "implementation", "lookback_days", "rules"],
+          "properties": {
+            "id": { "const": "attribution-first-party-window" },
+            "version": { "const": "0.4.29" },
+            "kind": { "const": "attribution" },
+            "implementation": { "const": "first-party-install-referrer-v0.4.29" },
+            "lookback_days": { "enum": [1, 7, 30] },
+            "rules": { "const": ["accepted-unique-exact-click-reference", "redirector-to-play-server-half-open-window", "install-original-receipt-revision", "never-reinterpret-imported-platform-or-engagement"] }
+          }
+        }
       }
     },
     "fraudRuleBundleContext": {

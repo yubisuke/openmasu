@@ -34,6 +34,7 @@ const readerNoTableSelect = new Set([
   "control.operator_webhook_destinations",
   "control.operator_webhook_destination_states",
   "control.operator_bulk_export_destinations",
+  "control.operator_bulk_export_credential_revisions",
   "control.operator_bulk_export_destination_states",
   "control.operator_bulk_export_checkpoints",
   "control.metric_replay_manifests",
@@ -48,6 +49,9 @@ const readerNoTableSelect = new Set([
   "ephemeral.operator_bulk_export_batches",
 ]);
 const seedControlTruncate = new Set([
+  "control.operator_bulk_export_credential_revisions",
+  "control.comparison_notifications",
+  "control.cost_backfills", "control.cost_backfill_days",
   "control.event_catalog_revisions",
   "control.worker_heartbeats",
   "control.worker_tenant_cycles",
@@ -136,6 +140,7 @@ function expected(row: Row): Privilege[] {
   if (row.schema_name === "control" && row.table_name === "deployment_purpose") return ["SELECT"];
   if (row.role_name === "openmasu_seed" && !disposable) return [];
   const qualified = `${row.schema_name}.${row.table_name}`;
+  if (qualified === "control.inbox_admission_states") return row.role_name === "openmasu_seed" ? ["TRUNCATE"] : [];
   if (row.schema_name === "ephemeral") {
     const matrix = ephemeralExpected.get(qualified);
     assert.ok(matrix, `new ephemeral table requires an explicit role matrix entry: ${qualified}`);
@@ -145,6 +150,8 @@ function expected(row: Row): Privilege[] {
     return row.role_name === "openmasu_seed" ? ["SELECT", "INSERT", "UPDATE", "DELETE"] : [];
   }
   if (row.role_name === "openmasu_app") {
+    if (qualified === "control.comparison_notifications") return ["SELECT", "INSERT", "UPDATE"];
+    if (qualified === "control.cost_backfill_days") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.worker_heartbeats") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.worker_tenant_cycles") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.retention_items") return ["SELECT", "INSERT", "UPDATE"];
@@ -271,12 +278,18 @@ try {
        ('control', 'operator_webhook_destination_states'),
        ('ephemeral', 'operator_webhook_deliveries'),
        ('control', 'operator_bulk_export_destinations'),
+       ('control', 'operator_bulk_export_credential_revisions'),
        ('control', 'operator_bulk_export_destination_states'),
        ('ephemeral', 'operator_bulk_export_batches')
      )
      ORDER BY table_schema, table_name, ordinal_position
   `);
   const expectedReaderOperatorColumns = new Set([
+    "control.operator_bulk_export_credential_revisions.credential_revision_seq",
+    "control.operator_bulk_export_credential_revisions.tenant_id",
+    "control.operator_bulk_export_credential_revisions.app_id",
+    "control.operator_bulk_export_credential_revisions.destination_id",
+    "control.operator_bulk_export_credential_revisions.changed_at",
     "control.operator_webhook_destinations.destination_id",
     "control.operator_webhook_destinations.tenant_id",
     "control.operator_webhook_destinations.app_id",
@@ -290,6 +303,8 @@ try {
     "control.operator_webhook_destination_states.status",
     "control.operator_webhook_destination_states.changed_at",
     "ephemeral.operator_webhook_deliveries.delivery_id",
+    "ephemeral.operator_webhook_deliveries.comparison_id",
+    "ephemeral.operator_webhook_deliveries.comparison_state",
     "ephemeral.operator_webhook_deliveries.tenant_id",
     "ephemeral.operator_webhook_deliveries.app_id",
     "ephemeral.operator_webhook_deliveries.destination_id",

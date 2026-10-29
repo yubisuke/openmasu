@@ -9,6 +9,7 @@ import { reconciliationResults } from "./reconciliation.js";
 import type { Any, EvaluationOutput } from "./evaluation-model.js";
 
 export { jcs, sha256 } from "./canonical.js";
+export { previewAcceptedFirstPartyAttribution } from "./attribution.js";
 export { selectDisjointCosts, costCoverageMatchesGrouping, type ScopedCost } from "./cost-selection.js";
 export { TimestampInvalidError, roundHalfEven } from "./evaluation-utils.js";
 export type { Json, CandidateHistoryState, CandidateAttempt } from "./evaluation-model.js";

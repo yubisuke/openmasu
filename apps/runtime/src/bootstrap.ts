@@ -178,6 +178,17 @@ const maxInboxBatchLimit = boundedIntegerSetting(
   1,
   1_000,
 );
+const inboxAdmissionMode = process.env.OPENMASU_INBOX_ADMISSION_ENABLED ?? existing.OPENMASU_INBOX_ADMISSION_ENABLED ?? "off";
+if (inboxAdmissionMode !== "off" && inboxAdmissionMode !== "on") throw new Error("inbox_admission_configuration_invalid");
+const inboxAdmissionSettings = {
+  OPENMASU_INBOX_ADMISSION_ENABLED: inboxAdmissionMode,
+  OPENMASU_INBOX_APP_MAX_BATCHES: boundedIntegerSetting("OPENMASU_INBOX_APP_MAX_BATCHES", process.env.OPENMASU_INBOX_APP_MAX_BATCHES ?? existing.OPENMASU_INBOX_APP_MAX_BATCHES, 10000, 1, Number.MAX_SAFE_INTEGER),
+  OPENMASU_INBOX_APP_MAX_BYTES: boundedIntegerSetting("OPENMASU_INBOX_APP_MAX_BYTES", process.env.OPENMASU_INBOX_APP_MAX_BYTES ?? existing.OPENMASU_INBOX_APP_MAX_BYTES, 268435456, 1, Number.MAX_SAFE_INTEGER),
+  OPENMASU_INBOX_GLOBAL_MAX_BATCHES: boundedIntegerSetting("OPENMASU_INBOX_GLOBAL_MAX_BATCHES", process.env.OPENMASU_INBOX_GLOBAL_MAX_BATCHES ?? existing.OPENMASU_INBOX_GLOBAL_MAX_BATCHES, 100000, 1, Number.MAX_SAFE_INTEGER),
+  OPENMASU_INBOX_GLOBAL_MAX_BYTES: boundedIntegerSetting("OPENMASU_INBOX_GLOBAL_MAX_BYTES", process.env.OPENMASU_INBOX_GLOBAL_MAX_BYTES ?? existing.OPENMASU_INBOX_GLOBAL_MAX_BYTES, 2147483648, 1, Number.MAX_SAFE_INTEGER),
+  OPENMASU_INBOX_RESUME_PERCENT: boundedIntegerSetting("OPENMASU_INBOX_RESUME_PERCENT", process.env.OPENMASU_INBOX_RESUME_PERCENT ?? existing.OPENMASU_INBOX_RESUME_PERCENT, 80, 1, 99),
+  OPENMASU_INBOX_RETRY_AFTER_SECONDS: boundedIntegerSetting("OPENMASU_INBOX_RETRY_AFTER_SECONDS", process.env.OPENMASU_INBOX_RETRY_AFTER_SECONDS ?? existing.OPENMASU_INBOX_RETRY_AFTER_SECONDS, 30, 1, 3600),
+};
 const adServicesProviderTimeout = boundedIntegerSetting(
   "OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS",
   protectedSettings.OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS ?? process.env.OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS
@@ -212,6 +223,7 @@ if (runtimeExists) {
     exclusiveWrite(repositoryEnvPath, `OPENMASU_DEPLOYMENT_PURPOSE=${deploymentPurpose}\n`);
   }
   reconcileEnvSettings(appEnvPath, {
+    ...inboxAdmissionSettings,
     OPENMASU_WORKER_CONCURRENCY: workerConcurrency,
     OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS: workerShutdownTimeout,
     OPENMASU_SDK_INBOX_BATCH_LIMIT: sdkInboxBatchLimit,
@@ -273,6 +285,7 @@ const appEntries: Record<string, string> = {
   OPENMASU_WORKER_CONCURRENCY: workerConcurrency,
   OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS: workerShutdownTimeout,
   OPENMASU_SDK_INBOX_BATCH_LIMIT: sdkInboxBatchLimit,
+  ...inboxAdmissionSettings,
   OPENMASU_MAX_INBOX_BATCH_LIMIT: maxInboxBatchLimit,
   OPENMASU_MAX_TENANT_ID: defaultTenantId,
   OPENMASU_MAX_APP_ID: defaultAppId,

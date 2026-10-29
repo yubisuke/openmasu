@@ -1,6 +1,6 @@
 # Work After rc.3
 
-Updated: 2026-10-28. This is the living follow-up list, not a release promise.
+Updated: 2026-10-29. This is the living follow-up list, not a release promise.
 
 ## Published baseline
 
@@ -21,6 +21,13 @@ source (71 checksummed migrations) to the existing upgrade preflight and
 parameterized backup/restore rehearsal. It covers interrupted migration,
 unchanged historical artifacts and repeated privacy reapplication without a new
 service or CI suite. See [the upgrade guide](../operations/upgrade.md).
+
+Current source also includes the setup/readiness and daily-workflow additions
+listed in [project status](../STATUS.md#current-development-focus), including
+the optional first-party attribution window profile (contract patch ledger
+v0.4.29; wire identity remains `0.4.0`). They require a new tagged distribution
+and matching publication evidence before being described as released SDK/runtime
+features. The existing rc.3 assets and historical receipts are unchanged.
 
 ## Concrete next work
 
