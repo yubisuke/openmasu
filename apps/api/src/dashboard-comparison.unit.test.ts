@@ -5,6 +5,7 @@ import type { IncomingMessage } from "node:http";
 import { comparisonWorkflowLimits as limits, readComparisonSubmission, boundedComparisonOutput, validateComparisonPair } from "./dashboard-comparison.js";
 import { renderComparisonWorkflow } from "./dashboard/comparison-workflow.js";
 import { compareSnapshots, comparisonDigest } from "./cohort-comparison.js";
+import { renderComparisonContent } from "./dashboard/comparison-report.js";
 
 const scope = { tenantId: "synthetic-tenant", appId: "synthetic-app" };
 const snapshot = () => ({ source: "synthetic <script>not markup</script>", conditions: { date_from: "2026-01-01", date_to: "2026-01-02", time_zone: "UTC",
@@ -73,4 +74,19 @@ it("rejects a valid foreign acquisition receipt without certifying receipt-less 
     scope: foreign, filters, row_count: 1, selection_sha256: comparisonDigest(runs), query_sha256: comparisonDigest({ scope: foreign, filters, conditions: base.conditions }), upstream_completeness: "unknown" } };
   assert.throws(() => validateComparisonPair(captured, base, scope), /scope_mismatch/);
   const pair = validateComparisonPair(base, base, scope); assert.equal(pair.left.acquisition, undefined);
+});
+
+it("renders saved priorities with source anchors and keeps legacy results without recomputing summaries", () => {
+  const a = snapshot(), b = snapshot(); b.rows[0].value = "-900719925474099300";
+  const result = compareSnapshots(a, b, { declaredOnly: true }), bytes = JSON.stringify(result);
+  const html = renderComparisonContent(result);
+  assert.match(html, /Investigation priorities/); assert.match(html, /meaning_unknown/);
+  assert.match(html, /href="#comparison-row-0"/); assert.match(html, /id="comparison-row-0"/);
+  assert.ok(html.includes(result.provenance.left.sha256)); assert.ok(html.includes(result.provenance.right.sha256));
+  assert.match(html, /-900719925474\.099300/); assert.doesNotMatch(html, /<script|javascript:/);
+  assert.equal(renderComparisonContent(JSON.parse(bytes)), html); assert.equal(JSON.stringify(result), bytes);
+  const legacy = structuredClone(result); delete legacy.summary;
+  const saved = JSON.stringify(legacy), old = renderComparisonContent(legacy);
+  assert.match(old, /summary was not recorded/); assert.doesNotMatch(old, /Investigation priorities/);
+  assert.match(old, /-900719925474\.099300/); assert.equal(JSON.stringify(legacy), saved);
 });
