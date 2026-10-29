@@ -5811,7 +5811,8 @@ CREATE POLICY operator_bulk_credentials_tenant ON control.operator_bulk_export_c
 CREATE TRIGGER operator_bulk_credentials_append_only BEFORE UPDATE OR DELETE
   ON control.operator_bulk_export_credential_revisions
   FOR EACH ROW EXECUTE FUNCTION ledger.reject_append_only_mutation();
-REVOKE ALL ON control.operator_bulk_export_credential_revisions FROM PUBLIC;
+-- Remove the owner's default reader table grant before exposing status columns.
+REVOKE ALL ON control.operator_bulk_export_credential_revisions FROM PUBLIC,openmasu_reader;
 GRANT SELECT,INSERT ON control.operator_bulk_export_credential_revisions TO openmasu_app;
 GRANT SELECT (credential_revision_seq,tenant_id,app_id,destination_id,changed_at)
   ON control.operator_bulk_export_credential_revisions TO openmasu_reader;
