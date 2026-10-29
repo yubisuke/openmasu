@@ -148,6 +148,22 @@ public final class OpenMasuUnityBridge {
     }, "openmasu-queue-health").start();
   }
 
+  public static void getDiagnosticsSnapshot(StringCallback callback) {
+    requireSdk().diagnosticsSnapshot(value -> {
+      OpenMasuQueueHealth queue = value.getQueue();
+      callback.onResult("available=true&collection_enabled=" + value.getCollectionEnabled() +
+          "&consent_barrier_active=" + value.getConsentBarrierActive() + "&reset_pending=" + value.getResetPending() +
+          "&enrolled=" + value.getEnrolled() + "&last_attempt_at_ms=" + (value.getLastAttemptAtMs() == null ? "" : value.getLastAttemptAtMs()) +
+          "&last_operation=" + value.getLastOperation().name().toLowerCase(java.util.Locale.ROOT) +
+          "&last_result=" + value.getLastResult().name().toLowerCase(java.util.Locale.ROOT) +
+          "&http_class=" + value.getHttpClass().name().toLowerCase(java.util.Locale.ROOT) +
+          "&retry_state=" + value.getRetryState().name().toLowerCase(java.util.Locale.ROOT) +
+          "&pending_count=" + queue.getPendingCount() + "&logical_bytes=" + queue.getLogicalBytes() +
+          "&evicted_total=" + queue.getEvictedTotal() + "&rejected_total=" + queue.getRejectedTotal());
+      return kotlin.Unit.INSTANCE;
+    });
+  }
+
   public static void setCollectionEnabled(boolean enabled) { requireSdk().setCollectionEnabled(enabled); }
 
   public static void resetInstallationId(BooleanCallback callback) {

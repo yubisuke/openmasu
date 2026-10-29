@@ -140,6 +140,18 @@ public final class OpenMasuStorage: @unchecked Sendable {
 
   func consentBarrierActive() throws -> Bool { try metadata("consent_barrier") == "1" }
 
+  func diagnosticAttempt() throws -> DiagnosticAttempt {
+    guard let value = try metadata("diagnostic_attempt"),
+          let decoded = try? JSONDecoder().decode(DiagnosticAttempt.self, from: Data(value.utf8)),
+          (decoded.atMs ?? 0) >= 0 else { return DiagnosticAttempt() }
+    return decoded
+  }
+
+  func setDiagnosticAttempt(_ value: DiagnosticAttempt) throws {
+    let data = try JSONEncoder().encode(value)
+    try setMetadata("diagnostic_attempt", value: String(decoding: data, as: UTF8.self))
+  }
+
   func appleConversionState() throws -> String? { try metadata("apple_conversion_state") }
   func setAppleConversionState(_ value: String) throws { try setMetadata("apple_conversion_state", value: value) }
   func clearAppleConversionState() throws {

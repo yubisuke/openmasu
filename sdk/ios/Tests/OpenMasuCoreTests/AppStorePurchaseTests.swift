@@ -8,6 +8,46 @@ final class AppStorePurchaseTests: XCTestCase {
   private let intent = UUID(uuidString: "db636db3-5cdc-4c01-b651-960afc2a7372")!
   private let token = UUID(uuidString: "de78c851-3221-4f1c-b27f-2501e66aefb4")!
 
+  func testHTTPDiagnosticsDistinguishOffline401429And202WithoutResponseContent() async throws {
+    let cases: [(Int, OpenMasuDiagnosticResult, OpenMasuHttpClass)] = [
+      (401, .authenticationRejected, .http4xx), (429, .rateLimited, .http4xx),
+      (202, .accepted, .http2xx), (0, .networkUnavailable, .none),
+    ]
+    for (status, result, httpClass) in cases {
+      let (sdk, _) = try httpSdk { request in
+        XCTAssertEqual(request.url?.path, "/v1/events/batch")
+        if status == 0 { throw URLError(.notConnectedToInternet) }
+        return (status, Data("synthetic-private-provider-body".utf8))
+      }
+      do { try await sdk.startSession(); XCTAssertEqual(status, 202) }
+      catch { XCTAssertNotEqual(status, 202) }
+      let snapshot = try await sdk.diagnosticsSnapshot()
+      XCTAssertEqual(snapshot.lastOperation, .delivery)
+      XCTAssertEqual(snapshot.lastResult, result)
+      XCTAssertEqual(snapshot.httpClass, httpClass)
+      XCTAssertNotNil(snapshot.lastAttemptAtMs)
+      XCTAssertEqual(snapshot.retryState, status == 202 ? .none : .pending)
+      XCTAssertEqual(snapshot.queue.pendingCount, status == 202 ? 0 : 1)
+      XCTAssertFalse(String(describing: snapshot).contains("synthetic-private-provider-body"))
+    }
+  }
+
+  func testDiagnosticsCanReadInFlightWithoutWaitingForNetwork() async throws {
+    let entered = expectation(description: "delivery entered")
+    let release = DispatchSemaphore(value: 0)
+    let (sdk, _) = try httpSdk { _ in
+      entered.fulfill()
+      guard release.wait(timeout: .now() + 5) == .success else { throw URLError(.timedOut) }
+      return (202, Data())
+    }
+    let sending = Task { try await sdk.startSession() }
+    await fulfillment(of: [entered], timeout: 5)
+    let snapshot = try await sdk.diagnosticsSnapshot()
+    release.signal()
+    XCTAssertEqual(snapshot.lastResult, .inFlight)
+    try await sending.value
+  }
+
   func testRawBodyHmacPreparationRetryAndPendingSubmissionDoNotQueueMoney() async throws {
     let recorder = PurchaseRequestRecorder()
     let requestId = UUID()

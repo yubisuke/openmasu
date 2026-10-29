@@ -35,6 +35,111 @@ class OpenMasuSdkTest {
 
   @After fun tearDown() { created.forEach { it.close() } }
 
+  @Test fun `diagnostics read is local closed and does not create an identity or guess custom HTTP`() {
+    val transport = RecordingTransport(false)
+    val sdk = sdk(transport)
+    sdk.setCollectionEnabled(false)
+    val preferences = context.getSharedPreferences(OpenMasuStorage.PREFERENCES, Context.MODE_PRIVATE)
+    val before = preferences.all
+    val initial = diagnostics(sdk)
+    assertFalse(initial.collectionEnabled)
+    assertFalse(initial.enrolled)
+    assertEquals(OpenMasuRetryState.COLLECTION_BLOCKED, initial.retryState)
+    assertEquals(OpenMasuDiagnosticResult.NOT_ATTEMPTED, initial.lastResult)
+    assertEquals(null, initial.lastAttemptAtMs)
+    assertEquals(0, initial.queue.pendingCount)
+    assertEquals(before, preferences.all)
+    assertFalse(preferences.contains("installation_id"))
+    assertEquals(0, transport.calls.get())
+    OpenMasuStorage(context).applyConsentState("withdrawn")
+    assertTrue(diagnostics(sdk).consentBarrierActive)
+    OpenMasuStorage(context).applyConsentState("granted")
+    sdk.setCollectionEnabled(true)
+    sdk.startSession()
+    sdk.pendingCount() // Wait for this deliberate send, not for the diagnostic getter.
+    val attempted = diagnostics(sdk)
+    assertEquals(OpenMasuDiagnosticResult.CUSTOM_FAILURE, attempted.lastResult)
+    assertEquals(OpenMasuHttpClass.NONE, attempted.httpClass)
+    assertEquals(OpenMasuRetryState.PENDING, attempted.retryState)
+    val keys = OpenMasuDiagnosticsSnapshot::class.java.declaredFields.filter { !it.isSynthetic }.map { it.name }.toSet()
+    assertEquals(setOf("collectionEnabled", "consentBarrierActive", "resetPending", "enrolled", "lastAttemptAtMs", "lastOperation", "lastResult", "httpClass", "retryState", "queue"), keys)
+    assertFalse(attempted.toString().contains("synthetic-secret"))
+  }
+
+  @Test fun `diagnostic getter can read while the delivery executor is blocked`() {
+    val entered = CountDownLatch(1)
+    val release = CountDownLatch(1)
+    val transport = object : OpenMasuTransport {
+      override fun enroll(installationId: String) = InstallationCredential("synthetic-key", "synthetic-secret")
+      override fun deliver(credential: InstallationCredential, events: List<QueuedEvent>): Boolean {
+        entered.countDown()
+        check(release.await(5, TimeUnit.SECONDS))
+        return true
+      }
+      override fun deleteInstallation(credential: InstallationCredential, installationId: String) = true
+    }
+    val sdk = sdk(transport)
+    sdk.startSession()
+    try {
+      assertTrue(entered.await(5, TimeUnit.SECONDS))
+      assertEquals(OpenMasuDiagnosticResult.IN_FLIGHT, diagnostics(sdk).lastResult)
+    } finally { release.countDown() }
+    sdk.pendingCount()
+    assertEquals(OpenMasuDiagnosticResult.CUSTOM_SUCCESS, diagnostics(sdk).lastResult)
+  }
+
+  @Test fun `HTTP diagnostics distinguish 401 429 202 and offline and survive a separate SDK instance`() {
+    val status = AtomicInteger(401)
+    val server = java.net.ServerSocket(0, 4, java.net.InetAddress.getByName("127.0.0.1"))
+    val serving = Thread {
+      while (!server.isClosed) runCatching {
+        server.accept().use { socket ->
+          socket.soTimeout = 2_000
+          val reader = socket.getInputStream().bufferedReader()
+          var length = 0
+          while (true) {
+            val line = reader.readLine() ?: break
+            if (line.isEmpty()) break
+            if (line.startsWith("Content-Length:", true)) length = line.substringAfter(':').trim().toInt()
+          }
+          repeat(length) { reader.read() }
+          val body = "synthetic-private-provider-body"
+          socket.getOutputStream().write("HTTP/1.1 ${status.get()} Synthetic\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n$body".toByteArray())
+        }
+      }
+    }.also { it.isDaemon = true; it.start() }
+    try {
+      val config = OpenMasuConfiguration("http://127.0.0.1:${server.localPort}", "sdk-key:synthetic", "synthetic-secret", timeoutMs = 2_000)
+      OpenMasuStorage(context).setCredential(InstallationCredential("synthetic-key", "synthetic-credential"))
+      val sdk = sdk(HmacHttpTransport(config), configuration = config)
+      sdk.startSession()
+      sdk.pendingCount()
+      assertEquals(OpenMasuDiagnosticResult.AUTHENTICATION_REJECTED, diagnostics(sdk).lastResult)
+      status.set(429)
+      assertFalse(sdk.flushBlocking())
+      assertEquals(OpenMasuDiagnosticResult.RATE_LIMITED, diagnostics(sdk).lastResult)
+      assertEquals(OpenMasuHttpClass.HTTP_4XX, diagnostics(sdk).httpClass)
+      status.set(202)
+      assertTrue(sdk.flushBlocking())
+      val accepted = diagnostics(sdk)
+      assertEquals(OpenMasuDiagnosticResult.ACCEPTED, accepted.lastResult)
+      assertEquals(OpenMasuHttpClass.HTTP_2XX, accepted.httpClass)
+      assertEquals(0, accepted.queue.pendingCount)
+      assertFalse(accepted.toString().contains("synthetic-private-provider-body"))
+      server.close()
+      serving.join(3_000)
+      sdk.startSession()
+      sdk.pendingCount()
+      val offline = diagnostics(sdk)
+      assertEquals(OpenMasuDiagnosticResult.NETWORK_UNAVAILABLE, offline.lastResult)
+      assertEquals(OpenMasuHttpClass.NONE, offline.httpClass)
+      assertEquals(OpenMasuRetryState.PENDING, offline.retryState)
+      sdk.close(); created.remove(sdk)
+      val reopened = sdk(RecordingTransport(false), configuration = config)
+      assertEquals(offline, diagnostics(reopened))
+    } finally { server.close(); serving.join(3_000) }
+  }
+
   @Test fun `disabled before initialize performs no reads or network calls`() {
     val transport = RecordingTransport(true)
     val playReads = AtomicInteger()
@@ -699,6 +804,10 @@ class OpenMasuSdkTest {
     assertEquals(0, sdk.pendingCount())
     assertFalse(sdk.isCollectionEnabled())
     val deliveriesBeforeGrant = transport.deliveries.get()
+    val diagnostic = diagnostics(sdk)
+    assertTrue(diagnostic.resetPending)
+    assertEquals(OpenMasuRetryState.RESET_PENDING, diagnostic.retryState)
+    assertEquals(OpenMasuDiagnosticResult.CUSTOM_SUCCESS, diagnostic.lastResult)
     sdk.updateConsent("granted", "synthetic-policy-granted")
     sdk.setCollectionEnabled(false)
     sdk.setCollectionEnabled(true)
@@ -794,6 +903,14 @@ class OpenMasuSdkTest {
   private fun await(condition: () -> Boolean) {
     repeat(100) { if (condition()) return; Thread.sleep(25) }
     error("condition_not_met")
+  }
+
+  private fun diagnostics(sdk: OpenMasuSdk): OpenMasuDiagnosticsSnapshot {
+    val result = AtomicReference<OpenMasuDiagnosticsSnapshot>()
+    val completed = CountDownLatch(1)
+    sdk.diagnosticsSnapshot { result.set(it); completed.countDown() }
+    assertTrue(completed.await(5, TimeUnit.SECONDS))
+    return result.get()
   }
 
   private fun purchaseResult(

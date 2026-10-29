@@ -504,6 +504,30 @@ public func openmasuIOSQueueHealth(
   }
 }
 
+@_cdecl("openmasu_ios_diagnostics")
+public func openmasuIOSDiagnostics(_ requestId: Int64, _ callbackValue: OpenMasuCStringCallback?) {
+  guard let sdk = BridgeState.get() else {
+    callback(callbackValue, requestId: requestId, value: "error:not_initialized")
+    return
+  }
+  Task {
+    do {
+      let value = try await sdk.diagnosticsSnapshot()
+      let queue = value.queue
+      let fields = [
+        "available=true", "collection_enabled=\(value.collectionEnabled)", "consent_barrier_active=\(value.consentBarrierActive)",
+        "reset_pending=\(value.resetPending)", "enrolled=\(value.enrolled)", "last_attempt_at_ms=\(value.lastAttemptAtMs.map(String.init) ?? "")",
+        "last_operation=\(value.lastOperation.rawValue)", "last_result=\(value.lastResult.rawValue)", "http_class=\(value.httpClass.rawValue)",
+        "retry_state=\(value.retryState.rawValue)", "pending_count=\(queue.pendingCount)", "logical_bytes=\(queue.logicalBytes)",
+        "evicted_total=\(queue.evictedTotal)", "rejected_total=\(queue.rejectedTotal)",
+      ]
+      callback(callbackValue, requestId: requestId, value: fields.joined(separator: "&"))
+    } catch {
+      callback(callbackValue, requestId: requestId, value: "error:diagnostics_unavailable")
+    }
+  }
+}
+
 @_cdecl("openmasu_ios_reset_installation")
 public func openmasuIOSResetInstallation(
   _ requestId: Int64,

@@ -52,6 +52,7 @@ internal static partial class Program
         ExerciseIosCallbackPath(mainThread);
         Require(OpenMasuiOSPlatform.ActiveCallbackCount == 0, "iOS function-pointer callback leaked");
         ExerciseRevenuePlatformCompatibility();
+        ExerciseLocalDiagnostics();
         ExerciseProtectedPurchases(mainThread);
         ExerciseAdRevenue();
         ExerciseLevelPlayAdapter();
@@ -340,6 +341,10 @@ internal static partial class Program
             try { legacyClient.GetQueueHealth(_ => { }); }
             catch (NotSupportedException) { unavailable = true; }
             Require(unavailable, "legacy IOpenMasuPlatform implementer was treated as a queue-health platform");
+            unavailable = false;
+            try { legacyClient.GetDiagnosticsSnapshot(_ => { }); }
+            catch (NotSupportedException) { unavailable = true; }
+            Require(unavailable, "legacy platform was treated as a diagnostics platform");
         }
 
         using (var platform = new SyntheticRevenuePlatform())
@@ -354,6 +359,41 @@ internal static partial class Program
             catch (ArgumentException) { rejected = true; }
             Require(rejected && platform.PurchaseCount == 1, "negative money reached the native bridge");
         }
+    }
+
+    private static void ExerciseLocalDiagnostics()
+    {
+        const string prefix = "available=true&collection_enabled=true&consent_barrier_active=false&reset_pending=false&enrolled=true&last_attempt_at_ms=123&last_operation=delivery&last_result=";
+        const string suffix = "&http_class=http_4xx&retry_state=pending&pending_count=1&logical_bytes=100&evicted_total=0&rejected_total=0";
+        var cases = new[] {
+            ("network_unavailable", OpenMasuDiagnosticResult.NetworkUnavailable),
+            ("authentication_rejected", OpenMasuDiagnosticResult.AuthenticationRejected),
+            ("rate_limited", OpenMasuDiagnosticResult.RateLimited),
+            ("accepted", OpenMasuDiagnosticResult.Accepted),
+            ("custom_failure", OpenMasuDiagnosticResult.CustomFailure),
+        };
+        foreach (var pair in cases)
+        {
+            var httpClass = pair.Item2 == OpenMasuDiagnosticResult.Accepted ? "http_2xx" :
+                pair.Item2 == OpenMasuDiagnosticResult.NetworkUnavailable || pair.Item2 == OpenMasuDiagnosticResult.CustomFailure ? "none" : "http_4xx";
+            var parsed = OpenMasuDiagnosticsSnapshot.Parse(prefix + pair.Item1 + suffix.Replace("http_4xx", httpClass));
+            Require(parsed.Available && parsed.LastResult == pair.Item2 && parsed.LastAttemptAtMs == 123 && parsed.Queue.PendingCount == 1,
+                "closed diagnostic metadata did not survive the typed bridge");
+        }
+        foreach (var invalid in new[] {
+            prefix + "provider-body-secret" + suffix,
+            prefix + "accepted" + suffix + "&installation_id=synthetic-private-id",
+            (prefix + "accepted" + suffix).Replace("pending_count=1", "pending_count=-1"),
+            (prefix + "accepted" + suffix).Replace("enrolled=true", "available=true"),
+        })
+        {
+            var rejected = false;
+            try { OpenMasuDiagnosticsSnapshot.Parse(invalid); }
+            catch (FormatException error) { rejected = !error.Message.Contains("synthetic-private"); }
+            Require(rejected, "diagnostic bridge accepted an unsafe or invalid field");
+        }
+        Require(typeof(OpenMasuDiagnosticsSnapshot).GetProperties().All(property => property.PropertyType != typeof(string)),
+            "diagnostic DTO exposes arbitrary strings");
     }
 
     private static void ExerciseAppleConversionPlatformCompatibility()
@@ -442,6 +482,15 @@ internal static partial class Program
             Require(health != null && health.PendingCount == 0 && health.LogicalBytes == 0 &&
                 health.EvictedTotal == 0 && health.RejectedTotal == 0,
                 "iOS queue-health callback changed aggregate values");
+            OpenMasuDiagnosticsSnapshot diagnostics = null;
+            client.GetDiagnosticsSnapshot(value => {
+                Require(Environment.CurrentManagedThreadId == mainThread, "diagnostics did not reach the Unity main thread");
+                diagnostics = value;
+            });
+            var diagnosticDeadline = DateTime.UtcNow.AddSeconds(5);
+            while (diagnostics == null && DateTime.UtcNow < diagnosticDeadline) { client.PumpCallbacks(); Thread.Yield(); }
+            Require(diagnostics != null && !diagnostics.Available && diagnostics.LastResult == OpenMasuDiagnosticResult.NotAttempted && diagnostics.LastAttemptAtMs == null,
+                "Editor diagnostics fabricated a device send result");
             bool? conversionUpdated = null;
             client.RecordAppleConversion(
                 "purchase",

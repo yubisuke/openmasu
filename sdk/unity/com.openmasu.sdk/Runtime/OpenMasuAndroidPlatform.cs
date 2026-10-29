@@ -5,7 +5,7 @@ using UnityEngine;
 namespace OpenMasu.Unity
 {
     public sealed class OpenMasuAndroidPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform,
-        IOpenMasuGooglePlayPurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuAdRevenuePlatform
+        IOpenMasuGooglePlayPurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuAdRevenuePlatform, IOpenMasuDiagnosticsPlatform
     {
         private AndroidJavaClass bridge;
         private bool disposed;
@@ -54,6 +54,8 @@ namespace OpenMasu.Unity
             EnsureBridge().CallStatic("updateConsent", state, policyVersion, new StringCallback(completion));
         public void GetQueueHealth(Action<string> completion) =>
             EnsureBridge().CallStatic("getQueueHealth", new StringCallback(completion));
+        public void GetDiagnosticsSnapshot(Action<string> completion) =>
+            EnsureBridge().CallStatic("getDiagnosticsSnapshot", new StringCallback(completion));
         public void SetCollectionEnabled(bool enabled) => EnsureBridge().CallStatic("setCollectionEnabled", enabled);
         public void ResetInstallationId(Action<bool> completion) =>
             EnsureBridge().CallStatic("resetInstallationId", new BooleanCallback(completion));

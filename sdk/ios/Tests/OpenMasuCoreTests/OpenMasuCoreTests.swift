@@ -6,6 +6,39 @@ import Darwin
 #endif
 
 final class OpenMasuCoreTests: XCTestCase {
+  func testDiagnosticsReadIsLocalClosedAndDoesNotCreateIdentityOrGuessCustomHTTP() async throws {
+    let root = temporaryDirectory("diagnostics")
+    let transport = RecordingTransport(deliveryFailure: false)
+    let sdk = try OpenMasuSDK(configuration: configuration(defaultEnabled: false), storageRoot: root, transport: transport)
+    let initial = try await sdk.diagnosticsSnapshot()
+    XCTAssertFalse(initial.collectionEnabled)
+    XCTAssertFalse(initial.enrolled)
+    XCTAssertEqual(initial.retryState, .collectionBlocked)
+    XCTAssertEqual(initial.lastResult, .notAttempted)
+    XCTAssertNil(initial.lastAttemptAtMs)
+    XCTAssertEqual(initial.queue.pendingCount, 0)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("installation-id").path))
+    let calls = await transport.callCount()
+    XCTAssertEqual(calls, 0)
+    let storage = try OpenMasuStorage(root: root)
+    try storage.applyConsentState("withdrawn")
+    let blocked = try await sdk.diagnosticsSnapshot()
+    XCTAssertTrue(blocked.consentBarrierActive)
+    try storage.applyConsentState("granted")
+    try await sdk.setCollectionEnabled(true)
+    try await sdk.startSession()
+    let delivered = try await sdk.diagnosticsSnapshot()
+    XCTAssertEqual(delivered.lastResult, .customSuccess)
+    XCTAssertEqual(delivered.httpClass, .none)
+    XCTAssertEqual(Set(Mirror(reflecting: delivered).children.compactMap(\.label)), Set([
+      "collectionEnabled", "consentBarrierActive", "resetPending", "enrolled", "lastAttemptAtMs", "lastOperation", "lastResult", "httpClass", "retryState", "queue",
+    ]))
+    XCTAssertFalse(String(describing: delivered).contains("synthetic-secret"))
+    let reopened = try OpenMasuSDK(configuration: configuration(defaultEnabled: true), storageRoot: root, transport: transport)
+    let restored = try await reopened.diagnosticsSnapshot()
+    XCTAssertEqual(restored, delivered)
+  }
+
   func testM4A20SharedSigningVectors() throws {
     let vectorURL = findRepositoryFile("sdk/signing-vectors.json")
     let object = try JSONSerialization.jsonObject(with: Data(contentsOf: vectorURL)) as! [String: Any]
@@ -509,6 +542,10 @@ final class OpenMasuCoreTests: XCTestCase {
     let retainedId = try await sdk.installationIdForMeasurement()
     XCTAssertEqual(retainedId, oldId)
     let deliveriesBeforeGrant = await transport.deliveredPayloads().count
+    let diagnostic = try await sdk.diagnosticsSnapshot()
+    XCTAssertTrue(diagnostic.resetPending)
+    XCTAssertEqual(diagnostic.retryState, .resetPending)
+    XCTAssertEqual(diagnostic.lastResult, .customSuccess)
     try await sdk.updateConsent(state: "granted", policyVersion: "synthetic-policy-granted")
     try await sdk.setCollectionEnabled(false)
     do { try await sdk.setCollectionEnabled(true); XCTFail("enabling collection must not bypass deletion") }

@@ -79,6 +79,13 @@ public final class AdRevenueQueueTest {
       assertEquals(2_000_000L, total);
       deliver.set(true); assertTrue(sdk.flushBlocking(10_000L));
       assertEquals(0, sdk.queueHealth().getPendingCount());
+      AtomicReference<String> diagnostics = new AtomicReference<>();
+      java.util.concurrent.CountDownLatch read = new java.util.concurrent.CountDownLatch(1);
+      OpenMasuUnityBridge.getDiagnosticsSnapshot(value -> { diagnostics.set(value); read.countDown(); });
+      assertTrue(read.await(5, java.util.concurrent.TimeUnit.SECONDS));
+      assertTrue(diagnostics.get().contains("last_result=custom_success"));
+      assertTrue(diagnostics.get().contains("&pending_count=0&"));
+      assertFalse(diagnostics.get().contains("synthetic-secret"));
     } finally { sdk.close(); field.set(null, null); }
   }
 

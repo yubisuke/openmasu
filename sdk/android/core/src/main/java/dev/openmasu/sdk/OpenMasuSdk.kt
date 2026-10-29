@@ -354,9 +354,13 @@ class OpenMasuSdk private constructor(
     return runCatching {
       val credential = storage.credential() ?: return false
       val status = if (transport is OpenMasuDeletionTransport) {
-        val observed = transport.deletionStatus(receipt)
-        if (observed == DeletionStatus.MISSING) transport.beginDeletion(credential, storage.installationId(), receipt) else observed
-      } else if (transport.deleteInstallation(credential, storage.installationId())) DeletionStatus.COMPLETED else DeletionStatus.PROCESSING
+        val observed = observeTransport(OpenMasuDiagnosticOperation.DELETION_STATUS) { transport.deletionStatus(receipt) }
+        if (observed == DeletionStatus.MISSING) observeTransport(OpenMasuDiagnosticOperation.DELETION) {
+          transport.beginDeletion(credential, storage.installationId(), receipt)
+        } else observed
+      } else if (observeTransport(OpenMasuDiagnosticOperation.DELETION) {
+        transport.deleteInstallation(credential, storage.installationId())
+      }) DeletionStatus.COMPLETED else DeletionStatus.PROCESSING
       if (status != DeletionStatus.COMPLETED) { backstopScheduler(context); return false }
       completePendingResetInstall(storage.completeDeletion(receipt))
     }.getOrElse { backstopScheduler(context); false }
@@ -371,7 +375,14 @@ class OpenMasuSdk private constructor(
     if (batch.isEmpty()) return true
     val credential = runCatching { storage.credential() ?: ensureCredential(storage.installationId()) }
       .getOrElse { backstopScheduler(context); return false }
-    return if (runCatching { transport.deliver(credential, batch) }.getOrDefault(false)) {
+    return if (runCatching {
+      observeTransport(OpenMasuDiagnosticOperation.DELIVERY) {
+        if (transport is OpenMasuDiagnosticTransport) {
+          transport.deliverWithDiagnostics(credential, batch)
+          true
+        } else transport.deliver(credential, batch)
+      }
+    }.getOrDefault(false)) {
       database.queue().deleteByIds(batch.map { it.eventId })
       if (database.queue().count() > 0) backstopScheduler(context)
       true
@@ -384,15 +395,39 @@ class OpenMasuSdk private constructor(
   internal fun pendingCount(): Int = executor.submit<Int> { database.queue().count() }.get()
   internal fun pendingEvents(): List<QueuedEvent> = executor.submit<List<QueuedEvent>> { database.queue().pending(10_000) }.get()
   internal fun installationId(): String = storage.installationId()
-  fun queueHealth(): OpenMasuQueueHealth = executor.submit<OpenMasuQueueHealth> {
+  fun queueHealth(): OpenMasuQueueHealth = executor.submit<OpenMasuQueueHealth> { readQueueHealth() }.get()
+
+  /** Local reads only. Completion runs on Room's read executor, never the delivery executor. */
+  fun diagnosticsSnapshot(onComplete: (OpenMasuDiagnosticsSnapshot) -> Unit) {
+    database.queryExecutor.execute {
+      val queue = readQueueHealth()
+      val attempt = storage.diagnosticAttempt()
+      val enabled = storage.collectionEnabled(defaultCollectionEnabled)
+      val barrier = storage.consentBarrierActive()
+      val reset = storage.deletionReceipt() != null || storage.resetInstallPending()
+      onComplete(OpenMasuDiagnosticsSnapshot(
+        enabled, barrier, reset, storage.credential() != null,
+        attempt.atMs, attempt.operation, attempt.result, attempt.httpClass,
+        when {
+          reset -> OpenMasuRetryState.RESET_PENDING
+          !enabled -> OpenMasuRetryState.COLLECTION_BLOCKED
+          barrier -> OpenMasuRetryState.CONSENT_BLOCKED
+          queue.pendingCount > 0 -> OpenMasuRetryState.PENDING
+          else -> OpenMasuRetryState.NONE
+        }, queue,
+      ))
+    }
+  }
+
+  private fun readQueueHealth(): OpenMasuQueueHealth {
     val stats = database.queue().stats() ?: QueueStats()
-    OpenMasuQueueHealth(
+    return OpenMasuQueueHealth(
       pendingCount = database.queue().count(),
       logicalBytes = database.queue().logicalBytes(),
       evictedTotal = stats.evictedTotal,
       rejectedTotal = stats.rejectedTotal,
     )
-  }.get()
+  }
   fun close() {
     executor.shutdown()
     executor.awaitTermination(10, TimeUnit.SECONDS)
@@ -400,7 +435,37 @@ class OpenMasuSdk private constructor(
   }
 
   private fun ensureCredential(installationId: String): InstallationCredential = storage.credential()
-    ?: transport.enroll(installationId).also { storage.setCredential(it) }
+    ?: observeTransport(OpenMasuDiagnosticOperation.ENROLLMENT) { transport.enroll(installationId) }
+      .also { storage.setCredential(it) }
+
+  private fun <T> observeTransport(operation: OpenMasuDiagnosticOperation, work: () -> T): T {
+    val attempt = DiagnosticAttempt(System.currentTimeMillis(), operation, OpenMasuDiagnosticResult.IN_FLIGHT)
+    runCatching { storage.setDiagnosticAttempt(attempt) }
+    try {
+      val value = work()
+      val http = transport is HmacHttpTransport || (operation == OpenMasuDiagnosticOperation.DELIVERY && transport is OpenMasuDiagnosticTransport)
+      val result = when {
+        value == false -> OpenMasuDiagnosticResult.CUSTOM_FAILURE
+        http && operation == OpenMasuDiagnosticOperation.DELIVERY -> OpenMasuDiagnosticResult.ACCEPTED
+        http -> OpenMasuDiagnosticResult.HTTP_RESPONSE
+        else -> OpenMasuDiagnosticResult.CUSTOM_SUCCESS
+      }
+      val httpClass = when {
+        !http -> OpenMasuHttpClass.NONE
+        value == DeletionStatus.MISSING -> OpenMasuHttpClass.HTTP_4XX
+        else -> OpenMasuHttpClass.HTTP_2XX
+      }
+      runCatching { storage.setDiagnosticAttempt(attempt.copy(result = result, httpClass = httpClass)) }
+      return value
+    } catch (error: Exception) {
+      val failure = error as? OpenMasuTransportFailure
+      runCatching { storage.setDiagnosticAttempt(attempt.copy(
+        result = failure?.result ?: if (transport is HmacHttpTransport) OpenMasuDiagnosticResult.UNEXPECTED_RESPONSE else OpenMasuDiagnosticResult.CUSTOM_FAILURE,
+        httpClass = failure?.httpClass ?: OpenMasuHttpClass.NONE,
+      )) }
+      throw error
+    }
+  }
 
   private fun normalizeDeferred(value: PlayReferrerEvidence): PlayReferrerEvidence {
     if (value.deepLinkValue == null) return value.copy(deferredDeepLinkStatus = value.deferredDeepLinkStatus ?: "absent")

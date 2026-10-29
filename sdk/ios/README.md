@@ -218,6 +218,23 @@ queue contains only higher-value measurement evidence. `queueHealth()` exposes
 only pending count, logical bytes, cumulative evictions, and cumulative
 rejections; it never returns queued payloads or identifiers.
 
+`try await sdk.diagnosticsSnapshot()` adds collection enablement, the consent
+barrier, reset-pending and enrolled flags, and the last observed enrollment,
+delivery or deletion attempt's timestamp, closed result and HTTP class alongside
+queue health. It reads only local state: no initialization, identifier creation,
+enrollment, flush or diagnostic upload. The actor records `inFlight` before
+awaiting network I/O, so a diagnostic read does not wait for the response. Closed
+attempt metadata survives reopening; no identifiers, secrets, URLs, payloads,
+response bodies or exception messages are returned.
+
+`accepted` means HTTP 202 admission, **not ledger completion**. Authentication
+rejection, rate limiting and network unavailability are separate results. Custom
+transports remain compatible: successful calls are `customSuccess`, not a made-up
+HTTP response; typed `OpenMasuError.transport` and `URLError` failures are safely
+classified, and other errors are `customFailure`. Retry state `pending` means
+local work remains, not a scheduled retry time. See
+[measurement health](../../docs/measurement-health.md#local-sdk-diagnostics-are-separate).
+
 Consent-gated applications must set the Boolean Info.plist key
 `OpenMasuCollectionEnabledDefault` to `false` and enable collection only after
 their own policy allows it. Unity's postprocessor writes `false` unless the

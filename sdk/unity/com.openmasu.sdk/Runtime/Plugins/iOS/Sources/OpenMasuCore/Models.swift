@@ -154,6 +154,43 @@ public struct OpenMasuQueueHealth: Equatable, Sendable {
   public let rejectedTotal: Int64
 }
 
+public enum OpenMasuDiagnosticOperation: String, Codable, Sendable {
+  case none, enrollment, delivery, deletion, deletionStatus = "deletion_status"
+}
+public enum OpenMasuDiagnosticResult: String, Codable, Sendable {
+  case notAttempted = "not_attempted", inFlight = "in_flight", accepted, httpResponse = "http_response"
+  case authenticationRejected = "authentication_rejected", rateLimited = "rate_limited"
+  case networkUnavailable = "network_unavailable", serverError = "server_error", requestRejected = "request_rejected"
+  case unexpectedResponse = "unexpected_response", customSuccess = "custom_success", customFailure = "custom_failure"
+}
+public enum OpenMasuHttpClass: String, Codable, Sendable {
+  case none, http2xx = "http_2xx", http4xx = "http_4xx", http5xx = "http_5xx", other
+}
+public enum OpenMasuRetryState: String, Sendable {
+  case none, pending, collectionBlocked = "collection_blocked", consentBlocked = "consent_blocked", resetPending = "reset_pending"
+}
+
+/// Closed local metadata. HTTP acceptance is not ledger completion or recognized revenue.
+public struct OpenMasuDiagnosticsSnapshot: Equatable, Sendable {
+  public let collectionEnabled: Bool
+  public let consentBarrierActive: Bool
+  public let resetPending: Bool
+  public let enrolled: Bool
+  public let lastAttemptAtMs: Int64?
+  public let lastOperation: OpenMasuDiagnosticOperation
+  public let lastResult: OpenMasuDiagnosticResult
+  public let httpClass: OpenMasuHttpClass
+  public let retryState: OpenMasuRetryState
+  public let queue: OpenMasuQueueHealth
+}
+
+struct DiagnosticAttempt: Codable {
+  var atMs: Int64? = nil
+  var operation: OpenMasuDiagnosticOperation = .none
+  var result: OpenMasuDiagnosticResult = .notAttempted
+  var httpClass: OpenMasuHttpClass = .none
+}
+
 struct QueueCapacity: Equatable, Sendable {
   let maxRecords: Int
   let maxBytes: Int64

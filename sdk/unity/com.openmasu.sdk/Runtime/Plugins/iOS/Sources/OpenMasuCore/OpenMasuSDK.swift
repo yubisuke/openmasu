@@ -356,13 +356,15 @@ public actor OpenMasuSDK {
     if journal.replacementId == nil {
       guard let credential = try storage.credential() else { throw OpenMasuError.resetRequiresEnrollment }
       if let asynchronous = transport as? any OpenMasuDeletionTransport {
-        var state = try await asynchronous.deletionStatus(receipt: journal.receipt)
+        var state = try await observeTransport(.deletionStatus) { try await asynchronous.deletionStatus(receipt: journal.receipt) }
         if state == .missing {
-          state = try await asynchronous.beginDeletion(credential: credential, installationId: journal.installationId, receipt: journal.receipt)
+          state = try await observeTransport(.deletion) {
+            try await asynchronous.beginDeletion(credential: credential, installationId: journal.installationId, receipt: journal.receipt)
+          }
         }
         guard state == .completed else { throw OpenMasuError.resetPending }
       } else {
-        try await transport.deleteInstallation(credential: credential, installationId: journal.installationId)
+        try await observeTransport(.deletion) { try await transport.deleteInstallation(credential: credential, installationId: journal.installationId) }
       }
     }
     let newInstallationId = try storage.completeDeletion()
@@ -372,7 +374,7 @@ public actor OpenMasuSDK {
   private func completePendingReset(installationId: String) async throws {
     if try storage.consentBarrierActive() || !isCollectionEnabled() { return }
     if try storage.credential() == nil {
-      try storage.setCredential(try await transport.enroll(installationId: installationId))
+      try storage.setCredential(try await observeTransport(.enrollment) { try await transport.enroll(installationId: installationId) })
     }
     if try !storage.isInstallRecorded() {
       let eventId = "event:reset:\(installationId)"
@@ -411,7 +413,7 @@ public actor OpenMasuSDK {
     let events = try storage.pending(limit: 100)
     guard !events.isEmpty else { return }
     let credential = try await ensureCredential()
-    try await transport.deliver(credential: credential, events: events)
+    try await observeTransport(.delivery) { try await transport.deliver(credential: credential, events: events) }
     try storage.delete(eventIds: events.map(\.eventId))
   }
 
@@ -419,6 +421,20 @@ public actor OpenMasuSDK {
   public func pendingEvents() throws -> [QueuedEvent] { try storage.pending(limit: 10_000) }
   public func pendingCount() throws -> Int { try storage.count() }
   public func queueHealth() throws -> OpenMasuQueueHealth { try storage.queueHealth() }
+  /// Reads local state only; never generates an identifier, enrolls, or sends.
+  public func diagnosticsSnapshot() throws -> OpenMasuDiagnosticsSnapshot {
+    let queue = try storage.queueHealth()
+    let attempt = try storage.diagnosticAttempt()
+    let enabled = try storage.collectionEnabled(default: Self.collectionDefault(bundle: .main, fallback: configuration.collectionEnabledByDefault))
+    let barrier = try storage.consentBarrierActive()
+    let reset = try storage.deletionJournal() != nil || storage.isResetPending()
+    let retry: OpenMasuRetryState = reset ? .resetPending : !enabled ? .collectionBlocked : barrier ? .consentBlocked : queue.pendingCount > 0 ? .pending : .none
+    return OpenMasuDiagnosticsSnapshot(
+      collectionEnabled: enabled, consentBarrierActive: barrier, resetPending: reset, enrolled: try storage.credential() != nil,
+      lastAttemptAtMs: attempt.atMs, lastOperation: attempt.operation, lastResult: attempt.result, httpClass: attempt.httpClass,
+      retryState: retry, queue: queue
+    )
+  }
   public func storageRoot() -> URL { storage.root }
 
   public func beginAppleConversionState(consentGranted: Bool, schemaVersion: String, schemaDigest: String) throws -> AppleConversionStateLease {
@@ -452,9 +468,46 @@ public actor OpenMasuSDK {
 
   private func ensureCredential() async throws -> InstallationCredential {
     if let credential = try storage.credential() { return credential }
-    let credential = try await transport.enroll(installationId: storage.installationId())
+    let credential = try await observeTransport(.enrollment) { try await transport.enroll(installationId: storage.installationId()) }
     try storage.setCredential(credential)
     return credential
+  }
+
+  private func observeTransport<T>(_ operation: OpenMasuDiagnosticOperation, work: () async throws -> T) async throws -> T {
+    var attempt = DiagnosticAttempt(atMs: Int64(Date().timeIntervalSince1970 * 1_000), operation: operation, result: .inFlight)
+    // Persist before await: the actor may serve a diagnostic read during network I/O.
+    try? storage.setDiagnosticAttempt(attempt)
+    do {
+      let value = try await work()
+      let http = transport is HmacHttpTransport
+      attempt.result = http ? (operation == .delivery ? .accepted : .httpResponse) : .customSuccess
+      attempt.httpClass = http ? ((value as? DeletionStatus) == .missing ? .http4xx : .http2xx) : .none
+      try? storage.setDiagnosticAttempt(attempt)
+      return value
+    } catch {
+      attempt.result = .customFailure
+      if let failure = error as? OpenMasuError, case .transport(let status) = failure {
+        switch status {
+        case 401, 403: attempt.result = .authenticationRejected
+        case 429: attempt.result = .rateLimited
+        case 500...599: attempt.result = .serverError
+        case 400...499: attempt.result = .requestRejected
+        default: attempt.result = .unexpectedResponse
+        }
+        switch status {
+        case 200...299: attempt.httpClass = .http2xx
+        case 400...499: attempt.httpClass = .http4xx
+        case 500...599: attempt.httpClass = .http5xx
+        default: attempt.httpClass = .other
+        }
+      } else if error is URLError {
+        attempt.result = .networkUnavailable
+      } else if transport is HmacHttpTransport {
+        attempt.result = .unexpectedResponse
+      }
+      try? storage.setDiagnosticAttempt(attempt)
+      throw error
+    }
   }
 
   private struct AppStorePurchaseContext {
