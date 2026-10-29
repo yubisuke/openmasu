@@ -276,6 +276,7 @@ describe("M2a redirector HTTP shell", () => {
       };
     };
     const unknown = await request("/r/UnknownSlug0_");
+    const activeBeforePause = await request(`/r/${slug}`);
     const batches = () => withTenant(pool, tenantId, async client => (await client.query<{ n: number }>(
       "SELECT count(*)::int AS n FROM ledger.ingest_batches WHERE tenant_id=$1", [tenantId])).rows[0].n);
     const beforePause = await batches();
@@ -295,7 +296,7 @@ describe("M2a redirector HTTP shell", () => {
     assert.equal(resumed.status, 302);
     const location = new URL(resumed.headers.find(([name]) => name === "location")![1]);
     location.searchParams.delete("referrer");
-    const destination = new URL(storedLink.destination_url); destination.searchParams.delete("referrer");
+    const destination = new URL(activeBeforePause.headers.find(([name]) => name === "location")![1]); destination.searchParams.delete("referrer");
     assert.equal(location.href, destination.href, "resume preserves the same slug and configured destination");
     assert.equal(await batches(), beforePause + 1);
     await withTenant(pool, tenantId, (client) => client.query(
