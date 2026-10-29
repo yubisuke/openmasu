@@ -48,6 +48,7 @@ import { persistCalculatedMetricRun } from "./metrics/persistence.js";
 import { signSdkRequest } from "../../api/src/sdk-auth.js";
 import { KeyedTokenBucket } from "../../api/src/rate-limit.js";
 import { processSdkInbox } from "./sdk-worker.js";
+import { createSyntheticValidation, syntheticValidationStatus } from "../../api/src/synthetic-validations.js";
 
 type Any = Record<string, any>;
 
@@ -623,6 +624,8 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     // D7 schedule with a nine-day lag cannot start on Aug 06 before Aug 15.
     // Real HTTP/DB timers still run; received_at is never rewritten afterward.
     const admittedAt = "2026-08-14T00:00:00.000Z";
+    const validation = await createSyntheticValidation(appPool, reportIdentity, { expected_events: ["session_start"] });
+    const duplicateValidation = await createSyntheticValidation(appPool, reportIdentity, { expected_events: ["session_start"] });
     context.mock.timers.enable({ apis: ["Date"], now: new Date(admittedAt) });
     try {
       const keyResponse = await admin(`/v1/admin/apps/${appId}/sdk-keys`, {
@@ -640,6 +643,7 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
           "x-openmasu-timestamp-ms": String(timestampMs), "x-openmasu-nonce": nonce, "x-openmasu-signature": signature } });
       };
       const sdkEventIds: string[] = [], sdkBatchIds: string[] = [];
+      let sendValidationDuplicate!: () => Promise<Response>;
       for (const [group, hour] of [["a", "00"], ["b", "03"]]) {
         const installationId = `installation:kpi70-install-${group}-0`;
         const enrollment = await signed("/v1/installations", { installation_id: installationId });
@@ -652,11 +656,18 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
             occurred_at: `2026-08-${day}T${hour}:30:00.000Z`, occurred_at_source: "device", processing_sequence: index + 1,
             payload: { event_name: "session_start", installation_id: installationId, session_id: sessionId } };
         });
-        const response = await signed("/v1/events/batch", { records }, credential);
+        const response = await signed("/v1/events/batch", { records, validation_session_token: validation.session_token }, credential);
         assert.equal(response.status, 202);
         sdkBatchIds.push((await response.json() as { ingest_batch_id: string }).ingest_batch_id);
+        if (group === "a") {
+          sendValidationDuplicate = () => signed("/v1/events/batch", { records: [records[0]], validation_session_token: duplicateValidation.session_token }, credential);
+        }
       }
+      const queuedValidation = await syntheticValidationStatus(readerPool, reportIdentity, validation.session_id);
+      assert.ok(queuedValidation.receipts.every(receipt => receipt.processing_state === "queued" && receipt.unresolved === 2));
       assert.equal(await processSdkInbox(appPool, payloadStore, tenantId), 2);
+      assert.equal((await sendValidationDuplicate()).status, 202);
+      assert.equal(await processSdkInbox(appPool, payloadStore, tenantId), 1);
       await withTenant(readerPool, tenantId, async client => {
         const admitted = await client.query<{ event_id: string; producer: string; received_at: string }>(
           `SELECT event_id,producer,received_at FROM ledger.raw_records
@@ -674,6 +685,12 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     assert.equal((await processMetricSchedules(appPool, tenantId, { now: new Date("2026-08-15T00:00:00.000Z") })).completedDates, 1);
     const rows = (await metricReport(readerPool, reportIdentity, { tenantId, appId, metricScheduleId: id,
       supersession: "latest", limit: 200 })).data;
+    const validationResult = await syntheticValidationStatus(readerPool, reportIdentity, validation.session_id);
+    assert.equal(validationResult.expectations[0].accepted, 4);
+    assert.ok(validationResult.receipts.every(receipt => receipt.metric_state === "saved_input_reference" && receipt.saved_input_references > 0));
+    const duplicateResult = await syntheticValidationStatus(readerPool, reportIdentity, duplicateValidation.session_id);
+    assert.equal(duplicateResult.receipts[0].duplicate, 1);
+    assert.equal(duplicateResult.receipts[0].metric_state, "not_observed", "a duplicate must not borrow a different session's canonical metric evidence");
     for (const [campaign, installs, cost, roas, retention] of [["kpi70-a", "3", "10000000", "1200000", "333333"],
       ["kpi70-b", "2", "4000000", "1500000", "500000"]]) {
       const value = (name: string) => rows.find(row => row.grouping.campaign_id === campaign && row.metric_name === name)!.value_unscaled;

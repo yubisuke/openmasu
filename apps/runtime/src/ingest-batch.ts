@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { uuidV7, withTenant } from "./index.js";
 import type { PayloadStore } from "./payload-store.js";
 import { batchDiagnosticGroups } from "./measurement-diagnostics.js";
@@ -27,6 +27,7 @@ export async function appendDurableBatch(
   pool: Pool,
   payloadStore: PayloadStore,
   input: DurableBatchInput,
+  onPersisted?: (client: PoolClient, ingestBatchId: string) => Promise<void>,
 ): Promise<string> {
   if (!Number.isInteger(input.eventCount) || input.eventCount < 1 || input.eventCount > 100) {
     throw new Error("event_count_out_of_range");
@@ -101,6 +102,9 @@ export async function appendDurableBatch(
           ingest_batch_id: ingestBatchId, status: "pending", changed_at: input.receivedAt,
         })],
       );
+      // Operational receipt/quota updates share admission's commit and rollback.
+      // The trusted callback must not copy its metadata into the durable body.
+      if (onPersisted) await onPersisted(client, ingestBatchId);
     });
   } catch (error) {
     await payloadStore.purge(bodyRef);

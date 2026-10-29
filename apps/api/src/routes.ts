@@ -2,6 +2,13 @@ export type RouteAuth = "public" | "admin_bearer" | "sdk_hmac" | "privacy_receip
 export type RouteCapability = "read" | "operate" | "administer";
 
 export type RouteHandler =
+  | "admin_synthetic_validation_create"
+  | "admin_synthetic_validation_read"
+  | "admin_synthetic_validation_close"
+  | "dashboard_synthetic_validation_form"
+  | "dashboard_synthetic_validation_create"
+  | "dashboard_synthetic_validation_read"
+  | "dashboard_synthetic_validation_close"
   | "admin_fraud_preview"
   | "dashboard_fraud_preview"
   | "admin_comparison_read"
@@ -141,6 +148,13 @@ function exactPathPattern(path: string): RegExp {
 }
 
 export const routes: readonly RouteDefinition[] = [
+  { handler: "admin_synthetic_validation_create", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/synthetic-validations$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "admin_synthetic_validation_read", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/synthetic-validations\/[^/]+$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "admin_synthetic_validation_close", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/synthetic-validations\/[^/]+\/close$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "dashboard_synthetic_validation_form", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/synthetic-validations$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_synthetic_validation_create", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/synthetic-validations$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_synthetic_validation_read", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/synthetic-validations\/[^/]+$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_synthetic_validation_close", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/synthetic-validations\/[^/]+\/close$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "admin_comparison_read", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/(?:comparisons|comparison-runs\/[^/]+)$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_comparison_mutate", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/comparisons$/, auth: "admin_bearer", mutates: true, capability: "operate" },
   { handler: "dashboard_comparison_runs", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/(?:comparisons|comparison-runs\/[^/]+\.json)$/, auth: "dashboard_session", mutates: false, capability: "read" },

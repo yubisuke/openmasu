@@ -15,6 +15,7 @@ export function renderRecentMeasurementHealth(recent: RecentMeasurementHealth, a
   const pending = recent.pending_groups.map(group =>
     `<tr><th scope="row">${value(group.producer)} / ${value(group.producer_version)} / ${value(group.event_name)}</th><td>${value(group.pending)}</td><td>${value(group.post_processing_pending)}</td><td>${value(group.oldest_received_at)}</td></tr>`).join("");
   return `<section aria-label="Recent measurement"><h2>Recent measurement</h2>${windows}
+    ${appId ? `<p><a href="/dashboard/apps/${encodeURIComponent(appId)}/synthetic-validations">Validate synthetic SDK receipts in an isolated disposable deployment</a></p>` : ""}
     <p>Current receipt window: ${value(recent.received_from)} ≤ server receipt &lt; ${value(recent.received_to)}. The preceding equal window starts at ${value(recent.previous_from)}. These windows do not use event occurrence time or report filters.</p>
     <p>SDK versions are client-reported public versions, not attested device identities. Unknown values are grouped as other. Legacy rows without recorded header metadata are not reconstructed from protected payloads.</p>
     <ul>${notices}</ul>

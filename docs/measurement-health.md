@@ -92,6 +92,94 @@ Unity's Editor shim explicitly reports that device diagnostics are unavailable.
 Inspect the snapshot in the consumer app and compare with bounded server receipts;
 there is no new diagnostic endpoint or upload service.
 
+## Disposable synthetic validation sessions
+
+From **Recent measurement**, open **Validate synthetic SDK receipts**. This
+feature is available only when the database was created with the immutable
+`synthetic_disposable` deployment purpose. An environment override or a request
+field cannot enable it on a persistent deployment. Use synthetic inputs and
+isolated deployment keys only; this is not a real-device or production diagnostic
+upload path.
+
+An administrator creates a session with
+`POST /v1/admin/apps/<app-id>/synthetic-validations`, for example:
+
+```json
+{
+  "ttl_seconds": 600,
+  "expected_events": ["install", "session_start", "custom_event"],
+  "expected_custom_keys": ["synthetic_checkout"]
+}
+```
+
+The response contains `session_id`, `session_token` and `expires_at`. The opaque
+32-byte base64url token is shown only in this creation response, never a URL or
+subsequent status result. The closed event vocabulary is `install`,
+`session_start`, `custom_event`, `ad_revenue`, `purchase`, `refund` and
+`deep_link_open`. Optional custom keys match exactly; they are declarations,
+not a shared catalog or fuzzy matching. At most 16 keys of 64 characters are
+accepted, and declaring keys requires the `custom_event` expectation.
+
+In the SDK's explicit synthetic validation configuration, supply that token and
+expiry. The wire protocol adds `validation_session_token` only at the top level
+of the existing `{ "records": [...] }` batch envelope. The entire raw envelope
+is covered by the existing SDK HMAC, installation credential and nonce checks.
+The server removes this operational field before durable event-body storage;
+neither the token nor a validation session reference enters contract artifacts.
+Collection, consent, enrollment, normal event validation and privacy fences
+remain independent and unchanged.
+
+An admitted opt-in batch receives an additional opaque `validation_receipt` in
+its HTTP 202 response. **This is queued admission, not ledger acceptance.**
+Quota consumption and receipt association commit atomically with the durable
+batch. An invalid, foreign, expired or over-limit session cannot leave a partial
+batch; its protected staged body is purged on rollback. There is no fallback
+that silently drops an invalid explicit label while still admitting its batch.
+An unlabelled batch follows its existing behavior and has no validation receipt.
+
+Read `GET /v1/admin/apps/<app-id>/synthetic-validations/<session-id>` with an
+authorized read-capable bearer key, or reload the dashboard detail page using
+its session cookie. Reads use the database reader role and never start jobs,
+sweep data, prolong expiry or contact a provider. Each result describes only
+this session's admitted receipts and their recorded batch/delivery/rejection
+evidence. It distinguishes queued, processed, failed and post-processing states;
+accepted, rejected, duplicate and unresolved attempt counts; and closed rejection
+reasons. Unknown/foreign app or session references do not disclose another scope.
+
+The optional metric observation is `saved_input_reference`: the receipt's own
+accepted record is referenced by a saved metric's input snapshot. **It does not
+prove a causal contribution to that metric's numeric value.** A duplicate never
+borrows its canonical record from another receipt or session. Inspection is
+limited to the latest 100 saved metric runs in the same app; no match at that
+limit is `unknown_limit`, not a zero result or proof of absence. No event,
+installation or raw payload identifiers, credential values, provider responses
+or protected references appear in the status projection. Expected events with
+no observations remain missing, not an automatic pass or fail verdict.
+
+Lifetime defaults to 10 minutes and is bounded to 1–30 minutes, with no sliding
+extension. A session permits at most 50 batches and 200 submitted events; a tenant
+has at most 20 retained sessions. The server's database clock is authoritative:
+expired status reads fail immediately and admission refuses expired tokens.
+`POST /v1/admin/apps/<app-id>/synthetic-validations/<session-id>/close` requires
+administrator authority and immediately removes its ephemeral associations.
+The dashboard mutations also require CSRF and Origin checks.
+
+At the beginning of each successful tenant worker cycle, up to 50 expired
+sessions are deleted with their receipt associations. The ordinary poll interval
+defaults to five seconds, but worker downtime, database unavailability or queued
+work can delay physical cleanup; this is not a hard wall-clock erasure SLA.
+Expired sessions are independently discovered even after their ingest work is
+finished. Creation also performs a bounded expired-session sweep. Expiry,
+closing and cleanup delete only the association, not the underlying synthetic
+ledger. A disposable seed reset clears both its ledger and validation sessions.
+
+The existing SDK HTTP integration test covers receipt admission, rejection,
+duplicate classification, scoping, expiry, cap races, rollback and read-only
+status. The existing scheduled-metric test connects signed SDK events to real
+SQL-generated input references and verifies that a different validation session's
+duplicate cannot claim those references. These are synthetic server proofs,
+not evidence of real-device or live-provider delivery.
+
 ## Retained history is background context
 
 The view uses a read-only repeatable-read database snapshot. Its observation

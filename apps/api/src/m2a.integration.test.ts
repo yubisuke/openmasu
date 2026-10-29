@@ -17,6 +17,8 @@ import {
   type PayloadStore,
   uuidV7,
   withTenant,
+  createReaderPool,
+  cleanupSyntheticValidations,
 } from "@openmasu/runtime";
 import { listRuntimeWorkTenants, processSdkInbox } from "../../worker/src/sdk-worker.js";
 import {
@@ -40,6 +42,7 @@ import { SDK_INSTALLATION_PRIVACY_PATH } from "./routes.js";
 import { handleDevicePrivacyStatus } from "./sdk-routes.js";
 import { verifyCompactJws } from "@openmasu/commerce-lifecycle";
 import { nonFraudBundleHash } from "@openmasu/contracts";
+import { createSyntheticValidation, closeSyntheticValidation, syntheticValidationStatus } from "./synthetic-validations.js";
 
 const run = randomBytes(6).toString("hex");
 const tenantId = `tenant-m2a-${run}`;
@@ -2130,6 +2133,77 @@ describe("M2a signed SDK ingestion", () => {
        WHERE tenant_id=$1 AND app_id=$2 AND reason_code='event_id_conflict'`, [tenantId, appId],
     ));
     assert.equal(conflictCount.rows[0].count, 1);
+  });
+
+  it("binds only opted-in synthetic receipts atomically and expires their associations without changing the ledger", async () => {
+    const reader = createReaderPool();
+    const identity = { tenantId, appId, keyId: "synthetic-validation-admin", role: "admin" as const };
+    try {
+      const session = await createSyntheticValidation(pool, identity, { expected_events: ["custom_event"], expected_custom_keys: ["synthetic_expected"] });
+      const valid = sourceEvent(`event:validation-valid:${run}`, "custom_event", { installation_id: installationId, event_key: "synthetic_expected" });
+      const invalid = sourceEvent(`event:validation-invalid:${run}`, "custom_event", { installation_id: installationId });
+      const send = (records: unknown[], token = session.session_token) => signed("/v1/events/batch", {
+        records, validation_session_token: token,
+      }, { secret: installationSecret, installationKeyId });
+      const admitted = await send([valid, invalid]); assert.equal(admitted.status, 202);
+      const receipt = await admitted.json() as { ingest_batch_id: string; validation_receipt: string };
+      assert.match(receipt.validation_receipt, /^[A-Za-z0-9_-]{43}$/);
+      const queued = await syntheticValidationStatus(reader, identity, session.session_id);
+      assert.equal(queued.receipts[0].processing_state, "queued"); assert.equal(queued.receipts[0].unresolved, 2);
+      const durable = await withTenant(pool, tenantId, async client => (await client.query(
+        "SELECT body_ref,artifact FROM ledger.ingest_batches WHERE tenant_id=$1 AND app_id=$2 AND ingest_batch_id=$3", [tenantId, appId, receipt.ingest_batch_id])).rows[0]);
+      assert.equal((await payloadStore.read(durable.body_ref)).includes(Buffer.from(session.session_token)), false);
+      assert.equal(JSON.stringify(durable.artifact).includes("validation"), false);
+      await processSdkInbox(pool, payloadStore, tenantId);
+      const first = await syntheticValidationStatus(reader, identity, session.session_id);
+      assert.deepEqual(first.expectations.map(row => [row.custom_key ?? "class", row.accepted, row.rejected]), [["class", 1, 1], ["synthetic_expected", 1, 0]]);
+      assert.deepEqual(first.receipts[0].rejection_reasons, [{ reason: "payload_schema_invalid", count: 1 }]);
+      const repeated = await send([valid]); assert.equal(repeated.status, 202);
+      await processSdkInbox(pool, payloadStore, tenantId);
+      assert.equal((await syntheticValidationStatus(reader, identity, session.session_id)).expectations[0].duplicate, 1);
+      await assert.rejects(syntheticValidationStatus(reader, { ...identity, tenantId: `tenant-other-${run}` }, session.session_id), /validation_session_unavailable/);
+      await assert.rejects(syntheticValidationStatus(reader, { ...identity, appId: `app-other-${run}` }, session.session_id), /validation_session_unavailable/);
+      await withTenant(pool, tenantId, client => client.query("INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ($1,$2,$3)", [tenantId, `app-validation-other-${run}`, new Date().toISOString()]));
+      const foreign = await createSyntheticValidation(pool, { ...identity, appId: `app-validation-other-${run}` }, {});
+      const before = await count("ingest_batches");
+      assert.equal((await send([valid], foreign.session_token)).status, 404);
+      assert.equal((await send([valid], "synthetic-invalid-token")).status, 400);
+      assert.equal(await count("ingest_batches"), before);
+      const rejectedBodyMarker = `synthetic-rolled-back-validation-${run}`;
+      await assert.rejects(appendDurableBatch(pool, payloadStore, { tenantId, appId, producer: "sdk-android", eventCount: 1,
+        receivedAt: new Date().toISOString(), body: Buffer.from(JSON.stringify({ records: [{ marker: rejectedBodyMarker }] })) },
+      async client => {
+        await client.query("SELECT 1 FROM ledger.ingest_batches WHERE tenant_id=$1", [tenantId]);
+        throw new Error("synthetic_receipt_write_failure");
+      }), /synthetic_receipt_write_failure/);
+      assert.equal(await count("ingest_batches"), before); assert.equal(await payloadStore.scanFor(rejectedBodyMarker), false);
+      const safe = JSON.stringify(await syntheticValidationStatus(reader, identity, session.session_id));
+      for (const forbidden of [session.session_token, installationId, "record_id", "body_ref", "event_id", '"payload":']) assert.equal(safe.includes(forbidden), false);
+      const snapshot = await withTenant(pool, tenantId, client => client.query("SELECT * FROM ephemeral.synthetic_validation_sessions WHERE session_id=$1", [session.session_id]));
+      await syntheticValidationStatus(reader, identity, session.session_id);
+      assert.deepEqual((await withTenant(pool, tenantId, client => client.query("SELECT * FROM ephemeral.synthetic_validation_sessions WHERE session_id=$1", [session.session_id]))).rows, snapshot.rows);
+
+      const capped = await createSyntheticValidation(pool, identity, {});
+      await withTenant(pool, tenantId, client => client.query("UPDATE ephemeral.synthetic_validation_sessions SET batch_count=49,event_count=199 WHERE session_id=$1", [capped.session_id]));
+      const raced = await Promise.all([send([valid], capped.session_token), send([valid], capped.session_token)]);
+      assert.deepEqual(raced.map(response => response.status).sort(), [202, 409]);
+      const last = (await syntheticValidationStatus(reader, identity, capped.session_id));
+      assert.equal(last.batch_count, 50); assert.equal(last.event_count, 200); assert.equal(last.receipts.length, 1);
+
+      const expired = await createSyntheticValidation(pool, identity, {});
+      await withTenant(pool, tenantId, client => client.query(`UPDATE ephemeral.synthetic_validation_sessions
+        SET created_at=clock_timestamp()-interval '2 minutes',expires_at=clock_timestamp()-interval '1 minute' WHERE session_id=$1`, [expired.session_id]));
+      await assert.rejects(syntheticValidationStatus(reader, identity, expired.session_id), /validation_session_unavailable/);
+      assert.equal((await send([valid], expired.session_token)).status, 410);
+      assert.ok((await listRuntimeWorkTenants(pool)).includes(tenantId));
+      assert.ok(await cleanupSyntheticValidations(pool, tenantId) >= 1);
+      const ledgerBeforeClose = await count("ingest_batches");
+      await closeSyntheticValidation(pool, identity, session.session_id);
+      await assert.rejects(syntheticValidationStatus(reader, identity, session.session_id), /validation_session_unavailable/);
+      assert.equal((await send([valid])).status, 404);
+      assert.equal(await count("ingest_batches"), ledgerBeforeClose);
+      await assert.rejects(withTenant(reader, tenantId, client => client.query("DELETE FROM ephemeral.synthetic_validation_sessions")), /permission denied/);
+    } finally { await reader.end(); }
   });
 
   it("bounds each SDK inbox cycle and resumes the FIFO backlog on the next cycle", async () => {

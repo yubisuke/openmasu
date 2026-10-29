@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
 import { createHash } from "node:crypto";
-import { appendDurableBatch, uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
+import { appendDurableBatch, uuidV7, withTenant, type PayloadStore, attachSyntheticValidationReceipt,
+  syntheticValidationToken, syntheticValidationTokenDigest, SyntheticValidationError } from "@openmasu/runtime";
 import { executePrivacyRequest, privacyResponseStatus, type PrivacyRequestBody } from "./privacy.js";
 import { assertDsarResponseSafe, generateDsarResponse, parseDsarRequest } from "./dsar.js";
 import { type KeyedTokenBucket } from "./rate-limit.js";
@@ -263,6 +264,12 @@ export async function handleSdkBatch(
   if (!Array.isArray(value.records) || value.records.length < 1 || value.records.length > dependencies.maximumEvents) {
     return writeJson(response, 400, { error: "event_count_out_of_range" });
   }
+  const validationToken = value.validation_session_token;
+  if (validationToken !== undefined) {
+    try { syntheticValidationTokenDigest(validationToken); }
+    catch { return writeJson(response, 400, { error: "validation_request_invalid" }); }
+  }
+  const validationReceipt = validationToken === undefined ? undefined : syntheticValidationToken();
   const receivedAt = new Date().toISOString();
   let records: Any[];
   try { records = value.records.map((record: Any) => normalizedRecord(record, identity, receivedAt, dependencies.config)); }
@@ -293,8 +300,12 @@ export async function handleSdkBatch(
       subjectDigest: identity.installationIdDigest,
       requestNonce: identity.nonce,
       requestTimestampMs: identity.timestampMs,
-    });
+    }, validationReceipt ? (client, batchId) => attachSyntheticValidationReceipt(client, {
+      tenantId: identity.tenantId, appId: identity.appId, token: validationToken,
+      receipt: validationReceipt, batchId, records: records as { record_id: string; event_name: unknown; payload?: { event_key?: unknown } }[],
+    }) : undefined);
   } catch (error) {
+    if (error instanceof SyntheticValidationError) return writeJson(response, error.status, { error: error.code });
     const reason = error instanceof Error ? error.message : "ingest_batch_append_failed";
     if (!["installation_credential_inactive", "privacy_subject_inactive", "privacy_scope_inactive"].includes(reason)) {
       throw error;
@@ -312,7 +323,8 @@ export async function handleSdkBatch(
     action: "ingest_batch_append", targetScope: "ingest_batch", targetRef: ingestBatchId,
     requestDigest: identity.requestDigest, outcome: "succeeded",
   });
-  writeJson(response, 202, { ingest_batch_id: ingestBatchId, status: "pending" });
+  writeJson(response, 202, { ingest_batch_id: ingestBatchId, status: "pending",
+    ...(validationReceipt ? { validation_receipt: validationReceipt } : {}) });
 }
 
 export async function handleApplePurchasePreparation(request: IncomingMessage, response: ServerResponse, dependencies: SdkRouteDependencies, submit = false): Promise<void> {
