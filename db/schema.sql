@@ -5832,8 +5832,6 @@ CREATE UNIQUE INDEX rule_bundle_version_once_except_first_party_window
 -- 093_operator_webhook_signing.sql
 -- Keep the existing destination secret as the immutable reference-HMAC key.
 -- Only signing use is revisioned; retries never silently adopt a later key.
--- A migration owner unable to see every legacy destination must fail, not skip it.
-SET LOCAL row_security = off;
 CREATE TABLE control.operator_webhook_signing_revisions (
   tenant_id control.identifier NOT NULL,
   app_id control.identifier NOT NULL,
@@ -5850,9 +5848,14 @@ CREATE TABLE control.operator_webhook_signing_revisions (
       AND control.canonical_timestamp_value(previous_valid_until)>=control.canonical_timestamp_value(created_at)
       AND control.canonical_timestamp_value(previous_valid_until)<=control.canonical_timestamp_value(created_at)+interval '1 day'))
 );
+-- The migration transaction runs as the table owner. Temporarily remove FORCE
+-- only for this legacy backfill; the transactional DDL lock excludes concurrent
+-- access, and ordinary roles retain their tenant policies throughout.
+ALTER TABLE control.operator_webhook_destinations NO FORCE ROW LEVEL SECURITY;
 INSERT INTO control.operator_webhook_signing_revisions
   (tenant_id,app_id,destination_id,signing_revision,secret_ref,created_at)
   SELECT tenant_id,app_id,destination_id,1,secret_ref,created_at FROM control.operator_webhook_destinations;
+ALTER TABLE control.operator_webhook_destinations FORCE ROW LEVEL SECURITY;
 
 CREATE TABLE control.operator_webhook_signing_retirements (
   tenant_id control.identifier NOT NULL,
