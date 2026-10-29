@@ -217,7 +217,7 @@ export function renderDashboard(view: DashboardView): string {
   const appNavigation = view.apps.length
     ? `<nav aria-label="Applications"><ul>${view.apps.map((app) => `<li><a href="/dashboard/apps/${encodeURIComponent(app.app_id)}">${escapeHtml(app.app_id)}</a></li>`).join("")}</ul></nav>`
     : "<p>No applications are registered.</p>";
-  const empty = reportControls(view) + measurementHealthSection(view) + (selected ? `<p><a href="/dashboard/apps/${encodeURIComponent(selected)}/attribution">Read attribution reason counts</a> · <a href="/dashboard/apps/${encodeURIComponent(selected)}/metric-recalculations">Review input corrections and recalculation jobs</a></p>` : "") + (selected && view.rows.length === 0 && view.records.length === 0 && view.differences.length === 0
+  const empty = reportControls(view) + measurementHealthSection(view) + (selected ? `<p><a href="/dashboard/apps/${encodeURIComponent(selected)}/attribution">Read attribution reason counts</a> · <a href="/dashboard/apps/${encodeURIComponent(selected)}/metric-recalculations">Review input corrections and recalculation jobs</a> · <a href="/dashboard/apps/${encodeURIComponent(selected)}/privacy-jobs">Review deletion job progress</a></p>` : "") + (selected && view.rows.length === 0 && view.records.length === 0 && view.differences.length === 0
     ? "<p>No report data match this view.</p>"
     : "");
   const dailyMeaning = view.rows.some(row => row.metric_name === "daily_selected_install_count")

@@ -4,6 +4,7 @@ import { Readable } from "node:stream";
 import { describe, it } from "node:test";
 import type { Pool } from "pg";
 import type { PayloadStore } from "@openmasu/runtime";
+import { InboxCapacityError } from "@openmasu/runtime";
 import { createRequestHandler, type RequestHandlerDependencies } from "../router.js";
 import { routePool } from "../http-security.js";
 import { dashboardCss } from "../dashboard/css.js";
@@ -30,8 +31,9 @@ function response() {
   const completed = new Promise<void>(done => { resolve = done; });
   const output = {
     statusCode: 200, headersSent: false, headers: {} as Record<string, unknown>, body: "",
+    setHeader(name: string, value: string) { this.headers[name] = value; return this; },
     writeHead(status: number, headers: Record<string, unknown> = {}) {
-      this.statusCode = status; this.headersSent = true; this.headers = headers; return this;
+      this.statusCode = status; this.headersSent = true; this.headers = { ...this.headers, ...headers }; return this;
     },
     end(body = "") { this.body = String(body); resolve(); return this; },
   };
@@ -39,6 +41,17 @@ function response() {
 }
 
 describe("HTTP controller composition", () => {
+  it("returns typed inbox capacity refusals with Retry-After and no internal error", async () => {
+    for (const reason of ["inbox_app_capacity", "inbox_global_capacity", "inbox_capacity_unknown"] as const) {
+      const handler = createRequestHandler({ ...dependencies, adminBucket: {
+        allow() { throw new InboxCapacityError(reason, 19); },
+      } as unknown as NonNullable<RequestHandlerDependencies["adminBucket"]> });
+      const reply = response(); handler(request("/v1/admin/apps"), reply.http); await reply.completed;
+      assert.equal(reply.output.statusCode, reason === "inbox_app_capacity" ? 429 : 503);
+      assert.equal(reply.output.headers["retry-after"], "19");
+      assert.deepEqual(JSON.parse(reply.output.body), { error: reason });
+    }
+  });
   it("separates live and ready without business queries or internal error disclosure", async () => {
     for (const state of [true, false, new Error("postgresql://private-secret@internal-db")]) {
       const handler = createRequestHandler({ ...dependencies, readiness: async () => {
@@ -73,6 +86,10 @@ describe("HTTP controller composition", () => {
     for (const entry of [
       { path: "/v1/admin/apps", headers: { cookie: `openmasu_dashboard=${"A".repeat(43)}` }, status: 401, expected: /unauthorized/ },
       { path: "/dashboard/apps/app-synthetic", headers: { authorization: "Bearer synthetic-admin-key" }, status: 401, expected: /Authentication required/ },
+      { path: "/v1/admin/apps/app-synthetic/privacy-jobs", headers: { cookie: `openmasu_dashboard=${"A".repeat(43)}` }, status: 401, expected: /unauthorized/ },
+      { path: "/v1/admin/apps/app-synthetic/privacy-jobs/request-synthetic", headers: {}, status: 401, expected: /unauthorized/ },
+      { path: "/dashboard/apps/app-synthetic/privacy-jobs", headers: { authorization: "Bearer synthetic-admin-key" }, status: 401, expected: /Authentication required/ },
+      { path: "/dashboard/apps/app-synthetic/privacy-jobs/request-synthetic", headers: {}, status: 401, expected: /Authentication required/ },
       { path: "/dashboard", headers: { authorization: "Bearer synthetic-admin-key" }, status: 200, expected: /Admin key/ },
     ]) {
       const reply = response(); handler(request(entry.path, entry.headers), reply.http);

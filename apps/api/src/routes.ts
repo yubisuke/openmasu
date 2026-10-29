@@ -24,6 +24,8 @@ export type RouteHandler =
   | "admin_fraud_preview"
   | "dashboard_fraud_preview"
   | "dashboard_attribution_window"
+  | "admin_privacy_jobs"
+  | "dashboard_privacy_jobs"
   | "admin_comparison_read"
   | "admin_comparison_mutate"
   | "dashboard_comparison_runs"
@@ -300,6 +302,8 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_rule_bundle", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/rule-bundles$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_fraud_preview", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/rule-bundles\/preview$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_attribution_window", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/attribution-window$/, auth: "dashboard_session", mutates: false, capability: "administer" },
+  { handler: "admin_privacy_jobs", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/privacy-jobs(?:\/[^/]+)?$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "dashboard_privacy_jobs", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/privacy-jobs(?:\/[^/]+)?$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_google_data_manager", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/google-data-manager$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_app", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_analyses", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/analyses$/, auth: "dashboard_session", mutates: false, capability: "read" },

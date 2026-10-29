@@ -132,6 +132,10 @@ through `raw_records_current`.
 
 ## Access, portability, correction, and deletion
 
+App-scoped [deletion progress](operations/privacy-deletion.md) separates protected
+payload removal from metric recalculation through read-only API and dashboard
+receipts. Missing or unavailable replay is not reported as successful completion.
+
 ### SDK deletion receipts
 
 The built-in native transports persist 32 random bytes (64 lowercase hex characters)

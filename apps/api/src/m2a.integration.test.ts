@@ -33,6 +33,7 @@ import { processCommerceReadbacks } from "../../worker/src/commerce-readback-wor
 import { createRequestHandler } from "./router.js";
 import { recordCommerceNotification } from "./commerce-notifications.js";
 import { executePrivacyRequest, privacySubjectDigest } from "./privacy.js";
+import { privacyJobProgress } from "./privacy-job-reports.js";
 import { KeyedTokenBucket } from "./rate-limit.js";
 import { parseMetricQuery } from "./report-query.js";
 import { encodeMetricReport, metricReport } from "./reporting.js";
@@ -3152,7 +3153,9 @@ describe("M2a signed SDK ingestion", () => {
     assert.equal((await signed("/v1/events/batch", { records: [sourceEvent(`event:after-delete:${run}`, "session_start", { installation_id: installationId, session_id: `session:after-delete:${run}` })] }, { secret: installationSecret, installationKeyId })).status, 401);
   });
 
-  it("recovers idempotently when purge succeeds but its verification read fails transiently", async () => {
+  it("recovers idempotently when purge succeeds but its verification read fails transiently", async (t) => {
+    const reader = createReaderPool();
+    t.after(() => reader.end());
     const crashInstallationId = `installation:privacy-crash-${run}`;
     const statusReceipt = randomBytes(32).toString("hex");
     const statusReceiptDigest = createHash("sha256").update(statusReceipt).digest("hex");
@@ -3258,6 +3261,38 @@ describe("M2a signed SDK ingestion", () => {
     assert.equal(Number(prepared.receipt.lifetime_seconds), 30 * 86_400);
     assert.equal(prepared.receipt.artifact.includes(statusReceipt), false);
     assert.equal(prepared.receipt.artifact.includes("status_receipt"), false);
+    const progressState = () => withTenant(pool, tenantId, async client => ({
+      job: (await client.query("SELECT status,updated_at,completed_at FROM control.privacy_deletion_jobs WHERE privacy_request_id=$1", [processing.privacy_request_id])).rows,
+      purges: (await client.query("SELECT status,attempts,last_error_code,updated_at FROM control.privacy_payload_purges WHERE privacy_request_id=$1 ORDER BY reference_digest", [processing.privacy_request_id])).rows,
+      metrics: (await client.query(`SELECT i.state,i.attempts,i.updated_at FROM control.metric_recalculation_jobs r
+        JOIN control.metric_recalculation_items i USING(tenant_id,app_id,recalculation_id)
+        WHERE r.privacy_request_id=$1 ORDER BY i.source_metric_run_id`, [processing.privacy_request_id])).rows,
+    }));
+    const beforeRead = await progressState();
+    const progress = await privacyJobProgress(reader, { tenantId, appId }, processing.privacy_request_id);
+    assert.equal(progress.data.length, 1);
+    assert.equal(progress.data[0].payload.state, "retry_pending");
+    assert.equal(progress.data[0].payload.failed, "1");
+    assert.equal(progress.data[0].payload.completed_at, null);
+    assert.equal(progress.data[0].recalculation.state, "not_recorded");
+    assert.equal(progress.data[0].all_recorded_steps_completed, false);
+    const listing = await privacyJobProgress(reader, { tenantId, appId });
+    assert.deepEqual(listing.data.find(row => row.request_id === processing.privacy_request_id), progress.data[0]);
+    assert.deepEqual(await progressState(), beforeRead, "reader progress cannot advance purge or metric jobs");
+    for (const forbidden of [crashInstallationId, statusReceipt, statusReceiptDigest, secretRef,
+      credential.installation_secret, "deletion_subject", "payload_ref", "record_id", "artifact_template"]) {
+      assert.equal(JSON.stringify(progress).includes(forbidden), false, forbidden);
+    }
+    assert.deepEqual(await privacyJobProgress(reader, { tenantId, appId: `${appId}-other` }, processing.privacy_request_id),
+      { data: [], has_more: false });
+    assert.deepEqual(await privacyJobProgress(reader, { tenantId: `${tenantId}-other`, appId }, processing.privacy_request_id),
+      { data: [], has_more: false });
+    for (const table of ["privacy_deletion_jobs", "privacy_payload_purges"]) {
+      await assert.rejects(withTenant(reader, tenantId, client => client.query(`SELECT * FROM control.${table} LIMIT 1`)), /permission denied/);
+    }
+    const definer = await withTenant(reader, tenantId, client => client.query(
+      "SELECT pg_get_userbyid(proowner) AS owner,prosecdef FROM pg_proc WHERE oid='control.privacy_job_progress(text,text)'::regprocedure"));
+    assert.deepEqual(definer.rows, [{ owner: "openmasu_owner", prosecdef: true }]);
     assert.ok((await listRuntimeWorkTenants(pool)).includes(tenantId),
       "the tenant discovery boundary must expose durable privacy work to the worker");
     assert.equal((await signed("/v1/events/batch", { records: [sourceEvent(
@@ -3288,6 +3323,14 @@ describe("M2a signed SDK ingestion", () => {
       )).rows[0].count),
     }));
     assert.deepEqual(completed, { jobs: 1, artifacts: 1, audits: 1 });
+    const completedProgress = await privacyJobProgress(reader, { tenantId, appId }, processing.privacy_request_id);
+    assert.equal(completedProgress.data[0].payload.state, "completed");
+    assert.equal(completedProgress.data[0].payload.purged, completedProgress.data[0].payload.total);
+    assert.equal(completedProgress.data[0].payload.failed, "0");
+    assert.ok(completedProgress.data[0].payload.completed_at);
+    assert.equal(completedProgress.data[0].recalculation.state, "not_recorded");
+    assert.equal(completedProgress.data[0].all_recorded_steps_completed, false,
+      "physical purge alone is not proof of metric replay completion");
     const completedStatus = await privacyStatus(statusReceipt);
     assert.equal(completedStatus.status, 200);
     assert.deepEqual(await completedStatus.json(), { status: "completed" });

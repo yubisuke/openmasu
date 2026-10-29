@@ -17,6 +17,7 @@ import {
 import { ensureAdminKeys } from "./admin-auth.js";
 import { KeyedTokenBucket, TokenBucket } from "./rate-limit.js";
 import { createRequestHandler } from "./router.js";
+import { executePrivacyRequest, privacySubjectDigest } from "./privacy.js";
 import { ingestRuntimeBatch } from "../../worker/src/ingestion.js";
 import type { CandidateAttempt } from "@openmasu/attribution-core";
 import type { MeasurementHealth } from "./measurement-health.js";
@@ -144,6 +145,61 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     assert.equal((await fetch(`${endpoint}/${created.session_id}`, { headers: { authorization: `Bearer ${readOnly}` } })).status, 200);
     assert.equal((await fetch(`${endpoint}/${created.session_id}/close`, { method: "POST", headers })).status, 200);
     assert.equal((await fetch(`${endpoint}/${created.session_id}`, { headers })).status, 404);
+  });
+
+  it("reads safe deletion progress through API and SSR without changing jobs or crossing app scope", async () => {
+    const privacyApp = `app-privacy-progress-${suffix}`, otherApp = `app-privacy-progress-other-${suffix}`;
+    const foreignTenant = `tenant-privacy-progress-other-${suffix}`, foreignApp = `app-privacy-progress-foreign-${suffix}`;
+    for (const [tenant, app] of [[tenantId, privacyApp], [tenantId, otherApp], [foreignTenant, foreignApp]]) {
+      await withTenant(appPool, tenant, client => client.query(
+        "INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ($1,$2,$3)", [tenant, app, new Date().toISOString()]));
+    }
+    const body = { tenant_id: tenantId, app_id: privacyApp, requested_via: "tenant_admin_api" as const,
+      deletion_scope: "installation" as const, deletion_subject_ref: `installation:privacy-progress-${suffix}` };
+    const deleted = await executePrivacyRequest(appPool, { tenantId, appId: privacyApp, keyId: "synthetic-privacy-progress-key",
+      role: "admin", deletionSubjectDigest: privacySubjectDigest("synthetic-privacy-progress-digest-key", body) }, body, payloadStore);
+    assert.equal(deleted.status, "completed");
+    const endpoint = `${baseUrl}/v1/admin/apps/${privacyApp}/privacy-jobs`;
+    const dashboard = `${baseUrl}/dashboard/apps/${privacyApp}/privacy-jobs`;
+    const requestId = encodeURIComponent(deleted.privacy_request_id);
+    const scopedKey = `synthetic-privacy-progress-reader-${suffix}-${"p".repeat(32)}`;
+    await ensureAdminKeys(appPool, { tenantId, appId: privacyApp }, [{ key: scopedKey, role: "read_only", appScope: privacyApp }]);
+    const headers = { authorization: `Bearer ${scopedKey}` }, sessionCookie = cookie(await login(scopedKey));
+    const state = () => withTenant(appPool, tenantId, async client => ({
+      jobs: (await client.query("SELECT * FROM control.privacy_deletion_jobs WHERE app_id=$1 ORDER BY privacy_request_id", [privacyApp])).rows,
+      purges: (await client.query("SELECT * FROM control.privacy_payload_purges WHERE app_id=$1 ORDER BY reference_digest", [privacyApp])).rows,
+      metrics: (await client.query("SELECT * FROM control.metric_recalculation_items WHERE app_id=$1 ORDER BY recalculation_id,source_metric_run_id", [privacyApp])).rows,
+      audits: (await client.query("SELECT count(*)::text AS count FROM ledger.audit_logs WHERE tenant_id=$1", [tenantId])).rows,
+    }));
+    const beforeRead = await state();
+    for (const path of [endpoint, `${endpoint}/${requestId}`]) {
+      const response = await fetch(path, { headers }); assert.equal(response.status, 200);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      const text = await response.text(), page = JSON.parse(text);
+      assert.equal(page.data[0].request_id, deleted.privacy_request_id);
+      assert.equal(page.data[0].payload.state, "completed");
+      assert.equal(page.data[0].recalculation.state, "not_recorded");
+      assert.equal(page.data[0].all_recorded_steps_completed, false);
+      for (const forbidden of [body.deletion_subject_ref, "deletion_subject", "payload_ref", "record_id", scopedKey])
+        assert.equal(text.includes(forbidden), false, forbidden);
+    }
+    for (const path of [dashboard, `${dashboard}/${requestId}`]) {
+      const response = await fetch(path, { headers: { cookie: sessionCookie } }); assert.equal(response.status, 200);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      const html = await response.text(); assert.match(html, /Not established/); assert.match(html, /not_recorded/);
+      assert.doesNotMatch(html, /<form|<script\b|javascript:|\son[a-z]+=/i);
+      assert.equal(html.includes(body.deletion_subject_ref), false); assert.equal(html.includes(scopedKey), false);
+    }
+    for (const other of [otherApp, foreignApp]) {
+      assert.equal((await fetch(`${baseUrl}/v1/admin/apps/${other}/privacy-jobs/${requestId}`, { headers })).status, 404);
+      assert.equal((await fetch(`${baseUrl}/dashboard/apps/${other}/privacy-jobs/${requestId}`, { headers: { cookie: sessionCookie } })).status, 404);
+    }
+    assert.equal((await fetch(`${endpoint}/unknown-synthetic`, { headers })).status, 404);
+    assert.equal((await fetch(`${dashboard}/unknown-synthetic`, { headers: { cookie: sessionCookie } })).status, 404);
+    assert.equal((await fetch(`${endpoint}?tenant=foreign`, { headers })).status, 400);
+    assert.equal((await fetch(endpoint, { headers: { cookie: sessionCookie } })).status, 401);
+    assert.equal((await fetch(dashboard, { headers })).status, 401);
+    assert.deepEqual(await state(), beforeRead, "GET must not write privacy jobs, purge progress, recalculation or audit");
   });
 
   it("shows app-scoped measurement health from retained synthetic ingestion and metric metadata", async () => {
