@@ -13,7 +13,8 @@ Do not start Docker or configure an SDK just to understand a difference.
 | --- | --- | --- |
 | Understand values and comparison without Docker | [Offline comparison](#offline-shadow-comparison-without-docker) | Reference-evaluator results and explicit comparison states, not stored runtime evidence |
 | Verify the full synthetic runtime and clean up automatically | [Recommended first run](#recommended-first-run) | Isolated PostgreSQL parity and HTTP smoke evidence; no persistent dashboard |
-| Explore receipt, metrics and evidence in a local dashboard | [Persistent local stack](#persistent-local-stack), then [receipt to comparison](#from-receipt-to-comparison) | A disposable local instance; never seed a stack containing data you need |
+| Explore reviewed synthetic values in a local dashboard | [Seed and parity](#seed-and-parity), then [receipt to comparison](#from-receipt-to-comparison) | An explicitly disposable instance, not a persistent ledger |
+| Keep an instance and import your own synthetic inputs | [Persistent local stack](#persistent-local-stack) | A retained ledger with seed/reset disabled |
 
 These instructions describe current source. `v0.3.0-rc.3` is the published
 source and SDK prerelease; its
@@ -143,7 +144,7 @@ campaign accuracy, or production readiness.
 
 ## Persistent local stack
 
-Use a persistent stack when developing or exploring the dashboard:
+Use a persistent stack for data you want to retain (seed/reset is disabled):
 
 ```bash
 docker compose up -d --wait
@@ -155,6 +156,11 @@ Bootstrap generates `.env` and local secret files. The API listens on
 `http://localhost:8080/dashboard`, and the redirector listens on
 `http://localhost:8090` unless the generated environment selects different
 host ports. `npm run bootstrap` prints the local admin key once.
+
+Bootstrap records `OPENMASU_DEPLOYMENT_PURPOSE=persistent` by default, with no seed
+password or seed connection URL. Migration binds the same purpose in the database.
+Normal application/reader/seed roles cannot change that marker. Legacy databases
+without a marker become persistent; setting a flag cannot convert them to disposable.
 
 `.env.example` is the complete development variable inventory, not a promise
 that the bundled Compose stack forwards every production setting. The local
@@ -176,7 +182,7 @@ fixture preview. The preview is not a database import or live-provider result.
 
 ## From receipt to comparison
 
-For a dashboard walkthrough, use a **synthetic-only** persistent stack. Follow
+For a dashboard walkthrough, use a separate **synthetic-only disposable** stack. Follow
 [seed and parity](#seed-and-parity) first if you want reviewed sample values;
 seeding resets that ledger, and normal writers must be stopped. Do not create
 keys or send events just to see seeded results.
@@ -257,7 +263,14 @@ specific security review and trusted certificate plan.
 ## Seed and parity
 
 The fixture seed resets the synthetic ledger and its derived metric correction
-jobs, so old jobs cannot affect newly seeded artifacts. Stop all normal writers first:
+jobs, so old jobs cannot affect newly seeded artifacts. Prefer `pilot:synthetic`
+for an isolated instance with automatic cleanup. For a manually managed synthetic
+instance, choose a **new, empty project and volume set**, set
+`OPENMASU_DEPLOYMENT_PURPOSE=synthetic_disposable` in its private Compose env file
+**before first bootstrap**, and retain that same project/env selection on every
+command. This is a one-time purpose, not a seed-time override.
+
+Stop all normal writers first:
 
 ```bash
 docker compose stop worker api redirector
@@ -269,6 +282,13 @@ docker compose up -d --wait
 Use this sequence only on a disposable synthetic instance. Parity requires the
 database artifacts to match the committed JSON goldens byte for byte after RFC
 8785 canonicalization.
+
+Seed checks the DB marker before touching fixture bookkeeping or the ledger;
+reset checks it again inside its transaction. Missing/persistent purpose fails
+closed, including when a caller selects the seed profile or changes CLI env.
+Persistent DBs also deny the seed role table-write/reset privileges. This does
+not prevent an owner from dropping volumes, issuing privileged SQL, or deleting
+backups; those remain operator responsibilities.
 
 ## Preview and confirm an import
 

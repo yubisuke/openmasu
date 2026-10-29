@@ -45,8 +45,14 @@ function boundedIntegerSetting(
   return String(parsed);
 }
 
-function reconcileEnvSettings(path: string, settings: Readonly<Record<string, string>>): void {
-  let next = readFileSync(path, "utf8").trimEnd();
+function reconcileEnvSettings(
+  path: string,
+  settings: Readonly<Record<string, string>>,
+  removedSettings: readonly string[] = [],
+): void {
+  let next = readFileSync(path, "utf8").split(/\r?\n/)
+    .filter((line) => !removedSettings.some((name) => line.startsWith(`${name}=`)))
+    .join("\n").trimEnd();
   for (const [name, value] of Object.entries(settings)) {
     const line = `${name}=${value}`;
     const matcher = new RegExp(`^${name}=.*$`, "m");
@@ -73,6 +79,24 @@ function url(user: string, password: string, host: string, port: string, databas
   return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
 }
 
+type DeploymentPurpose = "persistent" | "synthetic_disposable";
+
+function deploymentPurposeSetting(value: string): DeploymentPurpose {
+  if (value !== "persistent" && value !== "synthetic_disposable") {
+    throw new Error("OPENMASU_DEPLOYMENT_PURPOSE must be persistent or synthetic_disposable");
+  }
+  return value;
+}
+
+function readEnvironment(path: string): Record<string, string> {
+  return existsSync(path) ? Object.fromEntries(
+    readFileSync(path, "utf8").split(/\r?\n/).flatMap((line) => {
+      const separator = line.indexOf("=");
+      return separator > 0 ? [[line.slice(0, separator), line.slice(separator + 1)]] : [];
+    }),
+  ) : {};
+}
+
 const repositoryRoot = resolve(process.env.OPENMASU_REPOSITORY_ROOT ?? process.cwd());
 const runtimeSecretRoot = resolve(
   process.env.OPENMASU_RUNTIME_SECRET_ROOT ?? join(repositoryRoot, ".openmasu"),
@@ -82,14 +106,34 @@ const appEnvPath = join(runtimeSecretRoot, "app", "runtime.env");
 const seedEnvPath = join(runtimeSecretRoot, "seed", "runtime.env");
 const postgresPasswordPath = join(runtimeSecretRoot, "postgres", "password");
 const repositoryEnvPath = join(repositoryRoot, ".env");
-const existing = existsSync(repositoryEnvPath)
-  ? Object.fromEntries(
-      readFileSync(repositoryEnvPath, "utf8").split(/\r?\n/).flatMap((line) => {
-        const separator = line.indexOf("=");
-        return separator > 0 ? [[line.slice(0, separator), line.slice(separator + 1)]] : [];
-      }),
-    )
-  : {};
+const existing = readEnvironment(repositoryEnvPath);
+const runtimePaths = [migrationEnvPath, appEnvPath, seedEnvPath, postgresPasswordPath];
+const runtimeExists = runtimePaths.every(existsSync);
+if (!runtimeExists && runtimePaths.some(existsSync)) {
+  throw new Error(`incomplete runtime secret set: ${runtimeSecretRoot}`);
+}
+// The protected migration environment is authoritative once bootstrap has run.
+// Markerless legacy state is persistent; changing a caller's environment must
+// never turn an existing deployment into a disposable seed target.
+const migrationEnvironment = readEnvironment(migrationEnvPath);
+const seedEnvironment = readEnvironment(seedEnvPath);
+const persistedPurpose = runtimeExists
+  ? deploymentPurposeSetting(migrationEnvironment.OPENMASU_DEPLOYMENT_PURPOSE ?? "persistent")
+  : existsSync(repositoryEnvPath)
+    ? deploymentPurposeSetting(existing.OPENMASU_DEPLOYMENT_PURPOSE ?? "persistent")
+    : undefined;
+const deploymentPurpose = deploymentPurposeSetting(
+  process.env.OPENMASU_DEPLOYMENT_PURPOSE
+    ?? existing.OPENMASU_DEPLOYMENT_PURPOSE ?? persistedPurpose ?? "persistent",
+);
+for (const purpose of [persistedPurpose, existing.OPENMASU_DEPLOYMENT_PURPOSE,
+  seedEnvironment.OPENMASU_DEPLOYMENT_PURPOSE]) {
+  if (purpose !== undefined && deploymentPurposeSetting(purpose) !== deploymentPurpose) {
+    throw new Error("deployment purpose is immutable; use a new isolated deployment for synthetic_disposable");
+  }
+}
+const removedSeedSettings = deploymentPurpose === "persistent"
+  ? ["OPENMASU_SEED_DATABASE_PASSWORD", "OPENMASU_SEED_DATABASE_URL"] : [];
 const publicBaseUrl = process.env.OPENMASU_PUBLIC_BASE_URL ?? "http://localhost:8080";
 const redirectorBaseUrl = process.env.OPENMASU_REDIRECTOR_BASE_URL ?? "http://localhost:8090";
 const databaseHost = process.env.OPENMASU_DATABASE_HOST ?? "localhost";
@@ -146,12 +190,19 @@ if (Number(adServicesProviderTimeout) >= Number(adServicesClaimLease)) {
   throw new Error("OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS must be shorter than OPENMASU_ADSERVICES_CLAIM_LEASE_MS");
 }
 
-const runtimePaths = [migrationEnvPath, appEnvPath, seedEnvPath, postgresPasswordPath];
 const costRefreshMode = costRefreshEnabled(process.env.OPENMASU_COST_REFRESH_ENABLED
   ?? existing.OPENMASU_COST_REFRESH_ENABLED) ? "on" : "off";
 const costRefreshSecretsFile = process.env.OPENMASU_COST_REFRESH_SECRETS_FILE
   ?? existing.OPENMASU_COST_REFRESH_SECRETS_FILE ?? "";
-if (runtimePaths.every(existsSync)) {
+if (runtimeExists) {
+  const purposeSetting = { OPENMASU_DEPLOYMENT_PURPOSE: deploymentPurpose };
+  reconcileEnvSettings(migrationEnvPath, purposeSetting, removedSeedSettings);
+  reconcileEnvSettings(seedEnvPath, purposeSetting, removedSeedSettings);
+  if (existsSync(repositoryEnvPath)) {
+    reconcileEnvSettings(repositoryEnvPath, purposeSetting, removedSeedSettings);
+  } else {
+    exclusiveWrite(repositoryEnvPath, `OPENMASU_DEPLOYMENT_PURPOSE=${deploymentPurpose}\n`);
+  }
   reconcileEnvSettings(appEnvPath, {
     OPENMASU_WORKER_CONCURRENCY: workerConcurrency,
     OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS: workerShutdownTimeout,
@@ -165,12 +216,11 @@ if (runtimePaths.every(existsSync)) {
   console.log(`OpenMasu runtime secrets already exist: ${runtimeSecretRoot}`);
   process.exit(0);
 }
-if (runtimePaths.some(existsSync)) throw new Error(`incomplete runtime secret set: ${runtimeSecretRoot}`);
-
 const postgresPassword = existing.OPENMASU_POSTGRES_BOOTSTRAP_PASSWORD ?? secret();
 const appPassword = existing.OPENMASU_APP_DATABASE_PASSWORD ?? secret();
 const readerPassword = existing.OPENMASU_READER_DATABASE_PASSWORD ?? secret();
-const seedPassword = existing.OPENMASU_SEED_DATABASE_PASSWORD ?? secret();
+const seedPassword = deploymentPurpose === "synthetic_disposable"
+  ? existing.OPENMASU_SEED_DATABASE_PASSWORD ?? secret() : undefined;
 const adminKey = existing.OPENMASU_ADMIN_KEY ?? secret();
 const maxPathSecret = existing.OPENMASU_MAX_PATH_SECRET ?? secret(24);
 const maxEventKey = existing.OPENMASU_MAX_EVENT_KEY ?? secret();
@@ -181,18 +231,21 @@ const metaReferrerKey = existing.OPENMASU_META_IR_DECRYPTION_KEY ?? randomBytes(
 const migrationDatabaseUrl = url("postgres", postgresPassword, databaseHost, databasePort, databaseName);
 const appDatabaseUrl = url("openmasu_app", appPassword, databaseHost, databasePort, databaseName);
 const readerDatabaseUrl = url("openmasu_reader", readerPassword, databaseHost, databasePort, databaseName);
-const seedDatabaseUrl = url("openmasu_seed", seedPassword, databaseHost, databasePort, databaseName);
+const seedDatabaseUrl = seedPassword === undefined
+  ? undefined : url("openmasu_seed", seedPassword, databaseHost, databasePort, databaseName);
 const hostMigrationDatabaseUrl = url("postgres", postgresPassword, "localhost", databasePort, databaseName);
 const hostAppDatabaseUrl = url("openmasu_app", appPassword, "localhost", databasePort, databaseName);
 const hostReaderDatabaseUrl = url("openmasu_reader", readerPassword, "localhost", databasePort, databaseName);
-const hostSeedDatabaseUrl = url("openmasu_seed", seedPassword, "localhost", databasePort, databaseName);
+const hostSeedDatabaseUrl = seedPassword === undefined
+  ? undefined : url("openmasu_seed", seedPassword, "localhost", databasePort, databaseName);
 const maxTemplate = `${publicBaseUrl}/v1/ingest/max/${maxPathSecret}?event_token_all={EVENT_TOKEN_ALL}&event_id={EVENT_ID}&revenue={REVENUE}&ts={TS}`;
 
 const migrationEntries: Record<string, string> = {
+  OPENMASU_DEPLOYMENT_PURPOSE: deploymentPurpose,
   OPENMASU_MIGRATION_DATABASE_URL: migrationDatabaseUrl,
   OPENMASU_APP_DATABASE_PASSWORD: appPassword,
   OPENMASU_READER_DATABASE_PASSWORD: readerPassword,
-  OPENMASU_SEED_DATABASE_PASSWORD: seedPassword,
+  ...(seedPassword === undefined ? {} : { OPENMASU_SEED_DATABASE_PASSWORD: seedPassword }),
 };
 const appEntries: Record<string, string> = {
   OPENMASU_APP_DATABASE_URL: appDatabaseUrl,
@@ -331,19 +384,23 @@ const appEntries: Record<string, string> = {
   OPENMASU_ADSERVICES_CLAIM_LEASE_MS: adServicesClaimLease,
 };
 const seedEntries: Record<string, string> = {
-  OPENMASU_APP_DATABASE_URL: appDatabaseUrl,
-  OPENMASU_SEED_DATABASE_URL: seedDatabaseUrl,
+  OPENMASU_DEPLOYMENT_PURPOSE: deploymentPurpose,
+  ...(seedDatabaseUrl === undefined ? {} : {
+    OPENMASU_APP_DATABASE_URL: appDatabaseUrl,
+    OPENMASU_SEED_DATABASE_URL: seedDatabaseUrl,
+  }),
 };
 const repositoryEntries: Record<string, string> = {
+  OPENMASU_DEPLOYMENT_PURPOSE: deploymentPurpose,
   OPENMASU_POSTGRES_BOOTSTRAP_PASSWORD: postgresPassword,
   OPENMASU_APP_DATABASE_PASSWORD: appPassword,
   OPENMASU_READER_DATABASE_PASSWORD: readerPassword,
-  OPENMASU_SEED_DATABASE_PASSWORD: seedPassword,
+  ...(seedPassword === undefined ? {} : { OPENMASU_SEED_DATABASE_PASSWORD: seedPassword }),
   ...appEntries,
   OPENMASU_MIGRATION_DATABASE_URL: hostMigrationDatabaseUrl,
   OPENMASU_APP_DATABASE_URL: hostAppDatabaseUrl,
   OPENMASU_READER_DATABASE_URL: hostReaderDatabaseUrl,
-  OPENMASU_SEED_DATABASE_URL: hostSeedDatabaseUrl,
+  ...(hostSeedDatabaseUrl === undefined ? {} : { OPENMASU_SEED_DATABASE_URL: hostSeedDatabaseUrl }),
 };
 const envBody = (entries: Record<string, string>): string =>
   `${Object.entries(entries).map(([name, value]) => `${name}=${value}`).join("\n")}\n`;
@@ -358,7 +415,10 @@ if (!existsSync(repositoryEnvPath)) {
   const missing = Object.fromEntries(
     Object.entries(repositoryEntries).filter(([name]) => existing[name] === undefined),
   );
-  if (Object.keys(missing).length > 0) writeFileSync(repositoryEnvPath, envBody(missing), { flag: "a" });
+  reconcileEnvSettings(repositoryEnvPath, {
+    ...missing,
+    OPENMASU_DEPLOYMENT_PURPOSE: deploymentPurpose,
+  }, removedSeedSettings);
 }
 
 console.log(`OpenMasu admin key: ${adminKey}`);

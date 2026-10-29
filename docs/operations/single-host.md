@@ -92,8 +92,14 @@ that existing secret-volume configuration changed. Inspect/reconcile protected
 runtime files deliberately with traffic stopped, then repeat preflight.
 
 To stop, use `stop worker api redirector` before stopping PostgreSQL; keep volumes.
-Never run seed/reset, `down --volumes`, or `pilot:synthetic` against this project.
-Those belong only to disposable synthetic environments and erase their ledger.
+Keep the default `OPENMASU_DEPLOYMENT_PURPOSE=persistent` before first bootstrap.
+It is recorded in protected bootstrap settings and the database; later profile or
+env changes cannot promote this deployment to disposable. Bootstrap issues no seed
+credentials, and migration removes the seed role's table-write/reset privileges.
+Seed/reset rejects missing or non-disposable purpose before modifying the ledger.
+This does not protect privileged SQL, volume removal, or backup deletion: never
+run `down --volumes` against this project. Use `pilot:synthetic` only for its
+separate disposable synthetic environment.
 For upgrades, backup or failures use the [upgrade](upgrade.md) and
 [backup](backup-restore.md) runbooks; do not automatically reopen traffic after an
 incomplete migration or privacy reapplication.

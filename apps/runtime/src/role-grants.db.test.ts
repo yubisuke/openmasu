@@ -125,6 +125,8 @@ const ephemeralExpected = new Map<string, Record<Role, Privilege[]>>([
 ]);
 
 function expected(row: Row): Privilege[] {
+  if (row.schema_name === "control" && row.table_name === "deployment_purpose") return ["SELECT"];
+  if (row.role_name === "openmasu_seed" && !disposable) return [];
   const qualified = `${row.schema_name}.${row.table_name}`;
   if (row.schema_name === "ephemeral") {
     const matrix = ephemeralExpected.get(qualified);
@@ -161,7 +163,9 @@ function expected(row: Row): Privilege[] {
 }
 
 const pool = createMigrationPool();
+let disposable = false;
 try {
+  disposable = (await pool.query("SELECT purpose FROM control.deployment_purpose WHERE singleton")).rows[0]?.purpose === "synthetic_disposable";
   const schemaUsage = await pool.query<{ role_name: Role; schema_name: string; allowed: boolean }>(`
     SELECT role_name, schema_name,
            has_schema_privilege(role_name, schema_name, 'USAGE') AS allowed

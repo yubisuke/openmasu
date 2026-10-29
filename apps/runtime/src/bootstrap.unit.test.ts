@@ -31,6 +31,7 @@ function generatedAppEnvironment(options: {
     OPENMASU_REPOSITORY_ROOT: repositoryRoot,
     OPENMASU_RUNTIME_SECRET_ROOT: runtimeRoot,
   };
+  delete environment.OPENMASU_DEPLOYMENT_PURPOSE;
   if (options.allowlist === undefined) delete environment.OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST;
   else environment.OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST = options.allowlist;
   if (options.costRefreshEnabled === undefined) delete environment.OPENMASU_COST_REFRESH_ENABLED;
@@ -127,7 +128,134 @@ function generatedAppEnvironment(options: {
   }
 }
 
+function withBootstrapWorkspace(check: (workspace: {
+  paths: Record<"repository" | "migration" | "app" | "seed" | "postgres", string>;
+  run: (purpose?: string) => { status: number | null; stderr: string };
+}) => void): void {
+  const root = mkdtempSync(join(tmpdir(), "openmasu-bootstrap-purpose-"));
+  const repositoryRoot = join(root, "repository");
+  const runtimeRoot = join(root, "runtime");
+  const paths = {
+    repository: join(repositoryRoot, ".env"),
+    migration: join(runtimeRoot, "migration", "runtime.env"),
+    app: join(runtimeRoot, "app", "runtime.env"),
+    seed: join(runtimeRoot, "seed", "runtime.env"),
+    postgres: join(runtimeRoot, "postgres", "password"),
+  };
+  const run = (purpose?: string) => {
+    const environment: NodeJS.ProcessEnv = {
+      ...process.env,
+      OPENMASU_REPOSITORY_ROOT: repositoryRoot,
+      OPENMASU_RUNTIME_SECRET_ROOT: runtimeRoot,
+    };
+    if (purpose === undefined) delete environment.OPENMASU_DEPLOYMENT_PURPOSE;
+    else environment.OPENMASU_DEPLOYMENT_PURPOSE = purpose;
+    return spawnSync(process.execPath, ["--import", "tsx", "apps/runtime/src/bootstrap.ts"], {
+      cwd: process.cwd(), encoding: "utf8", env: environment,
+    });
+  };
+  try { check({ paths, run }); } finally { rmSync(root, { force: true, recursive: true }); }
+}
+
 describe("runtime bootstrap environment", () => {
+  it("defaults to persistent and does not generate or distribute seed credentials", () => {
+    withBootstrapWorkspace(({ paths, run }) => {
+      const result = run();
+      assert.equal(result.status, 0, result.stderr);
+      for (const name of ["repository", "migration", "seed"] as const) {
+        const content = readFileSync(paths[name], "utf8");
+        assert.match(content, /^OPENMASU_DEPLOYMENT_PURPOSE=persistent$/m);
+        assert.doesNotMatch(content, /^OPENMASU_SEED_DATABASE_(?:PASSWORD|URL)=/m);
+      }
+      assert.equal(readFileSync(paths.seed, "utf8"), "OPENMASU_DEPLOYMENT_PURPOSE=persistent\n");
+      assert.match(readFileSync(paths.app, "utf8"), /^OPENMASU_APP_DATABASE_URL=postgresql:/m);
+    });
+  });
+
+  it("retains seed credentials only for an initially disposable synthetic deployment", () => {
+    withBootstrapWorkspace(({ paths, run }) => {
+      let result = run("synthetic_disposable");
+      assert.equal(result.status, 0, result.stderr);
+      for (const name of ["repository", "migration", "seed"] as const) {
+        assert.match(readFileSync(paths[name], "utf8"), /^OPENMASU_DEPLOYMENT_PURPOSE=synthetic_disposable$/m);
+      }
+      for (const name of ["repository", "migration"] as const) {
+        assert.match(readFileSync(paths[name], "utf8"), /^OPENMASU_SEED_DATABASE_PASSWORD=[A-Za-z0-9_-]+$/m);
+      }
+      for (const name of ["repository", "seed"] as const) {
+        assert.match(readFileSync(paths[name], "utf8"), /^OPENMASU_SEED_DATABASE_URL=postgresql:\/\/openmasu_seed:/m);
+      }
+      const before = Object.values(paths).map((path) => readFileSync(path, "utf8"));
+      result = run();
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(Object.values(paths).map((path) => readFileSync(path, "utf8")), before);
+    });
+  });
+
+  it("rejects environment purpose changes before changing any existing file", () => {
+    for (const purpose of ["persistent", "synthetic_disposable"]) {
+      withBootstrapWorkspace(({ paths, run }) => {
+        const initial = run(purpose);
+        assert.equal(initial.status, 0, initial.stderr);
+        const before = Object.values(paths).map((path) => readFileSync(path, "utf8"));
+        const rejected = run(purpose === "persistent" ? "synthetic_disposable" : "persistent");
+        assert.notEqual(rejected.status, 0);
+        assert.match(rejected.stderr, /deployment purpose is immutable/);
+        assert.deepEqual(Object.values(paths).map((path) => readFileSync(path, "utf8")), before);
+      });
+    }
+  });
+
+  it("rejects a repository purpose that conflicts with the protected migration environment", () => {
+    withBootstrapWorkspace(({ paths, run }) => {
+      const initial = run();
+      assert.equal(initial.status, 0, initial.stderr);
+      writeFileSync(paths.repository, readFileSync(paths.repository, "utf8")
+        .replace("OPENMASU_DEPLOYMENT_PURPOSE=persistent", "OPENMASU_DEPLOYMENT_PURPOSE=synthetic_disposable"));
+      const before = Object.values(paths).map((path) => readFileSync(path, "utf8"));
+      const rejected = run();
+      assert.notEqual(rejected.status, 0);
+      assert.match(rejected.stderr, /deployment purpose is immutable/);
+      assert.deepEqual(Object.values(paths).map((path) => readFileSync(path, "utf8")), before);
+    });
+  });
+
+  it("keeps markerless legacy state persistent and removes only its obsolete seed credentials", () => {
+    withBootstrapWorkspace(({ paths, run }) => {
+      const initial = run("synthetic_disposable");
+      assert.equal(initial.status, 0, initial.stderr);
+      for (const name of ["repository", "migration", "seed"] as const) {
+        writeFileSync(paths[name], readFileSync(paths[name], "utf8")
+          .replace(/^OPENMASU_DEPLOYMENT_PURPOSE=.*\n/gm, ""));
+      }
+      const before = Object.values(paths).map((path) => readFileSync(path, "utf8"));
+      const rejected = run("synthetic_disposable");
+      assert.notEqual(rejected.status, 0);
+      assert.match(rejected.stderr, /deployment purpose is immutable/);
+      assert.deepEqual(Object.values(paths).map((path) => readFileSync(path, "utf8")), before);
+      const repaired = run();
+      assert.equal(repaired.status, 0, repaired.stderr);
+      const after = Object.values(paths).map((path) => readFileSync(path, "utf8"));
+      const withoutPurposeOrSeedCredentials = (content: string): string => content.replace(
+        /^OPENMASU_(?:DEPLOYMENT_PURPOSE|SEED_DATABASE_PASSWORD|SEED_DATABASE_URL)=.*\n/gm, "",
+      );
+      assert.deepEqual(after.map(withoutPurposeOrSeedCredentials), before.map(withoutPurposeOrSeedCredentials));
+      for (const name of ["repository", "migration", "seed"] as const) {
+        const content = readFileSync(paths[name], "utf8");
+        assert.match(content, /^OPENMASU_DEPLOYMENT_PURPOSE=persistent$/m);
+        assert.doesNotMatch(content, /^OPENMASU_SEED_DATABASE_(?:PASSWORD|URL)=/m);
+      }
+    });
+  });
+
+  it("rejects unknown deployment purposes", () => {
+    withBootstrapWorkspace(({ run }) => {
+      const result = run("development");
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /OPENMASU_DEPLOYMENT_PURPOSE must be persistent or synthetic_disposable/);
+    });
+  });
+
   it("keeps cost refresh off unless explicitly configured and forwards only its registry path", () => {
     assert.match(generatedAppEnvironment(), /^OPENMASU_COST_REFRESH_ENABLED=off$/m);
     const configured = generatedAppEnvironment({ costRefreshEnabled: "on", costRefreshSecretsFile: "/run/private/synthetic-cost-registry.json" });
@@ -168,6 +296,7 @@ describe("runtime bootstrap environment", () => {
 
   it("keeps the bundled Compose overrides configurable and loopback-bound", () => {
     const compose = readFileSync("compose.yaml", "utf8");
+    assert.match(compose, /OPENMASU_DEPLOYMENT_PURPOSE: \$\{OPENMASU_DEPLOYMENT_PURPOSE:-persistent\}/);
     assert.match(
       compose,
       /OPENMASU_PUBLIC_BASE_URL: \$\{OPENMASU_PUBLIC_BASE_URL:-http:\/\/localhost:8080\}/,

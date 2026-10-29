@@ -565,7 +565,7 @@ it(`upgrades the frozen ${upgradeSource.tag} backup, resumes a failed migration,
     }));
     assert.equal(migrationDigest(frozen), upgradeSource.migrationDigest);
     for (const migration of frozen) assert.equal(createHash("sha256").update(migration.source).digest("hex"), migration.checksum);
-    assert.equal(await migrateDatabase(sourceClient, frozen), upgradeSource.migrationCount);
+    assert.equal(await migrateDatabase(sourceClient, frozen, undefined, "persistent"), upgradeSource.migrationCount);
     const payloadStore = new EncryptedFilePayloadStore(join(root, "payloads"), "synthetic-upgrade-master-key-0000000000000000");
     const payloadRef = await payloadStore.write({ tenantId: "tenant-a", appId: "app-delete", objectId: "synthetic-upgrade-inbox" }, Buffer.from("synthetic upgrade evidence"));
     const frozenArtifact = (name: string) => JSON.parse(execFileSync("git", ["show", `${upgradeSource.revision}:fixtures/v0.4/${fixtureName}/${name}`], { encoding: "utf8" }));
@@ -608,7 +608,7 @@ it(`upgrades the frozen ${upgradeSource.tag} backup, resumes a failed migration,
     const failedMigration = current[upgradeSource.migrationCount + 1];
     assert.ok(failedMigration, "the candidate must contain two pending migrations for this rehearsal");
     const committedCount = upgradeSource.migrationCount + 1;
-    await assert.rejects(migrateDatabase(targetClient, current, (migration) => { if (migration.version === failedMigration.version) throw new Error("synthetic_mid_migration_failure"); }), /synthetic_mid_migration_failure/);
+    await assert.rejects(migrateDatabase(targetClient, current, (migration) => { if (migration.version === failedMigration.version) throw new Error("synthetic_mid_migration_failure"); }, "persistent"), /synthetic_mid_migration_failure/);
     assert.equal((await targetClient.query("SELECT count(*)::int AS count FROM public.schema_migrations")).rows[0].count, committedCount);
     if (upgradeSource.tag === "v0.2.0") {
       assert.equal((await targetClient.query("SELECT has_column_privilege('openmasu_reader','control.google_data_manager_destinations','enabled','SELECT') AS allowed")).rows[0].allowed, false, "failed migration grant rolls back too");
@@ -619,8 +619,8 @@ it(`upgrades the frozen ${upgradeSource.tag} backup, resumes a failed migration,
       assert.equal((await targetClient.query("SELECT to_regclass('control.comparison_definitions') AS relation")).rows[0].relation, null, "failed migration table rolls back too");
     }
     assert.equal((await upgradePreflight(targetClient, backup)).pending, current.length - committedCount);
-    assert.equal(await migrateDatabase(targetClient), current.length - committedCount);
-    assert.equal(await migrateDatabase(targetClient), 0);
+    assert.equal(await migrateDatabase(targetClient, current, undefined, "persistent"), current.length - committedCount);
+    assert.equal(await migrateDatabase(targetClient, current, undefined, "persistent"), 0);
     assert.equal((await upgradePreflight(targetClient, backup)).pending, 0);
     const targetAppUrl = new URL(appUrl); targetAppUrl.pathname = `/${names[1]}`;
     targetPool = new Pool({ connectionString: targetAppUrl.toString() });

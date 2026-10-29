@@ -2,7 +2,7 @@ import type { Pool } from "pg";
 import { jcs, sha256 } from "@openmasu/attribution-core/canonical";
 import { compareCandidateAttempts, evaluate, IndexedCandidateProvider, type CandidateAttempt, type CandidateProvider } from "@openmasu/attribution-core";
 import { uuidV7, withTenant } from "@openmasu/runtime";
-import { retryDeadlockOnce } from "./seed-safety.js";
+import { assertSyntheticDeployment, retryDeadlockOnce } from "./seed-safety.js";
 import { ensureSyntheticDefaultFraudBundle } from "./fraud-bundle-seed.js";
 import { inputAttempts, defaultTimestamp, policyDigestForRecord, refundProjectionTargets } from "../ingestion/input.js";
 import { storedArtifact, persistRawWithClient, persistDeliveryWithClient, persistLogicalWithClient, persistRejectionWithClient } from "../ingestion/record-repository.js";
@@ -303,6 +303,7 @@ export async function resetLedger(seedPool: Pool): Promise<void> {
     const client = await seedPool.connect();
     try {
       await client.query("BEGIN");
+      await assertSyntheticDeployment(client);
       const tables = await client.query<{ table_name: string }>(
         `SELECT table_name FROM information_schema.tables
          WHERE table_schema = 'ledger' AND table_type = 'BASE TABLE'
