@@ -61,9 +61,12 @@ describe("bounded cost refresh configuration", () => {
       const registry = join(directory, "registry.json");
       const name = costRefreshSecretName("tenant-synthetic", "app-synthetic", "access_token");
       const apple = costRefreshSecretName("tenant-synthetic", "app-synthetic", "apple_ads_access_token");
-      writeFileSync(registry, JSON.stringify({ [name]: { value: "synthetic-token" }, [apple]: { value: "synthetic-apple-token" } }));
+      const google = ["google_client_id", "google_client_secret", "google_refresh_token"] as const;
+      writeFileSync(registry, JSON.stringify({ [name]: { value: "synthetic-token" }, [apple]: { value: "synthetic-apple-token" },
+        ...Object.fromEntries(google.map(kind => [costRefreshSecretName("tenant-synthetic", "app-synthetic", kind), { value: `synthetic-${kind}` }])) }));
       assert.equal(loadCostRefreshSecrets(registry).require(name), "synthetic-token");
       assert.equal(loadCostRefreshSecrets(registry).require(apple), "synthetic-apple-token");
+      for (const kind of google) assert.equal(loadCostRefreshSecrets(registry).require(costRefreshSecretName("tenant-synthetic", "app-synthetic", kind)), `synthetic-${kind}`);
       writeFileSync(registry, JSON.stringify({ "private-must-not-leak": { value: "secret", file: "private-path" } }));
       assert.throws(() => loadCostRefreshSecrets(registry), { message: "cost_refresh_secret_registry_invalid" });
     } finally { rmSync(directory, { recursive: true, force: true }); }

@@ -2,9 +2,11 @@
 
 This later-source feature is not part of the frozen v0.2.0 release evidence.
 It joins the Google Ads v25 and Apple Ads Platform v1 adapters to the existing
-SecretStore, PostgreSQL scheduler and append-only cost ledger. It adds no OAuth
-flow, dependency, queue service or database. Both adapters bound acquisition
-before publishing a complete local snapshot.
+SecretStore, PostgreSQL scheduler and append-only cost ledger. The daily worker
+can renew Google access tokens from privately supplied refresh credentials;
+Apple currently requires a supplied access token. There is no interactive OAuth
+authorization flow, new dependency, queue service or database. Both adapters
+bound acquisition before publishing a complete local snapshot.
 
 ## Cost dimensions and row identity
 
@@ -183,8 +185,8 @@ changing its scope; disabling does not delete previously recorded cost.
 - A database-clock 120-second per-row lease and opaque token exclude concurrent
   acquisition. No database transaction is held while waiting on the provider.
   The existing tenant scheduler remains an additional work coordinator.
-- All cost partitions and country resolutions must validate within one
-  60-second acquisition deadline. An incomplete/oversized result publishes no
+- Credential acquisition, all cost partitions and country resolutions must
+  validate within one 60-second acquisition deadline. An incomplete/oversized result publishes no
   cost or completed import. The publication transaction locks and checks the
   current token, unexpired lease, active state and definition digest before
   writing costs, the import completion record and its checkpoint together.
@@ -195,7 +197,8 @@ changing its scope; disabling does not delete previously recorded cost.
   apart. Invalid results and permanent rejection fail closed. Exhaustion is a
   terminal state, including a process killed during its third claim. An operator
   fixes configuration and registers a new revision after disabling the old one;
-  there is no silent retry forever or automatic token refresh.
+  there is no silent retry forever. Credential rejection is terminal
+  `reauth_required`, not an endlessly retried expired token.
 - `POST /v1/admin/apps/<app>/cost-schedules/<id>/disable` records append-only
   stop history and clears the token under the publication lock. A late response
   is fenced. If publication committed first, the stop observes that completed
@@ -222,26 +225,59 @@ shape: exactly one of `{ "file": "<private mounted token path>" }` or
 `{ "value": "<private token>" }`. Prefer file entries. No credential or source
 response is submitted via the schedule API or committed to this repository.
 
-Google's two names are obtained with the exported runtime helper:
-`costRefreshSecretName(tenantId, appId, "access_token")` and
-`costRefreshSecretName(tenantId, appId, "developer_token")`. They contain the
-SHA-256 digest of the scope tuple, preventing delimiter collisions and
-cross-app secret selection. The registry itself is at most 1 MiB. An invalid
-registry produces only `cost_refresh_secret_registry_invalid`, not its path
-or contents. Missing app credentials leave a visible `source_rejected` state.
+Names are obtained with the exported runtime helper
+`costRefreshSecretName(tenantId, appId, kind)`. They contain the SHA-256 digest of
+the scope tuple, preventing delimiter collisions and cross-app secret selection.
+The registry itself is at most 1 MiB. An invalid registry produces only
+`cost_refresh_secret_registry_invalid`, not its path or contents. Missing app
+credentials leave a visible `source_rejected` state.
+
+For Google daily refresh, supply `developer_token` and all three renewable
+credential kinds: `google_client_id`, `google_client_secret` and
+`google_refresh_token`. The operator obtains and authorizes these outside
+OpenMasu. All three are required together; a partial configuration fails closed
+with `reauth_required` even if an `access_token` is also present. Complete
+renewable credentials take precedence over that static token. When none of the
+three is configured, the existing `access_token` plus `developer_token` setup
+continues to work. The standalone import CLI retains its existing static-token
+configuration; automatic renewal here belongs to the scheduled worker.
+
+The worker exchanges credentials only at `https://oauth2.googleapis.com/token`
+using the refresh-token grant; redirects are refused. Token responses are bounded
+to 64 KiB and ten seconds within the overall acquisition deadline. Access tokens
+are reused in memory until five minutes before their reported expiry. The cache
+holds at most 128 app scopes and stores only hashed scope/credential keys;
+tokens and credential material are never persisted in a checkpoint or report.
+Concurrent calls for the same scope and exact credentials share an exchange.
+One cancelled caller cannot cancel another's exchange. This is a process-local
+cache, not a global token service: the existing database claim/lease coordinates
+scheduled acquisitions across worker replicas.
+
+File-backed credential contents are read for each acquisition. Changing a
+renewable credential invalidates the old cached token; an older in-flight
+exchange cannot replace the new credential's cache entry. A report HTTP 401
+also invalidates the cache and ends the schedule with `reauth_required`.
+Rejected grants/client credentials likewise require operator action. Repair
+private credentials, disable the failed schedule and register a new revision.
+Token transport errors, timeouts, HTTP 408/429 and temporary server errors use
+the existing bounded three-attempt policy without changing the saved report
+range or `as_of`. Malformed successful token responses fail closed. Provider
+error bodies, tokens, credential values and private file paths are never emitted
+in health responses; prior cost revisions remain intact on every failure.
 
 Apple uses the separate `costRefreshSecretName(tenantId, appId,
 "apple_ads_access_token")` entry. The operator supplies an access token through
 the private registry, not through API JSON. This implementation neither issues
-client-secret JWTs nor refreshes OAuth tokens. Token expiry/401 is a terminal
-source rejection; 429/temporary server failures use the bounded retry policy.
+client-secret JWTs nor refreshes Apple OAuth tokens. Token expiry/401 is terminal
+`reauth_required`; 429/temporary server failures use the bounded retry policy.
 
 Bootstrap propagates the default-off mode and registry path into runtime.env,
 including an existing generated environment. For Compose, mount the private
 registry and token files read-only into the **worker**, at the container paths
 named in that registry. The repository does not mount host credential paths
-automatically. Restart the worker after replacing credentials; this feature
-does not implement OAuth refresh or hot-reload.
+automatically. The registry's entry mapping is loaded at startup: restart the
+worker after changing registry entries or their paths. Replacing the contents
+of an already configured secret file is observed on the next acquisition.
 
 ## Aggregate health and acceptance
 
@@ -258,6 +294,10 @@ schema snapshot and full-table role-matrix gates cover definition bounds,
 default-off behavior, complete lookback, crash/lease recovery, concurrent
 workers, late-response fencing, stop, retry exhaustion, acquisition timeout,
 empty-versus-zero, correction history, rollback and reader/API isolation.
+Google renewal tests additionally cover expiry, next-day scheduled ingestion,
+single-flight isolation, file rotation, static compatibility, bounded token
+responses/deadlines, terminal reauthorization and saved-range retries. All
+provider responses and credential values in these tests are synthetic.
 No new test harness or live account check is required.
 
 ## Primary references
@@ -271,6 +311,14 @@ Confirmed 2026-10-02, against public first-party documentation:
 Live permissions, quotas, account timezone, token validity/rotation, report
 availability and retry snapshot stability remain unverified. Read acceptance
 and a complete local snapshot do not prove upstream completeness.
+
+Google OAuth sources confirmed 2026-10-29:
+
+- [Credential management](https://developers.google.com/google-ads/api/docs/oauth/credential-management): access-token expiry and refreshing within five minutes of expiry.
+- [OAuth web-server flow](https://developers.google.com/identity/protocols/oauth2/web-server): refresh-token grant fields and the fixed token endpoint.
+
+Live grant issuance, consent, revocation and provider acceptance remain
+unverified; synthetic renewal does not establish an authorized live connection.
 
 Detail-query sources confirmed 2026-10-25:
 

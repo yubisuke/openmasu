@@ -2,11 +2,14 @@ import type { Pool } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
 import {
   costRefreshRange, costRefreshSecretName, normalizeCostRefreshDefinition, uuidV7, withTenant,
-  type CostRefreshDefinition, type SecretStore,
+  EnvironmentSecretStore, type CostRefreshDefinition, type SecretStore,
 } from "@openmasu/runtime";
 import { fetchGoogleAds, type FetchLike } from "./import/adapters.js";
 import { fetchAppleAds } from "./import/apple-cost.js";
 import { persistCostImportWithClient, type CostInput } from "./import/cost.js";
+import { CostRefreshAuth, CostRefreshAuthError } from "./cost-refresh-auth.js";
+
+const sharedAuthentication = new CostRefreshAuth();
 
 type Claim = {
   cost_schedule_id: string; tenant_id: string; app_id: string;
@@ -73,10 +76,12 @@ async function claimRefresh(pool: Pool, tenantId: string, now: Date): Promise<Cl
 }
 
 function sourceFailure(error: unknown): { reason: string; retry: boolean } {
+  if (error instanceof CostRefreshAuthError) return { reason: error.reason, retry: error.retry };
   const message = error instanceof Error ? error.message : "";
   if (message === "cost_acquisition_timeout") return { reason: "acquisition_timeout", retry: true };
   if (message === "cost_source_credentials_missing") return { reason: "source_rejected", retry: false };
   const status = /request failed with ([0-9]{3})$/.exec(message);
+  if (status?.[1] === "401") return { reason: "reauth_required", retry: false };
   if (status && ![408, 429].includes(Number(status[1])) && Number(status[1]) < 500) {
     return { reason: "source_rejected", retry: false };
   }
@@ -84,7 +89,7 @@ function sourceFailure(error: unknown): { reason: string; retry: boolean } {
   return { reason: "source_invalid", retry: false };
 }
 
-async function acquire(claim: Claim, secrets: SecretStore, fetcher: FetchLike, timeoutMs: number): Promise<CostInput[]> {
+async function acquire(claim: Claim, secrets: SecretStore, fetcher: FetchLike, timeoutMs: number, authentication: CostRefreshAuth): Promise<CostInput[]> {
   const scoped: SecretStore = {
     read: (name) => secrets.read(costRefreshSecretName(claim.tenant_id, claim.app_id,
       name === "OPENMASU_APPLE_ADS_ACCESS_TOKEN" ? "apple_ads_access_token"
@@ -101,15 +106,36 @@ async function acquire(claim: Claim, secrets: SecretStore, fetcher: FetchLike, t
     const deadline = new Promise<never>((_, reject) => {
       timer = setTimeout(() => { controller.abort(); reject(new Error("cost_acquisition_timeout")); }, timeoutMs);
     });
-    const common = {
-      fetch: (input, init) => fetcher(input, { ...init, signal: controller.signal }), secrets: scoped,
-      since: claim.since, until: claim.until,
-      scope: { tenant_id: claim.tenant_id, app_id: claim.app_id, currency: claim.definition.currency, as_of: claim.as_of },
-    } satisfies Pick<Parameters<typeof fetchGoogleAds>[0], "fetch" | "secrets" | "since" | "until" | "scope">;
-    return await Promise.race([deadline, claim.definition.provider === "apple_ads"
-      ? fetchAppleAds({ ...common, definition: claim.definition })
-      : fetchGoogleAds({ ...common, customerId: claim.definition.customer_id, loginCustomerId: claim.definition.login_customer_id,
-        apiVersion: claim.definition.api_version, limits: claim.definition.limits, detail: claim.definition.detail })]);
+    const acquireRows = async (): Promise<CostInput[]> => {
+      let sourceSecrets = scoped;
+      const authScope = { tenantId: claim.tenant_id, appId: claim.app_id };
+      if (claim.definition.provider === "google_ads") {
+        const credentials = await authentication.google({ ...authScope, secrets, fetch: fetcher, signal: controller.signal });
+        sourceSecrets = new EnvironmentSecretStore({
+          OPENMASU_GOOGLE_ADS_ACCESS_TOKEN: { value: credentials.accessToken },
+          OPENMASU_GOOGLE_ADS_DEVELOPER_TOKEN: { value: credentials.developerToken },
+        });
+      }
+      if (controller.signal.aborted) throw new Error("cost_acquisition_timeout");
+      const common = {
+        fetch: (input, init) => fetcher(input, { ...init, signal: controller.signal }), secrets: sourceSecrets,
+        since: claim.since, until: claim.until,
+        scope: { tenant_id: claim.tenant_id, app_id: claim.app_id, currency: claim.definition.currency, as_of: claim.as_of },
+      } satisfies Pick<Parameters<typeof fetchGoogleAds>[0], "fetch" | "secrets" | "since" | "until" | "scope">;
+      try {
+        return await (claim.definition.provider === "apple_ads"
+          ? fetchAppleAds({ ...common, definition: claim.definition })
+          : fetchGoogleAds({ ...common, customerId: claim.definition.customer_id, loginCustomerId: claim.definition.login_customer_id,
+            apiVersion: claim.definition.api_version, limits: claim.definition.limits, detail: claim.definition.detail }));
+      } catch (error) {
+        if (claim.definition.provider === "google_ads" && error instanceof Error && /request failed with 401$/.test(error.message)) {
+          authentication.invalidate(authScope);
+          throw new CostRefreshAuthError("reauth_required");
+        }
+        throw error;
+      }
+    };
+    return await Promise.race([deadline, acquireRows()]);
   } finally { clearTimeout(timer!); }
 }
 
@@ -155,6 +181,7 @@ async function completeClaim(pool: Pool, claim: Claim, rows: readonly CostInput[
 
 export async function processCostRefreshes(pool: Pool, tenantId: string, options: Readonly<{
   enabled: boolean; secrets: SecretStore; fetch?: FetchLike; now?: Date; timeoutMs?: number; maximumSchedules?: number;
+  authentication?: CostRefreshAuth;
 }>): Promise<Readonly<{ completed: number; empty: number; failed: number; fenced: number }>> {
   const result = { completed: 0, empty: 0, failed: 0, fenced: 0 };
   if (!options.enabled) return result;
@@ -166,7 +193,7 @@ export async function processCostRefreshes(pool: Pool, tenantId: string, options
     const claim = await claimRefresh(pool, tenantId, options.now ?? new Date());
     if (!claim) break;
     let rows: CostInput[];
-    try { rows = await acquire(claim, options.secrets, options.fetch ?? fetch, timeout); }
+    try { rows = await acquire(claim, options.secrets, options.fetch ?? fetch, timeout, options.authentication ?? sharedAuthentication); }
     catch (error) {
       if (await failClaim(pool, claim, error)) result.failed += 1;
       else result.fenced += 1;
