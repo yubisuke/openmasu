@@ -28,6 +28,7 @@ import {
   discoverOperatorWebhookDeliveries,
   processOperatorWebhookDeliveries,
 } from "./operator-webhook-worker.js";
+import { discoverOperatorWebhookDeletionNotifications } from "./operator-webhook-deletions.js";
 import {
   discoverOperatorBulkExports,
   processOperatorBulkExports,
@@ -305,9 +306,15 @@ async function processTenantCycle(tenantId: string, pool: Pool, schedulerPool: P
         timeoutMilliseconds: Number(process.env.OPENMASU_OPERATOR_WEBHOOK_TIMEOUT_MS ?? "5000"),
         maximumAttempts: Number(process.env.OPENMASU_OPERATOR_WEBHOOK_MAX_ATTEMPTS ?? "8"),
       });
-      // A comparison enqueue failure must not prevent ordinary event dispatch.
-      // Newly queued comparison transitions are sent on the next delivery cycle.
-      await discoverComparisonNotifications(pool, payloadStore, tenantId);
+      // Local privacy work and ordinary dispatch have already run. Failure in
+      // either optional notice discovery must not prevent the other discovery.
+      // New notices use the existing outbox on the next delivery cycle.
+      let discoveryFailed = false;
+      for (const discover of [discoverOperatorWebhookDeletionNotifications, discoverComparisonNotifications]) {
+        try { await discover(pool, payloadStore, tenantId); }
+        catch { discoveryFailed = true; }
+      }
+      if (discoveryFailed) throw Error("operator_webhook_notification_discovery_failed");
     }
   });
   await runWorkerJob(tenantId, "operator_bulk_export", async () => {

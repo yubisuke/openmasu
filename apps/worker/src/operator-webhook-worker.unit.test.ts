@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHmac, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -9,6 +9,7 @@ import {
   sendOperatorWebhook,
   type OperatorWebhookCandidate,
 } from "./operator-webhook-worker.js";
+import { buildOperatorWebhookDeletionRequest } from "./operator-webhook-deletions.js";
 
 const secret = Buffer.from("synthetic-operator-webhook-secret-material-0001", "utf8");
 const rawInstallation = "installation:must-not-leak";
@@ -36,6 +37,20 @@ const baseCandidate: OperatorWebhookCandidate = {
 };
 
 describe("operator webhook closed envelope", () => {
+  it("uses only the already-delivered subject reference in a closed deletion notice", () => {
+    const subjectRef = createHmac("sha256", secret).update(`openmasu:subject_ref:v1\0${rawInstallation}`).digest("hex");
+    const prepared = buildOperatorWebhookDeletionRequest({ deliveryId: "018f0000-0000-7000-8000-000000000104",
+      appId: "app-synthetic", subjectRef, recognizedAt: "2026-08-30T02:00:00.000Z", endpointUrl: baseCandidate.endpoint_url });
+    assert.deepEqual(prepared.envelope, { schema: "openmasu.subject_deletion.v1",
+      delivery_id: prepared.deliveryId, app_id: "app-synthetic", subject_ref: subjectRef, recognized_at: "2026-08-30T02:00:00.000Z" });
+    assert.equal(prepared.requestDigest, createHash("sha256").update(prepared.body).digest("hex"));
+    for (const value of [rawInstallation, rawTransaction, "privacy_request_id", "record_id", "event_ref", "payload", "secret_ref"])
+      assert.equal(prepared.body.toString().includes(value), false, value);
+    assert.throws(() => buildOperatorWebhookDeletionRequest({ deliveryId: prepared.deliveryId, appId: "app-synthetic",
+      subjectRef: rawInstallation, recognizedAt: "2026-08-30T02:00:00.000Z", endpointUrl: baseCandidate.endpoint_url }),
+    /operator_webhook_deletion_request_invalid/);
+  });
+
   it("emits only destination-scoped references and closed purchase fields", () => {
     const prepared = buildOperatorWebhookRequest({
       candidate: baseCandidate,
@@ -168,6 +183,24 @@ describe("operator webhook transport", () => {
       signingRevision: 2, signingValidUntil: deadline, now: () => new Date(deadline), allowSyntheticLoopback: true }),
     { outcome: "suppressed", reason: "signing_key_expired" });
     assert.equal(received.length, before, "expiry suppresses the network request, not just its receipt");
+  });
+
+  it("retries a deletion notice through the same signer without changing body or delivery identity", async () => {
+    const prepared = buildOperatorWebhookDeletionRequest({ deliveryId: "018f0000-0000-7000-8000-000000000105",
+      appId: "app-synthetic", subjectRef: "a".repeat(64), recognizedAt: "2026-08-30T02:00:00.000Z", endpointUrl: `${origin}/retry` });
+    const start = received.length;
+    for (const attempt of [1, 2]) assert.deepEqual(await sendOperatorWebhook(prepared, secret, {
+      destinationAllowlist: [origin], signingRevision: 3, attempt, allowSyntheticLoopback: true,
+    }), { outcome: "retry", reason: "rate_limited", httpStatus: 429 });
+    const attempts = received.slice(start);
+    assert.equal(attempts.length, 2);
+    for (const attempt of attempts) {
+      assert.deepEqual(attempt.body, prepared.body);
+      assert.equal(attempt.deliveryId, prepared.deliveryId);
+      assert.equal(attempt.signingRevision, "3");
+      assert.equal(attempt.signature, `sha256=${createHmac("sha256", secret).update(prepared.body).digest("hex")}`);
+    }
+    assert.deepEqual(attempts.map(attempt => attempt.attempt), ["1", "2"]);
   });
 
   it("classifies retryable, terminal, and redirect responses without reading receiver bodies", async () => {

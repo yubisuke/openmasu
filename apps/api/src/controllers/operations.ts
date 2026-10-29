@@ -9,7 +9,7 @@ import { roleAllows } from "../authorization.js";
 import { IngestRecoveryError, listIngestRecovery, requestIngestRecovery } from "../ingest-recovery.js";
 import { renderIngestRecovery } from "../dashboard/ingest-recovery.js";
 import { disableOperatorWebhookDestination, listOperatorWebhookDestinations, registerOperatorWebhookDestination,
-  rotateOperatorWebhookSigningKey, retireOperatorWebhookSigningKey } from "../operator-webhooks-admin.js";
+  rotateOperatorWebhookSigningKey, retireOperatorWebhookSigningKey, setOperatorWebhookDeletionNotifications } from "../operator-webhooks-admin.js";
 import { disableOperatorBulkExportDestination, listOperatorBulkExportDestinations, registerOperatorBulkExportDestination, rotateOperatorBulkExportCredentials } from "../operator-bulk-exports-admin.js";
 import { renderBulkExportCredentials } from "../dashboard/bulk-export-credentials.js";
 import type { RequestHandlerDependencies } from "../http-types.js";
@@ -79,6 +79,8 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
     try {
       if (route.handler === "dashboard_operator_webhooks_register") {
         if (!dependencies.operatorWebhooks) throw new Error("operator_webhooks_not_configured");
+        const deletionValues = body.getAll("deletion_notifications");
+        if (deletionValues.length > 1 || deletionValues.some(value => value !== "yes")) throw Error("operator_webhook_deletion_notifications_invalid");
         const issued = await registerOperatorWebhookDestination({
           pool: dependencies.pool,
           payloadStore: dependencies.payloadStore,
@@ -87,14 +89,19 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
             endpoint_url: body.get("endpoint_url") ?? "",
             events: body.getAll("events"),
             ...(body.has("purpose") ? { purpose: body.get("purpose") } : {}),
+            deletion_notifications: deletionValues.length === 1,
           },
           destinationAllowlist: dependencies.operatorWebhooks.destinationAllowlist,
           allowSyntheticLoopback: dependencies.operatorWebhooks.allowSyntheticLoopback,
         });
-        dashboardHtml(response, 201, renderOperatorWebhookRegistered({ destinationId: issued.destination_id, endpointUrl: issued.endpoint_url, signingSecret: issued.signing_secret, appId: appIdentity.appId }));
+        dashboardHtml(response, 201, renderOperatorWebhookRegistered({ destinationId: issued.destination_id, endpointUrl: issued.endpoint_url, signingSecret: issued.signing_secret, appId: appIdentity.appId, deletionNotifications: issued.deletion_notifications }));
       } else {
         if (!destinationId) throw new Error("operator_webhook_destination_not_found");
-        if (route.handler === "dashboard_operator_webhooks_rotate" || route.handler === "dashboard_operator_webhooks_retire") {
+        if (route.handler === "dashboard_operator_webhooks_deletion_notifications") {
+          if (body.getAll("enabled").length !== 1 || !["true", "false"].includes(String(body.get("enabled")))) throw Error("operator_webhook_deletion_notifications_invalid");
+          await setOperatorWebhookDeletionNotifications({ pool: dependencies.pool, payloadStore: dependencies.payloadStore,
+            identity: appIdentity, destinationId, body: { enabled: body.get("enabled") === "true" } });
+        } else if (route.handler === "dashboard_operator_webhooks_rotate" || route.handler === "dashboard_operator_webhooks_retire") {
           const number = (key: string) => {
             if (body.getAll(key).length !== 1 || typeof body.get(key) !== "string") throw Error("operator_webhook_signing_fields_invalid");
             return Number(body.get(key));
@@ -293,6 +300,11 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
       }
       const destinationId = operatorWebhookDestinationId(target.pathname);
       if (!destinationId) throw new Error("operator_webhook_destination_not_found");
+      if (route.handler === "admin_operator_webhooks_deletion_notifications") {
+        json(response, 200, await setOperatorWebhookDeletionNotifications({ pool: dependencies.pool, payloadStore: dependencies.payloadStore,
+          identity: appIdentity, destinationId, body: await decoder.json() }));
+        return;
+      }
       if (route.handler === "admin_operator_webhooks_rotate" || route.handler === "admin_operator_webhooks_retire") {
         const command = { pool: dependencies.pool, payloadStore: dependencies.payloadStore, identity: appIdentity,
           destinationId, body: await decoder.json() };
@@ -393,6 +405,7 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
     dashboard_operator_webhooks_disable: { boundary: "dashboard_app", handle: dashboardOperatorWebhooksRegister },
     dashboard_operator_webhooks_rotate: { boundary: "dashboard_app", handle: dashboardOperatorWebhooksRegister },
     dashboard_operator_webhooks_retire: { boundary: "dashboard_app", handle: dashboardOperatorWebhooksRegister },
+    dashboard_operator_webhooks_deletion_notifications: { boundary: "dashboard_app", handle: dashboardOperatorWebhooksRegister },
     dashboard_operator_bulk_exports_register: { boundary: "dashboard_app", handle: dashboardOperatorBulkExportsRegister },
     dashboard_operator_bulk_exports_disable: { boundary: "dashboard_app", handle: dashboardOperatorBulkExportsRegister },
     dashboard_operator_bulk_exports_credentials: { boundary: "dashboard_app", handle: dashboardOperatorBulkExportsRegister },
@@ -407,6 +420,7 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
     admin_operator_webhooks_disable: { boundary: "admin", handle: adminOperatorWebhooksList },
     admin_operator_webhooks_rotate: { boundary: "admin", handle: adminOperatorWebhooksList },
     admin_operator_webhooks_retire: { boundary: "admin", handle: adminOperatorWebhooksList },
+    admin_operator_webhooks_deletion_notifications: { boundary: "admin", handle: adminOperatorWebhooksList },
     admin_operator_bulk_exports_list: { boundary: "admin", handle: adminOperatorBulkExportsList },
     admin_operator_bulk_exports_register: { boundary: "admin", handle: adminOperatorBulkExportsList },
     admin_operator_bulk_exports_disable: { boundary: "admin", handle: adminOperatorBulkExportsList },

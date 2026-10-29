@@ -23,6 +23,7 @@ export type OperatorWebhookDestination = Readonly<{
   status: "active" | "disabled";
   created_at: string;
   status_changed_at: string;
+  deletion_notifications: boolean;
   signing_revision?: number;
   signing_revisions?: Awaited<ReturnType<typeof listWebhookSigningRevisions>>;
 }>;
@@ -63,6 +64,10 @@ export async function registerOperatorWebhookDestination(options: Readonly<{
   lookup?: WebhookLookup;
   now?: Date;
 }>): Promise<OperatorWebhookDestination & { readonly signing_secret: string }> {
+  if (Object.keys(options.body).some(key => !["endpoint_url", "events", "purpose", "deletion_notifications"].includes(key))) throw Error("operator_webhook_fields_invalid");
+  const deletionNotifications = options.body.deletion_notifications === undefined ? false : options.body.deletion_notifications;
+  if (typeof deletionNotifications !== "boolean") throw Error("operator_webhook_deletion_notifications_invalid");
+  if (options.body.purpose === "comparison_notifications" && deletionNotifications) throw Error("operator_webhook_deletion_notifications_invalid");
   const endpoint = await resolveWebhookEndpoint(options.body.endpoint_url, options.destinationAllowlist, {
     allowSyntheticLoopback: options.allowSyntheticLoopback,
     lookup: options.lookup,
@@ -108,17 +113,17 @@ export async function registerOperatorWebhookDestination(options: Readonly<{
       );
       await client.query(
         `INSERT INTO control.operator_webhook_destination_states (
-           destination_id,tenant_id,app_id,status,changed_at,artifact
-         ) VALUES ($1,$2,$3,'active',$4,$5::jsonb)`,
+           destination_id,tenant_id,app_id,status,changed_at,artifact,deletion_notifications
+         ) VALUES ($1,$2,$3,'active',$4,$5::jsonb,$6)`,
         [destinationId, options.identity.tenantId, options.identity.appId, createdAt,
-          JSON.stringify({ destination_id: destinationId, status: "active", changed_at: createdAt })],
+          JSON.stringify({ destination_id: destinationId, status: "active", changed_at: createdAt, deletion_notifications: deletionNotifications }), deletionNotifications],
       );
       await audit(client, {
         identity: options.identity,
         destinationId,
         action: "operator_webhook_destination_registered",
         occurredAt: createdAt,
-        digest: requestDigest({ endpoint_url: endpoint.url.href, events }),
+        digest: requestDigest({ endpoint_url: endpoint.url.href, events, deletion_notifications: deletionNotifications }),
       });
       return {
         destination_id: destinationId,
@@ -129,6 +134,7 @@ export async function registerOperatorWebhookDestination(options: Readonly<{
         status: "active" as const,
         created_at: createdAt,
         status_changed_at: createdAt,
+        deletion_notifications: deletionNotifications,
         signing_secret: signingSecret,
         signing_revision: 1,
       };
@@ -147,12 +153,12 @@ export async function listOperatorWebhookDestinations(
   return withTenant(pool, identity.tenantId, async (client) => {
     const rows = (await client.query<OperatorWebhookDestination>(
     `SELECT destination_id,tenant_id,app_id,endpoint_url,events,
-            status,created_at,status_changed_at
+            status,created_at,status_changed_at,deletion_notifications
        FROM (
          SELECT DISTINCT ON (base.destination_id)
                 base.destination_id,base.tenant_id,base.app_id,base.endpoint_url,
                 base.allowed_events AS events,state.status,base.created_at,
-                state.changed_at AS status_changed_at
+                state.changed_at AS status_changed_at,state.deletion_notifications
            FROM control.operator_webhook_destinations AS base
            JOIN control.operator_webhook_destination_states AS state
              USING (destination_id,tenant_id,app_id)
@@ -172,7 +178,7 @@ export async function listOperatorWebhookDestinations(
   });
 }
 
-type SigningCommand = Readonly<{ pool: Pool; payloadStore: PayloadStore; identity: AppIdentity; destinationId: string;
+type DestinationCommand = Readonly<{ pool: Pool; payloadStore: PayloadStore; identity: AppIdentity; destinationId: string;
   body: Record<string, unknown>; now?: Date }>;
 function revisionNumber(value: unknown): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) throw Error("operator_webhook_signing_revision_invalid");
@@ -196,15 +202,15 @@ function signingFailure(error: unknown): never {
 async function lockActiveDestination(client: PoolClient, identity: AppIdentity, destinationId: string) {
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended('openmasu:operator-webhook-destination:' || $1 || ':' || $2 || ':' || $3,0))",
     [identity.tenantId,identity.appId,destinationId]);
-  const destination = (await client.query<{ status: string; secret_ref: string }>(
-    `SELECT status,secret_ref FROM control.operator_webhook_destinations_current
+  const destination = (await client.query<{ status: string; secret_ref: string; allowed_events: string[]; deletion_notifications: boolean; status_changed_at: string }>(
+    `SELECT status,secret_ref,allowed_events,deletion_notifications,status_changed_at FROM control.operator_webhook_destinations_current
       WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3`, [identity.tenantId,identity.appId,destinationId])).rows[0];
   if (!destination) throw Error("operator_webhook_destination_not_found");
   if (destination.status !== "active") throw Error("operator_webhook_destination_not_active");
   return destination;
 }
 
-export async function rotateOperatorWebhookSigningKey(options: SigningCommand): Promise<{
+export async function rotateOperatorWebhookSigningKey(options: DestinationCommand): Promise<{
   destination_id: string; signing_revision: number; created_at: string; previous_valid_until: string; signing_secret: string;
 }> {
   if (Object.keys(options.body).some(key => !["expected_revision", "overlap_seconds"].includes(key))) throw Error("operator_webhook_signing_fields_invalid");
@@ -236,7 +242,7 @@ export async function rotateOperatorWebhookSigningKey(options: SigningCommand): 
   }
 }
 
-export async function retireOperatorWebhookSigningKey(options: SigningCommand): Promise<{
+export async function retireOperatorWebhookSigningKey(options: DestinationCommand): Promise<{
   destination_id: string; signing_revision: number; retired_at: string;
 }> {
   if (Object.keys(options.body).some(key => !["expected_revision", "signing_revision"].includes(key))) throw Error("operator_webhook_signing_fields_invalid");
@@ -270,14 +276,47 @@ export async function retireOperatorWebhookSigningKey(options: SigningCommand): 
   return result;
 }
 
+export async function setOperatorWebhookDeletionNotifications(options: DestinationCommand): Promise<{
+  destination_id: string; deletion_notifications: boolean; changed_at: string;
+}> {
+  if (Object.keys(options.body).length !== 1 || typeof options.body.enabled !== "boolean") throw Error("operator_webhook_deletion_notifications_invalid");
+  const enabled = options.body.enabled, now = options.now ?? new Date(), changedAt = commandTime(now);
+  let protectedRefs: string[] = [];
+  let result: { destination_id: string; deletion_notifications: boolean; changed_at: string };
+  try {
+    result = await withTenant(options.pool, options.identity.tenantId, async client => {
+      const destination = await lockActiveDestination(client, options.identity, options.destinationId);
+      if (enabled && destination.allowed_events.length === 0) throw Error("operator_webhook_deletion_notifications_invalid");
+      const changed = destination.deletion_notifications !== enabled;
+      if (changed) {
+        await client.query(`INSERT INTO control.operator_webhook_destination_states
+          (destination_id,tenant_id,app_id,status,changed_at,artifact,deletion_notifications)
+          VALUES ($1,$2,$3,'active',$4,$5::jsonb,$6)`, [options.destinationId,options.identity.tenantId,options.identity.appId,changedAt,
+          JSON.stringify({ destination_id: options.destinationId, status: "active", changed_at: changedAt, deletion_notifications: enabled }), enabled]);
+        await audit(client, { identity: options.identity, destinationId: options.destinationId, action: "operator_webhook_deletion_notifications_changed",
+          occurredAt: changedAt, digest: requestDigest({ deletion_notifications: enabled }) });
+      }
+      if (!enabled) protectedRefs = await suppressPending(client, options.identity, options.destinationId, now,
+        "deletion_notifications_disabled", null, "subject_deletion");
+      return { destination_id: options.destinationId, deletion_notifications: enabled, changed_at: changed ? changedAt : destination.status_changed_at };
+    });
+  } catch (error) {
+    if (error instanceof Error && ["operator_webhook_destination_not_found", "operator_webhook_destination_not_active", "operator_webhook_deletion_notifications_invalid"].includes(error.message)) throw error;
+    throw Error("operator_webhook_deletion_notifications_update_failed");
+  }
+  await purgeProtected(options.payloadStore, protectedRefs);
+  return result;
+}
+
 async function suppressPending(client: PoolClient, identity: AppIdentity, destinationId: string, now: Date,
-    reason: "destination_disabled" | "signing_key_retired", revision: number | null = null): Promise<string[]> {
+    reason: "destination_disabled" | "signing_key_retired" | "deletion_notifications_disabled", revision: number | null = null,
+    eventName: "subject_deletion" | null = null): Promise<string[]> {
   const changedAt = now.toISOString();
   const pending = await client.query<{ delivery_id: string; request_ref: string; request_digest: string; attempts: number }>(
     `SELECT delivery_id::text,request_ref,request_digest,attempts FROM ephemeral.operator_webhook_deliveries
       WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3 AND state IN ('queued','retry')
-        AND ($4::bigint IS NULL OR signing_revision=$4) ORDER BY delivery_id FOR UPDATE`,
-    [identity.tenantId,identity.appId,destinationId,revision]);
+        AND ($4::bigint IS NULL OR signing_revision=$4) AND ($5::text IS NULL OR event_name=$5) ORDER BY delivery_id FOR UPDATE`,
+    [identity.tenantId,identity.appId,destinationId,revision,eventName]);
   for (const row of pending.rows) {
     await client.query(`UPDATE ephemeral.operator_webhook_deliveries SET state='suppressed',safe_reason=$4,updated_at=$5
       WHERE tenant_id=$1 AND app_id=$2 AND delivery_id=$3`, [identity.tenantId,identity.appId,row.delivery_id,reason,changedAt]);
@@ -291,7 +330,8 @@ async function suppressPending(client: PoolClient, identity: AppIdentity, destin
   // Include prior suppressions so an interrupted post-commit purge can be retried.
   return (await client.query<{ request_ref: string }>(`SELECT request_ref FROM ephemeral.operator_webhook_deliveries
     WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3 AND state='suppressed' AND safe_reason=$4
-      AND ($5::bigint IS NULL OR signing_revision=$5)`, [identity.tenantId,identity.appId,destinationId,reason,revision])).rows.map(row => row.request_ref);
+      AND ($5::bigint IS NULL OR signing_revision=$5) AND ($6::text IS NULL OR event_name=$6)`,
+    [identity.tenantId,identity.appId,destinationId,reason,revision,eventName])).rows.map(row => row.request_ref);
 }
 
 export async function disableOperatorWebhookDestination(options: Readonly<{
@@ -327,7 +367,7 @@ export async function disableOperatorWebhookDestination(options: Readonly<{
            destination_id,tenant_id,app_id,status,changed_at,artifact
          ) VALUES ($1,$2,$3,'disabled',$4,$5::jsonb)`,
         [options.destinationId, options.identity.tenantId, options.identity.appId, changedAt,
-          JSON.stringify({ destination_id: options.destinationId, status: "disabled", changed_at: changedAt })],
+          JSON.stringify({ destination_id: options.destinationId, status: "disabled", changed_at: changedAt, deletion_notifications: false })],
       );
       await audit(client, {
         identity: options.identity,

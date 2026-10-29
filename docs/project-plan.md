@@ -49,6 +49,10 @@ These source additions do not change the frozen rc.3 distribution.
 Outbound webhooks keep stable event/subject references while rotating the signing
 key on the same destination. Bounded overlap, explicit retirement and queued
 revision binding reuse the existing encrypted outbox and administrator controls.
+An explicit destination opt-in adds deletion notices for subjects with recorded
+successful event delivery, using that same outbox and stable reference. Local
+privacy completion never waits for the recipient; HTTP acceptance is not evidence
+that the recipient has erased its copy.
 
 ## Implemented integration work
 
