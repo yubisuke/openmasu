@@ -1,7 +1,17 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 
 const seedLockName = "openmasu:synthetic-seed";
 const deadlockCode = "40P01";
+
+/** Trust the DB's one-time purpose, never a caller-supplied CLI/env flag. */
+export async function assertSyntheticDeployment(client: PoolClient): Promise<void> {
+  const result = await client.query<{ purpose: string }>(
+    "SELECT purpose FROM control.deployment_purpose WHERE singleton",
+  );
+  if (result.rows.length !== 1 || result.rows[0].purpose !== "synthetic_disposable") {
+    throw new Error("synthetic_seed_requires_disposable");
+  }
+}
 
 function postgresCode(error: unknown): string | undefined {
   return typeof error === "object" && error !== null && "code" in error
@@ -26,6 +36,7 @@ export async function withSyntheticSeedLock<T>(pool: Pool, operation: () => Prom
   try {
     await client.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [seedLockName]);
     locked = true;
+    await assertSyntheticDeployment(client);
     return await operation();
   } finally {
     if (locked) {

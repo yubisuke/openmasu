@@ -106,6 +106,12 @@ For a persistent local dashboard, app registration, tracking-link allowlists,
 safe seeding and import confirmation, follow
 [Getting started](docs/getting-started.md). Never reseed a ledger you need to keep.
 
+Normal bootstrap fixes the deployment purpose to `persistent` and does not issue
+seed credentials. Seed/reset also checks the database's stored purpose before any
+deletion; a Compose profile or later environment override cannot unlock it. The
+isolated pilot explicitly creates a fresh `synthetic_disposable` deployment.
+This protects the seed path, not an operator's direct SQL or `down --volumes`.
+
 ## Develop with KISS
 
 Use the existing services and test suites. Run the affected check while editing,

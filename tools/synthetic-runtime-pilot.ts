@@ -34,6 +34,7 @@ export function syntheticProcessEnvironment(environment: NodeJS.ProcessEnv): Nod
 
 export function syntheticComposeEnvironment(ports: { api: number; postgres: number; redirector: number }): string {
   const entries: Record<string, string> = {
+    OPENMASU_DEPLOYMENT_PURPOSE: "synthetic_disposable",
     OPENMASU_API_HOST_PORT: String(ports.api),
     OPENMASU_POSTGRES_HOST_PORT: String(ports.postgres),
     OPENMASU_REDIRECTOR_HOST_PORT: String(ports.redirector),

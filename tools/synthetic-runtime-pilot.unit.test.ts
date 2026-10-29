@@ -35,6 +35,7 @@ describe("disposable synthetic runtime pilot", () => {
 
   it("fixes provider integrations off and uses only synthetic identities and isolated ports", () => {
     const environment = syntheticComposeEnvironment({ api: 41001, postgres: 41002, redirector: 41003 });
+    assert.match(environment, /^OPENMASU_DEPLOYMENT_PURPOSE=synthetic_disposable$/m);
     assert.match(environment, /^OPENMASU_API_HOST_PORT=41001$/m);
     assert.match(environment, /^OPENMASU_PUBLIC_BASE_URL=http:\/\/127\.0\.0\.1:41001$/m);
     assert.match(environment, /^OPENMASU_REDIRECTOR_BASE_URL=http:\/\/127\.0\.0\.1:41003$/m);

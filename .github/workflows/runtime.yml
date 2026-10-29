@@ -44,6 +44,7 @@ jobs:
           --health-timeout 3s
           --health-retries 30
     env:
+      OPENMASU_DEPLOYMENT_PURPOSE: synthetic_disposable
       OPENMASU_MIGRATION_DATABASE_URL: postgresql://postgres:postgres-synthetic-ci@localhost:5432/openmasu
       OPENMASU_APP_DATABASE_PASSWORD: app-synthetic-ci-password
       OPENMASU_READER_DATABASE_PASSWORD: reader-synthetic-ci-password
