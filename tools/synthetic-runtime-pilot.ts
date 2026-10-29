@@ -344,12 +344,15 @@ export async function runSyntheticRuntimePilot(
     runStep("dependency_readiness", [...compose, "up", "-d", "--wait"]);
     runStep("dependency_readiness", healthProbe(200));
 
-    // Signal PID 1 from inside the container, not Docker's intentional-stop API.
+    // Signal the verified application child of Docker init, not namespace PID 1
+    // (which ignores peer SIGKILL/SIGSTOP) or Docker's intentional-stop API.
+    const signalWorker = (signal: "SIGSTOP" | "SIGKILL") => [...compose, "exec", "-T", "worker", "node", "-e",
+      `const fs=require('node:fs'); const children=fs.readFileSync('/proc/1/task/1/children','utf8').trim().split(/\\s+/).map(Number); const pid=children.find(pid=>fs.readFileSync('/proc/'+pid+'/cmdline','utf8').split('\\0').includes('apps/worker/src/main.ts')); if(!pid||pid<=1)process.exit(2); process.kill(pid,'${signal}');`];
     const beforeCrash = Number(requireSuccess("worker_crash_recovery", "docker", ["inspect", "--format", "{{.RestartCount}}", workerId], staging).stdout.trim());
-    runStep("worker_crash_recovery", [...compose, "exec", "-T", "worker", "node", "-e", "process.kill(1,'SIGSTOP')"]);
+    runStep("worker_crash_recovery", signalWorker("SIGSTOP"));
     runStep("worker_crash_recovery", [...compose, "exec", "-T", "api", ...shell("set -a && . /run/openmasu/app/runtime.env && set +a && node --import tsx tools/test-support/runtime-recovery.ts enqueue")]);
     // Exit status may reflect the killed exec container; inspect is authoritative.
-    execute("docker", [...compose, "exec", "-T", "worker", "node", "-e", "process.kill(1,'SIGKILL')"], staging);
+    execute("docker", signalWorker("SIGKILL"), staging);
     const recoveryDeadline = Date.now() + 60_000;
     let recovered = false;
     while (Date.now() < recoveryDeadline) {

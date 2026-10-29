@@ -111,6 +111,7 @@ services:
 
   api:
     <<: *app
+    init: true
     restart: unless-stopped
     command: ["/bin/sh", "-c", "set -a && . /run/openmasu/app/runtime.env && set +a && exec node --import tsx apps/api/src/server.ts"]
     volumes:
@@ -132,6 +133,7 @@ services:
 
   worker:
     <<: *app
+    init: true
     restart: unless-stopped
     command: ["/bin/sh", "-c", "set -a && . /run/openmasu/app/runtime.env && set +a && exec node --import tsx apps/worker/src/main.ts"]
     healthcheck:
@@ -148,6 +150,7 @@ services:
 
   redirector:
     <<: *app
+    init: true
     restart: unless-stopped
     command: ["/bin/sh", "-c", "set -a && . /run/openmasu/app/runtime.env && set +a && exec node --import tsx apps/redirector/src/server.ts"]
     healthcheck:
