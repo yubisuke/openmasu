@@ -3,6 +3,7 @@ import { acquisitionKpiRole, isCalendarActivityMetricDefinition } from "@openmas
 import { comparisonMeaning, comparisonMaturity } from "@openmasu/runtime/metric-comparison";
 import { comparisonDigest, parseComparisonContext } from "./cohort-comparison.js";
 import { buildAcquisitionKpiSets } from "./acquisition-kpis.js";
+import { acquisitionPeriodRows, buildAcquisitionPeriods, type AcquisitionPeriodSummary } from "./acquisition-period.js";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import type { MetricQuery } from "./report-query.js";
 import { fixedMetricSelections, type SelectionOptions } from "./fixed-comparison.js";
@@ -21,7 +22,8 @@ export type PeriodAnalysisRow = { metric_name: string; dimensions: Record<string
   current: AnalysisObservation[]; previous: AnalysisObservation[]; delta_current_minus_previous: string | null };
 export type PeriodAnalysis = { current_from: string; current_to: string; previous_from: string; previous_to: string;
   watermark_at_most: string; acquisition: "complete"; source_completeness: "unknown";
-  current_count: number; previous_count: number; selection_digest: string; rows: PeriodAnalysisRow[] };
+  current_count: number; previous_count: number; selection_digest: string; rows: PeriodAnalysisRow[];
+  summaries: AcquisitionPeriodSummary[] };
 
 function observation(row: MetricReportRow): AnalysisObservation {
   return { run_id: row.metric_run_id, snapshot_id: row.input_snapshot_id, watermark: row.input_received_at_watermark,
@@ -65,7 +67,7 @@ function eligibility(row: MetricReportRow, kpis: Map<string, string | null>): { 
   } catch { return { reason: "meaning_unverified" }; }
 }
 
-/** Align saved dates by offset. Never aggregate daily distinct counts, ratios, or multiple saved runs. */
+/** Preserve daily alignment; summarize only the explicit complete acquisition operand set. */
 export function buildPeriodAnalysis(query: MetricQuery, current: readonly MetricReportRow[], previous: readonly MetricReportRow[]): PeriodAnalysis {
   const prior = previousAnalysisQuery(query), groups = new Map<string, { metric: string; dimensions: Record<string, string>;
     offset: number; current: MetricReportRow[]; previous: MetricReportRow[] }>();
@@ -103,7 +105,8 @@ export function buildPeriodAnalysis(query: MetricQuery, current: readonly Metric
   return { current_from: query.dateFrom!, current_to: query.dateTo!, previous_from: prior.dateFrom!, previous_to: prior.dateTo!,
     watermark_at_most: query.watermarkAtMost!, acquisition: "complete", source_completeness: "unknown",
     current_count: current.length, previous_count: previous.length,
-    selection_digest: comparisonDigest({ query: selection, current, previous }), rows };
+    selection_digest: comparisonDigest({ query: selection, current, previous }), rows,
+    summaries: buildAcquisitionPeriods(query, [query.dateFrom!, query.dateTo!], [prior.dateFrom!, prior.dateTo!], current, previous) };
 }
 
 export function acquirePeriodAnalysis(pool: Pool, identity: AppAdminIdentity, query: MetricQuery, options: SelectionOptions = {}) {
@@ -114,7 +117,7 @@ export function visibleAnalysisRows(analysis: PeriodAnalysis, display: "all" | "
   return display === "exceptions" ? analysis.rows.filter(row => row.status !== "compared") : analysis.rows;
 }
 export function encodePeriodAnalysisCsv(analysis: PeriodAnalysis, display: "all" | "exceptions"): string {
-  const rows = visibleAnalysisRows(analysis, display).map(row => ({
+  const rows: Record<string, unknown>[] = visibleAnalysisRows(analysis, display).map(row => ({
     metric_name: row.metric_name, dimensions: row.dimensions, current_date: row.current_date, previous_date: row.previous_date,
     status: row.status, reason: row.reason,
     current_value_unscaled: row.current.length === 1 ? row.current[0].value_unscaled : null,
@@ -122,8 +125,24 @@ export function encodePeriodAnalysisCsv(analysis: PeriodAnalysis, display: "all"
     delta_current_minus_previous: row.delta_current_minus_previous,
     current_observations: row.current, previous_observations: row.previous,
     selection_digest: analysis.selection_digest, source_completeness: analysis.source_completeness,
+    row_kind: "daily_observation",
   }));
+  for (const row of acquisitionPeriodRows(analysis.summaries, display)) {
+    const { current, previous, dimensions } = row.summary;
+    rows.push({ metric_name: row.metric_name, dimensions, current_date: null, previous_date: null,
+      status: row.status, reason: row.reason, current_value_unscaled: row.current?.value_unscaled ?? null,
+      previous_value_unscaled: row.previous?.value_unscaled ?? null,
+      delta_current_minus_previous: row.delta_current_minus_previous,
+      current_observations: current.sources, previous_observations: previous.sources,
+      selection_digest: analysis.selection_digest, source_completeness: analysis.source_completeness,
+      row_kind: "acquisition_period_summary", current_period_from: current.date_from, current_period_to: current.date_to,
+      previous_period_from: previous.date_from, previous_period_to: previous.date_to,
+      current_summary: { ...current, sources: undefined, values: row.current },
+      previous_summary: { ...previous, sources: undefined, values: row.previous },
+    });
+  }
   return encodeCsv(rows, ["metric_name", "dimensions", "current_date", "previous_date", "status", "reason",
     "current_value_unscaled", "previous_value_unscaled", "delta_current_minus_previous", "current_observations",
-    "previous_observations", "selection_digest", "source_completeness"]);
+    "previous_observations", "selection_digest", "source_completeness", "row_kind", "current_period_from", "current_period_to",
+    "previous_period_from", "previous_period_to", "current_summary", "previous_summary"]);
 }

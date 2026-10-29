@@ -48,10 +48,41 @@ Acquisition rows also require complete, compatible eight-role saved calculation
 sets. Duplicates, missing runs, undefined/privacy-withdrawn values, pending
 corrections, unknown meaning/maturity or incompatible sets remain explicit.
 HTML and CSV use the same model, reasons, run/snapshot IDs and unscaled values.
-No campaign/currency totals or period ratio averages are inferred. In particular,
-retention remains a saved cohort observation because general denominator operands
-are not exposed. A valid row difference is current minus previous at the stored
-scale, not growth percent or a weighted period aggregate.
+Daily rows remain unchanged. A valid daily difference is current minus previous
+at the stored scale, not growth percent. Retention remains a saved cohort
+observation because general denominator operands are not exposed; daily unique
+installation counts and re-engagement are never summed into period metrics.
+
+### Acquisition period summaries
+
+The same complete read also provides **Acquisition period summaries**, one group
+per campaign and every other non-date dimension. Each side must contain exactly
+one complete, compatible eight-role native D7 set for **every** selected date.
+Different dates, input snapshots and watermarks are allowed; role-specific
+definitions, acquisition basis, currencies/scales, captured FX, fraud/privacy
+meaning, windows, grain and policies must match. Every set must be mature and
+free of pending corrections or unavailable evidence. Missing days/roles,
+duplicates and incompatible sets block that side with a reason; no partial sum
+or missing-cost-as-zero fallback is published.
+
+The five additive operands (installs, cost, advertising revenue, purchase net and
+total net) are summed as integers. CPI divides total cost by total installs;
+advertising and total ROAS divide their total revenue by total cost, with
+half-even rounding at scale 6. Daily ratios are **not averaged**. An undefined
+daily ratio does not prevent a period ratio when all its operands are present.
+A zero period denominator remains undefined with its reason. Summaries do not
+combine different campaigns, countries or attribution statuses.
+
+Each side is validated independently. If both sides are valid but their meanings
+differ, their values remain visible and the current-minus-previous delta is
+absent. Summary JSON includes source run IDs, snapshots, watermarks, daily set
+keys, grouping digests and period selection/meaning digests. HTML and CSV project
+the same calculated model, not separate arithmetic. CSV keeps the original daily
+columns first and appends `row_kind` (`daily_observation` or
+`acquisition_period_summary`), period bounds and the side summaries. A summary is
+a read-time projection, **not a new saved metric run**. A new GET reads current
+privacy/correction state; old totals are never cached. Source completeness
+remains unknown. See [acquisition KPI meaning](acquisition-kpis.md#period-totals-and-weighted-ratios).
 
 The existing two-campaign schedule integration journey owns persistence, session
 authorization, cross-scope isolation, pagination/concurrent-insert and export
