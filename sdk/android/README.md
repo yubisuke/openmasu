@@ -66,6 +66,26 @@ the modern data-extraction rules and legacy backup attributes. SQLite
 `secure_delete` is a limited local measure, not a guarantee that every device
 storage copy is erased.
 
+## Local diagnostics
+
+`sdk.diagnosticsSnapshot { snapshot -> ... }` asynchronously reads local state
+on Room's read executor, independently of network delivery. It does not initialize
+the SDK, generate an installation ID, enroll, flush, or upload diagnostics.
+The typed snapshot contains collection enablement, the consent barrier,
+reset-pending and enrolled flags, queue-health aggregates, and the last observed
+enrollment/delivery/deletion attempt's timestamp, closed result and HTTP class.
+The closed attempt metadata survives reopening, including background delivery
+from another SDK instance. No identifier, secret, URL, payload or response body
+is returned. Do not update Android UI directly from the completion callback.
+
+`ACCEPTED` means HTTP 202 admission, **not ledger completion**. Authentication
+rejection, rate limiting and network unavailability remain distinct. Existing
+custom transports remain compatible and report `CUSTOM_SUCCESS` or
+`CUSTOM_FAILURE`; an unknown custom failure is not assumed to mean offline.
+Custom HTTP transports may opt into `OpenMasuDiagnosticTransport` and the closed
+`OpenMasuTransportFailure` errors. `PENDING` means local work remains, not a
+promised retry time. See [measurement health](../../docs/measurement-health.md#local-sdk-diagnostics-are-separate).
+
 ## Install Referrer and deep links
 
 Install Referrer preserves Google Play response state and both client and

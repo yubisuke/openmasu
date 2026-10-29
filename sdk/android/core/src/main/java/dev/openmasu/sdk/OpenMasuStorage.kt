@@ -3,6 +3,7 @@ package dev.openmasu.sdk
 import android.content.Context
 import android.content.SharedPreferences
 import java.util.UUID
+import org.json.JSONObject
 
 internal class OpenMasuStorage(context: Context) {
   private val preferences: SharedPreferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
@@ -22,6 +23,23 @@ internal class OpenMasuStorage(context: Context) {
   }
 
   fun consentBarrierActive(): Boolean = preferences.getBoolean(KEY_CONSENT_BARRIER, false)
+
+  fun diagnosticAttempt(): DiagnosticAttempt = runCatching {
+    val value = JSONObject(preferences.getString("diagnostic_attempt", null) ?: return DiagnosticAttempt())
+    DiagnosticAttempt(
+      value.getLong("at_ms").also { require(it >= 0) },
+      OpenMasuDiagnosticOperation.valueOf(value.getString("operation")),
+      OpenMasuDiagnosticResult.valueOf(value.getString("result")),
+      OpenMasuHttpClass.valueOf(value.getString("http_class")),
+    )
+  }.getOrDefault(DiagnosticAttempt())
+
+  fun setDiagnosticAttempt(value: DiagnosticAttempt) {
+    // One atomic preferences record also serves the separate WorkManager SDK instance.
+    preferences.edit().putString("diagnostic_attempt", JSONObject()
+      .put("at_ms", value.atMs).put("operation", value.operation.name)
+      .put("result", value.result.name).put("http_class", value.httpClass.name).toString()).commit()
+  }
 
   fun applyConsentState(state: String) {
     when (state) {

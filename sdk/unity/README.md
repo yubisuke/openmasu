@@ -223,6 +223,25 @@ The example preserves both safe defaults. Enable
 the conversion-tag mapping and retrieval lifecycle; OpenMasu does not persist
 the opaque tag in analytics or logs.
 
+## Local diagnostics
+
+`client.GetDiagnosticsSnapshot(snapshot => { ... })` returns a typed
+`OpenMasuDiagnosticsSnapshot` on the Unity dispatcher when `PumpCallbacks()` runs.
+It reports only local collection/consent/reset/enrollment state, queue aggregates
+and the last observed attempt's timestamp, closed result and HTTP class. The
+getter never starts measurement or network work. The Editor shim reports
+`Available == false`; it does not fabricate a device send. Existing custom
+`IOpenMasuPlatform` implementations remain compatible and may add the optional
+`IOpenMasuDiagnosticsPlatform` capability. Unsupported platforms throw
+`NotSupportedException` rather than returning false success.
+
+`Accepted` is HTTP 202 admission, **not server ledger completion**. Authentication
+rejection, rate limiting, network unavailability and custom transport outcomes are
+distinct. The DTO has no arbitrary string fields, identifiers, secrets, URLs,
+payloads or provider response bodies. Diagnostic data is never uploaded by this
+API. See [measurement health](../../docs/measurement-health.md#local-sdk-diagnostics-are-separate)
+for the distinction between local retry state and server receipts.
+
 ## Apple conversion updates
 
 On iOS, `OpenMasuClient.RecordAppleConversion` reaches the bundled

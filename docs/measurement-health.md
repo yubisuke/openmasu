@@ -60,12 +60,37 @@ occurrence window. A past resolved failure is not a current-window alarm.
 ## Local SDK diagnostics are separate
 
 The response declares `client_diagnostics: on_device_only_not_received`.
-Existing SDK queue-health getters expose pending count, logical bytes,
-eviction and rejection totals locally. These values are **not uploaded** by
-this feature and are not derived from server receipts. Inspect them on the
-device or consumer app and compare against the bounded server view. This
-distinguishes a local queue problem from missing server observations without
-adding identifiers, diagnostic payload uploads or another endpoint/service.
+The Android `diagnosticsSnapshot` callback, iOS `diagnosticsSnapshot()` actor
+method and Unity `GetDiagnosticsSnapshot` return a typed, local-only snapshot.
+Existing queue-health getters remain available. These values are **not uploaded**
+and are not derived from server receipts. The snapshot contains:
+
+- Explicit collection enablement, the persisted consent barrier, reset-pending
+  and enrolled flags. Enabled collection does not override a consent/reset fence.
+- Queue pending count, logical bytes, cumulative eviction and rejection totals.
+- Last observed enrollment, delivery, deletion or deletion-status attempt time;
+  a closed result; and HTTP class (`none`, `http_2xx`, `http_4xx`, `http_5xx`, `other`).
+- Retry state: `none`, `pending`, `collection_blocked`, `consent_blocked` or
+  `reset_pending`. `pending` means retained work, not a timer, delivery guarantee,
+  or permission to bypass collection/consent policy.
+
+Results distinguish not attempted, in flight, HTTP admission (`accepted`), other
+HTTP responses, authentication rejection (401/403), rate limiting (429), network
+unavailability, server/request errors, unexpected responses and custom transport
+success/failure. Network unavailability covers connection, DNS, TLS and timeout
+failures; it is not a connectivity probe or proof that the device is offline.
+**HTTP 202 acceptance is not ledger completion, attribution or recognized revenue.**
+A successful custom transport is not assumed to have received HTTP 202.
+
+Only the last attempt's closed metadata is persisted, not a diagnostic history.
+An old `in_flight` record after process termination is the last observed state,
+not proof that a request still runs. SDK storage reset may clear this metadata.
+Queue and policy reads are local observations, not a transactional server view.
+Getters never generate IDs, enroll, send or read provider evidence, and expose no
+identifiers, credentials, URLs, payloads, raw exception text or provider bodies.
+Unity's Editor shim explicitly reports that device diagnostics are unavailable.
+Inspect the snapshot in the consumer app and compare with bounded server receipts;
+there is no new diagnostic endpoint or upload service.
 
 ## Retained history is background context
 

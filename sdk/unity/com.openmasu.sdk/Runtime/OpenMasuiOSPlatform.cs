@@ -7,7 +7,7 @@ using AOT;
 namespace OpenMasu.Unity
 {
     public sealed class OpenMasuiOSPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform,
-        IOpenMasuAppleConversionPlatform, IOpenMasuAppStorePurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuAdRevenuePlatform
+        IOpenMasuAppleConversionPlatform, IOpenMasuAppStorePurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuAdRevenuePlatform, IOpenMasuDiagnosticsPlatform
     {
         private delegate void NativeCallback(long requestId, IntPtr value);
         private static readonly NativeCallback Callback = OnNativeCallback;
@@ -172,6 +172,17 @@ namespace OpenMasu.Unity
 #endif
         }
 
+        public void GetDiagnosticsSnapshot(Action<string> completion)
+        {
+            ThrowIfDisposed();
+            var requestId = Register(completion);
+#if UNITY_IOS && !UNITY_EDITOR
+            openmasu_ios_diagnostics(requestId, Callback);
+#else
+            CompleteSynthetic(requestId, "available=false&collection_enabled=false&consent_barrier_active=false&reset_pending=false&enrolled=false&last_attempt_at_ms=&last_operation=none&last_result=not_attempted&http_class=none&retry_state=none&pending_count=0&logical_bytes=0&evicted_total=0&rejected_total=0");
+#endif
+        }
+
         public void SetCollectionEnabled(bool enabled)
         {
             ThrowIfDisposed();
@@ -322,6 +333,8 @@ namespace OpenMasu.Unity
         private static extern void openmasu_ios_start_session(long requestId, NativeCallback callback);
         [DllImport("__Internal")]
         private static extern void openmasu_ios_queue_health(long requestId, NativeCallback callback);
+        [DllImport("__Internal")]
+        private static extern void openmasu_ios_diagnostics(long requestId, NativeCallback callback);
         [DllImport("__Internal")]
         private static extern void openmasu_ios_set_collection_enabled([MarshalAs(UnmanagedType.I1)] bool enabled);
         [DllImport("__Internal")]

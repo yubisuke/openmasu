@@ -44,6 +44,84 @@ namespace OpenMasu.Unity
         void GetQueueHealth(Action<string> completion);
     }
 
+    public interface IOpenMasuDiagnosticsPlatform
+    {
+        void GetDiagnosticsSnapshot(Action<string> completion);
+    }
+
+    public enum OpenMasuDiagnosticOperation { None, Enrollment, Delivery, Deletion, DeletionStatus }
+    public enum OpenMasuDiagnosticResult {
+        NotAttempted, InFlight, Accepted, HttpResponse, AuthenticationRejected, RateLimited,
+        NetworkUnavailable, ServerError, RequestRejected, UnexpectedResponse, CustomSuccess, CustomFailure,
+    }
+    public enum OpenMasuHttpClass { None, Http2xx, Http4xx, Http5xx, Other }
+    public enum OpenMasuRetryState { None, Pending, CollectionBlocked, ConsentBlocked, ResetPending }
+
+    /// <summary>Device-local state. Accepted means HTTP 202 admission, never ledger completion.</summary>
+    public sealed class OpenMasuDiagnosticsSnapshot
+    {
+        public bool Available { get; private set; }
+        public bool CollectionEnabled { get; private set; }
+        public bool ConsentBarrierActive { get; private set; }
+        public bool ResetPending { get; private set; }
+        public bool Enrolled { get; private set; }
+        public long? LastAttemptAtMs { get; private set; }
+        public OpenMasuDiagnosticOperation LastOperation { get; private set; }
+        public OpenMasuDiagnosticResult LastResult { get; private set; }
+        public OpenMasuHttpClass HttpClass { get; private set; }
+        public OpenMasuRetryState RetryState { get; private set; }
+        public OpenMasuQueueHealth Queue { get; private set; }
+
+        internal static OpenMasuDiagnosticsSnapshot Parse(string value)
+        {
+            var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var pair in (value ?? string.Empty).Split('&'))
+            {
+                var parts = pair.Split(new[] { '=' }, 2);
+                if (parts.Length != 2 || fields.ContainsKey(parts[0])) throw Invalid();
+                fields.Add(parts[0], parts[1]);
+            }
+            if (fields.Count != 14) throw Invalid();
+            var attempt = Field(fields, "last_attempt_at_ms");
+            long? atMs = null;
+            if (attempt.Length != 0)
+            {
+                if (!long.TryParse(attempt, NumberStyles.None, CultureInfo.InvariantCulture, out var number) || number < 0) throw Invalid();
+                atMs = number;
+            }
+            return new OpenMasuDiagnosticsSnapshot {
+                Available = Boolean(fields, "available"),
+                CollectionEnabled = Boolean(fields, "collection_enabled"),
+                ConsentBarrierActive = Boolean(fields, "consent_barrier_active"),
+                ResetPending = Boolean(fields, "reset_pending"),
+                Enrolled = Boolean(fields, "enrolled"),
+                LastAttemptAtMs = atMs,
+                LastOperation = ClosedEnum<OpenMasuDiagnosticOperation>(fields, "last_operation"),
+                LastResult = ClosedEnum<OpenMasuDiagnosticResult>(fields, "last_result"),
+                HttpClass = ClosedEnum<OpenMasuHttpClass>(fields, "http_class"),
+                RetryState = ClosedEnum<OpenMasuRetryState>(fields, "retry_state"),
+                Queue = OpenMasuQueueHealth.Parse(value),
+            };
+        }
+
+        private static FormatException Invalid() => new FormatException("openmasu_diagnostics_invalid");
+        private static string Field(IReadOnlyDictionary<string, string> fields, string key) =>
+            fields.TryGetValue(key, out var value) ? value : throw Invalid();
+        private static bool Boolean(IReadOnlyDictionary<string, string> fields, string key)
+        {
+            var value = Field(fields, key);
+            if (value != "true" && value != "false") throw Invalid();
+            return value == "true";
+        }
+        private static T ClosedEnum<T>(IReadOnlyDictionary<string, string> fields, string key) where T : struct
+        {
+            var value = Field(fields, key);
+            if (value.Length == 0 || value[0] < 'a' || value[0] > 'z' ||
+                !Enum.TryParse(value.Replace("_", string.Empty), true, out T result) || !Enum.IsDefined(typeof(T), result)) throw Invalid();
+            return result;
+        }
+    }
+
     public interface IOpenMasuAppleConversionPlatform
     {
         void RecordAppleConversion(
@@ -201,6 +279,14 @@ namespace OpenMasu.Unity
         public void GetQueueHealth(Action<OpenMasuQueueHealth> completion) =>
             QueueHealthPlatform().GetQueueHealth(value =>
                 dispatcher.Post(() => completion(OpenMasuQueueHealth.Parse(value))));
+        public void GetDiagnosticsSnapshot(Action<OpenMasuDiagnosticsSnapshot> completion)
+        {
+            if (completion == null) throw new ArgumentNullException(nameof(completion));
+            var diagnostics = platform as IOpenMasuDiagnosticsPlatform;
+            if (diagnostics == null) throw new NotSupportedException("openmasu_diagnostics_platform_unavailable");
+            diagnostics.GetDiagnosticsSnapshot(value =>
+                dispatcher.Post(() => completion(OpenMasuDiagnosticsSnapshot.Parse(value))));
+        }
         public void SetCollectionEnabled(bool enabled)
         {
             ChangeAdRevenueCollection(enabled);
