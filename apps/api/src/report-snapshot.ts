@@ -51,7 +51,9 @@ export function reportToSnapshot(report: unknown, template: unknown) {
     }
     if (context) {
       const d = context.definition;
-      if (context.fx.rate_selection && ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(d.definition.calculation)) {
+      if (["cost_sum", "cost_over_cohort"].includes(d.definition.calculation)
+          && ["recalculation_pending", "input_revised"].includes(String(r.cost_update_state))) throw Error("cost_revision_pending");
+      if (context.fx.rate_selection && ["revenue_sum", "revenue_over_cost", "revenue_over_cohort", "cost_sum", "cost_over_cohort"].includes(d.definition.calculation)) {
         const fx = projectDatedFxSnapshot(r.fx_conversion_snapshot);
         if (!fx || fx.snapshot_id !== context.fx_digest || jcs(fx.policy) !== jcs(context.fx)) throw Error("fx_snapshot_binding_mismatch");
       }

@@ -310,7 +310,8 @@ or database call is made, and no ledger evidence is inserted.
 The original `version=1`, `external-elapsed-ad-roas-v1` declaration still supports
 elapsed advertising ROAS. The additive `version=2`, `external-install-cohort-v2`
 declaration covers advertising, purchase-net and total-net revenue sums, ROAS,
-money-valued LTV, retained-installation rates and explicit custom-outcome rates.
+money-valued LTV, retained-installation rates, explicit custom-outcome rates,
+distinct cohort installs, acquisition-day cost and CPI.
 Both use the same CSV conversion, comparator, dashboard review and CLI/HTML paths.
 
 The following complete synthetic mapping matches the historical D3 ROAS
@@ -435,11 +436,38 @@ leave the comparison unresolved instead of manufacturing a value.
 
 | Family | Meaning that must match the saved definition |
 | --- | --- |
+| Installs | `cohort_size`; numerator `cohort_size`, null denominator; **distinct installations in the accepted installation cohort**, not raw install-event count or people; count units, null currency/amount/ratio scales, no FX |
+| Acquisition cost | `cost_sum`; numerator `cost`, null denominator; `cohort_acquisition_day_current_snapshot`; money units and exact cost-grain selection |
+| CPI | `cost_over_cohort`; numerator `cost`, denominator `cohort_size`; the same distinct installation population and acquisition-day cost snapshot; money per installation, not a ratio-scale percentage |
 | Revenue sums | `revenue_sum`; advertising `revenue`, `purchase_net_revenue`, or their sum `total_net_revenue`; null denominator; money units |
 | ROAS | `revenue_over_cost`; cost denominator and `cohort_acquisition_day_current_snapshot`; ratio units; exact cost-grain selection |
 | LTV | `revenue_over_cohort`; distinct cohort-size denominator; money units |
 | Retention | `active_installations_over_cohort`; active installations/cohort size, `on_day`, `activity_events=["session_start"]`, activity-day or qualified calendar-day window; explicit maturity policy; no FX |
 | Custom outcome rate | `converted_installations_over_cohort`; distinct converted installations/cohort size, exact `conversion_event_key`, cumulative elapsed D7; no FX |
+
+The three acquisition families use the same closed v2 fields, not inferred
+meaning from a column called `installs` or `CPI`. Their aggregation is cumulative
+and the supported window is elapsed. Fields that do not apply (refund policies,
+conversion event, activity events and calendar policies) stay explicitly null or
+empty. Installs use `value_type=count`, `fx=null` and CSV units `currency=none`,
+`scale=0`; raw event counts, fractional count scales and an unspecified CPI
+denominator are not interchangeable. Cost/CPI use `value_type=money`, explicit
+currency/amount scale and FX, with null ratio scale. For example, three distinct
+installations and USD 10 of cost yield `half_even(10000000 / 3) = 3333333`
+micro-USD CPI. Missing cost and an empty-cohort denominator remain undefined,
+not a fabricated zero. Recorded zero cost remains a present value.
+
+Acquisition basis, date range, timezone, elapsed window, grouping grain,
+cost-selection policy, currency/scales, FX and the exact source cutoff must
+match. `cohort_acquisition_day_current_snapshot` means acquisition-date costs
+selected at that cutoff, not spend spread over the revenue window or a later
+provider revision. Changing the cutoff or cost-selection meaning produces an
+incomparable result. Saved cost/CPI observations with a recorded pending or
+revised cost input also produce no comparison; recalculate them first. An
+offline snapshot records its observed state, not proof that no later revision
+exists. External costs remain an operator's claim, not a verified provider
+snapshot. No inference is made when the actual grain, revision cutoff or CPI
+denominator is unknown.
 
 `settled_linked_refunds_own_window` means installation-anchored settled purchases
 minus their valid linked settled refunds, each in its own occurrence window;
@@ -455,7 +483,10 @@ V2 can express UTC/Tokyo calendar windows using
 `cohort_date_basis=installation_local_date` and
 `cost_reporting_time_zone=same_as_aggregation_time_zone`. Maturity then closes
 at local cohort-date start plus `day+1` calendar days. Elapsed and activity-day
-windows use the conservative `day+2` bound described above. Retention's
+windows use the conservative `day+2` bound described above, except `cohort_size`:
+its distinct-installation population closes at the exclusive end of the cohort
+date (`+1` day), matching the saved count implementation rather than waiting for
+its revenue window. Retention's
 `complete_activity_window` policy must match explicitly. Passing the clock
 boundary does not establish upstream completeness.
 
@@ -467,6 +498,13 @@ all fields are compared, with rate order normalized. The existing 128-rate limit
 explicit target-currency identity rates and unique currency/date keys apply.
 No rate is fetched or inferred. Non-money retention/outcome rates require `fx=null`;
 the policy's unused saved FX metadata is not treated as an operand.
+The same rule applies to installation counts. Cost and CPI instead require
+`fx.conversion=per_cost_row_round_then_sum` to match the saved implementation:
+each cost row is converted and half-even rounded before addition, then CPI
+divides that integer cost sum by distinct cohort installations. This conversion
+can be declared with either single-rate or dated v2 FX. The original v1 ROAS
+declaration is unchanged. Captured dated cost/CPI exports must bind the saved
+FX artifact to the same policy digest as the calculation context.
 
 Unknown/new implementation fields fail closed. Unsupported families, imported
 provider-specific outcome binding, engagement-anchored metrics, Apple aggregate

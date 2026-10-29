@@ -24,12 +24,13 @@ export type ExternalRoasDeclaration = {
 export type ExternalCohortDeclaration = Omit<ExternalRoasDeclaration,
   "version" | "profile" | "calculation" | "numerator" | "denominator" | "aggregation" | "window" | "cost_basis" | "value_type" | "ratio_scale" | "fx"> & {
   version: 2; profile: "external-install-cohort-v2";
-  calculation: "revenue_sum" | "revenue_over_cost" | "revenue_over_cohort" | "active_installations_over_cohort" | "converted_installations_over_cohort";
-  numerator: "revenue" | "purchase_net_revenue" | "total_net_revenue" | "active_installations" | "converted_installations";
+  calculation: "revenue_sum" | "revenue_over_cost" | "revenue_over_cohort" | "active_installations_over_cohort" | "converted_installations_over_cohort"
+    | "cohort_size" | "cost_sum" | "cost_over_cohort";
+  numerator: "revenue" | "purchase_net_revenue" | "total_net_revenue" | "active_installations" | "converted_installations" | "cohort_size" | "cost";
   denominator: "cost" | "cohort_size" | null; aggregation: "cumulative" | "on_day";
   window: { type: "elapsed" | "activity_day" | "calendar_day"; day: number; boundary: "half_open" };
   cost_basis: "cohort_acquisition_day_current_snapshot" | null;
-  value_type: "money" | "ratio"; currency: string | null; amount_scale: number | null; ratio_scale: number | null;
+  value_type: "money" | "ratio" | "count"; currency: string | null; amount_scale: number | null; ratio_scale: number | null;
   calendar_cohort_policy: "cumulative_revenue_on_day_activity" | null;
   cohort_date_basis: "installation_local_date" | null; cost_reporting_time_zone: "same_as_aggregation_time_zone" | null;
   retention_maturity_policy: "complete_activity_window" | null;
@@ -37,7 +38,9 @@ export type ExternalCohortDeclaration = Omit<ExternalRoasDeclaration,
   refund_policy: "settled_linked_refunds_own_window" | null;
   refund_reversal_policy: "cancel_target_refund_at_watermark" | null;
   conversion_event_key: string | null; activity_events: string[]; event_names: [];
-  fx: (ExternalRoasDeclaration["fx"] & { rate_selection?: DatedFxPolicyInput["rate_selection"];
+  fx: (Omit<ExternalRoasDeclaration["fx"], "conversion" | "rates"> & {
+    conversion: ExternalRoasDeclaration["fx"]["conversion"] | "per_cost_row_round_then_sum";
+    rate_selection?: DatedFxPolicyInput["rate_selection"];
     cost_conversion?: "per_cost_row_round_then_sum"; rates: (ExternalRoasDeclaration["fx"]["rates"][number] | DatedFxRate)[] }) | null;
 };
 export type ExternalDeclaration = ExternalRoasDeclaration | ExternalCohortDeclaration;
@@ -75,9 +78,9 @@ function parseLegacyDeclaration(input: unknown): ExternalRoasDeclaration {
   legacyFx(input.fx);
   return structuredClone(input) as ExternalRoasDeclaration;
 }
-function legacyFx(fx: unknown) {
+function legacyFx(fx: unknown, cost = false) {
   closed(fx, ["target_currency", "target_scale", "conversion", "rounding_mode", "rates"]);
-  choice(fx.conversion, ["per_event_round_then_sum", "round_after_sum"]);
+  choice(fx.conversion, ["per_event_round_then_sum", "round_after_sum", ...(cost ? ["per_cost_row_round_then_sum"] : [])]);
   choice(fx.rounding_mode, ["half_even", "half_up", "truncate"]); scale(fx.target_scale);
   if (typeof fx.target_currency !== "string" || !/^[A-Z]{3}$/.test(fx.target_currency)
       || !Array.isArray(fx.rates) || fx.rates.length !== 1) throw Error("invalid_external_declaration_fx");
@@ -98,9 +101,12 @@ export function parseExternalDeclaration(input: unknown): ExternalDeclaration {
   closed(input, cohortFields);
   choice(input.version, [2]); choice(input.profile, ["external-install-cohort-v2"]);
   choice(input.anchor_event, ["install"]); choice(input.population, ["accepted_installation_cohort"]);
-  choice(input.calculation, ["revenue_sum", "revenue_over_cost", "revenue_over_cohort", "active_installations_over_cohort", "converted_installations_over_cohort"]);
+  choice(input.calculation, ["revenue_sum", "revenue_over_cost", "revenue_over_cohort", "active_installations_over_cohort", "converted_installations_over_cohort",
+    "cohort_size", "cost_sum", "cost_over_cohort"]);
   const revenue = input.calculation.startsWith("revenue_"), retention = input.calculation === "active_installations_over_cohort";
-  choice(input.numerator, revenue ? ["revenue", "purchase_net_revenue", "total_net_revenue"] : [retention ? "active_installations" : "converted_installations"]);
+  const count = input.calculation === "cohort_size", cost = ["cost_sum", "cost_over_cohort"].includes(input.calculation);
+  choice(input.numerator, revenue ? ["revenue", "purchase_net_revenue", "total_net_revenue"]
+    : [count ? "cohort_size" : cost ? "cost" : retention ? "active_installations" : "converted_installations"]);
   choice(input.denominator, [null, "cost", "cohort_size"]);
   choice(input.cost_basis, [null, "cohort_acquisition_day_current_snapshot"]);
   choice(input.aggregation, [retention ? "on_day" : "cumulative"]);
@@ -123,22 +129,25 @@ export function parseExternalDeclaration(input: unknown): ExternalDeclaration {
   choice(input.refund_reversal_policy, net ? [null, "cancel_target_refund_at_watermark"] : [null]);
   if (!Array.isArray(input.activity_events) || (retention ? input.activity_events.length !== 1 || input.activity_events[0] !== "session_start" : input.activity_events.length !== 0)
       || !Array.isArray(input.event_names) || input.event_names.length !== 0) throw Error("invalid_external_declaration_events");
-  if (!revenue && !retention) {
+  if (input.calculation === "converted_installations_over_cohort") {
     if (typeof input.conversion_event_key !== "string" || !/^[a-z][a-z0-9_]{0,63}$/.test(input.conversion_event_key)) throw Error("invalid_external_declaration_event_key");
   } else choice(input.conversion_event_key, [null]);
   if (!Array.isArray(input.grouping_dimensions) || !input.grouping_dimensions.includes("cohort_date")
       || new Set(input.grouping_dimensions).size !== input.grouping_dimensions.length
       || input.grouping_dimensions.some((key: unknown) => typeof key !== "string" || !dimensions.includes(key))) throw Error("invalid_external_declaration_grouping");
-  const money = ["revenue_sum", "revenue_over_cohort"].includes(input.calculation);
-  choice(input.value_type, [money ? "money" : "ratio"]);
+  const money = cost || ["revenue_sum", "revenue_over_cohort"].includes(input.calculation);
+  choice(input.value_type, [money ? "money" : count ? "count" : "ratio"]);
   if (money) {
     if (typeof input.currency !== "string" || !/^[A-Z]{3}$/.test(input.currency)) throw Error("invalid_external_declaration_currency");
     scale(input.amount_scale); choice(input.ratio_scale, [null]);
-  } else { choice(input.currency, [null]); choice(input.amount_scale, [null]); scale(input.ratio_scale); }
-  if (revenue) {
+  } else {
+    choice(input.currency, [null]); choice(input.amount_scale, [null]);
+    if (count) choice(input.ratio_scale, [null]); else scale(input.ratio_scale);
+  }
+  if (revenue || cost) {
     const fx = input.fx, dated = fx && Object.hasOwn(fx, "rate_selection");
     closed(fx, ["target_currency", "target_scale", "conversion", "rounding_mode", "rates", ...(dated ? ["rate_selection", "cost_conversion"] : [])]);
-    choice(fx.conversion, ["per_event_round_then_sum", "round_after_sum"]);
+    choice(fx.conversion, ["per_event_round_then_sum", "round_after_sum", ...(cost ? ["per_cost_row_round_then_sum"] : [])]);
     choice(fx.rounding_mode, ["half_even", "half_up", "truncate"]);
     if (dated) {
       choice(fx.cost_conversion, ["per_cost_row_round_then_sum"]);
@@ -146,7 +155,7 @@ export function parseExternalDeclaration(input: unknown): ExternalDeclaration {
       if (!validDatedFxPolicy(datedPolicyShape(fx))) throw Error("invalid_external_declaration_fx");
     } else {
       // Keep the legacy single-rate validation and all its precision bounds in one place.
-      legacyFx(fx);
+      legacyFx(fx, cost);
     }
     if (money && (fx.target_currency !== input.currency || fx.target_scale !== input.amount_scale)) throw Error("invalid_external_declaration_units");
   } else choice(input.fx, [null]);
@@ -183,7 +192,7 @@ export function capturedExternalMeaning(context: MetricComparisonContext) {
 
 export function externalUnits(declaration: ExternalDeclaration) {
   return declaration.value_type === "money" ? { currency: declaration.currency!, scale: declaration.amount_scale! }
-    : { currency: "none", scale: declaration.ratio_scale! };
+    : { currency: "none", scale: declaration.value_type === "count" ? 0 : declaration.ratio_scale! };
 }
 export function externalWindowMaturity(declaration: ExternalDeclaration, cohortDate: string, watermark: string) {
   // This is elapsed time under the declaration, not evidence of actual provider delivery.
@@ -191,6 +200,9 @@ export function externalWindowMaturity(declaration: ExternalDeclaration, cohortD
     return Date.parse(watermark) >= Date.parse(cohortDayStart(addCalendarDays(cohortDate, declaration.window.day + 1), declaration.time_zone)) ? "window_elapsed" : "unknown";
   }
   const offset = declaration.time_zone === "Asia/Tokyo" ? 9 * 3_600_000 : 0;
-  const closesAt = Date.parse(cohortDate) - offset + (declaration.window.day + 2) * 86_400_000;
+  // Cohort size counts distinct installations on the cohort date, not events
+  // accumulated over the revenue window. Match the captured count boundary.
+  const days = declaration.calculation === "cohort_size" ? 1 : declaration.window.day + 2;
+  const closesAt = Date.parse(cohortDate) - offset + days * 86_400_000;
   return Date.parse(watermark) >= closesAt ? "window_elapsed" : "unknown";
 }

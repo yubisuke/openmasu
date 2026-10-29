@@ -62,6 +62,13 @@ export function snapshotAssurance(snapshot: Snapshot) {
   const meanings = contexts.map(({ context }) => comparisonMeaning(context));
   if (meanings.some(value => !value)) missing.push("unsupported_implementation_profile");
   if (new Set(meanings.filter(Boolean).map(comparisonDigest)).size > 1) missing.push("mixed_definition_semantics");
+  // A saved cost/CPI is not a current-snapshot comparison while a recorded
+  // correction is pending. Retain the observation, but publish no delta.
+  const freshness = new Map(snapshot.freshness_observations?.map(row => [row.key, row.observations]));
+  if (contexts.some(({ key, context }) => ["cost_sum", "cost_over_cohort"].includes(context.definition.definition.calculation)
+      && ["recalculation_pending", "input_revised"].includes(freshness.get(key)?.recalculation_state.cost ?? ""))) {
+    missing.push("cost_revision_pending");
+  }
   const maturities = contexts.map(({ key, context }) => {
     // Report-generated keys are closed grouping objects, not arbitrary user IDs.
     try { const grouping = JSON.parse(key); object(grouping);

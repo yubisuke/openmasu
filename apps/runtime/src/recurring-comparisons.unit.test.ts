@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
 import { jcs } from "@openmasu/attribution-core/canonical";
-import { comparisonDigest } from "./cohort-comparison.js";
+import { comparisonDigest, compareSnapshots } from "./cohort-comparison.js";
 import { parseComparisonRegistration, recurringComparisonResult, boundedComparisonSnapshot, assertSnapshotPeriod } from "./recurring-comparison-model.js";
 import { syntheticComparisonRegistration, syntheticRecurringSnapshot } from "../../../tools/synthetic-recurring-comparison.js";
+import { syntheticExternalComparisonCases, syntheticExternalComparisonPair } from "../../../tools/synthetic-external-comparison-cases.js";
+import { aggregateCsvToSnapshot } from "../../api/src/aggregate-csv-snapshot.js";
 
 it("recurring_comparison_reuses_exact_delta_and_separates_unknown_missing_definition_and_threshold", () => {
   const { definition, left, right } = parseComparisonRegistration(syntheticComparisonRegistration());
@@ -29,4 +31,20 @@ it("recurring_comparison_rejects_identifying_rows_wrong_cutoffs_unbounded_storag
   assert.throws(()=>boundedComparisonSnapshot({ ...parsed.left,source:"x".repeat(4*1024*1024) }),/snapshot_limit/);
   assert.equal(parsed.definition.left_definition_digest.length,64);
   assert.notEqual(comparisonDigest(parsed.definition),comparisonDigest({ ...parsed.definition,threshold:{ value_unscaled:"1",scale:6 } }));
+});
+it("recurring_external_installs_cost_and_CPI_preserve_the_offline_comparator_bytes_and_operator_assurance", () => {
+  for (const entry of syntheticExternalComparisonCases().filter(item => item.name.startsWith("native-acquisition-"))) {
+    const pair = syntheticExternalComparisonPair(entry), right = aggregateCsvToSnapshot(Buffer.from(pair.csv), pair.mapping);
+    const day = pair.saved.conditions.date_from;
+    const registration = parseComparisonRegistration({ name: `Synthetic ${entry.name}`, first_date: day, last_date: day,
+      watermark_lag_days: (Date.parse(pair.saved.conditions.source_cutoff) - Date.parse(day)) / 86400000,
+      retention_days: 30, mode: "external_declared", threshold: { value_unscaled: "0", scale: right.rows[0].scale },
+      left_snapshot: pair.saved, right_snapshot: right, supersedes_id: null });
+    const result = recurringComparisonResult(registration.definition, day, registration.left, registration.right);
+    assert.equal(result.state, "within_threshold", entry.name); assert.ok("comparison" in result);
+    assert.equal(jcs(result.comparison), jcs(compareSnapshots(pair.saved, right, { allowExternalDeclaration: true })), entry.name);
+    assert.equal(result.comparison.status, "external_declared_comparison");
+    assert.equal(result.comparison.assurance.right.acquisition.upstream_completeness, "unknown");
+    assert.deepEqual(result.comparison.assurance.right.execution, []);
+  }
 });

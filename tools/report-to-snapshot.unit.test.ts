@@ -11,6 +11,7 @@ import { captureMetricComparisonContext } from "@openmasu/runtime";
 import { sha256 } from "@openmasu/attribution-core";
 import { renderComparison } from "./cohort-comparison-html.js";
 import { parseCsv } from "@openmasu/runtime/import-normalization";
+import { syntheticExternalComparisonCases, syntheticExternalComparisonPair } from "./synthetic-external-comparison-cases.js";
 
 const template = () => ({ source: "synthetic-report", conditions: { date_from: "2026-01-01", date_to: "2026-01-02", time_zone: "UTC", maturity: "fully_elapsed_d7", aggregation: "cumulative", attribution_scope: "organic", metric_definition: "revenue_d7@v1", source_cutoff: "2026-01-10T00:00:00.000Z" }, rows: [] });
 const row = (): Record<string, any> => ({ metric_run_id: "synthetic-run", metric_name: "revenue_d7", metric_definition_version: "v1", input_snapshot_id: "a".repeat(64), input_received_at_watermark: "2026-01-10T00:00:00.000Z", aggregation_time_zone: "UTC", grouping: { cohort_date: "2026-01-01", attribution_status: "organic" }, value_type: "money", currency: "USD", amount_scale: 2, ratio_scale: null, value_state: "present", value_unscaled: "900719925474099301", undefined_reason: null, superseded: false, reproducibility_status: "fully_reproducible" });
@@ -25,6 +26,20 @@ const backedRow = () => {
     comparison_context: captureMetricComparisonContext(r as any, d, { policy_version: "synthetic", target_currency: "USD", target_scale: 2,
       rounding_mode: "half_even", rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0, as_of: "2026-01-01T00:00:00.000Z" }] }, "after", sha256) };
 };
+it("cost_and_CPI_snapshot_capture_bind_dated_FX_and_refuse_recorded_pending_revisions", () => {
+  for (const entry of syntheticExternalComparisonCases().filter(item => ["native-acquisition-cost", "native-acquisition-cpi"].includes(item.name))) {
+    const pair = syntheticExternalComparisonPair(entry), original = pair.report.data[0];
+    assert.ok(original.fx_conversion_snapshot);
+    assert.deepEqual(reportToSnapshot(pair.report, pair.template), pair.saved);
+    const absent = { ...original }; delete absent.fx_conversion_snapshot;
+    assert.throws(() => reportToSnapshot({ data: [absent] }, pair.template), /fx_snapshot_binding_mismatch/);
+    assert.throws(() => reportToSnapshot({ data: [{ ...original,
+      fx_conversion_snapshot: { ...original.fx_conversion_snapshot, snapshot_id: "f".repeat(64) } }] }, pair.template), /fx_snapshot_binding_mismatch/);
+    for (const cost_update_state of ["recalculation_pending", "input_revised"]) {
+      assert.throws(() => reportToSnapshot({ data: [{ ...original, cost_update_state }] }, pair.template), /cost_revision_pending/);
+    }
+  }
+});
 it("dated_FX_report_snapshot_requires_the_same_saved_policy_and_exposes_changed_rate_meaning", () => {
   const fixture = JSON.parse(readFileSync("fixtures/v0.4/69-dated-fx-cohorts/input.json", "utf8"));
   const r = backedRow();
