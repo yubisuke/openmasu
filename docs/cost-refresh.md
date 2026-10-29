@@ -2,9 +2,12 @@
 
 This later-source feature is not part of the frozen v0.2.0 release evidence.
 It joins the Google Ads v25 and Apple Ads Platform v1 adapters to the existing
-SecretStore, PostgreSQL scheduler and append-only cost ledger. It adds no OAuth
-flow, dependency, queue service or database. Both adapters bound acquisition
-before publishing a complete local snapshot.
+SecretStore, PostgreSQL scheduler and append-only cost ledger. The daily worker
+can renew Google access tokens from privately supplied refresh credentials;
+Apple access tokens can be renewed using a privately supplied P-256 signing key.
+There is no interactive OAuth
+authorization flow, new dependency, queue service or database. Both adapters
+bound acquisition before publishing a complete local snapshot.
 
 ## Cost dimensions and row identity
 
@@ -183,8 +186,8 @@ changing its scope; disabling does not delete previously recorded cost.
 - A database-clock 120-second per-row lease and opaque token exclude concurrent
   acquisition. No database transaction is held while waiting on the provider.
   The existing tenant scheduler remains an additional work coordinator.
-- All cost partitions and country resolutions must validate within one
-  60-second acquisition deadline. An incomplete/oversized result publishes no
+- Credential acquisition, all cost partitions and country resolutions must
+  validate within one 60-second acquisition deadline. An incomplete/oversized result publishes no
   cost or completed import. The publication transaction locks and checks the
   current token, unexpired lease, active state and definition digest before
   writing costs, the import completion record and its checkpoint together.
@@ -195,7 +198,8 @@ changing its scope; disabling does not delete previously recorded cost.
   apart. Invalid results and permanent rejection fail closed. Exhaustion is a
   terminal state, including a process killed during its third claim. An operator
   fixes configuration and registers a new revision after disabling the old one;
-  there is no silent retry forever or automatic token refresh.
+  there is no silent retry forever. Credential rejection is terminal
+  `reauth_required`, not an endlessly retried expired token.
 - `POST /v1/admin/apps/<app>/cost-schedules/<id>/disable` records append-only
   stop history and clears the token under the publication lock. A late response
   is fenced. If publication committed first, the stop observes that completed
@@ -219,29 +223,82 @@ previously saved metric.
 `OPENMASU_COST_REFRESH_SECRETS_FILE` points to a bounded operator-owned JSON
 registry outside the public repository. Entries use the existing SecretStore
 shape: exactly one of `{ "file": "<private mounted token path>" }` or
-`{ "value": "<private token>" }`. Prefer file entries. No credential or source
+`{ "value": "<private token>" }`. Prefer file entries; the Apple private key
+requires a `file` reference. No credential or source
 response is submitted via the schedule API or committed to this repository.
 
-Google's two names are obtained with the exported runtime helper:
-`costRefreshSecretName(tenantId, appId, "access_token")` and
-`costRefreshSecretName(tenantId, appId, "developer_token")`. They contain the
-SHA-256 digest of the scope tuple, preventing delimiter collisions and
-cross-app secret selection. The registry itself is at most 1 MiB. An invalid
-registry produces only `cost_refresh_secret_registry_invalid`, not its path
-or contents. Missing app credentials leave a visible `source_rejected` state.
+Names are obtained with the exported runtime helper
+`costRefreshSecretName(tenantId, appId, kind)`. They contain the SHA-256 digest of
+the scope tuple, preventing delimiter collisions and cross-app secret selection.
+The registry itself is at most 1 MiB. An invalid registry produces only
+`cost_refresh_secret_registry_invalid`, not its path or contents. Missing app
+credentials leave a visible `source_rejected` state.
 
-Apple uses the separate `costRefreshSecretName(tenantId, appId,
-"apple_ads_access_token")` entry. The operator supplies an access token through
-the private registry, not through API JSON. This implementation neither issues
-client-secret JWTs nor refreshes OAuth tokens. Token expiry/401 is a terminal
-source rejection; 429/temporary server failures use the bounded retry policy.
+For Google daily refresh, supply `developer_token` and all three renewable
+credential kinds: `google_client_id`, `google_client_secret` and
+`google_refresh_token`. The operator obtains and authorizes these outside
+OpenMasu. All three are required together; a partial configuration fails closed
+with `reauth_required` even if an `access_token` is also present. Complete
+renewable credentials take precedence over that static token. When none of the
+three is configured, the existing `access_token` plus `developer_token` setup
+continues to work. The standalone import CLI retains its existing static-token
+configuration; automatic renewal here belongs to the scheduled worker.
+
+Google credentials are exchanged only at `https://oauth2.googleapis.com/token`
+using the refresh-token grant; redirects are refused. Both providers share
+bounded exchange and cache handling. Token responses are bounded
+to 64 KiB and ten seconds within the overall acquisition deadline. Access tokens
+are reused in memory until five minutes before their reported expiry. The cache
+holds at most 128 provider/app scopes and stores only hashed scope/credential keys;
+tokens and credential material are never persisted in a checkpoint or report.
+Concurrent calls for the same scope and exact credentials share an exchange.
+One cancelled caller cannot cancel another's exchange. This is a process-local
+cache, not a global token service: the existing database claim/lease coordinates
+scheduled acquisitions across worker replicas.
+
+File-backed credential contents are read for each acquisition. Changing a
+renewable credential invalidates the old cached token; an older in-flight
+exchange cannot replace the new credential's cache entry. A report HTTP 401
+also invalidates the cache and ends the schedule with `reauth_required`.
+Rejected grants/client credentials likewise require operator action. Repair
+private credentials, disable the failed schedule and register a new revision.
+Token transport errors, timeouts, HTTP 408/429 and temporary server errors use
+the existing bounded three-attempt policy without changing the saved report
+range or `as_of`. Malformed successful token responses fail closed. Provider
+error bodies, tokens, credential values and private file paths are never emitted
+in health responses; prior cost revisions remain intact on every failure.
+
+For Apple daily refresh, supply all four kinds: `apple_ads_client_id`,
+`apple_ads_team_id`, `apple_ads_key_id` and `apple_ads_private_key`. The private
+key must be an unencrypted P-256 PEM file mounted read-only outside the public
+repository; it may contain normal PEM newlines. OpenMasu does not generate an
+operator key, upload a public key or request account access. The operator obtains
+the three identifiers and registers the matching public key with Apple privately.
+Complete credentials take precedence over `apple_ads_access_token`; when all
+four are absent that static-token configuration remains supported. Any partial
+configuration or invalid key fails closed with `reauth_required`.
+
+The worker signs a fresh ES256 client-secret JWT only when an exchange is needed.
+It sets `kid` to the supplied key ID, `iss` to the team ID, `sub` to the client ID,
+`aud` to `https://appleid.apple.com`, and `iat`/`exp` to the current UTC epoch and
+five minutes later. This is below Apple's less-than-180-day maximum. It posts
+the JWT in the form body to the fixed `https://appleid.apple.com/auth/oauth2/token`
+endpoint with `grant_type=client_credentials` and `scope=searchadsorg`; the granted
+scope must match. JWTs, private key contents and tokens never enter URLs, saved
+schedules, cost artifacts or health output. Apple and Google token caches and
+401 invalidation are separate even for the same tenant/app. Replacing the
+configured PEM file invalidates Apple's cached token on the next acquisition.
+Rejected clients and report 401s are terminal `reauth_required`; transient token
+failures use the same durable retry policy. Replacing a revoked key also requires
+privately registering its public key and updating its key ID with Apple.
 
 Bootstrap propagates the default-off mode and registry path into runtime.env,
 including an existing generated environment. For Compose, mount the private
 registry and token files read-only into the **worker**, at the container paths
 named in that registry. The repository does not mount host credential paths
-automatically. Restart the worker after replacing credentials; this feature
-does not implement OAuth refresh or hot-reload.
+automatically. The registry's entry mapping is loaded at startup: restart the
+worker after changing registry entries or their paths. Replacing the contents
+of an already configured secret file is observed on the next acquisition.
 
 ## Aggregate health and acceptance
 
@@ -258,6 +315,13 @@ schema snapshot and full-table role-matrix gates cover definition bounds,
 default-off behavior, complete lookback, crash/lease recovery, concurrent
 workers, late-response fencing, stop, retry exhaustion, acquisition timeout,
 empty-versus-zero, correction history, rollback and reader/API isolation.
+Renewal tests additionally cover expiry, next-day scheduled ingestion,
+single-flight isolation, file rotation, static compatibility, bounded token
+responses/deadlines, terminal reauthorization and saved-range retries. Apple
+tests verify JWT claims and P-256 signatures using freshly generated synthetic
+keys, reject other curves, and preserve saved history after a report 401 or
+rejected client credentials. All
+provider responses and credential values in these tests are synthetic.
 No new test harness or live account check is required.
 
 ## Primary references
@@ -272,6 +336,14 @@ Live permissions, quotas, account timezone, token validity/rotation, report
 availability and retry snapshot stability remain unverified. Read acceptance
 and a complete local snapshot do not prove upstream completeness.
 
+Google OAuth sources confirmed 2026-10-29:
+
+- [Credential management](https://developers.google.com/google-ads/api/docs/oauth/credential-management): access-token expiry and refreshing within five minutes of expiry.
+- [OAuth web-server flow](https://developers.google.com/identity/protocols/oauth2/web-server): refresh-token grant fields and the fixed token endpoint.
+
+Live grant issuance, consent, revocation and provider acceptance remain
+unverified; synthetic renewal does not establish an authorized live connection.
+
 Detail-query sources confirmed 2026-10-25:
 
 - [v25 ad-group fields](https://developers.google.com/google-ads/api/fields/v25/ad_group?hl=en): cost micros, date and target-country segmentation.
@@ -283,7 +355,18 @@ These references do not establish account access, all campaign-type coverage,
 operator mapping correctness, source completeness, first-party geographic
 equivalence or agreement with invoices. Those remain unverified.
 
-Apple sources confirmed 2026-10-11:
+Apple OAuth sources confirmed 2026-10-29:
+
+- [Implementing OAuth for the Apple Ads Platform API](https://developer.apple.com/documentation/apple-ads-platform-api/implementing-oauth-for-the-apple-ads-platform-api): P-256, ES256 claims, client-credentials grant, fixed endpoint, scope and token expiry.
+- [Managing Ad Accounts and API Access](https://developer.apple.com/documentation/apple-ads-platform-api/access-overview): bearer tokens and account-scoped access.
+- [Calling the Apple Ads Platform API](https://developer.apple.com/documentation/apple-ads-platform-api/calling-apple-ads-platform-api): Platform v1 headers and unauthorized/forbidden outcomes.
+
+Live key registration, provider acceptance, key-revocation propagation and
+account permissions remain unverified. Synthetic renewal proves local behavior,
+not a live authorized connection. Apple documents an access-token lifetime of
+one hour; the worker uses the validated response expiry and refreshes early.
+
+Apple report sources confirmed 2026-10-11:
 
 - [Campaign report endpoint and response](https://developer.apple.com/documentation/apple-ads-platform-api/get-app-campaign-reports)
 - [Report granularity, pagination and empty metrics](https://developer.apple.com/documentation/apple-ads-platform-api/reports)
