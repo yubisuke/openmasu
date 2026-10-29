@@ -861,6 +861,105 @@ describe("M2a signed SDK ingestion", () => {
     assert.ok(installationSecret.length >= 43);
   });
 
+  it("backpressures a stopped SDK inbox before acceptance, recovers every 202 and preserves the privacy lock order", async () => {
+    const scope = { tenantId: `tenant-admission-${run}`, appId: `app-admission-${run}` };
+    const key = `sdk-admission-${run}`, secret = `synthetic-admission-secret-${run}`;
+    const config = { ...authConfig, ...scope };
+    await ensureSdkKeys(pool, payloadStore, scope, [{ keyId: key, secret }]);
+    const isolatedServer = createServer(createRequestHandler({
+      pool, readerPool: pool, payloadStore,
+      maxConfig: { ...scope, pathSecret: "synthetic-path", eventKey: "synthetic-event-key", tokenMode: "all_with_event_fallback", maxParameters: 40, maxQueryBytes: 8192 },
+      publicBaseUrl: "http://localhost:8080", redirectorBaseUrl: "http://localhost:8090",
+      dashboard: { enabled: false, publicBaseUrl: "http://localhost:8080", tenantId: scope.tenantId, sessionTtlSeconds: 43200 },
+      sdk: { pool, payloadStore, config, maximumBytes: 65536, maximumEvents: 100,
+        enrollmentBucket: new KeyedTokenBucket(100, 100), installationBucket: new KeyedTokenBucket(100, 100),
+        appBucket: new KeyedTokenBucket(100, 100), privacyBucket: new KeyedTokenBucket(100, 100) },
+    }));
+    isolatedServer.listen(0, "127.0.0.1"); await once(isolatedServer, "listening");
+    const address = `http://127.0.0.1:${(isolatedServer.address() as AddressInfo).port}`;
+    const previous = {
+      OPENMASU_INBOX_ADMISSION_ENABLED: process.env.OPENMASU_INBOX_ADMISSION_ENABLED,
+      OPENMASU_INBOX_APP_MAX_BATCHES: process.env.OPENMASU_INBOX_APP_MAX_BATCHES,
+      OPENMASU_INBOX_APP_MAX_BYTES: process.env.OPENMASU_INBOX_APP_MAX_BYTES,
+      OPENMASU_INBOX_GLOBAL_MAX_BATCHES: process.env.OPENMASU_INBOX_GLOBAL_MAX_BATCHES,
+      OPENMASU_INBOX_GLOBAL_MAX_BYTES: process.env.OPENMASU_INBOX_GLOBAL_MAX_BYTES,
+      OPENMASU_INBOX_RESUME_PERCENT: process.env.OPENMASU_INBOX_RESUME_PERCENT,
+      OPENMASU_INBOX_RETRY_AFTER_SECONDS: process.env.OPENMASU_INBOX_RETRY_AFTER_SECONDS,
+    };
+    Object.assign(process.env, { OPENMASU_INBOX_ADMISSION_ENABLED: "on", OPENMASU_INBOX_APP_MAX_BATCHES: "1",
+      OPENMASU_INBOX_APP_MAX_BYTES: "1000000", OPENMASU_INBOX_GLOBAL_MAX_BATCHES: "1000000000",
+      OPENMASU_INBOX_GLOBAL_MAX_BYTES: String(Number.MAX_SAFE_INTEGER), OPENMASU_INBOX_RESUME_PERCENT: "50",
+      OPENMASU_INBOX_RETRY_AFTER_SECONDS: "11" });
+    const installation = `installation:admission-${run}`;
+    let credential: { installation_key_id: string; installation_secret: string } | undefined;
+    const post = (path: string, value: unknown) => {
+      const body = Buffer.from(JSON.stringify(value)), timestampMs = Date.now(), nonce = randomBytes(18).toString("base64url");
+      const enrollment = path === "/v1/installations";
+      const installationKey = enrollment ? undefined : credential!.installation_key_id;
+      return fetch(`${address}${path}`, { method: "POST", headers: {
+        "content-type": "application/json", "x-openmasu-sdk-key-id": key,
+        "x-openmasu-installation-key-id": installationKey ?? "-", "x-openmasu-timestamp-ms": String(timestampMs),
+        "x-openmasu-nonce": nonce, "x-openmasu-signature": signSdkRequest(enrollment ? secret : credential!.installation_secret,
+          { method: "POST", path, sdkKeyId: key, installationKeyId: installationKey, timestampMs, nonce, body }),
+      }, body: body.toString("utf8") });
+    };
+    try {
+      const enrollment = await post("/v1/installations", { installation_id: installation });
+      assert.equal(enrollment.status, 201); credential = await enrollment.json() as typeof credential;
+      const event = (number: number) => ({ records: [sourceEvent(`event:admission-${run}-${number}`, "session_start",
+        { installation_id: installation, session_id: `session:admission-${run}-${number}` }, new Date().toISOString())] });
+      const accepted = await post("/v1/events/batch", event(1)); assert.equal(accepted.status, 202);
+      const receipt = await accepted.json() as { ingest_batch_id: string };
+      const refused = await post("/v1/events/batch", event(2));
+      assert.equal(refused.status, 429); assert.equal(refused.headers.get("retry-after"), "11");
+      assert.deepEqual(await refused.json(), { error: "inbox_app_capacity" });
+      assert.equal(await processSdkInbox(pool, payloadStore, scope.tenantId), 1);
+      const retried = await post("/v1/events/batch", event(2)); assert.equal(retried.status, 202);
+      assert.equal(await processSdkInbox(pool, payloadStore, scope.tenantId), 1);
+      const evidence = await withTenant(pool, scope.tenantId, async (client) => ({
+        batches: (await client.query("SELECT ingest_batch_id,status,reason_code FROM ledger.ingest_batches_current WHERE app_id=$1", [scope.appId])).rows,
+        events: (await client.query("SELECT event_id FROM ledger.raw_records WHERE app_id=$1 ORDER BY event_id", [scope.appId])).rows,
+      }));
+      assert.equal(evidence.batches.length, 2);
+      assert.ok(evidence.batches.some((batch) => batch.ingest_batch_id === receipt.ingest_batch_id));
+      assert.ok(evidence.batches.every((batch) => batch.status === "processed" && batch.reason_code === null));
+      assert.deepEqual(evidence.events.map((row) => row.event_id), [`event:admission-${run}-1`, `event:admission-${run}-2`]);
+
+      const started = deferred(), released = deferred();
+      const blockingStore: PayloadStore = { read: (ref) => payloadStore.read(ref), purge: (ref) => payloadStore.purge(ref),
+        scanFor: (value) => payloadStore.scanFor(value), write: async (object, body) => {
+          const ref = await payloadStore.write(object, body); started.resolve(); await released.promise; return ref;
+        } };
+      const subjectDigest = installationIdDigest(config, installation);
+      const append = appendDurableBatch(pool, blockingStore, { ...scope, producer: "sdk-android", body: Buffer.from(JSON.stringify(event(3))),
+        eventCount: 1, receivedAt: new Date().toISOString(), sdkKeyId: key,
+        installationKeyId: credential!.installation_key_id, subjectDigest });
+      await within(started.promise, "enabled admission payload write");
+      const deletion = executePrivacyRequest(pool, { ...scope, actorType: "sdk_installation",
+        actorRef: `sdk_installation:${credential!.installation_key_id}`, requesterAuthRef: "sdk_auth:synthetic-admission",
+        installationKeyId: credential!.installation_key_id, deletionSubjectDigest: subjectDigest,
+      }, { tenant_id: scope.tenantId, app_id: scope.appId, requested_via: "on_device_sdk",
+        deletion_scope: "installation", deletion_subject_ref: installation }, payloadStore);
+      try { await waitForBlockedAdvisoryLock(scope.tenantId); } finally { released.resolve(); }
+      await within(append, "accepted append before deletion recognition");
+      assert.equal((await within(deletion, "privacy deletion after admitted append")).status, "completed");
+      assert.equal(await processSdkInbox(pool, payloadStore, scope.tenantId), 1);
+      assert.equal((await post("/v1/events/batch", event(4))).status, 401);
+      const freshEnrollment = await post("/v1/installations", { installation_id: `${installation}-fresh` });
+      assert.equal(freshEnrollment.status, 201); credential = await freshEnrollment.json() as typeof credential;
+      const freshEvent = { records: [sourceEvent(`event:admission-${run}-5`, "session_start",
+        { installation_id: `${installation}-fresh`, session_id: `session:admission-${run}-5` }, new Date().toISOString())] };
+      assert.equal((await post("/v1/events/batch", freshEvent)).status, 202, "privacy-purged bodies do not keep the app latched");
+      assert.equal(await processSdkInbox(pool, payloadStore, scope.tenantId), 1);
+    } finally {
+      for (const [name, value] of Object.entries(previous)) {
+        if (value === undefined) Reflect.deleteProperty(process.env, name);
+        else Object.assign(process.env, { [name]: value });
+      }
+      isolatedServer.close(); await once(isolatedServer, "close");
+    }
+  });
+
   it("WO19 accepts a fully verified App Store notification once and queues bounded read-back", async () => {
     const transaction = appleCommerceJws({
       transactionId: `apple-transaction-${run}`, originalTransactionId: `apple-original-${run}`,

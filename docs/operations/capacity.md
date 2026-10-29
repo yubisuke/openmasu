@@ -33,6 +33,61 @@ quiesce writers when a matched boundary is required. Partial results exit 2;
 complete observations exit 0. Operational errors are closed reasons, not raw
 database/filesystem error messages.
 
+## Durable inbox admission (opt-in)
+
+`OPENMASU_INBOX_ADMISSION_ENABLED=on` enables a separate, atomic admission gate
+for `ledger.ingest_batches`: SDK events, authenticated server events, Apple
+attribution postbacks, and redirector clicks. It does **not** cover the separate
+MAX postback inbox, imports, commerce/provider queues, outbound queues, total
+database allocation, free disk space, or retained processed payloads.
+
+Configure the same values on **every** API and redirector replica; stop writers,
+update the private environment, run bootstrap to reconcile the generated app
+environment, and restart all producers together. Mixed enabled/disabled writers
+cannot enforce one shared limit. The feature is off by default. Settings are
+documented in `.env.example` and forwarded by Compose/bootstrap:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `OPENMASU_INBOX_APP_MAX_BATCHES` | 10000 | Unresolved batches per tenant/app |
+| `OPENMASU_INBOX_APP_MAX_BYTES` | 268435456 | Their normalized plaintext body bytes |
+| `OPENMASU_INBOX_GLOBAL_MAX_BATCHES` | 100000 | Unresolved batches across the deployment |
+| `OPENMASU_INBOX_GLOBAL_MAX_BYTES` | 2147483648 | Their normalized plaintext body bytes |
+| `OPENMASU_INBOX_RESUME_PERCENT` | 80 | Resume only when both counts and bytes are at/below this percentage of their limits (1–99) |
+| `OPENMASU_INBOX_RETRY_AFTER_SECONDS` | 30 | Retry-After delay (1–3600 seconds) |
+
+Counts include `pending`, `failed`, and `processed` with
+`reason_code=post_processing_pending`. Ordinary `processed` rows are complete
+and excluded. A failed row still retains accepted work: it consumes capacity
+until successfully recovered, or its payload is purged by an independently
+authorized privacy request. A queued/incomplete purge does not release space.
+Use the existing [ingest recovery workflow](ingest-recovery.md) for failed work.
+Do not create deletion requests just to bypass backpressure. Admission never
+deletes accepted evidence, changes a fraud decision, or schedules retention.
+
+At a high-water mark the gate latches closed. The next request checks for drain
+below both low-water marks and automatically reopens; no restart or manual latch
+reset is needed. App capacity returns HTTP 429; global capacity returns 503.
+Both carry `Retry-After`, with closed error codes and no cross-tenant totals.
+Existing SDK retry queues remain responsible for retrying unaccepted requests;
+202 still means durable acceptance, not completed processing. Provider/browser
+retry behavior is not guaranteed by this server-side gate.
+
+The transaction acquires the privacy tenant fence, then one deployment-wide
+admission lock before writing an encrypted body and inserting its batch/state.
+Concurrent accepted requests cannot exceed either count or byte limit. A capacity
+refusal writes no payload; a later transactional failure rolls its file back.
+The only new control state is a hysteresis flag per app and deployment. A narrow
+owner function returns a decision, not totals; ordinary readers cannot call it
+or inspect those flags.
+
+Before enabling on an upgraded database, drain pre-upgrade unresolved batches
+while admission remains off. Their unknown `body_bytes` are not guessed or
+backfilled as zero. Any remaining unpurged unresolved legacy row fails closed
+with 503 `inbox_capacity_unknown`, including failed rows needing recovery.
+Investigate worker failures and complete normal recovery first, then enable the
+gate. Raising capacity is not a substitute for recovering a stalled worker.
+
 ## Interpret the layers before deciding retention
 
 - `raw_evidence` holds receipt, delivery and rejection state. Removing evidence

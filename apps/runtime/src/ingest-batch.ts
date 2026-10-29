@@ -3,6 +3,7 @@ import type { Pool, PoolClient } from "pg";
 import { uuidV7, withTenant } from "./index.js";
 import type { PayloadStore } from "./payload-store.js";
 import { batchDiagnosticGroups } from "./measurement-diagnostics.js";
+import { admitInboxBatch, readInboxAdmissionPolicy, type InboxAdmissionPolicy } from "./inbox-admission.js";
 import {
   acquirePrivacyTenantXactFence,
   privacyProjectionIsBlocked,
@@ -28,18 +29,22 @@ export async function appendDurableBatch(
   payloadStore: PayloadStore,
   input: DurableBatchInput,
   onPersisted?: (client: PoolClient, ingestBatchId: string) => Promise<void>,
+  admissionPolicy: InboxAdmissionPolicy | undefined = readInboxAdmissionPolicy(),
 ): Promise<string> {
   if (!Number.isInteger(input.eventCount) || input.eventCount < 1 || input.eventCount > 100) {
     throw new Error("event_count_out_of_range");
   }
   const ingestBatchId = uuidV7(Date.parse(input.receivedAt));
   const bodyDigest = createHash("sha256").update(input.body).digest("hex");
-  const bodyRef = await payloadStore.write(
+  const writeBody = () => payloadStore.write(
     { tenantId: input.tenantId, appId: input.appId, objectId: `ingest-batch-${ingestBatchId}` },
     input.body,
   );
+  // Preserve the disabled path's existing privacy-race behavior. When enabled,
+  // the admission lock covers both the file write and its durable DB reference.
+  let bodyRef = admissionPolicy ? undefined : await writeBody();
   try {
-    await withTenant(pool, input.tenantId, async (client) => {
+    const refusal = await withTenant(pool, input.tenantId, async (client) => {
       const privacyScope = {
         entryId: ingestBatchId,
         tenantId: input.tenantId,
@@ -59,6 +64,11 @@ export async function appendDurableBatch(
           [input.tenantId, input.appId, input.installationKeyId, input.subjectDigest],
         );
         if ((credential.rowCount ?? 0) !== 1) throw new Error("installation_credential_inactive");
+      }
+      if (admissionPolicy) {
+        const denied = await admitInboxBatch(client, input.tenantId, input.appId, input.body.byteLength, admissionPolicy);
+        if (denied) return denied;
+        bodyRef = await writeBody();
       }
       await client.query(
         `INSERT INTO control.apps (tenant_id, app_id, created_at)
@@ -82,8 +92,8 @@ export async function appendDurableBatch(
         `INSERT INTO ledger.ingest_batches (
           ingest_batch_id, tenant_id, app_id, producer, sdk_key_id,
           installation_key_id, server_key_id, subject_digest, received_at, body_ref,
-          body_digest, event_count, request_nonce, request_timestamp_ms, artifact, diagnostic_groups
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16::jsonb)`,
+          body_digest, event_count, request_nonce, request_timestamp_ms, artifact, diagnostic_groups, body_bytes
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16::jsonb,$17)`,
         [
           ingestBatchId, input.tenantId, input.appId, input.producer,
           input.sdkKeyId ?? null, input.installationKeyId ?? null,
@@ -92,6 +102,7 @@ export async function appendDurableBatch(
           input.requestTimestampMs ?? null,
           JSON.stringify(artifact),
           JSON.stringify(batchDiagnosticGroups(input.producer, input.body, input.eventCount)),
+          input.body.byteLength,
         ],
       );
       await client.query(
@@ -106,8 +117,9 @@ export async function appendDurableBatch(
       // The trusted callback must not copy its metadata into the durable body.
       if (onPersisted) await onPersisted(client, ingestBatchId);
     });
+    if (refusal) throw refusal;
   } catch (error) {
-    await payloadStore.purge(bodyRef);
+    if (bodyRef) await payloadStore.purge(bodyRef);
     throw error;
   }
   return ingestBatchId;

@@ -236,8 +236,8 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     await withTenant(appPool, tenantId, async (client) => {
       const batch = randomUUID();
       await client.query(`INSERT INTO ledger.ingest_batches
-        (ingest_batch_id,tenant_id,app_id,producer,received_at,body_ref,body_digest,event_count,artifact)
-        VALUES ($1,$2,$3,'android_sdk',$4,'synthetic-private-value',$5,1,'{}')`, [batch, tenantId, healthApp, at, "a".repeat(64)]);
+        (ingest_batch_id,tenant_id,app_id,producer,received_at,body_ref,body_digest,event_count,artifact,body_bytes)
+        VALUES ($1,$2,$3,'android_sdk',$4,'synthetic-private-value',$5,1,'{}',0)`, [batch, tenantId, healthApp, at, "a".repeat(64)]);
       await client.query(`INSERT INTO ledger.ingest_batch_states
         (ingest_batch_id,tenant_id,app_id,status,changed_at,artifact) VALUES ($1,$2,$3,'pending',$4,'{}')`, [batch, tenantId, healthApp, at]);
       await client.query(`INSERT INTO control.import_runs

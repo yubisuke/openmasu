@@ -138,6 +138,7 @@ function expected(row: Row): Privilege[] {
   if (row.schema_name === "control" && row.table_name === "deployment_purpose") return ["SELECT"];
   if (row.role_name === "openmasu_seed" && !disposable) return [];
   const qualified = `${row.schema_name}.${row.table_name}`;
+  if (qualified === "control.inbox_admission_states") return row.role_name === "openmasu_seed" ? ["TRUNCATE"] : [];
   if (row.schema_name === "ephemeral") {
     const matrix = ephemeralExpected.get(qualified);
     assert.ok(matrix, `new ephemeral table requires an explicit role matrix entry: ${qualified}`);
