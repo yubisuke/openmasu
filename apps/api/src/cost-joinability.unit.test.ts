@@ -23,6 +23,10 @@ it("cost joinability requires a closed bounded UTC selection, not identifying fi
 
 it("dimension observations retain date network and parent identity without inferring bindings", () => {
   assert.ok(projectCostJoinability([acquisition], [cost]).dimensions.every(row => row.both_observed_exact_key === 1));
+  const missingCreative = projectCostJoinability([{ ...acquisition, creative_id: null }], [cost])
+    .dimensions.find(row => row.dimension === "creative_id")!;
+  assert.equal(missingCreative.missing_acquisition_dimension, 1);
+  assert.equal(missingCreative.both_observed_exact_key, 0);
   for (const changed of [{ network: "other-network" }, { date: "2026-08-07" }]) {
     const report = projectCostJoinability([acquisition], [{ ...cost, ...changed }]);
     assert.ok(report.dimensions.every(row => row.both_observed_exact_key === 0));
