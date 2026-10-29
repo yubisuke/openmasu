@@ -123,8 +123,9 @@ export async function discoverComparisonNotifications(pool: Pool, payloadStore: 
         await client.query(`INSERT INTO ephemeral.operator_webhook_deliveries(delivery_id,tenant_id,app_id,destination_id,event_name,
           request_ref,request_digest,state,attempts,next_attempt_at,created_at,updated_at,
           comparison_id,comparison_run_id,comparison_epoch,comparison_state,comparison_sequence)
-          VALUES ($1,$2,$3,$4,'comparison_state_changed',$5,$6,'queued',0,$7,$7,$7,$8,$9,$10,$11,$12)`,
-          [deliveryId,tenantId,scope.appId,row.destination_id,written,createHash("sha256").update(body).digest("hex"),now.toISOString(),row.comparison_id,row.run_id,row.privacy_epoch,row.state,sequence]);
+          VALUES ($1,$2,$3,$4,'comparison_state_changed',$5,$6,'queued',0,$7,$13,$14,$8,$9,$10,$11,$12)`,
+          [deliveryId,tenantId,scope.appId,row.destination_id,written,createHash("sha256").update(body).digest("hex"),now.toISOString(),row.comparison_id,row.run_id,row.privacy_epoch,row.state,sequence,
+            now.toISOString(),now.toISOString()]);
         await client.query(`UPDATE control.comparison_notifications SET last_enqueued_state=$4,last_enqueued_at=$5,sequence=$6
           WHERE tenant_id=$1 AND app_id=$2 AND comparison_id=$3`,[tenantId,scope.appId,row.comparison_id,row.state,now.toISOString(),sequence]);
         return true;

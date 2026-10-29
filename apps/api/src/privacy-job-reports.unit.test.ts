@@ -11,7 +11,11 @@ it("privacy progress separates purge retries from unavailable, pending and compl
   assert.equal(pending.payload.state, "retry_pending"); assert.equal(pending.recalculation.state, "processing");
   assert.equal(pending.all_recorded_steps_completed, false); assert.ok(!JSON.stringify(pending).includes("forbidden"));
   const erased = { ...row, payload_state: "completed" as const, completed_at: "2026-10-29T00:01:00.000Z", payload_purged: "2", payload_failed: "0" };
-  assert.equal(projectPrivacyProgress({ ...erased, metric_pending: "0", metric_unavailable: "1" }).all_recorded_steps_completed, false);
+  const unsupportedReplay = projectPrivacyProgress({ ...erased, metric_pending: "0", metric_unavailable: "1" });
+  assert.deepEqual(unsupportedReplay.recalculation, {
+    state: "unavailable", total: "1", completed: "0", pending: "0", failed: "0", unavailable: "1",
+  });
+  assert.equal(unsupportedReplay.all_recorded_steps_completed, false);
   assert.equal(projectPrivacyProgress({ ...erased, metric_total: "0", metric_pending: "0" }).recalculation.state, "not_recorded");
   const failed = projectPrivacyProgress({ ...erased, metric_pending: "0", metric_failed: "1" });
   assert.equal(failed.recalculation.state, "failed"); assert.equal(failed.all_recorded_steps_completed, false);

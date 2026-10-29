@@ -210,6 +210,14 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
     assert.equal((await configure({destination_id:"webhook:unavailable"})).status,400);
     assert.equal((await configure()).status,200);
     assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(10)),1);
+    const queuedTimestamp=await withTenant(pool,tenantId,async c=>(await c.query<{
+      next_attempt_at:Date;created_at:string;updated_at:string;
+    }>(`SELECT next_attempt_at,created_at,updated_at FROM ephemeral.operator_webhook_deliveries
+      WHERE tenant_id=$1 AND app_id=$2 AND comparison_id=$3`,[tenantId,appId,saved.comparison_id])).rows);
+    assert.equal(queuedTimestamp.length,1);
+    assert.equal(queuedTimestamp[0].next_attempt_at.toISOString(),clock(10).toISOString());
+    assert.equal(queuedTimestamp[0].created_at,clock(10).toISOString());
+    assert.equal(queuedTimestamp[0].updated_at,clock(10).toISOString());
     assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(10)),0);
     const dispatch=(now:Date,extra:Record<string,unknown>={})=>processOperatorWebhookDeliveries(pool,payloadStore,tenantId,{
       enabled:true,destinationAllowlist:[receiverOrigin],allowSyntheticLoopback:true,now:()=>now,...extra });

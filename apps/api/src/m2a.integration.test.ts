@@ -3363,17 +3363,26 @@ describe("M2a signed SDK ingestion", () => {
     const progressState = () => withTenant(pool, tenantId, async client => ({
       job: (await client.query("SELECT status,updated_at,completed_at FROM control.privacy_deletion_jobs WHERE privacy_request_id=$1", [processing.privacy_request_id])).rows,
       purges: (await client.query("SELECT status,attempts,last_error_code,updated_at FROM control.privacy_payload_purges WHERE privacy_request_id=$1 ORDER BY reference_digest", [processing.privacy_request_id])).rows,
-      metrics: (await client.query(`SELECT i.state,i.attempts,i.updated_at FROM control.metric_recalculation_jobs r
+      metrics: (await client.query(`SELECT i.source_metric_run_id,i.state,i.safe_reason,i.attempts,i.updated_at FROM control.metric_recalculation_jobs r
         JOIN control.metric_recalculation_items i USING(tenant_id,app_id,recalculation_id)
         WHERE r.privacy_request_id=$1 ORDER BY i.source_metric_run_id`, [processing.privacy_request_id])).rows,
     }));
     const beforeRead = await progressState();
+    // The preceding deletion case retains a legacy run with neither evidence_refs
+    // nor a replay manifest. Each new app-scoped deletion conservatively withdraws
+    // it: absent dependency evidence cannot establish that this subject is unrelated.
+    assert.deepEqual(beforeRead.metrics.map(({ source_metric_run_id, state, safe_reason }) =>
+      ({ source_metric_run_id, state, safe_reason })), [{
+      source_metric_run_id: `metric:before-delete:${run}`, state: "unavailable", safe_reason: "replay_unavailable",
+    }]);
     const progress = await privacyJobProgress(reader, { tenantId, appId }, processing.privacy_request_id);
     assert.equal(progress.data.length, 1);
     assert.equal(progress.data[0].payload.state, "retry_pending");
     assert.equal(progress.data[0].payload.failed, "1");
     assert.equal(progress.data[0].payload.completed_at, null);
-    assert.equal(progress.data[0].recalculation.state, "not_recorded");
+    assert.deepEqual(progress.data[0].recalculation, {
+      state: "unavailable", total: "1", completed: "0", pending: "0", failed: "0", unavailable: "1",
+    });
     assert.equal(progress.data[0].all_recorded_steps_completed, false);
     const listing = await privacyJobProgress(reader, { tenantId, appId });
     assert.deepEqual(listing.data.find(row => row.request_id === processing.privacy_request_id), progress.data[0]);
@@ -3427,7 +3436,8 @@ describe("M2a signed SDK ingestion", () => {
     assert.equal(completedProgress.data[0].payload.purged, completedProgress.data[0].payload.total);
     assert.equal(completedProgress.data[0].payload.failed, "0");
     assert.ok(completedProgress.data[0].payload.completed_at);
-    assert.equal(completedProgress.data[0].recalculation.state, "not_recorded");
+    assert.deepEqual(completedProgress.data[0].recalculation, progress.data[0].recalculation,
+      "payload recovery cannot recreate the legacy run's missing replay evidence");
     assert.equal(completedProgress.data[0].all_recorded_steps_completed, false,
       "physical purge alone is not proof of metric replay completion");
     const completedStatus = await privacyStatus(statusReceipt);
