@@ -40,16 +40,20 @@ it("recurring_external_installs_cost_and_CPI_preserve_the_offline_comparator_byt
   for (const entry of syntheticExternalComparisonCases().filter(item => item.name.startsWith("native-acquisition-"))) {
     const pair = syntheticExternalComparisonPair(entry), right = aggregateCsvToSnapshot(Buffer.from(pair.csv), pair.mapping);
     const day = pair.saved.conditions.date_from;
+    for (const threshold of [{ value_unscaled: "0", scale: right.rows[0].scale },
+      { kind: "absolute", baseline: "left", value_unscaled: "0", scale: right.rows[0].scale }]) {
     const registration = parseComparisonRegistration({ name: `Synthetic ${entry.name}`, first_date: day, last_date: day,
       watermark_lag_days: (Date.parse(pair.saved.conditions.source_cutoff) - Date.parse(day)) / 86400000,
-      retention_days: 30, mode: "external_declared", threshold: { value_unscaled: "0", scale: right.rows[0].scale },
+      retention_days: 30, mode: "external_declared", threshold,
       left_snapshot: pair.saved, right_snapshot: right, supersedes_id: null });
     const result = recurringComparisonResult(registration.definition, day, registration.left, registration.right);
     assert.equal(result.state, "within_threshold", entry.name); assert.ok("comparison" in result);
-    assert.equal(jcs(result.comparison), jcs(compareSnapshots(pair.saved, right, { allowExternalDeclaration: true })), entry.name);
+    assert.equal(jcs(result.comparison), jcs(compareSnapshots(pair.saved, right, {
+      allowExternalDeclaration: true, includeSummary: registration.definition.version !== 1 })), entry.name);
     assert.equal(result.comparison.status, "external_declared_comparison");
     assert.equal(result.comparison.assurance.right.acquisition.upstream_completeness, "unknown");
     assert.deepEqual(result.comparison.assurance.right.execution, []);
+    }
   }
 });
 it("local_comparison_freezes_schedule_selection_without_confusing_schedule_and_snapshot_definition_digests", async () => {
