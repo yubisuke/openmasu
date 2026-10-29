@@ -718,6 +718,22 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     assert.equal(new Set(complete.rows.flatMap(row => row.current.map(value => value.run_id))).size, rows.length);
     assert.ok(complete.rows.some(row => row.metric_name === "retention_d7"));
     assert.ok(complete.rows.some(row => row.current.some(value => value.reason === "no_attributed_cost")));
+    for (const [campaign, installs, cost, cpi, totalRoas] of [
+      ["kpi70-a", "3", "10000000", "3333333", "1200000"],
+      ["kpi70-b", "2", "4000000", "2000000", "1500000"],
+    ]) {
+      const summary = complete.summaries.find(row => row.dimensions.campaign_id === campaign)!;
+      assert.ok(summary); assert.equal(summary.current.state, "ready");
+      assert.equal(summary.current.expected_days, 1); assert.equal(summary.current.observed_days, 1);
+      for (const [role, expected] of Object.entries({ installs, cost, cpi, total_roas: totalRoas })) {
+        const value = summary.current.values![role as keyof NonNullable<typeof summary.current.values>];
+        assert.equal(value.state, "present"); assert.equal(value.value_unscaled, expected);
+        assert.equal(value.value_unscaled, rows.find(row => row.grouping.campaign_id === campaign
+          && row.metric_name === `acquisition_d7_${role}`)!.value_unscaled);
+      }
+      assert.equal(summary.previous.state, "blocked"); assert.equal(summary.previous.reason, "missing_day");
+      assert.equal(summary.comparisons.total_roas.delta_current_minus_previous, null);
+    }
     for (const bounds of [{ ...comparisonLimits, rows: rows.length - 1 }, { ...comparisonLimits, bytes: 10 }]) {
       await assert.rejects(acquirePeriodAnalysis(readerPool, reportIdentity, selection, { bounds }), /comparison_incomplete_or_limit_exceeded/);
     }
@@ -742,8 +758,22 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     assert.equal(readView.status, 200); const analysisHtml = await readView.text();
     assert.match(analysisHtml, /kpi70-a/); assert.match(analysisHtml, /kpi70-b/); assert.match(analysisHtml, /no_attributed_cost/);
     assert.match(analysisHtml, /missing_previous/); assert.match(analysisHtml, /Source completeness remains unknown/);
-    const csvResponse = await fetch(`${baseUrl}${location}.csv`, { headers: { cookie } }); assert.equal(csvResponse.status, 200);
-    assert.equal(await csvResponse.text(), encodePeriodAnalysisCsv(complete, "all"));
+    const csvResponse = await fetch(`${baseUrl}${location}.csv`, { headers: { cookie: `openmasu_dashboard=${reader.token}` } });
+    assert.equal(csvResponse.status, 200);
+    const analysisCsv = await csvResponse.text(); assert.equal(analysisCsv, encodePeriodAnalysisCsv(complete, "all"));
+    const summaryCsvRows = parseCsv(analysisCsv).filter(row => row.row_kind === "acquisition_period_summary");
+    for (const summary of complete.summaries.filter(row => row.current.state === "ready")) {
+      for (const [role, value] of Object.entries(summary.current.values!)) {
+        const exported = summaryCsvRows.find(row => row.metric_name === `acquisition_d7_${role}`
+          && jcs(JSON.parse(row.dimensions)) === jcs(summary.dimensions))!;
+        assert.ok(exported); assert.equal(exported.current_value_unscaled, value.value_unscaled ?? "");
+        assert.deepEqual(JSON.parse(exported.current_summary).values, value);
+        assert.deepEqual(JSON.parse(exported.current_observations), summary.current.sources);
+        assert.equal(exported.selection_digest, complete.selection_digest);
+      }
+    }
+    assert.deepEqual(await schedules(), before, "reader analysis and CSV GET do not schedule work");
+    assert.deepEqual(await listSavedAnalyses(readerPool, reportIdentity), [saved], "reader GET does not rewrite the saved selection");
     assert.equal((await fetch(`${baseUrl}${location}?app_id=other-app`, { headers: { cookie } })).status, 400);
 
     let injected = false; const newId = `zz-analysis-concurrent-${randomBytes(6).toString("hex")}`;
@@ -773,6 +803,31 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     assert.deepEqual(await acquirePeriodAnalysis(concurrentReader, reportIdentity, { ...selection, limit: 1 }), complete);
     const fresh = await acquirePeriodAnalysis(readerPool, reportIdentity, selection);
     assert.equal(fresh.current_count, rows.length + 1); assert.ok(fresh.rows.some(row => row.current.some(value => value.run_id === newId)));
+
+    // Delete an installation through the real privacy path after these operands
+    // were saved. A fresh read must not publish the old period totals while the
+    // existing privacy recalculation is pending; no synthetic stub grants safety.
+    const deletionResponse = await admin("/v1/admin/privacy-requests", { method: "POST", body: JSON.stringify({
+      tenant_id: tenantId, app_id: appId, requested_via: "tenant_admin_api", deletion_scope: "installation",
+      deletion_subject_ref: "installation:kpi70-install-a-0",
+    }) });
+    assert.equal(deletionResponse.status, 201);
+    const deletion = await deletionResponse.json() as Any;
+    assert.equal(deletion.status, "completed");
+    assert.ok(deletion.affected_records.some((row: Any) => row.record_id === "kpi70-install-a-0"));
+    const afterPrivacy = await metricReport(readerPool, reportIdentity, { ...selection, limit: 200 });
+    const oldTotal = afterPrivacy.data.find(row => row.metric_name === "acquisition_d7_total_roas"
+      && row.grouping.campaign_id === "kpi70-a")!;
+    assert.ok(oldTotal); assert.equal(oldTotal.value_state, "unavailable");
+    assert.equal(oldTotal.value_unscaled, undefined); assert.equal(oldTotal.unavailable_reason, "privacy_deletion");
+    await assert.rejects(acquirePeriodAnalysis(readerPool, reportIdentity, selection), /comparison_evidence_unavailable/);
+    for (const suffix of ["", ".csv"]) {
+      const unavailable = await fetch(`${baseUrl}${location}${suffix}`, { headers: { cookie: `openmasu_dashboard=${reader.token}` } });
+      assert.equal(unavailable.status, 400);
+      const body = await unavailable.text(); assert.match(body, /comparison_evidence_unavailable/);
+      assert.doesNotMatch(body, /acquisition_period_summary|3333333|1200000/);
+    }
+    assert.deepEqual(await listSavedAnalyses(readerPool, reportIdentity), [saved], "privacy-safe GET retains only the saved selection, not cached totals");
     assert.equal((await save(new URLSearchParams({ csrf_token: csrfToken(session.token) }), cookie, "http://localhost:8080", `/${saved.view_id}/delete`)).status, 303);
     assert.equal((await fetch(`${baseUrl}${location}`, { headers: { cookie } })).status, 404);
     assert.equal(await getSavedAnalysis(readerPool, reportIdentity, saved.view_id), undefined);

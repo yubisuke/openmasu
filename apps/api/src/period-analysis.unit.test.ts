@@ -8,7 +8,7 @@ import { analysisQuery, savedAnalysisInput, previousAnalysisQuery, dailyAnalysis
 import { buildPeriodAnalysis, encodePeriodAnalysisCsv } from "./period-analysis.js";
 import { renderPeriodAnalysis } from "./dashboard/saved-analysis.js";
 import type { MetricReportRow } from "./reporting.js";
-import { calendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
+import { acquisitionKpiRole, calendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
 import { calendarActivityUnit } from "./metric-series.js";
 type Any = Record<string, any>;
 const identity = { tenantId: "tenant-a", appId: "app-a", keyId: "synthetic-analysis", role: "admin" as const };
@@ -95,6 +95,7 @@ it("period_analysis_retention_compares_saved_cohorts_but_never_invents_period_de
   const result = buildPeriodAnalysis(query, [adapt("2026-08-06", "current", "333333")], [adapt("2026-08-05", "previous", "500000")]);
   assert.equal(result.rows[0].status, "compared"); assert.equal(result.rows[0].delta_current_minus_previous, "-166667");
   assert.equal(result.rows[0].current[0].value_unscaled, "333333");
+  assert.deepEqual(result.summaries, []);
 });
 
 it("period_analysis_aligns_daily_activity_without_summing_distinct_installations_into_period_users", () => {
@@ -117,6 +118,7 @@ it("period_analysis_aligns_daily_activity_without_summing_distinct_installations
   const previous = [...adapt("2026-08-04", "previous"), ...adapt("2026-08-05", "previous")];
   const analysis = buildPeriodAnalysis(selection, current, previous);
   assert.equal(analysis.rows.length, 6);
+  assert.deepEqual(analysis.summaries, []);
   assert.ok(analysis.rows.every(row => row.status === "compared" && row.current[0].value_unscaled === "2"
     && row.delta_current_minus_previous === "0"));
   assert.deepEqual(analysis.rows.filter(row => row.metric_name === "daily_active_installations")
@@ -130,4 +132,142 @@ it("period_analysis_aligns_daily_activity_without_summing_distinct_installations
   const wrongDate = structuredClone(current[0]) as Any;
   wrongDate.grouping = { cohort_date: "2026-08-06" }; wrongDate.grouping_digest = sha256(wrongDate.grouping);
   assert.equal(buildPeriodAnalysis(selection, [wrongDate as MetricReportRow], previous).rows.find(row => row.metric_name === wrongDate.metric_name)!.reason, "meaning_unverified");
+});
+
+const twoDayQuery = { ...query, dateTo: "2026-08-08" };
+type MutableTestRow = { -readonly [K in keyof MetricReportRow]: MetricReportRow[K] } & { grouping: Record<string, string> };
+function acquisitionDay(date: string, prefix: string, installs: string, cost: string, revenue: string): MutableTestRow[] {
+  return rows(date, prefix).filter(row => row.grouping.campaign_id === "kpi70-a").map(row => {
+    // Explicit hand-calculated operands. Daily ratios deliberately differ from
+    // the period result and are never the source of period arithmetic.
+    const values = { installs, cost, ad_revenue: revenue, purchase_net: "0", total_net: revenue,
+      cpi: installs === "1" ? cost : "10000000", ad_roas: installs === "1" ? "1000000" : "2000000",
+      total_roas: installs === "1" ? "1000000" : "2000000" };
+    const result = structuredClone(row) as MutableTestRow;
+    result.value_state = "present"; result.undefined_reason = null;
+    result.value_unscaled = values[acquisitionKpiRole(row.metric_name)!];
+    result.input_snapshot_id = sha256({ date, prefix });
+    result.comparison_context!.input_snapshot_id = result.input_snapshot_id;
+    result.input_received_at_watermark = date.endsWith("07") ? "2026-08-19T00:00:00.000Z" : "2026-08-20T00:00:00.000Z";
+    return result;
+  });
+}
+function periodOperands() {
+  return {
+    current: [...acquisitionDay("2026-08-06", "current-one", "1", "100000000", "100000000"),
+      ...acquisitionDay("2026-08-07", "current-nine", "9", "90000000", "180000000")],
+    previous: [...acquisitionDay("2026-08-04", "previous-one", "1", "100000000", "100000000"),
+      ...acquisitionDay("2026-08-05", "previous-nine", "9", "90000000", "180000000")],
+  };
+}
+
+it("acquisition_period_sums_integer_operands_before_weighted_CPI_ROAS_and_preserves_daily_rows_and_provenance", () => {
+  const { current, previous } = periodOperands(), analysis = buildPeriodAnalysis(twoDayQuery, current, previous);
+  assert.equal(analysis.rows.length, 16); assert.equal(analysis.summaries.length, 1);
+  const summary = analysis.summaries[0], values = summary.current.values!;
+  assert.equal(summary.current.state, "ready"); assert.equal(summary.current.observed_days, 2);
+  assert.equal(values.installs.value_unscaled, "10"); assert.equal(values.cost.value_unscaled, "190000000");
+  assert.equal(values.ad_revenue.value_unscaled, "280000000"); assert.equal(values.total_net.value_unscaled, "280000000");
+  assert.equal(values.cpi.value_unscaled, "19000000"); assert.equal(values.cpi.label, "USD 19");
+  assert.equal(values.ad_roas.value_unscaled, "1473684"); assert.equal(values.total_roas.label, "1.473684 ×");
+  assert.ok(Object.values(summary.comparisons).every(value => value.status === "compared" && value.delta_current_minus_previous === "0"));
+  assert.deepEqual(summary.current.sources.flatMap(source => source.runs.map(run => run.run_id)).sort(), current.map(row => row.metric_run_id).sort());
+  assert.equal(new Set(summary.current.sources.flatMap(source => source.runs.map(run => run.snapshot_id))).size, 2);
+  assert.equal(new Set(summary.current.sources.flatMap(source => source.runs.map(run => run.watermark))).size, 2);
+  assert.ok(summary.current.sources.every(source => source.set_keys.length === 1 && source.runs.every(run => /^[a-f0-9]{64}$/.test(run.grouping_digest))));
+  assert.equal(analysis.source_completeness, "unknown");
+  const saved = { view_id: "synthetic-period", name: "Synthetic weighted period", selection: params.toString(), display: "all" as const,
+    created_at: "2026-08-20T00:00:00.000Z" };
+  const html = renderPeriodAnalysis(identity.appId, saved, analysis), csv = encodePeriodAnalysisCsv(analysis, "all");
+  assert.match(html, /USD 19/); assert.match(html, /1\.473684 ×/); assert.match(html, /data-value-unscaled="1473684"/);
+  assert.match(html, new RegExp(summary.current.selection_digest)); assert.match(csv, new RegExp(summary.current.selection_digest));
+  assert.match(html, /data-analysis-summary-metric="acquisition_d7_ad_roas"/);
+  const header = csv.split(/\r?\n/)[0];
+  assert.equal(header.split(",").slice(0, 13).join(","), "metric_name,dimensions,current_date,previous_date,status,reason,current_value_unscaled,previous_value_unscaled,delta_current_minus_previous,current_observations,previous_observations,selection_digest,source_completeness");
+  const summaryCsv = csv.split(/\r?\n/).filter(line => line.includes(",acquisition_period_summary,"));
+  assert.equal(summaryCsv.length, 8); assert.match(summaryCsv.find(line => line.startsWith("acquisition_d7_ad_roas,"))!, /,1473684,1473684,0,/);
+  assert.equal(csv.split(/\r?\n/).filter(line => line.includes(",daily_observation,")).length, 16);
+  assert.doesNotMatch(html, /<script|javascript:|\son[a-z]+=/i);
+});
+
+it("acquisition_period_recomputes_undefined_daily_ratios_from_present_operands_and_keeps_zero_denominators_undefined", () => {
+  const { current, previous } = periodOperands();
+  for (const row of current) if (["cpi", "ad_roas", "total_roas"].includes(acquisitionKpiRole(row.metric_name)!)) {
+    row.value_state = "undefined"; row.undefined_reason = "no_attributed_cost"; delete row.value_unscaled;
+    row.currency = null; row.amount_scale = null;
+  }
+  const result = buildPeriodAnalysis(twoDayQuery, current, previous);
+  assert.equal(result.summaries[0].current.values!.ad_roas.value_unscaled, "1473684");
+  assert.equal(result.summaries[0].current.values!.cpi.value_unscaled, "19000000");
+  assert.ok(result.rows.filter(row => row.metric_name.endsWith("roas")).every(row => row.status === "incomparable"));
+  for (const row of current) if (["cost", "installs"].includes(acquisitionKpiRole(row.metric_name)!)) row.value_unscaled = "0";
+  const zero = buildPeriodAnalysis(twoDayQuery, current, previous).summaries[0];
+  assert.equal(zero.current.state, "ready"); assert.equal(zero.current.values!.cost.value_unscaled, "0");
+  assert.equal(zero.current.values!.cpi.state, "undefined"); assert.equal(zero.current.values!.cpi.reason, "empty_cohort");
+  assert.equal(zero.current.values!.ad_roas.value_unscaled, null); assert.equal(zero.current.values!.ad_roas.reason, "no_attributed_cost");
+  assert.equal(zero.comparisons.ad_roas.delta_current_minus_previous, null);
+  for (const row of current) if (acquisitionKpiRole(row.metric_name) === "cost") {
+    row.value_state = "undefined"; row.undefined_reason = "no_attributed_cost"; delete row.value_unscaled;
+  }
+  const missing = buildPeriodAnalysis(twoDayQuery, current, previous).summaries[0];
+  assert.equal(missing.current.reason, "no_attributed_cost"); assert.equal(missing.current.values, null);
+});
+
+it("acquisition_period_blocks_missing_duplicate_pending_immature_or_invalid_daily_sets_without_hiding_the_valid_other_side", () => {
+  for (const kind of ["missing_day", "missing_role", "duplicate", "pending", "immature", "privacy", "fx_missing"] as const) {
+    const { current, previous } = periodOperands();
+    if (kind === "missing_day") current.splice(8);
+    if (kind === "missing_role") current.splice(0, 1);
+    if (kind === "duplicate") current.push(structuredClone(current[0]));
+    if (kind === "pending") current[0].cost_update_state = "recalculation_pending";
+    if (kind === "immature") for (const row of current) row.input_received_at_watermark = "2026-08-08T00:00:00.000Z";
+    if (kind === "privacy") { current[0].value_state = "unavailable"; current[0].unavailable_reason = "privacy_deletion"; delete current[0].value_unscaled; }
+    if (kind === "fx_missing") {
+      const row = current.find(row => acquisitionKpiRole(row.metric_name) === "cost")!;
+      row.value_state = "undefined"; row.undefined_reason = "missing_fx_rate"; delete row.value_unscaled;
+    }
+    const summary = buildPeriodAnalysis(twoDayQuery, current, previous).summaries[0];
+    assert.equal(summary.current.state, "blocked", kind); assert.equal(summary.current.values, null, kind);
+    assert.equal(summary.previous.state, "ready", kind); assert.equal(summary.previous.values!.cpi.value_unscaled, "19000000", kind);
+    assert.ok(Object.values(summary.comparisons).every(comparison => comparison.status === "incomparable" && comparison.delta_current_minus_previous === null), kind);
+    assert.equal(summary.current.reason, { missing_day: "missing_day", missing_role: "acquisition_set_incomplete_or_incompatible",
+      duplicate: "multiple_daily_sets", pending: "recalculation_pending", immature: "window_not_elapsed", privacy: "historical_or_unavailable",
+      fx_missing: "missing_fx_rate" }[kind]);
+  }
+});
+
+it("acquisition_period_never_mixes_currency_FX_basis_definition_fraud_privacy_window_or_grain", () => {
+  for (const kind of ["currency", "fx", "basis", "definition", "fraud", "privacy", "window", "grain"] as const) {
+    const { current, previous } = periodOperands();
+    for (const row of current.slice(8) as Any[]) {
+      const context = row.comparison_context, d = context.definition;
+      if (kind === "currency") { if (d.currency) { d.currency = "EUR"; row.currency = "EUR"; } context.fx.target_currency = "EUR"; }
+      if (kind === "fx") context.fx.rates[0].rate_unscaled = "2";
+      if (kind === "basis") d.acquisition_basis = "selected_verified_platform";
+      if (kind === "definition") { d.metric_definition_version = "0.4.24"; row.metric_definition_version = "0.4.24"; }
+      if (kind === "fraud") d.fraud_policy = "exclude_rejected";
+      if (kind === "privacy") context.privacy_state = "after";
+      if (kind === "window") d.definition.window.day = 8;
+      if (kind === "grain") d.grouping_dimensions = d.grouping_dimensions.filter((key: string) => key !== "country");
+      context.definition_digest = sha256(d); context.fx_digest = sha256(context.fx);
+    }
+    const summary = buildPeriodAnalysis(twoDayQuery, current, previous).summaries[0];
+    assert.equal(summary.current.state, "blocked", kind); assert.equal(summary.current.values, null, kind);
+    assert.equal(summary.previous.state, "ready", kind);
+  }
+});
+
+it("acquisition_period_keeps_independently_valid_totals_but_suppresses_deltas_across_different_meanings_and_dimensions", () => {
+  const { current, previous } = periodOperands();
+  for (const row of previous) row.comparison_context!.privacy_state = "after";
+  const summary = buildPeriodAnalysis(twoDayQuery, current, previous).summaries[0];
+  assert.equal(summary.current.state, "ready"); assert.equal(summary.previous.state, "ready");
+  assert.equal(summary.current.values!.ad_roas.value_unscaled, "1473684");
+  assert.equal(summary.previous.values!.ad_roas.value_unscaled, "1473684");
+  assert.ok(Object.values(summary.comparisons).every(value => value.reason === "meaning_fx_or_basis_mismatch" && value.delta_current_minus_previous === null));
+  const another = structuredClone(current);
+  for (const row of another) { row.grouping.country = "JP"; row.grouping_digest = sha256(row.grouping); }
+  const separated = buildPeriodAnalysis(twoDayQuery, [...current, ...another], previous);
+  assert.equal(separated.summaries.length, 2); assert.ok(separated.summaries.every(value => value.current.values!.installs.value_unscaled === "10"));
+  assert.notEqual(buildPeriodAnalysis(twoDayQuery, current, []).selection_digest, separated.selection_digest);
 });

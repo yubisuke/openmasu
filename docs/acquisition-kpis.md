@@ -30,6 +30,43 @@ Numerator/denominator and summand links point to the actual saved run details.
 JSON/CSV append `acquisition_kpi_set_key`; old CSV columns keep their order.
 Legacy reports, definitions and results remain readable without relabeling.
 
+## Period totals and weighted ratios
+
+Open [Saved daily analyses](dashboard-analysis.md#saved-daily-analyses-and-previous-periods)
+with all eight acquisition metrics, a date range and explicit receipt cutoff.
+Alongside the original daily rows, the same complete, privacy-fenced read produces
+current and preceding equal-length period summaries. No new calculation job or
+persisted metric run is created.
+
+Each campaign and all other non-date dimensions stay separate. A period needs
+exactly one complete eight-role set per selected date, identical role-specific
+meaning (including currency, FX, basis, definition/bundle, fraud/privacy, window
+and grain), and each date's conservative nine-day maturity. Snapshot IDs and
+watermarks may differ across dates. Missing/duplicate dates or roles,
+correction-pending, superseded and privacy-unavailable evidence block the side.
+Missing cost or FX is not zero; there is no partial sum.
+
+Sum the integer operands first, then use the existing half-even arithmetic:
+
+- Installs, cost, advertising revenue, purchase net and total net: integer sums.
+- CPI: `half_even(sum(cost_micro_units) / sum(installs))`.
+- Advertising ROAS: `half_even(sum(ad_revenue_micro_units) * 10^6 / sum(cost_micro_units))`.
+- Total ROAS: `half_even(sum(total_net_micro_units) * 10^6 / sum(cost_micro_units))`.
+
+For example, synthetic days with 1 install / USD 100 cost / USD 100 revenue and
+9 installs / USD 90 cost / USD 180 revenue yield **USD 19 CPI and 1.473684 ROAS**.
+Averaging the daily CPI values into USD 55 or daily ROAS into 1.5 would be wrong.
+Zero denominators remain undefined (`empty_cohort` for CPI,
+`no_attributed_cost` for ROAS). A daily undefined ratio can still contribute its
+present operands to a defined period result.
+
+Current and previous sides are validated separately. Incompatible cross-period
+meaning suppresses the delta, not each independently valid total. JSON, HTML and
+CSV share values/reasons and source run/snapshot/watermark/set/digest provenance.
+CSV identifies summary rows explicitly without reordering existing daily columns.
+Retention, daily distinct installation counts and re-engagement are not period
+aggregates. Saved-source completeness remains **unknown**, even for ready sums.
+
 ## Meaning and refusal boundaries
 
 - The initial set uses **selected native first-party click** acquisition, UTC
