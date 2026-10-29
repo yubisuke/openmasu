@@ -8,6 +8,7 @@ import { buildAcquisitionKpiSets, acquisitionKpiSetKey } from "./acquisition-kpi
 import { buildDashboardView } from "./dashboard/view.js";
 import { renderDashboard } from "./dashboard/render.js";
 import type { MetricReportRow } from "./reporting.js";
+import { acquisitionKpiRole, basisAcquisitionKpiDefinitions } from "@openmasu/contracts/definitions";
 type Any = Record<string, any>;
 const scope = { tenantId: "tenant-a", appId: "app-a" };
 const query = { ...scope, supersession: "latest" as const, limit: 200 };
@@ -23,9 +24,21 @@ function rows(): MetricReportRow[] {
     comparison_context: captureMetricComparisonContext({ metric_run_id: run.metric_run_id, input_snapshot_id: run.input_snapshot_id }, input.metric_definitions.find((d: Any) => d.metric_name === run.metric_name), input.fx_policy, "before", sha256),
   } as MetricReportRow));
 }
+function basisRows(source: readonly MetricReportRow[], basis: "selected_verified_platform" | "selected_imported_provider", provider?: string) {
+  const definitions = basisAcquisitionKpiDefinitions(basis, provider);
+  return source.map(row => {
+    const definition = definitions.find(d => acquisitionKpiRole(d.metric_name) === acquisitionKpiRole(row.metric_name))!;
+    const metric_run_id = `${provider ?? "platform"}:${row.metric_run_id}`;
+    return { ...structuredClone(row),metric_run_id,metric_name:definition.metric_name,metric_definition_version:definition.metric_definition_version,
+      rule_bundle_id:definition.rule_bundle_id,rule_bundle_hash:definition.rule_bundle_hash,policy_versions:[`rule_bundle:${definition.rule_bundle_version}`],
+      comparison_context:captureMetricComparisonContext({metric_run_id,input_snapshot_id:row.input_snapshot_id},definition,input.fx_policy,"before",sha256) };
+  });
+}
 
 it("acquisition_KPI_projection_aligns_eight_saved_roles_and_operand_run_refs_without_dividing", () => {
   const source = rows(), result = buildAcquisitionKpiSets(source, false, scope);
+  assert.equal(acquisitionKpiSetKey(source.find(row => row.metric_run_id === "kpi70-a:acquisition_d7_installs")!,scope),
+    "4060671b4b293c5547120a29348c52b3198ac0ecaf29d1330da803d4e0b03946","legacy native calculation key stays byte-identical");
   const authorizedIdentity = { ...scope, keyId: "synthetic-kpi70", role: "admin" as const };
   assert.deepEqual(buildAcquisitionKpiSets(source, false, authorizedIdentity), result);
   assert.equal(result.sets.length, 4); assert.equal(result.omittedRows, 0);
@@ -47,6 +60,53 @@ it("acquisition_KPI_projection_aligns_eight_saved_roles_and_operand_run_refs_wit
   assert.match(html, /CPI \(USD\/install\)/); assert.match(html, /USD 3\.333333/); assert.match(html, /no_attributed_cost/);
   assert.match(html, /Numerator<\/a> \/ <a/); assert.match(html, /Purchase-net summand/);
   assert.doesNotMatch(html, /<script|javascript:/i);
+});
+
+it("acquisition_KPI_projection_separates_native_platform_and_exact_import_provider_even_without_population", () => {
+  const native=rows().filter(row=>row.metric_run_id.startsWith("kpi70-a:"));
+  const platform=basisRows(native,"selected_verified_platform"), providerA=basisRows(native,"selected_imported_provider","synthetic-alpha"),
+    providerB=basisRows(native,"selected_imported_provider","synthetic-beta");
+  const source=[...native,...platform,...providerA,...providerB], result=buildAcquisitionKpiSets(source,false,scope);
+  assert.equal(result.sets.length,4); assert.equal(result.omittedRows,0);
+  assert.equal(new Set(result.sets.map(set=>set.key)).size,4);
+  assert.deepEqual(result.sets.map(set=>`${set.basis}:${set.importProvider ?? ""}`).sort(),[
+    "selected_first_party_click:","selected_imported_provider:synthetic-alpha","selected_imported_provider:synthetic-beta","selected_verified_platform:"].sort());
+  assert.ok(result.sets.every(set=>Object.values(set.rows).every(row=>acquisitionKpiSetKey(row,scope)===set.key)));
+  assert.equal(buildAcquisitionKpiSets([...providerA.slice(0,4),...providerB.slice(4)],false,scope).sets.length,0);
+  const html=renderDashboard(buildDashboardView({apps:[],selectedAppId:"app-a",query,metrics:{data:source},csrfToken:"synthetic"}));
+  assert.match(html,/Native first-party click/); assert.match(html,/Verified platform/);
+  assert.match(html,/Imported provider: synthetic-alpha/); assert.match(html,/Imported provider: synthetic-beta/);
+  assert.match(html,/provider-reported/);
+  const empty = native.map(row=>({...row,value_state:"undefined" as const,value_unscaled:undefined,undefined_reason:"empty_cohort",
+    input_snapshot_id:sha256([])}));
+  const emptyA=basisRows(empty,"selected_imported_provider","synthetic-alpha"),emptyB=basisRows(empty,"selected_imported_provider","synthetic-beta");
+  const emptySets=buildAcquisitionKpiSets([...emptyA,...emptyB],false,scope).sets;
+  assert.equal(emptySets.length,2); assert.notEqual(emptySets[0].key,emptySets[1].key);
+  assert.ok(emptySets.every(set=>set.rows.installs.value_state==="undefined"));
+});
+
+it("acquisition_KPI_basis_projection_keeps_missing_roles_cost_refusals_immaturity_and_strict_context_visible", () => {
+  const native=rows().filter(row=>row.metric_run_id.startsWith("kpi70-a:"));
+  const source=basisRows(native,"selected_imported_provider","synthetic-alpha");
+  assert.equal(buildAcquisitionKpiSets(source.slice(1),false,scope).sets.length,0);
+  const incomplete=structuredClone(source);
+  for (const row of incomplete) if (["cost","cpi","ad_roas","total_roas"].includes(acquisitionKpiRole(row.metric_name)!))
+    Object.assign(row,{value_state:"undefined",value_unscaled:undefined,undefined_reason:"overlapping_cost_grains"});
+  const projected=buildAcquisitionKpiSets(incomplete,false,scope);
+  assert.equal(projected.sets.length,1); assert.equal(projected.sets[0].rows.cost.undefined_reason,"overlapping_cost_grains");
+  const immature=source.map(row=>({...row,input_received_at_watermark:"2026-08-14T00:00:00.000Z"}));
+  assert.equal(buildAcquisitionKpiSets(immature,false,scope).sets[0].reason,"window_not_elapsed");
+  for (const invalid of ["provider", "window", "basis"] as const) {
+    const altered=structuredClone(source) as Any[];
+    for (const row of altered) {
+      const definition=row.comparison_context.definition;
+      if (invalid==="provider") delete definition.import_provider;
+      if (invalid==="window") definition.definition.window.day=6;
+      if (invalid==="basis") definition.acquisition_basis="selected_verified_platform";
+      row.comparison_context.definition_digest=sha256(definition);
+    }
+    assert.equal(buildAcquisitionKpiSets(altered as MetricReportRow[],false,scope).sets.length,0,invalid);
+  }
 });
 
 it("acquisition_KPI_projection_refuses_partial_duplicates_mixed_snapshot_FX_cutoff_basis_and_units", () => {

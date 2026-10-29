@@ -24,6 +24,7 @@ export const METRIC_PROFILE_BINDINGS = {
   calendar: binding("metric-calendar-acquisition"),
   daily_acquisition: binding("metric-selected-daily-acquisition"),
   acquisition_kpis: binding("metric-acquisition-kpis"),
+  basis_acquisition_kpis: binding("metric-basis-acquisition-kpis"),
   standard_retention: binding("metric-standard-retention"),
   calendar_activity: binding("metric-calendar-activity"),
   payer: binding("metric-verified-payers"),
@@ -80,6 +81,7 @@ const labels: Record<MetricProfileKey, string> = {
   engagement_policy: "First-party engagement with explicit recorded inactivity and verified purchase net",
   daily_acquisition: "Daily selected acquisition",
   acquisition_kpis: "Saved first-party acquisition KPIs",
+  basis_acquisition_kpis: "Saved platform or imported-provider acquisition KPIs",
   standard_retention: "D3/D14/D30 retained installations (complete observation window)",
   calendar_activity: "UTC daily activity (events and distinct installations, not people)",
   payer: "Verified settled purchase transactions and paying installations (not people)",
@@ -94,9 +96,9 @@ export const METRIC_PROFILE_METADATA: readonly MetricProfileMetadata[] =
       rule_bundle_version: METRIC_PROFILE_BINDINGS[key].rule_bundle_version,
       rule_bundle_hash: METRIC_PROFILE_BINDINGS[key].rule_bundle_hash,
     },
-    scheduleValidation: ["detail", "engagement", "engagement_policy", "daily_acquisition", "platform", "imported", "calendar", "acquisition_kpis", "standard_retention", "calendar_activity", "payer"].includes(key) ? "schema_profile"
+    scheduleValidation: ["detail", "engagement", "engagement_policy", "daily_acquisition", "platform", "imported", "calendar", "acquisition_kpis", "basis_acquisition_kpis", "standard_retention", "calendar_activity", "payer"].includes(key) ? "schema_profile"
       : ["selected", "safe_cost", "commerce", "refund", "custom"].includes(key) ? "manual_profile" : "legacy_operation",
-    evaluationValidation: ["refund", "detail", "custom", "engagement", "engagement_policy", "daily_acquisition", "platform", "imported", "calendar", "acquisition_kpis", "standard_retention", "calendar_activity", "payer"].includes(key) ? "schema_profile"
+    evaluationValidation: ["refund", "detail", "custom", "engagement", "engagement_policy", "daily_acquisition", "platform", "imported", "calendar", "acquisition_kpis", "basis_acquisition_kpis", "standard_retention", "calendar_activity", "payer"].includes(key) ? "schema_profile"
       : ["purchase", "purchase_horizon", "total", "commerce"].includes(key) ? "named_series"
       : ["selected", "safe_cost"].includes(key) ? "manual_profile" : "operation",
   }));

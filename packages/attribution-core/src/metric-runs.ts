@@ -216,6 +216,11 @@ export function metricRuns(
     for (const metricName of selectedNames) {
       const definition = definitionsByName.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
+      if (definition.rule_bundle_id === "metric-basis-acquisition-kpis"
+          && (!evaluation.grouping?.cohort_date || Object.keys(evaluation.grouping)
+            .some(key => !definition.grouping_dimensions?.includes(key as never)))) {
+        throw new Error("acquisition_kpi_grouping_invalid");
+      }
       const costCalculation = ["cost_sum", "cost_over_cohort"].includes(definition.definition.calculation);
       const payerProfile = definition.rule_bundle_id === "metric-verified-payers";
       const usesFx = costCalculation || ["revenue_sum", "revenue_over_cost", "revenue_over_cohort", "revenue_over_paying_installations"].includes(definition.definition.calculation);
@@ -328,6 +333,7 @@ export function metricRuns(
           && eligibleRevenue(definition, installation.record, item.record))) : [];
       const purchaseNetRevenueValue = includesPurchaseNet
         ? (payerProfile ? payerPurchases : purchases).reduce((sum, item) => {
+        if (definition.import_provider && item.record.producer !== `import:${definition.import_provider}`) return sum;
         const installation = eligibleInstalls.find((candidate) =>
           candidate.server.tenant_id === item.server.tenant_id && candidate.server.app_id === item.server.app_id &&
           candidate.record.payload.installation_id === item.record.payload.installation_id,
@@ -338,6 +344,8 @@ export function metricRuns(
       }, 0n) - refunds.reduce((sum, item) => {
         const target = resolveRefundTarget(item, visible);
         if (!target || target.record.payload.financial_status !== "settled") return sum;
+        if (definition.import_provider && (item.record.producer !== `import:${definition.import_provider}`
+          || target.record.producer !== `import:${definition.import_provider}`)) return sum;
         if (payerProfile && (!isVerifiedPurchaseProjection(item.record.producer, item.server.policy_digest)
             || !payerPurchases.includes(target))) return sum;
         if (definition.refund_reversal_policy && visible.some((reversal) =>

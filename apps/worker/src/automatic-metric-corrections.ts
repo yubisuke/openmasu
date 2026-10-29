@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
-import { acquirePrivacyTenantXactFence, correctionCutoff, metricCostScopePredicate, normalizeMetricCorrectionPolicy,
+import { acquirePrivacyTenantXactFence, correctionCutoff, correctionMetricNames, expandAcquisitionCompanions,
+  isBasisAcquisitionReplay, metricCostScopePredicate, normalizeMetricCorrectionPolicy,
   metricAcquisitionSql, metricAcquisitionJoinSql, metricAcquisitionDimensionSql, selectLateMetricInputs, supportsLateMetric, supportsAttributionMetric, withTenant,
   type MetricCorrectionPolicy } from "@openmasu/runtime";
 
@@ -81,6 +82,11 @@ async function enqueuePage(client: PoolClient, r: Receipt, policy: MetricCorrect
         ON next.tenant_id=lineage.tenant_id AND next.app_id=lineage.app_id AND next.supersedes_metric_run_id=lineage.metric_run_id
         WHERE lineage.depth<100)
       SELECT lineage.*,manifest.artifact AS replay,
+        EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(lineage.artifact->'evidence_refs','[]'::jsonb)) AS ref
+          LEFT JOIN ledger.raw_records_current AS raw ON raw.tenant_id=$1 AND raw.app_id=$2 AND raw.record_id=ref->>'ref'
+          LEFT JOIN ledger.cost_records AS cost ON cost.tenant_id=$1 AND cost.app_id=$2 AND cost.cost_record_id=ref->>'ref'
+          WHERE (raw.record_id IS NOT NULL AND raw.payload_lifecycle_status<>'available')
+            OR (raw.record_id IS NULL AND cost.cost_record_id IS NULL)) AS evidence_unavailable,
         EXISTS (SELECT 1 FROM control.metric_recalculation_items AS item WHERE item.tenant_id=$1 AND item.app_id=$2
           AND item.source_metric_run_id=lineage.metric_run_id AND item.state IN ('queued','processing','retry')) AS pending
       FROM lineage LEFT JOIN control.metric_replay_manifests AS manifest ON manifest.tenant_id=$1 AND manifest.app_id=$2
@@ -109,16 +115,18 @@ async function enqueuePage(client: PoolClient, r: Receipt, policy: MetricCorrect
     [scope.tenantId,scope.appId,r.source_ref,current.map(row=>row.metric_run_id)]);
     const ids=new Set(matches.rows.map(row=>row.metric_run_id));
     selected=current.filter(row=>ids.has(row.metric_run_id)).map(row=>({metric_run_id:row.metric_run_id,replay:row.replay,
-      safe_reason:row.replay?.version===1 && supportsLateMetric(row.replay) ? null : "unsupported_definition"}));
+      safe_reason:row.replay?.version===1 && (supportsLateMetric(row.replay) || isBasisAcquisitionReplay(row.replay)) ? null : "unsupported_definition"}));
   } else if (r.source_kind === "attribution_revision") {
     for (const row of current) {
-      if (row.replay?.version!==1 || !supportsAttributionMetric(row.replay) || !["selected_first_party_click","selected_verified_platform","selected_imported_provider"].includes(row.replay.metric_definition.acquisition_basis)) {
+      if (row.replay?.version!==1 || !(supportsAttributionMetric(row.replay) || isBasisAcquisitionReplay(row.replay)) || !["selected_first_party_click","selected_verified_platform","selected_imported_provider"].includes(row.replay.metric_definition.acquisition_basis)) {
         selected.push({metric_run_id:row.metric_run_id,replay:row.replay,safe_reason:"unsupported_definition"});
       } else if (await attributionMatches(client,scope,row,revision.artifact,watermark)) {
         selected.push({metric_run_id:row.metric_run_id,replay:row.replay,safe_reason:null});
       }
     }
   }
+  // Never retrieve a missing companion outside this receipt's fixed, bounded page.
+  selected=expandAcquisitionCompanions(scope,current as import("@openmasu/runtime").CorrectionCandidate[],selected);
   if (!selected.length) return null;
   const digest=sha256({receipt:ref(r),policy:r.definition_digest,cutoff:watermark,page:r.continuation,
     sources:revision.digest,targets:selected.map(row=>[row.metric_run_id,row.replay?sha256(row.replay):null,row.safe_reason])});
@@ -173,7 +181,7 @@ export async function planAutomaticMetricCorrections(pool: Pool, tenantId: strin
               AND NOT EXISTS (SELECT 1 FROM ledger.metric_runs AS newer WHERE newer.tenant_id=$1 AND newer.app_id=$2
                 AND newer.supersedes_metric_run_id=mr.metric_run_id)
             ORDER BY metric_run_id COLLATE "C" LIMIT $6`,[tenantId,next.app_id,policy.date_from,policy.date_to,
-              policy.metric_names??null,policy.maximum_runs_per_receipt+1]);
+              correctionMetricNames(policy.metric_names)??null,policy.maximum_runs_per_receipt+1]);
           if (rows.rows.length>policy.maximum_runs_per_receipt) throw Error("selection_limit");
           next.targets=rows.rows.map(row=>({root_id:row.metric_run_id,meaning:meaning(row)}));
         }

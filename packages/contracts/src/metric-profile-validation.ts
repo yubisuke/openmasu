@@ -1,7 +1,7 @@
 import type { OpenMasuMetricDefinitionV04 as Definition } from "./generated/contract-types.js";
 import { acquisitionDetailBase } from "./m1b-metric-definitions.js";
 import { validateMetricDefinition } from "./event-validation.js";
-import { ACQUISITION_KPI_BUNDLE } from "./acquisition-kpi-definitions.js";
+import { ACQUISITION_KPI_BUNDLE, BASIS_ACQUISITION_KPI_BUNDLE } from "./acquisition-kpi-definitions.js";
 import { isCalendarActivityMetric } from "./calendar-activity-definitions.js";
 import { isPayerMetric } from "./payer-metric-definitions.js";
 import {
@@ -44,7 +44,7 @@ export function validateScheduledMetricDefinition(input: unknown): input is Sche
   if (value.retention_maturity_policy !== undefined || value.rule_bundle_id === METRIC_PROFILE_BINDINGS.standard_retention.rule_bundle_id) {
     return validateMetricDefinition(value);
   }
-  if (value.rule_bundle_id === ACQUISITION_KPI_BUNDLE || String(value.metric_name).startsWith("acquisition_d7_")
+  if ([ACQUISITION_KPI_BUNDLE, BASIS_ACQUISITION_KPI_BUNDLE].includes(String(value.rule_bundle_id)) || /^(platform_|imported_)?acquisition_d7_/.test(String(value.metric_name))
       || ["cost_sum", "cost_over_cohort"].includes(String((value.definition as JsonObject | undefined)?.calculation))) {
     return validateMetricDefinition(value);
   }
@@ -163,7 +163,7 @@ export function assertMetricDefinitionSeries(definition: Definition, entry: "ref
     if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${metricName}`);
     return;
   }
-  if (definition.rule_bundle_id === ACQUISITION_KPI_BUNDLE || metricName.startsWith("acquisition_d7_")
+  if ([ACQUISITION_KPI_BUNDLE, BASIS_ACQUISITION_KPI_BUNDLE].includes(definition.rule_bundle_id) || /^(platform_|imported_)?acquisition_d7_/.test(metricName)
       || ["cost_sum", "cost_over_cohort"].includes(definition.definition.calculation)) {
     if (!validateMetricDefinition(definition)) throw new Error(`metric_definition_series_mismatch:${metricName}`);
     return;

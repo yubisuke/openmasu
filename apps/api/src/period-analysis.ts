@@ -3,6 +3,7 @@ import { acquisitionKpiRole, isCalendarActivityMetricDefinition } from "@openmas
 import { comparisonMeaning, comparisonMaturity } from "@openmasu/runtime/metric-comparison";
 import { comparisonDigest, parseComparisonContext } from "./cohort-comparison.js";
 import { buildAcquisitionKpiSets } from "./acquisition-kpis.js";
+import { acquisitionKpiDimensions } from "@openmasu/runtime/acquisition-kpi-key";
 import { acquisitionPeriodRows, buildAcquisitionPeriods, type AcquisitionPeriodSummary } from "./acquisition-period.js";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import type { MetricQuery } from "./report-query.js";
@@ -82,7 +83,8 @@ export function buildPeriodAnalysis(query: MetricQuery, current: readonly Metric
       const date = row.grouping.cohort_date ?? row.grouping.metric_date;
       const offset = (Date.parse(date) - Date.parse(from)) / 86_400_000;
       if (!Number.isInteger(offset) || offset < 0) throw new Error("analysis_row_date_invalid");
-      const dimensions = Object.fromEntries(Object.entries(row.grouping).filter(([key]) => !["cohort_date", "metric_date"].includes(key)).sort());
+      const dimensions = acquisitionKpiRole(row.metric_name) ? acquisitionKpiDimensions(row, query)
+        : Object.fromEntries(Object.entries(row.grouping).filter(([key]) => !["cohort_date", "metric_date"].includes(key)).sort());
       const key = JSON.stringify([row.metric_name, dimensions, offset]);
       const group = groups.get(key) ?? { metric: row.metric_name, dimensions, offset, current: [], previous: [] };
       group[side].push(row); groups.set(key, group);

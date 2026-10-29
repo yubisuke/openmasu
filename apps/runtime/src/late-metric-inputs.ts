@@ -3,7 +3,8 @@ import { sha256 } from "@openmasu/attribution-core/canonical";
 import { validateMetricDefinition } from "@openmasu/contracts/validation";
 import { isPayerMetricDefinition, isVerifiedPurchaseProjection } from "@openmasu/contracts/definitions";
 import { metricAcquisitionSql, metricAcquisitionJoinSql, metricAcquisitionDimensionSql } from "./platform-acquisition.js";
-import type { LateEventRecalculationRequest } from "./metric-recalculation.js";
+import { correctionMetricNames, expandAcquisitionCompanions, isBasisAcquisitionReplay,
+  type CorrectionCandidate, type LateEventRecalculationRequest } from "./metric-recalculation.js";
 
 type Any = Record<string, any>;
 type InputRow = {
@@ -124,8 +125,9 @@ export async function selectLateMetricInputs(
     status: eligible.length ? "no_matching_runs" : "no_eligible_inputs" };
   if (!eligible.length) return selection;
   // Bound candidate work before per-definition joins. Overflow never creates partial jobs.
-  const candidates = await client.query<{ metric_run_id: string; replay: Any | null; watermark: string; pending: boolean; evidence_unavailable: boolean }>(
-    `SELECT mr.metric_run_id,manifest.artifact AS replay,mr.input_received_at_watermark AS watermark,
+  const candidates = await client.query<CorrectionCandidate & { watermark: string }>(
+    `SELECT mr.metric_run_id,mr.artifact,mr.comparison_context,mr.grouping_digest,
+       manifest.artifact AS replay,mr.input_received_at_watermark AS watermark,
        EXISTS (SELECT 1 FROM control.metric_recalculation_items AS item WHERE item.tenant_id=mr.tenant_id
          AND item.app_id=mr.app_id AND item.source_metric_run_id=mr.metric_run_id
          AND item.state IN ('queued','processing','retry')) AS pending,
@@ -141,17 +143,20 @@ export async function selectLateMetricInputs(
        AND mr.grouping->>'cohort_date' BETWEEN $4 AND $5
        AND ($6::text[] IS NULL OR mr.metric_name=ANY($6::text[]))
        AND ($7::text[] IS NULL OR mr.metric_run_id=ANY($7::text[]))
-       AND (mr.comparison_context IS NULL OR mr.comparison_context->'definition'->'definition'->>'calculation'
+       AND (mr.comparison_context IS NULL OR mr.comparison_context->'definition'->>'rule_bundle_id'='metric-basis-acquisition-kpis'
+         OR mr.comparison_context->'definition'->'definition'->>'calculation'
          IN ('revenue_sum','revenue_over_cohort','revenue_over_cost','converted_installations','converted_installations_over_cohort',
            'purchase_count','paying_installations','paying_installations_over_cohort','revenue_over_paying_installations'))
        AND NOT EXISTS (SELECT 1 FROM ledger.metric_runs AS newer WHERE newer.tenant_id=mr.tenant_id
          AND newer.app_id=mr.app_id AND newer.supersedes_metric_run_id=mr.metric_run_id)
      ORDER BY mr.metric_run_id COLLATE "C" LIMIT 101`,
-    [scope.tenantId, scope.appId, request.watermark, request.date_from, request.date_to, request.metric_names ?? null, candidateIds ?? null]);
+    [scope.tenantId, scope.appId, request.watermark, request.date_from, request.date_to, correctionMetricNames(request.metric_names) ?? null, candidateIds ?? null]);
   if (candidates.rows.length > 100) throw new Error("metric_recalculation_selection_limit");
   const matchedRecords = new Set<string>();
   for (const row of candidates.rows) {
     if (!committedReceipt && !eligible.some(event => event.received_at > row.watermark)) continue;
+    // Counts/cost/CPI are companions, not individually affected by a revenue event.
+    if (isBasisAcquisitionReplay(row.replay) && !supportsLateMetric(row.replay!)) continue;
     let reason: string | null = null;
     if (row.replay?.version !== 1 || !row.replay.evaluation || !row.replay.fx_policy) reason = "replay_unavailable";
     else if (!supportsLateMetric(row.replay)) reason = "unsupported_definition";
@@ -217,6 +222,7 @@ export async function selectLateMetricInputs(
     }
     selection.rows.push({ metric_run_id: row.metric_run_id, replay: row.replay, safe_reason: reason });
   }
+  selection.rows = expandAcquisitionCompanions(scope, candidates.rows, selection.rows);
   if (selection.rows.length) selection.status = "selected";
   counts.matched_to_supported_runs = matchedRecords.size;
   counts.not_matched_to_supported_runs = eligible.length - matchedRecords.size;

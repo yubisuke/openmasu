@@ -30,6 +30,44 @@ Numerator/denominator and summand links point to the actual saved run details.
 JSON/CSV append `acquisition_kpi_set_key`; old CSV columns keep their order.
 Legacy reports, definitions and results remain readable without relabeling.
 
+## Select a separate platform or imported-provider set
+
+The same eight roles also have two explicit, opt-in definition families:
+
+| Population | Metric names | Definition version / bundle | Required selection |
+| --- | --- | --- | --- |
+| Native first-party click | `acquisition_d7_*` | `0.4.23` / `metric-acquisition-kpis` | Existing native profile |
+| Verified platform | `platform_acquisition_d7_*` | `0.4.30` / `metric-basis-acquisition-kpis` | `acquisition_basis: selected_verified_platform` |
+| Imported provider | `imported_acquisition_d7_*` | `0.4.30` / `metric-basis-acquisition-kpis` | `acquisition_basis: selected_imported_provider` and one exact `import_provider` |
+
+Select all eight definitions from the same family. Code constructing a private
+schedule can use `basisAcquisitionKpiDefinitions("selected_verified_platform")`
+or `basisAcquisitionKpiDefinitions("selected_imported_provider", "synthetic-alpha")`
+from `@openmasu/contracts/definitions`; the latter provider is an invented example.
+The factory returns the closed definitions, not a scheduled job or an import.
+Supply them to the existing metric definitions file or schedule API, with the
+same explicit cohort grouping, cutoff and FX policy as the native profile. Keep
+private provider configuration outside this public checkout. There is no
+automatic provider discovery and no implicit switch of existing schedules.
+
+These profiles remain **UTC install cohorts and elapsed D7 only**. The panel
+labels the acquisition basis and, for imported evidence, the exact provider.
+Provider-reported attribution is not native attribution or independent evidence
+of provider completeness. A platform set does not include Apple aggregate
+postbacks. Identical campaign names do not make these populations equivalent:
+the same installation can be represented in different evidence bases, so do not
+sum the panels into a cross-basis installation or revenue total.
+
+The new calculation-set identity binds basis and exact provider even when no
+population or cost was found. Provider A cannot supply missing roles for provider
+B. A missing role, unmatched definition/context, partial page, inconsistent
+snapshot or different cutoff does not produce a joined set. Undefined cost or
+overlapping-cost refusal remains visible in its saved cell; it is not filled from
+another population. Pending corrections and immature windows stay blocked.
+Native `saved-acquisition-d7-v1` keys remain byte-identical. New profiles use
+`saved-acquisition-d7-v2`; JSON and CSV still use the same
+`acquisition_kpi_set_key` field without reordering existing columns.
+
 ## Period totals and weighted ratios
 
 Open [Saved daily analyses](dashboard-analysis.md#saved-daily-analyses-and-previous-periods)
@@ -45,6 +83,12 @@ and grain), and each date's conservative nine-day maturity. Snapshot IDs and
 watermarks may differ across dates. Missing/duplicate dates or roles,
 correction-pending, superseded and privacy-unavailable evidence block the side.
 Missing cost or FX is not zero; there is no partial sum.
+Platform and each exact imported provider also remain separate in daily alignment,
+period summaries, HTML and CSV, even with identical campaign/date labels. Their
+presentation dimensions include `acquisition_basis` and, where applicable,
+`import_provider`; these are report labels, not new event-contract grouping fields.
+Legacy native daily/period identity is unchanged. Incomplete or unverified new
+contexts cannot borrow native rows or another provider's operands.
 
 Sum the integer operands first, then use the existing half-even arithmetic:
 
@@ -69,11 +113,11 @@ aggregates. Saved-source completeness remains **unknown**, even for ready sums.
 
 ## Meaning and refusal boundaries
 
-- The initial set uses **selected native first-party click** acquisition, UTC
-  install dates, elapsed D7 revenue and current disjoint acquisition-day costs.
-  Imported-provider, verified-platform, Apple aggregate, re-engagement,
-  calendar-zone and detail-grain profiles stay separate; this table does not
-  claim their populations are covered or blend them into native acquisition.
+- The native set uses **selected native first-party click** acquisition; the
+  explicit platform and imported-provider sets use their separately selected
+  evidence populations. All use UTC install dates, elapsed D7 revenue and current
+  disjoint acquisition-day costs. Apple aggregate, re-engagement, calendar-zone
+  and detail-grain profiles are not included in this KPI panel.
 - Cost sums individually converted rows. CPI is
   `half_even(cost_micro_units / distinct_installations)`. Each ROAS is saved
   `half_even(revenue_micro_units * 10^6 / cost_micro_units)`. Purchase net is
@@ -87,7 +131,8 @@ aggregates. Saved-source completeness remains **unknown**, even for ready sums.
 - Overlapping grains make cost/CPI/ROAS undefined. Missing exact-date FX gives
   `missing_fx_rate`, never a partial sum. The captured policy can be historical
   single-rate FX or an explicit [dated snapshot](fx-snapshots.md).
-- The set key binds authenticated tenant/app scope, grouping, shared input snapshot, cutoff, full captured FX
+- The set key binds authenticated tenant/app scope, grouping, acquisition basis,
+  exact imported provider when applicable, shared input snapshot, cutoff, full captured FX
   digest, registered definition/bundle version, window and privacy/fraud mode.
   Counts deliberately retain the same cost snapshot even though count arithmetic
   needs no FX. Different keys, duplicate/missing roles and partial keyset pages
@@ -98,8 +143,24 @@ aggregates. Saved-source completeness remains **unknown**, even for ready sums.
   arrived or that a campaign is profitable. [Freshness observations](metric-freshness.md)
   retain that distinction; current deletion state is used throughout.
 
-The [independent oracle](../fixtures/v0.4/70-saved-acquisition-kpis/README.md)
+## Bounded saved corrections
+
+New platform/imported sets use the existing cost and late-input correction jobs.
+Selecting one new-profile metric expands to its fixed eight roles within the
+same captured selection. The set key, replay definition, FX, source snapshot,
+privacy mode and cutoff must agree; missing or ambiguous companions are
+`unsupported_definition`, not a partially updated decision panel. Jobs retain
+the existing 31-date and 100-run bounds. Automatic correction only uses its
+captured page: it does not fetch companions from another page or scan history.
+Select a smaller complete date range when a set cannot fit those bounds.
+Current deletion/retention and unavailable replay evidence remain authoritative.
+The historical native correction behavior is unchanged.
+
+The [native independent oracle](../fixtures/v0.4/70-saved-acquisition-kpis/README.md)
 hand-calculates two campaigns, organic and cost-only rows. TS/Python/SQL share
 the input and exact arithmetic; the existing Runtime CI supplies SQL evidence.
+The [basis-separated oracle](../fixtures/v0.4/77-basis-acquisition-kpis/README.md)
+adds exact-provider commerce, organic/unattributed/missing populations and an
+empty platform control without borrowing the imported installations.
 No dependency, service, table, provider connection, impression-derived CTR or
 CVR is added.

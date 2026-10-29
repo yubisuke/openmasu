@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
-import { acquirePrivacyTenantXactFence, normalizeMetricRecalculationRequest, revisedMetricCostPredicate, withTenant } from "@openmasu/runtime";
+import { acquirePrivacyTenantXactFence, correctionMetricNames, expandAcquisitionCompanions,
+  normalizeMetricRecalculationRequest, revisedMetricCostPredicate, withTenant, type CorrectionCandidate } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
 import { selectLateMetricInputs } from "./late-metric-inputs.js";
@@ -45,8 +46,17 @@ export async function requestMetricRecalculation(pool: Pool, identity: AppAdminI
     const source = imported.rows[0];
     if (!source) throw new Error("cost_revision_not_found");
     if (source.watermark_before_revision) throw new Error("metric_recalculation_watermark_before_revision");
-    const selected = await client.query<{ metric_run_id: string; replay: Record<string, any> | null }>(
-      `SELECT mr.metric_run_id,manifest.artifact AS replay FROM ledger.metric_runs AS mr
+    const selected = await client.query<CorrectionCandidate>(
+      `SELECT mr.metric_run_id,mr.artifact,mr.comparison_context,mr.grouping_digest,manifest.artifact AS replay,
+         EXISTS (SELECT 1 FROM control.metric_recalculation_items AS item WHERE item.tenant_id=mr.tenant_id
+           AND item.app_id=mr.app_id AND item.source_metric_run_id=mr.metric_run_id
+           AND item.state IN ('queued','processing','retry')) AS pending,
+         EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(mr.artifact->'evidence_refs','[]'::jsonb)) AS ref
+           LEFT JOIN ledger.raw_records_current AS raw ON raw.tenant_id=mr.tenant_id AND raw.app_id=mr.app_id AND raw.record_id=ref->>'ref'
+           LEFT JOIN ledger.cost_records AS cost ON cost.tenant_id=mr.tenant_id AND cost.app_id=mr.app_id AND cost.cost_record_id=ref->>'ref'
+           WHERE (raw.record_id IS NOT NULL AND raw.payload_lifecycle_status<>'available')
+             OR (raw.record_id IS NULL AND cost.cost_record_id IS NULL)) AS evidence_unavailable
+       FROM ledger.metric_runs AS mr
        LEFT JOIN control.metric_replay_manifests AS manifest ON manifest.tenant_id=mr.tenant_id
          AND manifest.app_id=mr.app_id AND manifest.source_metric_run_id=mr.metric_run_id
        WHERE mr.tenant_id=$1 AND mr.app_id=$2 AND ($6::text[] IS NULL OR mr.metric_name=ANY($6::text[]))
@@ -55,22 +65,25 @@ export async function requestMetricRecalculation(pool: Pool, identity: AppAdminI
          AND EXISTS (SELECT 1 FROM ledger.cost_records AS cost WHERE ${revisedMetricCostPredicate}
            AND cost.import_run_id=$3::uuid AND cost.cost_date BETWEEN $4::date AND $5::date)
        ORDER BY mr.metric_run_id COLLATE "C" LIMIT 101`,
-      [identity.tenantId, identity.appId, request.cost_import_run_id, request.date_from, request.date_to, request.metric_names ?? null]);
+      [identity.tenantId, identity.appId, request.cost_import_run_id, request.date_from, request.date_to, correctionMetricNames(request.metric_names) ?? null]);
     if (selected.rows.length > 100) throw new Error("metric_recalculation_selection_limit");
+    const rows = expandAcquisitionCompanions(identity, selected.rows, selected.rows.map(row => ({ ...row,
+      safe_reason: row.replay?.version === 1 && row.replay.metric_definition && row.replay.evaluation && row.replay.fx_policy
+        ? null : "replay_unavailable" })));
     await client.query(`INSERT INTO control.metric_recalculation_jobs
       (recalculation_id,tenant_id,app_id,request_digest,cost_import_run_id,cost_snapshot_digest,date_from,date_to,watermark,created_at)
       VALUES ($1,$2,$3,$4,$5::uuid,$6,$7::date,$8::date,$9,$10)`,
     [id, identity.tenantId, identity.appId, digest, request.cost_import_run_id, source.source_snapshot_digest, request.date_from, request.date_to, request.watermark, now.toISOString()]);
-    for (const row of selected.rows) {
-      const available = row.replay?.version === 1 && row.replay.metric_definition && row.replay.evaluation && row.replay.fx_policy;
+    for (const row of rows) {
+      const available = !row.safe_reason;
       await client.query(`INSERT INTO control.metric_recalculation_items
         (recalculation_id,tenant_id,app_id,source_metric_run_id,replay_digest,state,safe_reason)
         VALUES ($1,$2,$3,$4,$5,$6,$7)`, [id, identity.tenantId, identity.appId, row.metric_run_id,
-        available ? sha256(row.replay) : null, available ? "queued" : "unavailable", available ? null : "replay_unavailable"]);
+        row.replay ? sha256(row.replay) : null, available ? "queued" : "unavailable", row.safe_reason]);
     }
     await recordDashboardAuditWithClient(client, { tenantId: identity.tenantId, appId: identity.appId,
       actorRef: `admin_key:${identity.keyId}`, action: "metric_recalculation_requested", targetScope: "app", targetRef: id, outcome: "succeeded", now });
-    return { recalculation_id: id, selected_runs: selected.rows.length, replayed: false };
+    return { recalculation_id: id, selected_runs: rows.length, replayed: false };
   });
 }
 

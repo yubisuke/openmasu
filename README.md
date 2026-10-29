@@ -53,14 +53,15 @@ Do not bypass the upgrade preflight or reset a ledger you need to keep.
 Downloaded native SDK evidence is recorded in the publication receipt; it is
 not physical-device or all-platform onboarding evidence.
 
-Current source includes additions through contract patch `v0.4.29`; the wire
+Current source includes additions through contract patch `v0.4.30`; the wire
 identity remains `0.4.0` with schema URNs ending in `:v0.4`. See
 [current status](docs/STATUS.md) and [post-release scope](docs/releases/next.md).
 Use the matching tag and its documentation when evaluating a published release.
 
 Optional [scheduled aggregate comparisons](docs/recurring-comparisons.md) retain
 definition revisions and fixed-cutoff results in private operator storage, using
-the existing worker. They do not fetch providers or send notifications.
+the existing worker. They do not fetch providers. Notifications require an
+explicit comparison destination and reuse the existing signed webhook sender.
 
 ## Start with synthetic data
 
@@ -126,8 +127,8 @@ python -m pip install --require-hashes --requirement requirements-contract.txt
 npm run validate
 ```
 
-It checks 28 schemas, 8 registries, 76 reviewed synthetic fixtures, 988 golden
-output artifacts, 76 scenario assertions, 27 acceptance criteria,
+It checks 28 schemas, 8 registries, 77 reviewed synthetic fixtures, 1001 golden
+output artifacts, 77 scenario assertions, 27 acceptance criteria,
 TypeScript/Python determinism and RFC 8785 conformance, plus type, documentation,
 release-identity and public-data guardrails. It never regenerates goldens.
 Runtime, database and native SDK evidence have separate CI owners.

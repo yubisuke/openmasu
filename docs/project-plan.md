@@ -39,6 +39,8 @@ KPI totals, cost join diagnostics/backfill, inert link preview/resume and typed
 recurring comparisons with saved-run operands and explicit thresholds. Optional
 [first-party window selection](attribution-window.md) is previewed against
 retained evidence before activation; old receipts keep their rule revision.
+Saved D7 KPI sets now separate native, verified-platform and exact imported
+provider populations, including bounded same-set cost/late corrections.
 These source additions do not change the frozen rc.3 distribution.
 
 ## Implemented integration work

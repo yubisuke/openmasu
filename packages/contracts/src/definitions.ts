@@ -27,6 +27,7 @@ export { CALENDAR_ACTIVITY_BUNDLE, CALENDAR_ACTIVITY_VERSION, CALENDAR_ACTIVITY_
 export { STANDARD_RETENTION_DAYS, standardRetentionMetricDefinitions, standardRetentionClosesAt,
   type StandardRetentionDay } from "./standard-retention-definitions.js";
 export { ACQUISITION_KPI_METRIC_DEFINITIONS, ACQUISITION_KPI_VERSION, ACQUISITION_KPI_BUNDLE,
+  BASIS_ACQUISITION_KPI_VERSION, BASIS_ACQUISITION_KPI_BUNDLE, basisAcquisitionKpiDefinitions,
   ACQUISITION_KPI_ROLES, acquisitionKpiRole, type AcquisitionKpiRole } from "./acquisition-kpi-definitions.js";
 export { DATED_FX_POLICY_VERSION, DATED_FX_RATE_SELECTION, validDatedFxPolicy, canonicalDatedFxPolicy,
   selectDatedFxRate, projectDatedFxSnapshot, type DatedFxPolicyInput, type DatedFxRate } from "./fx-policy.js";
