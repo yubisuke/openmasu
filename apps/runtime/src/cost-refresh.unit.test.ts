@@ -62,11 +62,18 @@ describe("bounded cost refresh configuration", () => {
       const name = costRefreshSecretName("tenant-synthetic", "app-synthetic", "access_token");
       const apple = costRefreshSecretName("tenant-synthetic", "app-synthetic", "apple_ads_access_token");
       const google = ["google_client_id", "google_client_secret", "google_refresh_token"] as const;
+      const appleCredentials = ["apple_ads_client_id", "apple_ads_team_id", "apple_ads_key_id"] as const;
+      const privateKey = costRefreshSecretName("tenant-synthetic", "app-synthetic", "apple_ads_private_key");
+      const keyFile = join(directory, "synthetic-key.pem"); writeFileSync(keyFile, "synthetic-file-only-value");
       writeFileSync(registry, JSON.stringify({ [name]: { value: "synthetic-token" }, [apple]: { value: "synthetic-apple-token" },
-        ...Object.fromEntries(google.map(kind => [costRefreshSecretName("tenant-synthetic", "app-synthetic", kind), { value: `synthetic-${kind}` }])) }));
+        [privateKey]: { file: keyFile },
+        ...Object.fromEntries([...google, ...appleCredentials].map(kind => [costRefreshSecretName("tenant-synthetic", "app-synthetic", kind), { value: `synthetic-${kind}` }])) }));
       assert.equal(loadCostRefreshSecrets(registry).require(name), "synthetic-token");
       assert.equal(loadCostRefreshSecrets(registry).require(apple), "synthetic-apple-token");
-      for (const kind of google) assert.equal(loadCostRefreshSecrets(registry).require(costRefreshSecretName("tenant-synthetic", "app-synthetic", kind)), `synthetic-${kind}`);
+      for (const kind of [...google, ...appleCredentials]) assert.equal(loadCostRefreshSecrets(registry).require(costRefreshSecretName("tenant-synthetic", "app-synthetic", kind)), `synthetic-${kind}`);
+      assert.equal(loadCostRefreshSecrets(registry).require(privateKey), "synthetic-file-only-value");
+      writeFileSync(registry, JSON.stringify({ [privateKey]: { value: "synthetic-private-must-be-a-file-reference" } }));
+      assert.throws(() => loadCostRefreshSecrets(registry), { message: "cost_refresh_secret_registry_invalid" });
       writeFileSync(registry, JSON.stringify({ "private-must-not-leak": { value: "secret", file: "private-path" } }));
       assert.throws(() => loadCostRefreshSecrets(registry), { message: "cost_refresh_secret_registry_invalid" });
     } finally { rmSync(directory, { recursive: true, force: true }); }

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { generateKeyPairSync, verify, type KeyObject } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,6 +16,107 @@ const credentials = () => new EnvironmentSecretStore({
   [key("google_refresh_token")]: { value: "synthetic-refresh" },
   [key("developer_token")]: { value: "synthetic-developer" },
   [key("access_token")]: { value: "synthetic-static-must-not-win" },
+});
+
+const appleToken = (value: string) => Response.json({ access_token: value, token_type: "Bearer", expires_in: 3_600, scope: "searchadsorg" });
+function appleCredentials(path: string, appId = scope.appId): SecretStore {
+  return new EnvironmentSecretStore({
+    [key("apple_ads_client_id", appId)]: { value: "synthetic-apple-client" },
+    [key("apple_ads_team_id", appId)]: { value: "synthetic-apple-team" },
+    [key("apple_ads_key_id", appId)]: { value: "synthetic-apple-key" },
+    [key("apple_ads_private_key", appId)]: { file: path },
+    [key("apple_ads_access_token", appId)]: { value: "synthetic-static-must-not-win" },
+  });
+}
+async function withAppleKey(check: (path: string, keys: { privateKey: KeyObject; publicKey: KeyObject }) => Promise<void>): Promise<void> {
+  const root = mkdtempSync(join(tmpdir(), "openmasu-apple-auth-"));
+  try {
+    const path = join(root, "synthetic-private.pem"), keys = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    writeFileSync(path, keys.privateKey.export({ type: "pkcs8", format: "pem" }).toString().replaceAll("\n", "\r\n"));
+    await check(path, keys);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}
+
+describe("bounded Apple cost credential renewal", () => {
+  it("signs fresh five-minute P-256 client secrets and shares exchanges until access-token expiry", async () => withAppleKey(async (path, keys) => {
+    let now = Date.parse("2026-10-29T00:00:00.000Z"), calls = 0;
+    let release!: () => void;
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    const auth = new CostRefreshAuth({ now: () => now });
+    const fetcher: FetchLike = async (url, init) => {
+      const count = ++calls;
+      assert.equal(String(url), "https://appleid.apple.com/auth/oauth2/token");
+      assert.equal(init?.method, "POST"); assert.equal(init?.redirect, "error");
+      assert.equal((init?.headers as Record<string, string>).host, "appleid.apple.com");
+      const fields = new URLSearchParams(String(init?.body));
+      assert.equal(fields.get("grant_type"), "client_credentials"); assert.equal(fields.get("scope"), "searchadsorg");
+      assert.equal(fields.get("client_id"), "synthetic-apple-client");
+      const [header, payload, signature] = fields.get("client_secret")!.split(".");
+      assert.deepEqual(JSON.parse(Buffer.from(header, "base64url").toString()), { alg: "ES256", kid: "synthetic-apple-key" });
+      assert.deepEqual(JSON.parse(Buffer.from(payload, "base64url").toString()), {
+        iss: "synthetic-apple-team", sub: "synthetic-apple-client", aud: "https://appleid.apple.com",
+        iat: Math.floor(now / 1_000), exp: Math.floor(now / 1_000) + 300,
+      });
+      assert.equal(Buffer.from(signature, "base64url").length, 64);
+      assert.ok(verify("sha256", Buffer.from(`${header}.${payload}`), { key: keys.publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(signature, "base64url")));
+      if (count === 1) await blocked;
+      return appleToken(`synthetic-apple-access-${count}`);
+    };
+    const options = { ...scope, secrets: appleCredentials(path), fetch: fetcher };
+    const first = auth.apple(options), second = auth.apple(options);
+    assert.equal(calls, 1); release();
+    assert.deepEqual(await Promise.all([first, second]), [{ accessToken: "synthetic-apple-access-1" }, { accessToken: "synthetic-apple-access-1" }]);
+    now += 3_299_999; assert.equal((await auth.apple(options)).accessToken, "synthetic-apple-access-1");
+    now += 1; assert.equal((await auth.apple(options)).accessToken, "synthetic-apple-access-2"); assert.equal(calls, 2);
+  }));
+
+  it("isolates provider and app caches and invalidates rotated keys without accepting an old exchange into the new cache", async () => withAppleKey(async path => {
+    const auth = new CostRefreshAuth();
+    let finish!: () => void, calls = 0, googleCalls = 0;
+    const blocked = new Promise<void>(resolve => { finish = resolve; });
+    const fetcher: FetchLike = async url => {
+      if (String(url) === "https://oauth2.googleapis.com/token") return token(`synthetic-google-${++googleCalls}`);
+      const count = ++calls; if (count === 1) await blocked;
+      return appleToken(`synthetic-apple-${count}`);
+    };
+    const options = { ...scope, secrets: appleCredentials(path), fetch: fetcher };
+    const old = auth.apple(options);
+    writeFileSync(path, generateKeyPairSync("ec", { namedCurve: "prime256v1" }).privateKey.export({ type: "pkcs8", format: "pem" }));
+    assert.equal((await auth.apple(options)).accessToken, "synthetic-apple-2");
+    finish(); await old;
+    assert.equal((await auth.apple(options)).accessToken, "synthetic-apple-2");
+    const googleOptions = { ...scope, secrets: credentials(), fetch: fetcher };
+    assert.equal((await auth.google(googleOptions)).accessToken, "synthetic-google-1");
+    assert.equal((await auth.apple({ ...options, appId: "app-other", secrets: appleCredentials(path, "app-other") })).accessToken, "synthetic-apple-3");
+    auth.invalidate(scope, "apple_ads");
+    assert.equal((await auth.apple(options)).accessToken, "synthetic-apple-4");
+    assert.equal((await auth.google(googleOptions)).accessToken, "synthetic-google-1");
+    auth.invalidate(scope, "google_ads");
+    assert.equal((await auth.apple(options)).accessToken, "synthetic-apple-4");
+  }));
+
+  it("preserves static Apple tokens but rejects partial credentials, malformed keys and non-P-256 curves before sending", async () => withAppleKey(async path => {
+    const auth = new CostRefreshAuth(), forbidden: FetchLike = async () => { throw new Error("must not fetch"); };
+    const entries = { [key("apple_ads_access_token")]: { value: "synthetic-static-apple" } };
+    assert.deepEqual(await auth.apple({ ...scope, secrets: new EnvironmentSecretStore(entries), fetch: forbidden }), { accessToken: "synthetic-static-apple" });
+    await rejects(auth.apple({ ...scope, secrets: new EnvironmentSecretStore({ ...entries,
+      [key("apple_ads_key_id")]: { value: "synthetic-partial" } }), fetch: forbidden }), "reauth_required");
+    for (const pem of ["synthetic-not-a-private-key", generateKeyPairSync("ec", { namedCurve: "secp384r1" }).privateKey.export({ type: "pkcs8", format: "pem" })]) {
+      writeFileSync(path, pem);
+      await rejects(auth.apple({ ...scope, secrets: appleCredentials(path), fetch: forbidden }), "reauth_required");
+    }
+    await rejects(auth.apple({ ...scope, secrets: new EnvironmentSecretStore({}), fetch: forbidden }), "source_rejected");
+  }));
+
+  it("sanitizes rejected Apple clients and validates the granted scope while reusing bounded transient failure handling", async () => withAppleKey(async path => {
+    for (const status of [400, 401, 429, 503]) {
+      await rejects(new CostRefreshAuth().apple({ ...scope, secrets: appleCredentials(path), fetch: async () =>
+        Response.json({ error: "invalid_client", error_description: "synthetic-private-key-detail" }, { status }) }),
+      status >= 429 ? "source_unavailable" : "reauth_required");
+    }
+    await rejects(new CostRefreshAuth().apple({ ...scope, secrets: appleCredentials(path), fetch: async () =>
+      Response.json({ access_token: "synthetic", token_type: "Bearer", expires_in: 3_600, scope: "unrequested-scope" }) }), "source_invalid");
+  }));
 });
 const token = (value: string) => Response.json({ access_token: value, token_type: "Bearer", expires_in: 3_600 });
 const rejects = async (pending: Promise<unknown>, reason: CostRefreshAuthError["reason"]) => {

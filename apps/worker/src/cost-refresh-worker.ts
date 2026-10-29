@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
 import {
-  costRefreshRange, costRefreshSecretName, normalizeCostRefreshDefinition, uuidV7, withTenant,
+  costRefreshRange, normalizeCostRefreshDefinition, uuidV7, withTenant,
   EnvironmentSecretStore, type CostRefreshDefinition, type SecretStore,
 } from "@openmasu/runtime";
 import { fetchGoogleAds, type FetchLike } from "./import/adapters.js";
@@ -90,16 +90,6 @@ function sourceFailure(error: unknown): { reason: string; retry: boolean } {
 }
 
 async function acquire(claim: Claim, secrets: SecretStore, fetcher: FetchLike, timeoutMs: number, authentication: CostRefreshAuth): Promise<CostInput[]> {
-  const scoped: SecretStore = {
-    read: (name) => secrets.read(costRefreshSecretName(claim.tenant_id, claim.app_id,
-      name === "OPENMASU_APPLE_ADS_ACCESS_TOKEN" ? "apple_ads_access_token"
-        : name === "OPENMASU_GOOGLE_ADS_ACCESS_TOKEN" ? "access_token" : "developer_token")),
-    require(name) {
-      const value = this.read(name);
-      if (!value) throw new Error("cost_source_credentials_missing");
-      return value;
-    },
-  };
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout>;
   try {
@@ -107,7 +97,7 @@ async function acquire(claim: Claim, secrets: SecretStore, fetcher: FetchLike, t
       timer = setTimeout(() => { controller.abort(); reject(new Error("cost_acquisition_timeout")); }, timeoutMs);
     });
     const acquireRows = async (): Promise<CostInput[]> => {
-      let sourceSecrets = scoped;
+      let sourceSecrets: SecretStore;
       const authScope = { tenantId: claim.tenant_id, appId: claim.app_id };
       if (claim.definition.provider === "google_ads") {
         const credentials = await authentication.google({ ...authScope, secrets, fetch: fetcher, signal: controller.signal });
@@ -115,6 +105,9 @@ async function acquire(claim: Claim, secrets: SecretStore, fetcher: FetchLike, t
           OPENMASU_GOOGLE_ADS_ACCESS_TOKEN: { value: credentials.accessToken },
           OPENMASU_GOOGLE_ADS_DEVELOPER_TOKEN: { value: credentials.developerToken },
         });
+      } else {
+        const credentials = await authentication.apple({ ...authScope, secrets, fetch: fetcher, signal: controller.signal });
+        sourceSecrets = new EnvironmentSecretStore({ OPENMASU_APPLE_ADS_ACCESS_TOKEN: { value: credentials.accessToken } });
       }
       if (controller.signal.aborted) throw new Error("cost_acquisition_timeout");
       const common = {
@@ -128,8 +121,8 @@ async function acquire(claim: Claim, secrets: SecretStore, fetcher: FetchLike, t
           : fetchGoogleAds({ ...common, customerId: claim.definition.customer_id, loginCustomerId: claim.definition.login_customer_id,
             apiVersion: claim.definition.api_version, limits: claim.definition.limits, detail: claim.definition.detail }));
       } catch (error) {
-        if (claim.definition.provider === "google_ads" && error instanceof Error && /request failed with 401$/.test(error.message)) {
-          authentication.invalidate(authScope);
+        if (error instanceof Error && /request failed with 401$/.test(error.message)) {
+          authentication.invalidate(authScope, claim.definition.provider);
           throw new CostRefreshAuthError("reauth_required");
         }
         throw error;

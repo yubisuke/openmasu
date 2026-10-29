@@ -125,7 +125,8 @@ export function costRefreshRange(now: Date, definition: CostRefreshDefinition): 
 }
 
 export type CostRefreshSecretKind = "access_token" | "developer_token" | "apple_ads_access_token"
-  | "google_client_id" | "google_client_secret" | "google_refresh_token";
+  | "google_client_id" | "google_client_secret" | "google_refresh_token"
+  | "apple_ads_client_id" | "apple_ads_team_id" | "apple_ads_key_id" | "apple_ads_private_key";
 
 export function costRefreshSecretName(tenantId: string, appId: string, kind: CostRefreshSecretKind): string {
   const scope = createHash("sha256").update(JSON.stringify([tenantId, appId])).digest("hex");
@@ -141,11 +142,12 @@ export function loadCostRefreshSecrets(path: string): EnvironmentSecretStore {
     if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error();
     const entries: Record<string, SecretEntry> = {};
     for (const [name, entry] of Object.entries(value)) {
-      if (!/^cost_refresh:[a-f0-9]{64}:(access_token|developer_token|apple_ads_access_token|google_client_id|google_client_secret|google_refresh_token)$/.test(name)
+      if (!/^cost_refresh:[a-f0-9]{64}:(access_token|developer_token|apple_ads_access_token|google_client_id|google_client_secret|google_refresh_token|apple_ads_client_id|apple_ads_team_id|apple_ads_key_id|apple_ads_private_key)$/.test(name)
         || !entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error();
       const fields = entry as Record<string, unknown>;
       if (Object.keys(fields).length !== 1 || !["value", "file"].includes(Object.keys(fields)[0])
         || Object.values(fields).some((item) => typeof item !== "string" || item.length < 1 || item.length > 16_384)) throw new Error();
+      if (name.endsWith(":apple_ads_private_key") && typeof fields.file !== "string") throw new Error();
       entries[name] = fields as SecretEntry;
     }
     return new EnvironmentSecretStore(entries);

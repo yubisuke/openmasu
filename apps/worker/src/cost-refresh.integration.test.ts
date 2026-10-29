@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { generateKeyPairSync } from "node:crypto";
 import { once } from "node:events";
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -82,11 +83,11 @@ function source(amount = "2500000", config: { empty?: boolean; partialFailure?: 
 
 const appleRequest = { provider: "apple_ads", ad_account_id: "23501", app_store_id: "23502", campaign_ids: ["23503", "23504"],
   currency: "USD", account_time_zone: "America/New_York", lookback_days: 7, limits: { pageSize: 1 } };
-function appleSource(amount = "2.50", config: { failure?: number; duplicate?: boolean; empty?: boolean } = {}) {
+function appleSource(amount = "2.50", config: { failure?: number; duplicate?: boolean; empty?: boolean; accessToken?: string } = {}) {
   const requests: any[] = [];
   const fetcher: FetchLike = async (_url, init) => {
     const request = JSON.parse(String(init?.body)); requests.push(request);
-    assert.equal((init?.headers as Record<string, string>).authorization, "Bearer synthetic-apple-token");
+    assert.equal((init?.headers as Record<string, string>).authorization, `Bearer ${config.accessToken ?? "synthetic-apple-token"}`);
     const offset = request.pagination.offset;
     if (config.empty) return Response.json({ result: {} });
     if (offset && config.failure) return new Response("synthetic-private-provider-detail", { status: config.failure });
@@ -267,6 +268,65 @@ describe("durable bounded cost refresh", { concurrency: false }, () => {
     } finally { release(); }
     await authentication.google({ tenantId: identity.tenantId, appId: identity.appId, secrets: renewableSecrets(), fetch: fetcher });
     assert.equal(reportCalls, 0); assert.deepEqual(await counts(), { costs: 0, runs: 0 });
+  });
+  it("renews Apple scheduled cost across days and preserves history when reports or signing credentials are rejected", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "openmasu-apple-renewal-"));
+    try {
+      const path = join(directory, "synthetic-key.pem");
+      writeFileSync(path, generateKeyPairSync("ec", { namedCurve: "prime256v1" }).privateKey.export({ type: "pkcs8", format: "pem" }));
+      const secretName = (kind: Parameters<typeof costRefreshSecretName>[2]) => costRefreshSecretName(identity.tenantId, identity.appId, kind);
+      const credentials = new EnvironmentSecretStore({
+        [secretName("apple_ads_client_id")]: { value: "synthetic-apple-client" },
+        [secretName("apple_ads_team_id")]: { value: "synthetic-apple-team" },
+        [secretName("apple_ads_key_id")]: { value: "synthetic-apple-key-id" },
+        [secretName("apple_ads_private_key")]: { file: path },
+        [secretName("apple_ads_access_token")]: { value: "synthetic-static-must-not-win" },
+      });
+      const schedule = await register(appleRequest);
+      let tokenClock = now.getTime(), tokenCalls = 0, reportCalls = 0, rejected = false, unauthorized = false, amount = "2.50";
+      const authentication = new CostRefreshAuth({ now: () => tokenClock });
+      const fetcher: FetchLike = async (url, init) => {
+        if (String(url) === "https://appleid.apple.com/auth/oauth2/token") {
+          tokenCalls++;
+          if (rejected) return Response.json({ error: "invalid_client", error_description: "synthetic-private-rejected-key" }, { status: 400 });
+          return Response.json({ access_token: `synthetic-apple-renewed-${tokenCalls}`, token_type: "Bearer", expires_in: 3_600, scope: "searchadsorg" });
+        }
+        reportCalls++;
+        assert.equal(String(url), "https://api.ads.apple.com/v1/reports/apps/campaigns/query");
+        return appleSource(amount, { accessToken: `synthetic-apple-renewed-${tokenCalls}`, failure: unauthorized ? 401 : undefined }).fetcher(url, init);
+      };
+      const run = (date: Date) => processCostRefreshes(pool, identity.tenantId, { ...options(fetcher, date), secrets: credentials, authentication });
+      const snapshot = () => withTenant(pool, identity.tenantId, async client => ({
+        costs: (await client.query("SELECT cost_record_id,artifact FROM ledger.cost_records WHERE tenant_id=$1", [identity.tenantId])).rows,
+        runs: (await client.query("SELECT * FROM control.import_runs WHERE tenant_id=$1", [identity.tenantId])).rows,
+      }));
+      assert.equal((await run(now)).completed, 1);
+      const original = await snapshot();
+      tokenClock += 86_400_000; amount = "5.00"; await due(schedule.cost_schedule_id);
+      assert.equal((await run(new Date("2026-08-23T00:00:00.000Z"))).completed, 1);
+      assert.equal(tokenCalls, 2); assert.deepEqual(await counts(), { costs: 28, runs: 2 });
+      const history = await snapshot();
+      for (const row of original.costs) assert.equal(jcs(history.costs.find(candidate => candidate.cost_record_id === row.cost_record_id)), jcs(row));
+      assert.deepEqual(history.runs.find(row => row.import_run_id === original.runs[0].import_run_id), original.runs[0]);
+      unauthorized = true; await due(schedule.cost_schedule_id);
+      assert.equal((await run(new Date("2026-08-24T00:00:00.000Z"))).failed, 1);
+      assert.equal((await listCostSchedules(reader, identity))[0].safe_reason, "reauth_required");
+      assert.deepEqual(await snapshot(), history, "even a valid first report page remains unpublished after a 401");
+      await due(schedule.cost_schedule_id);
+      assert.equal((await run(new Date("2026-08-24T00:00:00.000Z"))).failed, 0);
+      assert.equal(tokenCalls, 2); assert.equal(reportCalls, 6);
+      await disableCostSchedule(pool, identity, schedule.cost_schedule_id);
+      const replacement = await register(appleRequest); rejected = true;
+      assert.equal((await run(new Date("2026-08-25T00:00:00.000Z"))).failed, 1);
+      assert.equal(tokenCalls, 3, "the report 401 invalidates the Apple token before the replacement schedule");
+      const health = (await listCostSchedules(reader, identity)).find(row => row.cost_schedule_id === replacement.cost_schedule_id)!;
+      assert.equal(health.state, "failed"); assert.equal(health.safe_reason, "reauth_required");
+      for (const forbidden of ["synthetic-apple-client", "synthetic-apple-key-id", "synthetic-private", "synthetic-apple-renewed", path, "PRIVATE KEY"]) {
+        assert.equal(JSON.stringify(health).includes(forbidden), false);
+      }
+      await due(replacement.cost_schedule_id); await run(new Date("2026-08-26T00:00:00.000Z"));
+      assert.equal(tokenCalls, 3); assert.equal(reportCalls, 6); assert.deepEqual(await snapshot(), history);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
   });
   it("publishes complete Apple pages through the shared worker, preserves revisions and never turns empty into zero", async () => {
     const google = await register();

@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createPrivateKey, sign } from "node:crypto";
 import { costRefreshSecretName, type CostRefreshSecretKind, type SecretStore } from "@openmasu/runtime";
 import type { FetchLike } from "./import/adapters.js";
 
@@ -12,6 +12,8 @@ type Token = { value: string; refreshAt: number };
 type Entry = { fingerprint: string; token?: Token; pending?: Promise<Token> };
 type Scope = { tenantId: string; appId: string };
 type TokenOptions = Scope & { secrets: SecretStore; fetch: FetchLike; signal?: AbortSignal };
+type Provider = "google_ads" | "apple_ads";
+const tokenEndpoints = { google_ads: "https://oauth2.googleapis.com/token", apple_ads: "https://appleid.apple.com/auth/oauth2/token" } as const;
 
 function waitForCaller<T>(pending: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) return pending;
@@ -29,8 +31,21 @@ function credential(secrets: SecretStore, scope: Scope, kind: CostRefreshSecretK
   try {
     const value = secrets.read(costRefreshSecretName(scope.tenantId, scope.appId, kind));
     if (value !== undefined && (typeof value !== "string" || value.length < 1 || value.length > 16_384
-      || /[\r\n\u0000]/.test(value))) throw new Error();
+      || (kind === "apple_ads_private_key" ? /\u0000/.test(value) : /[\r\n\u0000]/.test(value)))) throw new Error();
     return value;
+  } catch { throw new CostRefreshAuthError("reauth_required"); }
+}
+
+function appleClientSecret(clientId: string, teamId: string, keyId: string, pem: string, now: number): string {
+  try {
+    if (![clientId, teamId, keyId].every(value => /^[A-Za-z0-9._-]{1,256}$/.test(value))) throw new Error();
+    const key = createPrivateKey(pem);
+    if (key.asymmetricKeyType !== "ec" || key.asymmetricKeyDetails?.namedCurve !== "prime256v1") throw new Error();
+    const iat = Math.floor(now / 1_000);
+    const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+    const unsigned = `${encode({ alg: "ES256", kid: keyId })}.${encode({ iss: teamId, sub: clientId,
+      aud: "https://appleid.apple.com", iat, exp: iat + 300 })}`;
+    return `${unsigned}.${sign("sha256", Buffer.from(unsigned), { key, dsaEncoding: "ieee-p1363" }).toString("base64url")}`;
   } catch { throw new CostRefreshAuthError("reauth_required"); }
 }
 
@@ -80,8 +95,9 @@ export class CostRefreshAuth {
     }
   }
 
-  invalidate(scope: Scope): void {
-    this.entries.delete(costRefreshSecretName(scope.tenantId, scope.appId, "access_token"));
+  invalidate(scope: Scope, provider: Provider = "google_ads"): void {
+    this.entries.delete(costRefreshSecretName(scope.tenantId, scope.appId,
+      provider === "apple_ads" ? "apple_ads_access_token" : "access_token"));
   }
 
   async google(options: TokenOptions): Promise<{ accessToken: string; developerToken: string }> {
@@ -105,6 +121,36 @@ export class CostRefreshAuth {
     }
     if (configured !== 3) { this.entries.delete(key); throw new CostRefreshAuthError("reauth_required"); }
     const fingerprint = createHash("sha256").update(JSON.stringify([clientId, clientSecret, refreshToken])).digest("hex");
+    const token = await this.cached(key, fingerprint, "google_ads", () => new URLSearchParams({ grant_type: "refresh_token",
+      client_id: clientId!, client_secret: clientSecret!, refresh_token: refreshToken! }), options);
+    return { accessToken: token.value, developerToken };
+  }
+
+  async apple(options: TokenOptions): Promise<{ accessToken: string }> {
+    if (options.signal?.aborted) throw new CostRefreshAuthError("acquisition_timeout");
+    const key = costRefreshSecretName(options.tenantId, options.appId, "apple_ads_access_token");
+    let clientId: string | undefined, teamId: string | undefined, keyId: string | undefined, pem: string | undefined;
+    try {
+      clientId = credential(options.secrets, options, "apple_ads_client_id");
+      teamId = credential(options.secrets, options, "apple_ads_team_id");
+      keyId = credential(options.secrets, options, "apple_ads_key_id");
+      pem = credential(options.secrets, options, "apple_ads_private_key");
+    } catch (error) { this.entries.delete(key); throw error; }
+    const configured = [clientId, teamId, keyId, pem].filter(value => value !== undefined).length;
+    if (configured === 0) {
+      this.entries.delete(key);
+      const accessToken = credential(options.secrets, options, "apple_ads_access_token");
+      if (!accessToken) throw new CostRefreshAuthError("source_rejected");
+      return { accessToken };
+    }
+    if (configured !== 4) { this.entries.delete(key); throw new CostRefreshAuthError("reauth_required"); }
+    const fingerprint = createHash("sha256").update(JSON.stringify([clientId, teamId, keyId, pem])).digest("hex");
+    const token = await this.cached(key, fingerprint, "apple_ads", () => new URLSearchParams({ grant_type: "client_credentials",
+      client_id: clientId!, client_secret: appleClientSecret(clientId!, teamId!, keyId!, pem!, this.now()), scope: "searchadsorg" }), options);
+    return { accessToken: token.value };
+  }
+
+  private async cached(key: string, fingerprint: string, provider: Provider, body: () => URLSearchParams, options: TokenOptions): Promise<Token> {
     let entry = this.entries.get(key);
     if (entry?.fingerprint !== fingerprint) {
       this.entries.delete(key);
@@ -118,10 +164,10 @@ export class CostRefreshAuth {
     }
     // Refresh five minutes before expiry. The clock is local token validity,
     // independent from a saved cost run's report watermark or retry as_of.
-    if (entry.token && this.now() < entry.token.refreshAt) return { accessToken: entry.token.value, developerToken };
+    if (entry.token && this.now() < entry.token.refreshAt) return entry.token;
     if (!entry.pending) {
       const current = entry;
-      current.pending = this.exchange(clientId!, clientSecret!, refreshToken!, options.fetch).then(token => {
+      current.pending = this.exchange(provider, body, options.fetch).then(token => {
         if (this.entries.get(key) === current) current.token = token;
         current.pending = undefined;
         return token;
@@ -131,11 +177,10 @@ export class CostRefreshAuth {
         throw error;
       });
     }
-    const token = await waitForCaller(entry.pending!, options.signal);
-    return { accessToken: token.value, developerToken };
+    return waitForCaller(entry.pending!, options.signal);
   }
 
-  private async exchange(clientId: string, clientSecret: string, refreshToken: string, fetcher: FetchLike): Promise<Token> {
+  private async exchange(provider: Provider, fields: () => URLSearchParams, fetcher: FetchLike): Promise<Token> {
     const controller = new AbortController();
     const startedAt = this.now();
     let timer: ReturnType<typeof setTimeout>;
@@ -146,11 +191,10 @@ export class CostRefreshAuth {
       }, this.timeoutMs);
     });
     const request = async (): Promise<Token> => {
-      const response = await fetcher("https://oauth2.googleapis.com/token", {
+      const response = await fetcher(tokenEndpoints[provider], {
         method: "POST", redirect: "error", signal: controller.signal,
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ grant_type: "refresh_token", client_id: clientId,
-          client_secret: clientSecret, refresh_token: refreshToken }),
+        headers: { "content-type": "application/x-www-form-urlencoded", ...(provider === "apple_ads" ? { host: "appleid.apple.com" } : {}) },
+        body: fields(),
       });
       if (controller.signal.aborted) { void response.body?.cancel().catch(() => undefined); throw new CostRefreshAuthError("source_unavailable"); }
       if (!response.ok) {
@@ -163,7 +207,8 @@ export class CostRefreshAuth {
       if (typeof body.access_token !== "string" || !/^[\x21-\x7e]{1,16384}$/.test(body.access_token)
         || typeof body.token_type !== "string" || body.token_type.toLowerCase() !== "bearer"
         || typeof body.expires_in !== "number" || !Number.isSafeInteger(body.expires_in)
-        || body.expires_in < 1 || body.expires_in > 86_400) throw new CostRefreshAuthError("source_invalid");
+        || body.expires_in < 1 || body.expires_in > 86_400
+        || (provider === "apple_ads" && body.scope !== "searchadsorg")) throw new CostRefreshAuthError("source_invalid");
       return { value: body.access_token, refreshAt: startedAt + body.expires_in * 1_000 - 300_000 };
     };
     try { return await Promise.race([deadline, request()]); }
