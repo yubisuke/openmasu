@@ -15,6 +15,9 @@ New comparisons capture one shared, pure `summary` in JSON. Offline, dashboard
 and scheduled comparisons use this same projection. HTML displays it without
 recalculating stored results; an older result without a summary keeps its original
 rows and reports that the summary was not recorded.
+Legacy version-one scheduled comparisons keep their frozen canonical output and
+do not add a summary when replayed. Version-two scheduled comparisons capture the
+summary when calculating a new result; previously saved results are never rewritten.
 
 The summary counts equal, different, missing-left/right, undefined and currency
 mismatches. It shows up to ten nonzero absolute deltas per currency/value-type

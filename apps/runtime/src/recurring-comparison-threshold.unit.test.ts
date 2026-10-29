@@ -75,6 +75,7 @@ it("version two definitions bind policy while declaration maturity and unsupport
   assert.equal(parsed.definition.version, 2);
   const result = recurringComparisonResult(parsed.definition, parsed.definition.first_date, parsed.left, parsed.right);
   assert.equal(result.format, "scheduled-cohort-comparison-v2"); assert.equal(result.state, "within_threshold");
+  assert.ok("comparison" in result && result.comparison.summary);
   assert.ok("threshold_policy" in result); assert.deepEqual(result.threshold_policy, relative);
   const lower = parseComparisonRegistration({ ...registration, threshold: { ...relative, value_unscaled: "1" } });
   assert.notEqual(comparisonDigest(parsed.definition), comparisonDigest(lower.definition));
