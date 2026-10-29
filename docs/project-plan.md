@@ -46,6 +46,9 @@ cost or FX selection. All eight roles remain undefined before cohort-date
 midnight plus 2/32 days; schedules enforce those lags, corrections stay bounded
 to complete same-horizon sets, and historical D7 identities remain unchanged.
 These source additions do not change the frozen rc.3 distribution.
+Outbound webhooks keep stable event/subject references while rotating the signing
+key on the same destination. Bounded overlap, explicit retirement and queued
+revision binding reuse the existing encrypted outbox and administrator controls.
 
 ## Implemented integration work
 

@@ -4,6 +4,7 @@ import { request as httpsRequest } from "node:https";
 import type { LookupFunction } from "node:net";
 import type { Pool, PoolClient } from "pg";
 import { comparisonNotificationEligible, lockComparisonNotifications } from "@openmasu/runtime/recurring-comparisons";
+import { webhookSigningRevision } from "@openmasu/runtime/operator-webhook-signing";
 import {
   operatorWebhookReference,
   operatorWebhookSignature,
@@ -45,7 +46,7 @@ type DeliveryRow = {
   delivery_id: string;
   destination_id: string;
   endpoint_url: string;
-  secret_ref: string;
+  signing_revision: string;
   app_id: string;
   record_id: string;
   comparison_id: string | null;
@@ -87,11 +88,15 @@ export type PreparedOperatorWebhook = Readonly<{
 export type OperatorWebhookDeliveryResult =
   | Readonly<{ outcome: "accepted"; httpStatus: number }>
   | Readonly<{ outcome: "retry"; reason: string; httpStatus?: number }>
+  | Readonly<{ outcome: "suppressed"; reason: "signing_key_expired" }>
   | Readonly<{ outcome: "terminal"; reason: string; httpStatus?: number }>;
 
 export type OperatorWebhookTransportOptions = Readonly<{
   destinationAllowlist: readonly string[];
   attempt: number;
+  signingRevision?: number;
+  signingValidUntil?: string | null;
+  now?: () => Date;
   allowSyntheticLoopback?: boolean;
   timeoutMilliseconds?: number;
   maximumRequestBytes?: number;
@@ -201,6 +206,11 @@ export async function sendOperatorWebhook(
     }
     return { outcome: "terminal", reason: "endpoint_rejected" };
   }
+  // DNS and protected-payload reads may outlast an overlap deadline. Check at
+  // the request boundary, not only when the worker's batch was selected.
+  if (options.signingValidUntil && (options.now?.() ?? new Date()).valueOf() >= Date.parse(options.signingValidUntil)) {
+    return { outcome: "suppressed", reason: "signing_key_expired" };
+  }
   const signature = operatorWebhookSignature(secret, prepared.body);
   const requestFactory = resolved.url.protocol === "https:" ? httpsRequest : httpRequest;
   const lookup: LookupFunction = (_hostname, _options, callback) => {
@@ -220,6 +230,7 @@ export async function sendOperatorWebhook(
       "user-agent": "OpenMasu-Operator-Webhook/1",
       "x-openmasu-delivery-id": prepared.deliveryId,
       "x-openmasu-attempt": String(options.attempt),
+      "x-openmasu-key-revision": String(options.signingRevision ?? 1),
       "x-openmasu-signature": signature,
     },
   };
@@ -264,7 +275,7 @@ async function lockDestination(
 
 async function appendResult(
   client: PoolClient,
-  row: Pick<DeliveryRow, "delivery_id" | "destination_id" | "app_id" | "request_digest">,
+  row: Pick<DeliveryRow, "delivery_id" | "destination_id" | "app_id" | "request_digest" | "signing_revision">,
   tenantId: string,
   state: "retry" | "succeeded" | "failed" | "suppressed",
   attempt: number,
@@ -281,6 +292,7 @@ async function appendResult(
     attempt,
     occurred_at: occurredAt,
     request_digest: row.request_digest,
+    signing_revision: Number(row.signing_revision),
     ...(httpStatus ? { http_status: httpStatus } : {}),
     ...(reason ? { reason_code: reason } : {}),
   };
@@ -389,15 +401,18 @@ export async function discoverOperatorWebhookDeliveries(
           [tenantId, candidate.app_id, candidate.destination_id, candidate.record_id],
         );
         if (!eligible.rows[0]?.eligible) return false;
+        const signing = await webhookSigningRevision(client, { tenantId, appId: candidate.app_id },
+          candidate.destination_id, undefined, now);
+        if (!signing) return false;
         const result = await client.query(
           `INSERT INTO ephemeral.operator_webhook_deliveries (
              delivery_id,tenant_id,app_id,destination_id,logical_event_id,record_id,event_name,
-             request_ref,request_digest,state,attempts,next_attempt_at,created_at,updated_at
-           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'queued',0,$10,$11,$12)
+             request_ref,request_digest,state,attempts,next_attempt_at,created_at,updated_at,signing_revision
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'queued',0,$10,$11,$12,$13)
            ON CONFLICT (tenant_id,app_id,destination_id,logical_event_id) DO NOTHING`,
           [deliveryId, tenantId, candidate.app_id, candidate.destination_id, candidate.logical_event_id,
             candidate.record_id, candidate.event_name, requestRef, prepared.requestDigest,
-            now.toISOString(), now.toISOString(), now.toISOString()],
+            now.toISOString(), now.toISOString(), now.toISOString(), signing.signing_revision],
         );
         return result.rowCount === 1;
       });
@@ -460,9 +475,10 @@ export async function processOperatorWebhookDeliveries(
         candidate.rows[0].app_id,
         candidate.rows[0].destination_id,
       );
+      const attemptAt = options.now?.() ?? new Date();
       const selected = await client.query<DeliveryRow>(
         `SELECT delivery.delivery_id::text,delivery.destination_id,destination.endpoint_url,
-                destination.secret_ref,delivery.app_id,delivery.record_id,delivery.comparison_id,delivery.request_ref,
+                delivery.signing_revision::text,delivery.app_id,delivery.record_id,delivery.comparison_id,delivery.request_ref,
                 delivery.request_digest,delivery.state,delivery.attempts,delivery.created_at,
                 destination.status AS destination_status,
                 raw.payload_lifecycle_status,raw.withdrawal_recognized_at,
@@ -482,27 +498,33 @@ export async function processOperatorWebhookDeliveries(
           WHERE delivery.tenant_id=$1 AND delivery.delivery_id=$2
             AND delivery.state IN ('queued','retry') AND delivery.next_attempt_at <= $3
           FOR UPDATE OF delivery`,
-        [tenantId, deliveryId, now.toISOString()],
+        [tenantId, deliveryId, attemptAt.toISOString()],
       );
       const row = selected.rows[0];
       if (!row) return;
       appId = row.app_id;
       const attempt = row.attempts + 1;
+      const signing = await webhookSigningRevision(client, { tenantId, appId: row.app_id },
+        row.destination_id, Number(row.signing_revision), attemptAt);
       const suppressed = row.destination_status !== "active"
         ? "destination_disabled"
+        : !signing ? "signing_key_unavailable"
+        : signing.state === "retired" ? "signing_key_retired"
+        : signing.state === "expired" ? "signing_key_expired"
         : row.comparison_id
-          ? await comparisonNotificationEligible(client, { tenantId,appId:row.app_id }, row.delivery_id, now) ? undefined : "comparison_suppressed"
+          ? await comparisonNotificationEligible(client, { tenantId,appId:row.app_id }, row.delivery_id, attemptAt) ? undefined : "comparison_suppressed"
         : row.payload_lifecycle_status !== "available" || row.withdrawal_recognized_at || row.tombstoned
           ? "privacy_suppressed"
           : undefined;
-      if (suppressed) {
+      if (suppressed || !signing) {
+        const reason = suppressed ?? "signing_key_unavailable";
         await client.query(
           `UPDATE ephemeral.operator_webhook_deliveries
               SET state='suppressed',attempts=$3,safe_reason=$4,updated_at=$5
             WHERE tenant_id=$1 AND delivery_id=$2`,
-          [tenantId, row.delivery_id, attempt, suppressed, now.toISOString()],
+          [tenantId, row.delivery_id, attempt, reason, attemptAt.toISOString()],
         );
-        await appendResult(client, row, tenantId, "suppressed", attempt, now.toISOString(), suppressed);
+        await appendResult(client, row, tenantId, "suppressed", attempt, attemptAt.toISOString(), reason);
         purgeRef = row.request_ref;
         processed += 1;
         return;
@@ -511,16 +533,16 @@ export async function processOperatorWebhookDeliveries(
       let body: Buffer;
       try {
         [secret, body] = await Promise.all([
-          payloadStore.read(row.secret_ref), payloadStore.read(row.request_ref),
+          payloadStore.read(signing.secret_ref), payloadStore.read(row.request_ref),
         ]);
       } catch {
         await client.query(
           `UPDATE ephemeral.operator_webhook_deliveries
               SET state='failed',attempts=$3,safe_reason='protected_payload_unavailable',updated_at=$4
             WHERE tenant_id=$1 AND delivery_id=$2`,
-          [tenantId, row.delivery_id, attempt, now.toISOString()],
+          [tenantId, row.delivery_id, attempt, attemptAt.toISOString()],
         );
-        await appendResult(client, row, tenantId, "failed", attempt, now.toISOString(), "protected_payload_unavailable");
+        await appendResult(client, row, tenantId, "failed", attempt, attemptAt.toISOString(), "protected_payload_unavailable");
         purgeRef = row.request_ref;
         processed += 1;
         return;
@@ -530,9 +552,9 @@ export async function processOperatorWebhookDeliveries(
           `UPDATE ephemeral.operator_webhook_deliveries
               SET state='failed',attempts=$3,safe_reason='request_digest_mismatch',updated_at=$4
             WHERE tenant_id=$1 AND delivery_id=$2`,
-          [tenantId, row.delivery_id, attempt, now.toISOString()],
+          [tenantId, row.delivery_id, attempt, attemptAt.toISOString()],
         );
-        await appendResult(client, row, tenantId, "failed", attempt, now.toISOString(), "request_digest_mismatch");
+        await appendResult(client, row, tenantId, "failed", attempt, attemptAt.toISOString(), "request_digest_mismatch");
         purgeRef = row.request_ref;
         processed += 1;
         return;
@@ -546,13 +568,17 @@ export async function processOperatorWebhookDeliveries(
       }, secret, {
         destinationAllowlist: options.destinationAllowlist,
         attempt,
+        signingRevision: signing.signing_revision,
+        signingValidUntil: signing.valid_until,
+        now: options.now,
         allowSyntheticLoopback: options.allowSyntheticLoopback,
         lookup: options.lookup,
         timeoutMilliseconds: options.timeoutMilliseconds,
       });
-      let state: "retry" | "succeeded" | "failed";
+      let state: "retry" | "succeeded" | "failed" | "suppressed";
       let reason: string | undefined;
       if (result.outcome === "accepted") state = "succeeded";
+      else if (result.outcome === "suppressed") { state = "suppressed"; reason = result.reason; }
       else if (result.outcome === "terminal" || attempt >= maximumAttempts) {
         state = "failed";
         reason = result.outcome === "terminal" ? result.reason : "retry_exhausted";
@@ -560,7 +586,8 @@ export async function processOperatorWebhookDeliveries(
         state = "retry";
         reason = result.reason;
       }
-      const nextAttemptAt = new Date(now.valueOf() + Math.min(3_600_000, 60_000 * (2 ** Math.min(attempt - 1, 6))));
+      const completedAt = options.now?.() ?? new Date();
+      const nextAttemptAt = new Date(completedAt.valueOf() + Math.min(3_600_000, 60_000 * (2 ** Math.min(attempt - 1, 6))));
       await client.query(
         `UPDATE ephemeral.operator_webhook_deliveries
             SET state=$3,attempts=$4,next_attempt_at=$5,last_http_status=$6,
@@ -568,9 +595,9 @@ export async function processOperatorWebhookDeliveries(
           WHERE tenant_id=$1 AND delivery_id=$2`,
         [tenantId, row.delivery_id, state, attempt, nextAttemptAt.toISOString(),
           "httpStatus" in result ? result.httpStatus ?? null : null,
-          reason ?? null, now.toISOString()],
+          reason ?? null, completedAt.toISOString()],
       );
-      await appendResult(client, row, tenantId, state, attempt, now.toISOString(), reason,
+      await appendResult(client, row, tenantId, state, attempt, completedAt.toISOString(), reason,
         "httpStatus" in result ? result.httpStatus : undefined);
       if (state !== "retry") purgeRef = row.request_ref;
       processed += 1;

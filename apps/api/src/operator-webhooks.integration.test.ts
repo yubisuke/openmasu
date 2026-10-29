@@ -20,6 +20,7 @@ import { ensureAdminKeys } from "./admin-auth.js";
 import { KeyedTokenBucket } from "./rate-limit.js";
 import { createRequestHandler } from "./router.js";
 import { signServerRequest } from "./server-auth.js";
+import { rotateOperatorWebhookSigningKey, retireOperatorWebhookSigningKey } from "./operator-webhooks-admin.js";
 
 const run = randomBytes(6).toString("hex");
 const tenantId = `tenant-webhook-${run}`;
@@ -41,9 +42,10 @@ let receiverOrigin = "";
 let serverKeyId = "";
 let serverSecret = "";
 let webhookSigningSecret = "";
-const received: Array<{ path: string; body: Buffer; signature: string; deliveryId: string }> = [];
+const received: Array<{ path: string; body: Buffer; signature: string; deliveryId: string; signingRevision: string }> = [];
 let deliverStatuses = [500, 204];
 let comparisonStatuses = [500, 204];
+let rotationStatuses = [500, 204];
 let raceGate: {
   entered: Promise<void>;
   release: Promise<void>;
@@ -126,13 +128,15 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
         body: Buffer.concat(chunks),
         signature: String(request.headers["x-openmasu-signature"] ?? ""),
         deliveryId: String(request.headers["x-openmasu-delivery-id"] ?? ""),
+        signingRevision: String(request.headers["x-openmasu-key-revision"] ?? ""),
       });
       if (request.url === "/race" && raceGate) {
         raceGate.markEntered();
         await raceGate.release;
       }
       const status = request.url === "/deliver" ? (deliverStatuses.shift() ?? 204)
-        : request.url === "/comparison" ? (comparisonStatuses.shift() ?? 204) : 204;
+        : request.url === "/comparison" ? (comparisonStatuses.shift() ?? 204)
+        : request.url === "/rotation" ? (rotationStatuses.shift() ?? 204) : 204;
       response.writeHead(status);
       response.end();
     });
@@ -209,15 +213,19 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
     assert.equal((await admin(commandPath,{method:"POST",headers:{authorization:`Bearer ${operatorKey}`},body:JSON.stringify(settings)})).status,403);
     assert.equal((await configure({destination_id:"webhook:unavailable"})).status,400);
     assert.equal((await configure()).status,200);
+    const comparisonSigning = await rotateOperatorWebhookSigningKey({ pool, payloadStore,
+      identity: { ...scope, keyId: "synthetic-comparison-rotation", role: "admin" }, destinationId: destination.destination_id,
+      body: { expected_revision: 1, overlap_seconds: 0 }, now: clock(10) });
     assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(10)),1);
     const queuedTimestamp=await withTenant(pool,tenantId,async c=>(await c.query<{
-      next_attempt_at:Date;created_at:string;updated_at:string;
-    }>(`SELECT next_attempt_at,created_at,updated_at FROM ephemeral.operator_webhook_deliveries
+      next_attempt_at:Date;created_at:string;updated_at:string;signing_revision:string;
+    }>(`SELECT next_attempt_at,created_at,updated_at,signing_revision::text FROM ephemeral.operator_webhook_deliveries
       WHERE tenant_id=$1 AND app_id=$2 AND comparison_id=$3`,[tenantId,appId,saved.comparison_id])).rows);
     assert.equal(queuedTimestamp.length,1);
     assert.equal(queuedTimestamp[0].next_attempt_at.toISOString(),clock(10).toISOString());
     assert.equal(queuedTimestamp[0].created_at,clock(10).toISOString());
     assert.equal(queuedTimestamp[0].updated_at,clock(10).toISOString());
+    assert.equal(queuedTimestamp[0].signing_revision,"2");
     assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(10)),0);
     const dispatch=(now:Date,extra:Record<string,unknown>={})=>processOperatorWebhookDeliveries(pool,payloadStore,tenantId,{
       enabled:true,destinationAllowlist:[receiverOrigin],allowSyntheticLoopback:true,now:()=>now,...extra });
@@ -226,7 +234,8 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
     const attempts=received.filter(entry=>entry.path==="/comparison");
     assert.equal(attempts.length,2); assert.equal(attempts[0].deliveryId,attempts[1].deliveryId);
     assert.deepEqual(attempts[0].body,attempts[1].body);
-    assert.equal(attempts[0].signature,`sha256=${createHmac("sha256",Buffer.from(destination.signing_secret)).update(attempts[0].body).digest("hex")}`);
+    assert.equal(attempts[0].signingRevision,"2"); assert.equal(attempts[1].signingRevision,"2");
+    assert.equal(attempts[0].signature,`sha256=${createHmac("sha256",Buffer.from(comparisonSigning.signing_secret)).update(attempts[0].body).digest("hex")}`);
     assert.equal(JSON.parse(attempts[0].body.toString()).state,"threshold_exceeded");
     assert.doesNotMatch(attempts[0].body.toString(),/value_unscaled|grouping|installation_id|record_id|payload|Synthetic daily/);
     assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(10,120)),0,"worker restart uses saved transition state");
@@ -504,7 +513,13 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
         WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3`,
       [tenantId, appId, destination.destination_id],
     )).rows[0]!.secret_ref);
-    assert.equal((await payloadStore.read(protectedReference)).toString("utf8"), destination.signing_secret);
+    const revisionReferences = await withTenant(pool, tenantId, async client => (await client.query<{ secret_ref: string }>(
+      `SELECT secret_ref FROM control.operator_webhook_signing_revisions
+        WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3`, [tenantId, appId, destination.destination_id])).rows);
+    assert.notEqual((await payloadStore.read(protectedReference)).toString("utf8"), destination.signing_secret,
+      "reference identity key is not the returned transport signing key");
+    assert.equal(revisionReferences.length, 1);
+    assert.equal((await payloadStore.read(revisionReferences[0].secret_ref)).toString("utf8"), destination.signing_secret);
     const eventId = `event:webhook-disable:${run}`;
     assert.equal((await submit(eventId, `installation:webhook-disable:${run}`)).status, 202);
     await processSdkInbox(pool, payloadStore, tenantId);
@@ -536,6 +551,7 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
       )).rows[0]!.status_changed_at)),
     });
     await assert.rejects(() => payloadStore.read(protectedReference));
+    for (const revision of revisionReferences) await assert.rejects(() => payloadStore.read(revision.secret_ref));
     await assert.rejects(() => payloadStore.read(pendingRef));
     const suppressed = await withTenant(pool, tenantId, async (client) => (await client.query<{ state: string }>(
       `SELECT state FROM ephemeral.operator_webhook_deliveries
@@ -547,5 +563,183 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
     const text = await listed.text();
     assert.equal(text.includes(destination.signing_secret), false);
     assert.match(text, /disabled/);
+  });
+
+  it("preserves migrated shared-key references after rotation and retirement while new delivery uses the new key", async () => {
+    const destinationId = `webhook:synthetic-legacy-${run}`, createdAt = new Date().toISOString();
+    const sharedKey = Buffer.from(`synthetic-legacy-webhook-key-${randomBytes(32).toString("base64url")}`);
+    const secretRef = await payloadStore.write({ tenantId, appId, objectId: `legacy-webhook-${run}` }, sharedKey);
+    // This is the exact post-migration shape, not the new separate-key registration path.
+    await withTenant(pool, tenantId, async client => {
+      await client.query(`INSERT INTO control.operator_webhook_destinations
+        (destination_id,tenant_id,app_id,endpoint_url,allowed_events,secret_ref,created_at,artifact)
+        VALUES ($1,$2,$3,$4,ARRAY['custom_event']::text[],$5,$6,$7::jsonb)`,
+      [destinationId, tenantId, appId, `${receiverOrigin}/legacy`, secretRef, createdAt, JSON.stringify({
+        destination_id: destinationId, tenant_id: tenantId, app_id: appId, endpoint_url: `${receiverOrigin}/legacy`, events: ["custom_event"], created_at: createdAt })]);
+      await client.query(`INSERT INTO control.operator_webhook_signing_revisions
+        (tenant_id,app_id,destination_id,signing_revision,secret_ref,created_at,previous_valid_until)
+        VALUES ($1,$2,$3,1,$4,$5,NULL)`, [tenantId, appId, destinationId, secretRef, createdAt]);
+      await client.query(`INSERT INTO control.operator_webhook_destination_states
+        (destination_id,tenant_id,app_id,status,changed_at,artifact) VALUES ($1,$2,$3,'active',$4,$5::jsonb)`,
+      [destinationId, tenantId, appId, createdAt, JSON.stringify({ destination_id: destinationId, status: "active", changed_at: createdAt })]);
+    });
+    const installationId = `installation:webhook-legacy:${run}`;
+    const send = async (suffix: string, now: Date) => {
+      const eventId = `event:webhook-legacy-${suffix}:${run}`;
+      assert.equal((await submit(eventId, installationId)).status, 202);
+      await processSdkInbox(pool, payloadStore, tenantId);
+      await discoverOperatorWebhookDeliveries(pool, payloadStore, tenantId, now);
+      const row = await withTenant(pool, tenantId, async client => (await client.query<{ delivery_id: string; logical_event_id: string }>(
+        `SELECT q.delivery_id::text,q.logical_event_id FROM ephemeral.operator_webhook_deliveries q
+        JOIN ledger.raw_records r USING(tenant_id,app_id,record_id)
+        WHERE q.tenant_id=$1 AND q.app_id=$2 AND q.destination_id=$3 AND r.event_id=$4`, [tenantId, appId, destinationId, eventId])).rows[0]);
+      assert.ok(row);
+      await processOperatorWebhookDeliveries(pool, payloadStore, tenantId, {
+        enabled: true, destinationAllowlist: [receiverOrigin], allowSyntheticLoopback: true, now: () => now });
+      const delivery = received.find(entry => entry.deliveryId === row.delivery_id)!;
+      assert.ok(delivery);
+      return { delivery, logicalEventId: row.logical_event_id, event: JSON.parse(delivery.body.toString()).event };
+    };
+    const before = await send("before", new Date(Date.now() + 1000));
+    assert.equal(before.delivery.signingRevision, "1");
+    assert.equal(before.delivery.signature, `sha256=${createHmac("sha256", sharedKey).update(before.delivery.body).digest("hex")}`);
+    const command = { pool, payloadStore, identity: { tenantId, appId, keyId: "synthetic-legacy-rotation", role: "admin" as const }, destinationId };
+    const rotationAt = new Date(Date.now() + 2000);
+    const rotated = await rotateOperatorWebhookSigningKey({ ...command, body: { expected_revision: 1 }, now: rotationAt });
+    await retireOperatorWebhookSigningKey({ ...command, body: { expected_revision: 2, signing_revision: 1 }, now: rotationAt });
+    const retainedKey = await payloadStore.read(secretRef);
+    assert.deepEqual(retainedKey, sharedKey, "retirement cannot purge a migrated reference identity key");
+    const after = await send("after", new Date(rotationAt.valueOf() + 1000));
+    assert.equal(after.delivery.signingRevision, "2");
+    assert.equal(after.delivery.signature, `sha256=${createHmac("sha256", Buffer.from(rotated.signing_secret)).update(after.delivery.body).digest("hex")}`);
+    assert.equal(after.event.subject_ref, before.event.subject_ref);
+    for (const value of [before, after]) {
+      assert.equal(value.event.subject_ref, createHmac("sha256", retainedKey).update(`openmasu:subject_ref:v1\0${installationId}`).digest("hex"));
+      assert.equal(value.event.event_ref, createHmac("sha256", retainedKey).update(`openmasu:event_ref:v1\0${value.logicalEventId}`).digest("hex"));
+    }
+    assert.equal(await discoverOperatorWebhookDeliveries(pool, payloadStore, tenantId, new Date(rotationAt.valueOf() + 2000)), 0,
+      "rotation neither recreates old events nor changes their identity");
+    assert.equal((await admin(`/v1/admin/apps/${appId}/operator-webhooks/${encodeURIComponent(destinationId)}/disable`,
+      { method: "POST", body: "{}" })).status, 200);
+    await assert.rejects(payloadStore.read(secretRef));
+  });
+
+  it("pins queued signing revisions, keeps references stable, and suppresses expired or retired keys without requests", async () => {
+    const response = await admin(`/v1/admin/apps/${appId}/operator-webhooks`, { method: "POST",
+      body: JSON.stringify({ endpoint_url: `${receiverOrigin}/rotation`, events: ["custom_event"] }) });
+    assert.equal(response.status, 201);
+    const destination = await response.json() as { destination_id: string; signing_revision: number; signing_secret: string };
+    assert.equal(destination.signing_revision, 1);
+    const destinationId = destination.destination_id, scope = { tenantId, appId };
+    const identity = { ...scope, keyId: "synthetic-webhook-rotation-admin", role: "admin" as const };
+    const command = { pool, payloadStore, identity, destinationId };
+    const t0 = Date.now() + 1000, at = (seconds: number) => new Date(t0 + seconds * 1000);
+    const baseRef = await withTenant(pool, tenantId, async client => (await client.query<{ secret_ref: string }>(
+      `SELECT secret_ref FROM control.operator_webhook_destinations WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3`,
+      [tenantId, appId, destinationId])).rows[0].secret_ref);
+    const referenceKey = await payloadStore.read(baseRef);
+    assert.notEqual(referenceKey.toString(), destination.signing_secret);
+    const installationId = `installation:webhook-rotation:${run}`;
+    const queue = async (suffix: string, seconds: number) => {
+      const eventId = `event:webhook-rotation-${suffix}:${run}`;
+      assert.equal((await submit(eventId, installationId)).status, 202);
+      await processSdkInbox(pool, payloadStore, tenantId);
+      await discoverOperatorWebhookDeliveries(pool, payloadStore, tenantId, at(seconds));
+      return withTenant(pool, tenantId, async client => (await client.query<{
+        delivery_id: string; request_ref: string; request_digest: string; signing_revision: string; logical_event_id: string;
+      }>(`SELECT q.delivery_id::text,q.request_ref,q.request_digest,q.signing_revision::text,q.logical_event_id
+        FROM ephemeral.operator_webhook_deliveries q JOIN ledger.raw_records r USING(tenant_id,app_id,record_id)
+        WHERE q.tenant_id=$1 AND q.app_id=$2 AND q.destination_id=$3 AND r.event_id=$4`,
+      [tenantId, appId, destinationId, eventId])).rows[0]);
+    };
+    const dispatch = (seconds: number) => processOperatorWebhookDeliveries(pool, payloadStore, tenantId, {
+      enabled: true, destinationAllowlist: [receiverOrigin], allowSyntheticLoopback: true, now: () => at(seconds) });
+    const first = await queue("retry", 0), expires = await queue("expire", 0);
+    assert.equal(first.signing_revision, "1"); assert.equal(expires.signing_revision, "1");
+    const originalBody = await payloadStore.read(first.request_ref);
+    // An independently queued delivery can become due only after the overlap.
+    await withTenant(pool, tenantId, client => client.query(
+      "UPDATE ephemeral.operator_webhook_deliveries SET next_attempt_at=$3 WHERE tenant_id=$1 AND delivery_id=$2",
+      [tenantId, expires.delivery_id, at(121).toISOString()]));
+    rotationStatuses = [500, 204];
+    await dispatch(0);
+    const rotatePath = `/v1/admin/apps/${appId}/operator-webhooks/${encodeURIComponent(destinationId)}/signing-keys`;
+    assert.equal((await admin(rotatePath, { method: "POST", headers: { authorization: `Bearer ${operatorKey}` },
+      body: JSON.stringify({ expected_revision: 1 }) })).status, 403);
+    const rotated = await rotateOperatorWebhookSigningKey({ ...command, body: { expected_revision: 1, overlap_seconds: 120 }, now: at(1) });
+    assert.equal(rotated.signing_revision, 2);
+    await assert.rejects(rotateOperatorWebhookSigningKey({ ...command, body: { expected_revision: 2 }, now: at(2) }),
+      /operator_webhook_signing_overlap_active/);
+    await assert.rejects(retireOperatorWebhookSigningKey({ ...command, body: { expected_revision: 2, signing_revision: 2 }, now: at(2) }),
+      /operator_webhook_signing_current_required/);
+    await dispatch(61);
+    const retry = received.filter(entry => entry.deliveryId === first.delivery_id);
+    assert.equal(retry.length, 2);
+    for (const attempt of retry) {
+      assert.equal(attempt.signingRevision, "1");
+      assert.deepEqual(attempt.body, originalBody);
+      assert.equal(attempt.signature, `sha256=${createHmac("sha256", Buffer.from(destination.signing_secret)).update(originalBody).digest("hex")}`);
+    }
+    const afterRotation = await queue("current", 62);
+    assert.equal(afterRotation.signing_revision, "2");
+    await dispatch(62);
+    const current = received.find(entry => entry.deliveryId === afterRotation.delivery_id)!;
+    assert.equal(current.signingRevision, "2");
+    assert.equal(current.signature, `sha256=${createHmac("sha256", Buffer.from(rotated.signing_secret)).update(current.body).digest("hex")}`);
+    for (const [delivery, body] of [[first, originalBody], [afterRotation, current.body]] as const) {
+      const envelope = JSON.parse(body.toString());
+      assert.equal(envelope.event.subject_ref, createHmac("sha256", referenceKey)
+        .update(`openmasu:subject_ref:v1\0${installationId}`).digest("hex"));
+      assert.equal(envelope.event.event_ref, createHmac("sha256", referenceKey)
+        .update(`openmasu:event_ref:v1\0${delivery.logical_event_id}`).digest("hex"));
+    }
+    const countBeforeExpiry = received.filter(entry => entry.path === "/rotation").length;
+    await dispatch(121);
+    assert.equal(received.filter(entry => entry.path === "/rotation").length, countBeforeExpiry);
+    const state = (id: string) => withTenant(pool, tenantId, async client => (await client.query<{
+      state: string; safe_reason: string | null; request_digest: string;
+    }>("SELECT state,safe_reason,request_digest FROM ephemeral.operator_webhook_deliveries WHERE tenant_id=$1 AND delivery_id=$2",
+    [tenantId, id])).rows[0]);
+    assert.equal((await state(expires.delivery_id)).safe_reason, "signing_key_expired");
+    await assert.rejects(payloadStore.read(expires.request_ref));
+    const retired = await queue("retired", 122);
+    assert.equal(retired.signing_revision, "2");
+    const rotations = await Promise.allSettled([1, 2].map(() => rotateOperatorWebhookSigningKey({ ...command,
+      body: { expected_revision: 2, overlap_seconds: 120 }, now: at(122) })));
+    assert.equal(rotations.filter(result => result.status === "fulfilled").length, 1);
+    const winner = rotations.find(result => result.status === "fulfilled")!;
+    assert.equal(winner.status, "fulfilled");
+    if (winner.status !== "fulfilled") throw Error("synthetic_rotation_missing");
+    assert.equal(winner.value.signing_revision, 3);
+    const loser = rotations.find(result => result.status === "rejected") as PromiseRejectedResult;
+    assert.match(String(loser.reason), /operator_webhook_signing_revision_stale/);
+    const retirement = await retireOperatorWebhookSigningKey({ ...command,
+      body: { expected_revision: 3, signing_revision: 2 }, now: at(123) });
+    assert.deepEqual(await retireOperatorWebhookSigningKey({ ...command,
+      body: { expected_revision: 3, signing_revision: 2 }, now: at(124) }), retirement);
+    assert.equal((await state(retired.delivery_id)).safe_reason, "signing_key_retired");
+    const beforeRetiredDispatch = received.filter(entry => entry.path === "/rotation").length;
+    await dispatch(124);
+    assert.equal(received.filter(entry => entry.path === "/rotation").length, beforeRetiredDispatch);
+    assert.deepEqual(await payloadStore.read(baseRef), referenceKey, "retirement does not rotate or purge reference identity");
+    assert.equal((await state(first.delivery_id)).request_digest, first.request_digest, "stored request digest never changes");
+    const receiptReasons = await withTenant(pool, tenantId, async client => (await client.query<{ reason_code: string }>(
+      `SELECT reason_code FROM ledger.operator_webhook_delivery_results WHERE tenant_id=$1 AND destination_id=$2 AND state='suppressed'`,
+      [tenantId, destinationId])).rows.map(row => row.reason_code));
+    assert.deepEqual(receiptReasons.sort(), ["signing_key_expired", "signing_key_retired"]);
+    const listed = await (await admin(`/v1/admin/apps/${appId}/operator-webhooks`)).text();
+    const audit = await withTenant(pool, tenantId, async client => (await client.query(
+      "SELECT action,request_digest FROM ledger.audit_logs WHERE tenant_id=$1 AND target_ref=$2", [tenantId, destinationId])).rows);
+    for (const secret of [destination.signing_secret, rotated.signing_secret, winner.value.signing_secret, referenceKey.toString()]) {
+      assert.equal(listed.includes(secret), false);
+      assert.equal(JSON.stringify(audit).includes(secret), false);
+    }
+    const references = await withTenant(pool, tenantId, async client => (await client.query<{ secret_ref: string }>(
+      "SELECT secret_ref FROM control.operator_webhook_signing_revisions WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3",
+      [tenantId, appId, destinationId])).rows.map(row => row.secret_ref));
+    assert.equal(references.length, 3);
+    assert.equal((await admin(`/v1/admin/apps/${appId}/operator-webhooks/${encodeURIComponent(destinationId)}/disable`,
+      { method: "POST", body: "{}" })).status, 200);
+    for (const reference of [baseRef, ...references]) await assert.rejects(payloadStore.read(reference));
   });
 });

@@ -100,7 +100,7 @@ describe("operator webhook closed envelope", () => {
 describe("operator webhook transport", () => {
   let receiver: ReturnType<typeof createServer>;
   let origin = "";
-  const received: Array<{ body: Buffer; signature: string; deliveryId: string; attempt: string }> = [];
+  const received: Array<{ body: Buffer; signature: string; deliveryId: string; attempt: string; signingRevision: string }> = [];
 
   before(async () => {
     receiver = createServer(async (request, response) => {
@@ -111,6 +111,7 @@ describe("operator webhook transport", () => {
         signature: String(request.headers["x-openmasu-signature"] ?? ""),
         deliveryId: String(request.headers["x-openmasu-delivery-id"] ?? ""),
         attempt: String(request.headers["x-openmasu-attempt"] ?? ""),
+        signingRevision: String(request.headers["x-openmasu-key-revision"] ?? ""),
       });
       if (request.url === "/slow") return;
       response.writeHead(request.url === "/retry" ? 429 : request.url === "/reject" ? 400
@@ -135,7 +136,7 @@ describe("operator webhook transport", () => {
       secret,
     });
     return { prepared, result: await sendOperatorWebhook(prepared, secret, {
-      destinationAllowlist: [origin], attempt: 2, allowSyntheticLoopback: true,
+      destinationAllowlist: [origin], attempt: 2, signingRevision: 7, allowSyntheticLoopback: true,
     }) };
   };
 
@@ -147,6 +148,26 @@ describe("operator webhook transport", () => {
     assert.equal(captured.signature, `sha256=${createHmac("sha256", secret).update(prepared.body).digest("hex")}`);
     assert.equal(captured.deliveryId, prepared.deliveryId);
     assert.equal(captured.attempt, "2");
+    assert.equal(captured.signingRevision, "7");
+  });
+
+  it("rotates only the transport signature and refuses an expired overlap at the request boundary", async () => {
+    const prepared = buildOperatorWebhookRequest({ candidate: { ...baseCandidate, endpoint_url: `${origin}/ok` },
+      deliveryId: "018f0000-0000-7000-8000-000000000103", emittedAt: "2026-08-30T00:00:01.000Z", secret });
+    const signingKey = Buffer.from("synthetic-independent-signing-key-00000002");
+    const deadline = "2026-08-30T01:00:00.000Z";
+    const sent = await sendOperatorWebhook(prepared, signingKey, { destinationAllowlist: [origin], attempt: 1,
+      signingRevision: 2, signingValidUntil: deadline, now: () => new Date("2026-08-30T00:59:59.999Z"), allowSyntheticLoopback: true });
+    assert.equal(sent.outcome, "accepted");
+    const captured = received.at(-1)!;
+    assert.deepEqual(captured.body, prepared.body, "rotation never rebuilds saved references or request bytes");
+    assert.equal(captured.signingRevision, "2");
+    assert.equal(captured.signature, `sha256=${createHmac("sha256", signingKey).update(prepared.body).digest("hex")}`);
+    const before = received.length;
+    assert.deepEqual(await sendOperatorWebhook(prepared, signingKey, { destinationAllowlist: [origin], attempt: 2,
+      signingRevision: 2, signingValidUntil: deadline, now: () => new Date(deadline), allowSyntheticLoopback: true }),
+    { outcome: "suppressed", reason: "signing_key_expired" });
+    assert.equal(received.length, before, "expiry suppresses the network request, not just its receipt");
   });
 
   it("classifies retryable, terminal, and redirect responses without reading receiver bodies", async () => {

@@ -42,7 +42,8 @@
     "./fixed-comparison": "./src/fixed-comparison.ts",
     "./metric-report-query": "./src/metric-report-query.ts",
     "./metric-report-read": "./src/metric-report-read.ts",
-    "./acquisition-kpi-key": "./src/acquisition-kpi-key.ts"
+    "./acquisition-kpi-key": "./src/acquisition-kpi-key.ts",
+    "./operator-webhook-signing": "./src/operator-webhook-signing.ts"
   },
   "scripts": {
     "db:migrate": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/runtime/src/migrate.ts",

@@ -137,8 +137,12 @@ describe("declarative API route security", () => {
     assert.equal(matchRoute("GET", "/v1/admin/apps/app-a/operator-webhooks")?.handler, "admin_operator_webhooks_list");
     assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/operator-webhooks")?.handler, "admin_operator_webhooks_register");
     assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/operator-webhooks/webhook%3Aone/disable")?.handler, "admin_operator_webhooks_disable");
+    assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/operator-webhooks/webhook%3Aone/signing-keys")?.handler, "admin_operator_webhooks_rotate");
+    assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/operator-webhooks/webhook%3Aone/signing-keys/retire")?.handler, "admin_operator_webhooks_retire");
     assert.equal(matchRoute("POST", "/dashboard/apps/app-a/operator-webhooks")?.handler, "dashboard_operator_webhooks_register");
     assert.equal(matchRoute("POST", "/dashboard/apps/app-a/operator-webhooks/webhook%3Aone/disable")?.handler, "dashboard_operator_webhooks_disable");
+    assert.equal(matchRoute("POST", "/dashboard/apps/app-a/operator-webhooks/webhook%3Aone/signing-keys")?.handler, "dashboard_operator_webhooks_rotate");
+    assert.equal(matchRoute("POST", "/dashboard/apps/app-a/operator-webhooks/webhook%3Aone/signing-keys/retire")?.handler, "dashboard_operator_webhooks_retire");
     assert.equal(matchRoute("GET", "/v1/admin/apps/app-a/operator-bulk-exports")?.handler, "admin_operator_bulk_exports_list");
     assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/operator-bulk-exports")?.handler, "admin_operator_bulk_exports_register");
     assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/operator-bulk-exports/bulk%3Aone/disable")?.handler, "admin_operator_bulk_exports_disable");
@@ -166,7 +170,9 @@ describe("declarative API route security", () => {
       "admin_server_keys_list", "admin_server_keys_issue", "admin_server_keys_retire",
       "dashboard_server_keys_issue", "dashboard_server_keys_retire",
       "admin_operator_webhooks_list", "admin_operator_webhooks_register", "admin_operator_webhooks_disable",
+      "admin_operator_webhooks_rotate", "admin_operator_webhooks_retire",
       "dashboard_operator_webhooks_register", "dashboard_operator_webhooks_disable",
+      "dashboard_operator_webhooks_rotate", "dashboard_operator_webhooks_retire",
       "admin_operator_bulk_exports_list", "admin_operator_bulk_exports_register", "admin_operator_bulk_exports_disable",
       "admin_metric_schedules_list", "admin_metric_schedules_register", "admin_metric_schedules_disable",
       "admin_metric_schedules_preview_replacement", "admin_metric_schedules_replace",

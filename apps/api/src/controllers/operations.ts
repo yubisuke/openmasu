@@ -8,7 +8,8 @@ import { csrfToken, recordDashboardAudit } from "../session.js";
 import { roleAllows } from "../authorization.js";
 import { IngestRecoveryError, listIngestRecovery, requestIngestRecovery } from "../ingest-recovery.js";
 import { renderIngestRecovery } from "../dashboard/ingest-recovery.js";
-import { disableOperatorWebhookDestination, listOperatorWebhookDestinations, registerOperatorWebhookDestination } from "../operator-webhooks-admin.js";
+import { disableOperatorWebhookDestination, listOperatorWebhookDestinations, registerOperatorWebhookDestination,
+  rotateOperatorWebhookSigningKey, retireOperatorWebhookSigningKey } from "../operator-webhooks-admin.js";
 import { disableOperatorBulkExportDestination, listOperatorBulkExportDestinations, registerOperatorBulkExportDestination, rotateOperatorBulkExportCredentials } from "../operator-bulk-exports-admin.js";
 import { renderBulkExportCredentials } from "../dashboard/bulk-export-credentials.js";
 import type { RequestHandlerDependencies } from "../http-types.js";
@@ -17,7 +18,10 @@ import { json, dashboardHtml } from "../http-responses.js";
 import { adminAppId, operatorWebhookDestinationId, operatorBulkExportDestinationId, publicReason } from "../http-paths.js";
 import { authorizeDashboardForm } from "../http-security.js";
 import { dashboardHeaders } from "../http-responses.js";
-import { renderOperatorWebhookRegistered, renderOperatorWebhookOperationFailed, renderBulkExportRegistered, renderBulkExportOperationFailed } from "../dashboard/action-pages.js";
+import { renderOperatorWebhookRegistered, renderOperatorWebhookSigningKeyIssued, renderOperatorWebhookOperationFailed, renderBulkExportRegistered, renderBulkExportOperationFailed } from "../dashboard/action-pages.js";
+
+const webhookStatus = (reason: string) => ["operator_webhook_destination_not_found", "operator_webhook_signing_revision_not_found"].includes(reason) ? 404
+  : ["operator_webhook_destination_not_active", "operator_webhook_signing_revision_stale", "operator_webhook_signing_overlap_active", "operator_webhook_signing_current_required"].includes(reason) ? 409 : 400;
 
 export function createOperationsControllers(dependencies: Pick<RequestHandlerDependencies, "operatorWebhooks" | "pool" | "payloadStore" | "dashboard" | "operatorBulkExports" | "operationalMetrics" | "readerPool">) {
   const recoveryFailure = async (identity: DashboardAppContext["appIdentity"], error: unknown) => {
@@ -90,7 +94,21 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
         dashboardHtml(response, 201, renderOperatorWebhookRegistered({ destinationId: issued.destination_id, endpointUrl: issued.endpoint_url, signingSecret: issued.signing_secret, appId: appIdentity.appId }));
       } else {
         if (!destinationId) throw new Error("operator_webhook_destination_not_found");
-        await disableOperatorWebhookDestination({
+        if (route.handler === "dashboard_operator_webhooks_rotate" || route.handler === "dashboard_operator_webhooks_retire") {
+          const number = (key: string) => {
+            if (body.getAll(key).length !== 1 || typeof body.get(key) !== "string") throw Error("operator_webhook_signing_fields_invalid");
+            return Number(body.get(key));
+          };
+          const command = { pool: dependencies.pool, payloadStore: dependencies.payloadStore, identity: appIdentity, destinationId };
+          if (route.handler === "dashboard_operator_webhooks_rotate") {
+            const issued = await rotateOperatorWebhookSigningKey({ ...command,
+              body: { expected_revision: number("expected_revision"), overlap_seconds: number("overlap_seconds") } });
+            dashboardHtml(response, 201, renderOperatorWebhookSigningKeyIssued({ ...issued, appId: appIdentity.appId }));
+            return;
+          }
+          await retireOperatorWebhookSigningKey({ ...command, body: {
+            expected_revision: number("expected_revision"), signing_revision: number("signing_revision") } });
+        } else await disableOperatorWebhookDestination({
           pool: dependencies.pool,
           payloadStore: dependencies.payloadStore,
           identity: appIdentity,
@@ -113,7 +131,7 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
         outcome: "failed",
         reasonCode: reason,
       });
-      dashboardHtml(response, reason === "operator_webhook_destination_not_found" ? 404 : 400,
+      dashboardHtml(response, webhookStatus(reason),
         renderOperatorWebhookOperationFailed({ reason: reason }));
     }
     return;
@@ -275,6 +293,13 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
       }
       const destinationId = operatorWebhookDestinationId(target.pathname);
       if (!destinationId) throw new Error("operator_webhook_destination_not_found");
+      if (route.handler === "admin_operator_webhooks_rotate" || route.handler === "admin_operator_webhooks_retire") {
+        const command = { pool: dependencies.pool, payloadStore: dependencies.payloadStore, identity: appIdentity,
+          destinationId, body: await decoder.json() };
+        if (route.handler === "admin_operator_webhooks_rotate") json(response, 201, await rotateOperatorWebhookSigningKey(command));
+        else json(response, 200, await retireOperatorWebhookSigningKey(command));
+        return;
+      }
       json(response, 200, await disableOperatorWebhookDestination({
         pool: dependencies.pool,
         payloadStore: dependencies.payloadStore,
@@ -283,7 +308,7 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
       }));
     } catch (error) {
       const reason = publicReason(error, "operator_webhook_lifecycle_failed");
-      if (error instanceof AppNotFoundError || reason === "operator_webhook_destination_not_found") {
+      if (error instanceof AppNotFoundError || webhookStatus(reason) === 404) {
         json(response, 404, { error: "not_found" });
       } else {
         await recordDashboardAudit(dependencies.pool, {
@@ -296,7 +321,7 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
           outcome: "failed",
           reasonCode: reason,
         });
-        json(response, reason === "operator_webhook_destination_not_active" ? 409 : 400, { error: reason });
+        json(response, webhookStatus(reason), { error: reason });
       }
     }
     return;
@@ -366,6 +391,8 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
     dashboard_ingest_recovery_request: { boundary: "dashboard_app", handle: dashboardIngestRecovery },
     dashboard_operator_webhooks_register: { boundary: "dashboard_app", handle: dashboardOperatorWebhooksRegister },
     dashboard_operator_webhooks_disable: { boundary: "dashboard_app", handle: dashboardOperatorWebhooksRegister },
+    dashboard_operator_webhooks_rotate: { boundary: "dashboard_app", handle: dashboardOperatorWebhooksRegister },
+    dashboard_operator_webhooks_retire: { boundary: "dashboard_app", handle: dashboardOperatorWebhooksRegister },
     dashboard_operator_bulk_exports_register: { boundary: "dashboard_app", handle: dashboardOperatorBulkExportsRegister },
     dashboard_operator_bulk_exports_disable: { boundary: "dashboard_app", handle: dashboardOperatorBulkExportsRegister },
     dashboard_operator_bulk_exports_credentials: { boundary: "dashboard_app", handle: dashboardOperatorBulkExportsRegister },
@@ -378,6 +405,8 @@ export function createOperationsControllers(dependencies: Pick<RequestHandlerDep
     admin_operator_webhooks_list: { boundary: "admin", handle: adminOperatorWebhooksList },
     admin_operator_webhooks_register: { boundary: "admin", handle: adminOperatorWebhooksList },
     admin_operator_webhooks_disable: { boundary: "admin", handle: adminOperatorWebhooksList },
+    admin_operator_webhooks_rotate: { boundary: "admin", handle: adminOperatorWebhooksList },
+    admin_operator_webhooks_retire: { boundary: "admin", handle: adminOperatorWebhooksList },
     admin_operator_bulk_exports_list: { boundary: "admin", handle: adminOperatorBulkExportsList },
     admin_operator_bulk_exports_register: { boundary: "admin", handle: adminOperatorBulkExportsList },
     admin_operator_bulk_exports_disable: { boundary: "admin", handle: adminOperatorBulkExportsList },
