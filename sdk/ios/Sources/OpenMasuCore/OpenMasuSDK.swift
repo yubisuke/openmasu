@@ -392,8 +392,8 @@ public actor OpenMasuSDK {
       guard try storage.hasQueuedEvent(eventId) else { throw OpenMasuError.resetPending }
       try storage.markInstallRecorded()
     }
-    try await flush()
     try storage.clearResetPending()
+    try await flush()
   }
 
   public func flush() async throws {
@@ -403,6 +403,10 @@ public actor OpenMasuSDK {
       return
     }
     guard try isCollectionEnabled() else { return }
+    if try storage.isResetPending() {
+      try await completePendingReset(installationId: storage.installationId())
+      return
+    }
     try storage.purgeConsentRequiredQueueIfBlocked()
     let events = try storage.pending(limit: 100)
     guard !events.isEmpty else { return }

@@ -582,7 +582,7 @@ final class OpenMasuCoreTests: XCTestCase {
     catch { XCTAssertEqual(error as? OpenMasuError, .transport(503)) }
     let replacement = try await sdk.installationIdForMeasurement()
     XCTAssertNotEqual(replacement, oldId)
-    try await sdk.resetInstallationId()
+    try await sdk.flush()
     let stableReplacement = try await sdk.installationIdForMeasurement()
     let beginCalls = await transport.beginCount()
     let enrolled = await transport.enrolledInstallations()

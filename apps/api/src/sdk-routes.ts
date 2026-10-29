@@ -392,7 +392,7 @@ export async function handleDevicePrivacy(
 
 /** Receipt possession grants only this bounded status projection, even after revocation. */
 export async function handleDevicePrivacyStatus(request: IncomingMessage, response: ServerResponse, dependencies: SdkRouteDependencies): Promise<void> {
-  if (!dependencies.privacyBucket.allow("deletion-status")) return writeJson(response, 429, { error: "rate_limited" });
+  if (!dependencies.enrollmentBucket.allow("deletion-status")) return writeJson(response, 429, { error: "rate_limited" });
   let value: Any;
   try { value = parseJsonBody<Any>(await readRawBody(request, 1024)); }
   catch { return writeJson(response, 400, { error: "malformed_json" }); }
@@ -400,6 +400,7 @@ export async function handleDevicePrivacyStatus(request: IncomingMessage, respon
     return writeJson(response, 400, { error: "privacy_receipt_invalid" });
   }
   const digest = createHash("sha256").update(value.status_receipt).digest("hex");
+  if (!dependencies.privacyBucket.allow(`receipt:${digest}`)) return writeJson(response, 429, { error: "rate_limited" });
   const row = await withTenant(dependencies.pool, dependencies.config.tenantId, async client => (await client.query<{ status: string }>(
     `SELECT status FROM control.privacy_deletion_jobs
       WHERE tenant_id=$1 AND app_id=$2 AND status_receipt_digest=$3
