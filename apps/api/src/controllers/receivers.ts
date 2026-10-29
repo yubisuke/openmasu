@@ -1,6 +1,6 @@
 import { receiveApplePostback } from "../apple-postback-receiver.js";
 import { receiveMax } from "../max-receiver.js";
-import { handleApplePurchasePreparation, handleDeviceDsar, handleDevicePrivacy, handleSdkBatch, handleSdkEnrollment } from "../sdk-routes.js";
+import { handleApplePurchasePreparation, handleDeviceDsar, handleDevicePrivacy, handleDevicePrivacyStatus, handleSdkBatch, handleSdkEnrollment } from "../sdk-routes.js";
 import { receiveGooglePlayRtdn } from "../google-play-rtdn-receiver.js";
 import { handleServerBatch } from "../server-routes.js";
 import { receiveAppleStoreNotification } from "../apple-store-notifications-receiver.js";
@@ -96,6 +96,11 @@ export function createReceiversControllers(dependencies: Pick<RequestHandlerDepe
     json(response, 404, { error: "not_found" });
   };
 
+  const devicePrivacyStatus = async ({ request, response }: HttpRequestContext): Promise<void> => {
+    if (dependencies.sdk) return handleDevicePrivacyStatus(request, response, dependencies.sdk);
+    json(response, 404, { error: "not_found" });
+  };
+
   return {
     health: { boundary: "receiver", handle: health },
     max_ingest: { boundary: "receiver", handle: maxIngest },
@@ -109,6 +114,7 @@ export function createReceiversControllers(dependencies: Pick<RequestHandlerDepe
     apple_purchase_submit: { boundary: "receiver", handle: applePurchasePrepare },
     server_batch: { boundary: "receiver", handle: serverBatch },
     device_privacy: { boundary: "receiver", handle: devicePrivacy },
+    device_privacy_status: { boundary: "receiver", handle: devicePrivacyStatus },
     device_dsar: { boundary: "receiver", handle: deviceDsar },
   } as const;
 }

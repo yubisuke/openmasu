@@ -30,6 +30,7 @@ public actor OpenMasuSDK {
   }
 
   public func initialize() async throws {
+    if try storage.deletionJournal() != nil { try await resetInstallationId(); return }
     guard try isCollectionEnabled() else { return }
     try storage.purgeConsentRequiredQueueIfBlocked()
     if try storage.consentBarrierActive() {
@@ -334,7 +335,7 @@ public actor OpenMasuSDK {
   }
 
   public func isCollectionEnabled() throws -> Bool {
-    try storage.collectionEnabled(default: Self.collectionDefault(
+    try storage.deletionJournal() == nil && storage.collectionEnabled(default: Self.collectionDefault(
       bundle: .main,
       fallback: configuration.collectionEnabledByDefault
     ))
@@ -345,26 +346,37 @@ public actor OpenMasuSDK {
     purchaseContextRevision &+= 1
     purchaseResetInFlight = true
     defer { purchaseResetInFlight = false }
-    if try storage.isResetPending() {
+    if try storage.deletionJournal() == nil && storage.isResetPending() {
       try await completePendingReset(installationId: storage.installationId())
       return
     }
-    let oldInstallationId = try storage.installationId()
-    guard let credential = try storage.credential() else { throw OpenMasuError.resetRequiresEnrollment }
-    try await transport.deleteInstallation(credential: credential, installationId: oldInstallationId)
-    try storage.clearForReset()
-    let newInstallationId = try storage.replaceInstallationId()
-    try storage.markResetPending()
+    if try storage.deletionJournal() == nil && storage.credential() == nil { throw OpenMasuError.resetRequiresEnrollment }
+    let journal = try storage.beginDeletion()
+    try storage.discardQueuedMeasurement()
+    if journal.replacementId == nil {
+      guard let credential = try storage.credential() else { throw OpenMasuError.resetRequiresEnrollment }
+      if let asynchronous = transport as? any OpenMasuDeletionTransport {
+        var state = try await asynchronous.deletionStatus(receipt: journal.receipt)
+        if state == .missing {
+          state = try await asynchronous.beginDeletion(credential: credential, installationId: journal.installationId, receipt: journal.receipt)
+        }
+        guard state == .completed else { throw OpenMasuError.resetPending }
+      } else {
+        try await transport.deleteInstallation(credential: credential, installationId: journal.installationId)
+      }
+    }
+    let newInstallationId = try storage.completeDeletion()
     try await completePendingReset(installationId: newInstallationId)
   }
 
   private func completePendingReset(installationId: String) async throws {
-    if try storage.consentBarrierActive() { return }
+    if try storage.consentBarrierActive() || !isCollectionEnabled() { return }
     if try storage.credential() == nil {
       try storage.setCredential(try await transport.enroll(installationId: installationId))
     }
     if try !storage.isInstallRecorded() {
-      try enqueue(
+      let eventId = "event:reset:\(installationId)"
+      if try !storage.hasQueuedEvent(eventId) { try enqueue(
         eventName: "install",
         purpose: "attribution",
         payloadJson: EventFactory.install(
@@ -374,16 +386,27 @@ public actor OpenMasuSDK {
           adServicesToken: nil,
           conversionSchemaVersion: configuration.conversionSchemaVersion,
           conversionSchemaSha256: configuration.conversionSchemaSha256
-        )
-      )
+        ),
+        eventId: eventId
+      ) }
+      guard try storage.hasQueuedEvent(eventId) else { throw OpenMasuError.resetPending }
       try storage.markInstallRecorded()
     }
-    try await flush()
     try storage.clearResetPending()
+    try await flush()
   }
 
   public func flush() async throws {
+    if try storage.deletionJournal() != nil {
+      guard !purchaseResetInFlight else { throw OpenMasuError.resetPending }
+      try await resetInstallationId()
+      return
+    }
     guard try isCollectionEnabled() else { return }
+    if try storage.isResetPending() {
+      try await completePendingReset(installationId: storage.installationId())
+      return
+    }
     try storage.purgeConsentRequiredQueueIfBlocked()
     let events = try storage.pending(limit: 100)
     guard !events.isEmpty else { return }
@@ -442,9 +465,9 @@ public actor OpenMasuSDK {
 
   private func appStorePurchaseContext(consent: Bool) throws -> AppStorePurchaseContext {
     guard consent else { throw OpenMasuError.purchaseConsentRequired }
+    guard !purchaseResetInFlight, try storage.deletionJournal() == nil, try !storage.isResetPending() else { throw OpenMasuError.purchaseContextChanged }
     guard try isCollectionEnabled() else { throw OpenMasuError.collectionDisabled }
     guard try !storage.consentBarrierActive() else { throw OpenMasuError.purchaseConsentRequired }
-    guard !purchaseResetInFlight, try !storage.isResetPending() else { throw OpenMasuError.purchaseContextChanged }
     guard try storage.isInstallRecorded(), let credential = try storage.credential() else {
       throw OpenMasuError.resetRequiresEnrollment
     }
@@ -471,6 +494,7 @@ public actor OpenMasuSDK {
   }
 
   private func enqueue(eventName: String, purpose: String, payloadJson: String, eventId: String? = nil) throws {
+    if try storage.deletionJournal() != nil { return }
     if try storage.consentBarrierActive(), Self.consentRequiredPurposes.contains(purpose) { return }
     _ = try storage.enqueue(QueuedEvent(
       eventId: eventId ?? EventFactory.identifier("event"),

@@ -37,6 +37,7 @@ import { encodeMetricReport, metricReport } from "./reporting.js";
 import { ensureSdkKeys, installationIdDigest, signSdkRequest } from "./sdk-auth.js";
 import { createTrackingLink } from "./tracking-links.js";
 import { SDK_INSTALLATION_PRIVACY_PATH } from "./routes.js";
+import { handleDevicePrivacyStatus } from "./sdk-routes.js";
 import { verifyCompactJws } from "@openmasu/commerce-lifecycle";
 import { nonFraudBundleHash } from "@openmasu/contracts";
 
@@ -151,6 +152,14 @@ async function signed(path: string, value: unknown, options: {
       "x-openmasu-signature": signature,
     },
     body: body.toString("utf8"),
+  });
+}
+
+async function privacyStatus(statusReceipt: string): Promise<Response> {
+  return fetch(`${baseUrl}${SDK_INSTALLATION_PRIVACY_PATH}/status`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ status_receipt: statusReceipt }),
   });
 }
 
@@ -3071,6 +3080,8 @@ describe("M2a signed SDK ingestion", () => {
 
   it("recovers idempotently when purge succeeds but its verification read fails transiently", async () => {
     const crashInstallationId = `installation:privacy-crash-${run}`;
+    const statusReceipt = randomBytes(32).toString("hex");
+    const statusReceiptDigest = createHash("sha256").update(statusReceipt).digest("hex");
     const enrollment = await signed("/v1/installations", { installation_id: crashInstallationId });
     assert.equal(enrollment.status, 201);
     const credential = await enrollment.json() as {
@@ -3114,6 +3125,7 @@ describe("M2a signed SDK ingestion", () => {
       requesterAuthRef: "sdk_auth:synthetic-crash-recovery",
       installationKeyId: credential.installation_key_id,
       deletionSubjectDigest: installationIdDigest(authConfig, crashInstallationId),
+      statusReceiptDigest,
     }, {
       tenant_id: tenantId,
       app_id: appId,
@@ -3124,6 +3136,15 @@ describe("M2a signed SDK ingestion", () => {
     assert.equal(processing.status, "processing");
     assert.equal(processing.deletion_subject_ref, crashInstallationId);
     assert.equal(processing.deletion_subject_digest, undefined);
+    assert.equal(JSON.stringify(processing).includes(statusReceipt), false);
+    assert.equal(JSON.stringify(processing).includes("status_receipt"), false);
+    const pendingStatus = await privacyStatus(statusReceipt);
+    assert.equal(pendingStatus.status, 200);
+    assert.equal(pendingStatus.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await pendingStatus.json(), { status: "processing" });
+    const unknownStatus = await privacyStatus(randomBytes(32).toString("hex"));
+    assert.equal(unknownStatus.status, 404);
+    assert.deepEqual(await unknownStatus.json(), { error: "not_found" });
 
     const prepared = await withTenant(pool, tenantId, async (client) => ({
       jobStatus: (await client.query<{ status: string }>(
@@ -3146,12 +3167,23 @@ describe("M2a signed SDK ingestion", () => {
         "SELECT payload_ref FROM control.privacy_payload_purges WHERE privacy_request_id=$1 ORDER BY reference_digest",
         [processing.privacy_request_id],
       )).rows.map((row) => row.payload_ref),
+      receipt: (await client.query<{ status_receipt_digest: string; lifetime_seconds: string; artifact: string }>(
+        `SELECT status_receipt_digest,
+                extract(epoch FROM (status_receipt_expires_at-control.canonical_timestamp_value(requested_at)))::text AS lifetime_seconds,
+                artifact_template::text AS artifact
+           FROM control.privacy_deletion_jobs WHERE privacy_request_id=$1`,
+        [processing.privacy_request_id],
+      )).rows[0],
     }));
     assert.equal(prepared.jobStatus, "processing");
     assert.equal(prepared.credentialStatus, "deleted");
     assert.equal(prepared.completedRows, 0, "completion must wait for every protected reference to become unreadable");
     assert.ok(prepared.tombstones >= 1, "the DB-first deletion boundary must remain fail closed");
     assert.ok(prepared.references.includes(secretRef));
+    assert.equal(prepared.receipt.status_receipt_digest, statusReceiptDigest);
+    assert.equal(Number(prepared.receipt.lifetime_seconds), 30 * 86_400);
+    assert.equal(prepared.receipt.artifact.includes(statusReceipt), false);
+    assert.equal(prepared.receipt.artifact.includes("status_receipt"), false);
     assert.ok((await listRuntimeWorkTenants(pool)).includes(tenantId),
       "the tenant discovery boundary must expose durable privacy work to the worker");
     assert.equal((await signed("/v1/events/batch", { records: [sourceEvent(
@@ -3182,12 +3214,132 @@ describe("M2a signed SDK ingestion", () => {
       )).rows[0].count),
     }));
     assert.deepEqual(completed, { jobs: 1, artifacts: 1, audits: 1 });
+    const completedStatus = await privacyStatus(statusReceipt);
+    assert.equal(completedStatus.status, 200);
+    assert.deepEqual(await completedStatus.json(), { status: "completed" });
+    const completedArtifact = await withTenant(pool, tenantId, async (client) => (await client.query<{ artifact: string }>(
+      "SELECT artifact::text FROM ledger.privacy_requests WHERE privacy_request_id=$1",
+      [processing.privacy_request_id],
+    )).rows[0].artifact);
+    assert.equal(completedArtifact.includes(statusReceipt), false);
+    assert.equal(completedArtifact.includes("status_receipt"), false);
     assert.deepEqual(await processPrivacyDeletionJobs({ pool, payloadStore, tenantId }), {
       jobs: 0,
       completed: 0,
       processing: 0,
       payloadsPurged: 0,
     });
+    await withTenant(pool, tenantId, async (client) => client.query(
+      `UPDATE control.privacy_deletion_jobs
+          SET status_receipt_expires_at=clock_timestamp()-interval '1 second'
+        WHERE privacy_request_id=$1`,
+      [processing.privacy_request_id],
+    ));
+    const expiredStatus = await privacyStatus(statusReceipt);
+    assert.equal(expiredStatus.status, 404);
+    assert.deepEqual(await expiredStatus.json(), { error: "not_found" });
+  });
+
+  it("recovers a lost deletion response with a status-only receipt without reviving credentials", async () => {
+    const receiptInstallationId = `installation:privacy-receipt-${run}`;
+    const peerInstallationId = `installation:privacy-receipt-peer-${run}`;
+    const credentials = [] as Array<{ installation_key_id: string; installation_secret: string }>;
+    for (const subject of [receiptInstallationId, peerInstallationId]) {
+      const enrollment = await signed("/v1/installations", { installation_id: subject });
+      assert.equal(enrollment.status, 201);
+      credentials.push(await enrollment.json() as typeof credentials[number]);
+    }
+    const [credential, peerCredential] = credentials;
+    const statusReceipt = randomBytes(32).toString("hex");
+    const statusReceiptDigest = createHash("sha256").update(statusReceipt).digest("hex");
+    assert.equal((await signed(SDK_INSTALLATION_PRIVACY_PATH, {
+      installation_id: receiptInstallationId, status_receipt: statusReceipt,
+    }, { secret: peerCredential.installation_secret, installationKeyId: peerCredential.installation_key_id })).status, 403);
+
+    const accepted = await signed(SDK_INSTALLATION_PRIVACY_PATH, {
+      installation_id: receiptInstallationId, status_receipt: statusReceipt,
+    }, { secret: credential.installation_secret, installationKeyId: credential.installation_key_id });
+    assert.equal(accepted.status, 201);
+    // Discard the initial response body: recovery must use only the pre-persisted receipt.
+    await accepted.body?.cancel();
+    const recovered = await privacyStatus(statusReceipt);
+    assert.equal(recovered.status, 200);
+    assert.deepEqual(await recovered.json(), { status: "completed" });
+    assert.equal((await signed(SDK_INSTALLATION_PRIVACY_PATH, {
+      installation_id: receiptInstallationId, status_receipt: statusReceipt,
+    }, { secret: credential.installation_secret, installationKeyId: credential.installation_key_id })).status, 401);
+    assert.equal((await fetch(`${baseUrl}/v1/events/batch`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status_receipt: statusReceipt, records: [] }),
+    })).status, 401, "a deletion receipt cannot authorize event ingestion");
+    assert.equal((await signed(SDK_INSTALLATION_PRIVACY_PATH, {
+      installation_id: peerInstallationId, status_receipt: statusReceipt,
+    }, { secret: peerCredential.installation_secret, installationKeyId: peerCredential.installation_key_id })).status, 409);
+
+    const identity = {
+      tenantId, appId, actorType: "sdk_installation" as const,
+      actorRef: `sdk_installation:${credential.installation_key_id}`,
+      requesterAuthRef: "sdk_auth:synthetic-receipt-retry",
+      installationKeyId: credential.installation_key_id,
+      deletionSubjectDigest: installationIdDigest(authConfig, receiptInstallationId),
+      statusReceiptDigest,
+    };
+    const body = {
+      tenant_id: tenantId, app_id: appId, requested_via: "on_device_sdk" as const,
+      deletion_scope: "installation" as const, deletion_subject_ref: receiptInstallationId,
+    };
+    const beforeRetry = await withTenant(pool, tenantId, async (client) => (await client.query<{
+      privacy_request_id: string; expires_at: string;
+    }>(
+      `SELECT privacy_request_id,status_receipt_expires_at::text AS expires_at
+         FROM control.privacy_deletion_jobs WHERE tenant_id=$1 AND app_id=$2 AND status_receipt_digest=$3`,
+      [tenantId, appId, statusReceiptDigest],
+    )).rows[0]);
+    // These identities model concurrent requests authenticated before revocation committed.
+    const retries = await Promise.all([1, 2].map(() => executePrivacyRequest(pool, identity, body, payloadStore)));
+    for (const retry of retries) assert.equal(retry.privacy_request_id, beforeRetry.privacy_request_id);
+    await assert.rejects(executePrivacyRequest(pool, {
+      ...identity, statusReceiptDigest: createHash("sha256").update(randomBytes(32)).digest("hex"),
+    }, body, payloadStore), { message: "installation_credential_inactive", statusCode: 401 });
+    const afterRetry = await withTenant(pool, tenantId, async (client) => ({
+      jobs: (await client.query<{ privacy_request_id: string; expires_at: string }>(
+        `SELECT privacy_request_id,status_receipt_expires_at::text AS expires_at
+           FROM control.privacy_deletion_jobs WHERE tenant_id=$1 AND app_id=$2 AND actor_ref=$3`,
+        [tenantId, appId, identity.actorRef],
+      )).rows,
+      peerStatus: (await client.query<{ status: string }>(
+        "SELECT status FROM control.installation_credentials_current WHERE installation_key_id=$1",
+        [peerCredential.installation_key_id],
+      )).rows[0].status,
+      audits: Number((await client.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM ledger.audit_logs WHERE action='privacy_delete' AND target_ref=$1",
+        [beforeRetry.privacy_request_id],
+      )).rows[0].count),
+    }));
+    assert.deepEqual(afterRetry, { jobs: [beforeRetry], peerStatus: "active", audits: 1 });
+
+    for (const scope of [{ ...authConfig, tenantId: `tenant-other-${run}` }, { ...authConfig, appId: `app-other-${run}` }]) {
+      const scopedServer = createServer((request, response) => {
+        void handleDevicePrivacyStatus(request, response, {
+          pool, payloadStore, config: scope, maximumBytes: 64 * 1024, maximumEvents: 100,
+          enrollmentBucket: new KeyedTokenBucket(100, 100), installationBucket: new KeyedTokenBucket(100, 100),
+          appBucket: new KeyedTokenBucket(100, 100), privacyBucket: new KeyedTokenBucket(100, 100),
+        }).catch(() => response.writeHead(500).end());
+      });
+      scopedServer.listen(0, "127.0.0.1");
+      await once(scopedServer, "listening");
+      try {
+        const wrongScope = await fetch(`http://127.0.0.1:${(scopedServer.address() as AddressInfo).port}${SDK_INSTALLATION_PRIVACY_PATH}/status`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status_receipt: statusReceipt }),
+        });
+        assert.equal(wrongScope.status, 404);
+        assert.deepEqual(await wrongScope.json(), { error: "not_found" });
+      } finally {
+        scopedServer.close();
+        await once(scopedServer, "close");
+      }
+    }
   });
 
   it("serializes a verified SDK append against installation deletion recognition", async () => {

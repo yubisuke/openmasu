@@ -3,6 +3,12 @@ import SQLite3
 
 private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
+struct DeletionJournal: Codable {
+  let receipt: String
+  let installationId: String
+  var replacementId: String?
+}
+
 public final class OpenMasuStorage: @unchecked Sendable {
   public static let directoryName = "OpenMasuSDK"
 
@@ -43,6 +49,7 @@ public final class OpenMasuStorage: @unchecked Sendable {
     try lock.withLock {
       let url = root.appendingPathComponent("installation-id")
       if let value = try? String(contentsOf: url, encoding: .utf8), !value.isEmpty { return value }
+      if let journal = try deletionJournal() { return journal.installationId }
       let value = "installation:\(UUID().uuidString.lowercased())"
       try write(value, to: url)
       return value
@@ -74,7 +81,45 @@ public final class OpenMasuStorage: @unchecked Sendable {
 
   public func isInstallRecorded() throws -> Bool { try metadata("install_recorded") == "1" }
   public func markInstallRecorded() throws { try setMetadata("install_recorded", value: "1") }
+  func hasQueuedEvent(_ eventId: String) throws -> Bool {
+    try lock.withLock { try queuedEvent(eventId: eventId) != nil }
+  }
   public func isResetPending() throws -> Bool { try metadata("reset_pending") == "1" }
+  func deletionJournal() throws -> DeletionJournal? {
+    try lock.withLock {
+      let url = root.appendingPathComponent("deletion-journal.json")
+      guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+      return try JSONDecoder().decode(DeletionJournal.self, from: Data(contentsOf: url))
+    }
+  }
+
+  func beginDeletion() throws -> DeletionJournal {
+    try lock.withLock {
+      if let existing = try deletionJournal() { return existing }
+      let receipt = (0..<32).map { _ in String(format: "%02x", UInt8.random(in: 0...255)) }.joined()
+      let journal = DeletionJournal(receipt: receipt, installationId: try installationId())
+      try write(JSONEncoder().encode(journal), to: root.appendingPathComponent("deletion-journal.json"))
+      return journal
+    }
+  }
+
+  /// Persist the one replacement before touching files/SQLite; interrupted switching is replayable.
+  func completeDeletion() throws -> String {
+    try lock.withLock {
+      guard var journal = try deletionJournal() else { return try installationId() }
+      if journal.replacementId == nil {
+        journal.replacementId = "installation:\(UUID().uuidString.lowercased())"
+        try write(JSONEncoder().encode(journal), to: root.appendingPathComponent("deletion-journal.json"))
+      }
+      try clearForReset()
+      try write(journal.replacementId!, to: root.appendingPathComponent("installation-id"))
+      try markResetPending()
+      try FileManager.default.removeItem(at: root.appendingPathComponent("deletion-journal.json"))
+      return journal.replacementId!
+    }
+  }
+
+  func discardQueuedMeasurement() throws { try lock.withLock { try execute("DELETE FROM queued_events") } }
   public func markResetPending() throws { try setMetadata("reset_pending", value: "1") }
   public func clearResetPending() throws {
     try lock.withLock {
@@ -268,10 +313,17 @@ public final class OpenMasuStorage: @unchecked Sendable {
   public func clearForReset() throws {
     try lock.withLock {
       let consentBarrier = try metadataUnlocked("consent_barrier")
-      try execute("DELETE FROM queued_events")
-      try execute("DELETE FROM metadata")
-      if let consentBarrier {
-        try setMetadataUnlocked("consent_barrier", value: consentBarrier)
+      let collection = try metadataUnlocked("collection_enabled")
+      try execute("BEGIN IMMEDIATE")
+      do {
+        try execute("DELETE FROM queued_events")
+        try execute("DELETE FROM metadata")
+        if let consentBarrier { try setMetadataUnlocked("consent_barrier", value: consentBarrier) }
+        if let collection { try setMetadataUnlocked("collection_enabled", value: collection) }
+        try execute("COMMIT")
+      } catch {
+        try? execute("ROLLBACK")
+        throw error
       }
       for name in ["credential.json", "installation-id"] {
         try? FileManager.default.removeItem(at: root.appendingPathComponent(name))

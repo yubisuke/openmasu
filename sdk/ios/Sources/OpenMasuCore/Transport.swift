@@ -6,7 +6,15 @@ public protocol OpenMasuTransport: Sendable {
   func deleteInstallation(credential: InstallationCredential, installationId: String) async throws
 }
 
-public final class HmacHttpTransport: OpenMasuAppStoreTransport, @unchecked Sendable {
+public enum DeletionStatus: Sendable { case missing, processing, completed }
+
+/// Optional capability. Existing custom transports retain synchronous deletion semantics.
+public protocol OpenMasuDeletionTransport: OpenMasuTransport {
+  func beginDeletion(credential: InstallationCredential, installationId: String, receipt: String) async throws -> DeletionStatus
+  func deletionStatus(receipt: String) async throws -> DeletionStatus
+}
+
+public final class HmacHttpTransport: OpenMasuAppStoreTransport, OpenMasuDeletionTransport, @unchecked Sendable {
   private let configuration: OpenMasuConfiguration
   private let session: URLSession
 
@@ -42,10 +50,35 @@ public final class HmacHttpTransport: OpenMasuAppStoreTransport, @unchecked Send
     guard response.status == 201 else { throw OpenMasuError.transport(response.status) }
   }
 
+  public func beginDeletion(credential: InstallationCredential, installationId: String, receipt: String) async throws -> DeletionStatus {
+    let body = try EventFactory.json(["installation_id": installationId, "status_receipt": receipt]).data(using: .utf8)!
+    let response = try await request(path: "/v1/privacy/installation", body: body, credential: credential)
+    guard response.status == 201 || response.status == 202 else { throw OpenMasuError.transport(response.status) }
+    return try decodeDeletionStatus(response.body)
+  }
+
+  public func deletionStatus(receipt: String) async throws -> DeletionStatus {
+    let body = try EventFactory.json(["status_receipt": receipt]).data(using: .utf8)!
+    let response = try await request(path: "/v1/privacy/installation/status", body: body, credential: nil, authenticated: false)
+    if response.status == 404 { return .missing }
+    guard response.status == 200 else { throw OpenMasuError.transport(response.status) }
+    return try decodeDeletionStatus(response.body)
+  }
+
+  private func decodeDeletionStatus(_ body: Data) throws -> DeletionStatus {
+    let value = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+    switch value?["status"] as? String {
+    case "completed": return .completed
+    case "processing": return .processing
+    default: throw OpenMasuError.responseInvalid
+    }
+  }
+
   func request(
     path: String,
     body: Data,
-    credential: InstallationCredential?
+    credential: InstallationCredential?,
+    authenticated: Bool = true
   ) async throws -> (status: Int, body: Data) {
     let timestampMs = Int64(Date().timeIntervalSince1970 * 1_000)
     let nonceBytes = Data((0..<18).map { _ in UInt8.random(in: 0...255) })
@@ -68,11 +101,13 @@ public final class HmacHttpTransport: OpenMasuAppStoreTransport, @unchecked Send
     request.httpMethod = "POST"
     request.httpBody = body
     request.setValue("application/json", forHTTPHeaderField: "content-type")
-    request.setValue(configuration.sdkKeyId, forHTTPHeaderField: "x-openmasu-sdk-key-id")
-    if let credential { request.setValue(credential.keyId, forHTTPHeaderField: "x-openmasu-installation-key-id") }
-    request.setValue(String(timestampMs), forHTTPHeaderField: "x-openmasu-timestamp-ms")
-    request.setValue(nonce, forHTTPHeaderField: "x-openmasu-nonce")
-    request.setValue(signature, forHTTPHeaderField: "x-openmasu-signature")
+    if authenticated {
+      request.setValue(configuration.sdkKeyId, forHTTPHeaderField: "x-openmasu-sdk-key-id")
+      if let credential { request.setValue(credential.keyId, forHTTPHeaderField: "x-openmasu-installation-key-id") }
+      request.setValue(String(timestampMs), forHTTPHeaderField: "x-openmasu-timestamp-ms")
+      request.setValue(nonce, forHTTPHeaderField: "x-openmasu-nonce")
+      request.setValue(signature, forHTTPHeaderField: "x-openmasu-signature")
+    }
     let (data, rawResponse) = try await session.data(for: request)
     guard let response = rawResponse as? HTTPURLResponse else { throw OpenMasuError.responseInvalid }
     return (response.statusCode, data)

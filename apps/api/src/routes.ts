@@ -1,4 +1,4 @@
-export type RouteAuth = "public" | "admin_bearer" | "sdk_hmac" | "server_hmac" | "google_oidc" | "dashboard_session";
+export type RouteAuth = "public" | "admin_bearer" | "sdk_hmac" | "privacy_receipt" | "server_hmac" | "google_oidc" | "dashboard_session";
 export type RouteCapability = "read" | "operate" | "administer";
 
 export type RouteHandler =
@@ -21,6 +21,7 @@ export type RouteHandler =
   | "apple_purchase_submit"
   | "server_batch"
   | "device_privacy"
+  | "device_privacy_status"
   | "device_dsar"
   | "admin_apps_list"
   | "admin_apps_create"
@@ -156,6 +157,7 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "apple_purchase_submit", method: "POST", pattern: /^\/v1\/apple\/purchases\/submit$/, auth: "sdk_hmac", mutates: true },
   { handler: "server_batch", method: "POST", pattern: /^\/v1\/events\/server$/, auth: "server_hmac", mutates: true },
   { handler: "device_privacy", method: "POST", pattern: exactPathPattern(SDK_INSTALLATION_PRIVACY_PATH), auth: "sdk_hmac", mutates: true },
+  { handler: "device_privacy_status", method: "POST", pattern: /^\/v1\/privacy\/installation\/status$/, auth: "privacy_receipt", mutates: false },
   { handler: "device_privacy", method: "POST", pattern: /^\/v1\/privacy\/on-device$/, auth: "sdk_hmac", mutates: true },
   { handler: "device_dsar", method: "POST", pattern: /^\/v1\/privacy\/access$/, auth: "sdk_hmac", mutates: true },
   { handler: "apple_skan_postback", method: "POST", pattern: exactPathPattern(APPLE_SKAN_POSTBACK_PATH), auth: "public", mutates: true },

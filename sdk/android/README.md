@@ -51,6 +51,16 @@ unrelated replacement identity. The SDK uses the canonical
 `POST /v1/privacy/installation` route; the server also retains the older
 `POST /v1/privacy/on-device` route as an authenticated compatibility alias.
 
+Reset persists a deletion receipt before sending. HTTP 202 means pending, not
+completion: collection and ordinary delivery stay stopped, and initialize,
+flush/background delivery, or another reset resumes status checking after restart.
+Only confirmed completion switches to one replacement installation. Consent and
+explicit collection disablement survive the switch. A pending reset callback is
+`false`; retry it to observe completion. The built-in transport supports receipts;
+custom transports can opt into `OpenMasuDeletionTransport` (legacy transports must
+only report success after synchronous deletion completes). See the
+[receipt protocol](../../docs/privacy-security.md#sdk-deletion-receipts).
+
 SDK storage is excluded from backup and transfer where Android supports both
 the modern data-extraction rules and legacy backup attributes. SQLite
 `secure_delete` is a limited local measure, not a guarantee that every device

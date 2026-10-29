@@ -132,6 +132,28 @@ through `raw_records_current`.
 
 ## Access, portability, correction, and deletion
 
+### SDK deletion receipts
+
+The built-in native transports persist 32 random bytes (64 lowercase hex characters)
+before a signed `POST /v1/privacy/installation`. Its optional `status_receipt` is
+bound to the authenticated installation's existing deletion job in the recognition
+transaction. Only its SHA-256 digest is stored; it is never a measurement artifact,
+URL parameter, or log field. Repeating the same recognized request does not create
+another deletion job. Legacy requests without a receipt keep their existing response.
+
+`POST /v1/privacy/installation/status` accepts only `{ "status_receipt": "..." }`
+and returns only `{ "status": "processing" }` or `{ "status": "completed" }`.
+This rate-limited, no-store projection uses the deployment's trusted tenant/app
+scope, not client-supplied scope. The receipt remains usable after installation
+revocation but authorizes no ingestion, export, or new deletion. Unknown, wrong-scope,
+or expired receipts return 404. Expiry is fixed at 30 days from recognition and
+does not slide. A lost initial reply can therefore be recovered without reusing a
+revoked credential. A missing/expired receipt is never evidence of completion:
+the SDK remains stopped when it cannot confirm deletion; operator intervention is
+needed if the receipt expires after recognition. Do not log receipt request bodies.
+
+### Data-subject operations
+
 - An enrolled installation may sign an access or portability request for its
   own installation only.
 - Native SDK installation reset sends its credential-bound deletion to

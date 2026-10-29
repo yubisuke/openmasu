@@ -62,6 +62,10 @@ class OpenMasuSdk private constructor(
   fun initialize() {
     if (!initialized.compareAndSet(false, true)) return
     storage.persistConfiguration(configuration)
+    if (storage.deletionReceipt() != null) {
+      executor.execute { resumeDeletion() }
+      return
+    }
     if (!isCollectionEnabled()) return
     executor.execute {
       purgeConsentRequiredQueueIfBlocked()
@@ -213,6 +217,7 @@ class OpenMasuSdk private constructor(
       executor.execute {
         val result = runCatching {
           when {
+            storage.deletionReceipt() != null && measurementRevision.get() != revision -> OpenMasuPurchaseQueueResult.CONTEXT_CHANGED
             !isCollectionEnabled() -> OpenMasuPurchaseQueueResult.COLLECTION_DISABLED
             storage.consentBarrierActive() -> OpenMasuPurchaseQueueResult.CONSENT_REQUIRED
             storage.installationId() != installationId -> OpenMasuPurchaseQueueResult.INSTALLATION_CHANGED
@@ -323,28 +328,44 @@ class OpenMasuSdk private constructor(
     if (enabled) executor.execute { drain() }
   }
 
-  fun isCollectionEnabled(): Boolean = storage.collectionEnabled(defaultCollectionEnabled)
+  fun isCollectionEnabled(): Boolean = storage.deletionReceipt() == null && storage.collectionEnabled(defaultCollectionEnabled)
 
   @JvmOverloads
   fun resetInstallationId(onComplete: (Boolean) -> Unit = {}) {
     measurementRevision.incrementAndGet()
+    val oldId = storage.installationId()
+    // Enrollment already queued by initialize may not have completed yet.
+    val receipt = if (storage.resetInstallPending() || storage.credential() == null) null else storage.beginDeletion()
     executor.execute {
-      val oldId = storage.installationId()
-      val credential = storage.credential()
-      if (credential == null || !transport.deleteInstallation(credential, oldId)) {
-        onComplete(false)
-        return@execute
+      // Calls queued for the same receipt cannot reset its replacement again.
+      val result = when {
+        storage.installationId() != oldId || storage.resetInstallPending() -> completePendingResetInstall()
+        storage.credential() == null -> false
+        receipt != null && storage.deletionReceipt() != receipt -> completePendingResetInstall()
+        else -> { storage.beginDeletion(); resumeDeletion() }
       }
-      database.runInTransaction { database.queue().deleteAll() }
-      storage.clearAfterDeletion()
-      val newId = storage.replaceInstallationId()
-      storage.markResetInstallPending()
-      onComplete(completePendingResetInstall(newId))
+      onComplete(result)
     }
   }
 
+  private fun resumeDeletion(): Boolean {
+    val receipt = storage.deletionReceipt() ?: return completePendingResetInstall()
+    database.runInTransaction { database.queue().deleteAll() }
+    return runCatching {
+      val credential = storage.credential() ?: return false
+      val status = if (transport is OpenMasuDeletionTransport) {
+        val observed = transport.deletionStatus(receipt)
+        if (observed == DeletionStatus.MISSING) transport.beginDeletion(credential, storage.installationId(), receipt) else observed
+      } else if (transport.deleteInstallation(credential, storage.installationId())) DeletionStatus.COMPLETED else DeletionStatus.PROCESSING
+      if (status != DeletionStatus.COMPLETED) { backstopScheduler(context); return false }
+      completePendingResetInstall(storage.completeDeletion(receipt))
+    }.getOrElse { backstopScheduler(context); false }
+  }
+
   internal fun drain(): Boolean {
+    if (storage.deletionReceipt() != null) return resumeDeletion()
     if (!isCollectionEnabled()) return false
+    if (storage.resetInstallPending() && !storage.consentBarrierActive()) return completePendingResetInstall()
     purgeConsentRequiredQueueIfBlocked()
     val batch = database.queue().pending(100)
     if (batch.isEmpty()) return true
@@ -391,6 +412,7 @@ class OpenMasuSdk private constructor(
   }
 
   private fun enqueueJson(eventName: String, purpose: String, payload: JSONObject, eventId: String? = null): Boolean {
+    if (storage.deletionReceipt() != null) return false
     if (!isCollectionEnabled() && eventName != "consent_changed") return false
     if (storage.consentBarrierActive() && purpose in CONSENT_REQUIRED_PURPOSES) return false
     val now = EventFactory.canonicalNow()
@@ -406,16 +428,19 @@ class OpenMasuSdk private constructor(
   }
 
   private fun completePendingResetInstall(installationId: String = storage.installationId()): Boolean {
-    if (!storage.resetInstallPending() || storage.consentBarrierActive()) return true
+    if (!storage.resetInstallPending() || storage.consentBarrierActive() || !isCollectionEnabled()) return true
     return runCatching {
       ensureCredential(installationId)
-      enqueueJson(
+      val eventId = "event:reset:$installationId"
+      val admitted = database.queue().byEventId(eventId) != null || enqueueJson(
         "install", "attribution",
         EventFactory.install(
           installationId, configuration.wrapperVersion ?: configuration.sdkVersion,
           PlayReferrerEvidence("none", "ok"), MetaReferrerEvidence("provider_unavailable"), "identifier_reset",
         ),
+        eventId,
       )
+      check(admitted) { "reset_install_not_queued" }
       storage.clearResetInstallPending()
       drain()
       true
