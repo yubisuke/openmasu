@@ -19,7 +19,7 @@ This feature does not independently attest or recalculate uploaded values.
 
 Open **Reports → Scheduled aggregate comparisons** as an operator or administrator.
 Choose **Register or replace a comparison**, enter the inclusive target dates,
-UTC cutoff lag, retention, evidence mode and absolute threshold, then select two
+UTC cutoff lag, retention, evidence mode and threshold policy, then select two
 aggregate snapshot JSON files. **Review definition and evidence** displays each
 side's meaning, time zone, cutoff, units and maturity before **Confirm and save**.
 No command JSON needs to be pasted. Replacement uses the active-revision selector;
@@ -121,6 +121,46 @@ records and 200 recent result summaries. Full stored results are separately read
 with `GET /v1/admin/apps/:app/comparison-runs/:run_id`; the dashboard offers the
 same stored result as a JSON download. GET does not schedule, write or recalculate.
 
+## Exact numeric threshold policies
+
+The form offers **absolute** or **relative** difference and an explicit **left**
+or **right** baseline. Both manual and automatic-left registrations use the same
+policy. A new JSON threshold is, for example:
+
+```json
+{"kind":"relative","baseline":"left","value_unscaled":"2","scale":1}
+```
+
+This means `abs(right - left) / left > 0.2` (20%). With values 100 and 125,
+the left baseline gives 25% and exceeds this threshold; the right baseline gives
+20% and is within it. Equality is within. Values are aligned using integers;
+relative comparison uses cross-products, not a rounded quotient. Absolute
+difference keeps the original unit and supports negative values. Relative
+comparison returns `unknown` with `zero_baseline` or `negative_operand` instead
+of inventing a percentage. Missing and undefined operands remain unknown;
+unelapsed or unknown maturity remains incomparable with `maturity_unknown`.
+Declaration-only mode never produces a threshold decision.
+
+An optional `"minimum_population":"50"` requires at least 50 installations on
+the selected baseline side. This narrow implementation accepts it **only when
+that baseline metric itself is a captured, present `cohort_size` count**. A
+report's number of rows is not a population. ROAS, CPI, retention and external
+declarations do not carry an eligible population operand here, so configuring a
+minimum for those inputs is refused with `comparison_population_unsupported`.
+No denominator is inferred and no extra event query is made. If a later dated
+operand lacks the evidence, its threshold state is `unknown / population_unknown`;
+an observed count below the minimum is `unknown / below_minimum_population`, not
+within threshold. Captured uploaded evidence still has the operator-supplied
+authenticity limitation described above; a minimum is not statistical significance.
+
+Explicit policies create definition version 2 and
+`scheduled-cohort-comparison-v2` results, which include `threshold_policy` and
+closed row-level unknown reasons. Change a policy by creating a replacement
+revision. Legacy JSON `{ "value_unscaled":"300000", "scale":6 }` still creates
+version 1 with the original absolute calculation and canonical result bytes;
+existing definitions and stored results are not rewritten. New form submissions
+use version 2, while existing command clients without policy fields remain valid.
+
 ## Result states and reproducibility
 
 - `missing_input`: one or both dated operands have not arrived. A later deposit
@@ -129,8 +169,8 @@ same stored result as a JSON download. GET does not schedule, write or recalcula
   matching meaning/conditions. No numerical threshold decision is invented.
 - `unknown`: declaration-only, empty, missing-row or undefined values do not
   establish a numerical threshold decision. Row-level states remain in the result.
-- `within_threshold` / `threshold_exceeded`: absolute right-minus-left delta is
-  compared exactly at aligned integer scales. Equality is within the threshold.
+- `within_threshold` / `threshold_exceeded`: the declared absolute or relative
+  policy is compared exactly with integer arithmetic. Equality is within the threshold.
   External-declaration mode remains explicitly operator-declared, not verified.
 
 Modes are `captured` (default comparison checks), `external_declared` (explicit

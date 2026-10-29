@@ -51,12 +51,17 @@ export async function previewComparisonForm(form: FormData, scope: Scope, plans:
   const action = scalar(form, "action");
   if (action === "register" || action === "register_local") {
     const local = action === "register_local";
+    const policyFields = ["threshold_kind", "threshold_baseline", "minimum_population"];
+    const policy = policyFields.some(field => form.has(field));
     exactFields(form, ["action", "name", "first_date", "last_date", "watermark_lag_days", "retention_days", "mode",
       "threshold_value_unscaled", "threshold_scale", "supersedes_id", "right_snapshot",
+      ...(policy ? policyFields : []),
       ...(local ? ["metric_schedule_id", "metric_name"] : ["left_snapshot"])]);
     const registration: Record<string, unknown> = { name: scalar(form, "name"), first_date: scalar(form, "first_date"), last_date: scalar(form, "last_date"),
       watermark_lag_days: integer(form, "watermark_lag_days"), retention_days: integer(form, "retention_days"), mode: scalar(form, "mode"),
-      threshold: { value_unscaled: scalar(form, "threshold_value_unscaled"), scale: integer(form, "threshold_scale") },
+      threshold: { value_unscaled: scalar(form, "threshold_value_unscaled"), scale: integer(form, "threshold_scale"),
+        ...(policy ? { kind: scalar(form, "threshold_kind"), baseline: scalar(form, "threshold_baseline"),
+          ...(scalar(form, "minimum_population") ? { minimum_population: scalar(form, "minimum_population") } : {}) } : {}) },
       supersedes_id: scalar(form, "supersedes_id") || null,
       ...(local ? { local_selection: { metric_schedule_id: scalar(form, "metric_schedule_id"), metric_name: scalar(form, "metric_name") } }
         : { left_snapshot: await upload(form, "left_snapshot", scope) }), right_snapshot: await upload(form, "right_snapshot", scope) };

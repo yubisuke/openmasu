@@ -95,8 +95,22 @@ it("recurring_comparison_form_worker_saved_bytes_next_date_revisions_expiry_and_
   assert.equal(await withTenant(reader,"tenant-synthetic-other",async c=>(await c.query("SELECT * FROM control.comparison_definitions")).rowCount),0);
   const columns=await withTenant(reader,scope.tenantId,async c=>(await c.query("SELECT snapshot FROM control.comparison_snapshots WHERE comparison_id=$1",[saved.comparison_id])).rows);
   assert.doesNotMatch(jcs(columns),/installation_id|raw_payload|evidence_refs|csv_bytes/);
-  const replacement=await command({ action:"register",registration:{ ...registration,supersedes_id:saved.comparison_id,name:"Synthetic replacement",threshold:{ value_unscaled:"1",scale:6 } } });
-  assert.equal(replacement.status,200); await processRecurringComparisons(pool,scope.tenantId,now);
+  const unsupported=await command({ action:"register",registration:{ ...registration,name:"Synthetic unsupported population",
+    threshold:{ kind:"relative",baseline:"left",value_unscaled:"1",scale:6,minimum_population:"10" } } });
+  assert.equal(unsupported.status,400); assert.deepEqual(await unsupported.json(),{error:"comparison_population_unsupported"});
+  const replacementRegistration={ ...registration,supersedes_id:saved.comparison_id,name:"Synthetic replacement",
+    threshold:{ kind:"relative",baseline:"right",value_unscaled:"1",scale:6 } };
+  const replacement=await command({ action:"register",registration:replacementRegistration });
+  assert.equal(replacement.status,200); const replaced=await replacement.json() as any;
+  assert.equal(replaced.definition.version,2); assert.notEqual(replaced.definition_digest,saved.definition_digest);
+  await processRecurringComparisons(pool,scope.tenantId,now);
+  const v2run=(await list()).runs.find((run:any)=>run.comparison_id===replaced.comparison_id&&run.target_date==="2026-08-01");
+  assert.ok(v2run); const v2=await readComparisonRun(reader,scope,v2run.run_id,now);
+  const v2parsed=parseComparisonRegistration(replacementRegistration);
+  assert.equal(v2.format,"scheduled-cohort-comparison-v2"); assert.equal(v2.state,"threshold_exceeded");
+  assert.equal(jcs(v2),jcs(recurringComparisonResult(v2parsed.definition,v2parsed.definition.first_date,v2parsed.left,v2parsed.right)));
+  assert.equal((await processRecurringComparisons(pool,scope.tenantId,now)).completed,0);
+  assert.equal(jcs(await readComparisonRun(reader,scope,v2run.run_id,now)),jcs(v2));
   assert.equal(await (await download()).text(),bytes,"replacing a definition must not overwrite its prior result");
   const page=await fetch(`${base}/dashboard/apps/app-a/comparisons`,{ headers:{ cookie } }); assert.equal(page.status,200);
   const html=await page.text(); assert.match(html,/threshold_exceeded/); assert.doesNotMatch(html,/<script|javascript:|\son\w+=/i);

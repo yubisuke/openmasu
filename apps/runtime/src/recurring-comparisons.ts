@@ -8,6 +8,7 @@ import { comparisonPrivacyEpoch } from "./fixed-comparison.js";
 import { captureLocalComparison, resolveLocalComparisonSelection } from "./recurring-comparison-local.js";
 import { assertSnapshotPeriod, boundedComparisonSnapshot, comparisonWatermark, parseComparisonRegistration,
   recurringComparisonLimits as limits, recurringComparisonResult, type ComparisonDefinition } from "./recurring-comparison-model.js";
+import { parseComparisonThresholdPolicy } from "./recurring-comparison-threshold.js";
 export * from "./recurring-comparison-model.js";
 
 type Scope = { tenantId: string; appId: string };
@@ -58,7 +59,14 @@ export async function prepareComparisonRegistration(pool: Pool, scope: Scope, in
   if (input.local_selection === undefined) return { parsed: parseComparisonRegistration(input), captured: undefined };
   if (input.left_snapshot !== undefined) throw Error("comparison_local_capture_required");
   const { local_selection, expected_left_snapshot_digest: _expected, ...manual } = input;
-  const settings = parseComparisonRegistration({ ...manual, left_snapshot: input.right_snapshot });
+  let threshold = input.threshold;
+  if (threshold && typeof threshold === "object" && !Array.isArray(threshold) && "kind" in threshold) {
+    // The left operand is not known until capture. Validate the policy now, then
+    // validate its population requirement against the real operand below.
+    const { minimum_population: _minimum, ...policy } = parseComparisonThresholdPolicy(threshold);
+    threshold = policy;
+  }
+  const settings = parseComparisonRegistration({ ...manual, threshold, left_snapshot: input.right_snapshot });
   const selection = await withTenant(pool, scope.tenantId, client => resolveLocalComparisonSelection(client, scope, local_selection));
   const captured = await captureLocalComparison(pool, scope, selection, settings.definition, settings.definition.first_date);
   return { parsed: parseComparisonRegistration(input, { selection, snapshot: captured.snapshot }), captured };

@@ -52,6 +52,21 @@ it("typed recurring preview uses existing meaning, maturity, bounds and exact fi
   const raw = registrationForm(); raw.set("left_snapshot", new Blob(["not json"]), "bad.json");
   await assert.rejects(previewComparisonForm(raw, scope, []), /comparison_invalid_json/);
 });
+it("typed threshold policy reviews the chosen relative baseline and refuses unsupported population", async () => {
+  const form = registrationForm(); form.set("threshold_kind", "relative"); form.set("threshold_baseline", "right");
+  form.set("minimum_population", ""); form.set("threshold_value_unscaled", "1"); form.set("threshold_scale", "1");
+  const preview = await previewComparisonForm(form, scope, []);
+  const registration = preview.command.registration as Record<string, unknown>;
+  assert.deepEqual(registration.threshold, { kind: "relative", baseline: "right", value_unscaled: "1", scale: 1 });
+  assert.equal(preview.resultState, "threshold_exceeded");
+  const parsed = parseComparisonRegistration(registration); assert.equal(parsed.definition.version, 2);
+  const html = renderComparisonFormPreview("app-a", "synthetic-csrf", preview);
+  assert.match(html, /relative/); assert.match(html, /right/);
+  form.set("minimum_population", "50");
+  await assert.rejects(previewComparisonForm(form, scope, []), /population_unsupported/);
+  form.delete("minimum_population");
+  await assert.rejects(previewComparisonForm(form, scope, []), /input_invalid/);
+});
 it("typed local comparison review binds a server read digest without accepting an uploaded left operand", async () => {
   const input = syntheticComparisonRegistration(), form = registrationForm(input);
   form.set("action", "register_local"); form.delete("left_snapshot");

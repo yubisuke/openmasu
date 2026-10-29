@@ -5,6 +5,12 @@ import type { ComparisonFormPreview } from "../recurring-comparison-form.js";
 
 const input = (name: string, label: string, type = "text", attributes = "") => `<label>${e(label)} <input name="${e(name)}" type="${type}" ${attributes} required></label>`;
 const file = (name: string, label: string) => input(name, label, "file", 'accept=".json,application/json"');
+const thresholdFields = () => `<label>Threshold policy <select name="threshold_kind"><option value="absolute">Absolute difference</option><option value="relative">Relative difference</option></select></label>
+<label>Baseline side <select name="threshold_baseline"><option value="left">Left</option><option value="right">Right</option></select></label>
+${input("threshold_value_unscaled", "Threshold integer", "text", 'pattern="(0|[1-9][0-9]{0,99})" value="300000"')}${input("threshold_scale", "Threshold decimal scale", "number", 'min="0" max="18" value="6"')}
+<p>300000 at scale 6 means 0.30 absolute units, or 30% relative difference. Equality is within the threshold. Relative zero baselines and negative operands are unknown.</p>
+<label>Minimum baseline cohort (optional) <input name="minimum_population" type="text" pattern="[1-9][0-9]{0,99}"></label>
+<p>Minimum population is supported only when the baseline metric itself is a captured cohort-size count. ROAS, CPI, retention and external declarations do not supply that operand here; unsupported settings are refused.</p>`;
 function forms(base: string, token: string, saved: Awaited<ReturnType<typeof readComparisons>>) {
   const start = `<form method="post" enctype="multipart/form-data" action="${base}/comparisons/preview"><input type="hidden" name="csrf_token" value="${e(token)}">`;
   const active = saved.plans.filter(row => row.active && row.privacy_state === "current");
@@ -14,7 +20,7 @@ ${start}<input type="hidden" name="action" value="register">
 ${input("name", "Name", "text", 'maxlength="80"')}${input("first_date", "First UTC target date (inclusive)", "date")}${input("last_date", "Last UTC target date (inclusive)", "date")}
 ${input("watermark_lag_days", "Cutoff lag in days (1–366)", "number", 'min="1" max="366" value="9"')}${input("retention_days", "Retain stored input/result values (days)", "number", 'min="1" max="90" value="30"')}
 <label>Evidence mode <select name="mode"><option value="captured">Captured definition evidence</option><option value="external_declared">Explicit external declaration</option><option value="declared_only">Declaration only (no threshold decision)</option></select></label>
-${input("threshold_value_unscaled", "Absolute difference threshold: integer", "text", 'pattern="(0|[1-9][0-9]{0,99})" value="300000"')}${input("threshold_scale", "Threshold decimal scale (300000 at scale 6 = 0.30)", "number", 'min="0" max="18" value="6"')}
+${thresholdFields()}
 <label>Replace revision <select name="supersedes_id"><option value="">Create a new comparison</option>${options(active)}</select></label>
 ${file("left_snapshot", "Left initial aggregate snapshot")}${file("right_snapshot", "Right initial aggregate snapshot")}<button type="submit">Review definition and evidence</button></form>
 <h2>Use saved server runs for the left operand</h2><p>Select one active metric schedule and one of its metrics. The schedule must have exactly one matching evaluation. The first date must already have complete, mature saved runs at the chosen cutoff. Review reads them without saving; confirmation rechecks their digest. Later dates are captured by the worker. The right operand remains an operator upload.</p>
@@ -22,7 +28,7 @@ ${start}<input type="hidden" name="action" value="register_local">
 ${input("name", "Name", "text", 'maxlength="80"')}${input("first_date", "First UTC target date (inclusive)", "date")}${input("last_date", "Last UTC target date (inclusive)", "date")}
 ${input("watermark_lag_days", "Cutoff lag in days (1–366)", "number", 'min="1" max="366" value="9"')}${input("retention_days", "Retain stored input/result values (days)", "number", 'min="1" max="90" value="30"')}
 <label>Evidence mode <select name="mode"><option value="captured">Captured definition evidence</option><option value="external_declared">Explicit external declaration</option><option value="declared_only">Declaration only (no threshold decision)</option></select></label>
-${input("threshold_value_unscaled", "Absolute difference threshold: integer", "text", 'pattern="(0|[1-9][0-9]{0,99})" value="300000"')}${input("threshold_scale", "Threshold decimal scale (300000 at scale 6 = 0.30)", "number", 'min="0" max="18" value="6"')}
+${thresholdFields()}
 <label>Replace revision <select name="supersedes_id"><option value="">Create a new comparison</option>${options(active)}</select></label>
 ${input("metric_schedule_id", "Saved metric schedule ID")}${input("metric_name", "Metric name", "text", 'pattern="[a-z][a-z0-9_]{2,127}"')}
 ${file("right_snapshot", "Right initial aggregate snapshot")}<button type="submit">Review server selection and evidence</button></form>
