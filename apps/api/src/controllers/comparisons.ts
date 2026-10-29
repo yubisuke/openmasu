@@ -9,7 +9,9 @@ import { dashboardHeaders, dashboardHtml, json, rawBody } from "../http-response
 import { authorizeDashboardForm } from "../http-security.js";
 import { assertRoleAllows, roleAllows } from "../authorization.js";
 import { csrfToken, recordDashboardAudit } from "../session.js";
-import { renderRecurringComparisons } from "../dashboard/recurring-comparisons.js";
+import { renderComparisonFormPreview, renderRecurringComparisons } from "../dashboard/recurring-comparisons.js";
+import { confirmedComparisonForm, previewComparisonForm } from "../recurring-comparison-form.js";
+import { boundedComparisonOutput } from "../dashboard-comparison.js";
 
 const maximumBody = recurringComparisonLimits.bytes * 2 + 16384;
 const reason = (error: unknown) => error instanceof Error && /^comparison_[a-z_]+$/.test(error.message) ? error.message : "comparison_input_invalid";
@@ -50,15 +52,40 @@ export function createComparisonsControllers(dependencies: Pick<RequestHandlerDe
       action: `comparison_${action}`, targetScope: "app", targetRef, outcome: "succeeded" });
     return result;
   };
-  const dashboard = async ({ request, response, pool, session, appId, appIdentity, target, route }: DashboardAppContext) => {
+  const dashboard = async ({ request, response, pool, session, appId, appIdentity, target, route, startedAt }: DashboardAppContext) => {
     try {
-      if (route.handler === "dashboard_comparison_runs_mutate") {
-        const form = new URLSearchParams((await rawBody(request, maximumBody)).toString("utf8"));
-        if (!await authorizeDashboardForm(dependencies, { request, response, session }, form, "comparison_mutation", "app", appId)) return;
+      if (route.handler === "dashboard_comparison_runs_mutate" || route.handler === "dashboard_comparison_runs_preview") {
         assertRoleAllows(session.role, "operate");
-        if ([...form.keys()].some(key => !["csrf_token", "command"].includes(key)) || form.getAll("command").length !== 1) throw Error("comparison_input_invalid");
-        await mutate(appIdentity, JSON.parse(form.get("command")!));
-        response.writeHead(303, { ...dashboardHeaders, location: `/dashboard/apps/${encodeURIComponent(appId)}/comparisons` }).end(); return;
+        const type = request.headers["content-type"] ?? "";
+        const bytes = await rawBody(request, maximumBody);
+        let form: FormData;
+        if (/^multipart\/form-data;\s*boundary=(?:"[A-Za-z0-9'()+_,./:=? -]{1,70}"|[A-Za-z0-9'()+_,./:=?-]{1,70})$/i.test(type)) {
+          new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+          form = await new Request("http://openmasu.local/comparisons", { method: "POST", headers: { "content-type": type }, body: new Uint8Array(bytes) }).formData();
+        } else if (route.handler === "dashboard_comparison_runs_mutate" && type.startsWith("application/x-www-form-urlencoded")) {
+          // Keep existing command clients compatible; the page only offers typed forms.
+          form = new FormData();
+          for (const [key, value] of new URLSearchParams(new TextDecoder("utf-8", { fatal: true }).decode(bytes))) form.append(key, value);
+        } else throw Error("comparison_multipart_required");
+        const token = form.get("csrf_token");
+        if (form.getAll("csrf_token").length !== 1 || typeof token !== "string") throw Error("comparison_input_invalid");
+        if (!await authorizeDashboardForm(dependencies, { request, response, session }, new URLSearchParams({ csrf_token: token }), "comparison_mutation", "app", appId)) return;
+        if (route.handler === "dashboard_comparison_runs_preview") {
+          const saved = await readComparisons(pool, appIdentity);
+          const preview = await previewComparisonForm(form, appIdentity, saved.plans);
+          dashboardHtml(response, 200, boundedComparisonOutput(renderComparisonFormPreview(appId, csrfToken(session.token), preview), startedAt + 30_000));
+          return;
+        }
+        let command: Record<string, unknown>;
+        if (form.has("confirmation_digest")) command = confirmedComparisonForm(form);
+        else {
+          if ([...form.keys()].some(key => !["csrf_token", "command"].includes(key)) || form.getAll("command").length !== 1
+              || typeof form.get("command") !== "string") throw Error("comparison_input_invalid");
+          command = JSON.parse(form.get("command") as string);
+        }
+        const result = await mutate(appIdentity, command) as { comparison_id?: string };
+        const id = result.comparison_id ?? (typeof command.comparison_id === "string" ? command.comparison_id : "");
+        response.writeHead(303, { ...dashboardHeaders, location: `/dashboard/apps/${encodeURIComponent(appId)}/comparisons${id ? `#comparison-${encodeURIComponent(id)}` : ""}` }).end(); return;
       }
       const runId = decodedPathPart(target.pathname, /\/comparison-runs\/([^/]+)\.json$/);
       if (runId) {
@@ -75,5 +102,6 @@ export function createComparisonsControllers(dependencies: Pick<RequestHandlerDe
     admin_comparison_mutate: { boundary: "admin", handle: admin },
     dashboard_comparison_runs: { boundary: "dashboard_app", handle: dashboard },
     dashboard_comparison_runs_mutate: { boundary: "dashboard_app", handle: dashboard },
+    dashboard_comparison_runs_preview: { boundary: "dashboard_app", handle: dashboard },
   } as const;
 }

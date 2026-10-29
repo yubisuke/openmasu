@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { after, before, it } from "node:test";
 import { createAppPool, createReaderPool, withTenant, type PayloadStore } from "@openmasu/runtime";
-import { processRecurringComparisons, readComparisonRun, registerComparison } from "@openmasu/runtime/recurring-comparisons";
+import { processRecurringComparisons, readComparisonRun, registerComparison, parseComparisonRegistration, recurringComparisonResult } from "@openmasu/runtime/recurring-comparisons";
 import { jcs } from "@openmasu/attribution-core/canonical";
 import { createRequestHandler } from "../../api/src/router.js";
 import { ensureAdminKeys } from "../../api/src/admin-auth.js";
@@ -35,10 +35,27 @@ after(async()=>{ server.close(); await once(server,"close"); await Promise.all([
 it("recurring_comparison_form_worker_saved_bytes_next_date_revisions_expiry_and_RLS",async()=>{
   const registration = syntheticComparisonRegistration();
   assert.equal((await command({ action:"register",registration },readKey)).status,403);
-  const form = new URLSearchParams({ csrf_token:csrf,command:JSON.stringify({ action:"register",registration }) });
-  const post = (origin:string) => fetch(`${base}/dashboard/apps/app-a/comparisons`,{ method:"POST",headers:{ cookie,origin },body:form,redirect:"manual" });
-  assert.equal((await post("https://outside.example.invalid")).status,403);
-  assert.equal((await post("http://localhost:8080")).status,303);
+  const form = new FormData(); form.set("csrf_token",csrf); form.set("action","register");
+  for (const name of ["name","first_date","last_date","watermark_lag_days","retention_days","mode"] as const) form.set(name,String(registration[name]));
+  form.set("supersedes_id", ""); form.set("threshold_value_unscaled",registration.threshold.value_unscaled); form.set("threshold_scale",String(registration.threshold.scale));
+  for (const side of ["left","right"] as const) form.set(`${side}_snapshot`,new Blob([jcs(registration[`${side}_snapshot`])]),`${side}.json`);
+  const counts = () => withTenant(reader,scope.tenantId,async c=>(await c.query(`SELECT
+    (SELECT count(*) FROM control.comparison_definitions) AS definitions,
+    (SELECT count(*) FROM control.comparison_snapshots) AS snapshots,
+    (SELECT count(*) FROM control.comparison_runs) AS runs`)).rows[0]);
+  const beforePreview=await counts();
+  const getPage=await fetch(`${base}/dashboard/apps/app-a/comparisons`,{headers:{cookie}});
+  assert.equal(getPage.status,200); assert.match(await getPage.text(),/name="left_snapshot"/);
+  assert.deepEqual(await counts(),beforePreview,"GET form must not write");
+  const previewPost=(origin:string)=>fetch(`${base}/dashboard/apps/app-a/comparisons/preview`,{method:"POST",headers:{cookie,origin},body:form});
+  assert.equal((await previewPost("https://outside.example.invalid")).status,403);
+  const review=await previewPost("http://localhost:8080"); assert.equal(review.status,200);
+  const reviewHtml=await review.text(); assert.match(reviewHtml,/within_threshold/);
+  assert.deepEqual(await counts(),beforePreview,"preview uses reader role and does not save inputs or results");
+  const confirmation=new FormData(); confirmation.set("csrf_token",csrf); confirmation.set("command",jcs({action:"register",registration}));
+  confirmation.set("confirmation_digest",/name="confirmation_digest" value="([0-9a-f]{64})"/.exec(reviewHtml)![1]);
+  const confirmed=await fetch(`${base}/dashboard/apps/app-a/comparisons`,{method:"POST",headers:{cookie,origin:"http://localhost:8080"},body:confirmation,redirect:"manual"});
+  assert.equal(confirmed.status,303); assert.match(confirmed.headers.get("location")!,/#comparison-/);
   const saved=(await list()).plans[0];
   const first=await processRecurringComparisons(pool,scope.tenantId,now); assert.equal(first.completed,3);
   let state=await list();
@@ -47,6 +64,8 @@ it("recurring_comparison_form_worker_saved_bytes_next_date_revisions_expiry_and_
   const download=()=>fetch(`${base}/dashboard/apps/app-a/comparison-runs/${original.run_id}.json`,{ headers:{ cookie } });
   const bytes=await (await download()).text();
   assert.equal(JSON.parse(bytes).comparison.rows[0].delta_right_minus_left,"250000");
+  const parsed=parseComparisonRegistration(registration);
+  assert.equal(bytes,`${jcs(recurringComparisonResult(parsed.definition,parsed.definition.first_date,parsed.left,parsed.right))}\n`,"typed form and JSON service preserve the same stored result");
   assert.equal((await processRecurringComparisons(pool,scope.tenantId,now)).completed,0);
   assert.equal(await (await download()).text(),bytes);
   const deposit=async(day:string,side:string,snapshot:unknown)=>{const r=await command({ action:"deposit",comparison_id:saved.comparison_id,target_date:day,side,snapshot });assert.equal(r.status,200,await r.text());};

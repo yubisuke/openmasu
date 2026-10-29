@@ -14,10 +14,19 @@ This feature does not independently attest or recalculate uploaded values.
 ## Start with synthetic inputs
 
 Open **Reports → Scheduled aggregate comparisons** as an operator or administrator.
-Paste the command from
+Choose **Register or replace a comparison**, enter the inclusive target dates,
+UTC cutoff lag, retention, evidence mode and absolute threshold, then select two
+aggregate snapshot JSON files. **Review definition and evidence** displays each
+side's meaning, time zone, cutoff, units and maturity before **Confirm and save**.
+No command JSON needs to be pasted. Replacement uses the active-revision selector;
+the separate deposit form accepts one dated side, and deletion requires its own
+confirmation. Saved revisions link to the same stored JSON results as the API.
+
+For a synthetic example, the `registration.left_snapshot` and
+`registration.right_snapshot` objects in
 [`examples/synthetic/recurring-comparison.json`](../examples/synthetic/recurring-comparison.json)
-into the command form. It contains aggregate-only D7 ROAS observations using
-fixture33's reviewed definition: 1.50 versus 1.75, delta 0.25, threshold 0.30.
+are aggregate-only files to select. That example uses fixture33's reviewed D7
+ROAS definition: 1.50 versus 1.75, delta 0.25, threshold integer 300000 / scale 6.
 The initial result is `within_threshold`. These are synthetic operator uploads,
 not fresh event ingestion or actual provider measurements.
 
@@ -37,9 +46,15 @@ checkout; checked-in examples and tests are synthetic only.
 
 ## HTTP and dashboard commands
 
-Bearer API: `POST /v1/admin/apps/:app/comparisons`, JSON body. Dashboard: the same
-command JSON in a session/CSRF-protected form. Writes require `operate`; reads use
-the reader role and tenant/app scope. `/v1` never authenticates with cookies.
+Bearer API: `POST /v1/admin/apps/:app/comparisons`, JSON body. Dashboard: typed
+multipart forms translate to that same command and service, under session/CSRF
+protection. The GET form and POST `/dashboard/apps/:app/comparisons/preview` use
+the reader role and never store inputs, definitions or results. A failed CSRF
+check can still produce the existing security audit entry. Preview requires
+`operate` but does not reserve state; confirmation revalidates current privacy,
+revision and storage constraints. Writes require `operate`; all routes retain
+tenant/app scope. `/v1` never authenticates with cookies. Existing URL-encoded
+command clients remain compatible; the dashboard no longer displays that editor.
 
 - **Register:** `{ "action": "register", "registration": { ... } }`. Registration
   has exactly `name`, `first_date`, `last_date` (both inclusive),

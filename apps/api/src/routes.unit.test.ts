@@ -45,7 +45,7 @@ describe("declarative API route security", () => {
             && route.auth === "dashboard_session")))
       || (route.method === "POST" && route.auth === "dashboard_session"
         && ((route.handler === "dashboard_comparison_submit" && route.capability === "read")
-          || (route.handler === "dashboard_metric_recalculations_preview" && route.capability === "operate")))), true);
+          || (["dashboard_metric_recalculations_preview", "dashboard_comparison_runs_preview"].includes(route.handler) && route.capability === "operate")))), true);
     assert.equal(routes.find((route) => route.handler === "max_ingest")?.mutates, true);
     assert.equal(matchRoute("POST", "/v1/privacy/installation/status")?.auth, "privacy_receipt");
     assert.equal(matchRoute("GET", "/v1/privacy/installation/status"), undefined);

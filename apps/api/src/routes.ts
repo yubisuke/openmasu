@@ -21,6 +21,7 @@ export type RouteHandler =
   | "admin_comparison_mutate"
   | "dashboard_comparison_runs"
   | "dashboard_comparison_runs_mutate"
+  | "dashboard_comparison_runs_preview"
   | "health"
   | "ready"
   | "operational_metrics"
@@ -173,6 +174,7 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "admin_comparison_mutate", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/comparisons$/, auth: "admin_bearer", mutates: true, capability: "operate" },
   { handler: "dashboard_comparison_runs", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/(?:comparisons|comparison-runs\/[^/]+\.json)$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_comparison_runs_mutate", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/comparisons$/, auth: "dashboard_session", mutates: true, capability: "operate" },
+  { handler: "dashboard_comparison_runs_preview", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/comparisons\/preview$/, auth: "dashboard_session", mutates: false, capability: "operate" },
   { handler: "health", method: "GET", pattern: /^\/health$/, auth: "public", mutates: false },
   { handler: "ready", method: "GET", pattern: /^\/ready$/, auth: "public", mutates: false },
   { handler: "operational_metrics", method: "GET", pattern: /^\/metrics$/, auth: "admin_bearer", mutates: false, capability: "read", tenantWideOnly: true },
