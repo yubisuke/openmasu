@@ -2,8 +2,8 @@ import { resolve } from "node:path";
 import type { Pool } from "pg";
 import { createAppPool, recordJobOutcome, runWithTerminalJobOutcome } from "@openmasu/runtime";
 import { persistCostImport, prepareCostImportRows, type CostImportResult, type CostInput } from "./cost.js";
-import { loadMapping, loadMappingScope, mapRow, rowMatches } from "./mapping.js";
-import { readRows, type ImportLimits } from "./source.js";
+import { loadMapping, loadMappingScope, mapRow, rowMatches, type ImportMapping } from "./mapping.js";
+import { readRows, readRowsFromSource, type ImportLimits } from "./source.js";
 
 type Any = Record<string, any>;
 
@@ -92,6 +92,30 @@ export function normalizeCostInput(mapping: ReturnType<typeof loadMapping>, mapp
   };
 }
 
+function prepareMappedCostRows(mapping: ImportMapping, rows: readonly Any[]): CostInput[] {
+  return prepareCostImportRows(rows.filter((row) => rowMatches(mapping, row))
+    .map((row) => normalizeCostInput(mapping, mapRow(mapping, row))));
+}
+
+/** Protected uploads use the same strict mapping without a plaintext file. */
+export function prepareCostImportSource(options: {
+  mapping: ImportMapping;
+  sourceBytes: Uint8Array;
+  limits?: ImportLimits;
+}): CostInput[] {
+  if (options.mapping.kind !== "manual_cost") throw new Error("import:cost requires a manual_cost mapping");
+  const loaded = readRowsFromSource(options.sourceBytes, options.mapping, options.limits ?? defaultLimits);
+  return prepareMappedCostRows(options.mapping, loaded.rows);
+}
+
+export async function runCostImportSource(options: Parameters<typeof prepareCostImportSource>[0] & {
+  pool: Pool;
+}): Promise<CostImportResult & { rows: number }> {
+  const rows = prepareCostImportSource(options);
+  const result = await persistCostImport(options.pool, options.mapping.source_id, rows);
+  return { ...result, rows: rows.length };
+}
+
 export async function runCostImportFile(options: {
   pool: Pool;
   mappingPath: string;
@@ -101,9 +125,7 @@ export async function runCostImportFile(options: {
   const mapping = loadMapping(options.mappingPath);
   if (mapping.kind !== "manual_cost") throw new Error("import:cost requires a manual_cost mapping");
   const loaded = readRows(options.filePath, mapping, options.limits ?? defaultLimits);
-  const rows = prepareCostImportRows(
-    loaded.rows.filter((row) => rowMatches(mapping, row)).map((row) => normalizeCostInput(mapping, mapRow(mapping, row))),
-  );
+  const rows = prepareMappedCostRows(mapping, loaded.rows);
   const result = await persistCostImport(options.pool, mapping.source_id, rows);
   return { ...result, rows: rows.length };
 }
