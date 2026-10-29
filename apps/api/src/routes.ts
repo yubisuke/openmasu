@@ -2,6 +2,10 @@ export type RouteAuth = "public" | "admin_bearer" | "sdk_hmac" | "privacy_receip
 export type RouteCapability = "read" | "operate" | "administer";
 
 export type RouteHandler =
+  | "admin_event_catalog_list"
+  | "admin_event_catalog_save"
+  | "dashboard_event_catalog_list"
+  | "dashboard_event_catalog_save"
   | "admin_synthetic_validation_create"
   | "admin_synthetic_validation_read"
   | "admin_synthetic_validation_close"
@@ -148,6 +152,10 @@ function exactPathPattern(path: string): RegExp {
 }
 
 export const routes: readonly RouteDefinition[] = [
+  { handler: "admin_event_catalog_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/event-catalog$/, auth: "admin_bearer", mutates: false, capability: "administer" },
+  { handler: "admin_event_catalog_save", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/event-catalog$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "dashboard_event_catalog_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/event-catalog$/, auth: "dashboard_session", mutates: false, capability: "administer" },
+  { handler: "dashboard_event_catalog_save", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/event-catalog$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "admin_synthetic_validation_create", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/synthetic-validations$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_synthetic_validation_read", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/synthetic-validations\/[^/]+$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_synthetic_validation_close", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/synthetic-validations\/[^/]+\/close$/, auth: "admin_bearer", mutates: true, capability: "administer" },

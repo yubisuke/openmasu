@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-10-28. This page describes the current `main` source tree.
+Updated: 2026-10-29. This page describes the current `main` source tree.
 Implementation and synthetic verification are not live operational qualification.
 
 ## Release snapshot
@@ -61,6 +61,16 @@ Detailed limits belong to the [product guides](README.md), [product scope](produ
 [privacy/security policy](privacy-security.md) and [threat model](threat-model.md).
 
 ## Current development focus
+
+The active [usability backlog](https://github.com/yubisuke/openmasu/issues/320)
+prioritizes safe setup, daily authenticated input, measurement intent and useful
+saved-period decisions. Current source adds persistent seed refusal, dependency
+readiness and worker recovery, explicit deployment configuration plan/apply,
+renewable Google/Apple cost credentials and device-local SDK diagnostics.
+These additions do not change the frozen rc.3 release or establish live-provider
+access. SDK receipt acceptance remains distinct from server measurement results.
+The corresponding product guides carry operation-specific limits; PRs carry
+exact-commit synthetic evidence.
 
 The [functional plan](https://github.com/yubisuke/openmasu/issues/218) has
 all 35 child implementations present in current source. The earlier

@@ -11,7 +11,7 @@ Replacing an existing MMP is not the objective.
 | Topic | Canonical source |
 | --- | --- |
 | Product and current evidence | [Product scope](product-scope.md) and [Project status](STATUS.md) |
-| Order and dependencies | [Roadmap](roadmap.md) and [functional issue plan](https://github.com/yubisuke/openmasu/issues/218) |
+| Order and dependencies | [Roadmap](roadmap.md) and [active usability backlog](https://github.com/yubisuke/openmasu/issues/320) |
 | Contract | [Specification](../spec/event-metric-contract-v0.4.md), schemas, registries and reviewed fixtures |
 | Placement and design | [Development](development.md), [Architecture](architecture.md) and [design index](design/README.md) |
 | Safety and operation | [Privacy/security](privacy-security.md), [threat model](threat-model.md) and [operator checklists](validation/README.md) |
@@ -25,6 +25,14 @@ Correctness before breadth; integrate existing workflows before promoting a
 release. Keep missing operator evidence explicit. Use one bounded workflow per
 PR, existing services and test suites, and proportionate evidence rather than
 a growing list of overlapping checks.
+
+The active backlog follows four operator outcomes: safe setup and diagnosis;
+authenticated daily inputs and declared events; complete saved-period decisions
+and recovery; then selected operating paths and optional analysis breadth.
+These priorities do not rename the roadmap's completed product milestones.
+The closed functional plan is historical evidence, not the current checklist.
+Provider approval and privacy-policy decisions require owner direction; they are
+not ordinary implementation tasks.
 
 ## Implemented integration work
 
@@ -156,8 +164,8 @@ not physical-device, all-platform onboarding or live-provider acceptance.
 
 The rc.3 delivery has matching source/SDKs, exact-commit full CI and verified
 public assets. Reuse the existing first-use walkthrough and record only observed
-usability or upgrade gaps as follow-ups. No extra feature or architecture milestone
-is implied. The rc.2 upgrade implementation above awaits the next tagged
+usability or upgrade gaps as scoped children of the active usability backlog.
+No extra architecture milestone is implied. The rc.2 upgrade implementation above awaits the next tagged
 distribution before it becomes an operator-supported deployment path.
 
 The [roadmap foundations](roadmap.md#next-development-foundations) are implemented.

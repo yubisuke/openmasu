@@ -6,7 +6,7 @@ to replace every feature of an existing provider.
 
 [Project status](STATUS.md) owns current capabilities and release boundaries.
 [Project plan](project-plan.md) gives the acceptance crosswalk for the sequence
-below. Updated: 2026-10-25.
+below. Updated: 2026-10-29.
 
 ## Status vocabulary
 
@@ -60,6 +60,21 @@ API 24, with SDK and harness revisions recorded in the receipt.
 
 ## Next product sequence
 
+The active [usability backlog](https://github.com/yubisuke/openmasu/issues/320)
+connects existing capabilities into a daily operator workflow. Its priorities
+are not new product milestones or an all-or-nothing release gate:
+
+1. Safely install, configure and diagnose one deployment and app.
+2. Keep daily inputs authenticated, declare intended events and inspect receipt.
+3. Compare complete saved periods and recover missing or revised inputs.
+4. Extend the selected operating paths before adding optional analysis breadth.
+
+Persistent seed refusal, dependency readiness/recovery, explicit deployment
+configuration, renewable cost credentials and local SDK diagnostics are now in
+source. Their guides distinguish local/CI evidence from live qualification.
+Follow open child dependencies in the backlog, not the closed functional plan.
+Provider access and privacy-policy decisions remain a separate owner boundary.
+
 The published rc.3 packages the completed source plan. Current source adds the
 rc.2 upgrade entry and extends the existing migration/privacy rehearsal
 ([#315](https://github.com/yubisuke/openmasu/issues/315)); deployment availability
@@ -84,8 +99,8 @@ dependencies; the phases below are priorities, not extra refactoring gates.
 [Fraud policy preview](fraud-preview.md) completes the operator-extension
 crosswalk: bounded same-evidence decision/gross-net effects and explicit
 receipt-bound activation. Missing historical rule inputs remain unavailable,
-not guessed. No additional feature backlog is implied by the completed plan;
-future slices need a concrete user requirement and their own scope.
+not guessed. The completed plan is not reopened; the active usability backlog
+gives each new slice a concrete user requirement and its own scope.
 
 [App-scoped access](operations/access.md) now narrows existing operator roles
 across API/dashboard reads and controls. Tenant-wide keys remain compatible;
