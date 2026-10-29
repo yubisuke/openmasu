@@ -21,6 +21,9 @@ async function purchaseNetRevenueValue(
   refund_reversal_unscaled?: string; refund_reversal_event_count?: string;
 } } | { value_state: "undefined"; undefined_reason: "missing_fx_rate" | "empty_cohort" | "no_paying_installations" }> {
   const payerProfile = definition.rule_bundle_id === "metric-verified-payers";
+  const imported = definition.acquisition_basis === "selected_imported_provider";
+  const mode = imported ? "selected_imported_provider" : definition.acquisition_basis === "selected_verified_platform";
+  const contextDimensions = imported || definition.acquisition_basis === "selected_verified_platform";
   if ((!payerProfile && definition.definition.calculation !== "revenue_sum")
       || definition.definition.window?.type !== "elapsed") {
     throw new Error(`SQL purchase net revenue definition is invalid: ${definition.metric_name}`);
@@ -31,7 +34,7 @@ async function purchaseNetRevenueValue(
     purchase_event_count: string; refund_event_count: string;
     refund_reversal_unscaled: string; refund_reversal_event_count: string }>(
     `WITH
-       acquisition AS (SELECT * FROM (${metricAcquisitionSql(definition.acquisition_basis === "selected_verified_platform")}) AS selected WHERE $15::boolean),
+       acquisition AS (SELECT * FROM (${metricAcquisitionSql(mode, "$22")}) AS selected WHERE $15::boolean),
        rates AS (
          SELECT currency, rate_unscaled::numeric AS rate_unscaled, rate_scale, effective_date, as_of
          FROM jsonb_to_recordset($10::jsonb)
@@ -58,15 +61,16 @@ async function purchaseNetRevenueValue(
            ORDER BY candidate.decided_at DESC, candidate.attribution_id DESC
            LIMIT 1
          ) AS attribution ON true
-         ${metricAcquisitionJoinSql("$15", "$12", definition.acquisition_basis === "selected_verified_platform")}
+         ${metricAcquisitionJoinSql("$15", "$12", mode, "$22")}
          WHERE install.tenant_id=$1 AND install.app_id=$2 AND install.occurred_at IS NOT NULL
            ${definition.acquisition_basis === "selected_first_party_click" ? "AND logical.producer NOT LIKE 'import:%'" : ""}
            ${definition.acquisition_basis === "selected_verified_platform" ? "AND acquisition_source.network IS NOT NULL" : ""}
+           ${imported ? "AND acquisition_source.import_provider IS NOT NULL" : ""}
            AND raw.received_at <= $3
            AND ($12='before' OR raw.payload_lifecycle_status='available')
-           AND ($4::text IS NULL OR ${definition.acquisition_basis === "selected_verified_platform" ? "acquisition_source.campaign_id" : "coalesce(install.campaign_id, acquisition_source.campaign_id)"}=$4)
-           AND ($5::text IS NULL OR ${definition.acquisition_basis === "selected_verified_platform" ? "acquisition_source.network" : "coalesce(install.network, acquisition_source.network)"}=$5)
-           AND ($6::text IS NULL OR install.country=$6)
+           AND ($4::text IS NULL OR ${contextDimensions ? "acquisition_source.campaign_id" : "coalesce(install.campaign_id, acquisition_source.campaign_id)"}=$4)
+           AND ($5::text IS NULL OR ${contextDimensions ? "acquisition_source.network" : "coalesce(install.network, acquisition_source.network)"}=$5)
+           AND ($6::text IS NULL OR ${imported ? "acquisition_source.country" : "install.country"}=$6)
            AND ($7::text IS NULL OR timezone($8, install.occurred_at_ts)::date::text=$7)
            AND ($13::text IS NULL OR (CASE WHEN $15 THEN coalesce(acquisition.status, 'unattributed') ELSE attribution.status END)=$13)
            AND ($14='gross' OR (CASE WHEN $15 THEN acquisition.reason_code ELSE attribution.reason_code END) IS DISTINCT FROM 'fraud_excluded')
@@ -93,6 +97,7 @@ async function purchaseNetRevenueValue(
              AND control.canonical_timestamp_value(rate.as_of) <= control.canonical_timestamp_value($3)))
          WHERE purchase.tenant_id=$1 AND purchase.app_id=$2
            AND purchase.financial_status='settled'
+           AND (NOT $21::boolean OR raw.producer='import:'||$22::text)
            AND (NOT $20::boolean OR (raw.producer LIKE 'adapter:%'
              AND purchase_policy.policy_digest IN ('google-play-product-verification-v1','verified-commerce-v1')))
            AND raw.received_at <= $3
@@ -158,6 +163,7 @@ async function purchaseNetRevenueValue(
          WHERE refund.tenant_id=$1 AND refund.app_id=$2
            AND refund.financial_status='settled'
            AND purchase.financial_status='settled'
+           AND (NOT $21::boolean OR (refund_raw.producer='import:'||$22::text AND purchase_raw.producer='import:'||$22::text))
            AND (NOT $20::boolean OR (
              (refund_raw.producer LIKE 'adapter:%' AND refund_policy.policy_digest IN ('google-play-product-verification-v1','verified-commerce-v1'))
              AND (purchase_raw.producer LIKE 'adapter:%' AND purchase_policy.policy_digest IN ('google-play-product-verification-v1','verified-commerce-v1'))
@@ -215,6 +221,8 @@ async function purchaseNetRevenueValue(
       grouping?.creative_id ?? null,
       !!fxPolicy.rate_selection,
       payerProfile,
+      imported,
+      definition.import_provider ?? null,
     ],
   );
   const row = result.rows[0];

@@ -5,7 +5,7 @@ import { ACQUISITION_DETAIL_METRIC_DEFINITIONS, DISJOINT_COST_METRIC_DEFINITIONS
 import { metricScheduleTargetDate, normalizeMetricScheduleRequest } from "./metric-schedules.js";
 import { metricScheduleRequestDefinition } from "./metric-schedule-definition.js";
 import { engagementMetricDefinitions, engagementPolicyMetricDefinitions, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
-import { VERIFIED_PLATFORM_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
+import { VERIFIED_PLATFORM_METRIC_DEFINITIONS, ACQUISITION_KPI_METRIC_DEFINITIONS, basisAcquisitionKpiDefinitions } from "@openmasu/contracts/definitions";
 import { importedAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
 import { calendarAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
 
@@ -30,6 +30,21 @@ const body = {
 };
 
 describe("scheduled metric configuration", () => {
+  it("requires cohort dates and nine-day maturity only for the new basis acquisition KPI profile", () => {
+    const normalize = (value: any) => normalizeMetricScheduleRequest(value, new Date("2026-10-01T12:00:00.000Z"));
+    for (const definitions of [basisAcquisitionKpiDefinitions("selected_verified_platform"),
+      basisAcquisitionKpiDefinitions("selected_imported_provider", "synthetic-export")]) {
+      const request = { ...body, lag_days: 9, metric_definitions: definitions,
+        evaluations: [{ metric_names: definitions.map(d => d.metric_name), date_dimension: "cohort_date", grouping: {} }] };
+      assert.equal(normalize(request).lagDays, 9);
+      assert.throws(() => normalize({ ...request, lag_days: 8 }), /acquisition_kpi_profile_required/);
+      assert.throws(() => normalize({ ...request, evaluations: [{ ...request.evaluations[0], date_dimension: "metric_date" }] }), /acquisition_kpi_profile_required/);
+      if (definitions[0].import_provider) assert.throws(() => normalize({ ...request,
+        evaluations: [{ ...request.evaluations[0], campaign_discovery: { policy: "selected_acquisition_and_cost_v1", max_targets: 10 } }] }), /discovery_invalid/);
+    }
+    assert.equal(normalize({ ...body, lag_days: 1, metric_definitions: ACQUISITION_KPI_METRIC_DEFINITIONS,
+      evaluations: [{ metric_names: ACQUISITION_KPI_METRIC_DEFINITIONS.map(d => d.metric_name), date_dimension: "cohort_date", grouping: {} }] }).lagDays, 1);
+  });
   it("dated_FX_schedule_captures_a_canonical_bounded_snapshot_and_rejects_target_mismatch", () => {
     const fixture=JSON.parse(readFileSync("fixtures/v0.4/69-dated-fx-cohorts/input.json","utf8"));
     const request={...body,fx_policy:fixture.fx_policy,metric_definitions:fixture.metric_definitions,

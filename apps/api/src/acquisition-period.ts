@@ -5,6 +5,7 @@ import { buildAcquisitionKpiSets, type AcquisitionKpiScope } from "./acquisition
 import { comparisonDigest, parseComparisonContext } from "./cohort-comparison.js";
 import { exactDecimal } from "./dashboard/metric-value.js";
 import type { MetricReportRow } from "./reporting.js";
+import { acquisitionKpiDimensions } from "@openmasu/runtime/acquisition-kpi-key";
 
 const additiveRoles = ["installs", "cost", "ad_revenue", "purchase_net", "total_net"] as const;
 export type AcquisitionPeriodValue = {
@@ -25,10 +26,7 @@ export type AcquisitionPeriodSummary = {
   comparisons: Record<AcquisitionKpiRole, Comparison>;
 };
 
-const dimensionsOf = (row: MetricReportRow) => Object.fromEntries(Object.entries(row.grouping)
-  .filter(([key]) => key !== "cohort_date" && key !== "metric_date").sort());
-
-/** Only complete, compatible native D7 sets can supply period operands. */
+/** Only complete, compatible D7 sets within one acquisition basis/provider supply period operands. */
 function side(scope: AcquisitionKpiScope, from: string, to: string, rows: readonly MetricReportRow[]): AcquisitionPeriodSide {
   const expectedDays = (Date.parse(to) - Date.parse(from)) / 86_400_000;
   const days = Array.from({ length: expectedDays }, (_, i) => new Date(Date.parse(from) + i * 86_400_000).toISOString().slice(0, 10));
@@ -104,7 +102,7 @@ export function buildAcquisitionPeriods(scope: AcquisitionKpiScope, currentRange
   for (const [which, rows] of [["current", current], ["previous", previous]] as const) {
     for (const row of rows) {
       if (!acquisitionKpiRole(row.metric_name)) continue;
-      const dimensions = dimensionsOf(row), key = JSON.stringify(dimensions);
+      const dimensions = acquisitionKpiDimensions(row, scope), key = JSON.stringify(dimensions);
       const group = groups.get(key) ?? { dimensions, current: [], previous: [] };
       group[which].push(row); groups.set(key, group);
     }
@@ -124,7 +122,8 @@ export function buildAcquisitionPeriods(scope: AcquisitionKpiScope, currentRange
 /** Both presentation adapters consume the same calculated values and reasons. */
 export function acquisitionPeriodRows(summaries: readonly AcquisitionPeriodSummary[], display: "all" | "exceptions") {
   return summaries.flatMap(summary => ACQUISITION_KPI_ROLES.map(role => ({ summary, role,
-    metric_name: `acquisition_d7_${role}`, current: summary.current.values?.[role] ?? null,
+    metric_name: `${summary.dimensions.acquisition_basis === "selected_imported_provider" ? "imported_"
+      : summary.dimensions.acquisition_basis === "selected_verified_platform" ? "platform_" : ""}acquisition_d7_${role}`, current: summary.current.values?.[role] ?? null,
     previous: summary.previous.values?.[role] ?? null, ...summary.comparisons[role],
   }))).filter(row => display === "all" || row.status !== "compared");
 }

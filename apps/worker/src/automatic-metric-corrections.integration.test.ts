@@ -3,9 +3,10 @@ import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { after,beforeEach,describe,it } from "node:test";
 import { jcs,sha256,type CandidateAttempt } from "@openmasu/attribution-core";
+import { basisAcquisitionKpiDefinitions } from "@openmasu/contracts/definitions";
 import { createAppPool,createReaderPool,createSeedPool,withTenant } from "@openmasu/runtime";
 import { saveMetricCorrectionPolicy,metricCorrectionStatus } from "../../api/src/metric-correction-policy.js";
-import { listMetricRecalculations } from "../../api/src/metric-recalculations.js";
+import { listMetricRecalculations, requestMetricRecalculation } from "../../api/src/metric-recalculations.js";
 import { metricReport } from "../../api/src/reporting.js";
 import { ingestFixture } from "./test-support/fixture-ingestion.js";
 import { ingestRuntimeBatch } from "./ingestion.js";
@@ -106,6 +107,58 @@ describe("opt-in receipt-driven bounded automatic metric corrections",{concurren
     assert.equal(status.upstream_completeness,"unknown");
     assert.doesNotMatch(JSON.stringify(status),/source_ref|installation:|payload_sha256|lease_token|root_id|transaction_id/);
     assert.equal((await metricCorrectionStatus(reader,{...identity,tenantId:"tenant-unrelated"})).policy,null);
+  });
+
+  it("corrects the complete imported acquisition KPI set for manual cost and automatic late receipts at one saved cutoff", async () => {
+    const fixture = JSON.parse(readFileSync("fixtures/v0.4/67-imported-provider-acquisition/input.json", "utf8")
+      .replaceAll('"tenant-a"', JSON.stringify(identity.tenantId)));
+    const definitions = basisAcquisitionKpiDefinitions("selected_imported_provider", "synthetic-export");
+    const names = definitions.map(d => d.metric_name), originalCost = fixture.cost_records[0];
+    const evaluation = { ...fixture.metric_evaluations[0], metric_names: names,
+      metric_run_id_prefix: `synthetic-basis-${identity.tenantId}`, privacy_state: "after" };
+    fixture.metric_definitions = definitions; fixture.metric_evaluations = []; fixture.cost_records = [];
+    await ingestFixture(`synthetic-basis-${identity.tenantId}`, fixture, app, seed);
+    await persistCostImport(app, "synthetic-basis-original-cost", [originalCost]);
+    const before = await computeSqlMetricRuns(app, { ...fixture, metric_evaluations: [evaluation] }, true);
+    assert.equal(before.length, 8); assert.equal(new Set(before.map(r => r.input_snapshot_id)).size, 1);
+    const revision = await persistCostImport(app, "synthetic-basis-revised-cost", [{ ...originalCost,
+      amount_unscaled: "8000000", as_of: "2026-08-16T00:00:00.000Z" }]);
+    const manual = await requestMetricRecalculation(app, identity, { cost_import_run_id: revision.import_run_id,
+      date_from: "2026-08-06", date_to: "2026-08-06", watermark: "2026-08-17T00:00:00.000Z",
+      metric_names: ["imported_acquisition_d7_ad_roas"] });
+    assert.equal(manual.selected_runs, 8);
+    assert.deepEqual(await processMetricRecalculations(app, identity.tenantId, 10), { completed: 8, skipped: 0, fenced: 0, failed: 0 });
+    const current = () => metricReport(reader, identity, { tenantId: identity.tenantId, appId: identity.appId,
+      metricNames: names, supersession: "latest", limit: 100 });
+    const costCorrected = (await current()).data;
+    assert.equal(costCorrected.length, 8);
+    assert.equal(costCorrected.find(r => r.metric_name === "imported_acquisition_d7_cost")!.value_unscaled, "8000000");
+    assert.equal(costCorrected.find(r => r.metric_name === "imported_acquisition_d7_cpi")!.value_unscaled, "8000000");
+    assert.equal(costCorrected.find(r => r.metric_name === "imported_acquisition_d7_ad_roas")!.value_unscaled, "250000");
+    assert.equal(new Set(costCorrected.map(r => r.input_snapshot_id)).size, 1);
+    assert.ok(costCorrected.every(r => r.input_received_at_watermark === "2026-08-17T00:00:00.000Z"));
+    await saveMetricCorrectionPolicy(app, identity, { ...policy, date_to: "2026-08-06", runs_per_page: 8,
+      metric_names: ["imported_acquisition_d7_ad_roas"] });
+    const record = { ...structuredClone(fixture.records.find((r: Any) => r.record_id === "revenue-paid-67")),
+      record_id: "synthetic-basis-late", event_id: "synthetic-basis-late", delivery_id: "synthetic-basis-late",
+      received_at: "2026-08-18T00:00:00.000Z" };
+    const attempts = fixture.records.map((record: Any) => ({ record, server: fixture.server_context, batch_id: "synthetic-basis-original" }));
+    const admitted = await ingestRuntimeBatch([{ record, server: { ...fixture.server_context, received_at: record.received_at },
+      batch_id: "synthetic-basis-late" }], app, attempts);
+    assert.equal(admitted.rejections.length, 0);
+    await drain();
+    const corrected = (await current()).data;
+    assert.equal(corrected.length, 8);
+    assert.equal(corrected.find(r => r.metric_name === "imported_acquisition_d7_ad_roas")!.value_unscaled, "500000");
+    assert.equal(new Set(corrected.map(r => r.input_snapshot_id)).size, 1);
+    assert.equal(new Set(corrected.map(r => r.input_received_at_watermark)).size, 1);
+    assert.equal(new Set(corrected.map(r => r.acquisition_kpi_set_key)).size, 1);
+    assert.ok(corrected.every(r => r.acquisition_kpi_set_key && r.comparison_context?.privacy_state === "after"
+      && r.comparison_context.definition.import_provider === "synthetic-export"
+      && r.comparison_context.fx_digest === costCorrected[0].comparison_context!.fx_digest));
+    assert.equal((await listMetricRecalculations(reader, identity)).filter(j => j.trigger_kind === "late_events" && j.state === "completed").length, 8);
+    const stored = await artifacts();
+    for (const original of before) assert.equal(jcs(stored.find(r => r.metric_run_id === original.metric_run_id)), jcs(original));
   });
 
   it("drains more than 100 committed inputs and a paged run manifest across pause, resume and concurrent workers without duplicates",async()=>{

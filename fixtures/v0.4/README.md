@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 76 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 77 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -638,6 +638,16 @@ seven-day results or imported/platform/engagement rules. Candidate TypeScript
 and Python match the independently constructed families at combined JCS SHA-256
 `7d436dd90947f7af74277f01637ddbd99ad4a39c7ba17218f7c2d3cf0d0d7b9d`.
 The previous 75 inputs and 975 golden files remain unchanged.
+
+## Fixture 77: basis-separated acquisition KPIs
+
+The [independent derivation](77-basis-acquisition-kpis/README.md) constructs all
+thirteen expected families and five eight-role sets. The selected imported paid
+population has one install, USD4 cost, USD2 ad revenue and USD5 purchase net;
+its CPI is USD4 and total ROAS 1.75. Organic, unattributed and missing populations
+stay separate. A platform control with matching cost but no verified install
+cannot borrow the imported population. Previous 76 inputs and 988 golden artifacts
+are unchanged. SQL and both evaluators use the same synthetic source evidence.
 
 ## Adding a fixture procedure
 

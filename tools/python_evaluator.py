@@ -1313,13 +1313,14 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
         if prefix is None or day not in (3, 14, 30) or isinstance(day, bool) or policy not in (None, "gross", "net") or definition != expected:
             raise ValueError(f"metric_definition_series_mismatch:{definition['metric_name']}")
         return
-    if (definition.get("rule_bundle_id") == "metric-acquisition-kpis" or definition["metric_name"].startswith("acquisition_d7_")
+    if (definition.get("rule_bundle_id") in {"metric-acquisition-kpis", "metric-basis-acquisition-kpis"} or re.match(r"^(platform_|imported_)?acquisition_d7_", definition["metric_name"])
             or definition["definition"]["calculation"] in {"cost_sum", "cost_over_cohort"}):
         operations = {"installs": ("cohort_size", "cohort_size", "count"), "cost": ("cost_sum", "cost", "money"),
                       "cpi": ("cost_over_cohort", "cost", "money"), "ad_revenue": ("revenue_sum", "revenue", "money"),
                       "purchase_net": ("revenue_sum", "purchase_net_revenue", "money"), "total_net": ("revenue_sum", "total_net_revenue", "money"),
                       "ad_roas": ("revenue_over_cost", "revenue", "ratio"), "total_roas": ("revenue_over_cost", "total_net_revenue", "ratio")}
-        role = definition["metric_name"].removeprefix("acquisition_d7_")
+        prefix = "imported_" if definition["metric_name"].startswith("imported_") else "platform_" if definition["metric_name"].startswith("platform_") else ""
+        role = definition["metric_name"].removeprefix(prefix + "acquisition_d7_")
         if role not in operations:
             raise ValueError("invalid acquisition KPI role")
         calculation, numerator, value_type = operations[role]
@@ -1339,6 +1340,16 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
             expected.update(currency="USD", amount_scale=6)
         elif value_type == "ratio":
             expected["ratio_scale"] = 6
+        if prefix:
+            expected.update(metric_definition_version="0.4.30", rule_bundle_version="0.4.30",
+                            rule_bundle_id="metric-basis-acquisition-kpis",
+                            rule_bundle_hash="bbf1ff5c2a48479fb5eb593334a0f71f693ae351be58f41b8a1a2a4457ce54b8",
+                            acquisition_basis="selected_imported_provider" if prefix == "imported_" else "selected_verified_platform")
+            if prefix == "imported_":
+                provider = definition.get("import_provider")
+                if not isinstance(provider, str) or not re.fullmatch(r"[a-z0-9-]{1,64}", provider):
+                    raise ValueError("acquisition_kpi_basis_invalid")
+                expected["import_provider"] = provider
         if (any(definition.get(key) != value for key, value in expected.items())
                 or set(definition) - set(expected) - {"metric_name", "fraud_policy"}
                 or definition.get("fraud_policy", "gross") not in {"gross", "net"}):
@@ -2202,6 +2213,10 @@ def metric_runs(
             if metric_name not in definitions_by_name:
                 raise ValueError(f"unknown metric definition: {metric_name}")
             definition = definitions_by_name[metric_name]
+            if (definition.get("rule_bundle_id") == "metric-basis-acquisition-kpis"
+                    and (not evaluation.get("grouping", {}).get("cohort_date")
+                         or set(evaluation.get("grouping", {})) - set(definition.get("grouping_dimensions", [])))):
+                raise ValueError("acquisition_kpi_grouping_invalid")
             cost_calculation = definition["definition"]["calculation"] in ("cost_sum", "cost_over_cohort")
             payer_profile = definition.get("rule_bundle_id") == "metric-verified-payers"
             uses_fx = cost_calculation or definition["definition"]["calculation"] in ("revenue_sum", "revenue_over_cost", "revenue_over_cohort", "revenue_over_paying_installations")
@@ -2338,6 +2353,8 @@ def metric_runs(
                 and eligible_revenue(definition, install["record"], item["record"]) for install in eligible_installs)] if payer_profile else []
             if not definition.get("engagement_credit_policy") and definition["definition"]["numerator"] in {"purchase_net_revenue", "total_net_revenue"}:
                 for item in (payer_purchases if payer_profile else purchases):
+                    if definition.get("import_provider") and item["record"]["producer"] != f"import:{definition['import_provider']}":
+                        continue
                     installation = next((
                         candidate for candidate in eligible_installs
                         if candidate["server"]["tenant_id"] == item["server"]["tenant_id"]
@@ -2349,6 +2366,9 @@ def metric_runs(
                 for item in refunds:
                     target = resolve_refund_target(item, visible)
                     if target is None or target["record"]["payload"]["financial_status"] != "settled":
+                        continue
+                    if definition.get("import_provider") and (item["record"]["producer"] != f"import:{definition['import_provider']}"
+                            or target["record"]["producer"] != f"import:{definition['import_provider']}"):
                         continue
                     if payer_profile and (not verified_projection(item) or target not in payer_purchases):
                         continue

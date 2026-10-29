@@ -8,7 +8,7 @@ import { analysisQuery, savedAnalysisInput, previousAnalysisQuery, dailyAnalysis
 import { buildPeriodAnalysis, encodePeriodAnalysisCsv } from "./period-analysis.js";
 import { renderPeriodAnalysis } from "./dashboard/saved-analysis.js";
 import type { MetricReportRow } from "./reporting.js";
-import { acquisitionKpiRole, calendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
+import { acquisitionKpiRole, basisAcquisitionKpiDefinitions, calendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
 import { calendarActivityUnit } from "./metric-series.js";
 type Any = Record<string, any>;
 const identity = { tenantId: "tenant-a", appId: "app-a", keyId: "synthetic-analysis", role: "admin" as const };
@@ -160,6 +160,38 @@ function periodOperands() {
       ...acquisitionDay("2026-08-05", "previous-nine", "9", "90000000", "180000000")],
   };
 }
+
+it("acquisition_period_and_daily_alignment_keep_identical_campaigns_separate_by_basis_and_exact_provider", () => {
+  const original=periodOperands();
+  const convert=(source:readonly MetricReportRow[],basis:"selected_verified_platform"|"selected_imported_provider",provider?:string)=> {
+    const definitions=basisAcquisitionKpiDefinitions(basis,provider);
+    return source.map(row=> {
+      const d=definitions.find(definition=>acquisitionKpiRole(definition.metric_name)===acquisitionKpiRole(row.metric_name))!;
+      const metric_run_id=`${provider ?? "platform"}:${row.metric_run_id}`;
+      return {...structuredClone(row),metric_run_id,metric_name:d.metric_name,metric_definition_version:d.metric_definition_version,
+        rule_bundle_id:d.rule_bundle_id,rule_bundle_hash:d.rule_bundle_hash,policy_versions:[`rule_bundle:${d.rule_bundle_version}`],
+        comparison_context:captureMetricComparisonContext({metric_run_id,input_snapshot_id:row.input_snapshot_id},d,input.fx_policy,"before",sha256)};
+    });
+  };
+  const extend=(source:readonly MetricReportRow[])=>[...source,...convert(source,"selected_verified_platform"),
+    ...convert(source,"selected_imported_provider","synthetic-alpha"),...convert(source,"selected_imported_provider","synthetic-beta")];
+  const analysis=buildPeriodAnalysis(twoDayQuery,extend(original.current),extend(original.previous));
+  assert.equal(analysis.summaries.length,4); assert.equal(analysis.rows.length,64);
+  assert.ok(analysis.rows.every(row=>row.current.length===1&&row.previous.length===1&&row.status==="compared"));
+  assert.ok(analysis.summaries.every(summary=>summary.current.state==="ready"&&summary.current.values!.installs.value_unscaled==="10"));
+  const imported=analysis.summaries.filter(summary=>summary.dimensions.acquisition_basis==="selected_imported_provider");
+  assert.deepEqual(imported.map(summary=>summary.dimensions.import_provider).sort(),["synthetic-alpha","synthetic-beta"]);
+  assert.notDeepEqual(imported[0].current.sources.flatMap(source=>source.set_keys),imported[1].current.sources.flatMap(source=>source.set_keys));
+  assert.ok(analysis.summaries.some(summary=>summary.dimensions.acquisition_basis==="selected_verified_platform"));
+  const native=analysis.summaries.find(summary=>!summary.dimensions.acquisition_basis)!;
+  assert.deepEqual(native,buildPeriodAnalysis(twoDayQuery,original.current,original.previous).summaries[0],"legacy native summary and identity remain unchanged");
+  const saved={view_id:"synthetic-separated",name:"Synthetic basis-separated periods",selection:params.toString(),display:"all" as const,created_at:"2026-08-20T00:00:00.000Z"};
+  const html=renderPeriodAnalysis(identity.appId,saved,analysis),csv=encodePeriodAnalysisCsv(analysis,"all");
+  for (const text of ["selected_verified_platform","selected_imported_provider","synthetic-alpha","synthetic-beta","imported_acquisition_d7_cost","platform_acquisition_d7_cost"]) {
+    assert.ok(html.includes(text),text); assert.ok(csv.includes(text),text);
+  }
+  assert.equal(csv.split(/\r?\n/).filter(line=>line.includes(",acquisition_period_summary,")).length,32);
+});
 
 it("acquisition_period_sums_integer_operands_before_weighted_CPI_ROAS_and_preserves_daily_rows_and_provenance", () => {
   const { current, previous } = periodOperands(), analysis = buildPeriodAnalysis(twoDayQuery, current, previous);

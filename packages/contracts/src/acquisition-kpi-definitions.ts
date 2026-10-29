@@ -3,6 +3,8 @@ import { nonFraudBundleHash } from "./rule-bundle-provenance.js";
 
 export const ACQUISITION_KPI_VERSION = "0.4.23";
 export const ACQUISITION_KPI_BUNDLE = "metric-acquisition-kpis";
+export const BASIS_ACQUISITION_KPI_VERSION = "0.4.30";
+export const BASIS_ACQUISITION_KPI_BUNDLE = "metric-basis-acquisition-kpis";
 export const ACQUISITION_KPI_ROLES = ["installs", "cost", "cpi", "ad_revenue", "purchase_net", "total_net", "ad_roas", "total_roas"] as const;
 export type AcquisitionKpiRole = (typeof ACQUISITION_KPI_ROLES)[number];
 const operations = {
@@ -37,5 +39,22 @@ export const ACQUISITION_KPI_METRIC_DEFINITIONS: readonly OpenMasuMetricDefiniti
 });
 
 export function acquisitionKpiRole(metricName: string): AcquisitionKpiRole | undefined {
-  return ACQUISITION_KPI_ROLES.find(role => metricName === `acquisition_d7_${role}`);
+  return ACQUISITION_KPI_ROLES.find(role =>
+    ["", "platform_", "imported_"].some(prefix => metricName === `${prefix}acquisition_d7_${role}`));
+}
+
+/** Closed D7 profiles; provider identity is explicit and never inferred from a campaign. */
+export function basisAcquisitionKpiDefinitions(
+  basis: "selected_verified_platform" | "selected_imported_provider", provider?: string,
+): OpenMasuMetricDefinitionV04[] {
+  const imported = basis === "selected_imported_provider";
+  if (imported ? typeof provider !== "string" || !/^[a-z0-9-]{1,64}$/.test(provider)
+    : basis !== "selected_verified_platform" || provider !== undefined) throw new Error("acquisition_kpi_basis_invalid");
+  return ACQUISITION_KPI_METRIC_DEFINITIONS.map(definition => ({
+    ...structuredClone(definition), metric_name: `${imported ? "imported" : "platform"}_${definition.metric_name}`,
+    metric_definition_version: BASIS_ACQUISITION_KPI_VERSION, acquisition_basis: basis,
+    ...(imported ? { import_provider: provider! } : {}),
+    rule_bundle_id: BASIS_ACQUISITION_KPI_BUNDLE, rule_bundle_version: BASIS_ACQUISITION_KPI_VERSION,
+    rule_bundle_hash: nonFraudBundleHash(BASIS_ACQUISITION_KPI_BUNDLE),
+  }));
 }

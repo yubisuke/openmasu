@@ -5,6 +5,35 @@ Contract v0.4.0 completed the identity migration from the immutable
 contract identity but did not change field meaning, attribution behavior, metric
 arithmetic, ordering, hashing, privacy, or fraud semantics.
 
+## Basis-separated acquisition KPI sets (0.4.30)
+
+Independent `metric-basis-acquisition-kpis` definitions add the eight saved D7
+roles for verified-platform and explicitly selected imported-provider cohorts.
+They reuse the current arithmetic, admission, source projections and immutable
+snapshot model; no new event/registry or wire identity is introduced. Imported
+purchase and refund money requires the same exact producer as the selected
+installation, including the refund target. The old imported ad-revenue profiles
+and native eight-role definitions keep their existing results.
+
+Complete new golden inventory under `77-basis-acquisition-kpis/`:
+
+- `expected_raw_records.json`, `expected_deliveries.json`,
+  `expected_logical_events.json`, `expected_corrections.json`;
+- `expected_privacy_requests.json`, `expected_privacy_tombstones.json`,
+  `expected_attributions.json`, `expected_metric_definitions.json`;
+- `expected_metric_runs.json`, `expected_cost_records.json`,
+  `expected_fraud_decisions.json`, `expected_rejections.json`,
+  `expected_reconciliation.json`;
+- new `input.json` and [independent derivation](../fixtures/v0.4/77-basis-acquisition-kpis/README.md).
+
+All 76 prior inputs and 988 expected files are unchanged. The fixture diff against
+the parent integration commit must contain only directory 77 and the shared
+fixture README. New golden artifacts are committed separately from behavior,
+constructed from reviewed admission templates, canonical hash inputs and written
+arithmetic, not promoted from evaluator output. TS/Python and SQL compare against
+that independent oracle. The active contract tree remains `fixtures/v0.4`, schema
+URNs remain `:v0.4`, and package/wire versions remain `0.4.0`.
+
 ## Versioned first-party attribution windows (0.4.29)
 
 Optional authenticated `first_party_attribution_bundle` adds a closed independent

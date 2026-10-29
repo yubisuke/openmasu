@@ -353,9 +353,9 @@ Production signals, IP or User-Agent values, live thresholds, model weights, wat
 
 ## Reviewed fixture and validation gate
 
-The validation gate compiles 28 schemas and validates 8 registries. The 76 fixture directories contain synthetic input plus 13 committed golden output classes: raw records, deliveries, logical events, corrections, privacy requests, privacy tombstones, attributions, metric definitions, metric runs, cost records, public fraud decisions, rejections, and reconciliation. Fixture 10 demonstrates both paid reinstall attribution and no-referrer redownload attribution. Fixtures 28 through 32 exercise imported attribution, automatically derived reconciliation, every registered producer form, and stale-evidence rejection. Fixture 33 exercises reporting dimensions, advertiser-side ad views, installation and aggregate revenue, default-currency provenance, append-only cost revisions, per-event half-even FX, attribution-status-separated ROAS, retention, and cohort LTV/count. Fixture 34 exercises the supported platform method/model rows, both Apple aggregate event names, their versioned reasons, synthetic postback producers, and typed Meta evidence. Fixture 35 exercises authenticated tenant-admin and on-device privacy-request provenance plus same-installation scope enforcement. Fixture 36 exercises the child-directed audience boundary without adding an advertising identifier to the canonical event vocabulary. Fixture 37 proves that an organic cohort without attributed cost emits an undefined ROAS rather than zero or infinity. Fixture 38 classifies a modeled external row without an internal candidate as `provider_modeled_conversion`. Fixture 39 classifies a foreign third-party referrer. Fixture 40 validates the closed custom-event envelope plus wrapper provenance. Fixture 41 derives the public click-injection category from server CTIT. Fixture 42 exercises the v0.3.1 `metric_date` dimension with deterministic daily click and organic-install event counts. Fixture 43 exercises the v0.3.2 iOS first-launch, platform-referrer, AdServices outcome, AAK signing-environment, and SKAN minor-version vocabulary. Fixture 44 exercises the v0.3.3 qualified SKAN/AAK postback counts and fine/coarse SKAN conversion buckets. Fixture 45 exercises the v0.3.4 iOS conversion-schema provenance pair and the opt-in conversion-value lifecycle event. Fixture 46 reserves server-assigned Play Integrity and App Attest evidence without making it an attribution or metric input. Fixture 47 exercises the non-identifying payload-schema rejection boundary without storing the rejected payload. Fixtures 48 through 52 exercise deterministic fraud controls and protected integrity-provider normalization. Fixture 53 exercises the negative-CTIT clock diagnostic and day-wide provisional guard. Fixture 54 exercises deep-link opens, engagement-scope attribution, double-count prevention, and separated daily metrics. Fixture 55 exercises settled purchase/refund net revenue, canonical refund targeting, refund-time windows, per-target caps, and unchanged ad revenue. Fixture 56 exercises D30/D90 purchase-net, total-net revenue, ROAS, and LTV with exact D31/D91 boundaries. Fixture 57 accepts current AdAttributionKit re-engagement postbacks and proves they remain aggregate while reporting separately from install postbacks. Fixtures 25, 33, and 34 collectively exercise every registered processing purpose. Validation also exercises invalid calendar timestamps, reconciliation reasons, attribution supersession, replay suspicion, retention expiry, impression-to-revenue evidence, reorder invariance, install-type evidence dominance, record-ID collision, click ambiguity, millisecond normalization boundaries, scoped-reference mutations, child-directed advertising-identifier rejection, CTIT boundaries, custom-event bounds, platform-integrity closure, Apple aggregate qualification and receipt-date authority, refund-target ambiguity/temporal stability/caps, business-transaction conflicts, and unknown-purpose rejection; golden files remain committed human-reviewed artifacts.
+The validation gate compiles 28 schemas and validates 8 registries. The 77 fixture directories contain synthetic input plus 13 committed golden output classes: raw records, deliveries, logical events, corrections, privacy requests, privacy tombstones, attributions, metric definitions, metric runs, cost records, public fraud decisions, rejections, and reconciliation. Fixture 10 demonstrates both paid reinstall attribution and no-referrer redownload attribution. Fixtures 28 through 32 exercise imported attribution, automatically derived reconciliation, every registered producer form, and stale-evidence rejection. Fixture 33 exercises reporting dimensions, advertiser-side ad views, installation and aggregate revenue, default-currency provenance, append-only cost revisions, per-event half-even FX, attribution-status-separated ROAS, retention, and cohort LTV/count. Fixture 34 exercises the supported platform method/model rows, both Apple aggregate event names, their versioned reasons, synthetic postback producers, and typed Meta evidence. Fixture 35 exercises authenticated tenant-admin and on-device privacy-request provenance plus same-installation scope enforcement. Fixture 36 exercises the child-directed audience boundary without adding an advertising identifier to the canonical event vocabulary. Fixture 37 proves that an organic cohort without attributed cost emits an undefined ROAS rather than zero or infinity. Fixture 38 classifies a modeled external row without an internal candidate as `provider_modeled_conversion`. Fixture 39 classifies a foreign third-party referrer. Fixture 40 validates the closed custom-event envelope plus wrapper provenance. Fixture 41 derives the public click-injection category from server CTIT. Fixture 42 exercises the v0.3.1 `metric_date` dimension with deterministic daily click and organic-install event counts. Fixture 43 exercises the v0.3.2 iOS first-launch, platform-referrer, AdServices outcome, AAK signing-environment, and SKAN minor-version vocabulary. Fixture 44 exercises the v0.3.3 qualified SKAN/AAK postback counts and fine/coarse SKAN conversion buckets. Fixture 45 exercises the v0.3.4 iOS conversion-schema provenance pair and the opt-in conversion-value lifecycle event. Fixture 46 reserves server-assigned Play Integrity and App Attest evidence without making it an attribution or metric input. Fixture 47 exercises the non-identifying payload-schema rejection boundary without storing the rejected payload. Fixtures 48 through 52 exercise deterministic fraud controls and protected integrity-provider normalization. Fixture 53 exercises the negative-CTIT clock diagnostic and day-wide provisional guard. Fixture 54 exercises deep-link opens, engagement-scope attribution, double-count prevention, and separated daily metrics. Fixture 55 exercises settled purchase/refund net revenue, canonical refund targeting, refund-time windows, per-target caps, and unchanged ad revenue. Fixture 56 exercises D30/D90 purchase-net, total-net revenue, ROAS, and LTV with exact D31/D91 boundaries. Fixture 57 accepts current AdAttributionKit re-engagement postbacks and proves they remain aggregate while reporting separately from install postbacks. Fixtures 25, 33, and 34 collectively exercise every registered processing purpose. Validation also exercises invalid calendar timestamps, reconciliation reasons, attribution supersession, replay suspicion, retention expiry, impression-to-revenue evidence, reorder invariance, install-type evidence dominance, record-ID collision, click ambiguity, millisecond normalization boundaries, scoped-reference mutations, child-directed advertising-identifier rejection, CTIT boundaries, custom-event bounds, platform-integrity closure, Apple aggregate qualification and receipt-date authority, refund-target ambiguity/temporal stability/caps, business-transaction conflicts, and unknown-purpose rejection; golden files remain committed human-reviewed artifacts.
 
-The literal validation summary is: `Validated 28 schemas, 8 registries, 76 reviewed fixtures, 988 golden output artifacts, 76 scenario assertions, 27 acceptance criteria, deterministic TypeScript, independent Python, and RFC 8785 conformance.`
+The literal validation summary is: `Validated 28 schemas, 8 registries, 77 reviewed fixtures, 1001 golden output artifacts, 77 scenario assertions, 27 acceptance criteria, deterministic TypeScript, independent Python, and RFC 8785 conformance.`
 
 The validation command never writes fixture files. `npm run validate`:
 
@@ -363,8 +363,8 @@ The validation command never writes fixture files. `npm run validate`:
 2. compiles every Draft 2020-12 schema;
 3. validates registry shape, uniqueness, and cross-references;
 4. validates every input event through its event schema;
-5. validates all 988 golden output artifacts;
-6. runs named assertions for all 76 scenarios and 27 acceptance criteria (AC01-AC27);
+5. validates all 1001 golden output artifacts;
+6. runs named assertions for all 77 scenarios and 27 acceptance criteria (AC01-AC27);
 7. runs deliberate negative mutations;
 8. runs the TypeScript evaluator twice;
 9. runs the independently implemented Python evaluator;
@@ -373,6 +373,48 @@ The validation command never writes fixture files. `npm run validate`:
 Environment setup is `npm ci` and `python -m pip install --require-hashes --requirement requirements-contract.txt`.
 
 ## Version history
+
+### v0.4.30 patch release: basis-separated acquisition KPI sets
+
+Independent `metric-basis-acquisition-kpis` definitions add a closed eight-role
+UTC elapsed D7 set for `selected_verified_platform` and
+`selected_imported_provider`. The metric names are `platform_acquisition_d7_`
+or `imported_acquisition_d7_` followed by `installs`, `cost`, `cpi`,
+`ad_revenue`, `purchase_net`, `total_net`, `ad_roas` or `total_roas`.
+Definition and bundle versions are `0.4.30`; the registered JCS/SHA-256 bundle
+hash is `bbf1ff5c2a48479fb5eb593334a0f71f693ae351be58f41b8a1a2a4457ce54b8`.
+The historical first-party D7 definitions and saved set keys are unchanged.
+
+The arithmetic is the existing eight-role arithmetic: distinct eligible
+installations; selected cost; cost/installations; advertising revenue; settled
+purchase minus settled refunds; advertising plus purchase net; advertising/cost;
+and total net/cost. Money uses USD scale 6 and ratios use scale 6. Captured FX
+converts each event or cost row with half-even rounding before summation.
+Missing cost, empty CPI denominators, missing FX and overlapping cost grains
+remain explicit undefined results, never fabricated zeroes.
+
+Every evaluation requires an explicit `cohort_date`. The only declared grouping
+dimensions are campaign, network, country, cohort date and attribution status.
+Platform campaign selection requires its source network. Imported definitions
+require exactly one `import_provider`; installs use its canonical import context
+and selected attribution revision. Advertising, purchases, refunds and their
+purchase targets must belong to that same import producer and installation.
+Unrelated SDK or other-provider outcomes cannot fill a missing imported role.
+Provider selection is not proof of cost ownership: matching costs keep their
+existing operator-declared meaning and disjoint-grain safety rule.
+
+All eight saved roles retain the same scoped record/cost/attribution snapshot,
+fixed receipt watermark, FX and privacy/fraud policies. Presentation separates
+basis and exact provider even when campaign text matches or a population is
+empty. An incomplete role set is not synthesized. A complete D7 panel requires
+the cutoff to reach cohort-date midnight plus nine days; this is conservative
+elapsed-window maturity, not a provider-completeness claim. Saved corrections
+use the existing bounded replay workflow and never combine old and new roles.
+
+Fixture 77 and its independent derivation exercise the new profiles. All 76
+previous inputs and 988 golden artifacts retain their bytes. This is an opt-in
+additive profile, not a change to existing attribution, metrics, event vocabulary,
+schema URNs or wire/package `0.4.0` identity.
 
 ### v0.4.29 patch release: versioned first-party attribution windows
 

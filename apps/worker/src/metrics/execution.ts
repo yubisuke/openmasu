@@ -85,6 +85,11 @@ export async function executeMetricCalculation(
     for (const metricName of evaluation.metric_names ?? []) {
       const definition = definitions.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
+      if (definition.rule_bundle_id === "metric-basis-acquisition-kpis"
+          && (!grouping?.cohort_date || Object.keys(grouping)
+            .some(key => !definition.grouping_dimensions?.includes(key as never)))) {
+        throw new Error("acquisition_kpi_grouping_invalid");
+      }
       const usesFx = ["revenue_sum", "revenue_over_cost", "revenue_over_cohort", "cost_sum", "cost_over_cohort", "revenue_over_paying_installations"].includes(definition.definition.calculation);
       if ((fxPolicy.rate_selection || definition.rule_bundle_id === "metric-verified-payers") && definition.value_type === "money"
           && (definition.currency !== fxPolicy.target_currency || definition.amount_scale !== fxPolicy.target_scale)) {

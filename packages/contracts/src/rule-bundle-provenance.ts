@@ -38,6 +38,7 @@ export type NonFraudRuleBundleId =
   | "metric-calendar-acquisition"
   | "metric-selected-daily-acquisition"
   | "metric-acquisition-kpis"
+  | "metric-basis-acquisition-kpis"
   | "metric-standard-retention"
   | "metric-calendar-activity"
   | "metric-verified-payers"
@@ -63,6 +64,16 @@ export type NonFraudRuleBundleDefinition = {
 };
 
 export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonFraudRuleBundleDefinition>> = {
+  "metric-basis-acquisition-kpis": {
+    id: "metric-basis-acquisition-kpis", version: "0.4.30", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["explicit-platform-or-imported-provider-d7-cohort-set", "same-input-cost-and-attribution-snapshot",
+      "exact-import-provider-cohort-purchase-refund-and-target", "cohort-acquisition-day-current-snapshot",
+      "reject-overlapping-cost-grains", "cost-sum-and-half-even-cost-over-cohort",
+      "missing-cost-and-empty-cohort-are-not-zero-cpi", "separate-ad-purchase-net-and-total-net",
+      "captured-fx-and-watermark", "preserve-current-privacy-and-fraud",
+      "provider-is-not-proof-of-cost-ownership", "preserve-native-d7-identity"],
+  },
   "metric-engagement-policy": {
     id: "metric-engagement-policy", version: "0.4.28", kind: "metric",
     implementation: "reference-metric-v0.4",
