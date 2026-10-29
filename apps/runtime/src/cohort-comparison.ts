@@ -164,7 +164,7 @@ type ResultProvenance = { source: string; sha256: string; saved_report?: Provena
 export type ComparisonResult = { format: "cohort-comparison-v2"; provenance: { left: ResultProvenance; right: ResultProvenance };
   status: "compared" | "declared_comparison" | "external_declared_comparison" | "incomparable"; conditions: Conditions; mismatches: string[];
   assurance: { left: Assurance; right: Assurance }; rows: ComparisonRow[]; summary?: ComparisonSummary };
-export function compareSnapshots(left: unknown, right: unknown, options: { declaredOnly?: boolean; allowExternalDeclaration?: boolean } = {}): ComparisonResult {
+export function compareSnapshots(left: unknown, right: unknown, options: { declaredOnly?: boolean; allowExternalDeclaration?: boolean; includeSummary?: boolean } = {}): ComparisonResult {
   if (options.declaredOnly && options.allowExternalDeclaration) throw Error("conflicting_comparison_modes");
   const a = parseSnapshot(left), b = parseSnapshot(right);
   const la = snapshotAssurance(a), ra = snapshotAssurance(b);
@@ -208,7 +208,7 @@ export function compareSnapshots(left: unknown, right: unknown, options: { decla
     ...(s.external_calculation ? { external_calculation: s.external_calculation } : {}) });
   const result: ComparisonResult = { format: "cohort-comparison-v2", provenance: { left: provenance(a), right: provenance(b) },
     conditions: a.conditions, status: "incomparable", mismatches: [...new Set(mismatches)].sort(), assurance: { left: la.assurance, right: ra.assurance }, rows: [] };
-  if (mismatches.length || (external ? !externalComparable : !declared && (!la.meaning || !ra.meaning))) return { ...result, summary: summarizeComparison(a, b, result) };
+  if (mismatches.length || (external ? !externalComparable : !declared && (!la.meaning || !ra.meaning))) return options.includeSummary === false ? result : { ...result, summary: summarizeComparison(a, b, result) };
   const am = new Map(a.rows.map(r => [r.key, r])), bm = new Map(b.rows.map(r => [r.key, r]));
   const rows = [...new Set([...am.keys(), ...bm.keys()])].sort().map(key => {
     const l = am.get(key), r = bm.get(key);
@@ -220,5 +220,5 @@ export function compareSnapshots(left: unknown, right: unknown, options: { decla
     return { key, status: delta === 0n ? "equal" : "different", currency: l.currency, scale, delta_right_minus_left: delta.toString(), left: l, right: r };
   });
   const compared: ComparisonResult = { ...result, status: external ? "external_declared_comparison" : declared ? "declared_comparison" : "compared", rows };
-  return { ...compared, summary: summarizeComparison(a, b, compared) };
+  return options.includeSummary === false ? compared : { ...compared, summary: summarizeComparison(a, b, compared) };
 }
