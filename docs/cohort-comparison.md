@@ -9,6 +9,41 @@ The command reads two aggregate snapshots without database or network access.
 Inputs are limited to 4 MiB and 10,000 rows each. Keep private data outside this
 public repository; checked-in examples and tests must be synthetic.
 
+## Investigation priorities
+
+New comparisons capture one shared, pure `summary` in JSON. Offline, dashboard
+and scheduled comparisons use this same projection. HTML displays it without
+recalculating stored results; an older result without a summary keeps its original
+rows and reports that the summary was not recorded.
+Legacy version-one scheduled comparisons keep their frozen canonical output and
+do not add a summary when replayed. Version-two scheduled comparisons capture the
+summary when calculating a new result; previously saved results are never rewritten.
+
+The summary counts equal, different, missing-left/right, undefined and currency
+mismatches. It shows up to ten nonzero absolute deltas per currency/value-type
+partition, ordered using exact scaled integers and key order for ties. It never
+ranks different currencies against each other or interprets `currency: none` as
+a count. Source keys, normalized input hashes and available saved-report/run/input
+snapshot references accompany each priority. Links return to the original
+key-sorted rows. Missing and undefined operands do not become zero.
+
+Contribution totals (left, right, signed delta and the sum of absolute row deltas)
+are available only for recognized additive money/count calculations:
+installation-cohort revenue sums, cohort sizes, cost sums with overlap-rejecting
+cost selection, and ordinary event counts. Captured definitions or an explicitly
+matched external calculation declaration must establish the meaning. Every row
+must use the same canonical grouping axes, contain its cohort/event date, and
+belong to the definition's declared exclusive dimensions. Mixed rollup/detail
+grains, unknown axes, missing/undefined operands, mixed currencies, unsupported
+calculations, daily unique counts and ratios have visible exclusion reasons.
+Money-valued averages such as CPI/LTV are not sums. Declaration-only inputs can
+show numerical priorities labeled with unknown units, but cannot claim totals.
+
+Totals describe only the included nonoverlapping rows: they do not prove complete
+provider coverage, independently verify external declarations, or explain causes.
+Engagement-credit and other unsupported populations remain excluded rather than
+being treated as installation-cohort sums.
+
 Minimal declaration-only synthetic input:
 
 ```json

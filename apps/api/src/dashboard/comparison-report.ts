@@ -16,11 +16,20 @@ export function renderComparisonContent(result: Comparison): string {
   // Saved canonical JSON and in-process results must render the same bytes.
   result = JSON.parse(jcs(result)) as Comparison;
   const cell = (value: unknown) => `<td>${escape(value)}</td>`;
-  const rows = result.rows.map(row => {
+  const rows = result.rows.map((row, index) => {
     const display = (side: typeof row.left) => !side ? "Missing row" : side.state === "undefined" ? `Undefined: ${side.reason}` : `${decimal(side.value, side.scale)} ${side.currency}`;
     const delta = row.delta_right_minus_left === undefined ? "Not calculated" : `${decimal(row.delta_right_minus_left, row.scale!)} ${row.currency}`;
-    return `<tr><th scope="row">${escape(row.key)}</th>${cell(row.status)}${cell(display(row.left))}${cell(display(row.right))}${cell(delta)}</tr>`;
+    return `<tr id="comparison-row-${index}"><th scope="row">${escape(row.key)}</th>${cell(row.status)}${cell(display(row.left))}${cell(display(row.right))}${cell(delta)}</tr>`;
   }).join("\n");
+  const summary = result.summary;
+  const priorities = summary ? `<h2>Investigation priorities</h2><dl>${Object.entries(summary.counts).map(([key, value]) => `<dt>${escape(key)}</dt><dd>${value}</dd>`).join("")}</dl>
+<p>Top ${summary.top_limit} nonzero absolute differences within each currency/unit partition. Partitions are not ranked against each other. Unknown units remain unverified. These are contributions to a numerical difference, not its cause; missing and undefined operands are never zero.</p>
+${summary.partitions.map(partition => {
+    const c = partition.contribution;
+    const total = c.state === "excluded" ? `<p>Contribution total unavailable: ${escape(c.reasons.join(", "))}.</p>`
+      : `<p>Included nonoverlapping rows only: left ${escape(decimal(c.left, c.scale))}; right ${escape(decimal(c.right, c.scale))}; right minus left ${escape(decimal(c.delta_right_minus_left, c.scale))}; sum of absolute row differences ${escape(decimal(c.absolute_delta_sum, c.scale))}. Unit: ${escape(partition.currency)} / ${escape(partition.value_type)}. This is not a complete-population or causal claim.</p>`;
+    return `<h3>${escape(partition.currency)} / ${escape(partition.value_type)}</h3>${total}<ol>${partition.top_differences.map(row => `<li><a href="#comparison-row-${row.row_index}">${escape(row.key)}</a>: ${escape(decimal(row.delta_right_minus_left, row.scale))} (absolute ${escape(decimal(row.absolute_delta, row.scale))})<details><summary>Source references</summary><p>Left: ${escape(JSON.stringify(row.left))}</p><p>Right: ${escape(JSON.stringify(row.right))}</p></details></li>`).join("")}</ol>`;
+  }).join("")}` : "<p>Investigation summary was not recorded for this saved result. Original rows and evidence remain available; no summary has been recomputed.</p>";
   const conditions = result.conditions ? Object.entries(result.conditions).map(([k, v]) => `<dt>${escape(k)}</dt><dd>${escape(v)}</dd>`).join("") : "";
   const mismatches = result.mismatches.map(key => `<li>${escape(key)}</li>`).join("");
   const provenanceDetails = (["left", "right"] as const).map(side => {
@@ -38,6 +47,7 @@ export function renderComparisonContent(result: Comparison): string {
 <p>Status: ${escape(result.status)}</p>
 <p>Differences are right minus left. A numerical difference does not establish its cause.</p>
 ${result.status === "external_declared_comparison" ? "<p>EXTERNAL DECLARED COMPARISON: the saved calculation matches the operator's explicit claim. The external implementation and completeness remain unverified.</p>" : ""}
+${priorities}
 ${result.status === "incomparable" ? `<h2>Incompatible or unknown conditions</h2><p>No numerical comparison was performed.</p><ul>${mismatches}</ul>` : `<h2>Selected conditions</h2><dl>${conditions}</dl>${result.status === "declared_comparison" ? "<p>DECLARED ONLY: equivalence of calculation meaning has not been established.</p>" : ""}<h2>Results</h2><p>${result.rows.length} rows. Missing and undefined values are not zero.</p><table><caption>Exact aggregate comparison</caption><thead><tr><th scope="col">Key</th><th scope="col">Status</th><th scope="col">Left</th><th scope="col">Right</th><th scope="col">Difference</th></tr></thead><tbody>${rows}</tbody></table>`}
 <h2>Comparison basis</h2>${assurance}
 <h2>Input provenance</h2>

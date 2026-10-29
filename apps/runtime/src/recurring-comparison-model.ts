@@ -101,7 +101,8 @@ export function recurringComparisonResult(definition: ComparisonDefinition, day:
   if (snapshotDefinitionDigest(left) !== definition.left_definition_digest || snapshotDefinitionDigest(right) !== definition.right_definition_digest) {
     return { ...base, state: "incomparable", reason: "definition_changed" };
   }
-  const result = compareSnapshots(left, right, { ...(definition.mode === "declared_only" ? { declaredOnly: true } : {}),
+  // Version-one scheduled results have a frozen canonical representation.
+  const result = compareSnapshots(left, right, { includeSummary: definition.version !== 1, ...(definition.mode === "declared_only" ? { declaredOnly: true } : {}),
     ...(definition.mode === "external_declared" ? { allowExternalDeclaration: true } : {}) });
   if (result.status === "incomparable") return { ...base, state: "incomparable", comparison: result,
     ...(definition.version === 2 ? { reason: [result.assurance.left, result.assurance.right].some(side => side.missing.includes("window_maturity"))

@@ -5,6 +5,9 @@ import { compareSnapshots, parseSnapshot, canonicalComparisonCutoff } from "./co
 import { M1B_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { captureMetricComparisonContext } from "@openmasu/runtime";
 import { sha256, jcs } from "@openmasu/attribution-core";
+import { CALENDAR_ACTIVITY_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
+import { syntheticExternalComparisonCases, syntheticExternalComparisonPair } from "./synthetic-external-comparison-cases.js";
+import { aggregateCsvToSnapshot } from "./report-to-snapshot.js";
 
 const declared = (left: unknown, right: unknown) => compareSnapshots(left, right, { declaredOnly: true });
 
@@ -38,6 +41,7 @@ it("distinguishes missing undefined zero and currency mismatch", () => {
   b.rows = [{ ...a.rows[0], value: "0" }];
   assert.equal(declared(a, b).rows[0].status, "different");
   b.rows[0].currency = "EUR"; assert.equal(declared(a, b).rows[0].status, "currency_mismatch");
+  assert.equal(declared(a, b).summary!.counts.currency_mismatch, 1);
 });
 it("rejects duplicate keys and malformed inputs", () => {
   const a = snapshot(); a.rows.push(a.rows[0]); assert.throws(() => parseSnapshot(a), /duplicate_key/);
@@ -118,4 +122,89 @@ it("keeps unsupported implementation or missing maturity unknown and checks dige
   const missing = structuredClone(a); missing.rows[0].key = "unknown"; missing.provenance.runs[0].key = "unknown"; missing.comparison_contexts[0].key = "unknown";
   assert.equal(compareSnapshots(missing, missing).status, "incomparable");
   assert.ok(compareSnapshots(missing, missing).assurance.left.missing.includes("window_maturity"));
+});
+
+it("ranks exact absolute deltas within currencies with stable ties, counts unavailable rows, and preserves row order", () => {
+  const a: any = snapshot(), b: any = snapshot();
+  a.rows = Array.from({ length: 12 }, (_, n) => ({ key: `key-${String(n).padStart(2, "0")}`, currency: "USD", scale: n % 2,
+    state: "present", value: "0" }));
+  b.rows = a.rows.map((row: any, n: number) => ({ ...row, scale: (n + 1) % 2,
+    value: `${n % 2 ? "" : "-"}900719925474099300${row.scale === 0 ? "0" : ""}` }));
+  a.rows.push({ key: "equal", currency: "USD", scale: 0, state: "present", value: "0" });
+  b.rows.push({ key: "equal", currency: "USD", scale: 2, state: "present", value: "0" });
+  a.rows.push({ key: "undefined", currency: "USD", scale: 0, state: "undefined", reason: "empty_cohort" });
+  b.rows.push({ key: "undefined", currency: "USD", scale: 0, state: "present", value: "0" });
+  a.rows.push({ key: "left-only", currency: "USD", scale: 0, state: "present", value: "1" });
+  b.rows.push({ key: "right-only", currency: "USD", scale: 0, state: "present", value: "1" });
+  a.rows.push({ key: "eur", currency: "EUR", scale: 0, state: "present", value: "0" });
+  b.rows.push({ key: "eur", currency: "EUR", scale: 0, state: "present", value: "999999999999999999999999" });
+  const result = declared(a, b), summary = result.summary!;
+  assert.deepEqual(summary.counts, { equal: 1, different: 13, missing: 2, missing_left: 1, missing_right: 1, undefined: 1, currency_mismatch: 0 });
+  assert.deepEqual(summary.partitions.map(p => [p.currency, p.value_type]), [["EUR", "unknown"], ["USD", "unknown"]]);
+  const usd = summary.partitions[1];
+  assert.equal(usd.top_differences.length, 10);
+  assert.deepEqual(usd.top_differences.map(row => row.key), Array.from({ length: 10 }, (_, n) => `key-${String(n).padStart(2, "0")}`));
+  assert.equal(usd.top_differences[0].delta_right_minus_left, "-9007199254740993000");
+  assert.equal(usd.top_differences[0].absolute_delta, "9007199254740993000");
+  assert.deepEqual(result.rows.map(row => row.key), [...result.rows.map(row => row.key)].sort());
+  assert.ok(usd.top_differences.every(row => result.rows[row.row_index].key === row.key && row.left.source_sha256 === result.provenance.left.sha256));
+  assert.equal(usd.contribution.state, "excluded");
+  if (usd.contribution.state === "excluded") assert.deepEqual(usd.contribution.reasons, ["meaning_unknown", "mixed_currency", "missing_or_undefined_operand"]);
+  a.rows.reverse(); b.rows.reverse(); assert.deepEqual(declared(a, b), result);
+});
+
+function partitionSnapshot(definition: typeof M1B_METRIC_DEFINITIONS[number], groups: Record<string, string>[], values: string[]) {
+  const base = backed(), fx = base.comparison_contexts[0].context.fx;
+  const rows = groups.map((group, n) => ({ key: jcs(group), currency: definition.currency ?? "none",
+    scale: definition.amount_scale ?? definition.ratio_scale ?? 0, state: "present" as const, value: values[n] }));
+  const runs = rows.map(({ key }, n) => ({ key, metric_run_id: `synthetic-partition-${n}`, input_snapshot_id: "a".repeat(64) }));
+  return { ...base, conditions: { ...base.conditions, date_to: "2026-01-03", source_cutoff: "2026-05-01T00:00:00Z", attribution_scope: "all",
+    aggregation: definition.anchor_event === "calendar_day" ? "on_day" : "cumulative", metric_definition: `${definition.metric_name}@${definition.metric_definition_version}` },
+    rows, provenance: { ...base.provenance, runs }, comparison_contexts: runs.map(run => ({ key: run.key,
+      context: captureMetricComparisonContext(run, definition, fx, "after", sha256) })) };
+}
+
+it("totals only captured nonoverlapping additive money and counts and retains exact evidence references", () => {
+  for (const calculation of ["cohort_size", "revenue_sum"] as const) {
+    const definition = { ...structuredClone(M1B_METRIC_DEFINITIONS.find(d => d.definition.calculation === calculation)!),
+      grouping_dimensions: ["cohort_date", "campaign_id"] as ("cohort_date" | "campaign_id")[] };
+    const groups = [{ cohort_date: "2026-01-01", campaign_id: "synthetic-a" }, { cohort_date: "2026-01-01", campaign_id: "synthetic-b" }];
+    const a = partitionSnapshot(definition, groups, ["10", "20"]), b = partitionSnapshot(definition, groups, ["7", "25"]);
+    const result = compareSnapshots(a, b), p = result.summary!.partitions[0];
+    assert.equal(result.status, "compared");
+    assert.deepEqual(p.contribution, { state: "present", scale: a.rows[0].scale, left: "30", right: "32", delta_right_minus_left: "2", absolute_delta_sum: "8" });
+    assert.equal(p.value_type, calculation === "cohort_size" ? "count" : "money");
+    assert.equal(p.top_differences[0].left.metric_run_id, "synthetic-partition-1");
+    assert.equal(p.top_differences[0].left.input_snapshot_id, "a".repeat(64));
+    assert.equal(p.top_differences[0].left.report_sha256, "b".repeat(64));
+    const overlapping = partitionSnapshot(definition, [{ cohort_date: "2026-01-01" }, groups[1]], ["10", "20"]);
+    const excluded = compareSnapshots(overlapping, overlapping).summary!.partitions[0].contribution;
+    assert.equal(excluded.state, "excluded");
+    if (excluded.state === "excluded") assert.ok(excluded.reasons.includes("overlapping_or_unproven_grain"));
+  }
+});
+
+it("never sums ratio or daily unique values merely because currency is none", () => {
+  const ratio = compareSnapshots(backed(), backed()).summary!.partitions[0];
+  assert.equal(ratio.value_type, "ratio"); assert.deepEqual(ratio.contribution, { state: "excluded", reasons: ["ratio_not_additive"] });
+  const definition = CALENDAR_ACTIVITY_METRIC_DEFINITIONS.find(d => d.metric_name === "daily_active_installations")!;
+  const daily = partitionSnapshot(definition, [{ metric_date: "2026-01-01" }, { metric_date: "2026-01-02" }], ["5", "5"]);
+  const unique = compareSnapshots(daily, daily).summary!.partitions[0];
+  assert.equal(unique.value_type, "count"); assert.deepEqual(unique.contribution, { state: "excluded", reasons: ["daily_unique_not_additive"] });
+  const events = partitionSnapshot(CALENDAR_ACTIVITY_METRIC_DEFINITIONS.find(d => d.metric_name === "daily_session_starts")!,
+    [{ metric_date: "2026-01-01" }, { metric_date: "2026-01-02" }], ["5", "5"]);
+  assert.deepEqual(compareSnapshots(events, events).summary!.partitions[0].contribution,
+    { state: "present", scale: 0, left: "10", right: "10", delta_right_minus_left: "0", absolute_delta_sum: "0" });
+});
+
+it("uses explicit matched external calculation declarations for additive families but never sums CPI", () => {
+  const cases = syntheticExternalComparisonCases();
+  for (const name of ["native-acquisition-installs", "native-acquisition-cost", "native-acquisition-cpi"]) {
+    const entry = cases.find(c => c.name === name)!, pair = syntheticExternalComparisonPair(entry);
+    const result = compareSnapshots(pair.saved, aggregateCsvToSnapshot(Buffer.from(pair.csv), pair.mapping), { allowExternalDeclaration: true });
+    assert.equal(result.status, "external_declared_comparison");
+    const c = result.summary!.partitions[0].contribution;
+    if (name.endsWith("cpi")) assert.deepEqual(c, { state: "excluded", reasons: ["calculation_not_additive"] });
+    else { assert.equal(c.state, "present"); if (c.state === "present") assert.equal(c.left, entry.expected); }
+  }
 });

@@ -4,6 +4,7 @@ import { comparisonMeaning, comparisonMaturity, type MetricComparisonContext } f
 import { groupingDimensionAllowlist, validateGrouping, type GroupingDimension } from "./report-query-model.js";
 import { parseExternalDeclaration, externalDeclarationMeaning, capturedExternalMeaning, externalUnits, type ExternalCalculation } from "./external-calculation-declaration.js";
 import { parseMetricFreshness } from "./metric-freshness.js";
+import { summarizeComparison, type ComparisonSummary } from "./comparison-summary.js";
 import { validDatedFxPolicy, canonicalDatedFxPolicy } from "@openmasu/contracts/definitions";
 
 import { comparisonDigest, canonicalComparisonCutoff, snapshotAssurance, fields, object, keys, text, date, scale,
@@ -158,12 +159,12 @@ export function parseSnapshot(input: unknown): Snapshot {
   }
   return { source: input.source, conditions: { ...c }, rows: [...input.rows].sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0), ...(provenance ? { provenance } : {}), ...(contexts ? { comparison_contexts: contexts } : {}), ...(freshness ? { freshness_observations: freshness } : {}), ...(acquisition ? { acquisition } : {}), ...(mappingProvenance ? { mapping_provenance: mappingProvenance } : {}), ...(external ? { external_calculation: external } : {}) } as Snapshot;
 }
-type ComparisonRow = { key: string; status: string; left: Row | null; right: Row | null; currency?: string; scale?: number; delta_right_minus_left?: string };
+export type ComparisonRow = { key: string; status: string; left: Row | null; right: Row | null; currency?: string; scale?: number; delta_right_minus_left?: string };
 type ResultProvenance = { source: string; sha256: string; saved_report?: Provenance; freshness_observations?: FreshnessRow[]; mapping_provenance?: MappingProvenance; external_calculation?: ExternalCalculation };
 export type ComparisonResult = { format: "cohort-comparison-v2"; provenance: { left: ResultProvenance; right: ResultProvenance };
   status: "compared" | "declared_comparison" | "external_declared_comparison" | "incomparable"; conditions: Conditions; mismatches: string[];
-  assurance: { left: Assurance; right: Assurance }; rows: ComparisonRow[] };
-export function compareSnapshots(left: unknown, right: unknown, options: { declaredOnly?: boolean; allowExternalDeclaration?: boolean } = {}): ComparisonResult {
+  assurance: { left: Assurance; right: Assurance }; rows: ComparisonRow[]; summary?: ComparisonSummary };
+export function compareSnapshots(left: unknown, right: unknown, options: { declaredOnly?: boolean; allowExternalDeclaration?: boolean; includeSummary?: boolean } = {}): ComparisonResult {
   if (options.declaredOnly && options.allowExternalDeclaration) throw Error("conflicting_comparison_modes");
   const a = parseSnapshot(left), b = parseSnapshot(right);
   const la = snapshotAssurance(a), ra = snapshotAssurance(b);
@@ -207,7 +208,7 @@ export function compareSnapshots(left: unknown, right: unknown, options: { decla
     ...(s.external_calculation ? { external_calculation: s.external_calculation } : {}) });
   const result: ComparisonResult = { format: "cohort-comparison-v2", provenance: { left: provenance(a), right: provenance(b) },
     conditions: a.conditions, status: "incomparable", mismatches: [...new Set(mismatches)].sort(), assurance: { left: la.assurance, right: ra.assurance }, rows: [] };
-  if (mismatches.length || (external ? !externalComparable : !declared && (!la.meaning || !ra.meaning))) return result;
+  if (mismatches.length || (external ? !externalComparable : !declared && (!la.meaning || !ra.meaning))) return options.includeSummary === false ? result : { ...result, summary: summarizeComparison(a, b, result) };
   const am = new Map(a.rows.map(r => [r.key, r])), bm = new Map(b.rows.map(r => [r.key, r]));
   const rows = [...new Set([...am.keys(), ...bm.keys()])].sort().map(key => {
     const l = am.get(key), r = bm.get(key);
@@ -218,5 +219,6 @@ export function compareSnapshots(left: unknown, right: unknown, options: { decla
     const delta = BigInt(r.value) * 10n ** BigInt(scale - r.scale) - BigInt(l.value) * 10n ** BigInt(scale - l.scale);
     return { key, status: delta === 0n ? "equal" : "different", currency: l.currency, scale, delta_right_minus_left: delta.toString(), left: l, right: r };
   });
-  return { ...result, status: external ? "external_declared_comparison" : declared ? "declared_comparison" : "compared", rows };
+  const compared: ComparisonResult = { ...result, status: external ? "external_declared_comparison" : declared ? "declared_comparison" : "compared", rows };
+  return options.includeSummary === false ? compared : { ...compared, summary: summarizeComparison(a, b, compared) };
 }
