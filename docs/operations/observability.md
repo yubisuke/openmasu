@@ -11,7 +11,28 @@ metrics without adding an OpenMasu dependency or enabling notification delivery.
 
 ## Health and metrics
 
-- Service health is exposed by the API health route and Compose health checks.
+- `GET /health` on the API and redirector is liveness only: an answering
+  process returns 200 even while a dependency is unavailable. `GET /ready`
+  returns 200 `ready` or 503 `not_ready`, with no-store and no internal details.
+  It checks the installed migration inventory against this binary, a recent
+  tenant worker discovery heartbeat, and existing payload/key directory access.
+  Probes use a dedicated reader connection, a 1.5-second deadline and a one-second
+  shared cache. They never create business records or payload probes.
+- The worker exposes the same routes only on container loopback port 8091;
+  it additionally requires a recent successful discovery poll in that process.
+  Heartbeats expire after the greater of 30 seconds or three poll intervals.
+  This is not proof that every job/tenant is succeeding or a provider is reachable.
+  Payload access checks are not free-space or write/durability guarantees; migration
+  inventory is not a full audit of out-of-band database edits.
+- Compose checks readiness for API, worker and redirector. PostgreSQL, these
+  three services and the optional proxy use `restart: unless-stopped`; one-shot
+  bootstrap/migrate/seed jobs do not restart. An unhealthy but running container
+  is **not** automatically restarted. Explicit `docker compose stop` remains
+  stopped until an operator starts it. Unexpected process exit is restarted;
+  durable work resumes subject to existing claim leases, not instantly.
+  See [Docker restart policy semantics](https://docs.docker.com/engine/containers/start-containers-automatically/)
+  (checked 2026-10-29). The isolated synthetic pilot checks dependency failure,
+  inventory mismatch, unexpected worker exit with queued input, and explicit stop.
 - Authenticated `/metrics` output uses Prometheus text format.
 - Metrics include fixed-label request, import, scheduler success/failure,
   consecutive-failure, active-lease, and overdue-job state.

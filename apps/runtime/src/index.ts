@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
 export * from "./secrets.js";
+export * from "./readiness.js";
 export * from "./payload-store.js";
 export * from "./job-health.js";
 export * from "./scheduler.js";
@@ -32,20 +33,24 @@ export function requireEnvironment(name: string, value: string | undefined): str
 }
 
 export function createAppPool(): Pool {
-  return new Pool({
+  const pool = new Pool({
     connectionString: requireEnvironment("OPENMASU_APP_DATABASE_URL", process.env.OPENMASU_APP_DATABASE_URL),
     max: 10,
   });
+  pool.on("error", () => { process.stderr.write('{"event":"idle_database_connection_lost"}\n'); });
+  return pool;
 }
 
 export function createReaderPool(): Pool {
-  return new Pool({
+  const pool = new Pool({
     connectionString: requireEnvironment(
       "OPENMASU_READER_DATABASE_URL",
       process.env.OPENMASU_READER_DATABASE_URL,
     ),
     max: 10,
   });
+  pool.on("error", () => { process.stderr.write('{"event":"idle_database_connection_lost"}\n'); });
+  return pool;
 }
 
 export function createMigrationPool(): Pool {

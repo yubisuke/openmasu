@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { createAppPool, createReaderPool, EncryptedFilePayloadStore, EnvironmentSecretStore } from "@openmasu/runtime";
+import { createAppPool, createReaderPool, createRuntimeReadiness, EncryptedFilePayloadStore, EnvironmentSecretStore } from "@openmasu/runtime";
 import { assertSafeMaxTemplate, receiveMax, type MaxReceiverConfig } from "./max-receiver.js";
 import { ensureAdminKeys, parseAdminRole } from "./admin-auth.js";
 import { HourlyLedgerQuota } from "./apple-postback-receiver.js";
@@ -68,6 +68,10 @@ const operationalMetrics = new OperationalMetrics();
 const operationalLogWriter = (line: string) => process.stdout.write(line);
 
 const server = createServer(createRequestHandler({
+  readiness: createRuntimeReadiness({
+    databaseUrl: process.env.OPENMASU_READER_DATABASE_URL!, tenantId: maxConfig.tenantId,
+    payloadDirectory: process.env.OPENMASU_PAYLOAD_STORE_DIR ?? ".openmasu/payloads",
+  }).check,
   pool,
   readerPool,
   payloadStore,

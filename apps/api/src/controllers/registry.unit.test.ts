@@ -39,6 +39,20 @@ function response() {
 }
 
 describe("HTTP controller composition", () => {
+  it("separates live and ready without business queries or internal error disclosure", async () => {
+    for (const state of [true, false, new Error("postgresql://private-secret@internal-db")]) {
+      const handler = createRequestHandler({ ...dependencies, readiness: async () => {
+        if (state instanceof Error) throw state;
+        return state;
+      } });
+      for (const path of ["/health", "/ready"]) {
+        const reply = response(); handler(request(path), reply.http); await reply.completed;
+        assert.equal(reply.output.statusCode, path === "/health" || state === true ? 200 : 503);
+        assert.doesNotMatch(reply.output.body, /private|postgres|internal/);
+        if (path === "/ready") assert.equal(reply.output.headers["cache-control"], "no-store");
+      }
+    }
+  });
   it("handler_registry_is_exhaustive", () => {
     const registry = createHandlerRegistry(dependencies);
     assert.deepEqual(Object.keys(registry).sort(), [...new Set(routes.map(route => route.handler))].sort());

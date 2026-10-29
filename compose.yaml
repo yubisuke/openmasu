@@ -76,6 +76,7 @@ services:
     restart: "no"
 
   postgres:
+    restart: unless-stopped
     image: postgres:17-alpine
     depends_on:
       bootstrap:
@@ -110,7 +111,8 @@ services:
 
   api:
     <<: *app
-    command: ["/bin/sh", "-c", "set -a && . /run/openmasu/app/runtime.env && set +a && node --import tsx apps/api/src/server.ts"]
+    restart: unless-stopped
+    command: ["/bin/sh", "-c", "set -a && . /run/openmasu/app/runtime.env && set +a && exec node --import tsx apps/api/src/server.ts"]
     volumes:
       - app-secrets:/run/openmasu/app:ro
       - payload-objects:/run/openmasu/payloads
@@ -123,14 +125,20 @@ services:
       - backend
       - edge
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 2s
       timeout: 3s
       retries: 30
 
   worker:
     <<: *app
-    command: ["/bin/sh", "-c", "set -a && . /run/openmasu/app/runtime.env && set +a && node --import tsx apps/worker/src/main.ts"]
+    restart: unless-stopped
+    command: ["/bin/sh", "-c", "set -a && . /run/openmasu/app/runtime.env && set +a && exec node --import tsx apps/worker/src/main.ts"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8091/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
     volumes:
       - app-secrets:/run/openmasu/app:ro
       - payload-objects:/run/openmasu/payloads
@@ -140,7 +148,13 @@ services:
 
   redirector:
     <<: *app
-    command: ["/bin/sh", "-c", "set -a && . /run/openmasu/app/runtime.env && set +a && node --import tsx apps/redirector/src/server.ts"]
+    restart: unless-stopped
+    command: ["/bin/sh", "-c", "set -a && . /run/openmasu/app/runtime.env && set +a && exec node --import tsx apps/redirector/src/server.ts"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8090/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
     volumes:
       - app-secrets:/run/openmasu/app:ro
       - payload-objects:/run/openmasu/payloads
@@ -165,6 +179,7 @@ services:
     restart: "no"
 
   proxy:
+    restart: unless-stopped
     image: caddy:2.11.4-alpine
     profiles: ["proxy"]
     ports:

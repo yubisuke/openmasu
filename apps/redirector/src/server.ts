@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { createAppPool, EncryptedFilePayloadStore, EnvironmentSecretStore } from "@openmasu/runtime";
+import { createAppPool, createRuntimeReadiness, EncryptedFilePayloadStore, EnvironmentSecretStore } from "@openmasu/runtime";
 import { createRedirectorHandler } from "./handler.js";
 
 class BoundedIpBucket {
@@ -36,6 +36,11 @@ const payloadStore = new EncryptedFilePayloadStore(
 const geoMode = process.env.OPENMASU_REDIRECTOR_GEO ?? "off";
 if (geoMode !== "off" && geoMode !== "country") throw new Error("OPENMASU_REDIRECTOR_GEO must be off or country");
 const server = createServer(createRedirectorHandler({
+  readiness: createRuntimeReadiness({
+    databaseUrl: process.env.OPENMASU_READER_DATABASE_URL!,
+    tenantId: process.env.OPENMASU_REDIRECTOR_TENANT_ID ?? "tenant-local",
+    payloadDirectory: process.env.OPENMASU_PAYLOAD_STORE_DIR ?? ".openmasu/payloads",
+  }).check,
   pool: createAppPool(),
   payloadStore,
   tenantId: process.env.OPENMASU_REDIRECTOR_TENANT_ID ?? "tenant-local",

@@ -9,6 +9,7 @@ export type RouteHandler =
   | "dashboard_comparison_runs"
   | "dashboard_comparison_runs_mutate"
   | "health"
+  | "ready"
   | "operational_metrics"
   | "max_ingest"
   | "report_metrics"
@@ -145,6 +146,7 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_comparison_runs", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/(?:comparisons|comparison-runs\/[^/]+\.json)$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_comparison_runs_mutate", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/comparisons$/, auth: "dashboard_session", mutates: true, capability: "operate" },
   { handler: "health", method: "GET", pattern: /^\/health$/, auth: "public", mutates: false },
+  { handler: "ready", method: "GET", pattern: /^\/ready$/, auth: "public", mutates: false },
   { handler: "operational_metrics", method: "GET", pattern: /^\/metrics$/, auth: "admin_bearer", mutates: false, capability: "read", tenantWideOnly: true },
   { handler: "max_ingest", method: "GET", pattern: /^\/v1\/ingest\/max\/[^/]+$/, auth: "public", mutates: true },
   { handler: "report_metrics", method: "GET", pattern: /^\/v1\/reports\/metrics$/, auth: "admin_bearer", mutates: false, capability: "read" },
