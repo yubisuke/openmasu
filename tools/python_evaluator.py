@@ -56,6 +56,30 @@ def digest(value: Any) -> str:
     return hashlib.sha256(rfc8785.dumps(value)).hexdigest()
 
 
+def bound_first_party_window(server: dict[str, Any]) -> dict[str, Any] | None:
+    bound = server.get("first_party_attribution_bundle")
+    if bound is None:
+        return None
+    definition = bound.get("definition", {})
+    days = definition.get("lookback_days")
+    if type(days) is not int or days not in (1, 7, 30):
+        raise ValueError("attribution_window_days_invalid")
+    expected = {
+        "id": "attribution-first-party-window", "version": "0.4.29", "kind": "attribution",
+        "implementation": "first-party-install-referrer-v0.4.29", "lookback_days": days,
+        "rules": ["accepted-unique-exact-click-reference", "redirector-to-play-server-half-open-window",
+                  "install-original-receipt-revision", "never-reinterpret-imported-platform-or-engagement"],
+    }
+    if canonical(definition) != canonical(expected):
+        raise ValueError("attribution_window_definition_invalid")
+    bundle_hash = digest(expected)
+    if (bound.get("rule_bundle_id") != expected["id"] or bound.get("rule_bundle_version") != expected["version"]
+            or bound.get("rule_bundle_hash") != bundle_hash or bound.get("definition_digest") != bundle_hash):
+        raise ValueError("attribution_window_binding_mismatch")
+    return {"days": days, "rule_bundle_id": expected["id"], "rule_bundle_version": expected["version"],
+            "rule_bundle_hash": bundle_hash}
+
+
 FRAUD_BUNDLE = {
     "id": "fraud-conservative",
     "version": "1.0.0",
@@ -948,6 +972,11 @@ def attribution(
         return result("unattributed", "none", "none", "install_referrer_unavailable")
     if payload["referrer_status"] == "not_applicable":
         return result("unattributed", "none", "none", "platform_referrer_not_available")
+    window = bound_first_party_window(server) if install["producer"] in ("sdk-android", "sdk-ios") else None
+    if window is not None:
+        base.update({key: value for key, value in window.items() if key != "days"})
+        base["attribution_id"] = "attr:window:" + digest([
+            server["tenant_id"], server["app_id"], install["record_id"], window["rule_bundle_hash"]])
     clicks = [
         candidate for candidate in attempts
         if candidate["server"]["tenant_id"] == server["tenant_id"]
@@ -980,7 +1009,7 @@ def attribution(
     delta = timestamp(payload["install_begin_at_server"], "install_begin_at_server") - timestamp(
         click["record"]["payload"]["redirector_click_at"], "redirector_click_at"
     )
-    if delta.total_seconds() < 0 or delta >= timedelta(days=7):
+    if delta.total_seconds() < 0 or delta >= timedelta(days=window["days"] if window else 7):
         return result("unattributed", "none", "none", "window_expired")
     return result("non_organic", "install_referrer", "last_click", "valid_install_referrer", {
         "evidence_refs": [evidence(click["record"]["record_id"]), evidence(install["record_id"])],

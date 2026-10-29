@@ -58,7 +58,8 @@ const rejectionRows = selected.rejections.map((artifact) => ({ ...artifact, arti
 const correctionRows = selected.corrections.map((artifact) => ({ ...artifact, artifact }));
 const attributionRows = selected.attributions.map((artifact) => ({ ...artifact, artifact }));
 for (const artifact of selected.attributions) {
-    const binding = nonFraudBindings.get(artifact.rule_bundle_id);
+    const binding = nonFraudBindings.get(`${artifact.rule_bundle_id}:${artifact.rule_bundle_hash}`)
+      ?? nonFraudBindings.get(artifact.rule_bundle_id);
     if (!binding) throw new Error("non_fraud_rule_bundle_binding_missing");
     assertNonFraudArtifactBinding(artifact, binding);
   }

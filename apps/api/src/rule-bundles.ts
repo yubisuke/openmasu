@@ -1,10 +1,12 @@
 import type { Pool } from "pg";
 import { fraudBundleHash, sha256Jcs, type FraudBundle } from "@openmasu/fraud-rules";
-import { NON_FRAUD_RULE_BUNDLES, validateNonFraudBundleDefinition } from "@openmasu/contracts/definitions";
+import { NON_FRAUD_RULE_BUNDLES, validateNonFraudBundleDefinition, FIRST_PARTY_WINDOW_BUNDLE,
+  validateFirstPartyWindowDefinition } from "@openmasu/contracts/definitions";
 import { uuidV7 } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
 import { FraudPreviewError,parseFraudPreviewRequest,fraudPreviewWithClient,withFraudSnapshot } from "./fraud-preview.js";
+import { AttributionWindowPreviewError, parseAttributionWindowRequest, attributionWindowPreviewWithClient } from "./attribution-window-preview.js";
 
 type Any = Record<string, unknown>;
 
@@ -19,6 +21,8 @@ export type RuleBundleRevision = {
   readonly preview_receipt?: string;
   readonly preview_evidence_digest?: string;
   readonly preview_watermark_at_most?: string;
+  readonly preview_date_from?: string;
+  readonly preview_date_to?: string;
 };
 
 function validateBody(body: Any): {
@@ -44,11 +48,13 @@ function validateBody(body: Any): {
     : String(body.supersedes_rule_bundle_revision_id);
   if (!/^[A-Za-z0-9._:-]{1,128}$/.test(ruleBundleId)) throw new Error("rule_bundle_id_invalid");
   if (ruleBundleVersion.length < 1 || ruleBundleVersion.length > 128) throw new Error("rule_bundle_version_invalid");
+  const windowBundle = ruleBundleId === FIRST_PARTY_WINDOW_BUNDLE;
   const knownNonFraud = Object.prototype.hasOwnProperty.call(NON_FRAUD_RULE_BUNDLES, ruleBundleId);
-  if (definition === undefined && (ruleBundleId.startsWith("fraud-") || knownNonFraud)) {
+  if (definition === undefined && (ruleBundleId.startsWith("fraud-") || knownNonFraud || windowBundle)) {
     throw new Error("rule_bundle_definition_required");
   }
   if (definition !== undefined && ruleBundleId.startsWith("fraud-")) fraudBundleHash(definition as FraudBundle);
+  else if (definition !== undefined && windowBundle) validateFirstPartyWindowDefinition(definition);
   else if (definition !== undefined && knownNonFraud) validateNonFraudBundleDefinition(definition);
   const computedHash = definition === undefined ? undefined : ruleBundleId.startsWith("fraud-")
     ? fraudBundleHash(definition as FraudBundle) : sha256Jcs(definition);
@@ -88,7 +94,8 @@ export async function activateRuleBundle(input: {
 }): Promise<RuleBundleRevision> {
   const {preview:proof,...body}=input.body;
   const value = validateBody(body);
-  if (proof !== undefined && !value.ruleBundleId.startsWith("fraud-")) throw new FraudPreviewError("fraud_preview_only");
+  const windowBundle = value.ruleBundleId === FIRST_PARTY_WINDOW_BUNDLE;
+  if (proof !== undefined && !value.ruleBundleId.startsWith("fraud-") && !windowBundle) throw new FraudPreviewError("fraud_preview_only");
   const now = input.now ?? new Date();
   const activatedAt = now.toISOString();
   const revisionId = `rule-bundle:${uuidV7(now.getTime())}`;
@@ -112,6 +119,23 @@ export async function activateRuleBundle(input: {
     );
     const currentId = current.rows[0]?.rule_bundle_revision_id;
     if ((currentId ?? undefined) !== value.supersedes) throw new Error("rule_bundle_predecessor_mismatch");
+    // Opt-in attribution changes always require a fixed-evidence receipt,
+    // including the first activation from the unregistered seven-day default.
+    if (windowBundle) {
+      if (!proof || typeof proof !== "object" || Array.isArray(proof)) throw new AttributionWindowPreviewError("attribution_window_preview_required");
+      const evidence = proof as Any;
+      if (Object.keys(evidence).some(key => !["receipt", "date_from", "date_to", "watermark_at_most", "baseline_revision_id"].includes(key))
+        || typeof evidence.receipt !== "string" || !/^[a-f0-9]{64}$/.test(evidence.receipt)) {
+        throw new AttributionWindowPreviewError("attribution_window_receipt_invalid");
+      }
+      const request = parseAttributionWindowRequest({ definition: value.definition, date_from: evidence.date_from, date_to: evidence.date_to,
+        watermark_at_most: evidence.watermark_at_most, ...(evidence.baseline_revision_id ? { baseline_revision_id: evidence.baseline_revision_id } : {}) }, now);
+      const result = await attributionWindowPreviewWithClient(client, input.identity, request);
+      if (!result.can_activate || (result.baseline_revision_id ?? undefined) !== currentId) throw new AttributionWindowPreviewError("attribution_window_preview_blocked");
+      if (result.receipt !== evidence.receipt) throw new AttributionWindowPreviewError("attribution_window_receipt_mismatch");
+      artifact = { ...artifact, preview_receipt: result.receipt, preview_evidence_digest: result.evidence.evidence_digest,
+        preview_watermark_at_most: result.watermark_at_most, preview_date_from: result.date_from, preview_date_to: result.date_to };
+    }
     if (input.requirePreview && value.ruleBundleId.startsWith("fraud-") && !currentId) {
       const other=await client.query(`SELECT 1 FROM control.rule_bundles_current WHERE tenant_id=$1 AND app_id=$2 AND rule_bundle_id LIKE 'fraud-%'`,[input.identity.tenantId,input.identity.appId]);
       if (other.rowCount) throw new FraudPreviewError("fraud_preview_baseline_mismatch");

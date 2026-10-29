@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after,it } from "node:test";
 import { DEFAULT_FRAUD_BUNDLE,fraudBundleHash,type FraudBundle } from "@openmasu/fraud-rules";
-import { evaluate,jcs } from "@openmasu/attribution-core";
+import { evaluate,jcs,sha256 } from "@openmasu/attribution-core";
 import { createAppPool,createReaderPool,createSeedPool,EncryptedFilePayloadStore,uuidV7,withTenant } from "@openmasu/runtime";
 import { ingestFixture,persistRaw,persistLogical } from "../../worker/src/test-support/fixture-ingestion.js";
 import { ingestRuntimeBatch } from "../../worker/src/ingestion.js";
@@ -17,6 +17,8 @@ import { ensureAdminKeys,verifyAdminKey,type AppAdminIdentity } from "./admin-au
 import { createRequestHandler } from "./router.js";
 import { previewFraudBundle } from "./fraud-preview.js";
 import { activateRuleBundle } from "./rule-bundles.js";
+import { firstPartyWindowDefinition,firstPartyWindowHash } from "@openmasu/contracts/definitions";
+import { previewAttributionWindow } from "./attribution-window-preview.js";
 
 const pool=createAppPool(),reader=createReaderPool(),seed=createSeedPool();
 const root=mkdtempSync(join(tmpdir(),"openmasu-fraud-preview-"));
@@ -31,6 +33,88 @@ async function state(identity:AppAdminIdentity) {
     (SELECT count(*)::int FROM ledger.audit_logs WHERE tenant_id=$1) AS audit,
     (SELECT count(*)::int FROM control.rule_bundle_revisions WHERE tenant_id=$1) AS revisions`,[identity.tenantId])).rows[0]);
 }
+it("first_party_window_preview_confirm_keeps_history_and_late_install_receipt_revision",{timeout:45_000},async()=>{
+  const tenantId=`tenant-window-${uuidV7().slice(-12)}`,appId="app-a",cutoff="2026-08-12T00:00:00.000Z";
+  const input=JSON.parse(readFileSync("fixtures/v0.4/01-valid-install-referrer/input.json","utf8").replaceAll("tenant-a",tenantId));
+  await ingestFixture(`window-${tenantId}`,input,pool,seed);
+  const key="synthetic-window-admin-key-000000000000",readKey="synthetic-window-read-key-000000000000";
+  await ensureAdminKeys(pool,{tenantId,appId},[{key,role:"admin"},{key:readKey,role:"read_only"}]);
+  const admin=await verifyAdminKey(pool,tenantId,`Bearer ${key}`);assert.ok(admin);
+  const identity={...admin,appId},definition=firstPartyWindowDefinition(1);
+  const request={definition,date_from:"2026-08-01",date_to:"2026-08-13",watermark_at_most:cutoff};
+  const activation=(preview:any,candidate=definition)=>({rule_bundle_id:candidate.id,rule_bundle_version:candidate.version,definition:candidate,
+    ...(preview.baseline_revision_id ? {supersedes_rule_bundle_revision_id:preview.baseline_revision_id}:{}),
+    preview:{receipt:preview.receipt,date_from:request.date_from,date_to:request.date_to,watermark_at_most:cutoff,
+      ...(preview.baseline_revision_id ? {baseline_revision_id:preview.baseline_revision_id}:{})}});
+  const before=await state(identity),preview=await previewAttributionWindow(pool,identity,request);
+  assert.equal(preview.can_activate,true,JSON.stringify(preview.issues));assert.equal(preview.changed_decisions,1);
+  assert.deepEqual(preview.active_counts,{valid_install_referrer:1});assert.deepEqual(preview.candidate_counts,{window_expired:1});
+  assert.deepEqual(await state(identity),before);
+  for (const field of ["installation_id","record_id","payload_ref","raw_payload_ref"]) assert.equal(JSON.stringify(preview).includes(field),false);
+  const absent=await previewAttributionWindow(pool,identity,{...request,date_from:"2026-07-01",date_to:"2026-07-02"});
+  assert.equal(absent.can_activate,false);assert.equal(absent.changed_decisions,null);assert.equal(absent.active_counts,null);
+  await assert.rejects(activateRuleBundle({pool,identity,body:{rule_bundle_id:definition.id,rule_bundle_version:definition.version,definition}}),/preview_required/);
+  const changed=firstPartyWindowDefinition(30);
+  await assert.rejects(activateRuleBundle({pool,identity,body:activation(preview,changed)}),/receipt_mismatch/);
+  const server=createServer(createRequestHandler({pool,readerPool:reader,payloadStore:store,
+    maxConfig:{tenantId,appId,pathSecret:"synthetic-window-path",eventKey:"synthetic-window-event",tokenMode:"all",maxParameters:40,maxQueryBytes:8192},
+    publicBaseUrl:"http://localhost:8080",redirectorBaseUrl:"http://localhost:8090",
+    dashboard:{enabled:true,publicBaseUrl:"http://localhost:8080",tenantId,sessionTtlSeconds:43_200}}));
+  server.listen(0,"127.0.0.1");await once(server,"listening");
+  const base=`http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const api=(path:string,body:unknown,authorization=key)=>fetch(base+path,{method:"POST",headers:{authorization:`Bearer ${authorization}`,"content-type":"application/json"},body:JSON.stringify(body)});
+    assert.equal((await api(`/v1/admin/apps/${appId}/rule-bundles/preview`,request,readKey)).status,403);
+    assert.equal((await api("/v1/admin/apps/app-missing/rule-bundles/preview",request)).status,404);
+    const response=await api(`/v1/admin/apps/${appId}/rule-bundles/preview`,request);assert.equal(response.status,200);
+    assert.equal((await response.json() as any).receipt,preview.receipt);
+    const login=await fetch(base+"/dashboard/session",{method:"POST",redirect:"manual",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({admin_key:key})});
+    const cookie=login.headers.get("set-cookie")!.split(";",1)[0];
+    const settings=await fetch(`${base}/dashboard/apps/${appId}/attribution-window`,{headers:{cookie}});assert.equal(settings.status,200);
+    const html=await settings.text(),csrf=/name="csrf_token" value="([^"]+)"/.exec(html)?.[1];assert.ok(csrf);assert.match(html,/Historical default/);
+    const beforeForm=await state(identity);
+    const form=await fetch(`${base}/dashboard/apps/${appId}/rule-bundles/preview`,{method:"POST",headers:{cookie,origin:"http://localhost:8080","content-type":"application/x-www-form-urlencoded"},
+      body:new URLSearchParams({csrf_token:csrf,preview_kind:"first_party_window",lookback_days:"1",date_from:request.date_from,date_to:request.date_to,watermark_at_most:cutoff})});
+    assert.equal(form.status,200);const previewHtml=await form.text();assert.match(previewHtml,/Activate this reviewed window/);
+    assert.ok(previewHtml.includes(preview.receipt));assert.doesNotMatch(previewHtml,/<script|javascript:|\son[a-z]+\s*=/i);
+    assert.deepEqual(await state(identity),beforeForm);
+    const originals=await withTenant(pool,tenantId,client=>client.query("SELECT artifact FROM ledger.attribution_results WHERE tenant_id=$1 ORDER BY attribution_id",[tenantId]));
+    const first=await activateRuleBundle({pool,identity,body:activation(preview),now:new Date("2026-08-13T00:00:00.000Z"),requirePreview:true});
+    assert.equal(first.preview_receipt,preview.receipt);
+    const install=structuredClone(input.records.find((row:any)=>row.event_name==="install"));
+    Object.assign(install,{record_id:"window-late-install",event_id:"window-late-install",delivery_id:"window-late-install",received_at:"2026-08-14T00:00:00.000Z"});
+    Object.assign(install.payload,{installation_id:"window-late-installation",click_id:"synthetic_window_late_click_0001"});
+    const historical={batch_id:"window-old-receipt",server:{...input.server_context,received_at:install.received_at},record:install};
+    const admitted=await ingestRuntimeBatch([historical],pool);
+    assert.equal(admitted.attributions[0].rule_bundle_hash,firstPartyWindowHash(definition));
+    assert.equal(admitted.attributions[0].reason_code,"unknown_click_id");
+    const next=await previewAttributionWindow(pool,identity,{...request,definition:changed});
+    await activateRuleBundle({pool,identity,body:activation(next,changed),now:new Date("2026-08-15T00:00:00.000Z"),requirePreview:true});
+    const click=structuredClone(input.records.find((row:any)=>row.event_name==="click"));
+    Object.assign(click,{record_id:"window-late-click",event_id:"window-late-click",delivery_id:"window-late-click",received_at:"2026-08-16T00:00:00.000Z"});
+    click.payload.click_id=install.payload.click_id;
+    const late=await ingestRuntimeBatch([{batch_id:"window-new-receipt",server:{...input.server_context,received_at:click.received_at},record:click}],pool,
+      [{...historical,history_state:{payload_sha256:admitted.raw_records[0].payload_sha256,semantic_available:true,ledger_position:"synthetic"}}]);
+    assert.equal(late.attributions[0].rule_bundle_hash,firstPartyWindowHash(definition),"late evidence uses the original receipt revision, not current 30 days");
+    assert.equal(late.attributions[0].reason_code,"window_expired");
+    const retained=await withTenant(pool,tenantId,client=>client.query("SELECT artifact FROM ledger.attribution_results WHERE tenant_id=$1 AND attribution_id=$2",[tenantId,originals.rows[0].artifact.attribution_id]));
+    assert.deepEqual(retained.rows,originals.rows,"activation preserves the existing default attribution bytes");
+    await assert.rejects(activateRuleBundle({pool,identity,body:activation(next,changed)}),/predecessor_mismatch/);
+    const seven=firstPartyWindowDefinition(7),stale=await previewAttributionWindow(pool,identity,{...request,definition:seven});
+    const another=structuredClone(input.records.find((row:any)=>row.event_name==="install"));
+    Object.assign(another,{record_id:"window-backfilled-install",event_id:"window-backfilled-install",delivery_id:"window-backfilled-install"});
+    another.payload.installation_id="window-backfilled-installation";
+    await ingestRuntimeBatch([{batch_id:"window-backfilled",server:input.server_context,record:another}],pool,
+      [{batch_id:"window-click",server:input.server_context,record:input.records[0],history_state:{payload_sha256:sha256(input.records[0].payload),semantic_available:true,ledger_position:"synthetic"}}]);
+    const afterArrival=await state(identity);
+    await assert.rejects(activateRuleBundle({pool,identity,body:activation(stale,seven)}),/receipt_mismatch/);
+    assert.deepEqual(await state(identity),afterArrival,"failed confirmation has no audit, revision or ledger write");
+    await withTenant(pool,tenantId,client=>client.query(`INSERT INTO ledger.raw_payload_states(tenant_id,app_id,record_id,lifecycle_status,changed_at)
+      VALUES($1,$2,$3,'redacted','2026-08-18T00:00:00.000Z')`,[tenantId,appId,another.record_id]));
+    const removed=await previewAttributionWindow(pool,identity,{...request,definition:seven});
+    assert.equal(removed.can_activate,false);assert.equal(removed.changed_decisions,null);assert.ok(removed.issues.includes("evidence_unavailable"));
+  } finally {await new Promise<void>((resolve,reject)=>server.close(error=>error ? reject(error):resolve()));}
+});
 it("fraud_preview_uses_same_ledger_gross_net_blocks_substitution_and_stale_receipts_and_replays_recorded_revision_after_activation",{timeout:45_000},async()=>{
   const tenantId=`tenant-fraud-preview-${uuidV7().slice(-12)}`,appId="app-a",cutoff="2026-08-22T00:00:00.000Z";
   const input=JSON.parse(readFileSync("fixtures/v0.4/50-gross-net-metrics/input.json","utf8").replaceAll("tenant-a",tenantId));

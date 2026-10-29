@@ -10,7 +10,7 @@ Implementation and synthetic verification are not live operational qualification
 | Published prerelease | `v0.3.0-rc.3` at `2d689dc`; eight verified SDK assets and exact-commit full CI |
 | Synthetic SDK onboarding | Publication receipt records the downloaded Android SDK/backend journey separately from emulator and provider-shim evidence |
 | Latest stable source release | `v0.2.0`; later features belong to newer source, not this tag |
-| Current source | Contract patch ledger through v0.4.28; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 75 fixtures, 975 golden artifacts |
+| Current source | Contract patch ledger through v0.4.29; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 76 fixtures, 988 golden artifacts |
 
 `v0.3.0-rc.3` is the current published source and SDK release, marked as a
 prerelease. Its [release page](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.3)
@@ -41,7 +41,7 @@ qualification is stated. No row establishes production readiness.
 | Operator access | Optional single-app restriction on existing roles; shared API/session/list/export/job gates; atomic audited key issuance/retirement with immediate session revocation | Backend reader credentials remain trusted tenant-scoped SQL access, not app-scoped user logins; no SSO or general IAM |
 | Retention expiry | Default-off policy, read-only aggregate preview, fixed bounded receipt, interruption-safe protected-object/expired-nonce expiry and retention-affected replay disclosure | No blanket ledger/credential cleanup, legal duration, backup erasure or live-expiry qualification |
 | Receipt and import | Durable SDK/backend admission; explicit raw-event, cost and revenue mappings; atomic records, schema rejection, idempotency and bounded bulk import | Real exports/credentials are not repository evidence; mappings remain explicit |
-| Attribution | First-party Install Referrer, verified platform evidence and imported provider judgments remain separate; recorded exclusions and reasons | No probabilistic identity, blanket partner coverage or external-equivalence claim |
+| Attribution | First-party Install Referrer, verified platform evidence and imported provider judgments remain separate; optional versioned 1/7/30-day first-party window with evidence-bound preview and activation | Historical receipts keep their recorded revision; platform/imported/engagement rules are not reinterpreted; no probabilistic identity or external-equivalence claim |
 | Apple aggregate measurement | Signed synthetic receivers, separate bounded observations, registered event/revenue meaning profiles and window-local SDK state | Postbacks are not unique installs; selected-schema decoding is unverified, not actual revenue or a verified postback binding; live delivery is unverified |
 | Acquisition and money | Selected native/platform/imported profiles; safe cost grain; purchase/refund/reversal, ROAS/LTV, saved FX and native D7 same-set KPIs | Profiles have explicit source, currency and window limits; no inferred cost ownership/allocation or live FX service |
 | Retention and outcomes | Opt-in D3/D14/D30 retained-installation horizons and multiple custom D7 outcome keys | Incomplete windows are not zero; native/platform/imported populations stay separate |
@@ -67,6 +67,11 @@ prioritizes safe setup, daily authenticated input, measurement intent and useful
 saved-period decisions. Current source adds persistent seed refusal, dependency
 readiness and worker recovery, explicit deployment configuration plan/apply,
 renewable Google/Apple cost credentials and device-local SDK diagnostics.
+The next connected workflows now include declared-event setup, complete-period
+CPI/ROAS, cost join diagnostics and bounded backfill, inert link preview/resume,
+typed recurring comparison setup, saved-run left operands and explicit threshold
+policies. The [first-party window guide](attribution-window.md) describes the
+optional 1/7/30-day profile and its retained-evidence activation boundary.
 These additions do not change the frozen rc.3 release or establish live-provider
 access. SDK receipt acceptance remains distinct from server measurement results.
 The corresponding product guides carry operation-specific limits; PRs carry
@@ -101,9 +106,12 @@ evidence, not live store qualification; these metrics are included in rc.3.
 [Scheduled aggregate comparisons](recurring-comparisons.md) persist explicit
 definition revisions and aggregate-only operands. The existing worker produces
 fixed-cutoff, content-addressed results; missing/unknown/incomparable are not
-threshold breaches. Inputs remain operator deposited, with explicit expiry,
-deletion and conservative privacy suppression. No provider authentication,
-notification delivery or new service is introduced. This is included in rc.3.
+threshold breaches. The rc.3 implementation uses operator-deposited inputs.
+Current source additionally supports a selected saved metric schedule as the
+left operand, while the right operand remains explicit, and versioned absolute
+or relative threshold policies. Expiry, deletion and conservative privacy
+suppression remain enforced. Provider authentication and notification delivery
+are not implied by this comparison capability.
 
 [Selected Google detail costs](cost-refresh.md#explicit-google-ad-group-and-ad-costs)
 add bounded ad-group/ad acquisition and explicit creative binding. Selected child

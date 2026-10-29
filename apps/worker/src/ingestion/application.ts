@@ -3,7 +3,8 @@ import { compareCandidateAttempts, evaluate, IndexedCandidateProvider, sortCandi
 import { clickInjectionPolicyDigest, fraudNumberParameter } from "@openmasu/fraud-rules";
 import { withTenant, measurementClasses } from "@openmasu/runtime";
 import { resolveActiveFraudBundle, serverBundleContext } from "../fraud-bundle-runtime.js";
-import { assertNonFraudArtifactBinding, nonFraudServerContext, resolveNonFraudBundle, type BoundNonFraudBundle } from "../non-fraud-bundle-runtime.js";
+import { assertNonFraudArtifactBinding, nonFraudServerContext, resolveNonFraudBundle, firstPartyWindowRevisions,
+  firstPartyWindowAtReceipt, firstPartyWindowServerContext, type BoundNonFraudBundle } from "../non-fraud-bundle-runtime.js";
 import { inputAttempts, defaultTimestamp, policyDigestForRecord, refundProjectionTargets } from "./input.js";
 import { persistRawWithClient, persistDeliveryWithClient, persistLogicalWithClient, persistCorrectionWithClient, persistRejectionWithClient } from "./record-repository.js";
 import { persistProjectionWithClient } from "./fact-projections.js";
@@ -117,18 +118,32 @@ export async function ingestRuntimeBatch(
   const activeRevision = await resolveActiveFraudBundle(appPool, tenantId, appId);
   const attributionBinding = await resolveNonFraudBundle(appPool, tenantId, appId, "attribution-default");
   const applePostbackBinding = await resolveNonFraudBundle(appPool, tenantId, appId, "apple-postback-default");
+  const windowRevisions = await firstPartyWindowRevisions(appPool, tenantId, appId);
   const nonFraudBindings = new Map<string, BoundNonFraudBundle>([
     [attributionBinding.ruleBundleId, attributionBinding],
     [applePostbackBinding.ruleBundleId, applePostbackBinding],
   ]);
   const bind = (attempt: CandidateAttempt): CandidateAttempt => {
+    // Runtime callers cannot inject a policy through event or reconstructed context.
+    const { first_party_attribution_bundle: _untrusted, ...originalServer } = attempt.server;
+    let window = attempt.record.event_name === "install"
+      ? firstPartyWindowAtReceipt(windowRevisions, attempt.server.received_at) : undefined;
+    const recorded = attempt.history_state ? attempt.server.recorded_attribution_bundle : undefined;
+    if (recorded) {
+      window = recorded.rule_bundle_id === "attribution-first-party-window"
+        ? windowRevisions.find(revision => revision.ruleBundleHash === recorded.rule_bundle_hash
+          && revision.ruleBundleVersion === recorded.rule_bundle_version) : undefined;
+      if (recorded.rule_bundle_id === "attribution-first-party-window" && !window) throw new Error("attribution_window_recorded_revision_missing");
+    }
+    if (window) nonFraudBindings.set(`${window.ruleBundleId}:${window.ruleBundleHash}`, window);
+    const server = { ...originalServer, ...(window ? { first_party_attribution_bundle: firstPartyWindowServerContext(window) } : {}) };
     const enabled = attempt.server.fraud_enabled !== false && activeRevision !== undefined;
     const nonFraudRuleBundles = {
       "attribution-default": nonFraudServerContext(attributionBinding),
       "apple-postback-default": nonFraudServerContext(applePostbackBinding),
     };
     if (!enabled) return { ...attempt, server: {
-      ...attempt.server, fraud_enabled: false, non_fraud_rule_bundles: nonFraudRuleBundles,
+      ...server, fraud_enabled: false, non_fraud_rule_bundles: nonFraudRuleBundles,
     } };
     const thresholdSeconds = fraudNumberParameter(activeRevision.definition, "ctit_lower_bound_seconds", 10);
     const policy = {
@@ -139,7 +154,7 @@ export async function ingestRuntimeBatch(
     return {
       ...attempt,
       server: {
-        ...attempt.server,
+        ...server,
         non_fraud_rule_bundles: nonFraudRuleBundles,
         fraud_enabled: true,
         fraud_rule_bundle: serverBundleContext(activeRevision),
@@ -261,7 +276,8 @@ export async function ingestRuntimeBatch(
     return selected;
   }
   for (const attribution of selected.attributions) {
-    const binding = nonFraudBindings.get(attribution.rule_bundle_id);
+    const binding = nonFraudBindings.get(`${attribution.rule_bundle_id}:${attribution.rule_bundle_hash}`)
+      ?? nonFraudBindings.get(attribution.rule_bundle_id);
     if (!binding) throw new Error("non_fraud_rule_bundle_binding_missing");
     await persistAttribution(appPool, attribution, binding);
   }

@@ -1,6 +1,32 @@
 import { createHash } from "node:crypto";
 import { canonicalize } from "json-canonicalize";
 
+export const FIRST_PARTY_WINDOW_BUNDLE = "attribution-first-party-window";
+export const FIRST_PARTY_WINDOW_VERSION = "0.4.29";
+export const FIRST_PARTY_WINDOW_DAYS = [1, 7, 30] as const;
+export type FirstPartyWindowDays = typeof FIRST_PARTY_WINDOW_DAYS[number];
+export function firstPartyWindowDefinition(days: FirstPartyWindowDays) {
+  if (!(FIRST_PARTY_WINDOW_DAYS as readonly number[]).includes(days)) throw new Error("attribution_window_days_invalid");
+  return {
+    id: FIRST_PARTY_WINDOW_BUNDLE as typeof FIRST_PARTY_WINDOW_BUNDLE, version: FIRST_PARTY_WINDOW_VERSION, kind: "attribution" as const,
+    implementation: "first-party-install-referrer-v0.4.29", lookback_days: days,
+    rules: ["accepted-unique-exact-click-reference", "redirector-to-play-server-half-open-window",
+      "install-original-receipt-revision", "never-reinterpret-imported-platform-or-engagement"],
+  };
+}
+export type FirstPartyWindowDefinition = ReturnType<typeof firstPartyWindowDefinition>;
+export function validateFirstPartyWindowDefinition(value: unknown): FirstPartyWindowDefinition {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("attribution_window_definition_invalid");
+  const days = (value as Record<string, unknown>).lookback_days;
+  if (!(FIRST_PARTY_WINDOW_DAYS as readonly unknown[]).includes(days)) throw new Error("attribution_window_days_invalid");
+  const expected = firstPartyWindowDefinition(days as FirstPartyWindowDays);
+  if (canonicalize(value) !== canonicalize(expected)) throw new Error("attribution_window_definition_invalid");
+  return expected;
+}
+export function firstPartyWindowHash(definition: FirstPartyWindowDefinition): string {
+  return createHash("sha256").update(canonicalize(validateFirstPartyWindowDefinition(definition)), "utf8").digest("hex");
+}
+
 export type NonFraudRuleBundleId =
   | "attribution-default"
   | "apple-postback-default"

@@ -4,9 +4,17 @@ import {
   NON_FRAUD_RULE_BUNDLES,
   nonFraudBundleHash,
   validateNonFraudBundleDefinition,
+  firstPartyWindowDefinition, firstPartyWindowHash, validateFirstPartyWindowDefinition,
 } from "./rule-bundle-provenance.js";
 
 describe("WO20 non-fraud rule-bundle provenance", () => {
+  it("keeps the historical default and binds each closed opt-in window independently", () => {
+    assert.equal(nonFraudBundleHash("attribution-default"), "2a6acdf35b3c649dc1e56d14cbc7436065118e4bb0ed1e7bd7b4604e834dce50");
+    const hashes = [1,7,30].map(days => firstPartyWindowHash(firstPartyWindowDefinition(days as 1|7|30)));
+    assert.equal(new Set(hashes).size, 3);
+    for (const value of [0,2,31,"7",null]) assert.throws(() => validateFirstPartyWindowDefinition({ ...firstPartyWindowDefinition(7), lookback_days:value }));
+    assert.throws(() => validateFirstPartyWindowDefinition({ ...firstPartyWindowDefinition(7), provider_window:true }));
+  });
   it("derives a non-placeholder JCS digest for every checked-in definition", () => {
     for (const [id, definition] of Object.entries(NON_FRAUD_RULE_BUNDLES)) {
       assert.equal(validateNonFraudBundleDefinition(structuredClone(definition)), definition);
