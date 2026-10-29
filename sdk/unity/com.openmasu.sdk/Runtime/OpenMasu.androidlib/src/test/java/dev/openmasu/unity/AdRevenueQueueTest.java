@@ -48,6 +48,12 @@ public final class AdRevenueQueueTest {
     OpenMasuSdk sdk = make(context, configuration, transport);
     try {
       field.set(null, sdk);
+      AtomicReference<String> sessionResult = new AtomicReference<>();
+      OpenMasuUnityBridge.setSyntheticValidationSession("A".repeat(43), System.currentTimeMillis() + 60_000, sessionResult::set);
+      assertEquals("unsupported", sessionResult.get()); // This custom transport has not opted into validation envelopes.
+      OpenMasuUnityBridge.clearSyntheticValidationSession(sessionResult::set);
+      assertEquals("cleared", sessionResult.get());
+      assertNull(captured.get());
       sdk.initialize(); sdk.updateConsent("granted", "synthetic-levelplay"); sdk.flushBlocking(10_000L);
       JSONArray observations = input == null ? syntheticObservations() : new JSONArray(
           new String(Files.readAllBytes(java.nio.file.Paths.get(input)), java.nio.charset.StandardCharsets.UTF_8));

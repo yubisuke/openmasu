@@ -93,6 +93,12 @@ const seedControlTruncate = new Set([
   "control.worker_job_schedules",
 ]);
 const ephemeralExpected = new Map<string, Record<Role, Privilege[]>>([
+  ["ephemeral.synthetic_validation_sessions", {
+    openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: ["SELECT"], openmasu_seed: ["TRUNCATE"],
+  }],
+  ["ephemeral.synthetic_validation_receipts", {
+    openmasu_app: ["SELECT", "INSERT", "DELETE"], openmasu_reader: ["SELECT"], openmasu_seed: ["TRUNCATE"],
+  }],
   ["ephemeral.request_nonces", {
     openmasu_app: ["SELECT", "INSERT", "DELETE"], openmasu_reader: [], openmasu_seed: ["TRUNCATE"],
   }],

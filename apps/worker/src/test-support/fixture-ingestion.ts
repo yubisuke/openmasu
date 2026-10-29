@@ -314,6 +314,8 @@ export async function resetLedger(seedPool: Pool): Promise<void> {
       // Synthetic reseeding also resets derived metric work; stale items must not
       // withdraw newly seeded artifacts that intentionally reuse fixture IDs.
       quoted.push("control.metric_recalculation_jobs", "control.metric_recalculation_items");
+      // A synthetic reset removes the ledger that these temporary receipts describe.
+      quoted.push("ephemeral.synthetic_validation_sessions");
       await client.query(`TRUNCATE TABLE ${quoted.join(", ")} CASCADE`);
       await client.query("COMMIT");
     } catch (error) {

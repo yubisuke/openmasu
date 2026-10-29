@@ -23,6 +23,7 @@ export * from "./webhook-security.js";
 export type { RoasOperands, TotalNetRoasOperands, RoasCalculationEvidence } from "./metric-evidence.js";
 export * from "./metric-comparison.js";
 export * from "./measurement-diagnostics.js";
+export * from "./synthetic-validation.js";
 export * from "./s3-object-storage.js";
 
 const identifierPattern = /^[A-Za-z0-9._:-]{1,128}$/;

@@ -191,6 +191,20 @@ struct DiagnosticAttempt: Codable {
   var httpClass: OpenMasuHttpClass = .none
 }
 
+public enum OpenMasuSyntheticValidationError: Error { case invalidSession, transportUnsupported }
+
+struct SyntheticValidationSession: Codable {
+  let token: String
+  let expiresAtMs: Int64
+  static let maxTTLms: Int64 = 30 * 60 * 1_000
+  static func validToken(_ token: String) -> Bool {
+    token.utf8.count == 43 && token.range(of: "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$", options: .regularExpression) != nil
+  }
+  func isActive(nowMs: Int64) -> Bool {
+    Self.validToken(token) && expiresAtMs > nowMs && expiresAtMs <= nowMs + Self.maxTTLms
+  }
+}
+
 struct QueueCapacity: Equatable, Sendable {
   let maxRecords: Int
   let maxBytes: Int64

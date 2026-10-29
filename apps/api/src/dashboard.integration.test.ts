@@ -113,6 +113,38 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     if (payloadRoot) rmSync(payloadRoot, { recursive: true, force: true });
   });
 
+  it("creates one-time disposable validation tokens through scoped API and CSRF-protected SSR without GET writes", async () => {
+    const endpoint = `${baseUrl}/v1/admin/apps/${appId}/synthetic-validations`;
+    const headers = { authorization: `Bearer ${adminKeyA}`, "content-type": "application/json" };
+    assert.equal((await fetch(endpoint, { method: "POST", body: "{}" })).status, 401);
+    const response = await fetch(endpoint, { method: "POST", headers, body: JSON.stringify({ expected_events: ["install", "custom_event"], expected_custom_keys: ["synthetic_checkout"] }) });
+    assert.equal(response.status, 201);
+    const created = await response.json() as { session_id: string; session_token: string; expires_at: string };
+    assert.match(created.session_token, /^[A-Za-z0-9_-]{43}$/);
+    const read = await fetch(`${endpoint}/${created.session_id}`, { headers }); assert.equal(read.status, 200);
+    const text = await read.text(); assert.equal(text.includes(created.session_token), false); assert.equal(text.includes("token_digest"), false);
+    assert.equal((await fetch(`${endpoint}/${randomUUID()}`, { headers })).status, 404);
+    const sessionCookie = cookie(await login(adminKeyA));
+    const token = readDashboardToken(sessionCookie, configuredOrigin)!;
+    const path = `${baseUrl}/dashboard/apps/${appId}/synthetic-validations`;
+    const before = (await withTenant(readerPool, tenantId, client => client.query("SELECT * FROM ephemeral.synthetic_validation_sessions WHERE tenant_id=$1 ORDER BY session_id", [tenantId]))).rows;
+    for (const url of [path, `${path}/${created.session_id}`]) {
+      const page = await fetch(url, { headers: { cookie: sessionCookie } }); assert.equal(page.status, 200);
+      const html = await page.text(); assert.doesNotMatch(html, /<script\b|javascript:|\son[a-z]+=/i); assert.equal(html.includes(created.session_token), false);
+    }
+    assert.deepEqual((await withTenant(readerPool, tenantId, client => client.query("SELECT * FROM ephemeral.synthetic_validation_sessions WHERE tenant_id=$1 ORDER BY session_id", [tenantId]))).rows, before);
+    const form = new URLSearchParams({ csrf_token: csrfToken(token), ttl_seconds: "600", expected_events: "session_start", expected_custom_keys: "" });
+    assert.equal((await fetch(path, { method: "POST", headers: { cookie: sessionCookie, origin: "https://untrusted.synthetic.invalid" }, body: form })).status, 403);
+    const issued = await fetch(path, { method: "POST", headers: { cookie: sessionCookie, origin: configuredOrigin }, body: form });
+    assert.equal(issued.status, 201); assert.match(await issued.text(), /Session token — shown once/);
+    const readOnly = `synthetic-validation-reader-${suffix}-${"r".repeat(32)}`;
+    await ensureAdminKeys(appPool, { tenantId, appId }, [{ key: readOnly, role: "read_only" }]);
+    assert.equal((await fetch(endpoint, { method: "POST", headers: { authorization: `Bearer ${readOnly}`, "content-type": "application/json" }, body: "{}" })).status, 403);
+    assert.equal((await fetch(`${endpoint}/${created.session_id}`, { headers: { authorization: `Bearer ${readOnly}` } })).status, 200);
+    assert.equal((await fetch(`${endpoint}/${created.session_id}/close`, { method: "POST", headers })).status, 200);
+    assert.equal((await fetch(`${endpoint}/${created.session_id}`, { headers })).status, 404);
+  });
+
   it("shows app-scoped measurement health from retained synthetic ingestion and metric metadata", async () => {
     const healthApp = `app-health-${suffix}`;
     const otherApp = `app-health-other-${suffix}`;

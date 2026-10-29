@@ -15,6 +15,7 @@ import {
   type ScheduledWorkerJob,
   createRuntimeReadiness,
   serveRuntimeHealth,
+  cleanupSyntheticValidations,
 } from "@openmasu/runtime";
 import { AdServicesLookupLimiter, processAdServicesLookups } from "./adservices-worker.js";
 import { processMaxInbox } from "./import/max-worker.js";
@@ -211,6 +212,8 @@ async function runWorkerScheduledJob(
 }
 
 async function processTenantCycle(tenantId: string, pool: Pool, schedulerPool: Pool): Promise<void> {
+  // At most 50 expired associations per tenant cycle; no payload or ledger deletion.
+  await cleanupSyntheticValidations(pool, tenantId);
   const store = new PostgresSchedulerStore(schedulerPool);
   const runWorkerJob = (jobTenant: string, job: ScheduledWorkerJob, task: () => Promise<void>, policy = schedulePolicy) =>
     runWorkerScheduledJob(store, jobTenant, job, task, policy);

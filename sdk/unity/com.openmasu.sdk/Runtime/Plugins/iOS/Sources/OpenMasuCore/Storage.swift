@@ -152,6 +152,29 @@ public final class OpenMasuStorage: @unchecked Sendable {
     try setMetadata("diagnostic_attempt", value: String(decoding: data, as: UTF8.self))
   }
 
+  func syntheticValidationSession() throws -> SyntheticValidationSession? {
+    guard let encoded = try metadata("synthetic_validation_session") else { return nil }
+    if let session = try? JSONDecoder().decode(SyntheticValidationSession.self, from: Data(encoded.utf8)),
+       session.isActive(nowMs: Int64(Date().timeIntervalSince1970 * 1_000)) { return session }
+    // Delete only the observed stale value, not a session concurrently replaced by another SDK instance.
+    try lock.withLock {
+      let statement = try prepare("DELETE FROM metadata WHERE key='synthetic_validation_session' AND value=?")
+      defer { sqlite3_finalize(statement) }
+      bind(encoded, to: statement, at: 1)
+      guard sqlite3_step(statement) == SQLITE_DONE else { throw databaseError("synthetic_validation_clear_failed") }
+    }
+    return nil
+  }
+
+  func setSyntheticValidationSession(_ value: SyntheticValidationSession?) throws {
+    if let value {
+      let data = try JSONEncoder().encode(value)
+      try setMetadata("synthetic_validation_session", value: String(decoding: data, as: UTF8.self))
+    } else {
+      try lock.withLock { try execute("DELETE FROM metadata WHERE key='synthetic_validation_session'") }
+    }
+  }
+
   func appleConversionState() throws -> String? { try metadata("apple_conversion_state") }
   func setAppleConversionState(_ value: String) throws { try setMetadata("apple_conversion_state", value: value) }
   func clearAppleConversionState() throws {
@@ -161,6 +184,7 @@ public final class OpenMasuStorage: @unchecked Sendable {
   func applyConsentState(_ state: String) throws {
     if state == "denied" || state == "withdrawn" {
       try setMetadata("consent_barrier", value: "1")
+      try setSyntheticValidationSession(nil)
     } else if state == "granted" || state == "not_required" {
       try setMetadata("consent_barrier", value: "0")
     }

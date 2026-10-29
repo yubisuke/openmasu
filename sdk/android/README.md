@@ -86,6 +86,28 @@ Custom HTTP transports may opt into `OpenMasuDiagnosticTransport` and the closed
 `OpenMasuTransportFailure` errors. `PENDING` means local work remains, not a
 promised retry time. See [measurement health](../../docs/measurement-health.md#local-sdk-diagnostics-are-separate).
 
+## Short-lived synthetic validation sessions
+
+On a disposable synthetic deployment, an administrator can create a short-lived
+validation session and supply its one-time token and expiry to a synthetic test
+app. Call `sdk.setSyntheticValidationSession(token, expiresAtMs)` to opt in and
+`sdk.clearSyntheticValidationSession()` to opt out. These calls only update local
+settings: they do not create an identifier, enroll, send, enable collection or
+relax consent. The built-in transport supports this capability; a custom transport
+must implement `OpenMasuSyntheticValidationTransport`, otherwise setting fails
+explicitly with `UnsupportedOperationException`.
+
+The token must be canonical base64url for 32 bytes, without padding (43 characters).
+Expiry must be in the future and at most 30 minutes away. Server expiry and the
+`synthetic_disposable` deployment restriction remain authoritative. Active opt-in
+survives reopening/background work in the existing private SDK storage. Only the
+signed batch envelope gets `validation_session_token`; queue events, diagnostics,
+logs and enrollment requests do not. Expired settings send ordinary unlabelled
+batches under the unchanged collection/consent rules. Withdrawal, denial and
+installation reset clear the setting. HTTP 202 still means admission, not a
+successful validation or metric result; follow receipts in the administrator UI.
+Never use this facility with real data or persist its token in application logs.
+
 ## Install Referrer and deep links
 
 Install Referrer preserves Google Play response state and both client and

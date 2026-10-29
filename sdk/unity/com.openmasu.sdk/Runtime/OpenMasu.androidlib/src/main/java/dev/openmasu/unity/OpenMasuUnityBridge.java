@@ -164,6 +164,29 @@ public final class OpenMasuUnityBridge {
     });
   }
 
+  public static void setSyntheticValidationSession(String token, long expiresAtMs, StringCallback callback) {
+    OpenMasuSdk current = sdk;
+    if (current == null) { callback.onResult("not_initialized"); return; }
+    try {
+      if (token == null) { callback.onResult("invalid_session"); return; }
+      current.setSyntheticValidationSession(token, expiresAtMs);
+      callback.onResult("configured");
+    } catch (UnsupportedOperationException exception) {
+      callback.onResult("unsupported");
+    } catch (IllegalArgumentException exception) {
+      callback.onResult("invalid_session");
+    } catch (RuntimeException exception) {
+      callback.onResult("native_failure");
+    }
+  }
+
+  public static void clearSyntheticValidationSession(StringCallback callback) {
+    OpenMasuSdk current = sdk;
+    if (current == null) { callback.onResult("not_initialized"); return; }
+    try { current.clearSyntheticValidationSession(); callback.onResult("cleared"); }
+    catch (RuntimeException exception) { callback.onResult("native_failure"); }
+  }
+
   public static void setCollectionEnabled(boolean enabled) { requireSdk().setCollectionEnabled(enabled); }
 
   public static void resetInstallationId(BooleanCallback callback) {

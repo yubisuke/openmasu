@@ -20,6 +20,11 @@ final class OpenMasuCoreTests: XCTestCase {
     XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("installation-id").path))
     let calls = await transport.callCount()
     XCTAssertEqual(calls, 0)
+    do {
+      try await sdk.setSyntheticValidationSession(token: String(repeating: "A", count: 43), expiresAtMs: Int64(Date().timeIntervalSince1970 * 1_000) + 60_000)
+      XCTFail("legacy custom transport must explicitly reject validation sessions")
+    } catch OpenMasuSyntheticValidationError.transportUnsupported { }
+    try await sdk.clearSyntheticValidationSession()
     let storage = try OpenMasuStorage(root: root)
     try storage.applyConsentState("withdrawn")
     let blocked = try await sdk.diagnosticsSnapshot()
@@ -535,8 +540,10 @@ final class OpenMasuCoreTests: XCTestCase {
     catch { XCTAssertEqual(error as? OpenMasuError, .transport(503)) }
     let queuedBeforeReset = try await sdk.pendingCount()
     XCTAssertEqual(queuedBeforeReset, 1)
+    try await sdk.setSyntheticValidationSession(token: String(repeating: "A", count: 43), expiresAtMs: Int64(Date().timeIntervalSince1970 * 1_000) + 60_000)
     do { try await sdk.resetInstallationId(); XCTFail("deletion is still processing") }
     catch { XCTAssertEqual(error as? OpenMasuError, .resetPending) }
+    XCTAssertNil(try OpenMasuStorage(root: root).syntheticValidationSession())
     let receipt = try OpenMasuStorage(root: root).deletionJournal()?.receipt
     XCTAssertEqual(receipt?.count, 64)
     let retainedId = try await sdk.installationIdForMeasurement()
@@ -950,7 +957,7 @@ private actor RecordingTransport: OpenMasuTransport {
   func failNextEnrollment() { enrollmentFailures += 1 }
 }
 
-private actor ReceiptTransport: OpenMasuDeletionTransport {
+private actor ReceiptTransport: OpenMasuDeletionTransport, OpenMasuSyntheticValidationTransport {
   private var receipt: String?
   private var state = DeletionStatus.missing
   private var begins = 0
@@ -976,6 +983,9 @@ private actor ReceiptTransport: OpenMasuDeletionTransport {
   func deliver(credential: InstallationCredential, events: [QueuedEvent]) async throws {
     payloads.append(events)
     if failDelivery { throw OpenMasuError.transport(503) }
+  }
+  func deliverForSyntheticValidation(credential: InstallationCredential, events: [QueuedEvent], sessionToken: String) async throws {
+    try await deliver(credential: credential, events: events)
   }
   func deleteInstallation(credential: InstallationCredential, installationId: String) async throws {
     XCTFail("receipt capability must be used")

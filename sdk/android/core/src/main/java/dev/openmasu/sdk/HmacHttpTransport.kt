@@ -6,7 +6,7 @@ import java.net.URL
 import java.util.Base64
 import java.util.UUID
 
-class HmacHttpTransport(private val configuration: OpenMasuConfiguration) : OpenMasuDeletionTransport, OpenMasuDiagnosticTransport {
+class HmacHttpTransport(private val configuration: OpenMasuConfiguration) : OpenMasuDeletionTransport, OpenMasuSyntheticValidationTransport {
   override fun enroll(installationId: String): InstallationCredential {
     val response = request("/v1/installations", JSONObject().put("installation_id", installationId).toString(), null)
     if (response.status != 201) throw OpenMasuTransportFailure.http(response.status)
@@ -19,6 +19,14 @@ class HmacHttpTransport(private val configuration: OpenMasuConfiguration) : Open
 
   override fun deliverWithDiagnostics(credential: InstallationCredential, events: List<QueuedEvent>) {
     val status = request("/v1/events/batch", EventFactory.envelope(events, configuration.sdkVersion, configuration.wrapperVersion), credential).status
+    if (status != 202) throw OpenMasuTransportFailure.http(status)
+  }
+
+  override fun deliverForSyntheticValidation(credential: InstallationCredential, events: List<QueuedEvent>, sessionToken: String) {
+    require(SyntheticValidationSession.validToken(sessionToken)) { "synthetic_validation_token_invalid" }
+    val body = JSONObject(EventFactory.envelope(events, configuration.sdkVersion, configuration.wrapperVersion))
+      .put("validation_session_token", sessionToken).toString()
+    val status = request("/v1/events/batch", body, credential).status
     if (status != 202) throw OpenMasuTransportFailure.http(status)
   }
 

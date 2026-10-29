@@ -14,7 +14,12 @@ public protocol OpenMasuDeletionTransport: OpenMasuTransport {
   func deletionStatus(receipt: String) async throws -> DeletionStatus
 }
 
-public final class HmacHttpTransport: OpenMasuAppStoreTransport, OpenMasuDeletionTransport, @unchecked Sendable {
+/// Optional explicit opt-in. The token belongs only to the signed batch envelope.
+public protocol OpenMasuSyntheticValidationTransport: OpenMasuTransport {
+  func deliverForSyntheticValidation(credential: InstallationCredential, events: [QueuedEvent], sessionToken: String) async throws
+}
+
+public final class HmacHttpTransport: OpenMasuAppStoreTransport, OpenMasuDeletionTransport, OpenMasuSyntheticValidationTransport, @unchecked Sendable {
   private let configuration: OpenMasuConfiguration
   private let session: URLSession
 
@@ -48,6 +53,16 @@ public final class HmacHttpTransport: OpenMasuAppStoreTransport, OpenMasuDeletio
     let body = try EventFactory.json(["installation_id": installationId]).data(using: .utf8)!
     let response = try await request(path: "/v1/privacy/installation", body: body, credential: credential)
     guard response.status == 201 else { throw OpenMasuError.transport(response.status) }
+  }
+
+  public func deliverForSyntheticValidation(credential: InstallationCredential, events: [QueuedEvent], sessionToken: String) async throws {
+    guard SyntheticValidationSession.validToken(sessionToken) else { throw OpenMasuSyntheticValidationError.invalidSession }
+    let original = try EventFactory.envelope(events: events, producerVersion: configuration.sdkVersion, wrapperVersion: configuration.wrapperVersion)
+    guard var envelope = try JSONSerialization.jsonObject(with: original) as? [String: Any] else { throw OpenMasuError.responseInvalid }
+    envelope["validation_session_token"] = sessionToken
+    let body = try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys, .withoutEscapingSlashes])
+    let response = try await request(path: "/v1/events/batch", body: body, credential: credential)
+    guard response.status == 202 else { throw OpenMasuError.transport(response.status) }
   }
 
   public func beginDeletion(credential: InstallationCredential, installationId: String, receipt: String) async throws -> DeletionStatus {

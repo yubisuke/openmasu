@@ -235,6 +235,23 @@ classified, and other errors are `customFailure`. Retry state `pending` means
 local work remains, not a scheduled retry time. See
 [measurement health](../../docs/measurement-health.md#local-sdk-diagnostics-are-separate).
 
+For an administrator-created short-lived session on a disposable synthetic
+deployment, use `try await sdk.setSyntheticValidationSession(token:expiresAtMs:)`
+and `try await sdk.clearSyntheticValidationSession()`. Both are local settings
+operations: they do not create identifiers, enroll, send, enable collection or
+relax consent. The token must be a canonical unpadded 43-character base64url value
+for 32 bytes, and expiry must be in the future and no more than 30 minutes away.
+The server remains authoritative for expiry and `synthetic_disposable` eligibility.
+Custom transports must adopt `OpenMasuSyntheticValidationTransport`; unsupported
+transports throw `OpenMasuSyntheticValidationError.transportUnsupported` on opt-in.
+
+Active settings survive reopening in private SDK metadata. Only the signed batch
+envelope receives `validation_session_token`; it is absent from queue events,
+diagnostics, enrollment and logs. Expiry uses ordinary unlabelled batches without
+changing consent/collection rules; withdrawal, denial and reset clear the setting.
+HTTP 202 does not establish validation success or metric membership. Follow the
+receipt in the administrator UI, and never use real data or log the token.
+
 Consent-gated applications must set the Boolean Info.plist key
 `OpenMasuCollectionEnabledDefault` to `false` and enable collection only after
 their own policy allows it. Unity's postprocessor writes `false` unless the
