@@ -7,13 +7,88 @@ import { correctionMetricNames, expandAcquisitionCompanions, isCompanionAcquisit
   type CorrectionCandidate, type LateEventRecalculationRequest } from "./metric-recalculation.js";
 
 type Any = Record<string, any>;
+export type EngagementCorrectionInput = {
+  record_id: string; event_name: string; installation_id: string | null; occurred_at: string | null; producer: string;
+  event_key?: string | null; policy_digest?: string | null; target_policy_digest?: string | null;
+  target_producer?: string | null; target_occurred_at?: string | null;
+};
 type InputRow = {
   record_id: string; payload_sha256: string; event_name: string; received_at: string;
   lifecycle: string; logical_event_id: string | null; installation_id: string | null;
   occurred_at: string | null; financial_status: string | null; target_available: boolean; refund_reversal: boolean; producer: string;
   event_key: string | null;
   policy_digest: string | null; target_policy_digest: string | null; target_producer: string | null;
+  target_occurred_at: string | null;
 };
+
+/** The two shipped engagement profiles only; never reinterpret an install cohort. */
+export function supportsEngagementMetric(replay: Any): boolean {
+  const metric = replay.metric_definition, grouping = replay.evaluation?.grouping;
+  if (!metric || !validateMetricDefinition(metric) || metric.anchor_event !== "deep_link_open"
+    || !((metric.rule_bundle_id === "metric-first-party-engagement" && metric.metric_definition_version === "0.4.17"
+      && metric.rule_bundle_version === "0.4.17")
+      || (metric.rule_bundle_id === "metric-engagement-policy" && metric.metric_definition_version === "0.4.28"
+        && metric.rule_bundle_version === "0.4.28"))
+    || !grouping || typeof grouping.metric_date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(grouping.metric_date)
+    || !Number.isFinite(Date.parse(grouping.metric_date)) || new Date(grouping.metric_date).toISOString().slice(0, 10) !== grouping.metric_date
+    || Object.keys(grouping).some(key => !["metric_date", "campaign_id"].includes(key))) return false;
+  return grouping.campaign_id === undefined || typeof grouping.campaign_id === "string"
+    && /^[A-Za-z0-9._:-]{1,128}$/.test(grouping.campaign_id);
+}
+
+/** Conservative influence, not a second winner/inactivity calculator. The saved date
+ * and installation bound the search; a later open can remove credit from another campaign. */
+export async function engagementInputMatches(client: PoolClient, scope: { tenantId: string; appId: string }, replay: Any,
+  changes: readonly EngagementCorrectionInput[], watermark: string): Promise<string[]> {
+  if (changes.length > 100) throw new Error("metric_recalculation_input_limit");
+  if (!supportsEngagementMetric(replay)) return [];
+  const metric = replay.metric_definition, policy = metric.rule_bundle_id === "metric-engagement-policy";
+  const inactivity = policy ? metric.engagement_inactivity_days : 0, numerator = metric.definition.numerator;
+  const eligible = changes.filter(event => {
+    if (!event.installation_id || !event.occurred_at) return false;
+    const history = inactivity > 0 && ["sdk-android", "sdk-ios"].includes(event.producer);
+    if (event.event_name === "deep_link_open") return true;
+    if (event.event_name === "session_start" || event.event_name === "install") return history;
+    if (event.event_name === "custom_event") return history
+      || numerator === "converted_installations" && event.event_key === metric.conversion_event_key;
+    if (event.event_name === "ad_revenue") return numerator === "revenue";
+    if (event.event_name === "purchase" || event.event_name === "refund") return policy && numerator === "purchase_net_revenue"
+      && isVerifiedPurchaseProjection(event.producer, event.policy_digest ?? "")
+      && (event.event_name !== "refund" || !!event.target_occurred_at
+        && isVerifiedPurchaseProjection(event.target_producer ?? "", event.target_policy_digest ?? ""));
+    return false;
+  });
+  if (!eligible.length) return [];
+  const result = await client.query<{ record_id: string }>(
+    `SELECT DISTINCT changed.record_id COLLATE "C" AS record_id FROM jsonb_to_recordset($4::jsonb)
+       AS changed(record_id text,event_name text,installation_id text,occurred_at text,producer text,event_key text,target_occurred_at text)
+     JOIN ledger.raw_records_current AS changed_raw ON changed_raw.tenant_id=$1 AND changed_raw.app_id=$2
+       AND changed_raw.record_id=changed.record_id AND changed_raw.received_at<=$3 AND changed_raw.payload_lifecycle_status='available'
+     JOIN ledger.deep_link_open_facts AS opened ON opened.tenant_id=$1 AND opened.app_id=$2
+       AND opened.installation_id=changed.installation_id
+     JOIN ledger.logical_events AS logical ON logical.logical_event_id=opened.logical_event_id
+       AND logical.tenant_id=$1 AND logical.app_id=$2
+     JOIN ledger.raw_records_current AS raw ON raw.tenant_id=$1 AND raw.app_id=$2 AND raw.record_id=logical.record_id
+     WHERE raw.received_at<=$3 AND timezone('UTC',opened.occurred_at_ts)::date=$5::date
+       AND (
+         ((changed.event_name='deep_link_open'
+             OR (changed.event_name='ad_revenue' AND $7::text='revenue')
+             OR (changed.event_name='custom_event' AND $7::text='converted_installations' AND changed.event_key=$8::text))
+           AND control.canonical_timestamp_value(changed.occurred_at)>=opened.occurred_at_ts
+           AND control.canonical_timestamp_value(changed.occurred_at)<opened.occurred_at_ts+$6::int*interval '1 day')
+         OR (changed.event_name IN ('purchase','refund') AND $7::text='purchase_net_revenue'
+           AND control.canonical_timestamp_value(CASE WHEN changed.event_name='refund' THEN changed.target_occurred_at ELSE changed.occurred_at END)>=opened.occurred_at_ts
+           AND control.canonical_timestamp_value(CASE WHEN changed.event_name='refund' THEN changed.target_occurred_at ELSE changed.occurred_at END)<opened.occurred_at_ts+$6::int*interval '1 day')
+         OR ($9::int>0 AND changed.producer IN ('sdk-android','sdk-ios')
+           AND changed.event_name IN ('session_start','custom_event','deep_link_open')
+           AND control.canonical_timestamp_value(changed.occurred_at)>=opened.occurred_at_ts-$9::int*interval '1 day'
+           AND control.canonical_timestamp_value(changed.occurred_at)<opened.occurred_at_ts)
+         OR ($9::int>0 AND changed.producer IN ('sdk-android','sdk-ios') AND changed.event_name='install'
+           AND control.canonical_timestamp_value(changed.occurred_at)<=opened.occurred_at_ts-$9::int*interval '1 day'))
+     ORDER BY record_id LIMIT 101`, [scope.tenantId, scope.appId, watermark, JSON.stringify(eligible),
+      replay.evaluation.grouping.metric_date, metric.definition.window.day + 1, numerator, metric.conversion_event_key ?? null, inactivity]);
+  return result.rows.map(row => row.record_id);
+}
 export type LateSelection = {
   rows: { metric_run_id: string; replay: Any | null; safe_reason: string | null }[];
   records: { record_id: string; payload_sha256: string; received_at: string; event_name: string }[];
@@ -23,6 +98,7 @@ export type LateSelection = {
 
 /** A narrow operational selector, not another metric definition or calculator. */
 export function supportsLateMetric(replay: Any): boolean {
+  if (supportsEngagementMetric(replay)) return true;
   const metric = replay.metric_definition, definition = metric?.definition;
   return !!metric && validateMetricDefinition(metric) && metric.anchor_event === "install"
     && ((["revenue_sum", "revenue_over_cohort", "revenue_over_cost"].includes(definition?.calculation)
@@ -61,8 +137,10 @@ export async function selectLateMetricInputs(
        raw_policy.policy_digest,target_policy.policy_digest AS target_policy_digest,target_raw.producer AS target_producer,
        CASE raw.event_name WHEN 'ad_revenue' THEN revenue.installation_id
          WHEN 'purchase' THEN purchase.installation_id WHEN 'refund' THEN target.installation_id
-         WHEN 'custom_event' THEN custom.installation_id END AS installation_id,custom.event_key,
-       CASE WHEN raw.event_name='custom_event' THEN raw.occurred_at ELSE coalesce(revenue.occurred_at,purchase.occurred_at,
+         WHEN 'custom_event' THEN custom.installation_id WHEN 'session_start' THEN session.installation_id
+         WHEN 'deep_link_open' THEN opened.installation_id WHEN 'install' THEN installed.installation_id END AS installation_id,custom.event_key,
+       target.occurred_at AS target_occurred_at,
+       CASE WHEN raw.event_name IN ('custom_event','session_start','deep_link_open','install') THEN raw.occurred_at ELSE coalesce(revenue.occurred_at,purchase.occurred_at,
          CASE WHEN refund.artifact ? 'reverses_refund_record_id' THEN cancelled.occurred_at ELSE refund.occurred_at END) END AS occurred_at,
        coalesce(refund.financial_status='reversed' AND refund.artifact ? 'reverses_refund_record_id',false) AS refund_reversal,
        coalesce(purchase.financial_status,refund.financial_status) AS financial_status,
@@ -88,6 +166,9 @@ export async function selectLateMetricInputs(
      LEFT JOIN ledger.purchase_facts AS purchase USING (logical_event_id)
      LEFT JOIN ledger.refund_facts AS refund USING (logical_event_id)
      LEFT JOIN ledger.custom_event_facts AS custom USING (logical_event_id)
+     LEFT JOIN ledger.session_facts AS session USING (logical_event_id)
+     LEFT JOIN ledger.deep_link_open_facts AS opened USING (logical_event_id)
+     LEFT JOIN ledger.install_facts AS installed USING (logical_event_id)
      LEFT JOIN ledger.purchase_facts AS target ON target.tenant_id=raw.tenant_id AND target.app_id=raw.app_id
        AND target.record_id=refund.correction_target_record_id
      LEFT JOIN ledger.raw_records_current AS target_raw ON target_raw.tenant_id=target.tenant_id
@@ -102,7 +183,7 @@ export async function selectLateMetricInputs(
        AND cancelled_raw.app_id=raw.app_id AND cancelled_raw.record_id=cancelled_logical.record_id
      WHERE raw.tenant_id=$1 AND raw.app_id=$2
        AND (($4::text[] IS NOT NULL AND raw.record_id=ANY($4::text[]))
-         OR ($4::text[] IS NULL AND raw.event_name IN ('ad_revenue','purchase','refund','custom_event')
+         OR ($4::text[] IS NULL AND raw.event_name IN ('ad_revenue','purchase','refund','custom_event','session_start','deep_link_open','install')
            AND raw.received_at>$5 AND raw.received_at<=$6))
      ORDER BY raw.record_id COLLATE "C" LIMIT 101`, [scope.tenantId, scope.appId, request.watermark,
       request.source_record_ids ?? null, request.source_received_from ?? null, request.source_received_to ?? null]);
@@ -112,10 +193,10 @@ export async function selectLateMetricInputs(
   const eligible = result.rows.filter(row => {
     const reason = row.lifecycle !== "available" ? "unavailable"
       : !row.logical_event_id ? "non_canonical"
-      : !["ad_revenue", "purchase", "refund", "custom_event"].includes(row.event_name) ? "unsupported_input"
+      : !["ad_revenue", "purchase", "refund", "custom_event", "session_start", "deep_link_open", "install"].includes(row.event_name) ? "unsupported_input"
       : row.received_at > request.watermark ? "after_watermark"
       : !row.installation_id || !row.occurred_at || !row.target_available
-        || (!["ad_revenue", "custom_event"].includes(row.event_name) && row.financial_status !== "settled" && !row.refund_reversal) ? "non_contributing" : "eligible";
+        || (["purchase", "refund"].includes(row.event_name) && row.financial_status !== "settled" && !row.refund_reversal) ? "non_contributing" : "eligible";
     counts[reason] = (counts[reason] ?? 0) + 1;
     return reason === "eligible";
   });
@@ -140,7 +221,9 @@ export async function selectLateMetricInputs(
      LEFT JOIN control.metric_replay_manifests AS manifest ON manifest.tenant_id=mr.tenant_id
        AND manifest.app_id=mr.app_id AND manifest.source_metric_run_id=mr.metric_run_id
      WHERE mr.tenant_id=$1 AND mr.app_id=$2 AND mr.input_received_at_watermark<$3
-       AND mr.grouping->>'cohort_date' BETWEEN $4 AND $5
+       AND (CASE WHEN coalesce(mr.comparison_context->'definition'->>'anchor_event',manifest.artifact->'metric_definition'->>'anchor_event')='deep_link_open'
+         THEN mr.grouping->>'metric_date' BETWEEN $4 AND $5
+         ELSE $8::boolean AND mr.grouping->>'cohort_date' BETWEEN $4 AND $5 END)
        AND ($6::text[] IS NULL OR mr.metric_name=ANY($6::text[]))
        AND ($7::text[] IS NULL OR mr.metric_run_id=ANY($7::text[]))
        AND (mr.comparison_context IS NULL OR mr.comparison_context->'definition'->>'rule_bundle_id' IN ('metric-basis-acquisition-kpis','metric-horizon-acquisition-kpis')
@@ -150,7 +233,8 @@ export async function selectLateMetricInputs(
        AND NOT EXISTS (SELECT 1 FROM ledger.metric_runs AS newer WHERE newer.tenant_id=mr.tenant_id
          AND newer.app_id=mr.app_id AND newer.supersedes_metric_run_id=mr.metric_run_id)
      ORDER BY mr.metric_run_id COLLATE "C" LIMIT 101`,
-    [scope.tenantId, scope.appId, request.watermark, request.date_from, request.date_to, correctionMetricNames(request.metric_names) ?? null, candidateIds ?? null]);
+    [scope.tenantId, scope.appId, request.watermark, request.date_from, request.date_to, correctionMetricNames(request.metric_names) ?? null, candidateIds ?? null,
+      eligible.some(event => ["ad_revenue", "purchase", "refund", "custom_event"].includes(event.event_name))]);
   if (candidates.rows.length > 100) throw new Error("metric_recalculation_selection_limit");
   const matchedRecords = new Set<string>();
   for (const row of candidates.rows) {
@@ -161,6 +245,13 @@ export async function selectLateMetricInputs(
     if (row.replay?.version !== 1 || !row.replay.evaluation || !row.replay.fx_policy) reason = "replay_unavailable";
     else if (!supportsLateMetric(row.replay)) reason = "unsupported_definition";
     else if (row.evidence_unavailable) reason = "input_unavailable";
+    else if (supportsEngagementMetric(row.replay)) {
+      const changes = committedReceipt ? eligible : eligible.filter(event => event.received_at > row.watermark);
+      const impacted = await engagementInputMatches(client, scope, row.replay, changes, request.watermark);
+      if (!impacted.length) continue;
+      for (const recordId of impacted) matchedRecords.add(recordId);
+      if (row.pending) reason = "already_pending";
+    }
     else {
       const metric = row.replay.metric_definition;
       const contributing = isPayerMetricDefinition(metric) ? eligible.filter(event =>

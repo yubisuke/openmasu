@@ -114,7 +114,9 @@ explicit campaign selection and at least two lag days. Campaign discovery is
 not supported for this profile. Schedules record the definition and fixed
 watermark and safely retry a completed date without duplicating saved runs.
 They do not replace default install schedules or automatically revisit old
-dates after late delivery.
+dates by themselves. Enable the existing bounded [automatic correction
+policy](automatic-metric-corrections.md) to revisit eligible saved engagement
+results after late delivery; no second scheduler is needed.
 
 ## Read, compare and recalculate
 
@@ -137,14 +139,51 @@ names rather than returning unrelated counts.
 
 Stored definitions and comparison context retain the exact engagement credit
 policy. Do not compare this series as if it were install-cohort revenue or a
-provider aggregate. Re-run with a later explicit watermark to include late
-receipts or recalculate after deletion. Operational engagement calculations use
+provider aggregate. A manual re-run can use a later explicit watermark to
+include late receipts. Operational engagement calculations use
 `privacy_state: after`; deleted anchors and outcomes do not return. New runs
-are appended, not substitutions for historical runs. Automatic privacy/late-
-event supersession is not wired to this new series: explicitly select the new
-watermark when reading the report, and retain old runs only as historical
-evidence. Repeating a manual command with the same run IDs refuses an overwrite;
-the schedule's checkpoint handles operational retry.
+are appended with explicit successor lineage rather than overwriting historical
+artifacts. The existing privacy workflow already selects affected engagement
+runs for withdrawal/recalculation and withholds affected values while that work
+is pending. It does not require the late-input correction policy to be enabled.
+Missing replay evidence remains unavailable, not a copied old value. Repeating
+a manual command with the same run IDs refuses an overwrite; the schedule's
+checkpoint handles operational retry.
+
+## Opt in to bounded late-input correction
+
+Use the existing `POST /v1/admin/apps/:app/metric-correction-policy` with a finite
+`date_from`/`date_to` range and, optionally, engagement `metric_names`. For these
+two supported profiles the range selects the saved **open's `metric_date`**;
+install-cohort definitions still use `cohort_date`. The saved evaluation's
+optional `campaign_id` remains fixed. No new date-dimension or campaign field
+is accepted by the policy, and this does not discover campaigns or create
+missing daily runs. The existing page, target and retry limits apply.
+
+Late opens, ad revenue, verified purchases/refunds and refund cancellations can
+affect credit. Late sessions, custom events, opens and installs can also change
+the recorded-inactivity/history result. The selector conservatively considers
+saved runs with opens for the same installation within the configured open-date
+range; the unchanged calculator decides actual eligibility and value. It does
+not select only the incoming open's campaign: a newer winner can remove credit
+from an older campaign. Refund cancellation follows the original refund and
+purchase relationship rather than being discarded because its own receipt or
+event date is outside the outcome window.
+
+Logical events and their engagement attribution can commit separately. Both
+the late-event receipt and the first or revised engagement-attribution receipt
+can schedule correction, so an early planning pass cannot permanently miss
+attribution committed afterward. The source receipt fixes a new evidence cutoff
+and bounded target set. Replay keeps the saved definition, outcome/inactivity
+windows, FX policy and grouping; original runs keep their original cutoffs and
+bytes. A configuration change does not replace those definitions.
+
+Unknown history stays `undefined/insufficient_activity_history`; an empty
+eligible population stays `undefined/empty_cohort`, not zero. A correction job
+or receipt is not proof of complete upstream delivery, human activity or an
+incremental campaign effect. Inspect job results and successor runs through
+the existing [correction workflow](automatic-metric-corrections.md); reads do
+not start work. Privacy fences and deletion/replay gates remain authoritative.
 
 ## Synthetic evidence and limits
 

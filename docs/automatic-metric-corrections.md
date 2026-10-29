@@ -11,6 +11,10 @@ eligible count, retention or revenue series without relabelling first-party
 results; late money and cost continue to use their existing contributing-input
 selection. Earlier runs retain their recorded cutoff and meaning.
 
+[First-party engagement outcomes](engagement-outcomes.md) also use this queue
+for late evidence and engagement-attribution updates. Their existing privacy
+recalculation path is independent and does not depend on enabling this policy.
+
 ## Configure, pause and inspect
 
 `POST /v1/admin/apps/:app/metric-correction-policy` requires `administer`.
@@ -29,7 +33,13 @@ The body is closed; this example is synthetic:
 ```
 
 Both dates are inclusive, with at most 31 days. Omitted metric names mean eligible
-saved runs **in this finite cohort range**, not all history. Limits/defaults are
+saved runs **in this finite anchor-date range**, not all history. Install-cohort
+definitions use the saved `cohort_date`; supported engagement definitions use
+the saved open's `metric_date` and retain their optional saved `campaign_id`.
+For engagement-only correction, set `metric_names` to the intended existing
+engagement metric names. The policy accepts no additional `date_dimension` or
+campaign filter, does not discover campaigns and does not create missing runs.
+Limits/defaults are
 20/5 receipt pages per call, 100/20 targets per page and 1000/200 frozen candidate
 targets per receipt. The ordinary worker calls the planner with a global budget
 of five pages per tenant cycle, then the existing calculator with five items.
@@ -56,9 +66,14 @@ not contributing events. Retained receipts never establish provider completeness
 
 ## Fixed evidence and bounded continuation
 
-Statement triggers capture canonical revenue/purchase/refund, published cost
-rows and installation attribution revisions in the **same transaction** as the
-evidence. Scope plus source kind and immutable source reference is unique.
+Statement triggers capture canonical revenue/purchase/refund, custom events,
+sessions, deep-link opens and installs, published cost rows, installation
+attribution revisions, and initial or revised engagement attribution in the
+**same transaction** as each source. Logical events and engagement attribution
+can commit separately: both are captured, so planning between those commits
+cannot lose the later attribution evidence. Existing receipt kinds
+`late_events` and `attribution_revision` are reused. Scope plus source kind and
+immutable source reference is unique.
 Rollback removes both; duplicate publication creates no second receipt. No
 timestamp/sequence high-water cursor can miss an older transaction committing
 later. Transition tables avoid a separate policy query for every imported row.
@@ -91,12 +106,27 @@ unbounded retry or widening of the configured range.
   predecessor membership and current selection: a move **out** of a group also
   needs correction. Check the attribution artifact digest and available evidence
   again before replay.
+- Engagement: the saved `metric-first-party-engagement` 0.4.17 and
+  `metric-engagement-policy` 0.4.28 profiles, anchored to `deep_link_open`, with
+  `metric_date` and optional `campaign_id`. Late opens/outcomes, verified
+  refunds/cancellations, sessions/custom events and installation history select
+  a conservative same-installation set of saved runs within the configured
+  date range. The existing calculator determines actual winner, window and
+  inactivity effects. Initial and revised engagement attribution use the same
+  selector; an incoming campaign must not hide credit removed from another
+  saved campaign. Exact saved definitions, FX and grouping are replayed, not
+  replaced with a new attribution/outcome/inactivity policy.
 
 Other definitions are ignored when unrelated, or recorded
 `unsupported_definition` when the relationship cannot be safely determined.
 Missing private replay/evidence is unavailable, not a copied result. Selected
-daily acquisition, retention/custom, imported/platform/Apple aggregate and
-engagement attribution correction are not implied by this narrow selector.
+definition support is explicit; a shared metric name or date dimension does
+not make an unrelated definition replayable. Apple aggregate and engagement
+profiles outside the two listed above are not added by this selector. Engagement
+refund cancellations retain their original purchase/refund relationship rather
+than being excluded by the cancellation's own date. Missing activity history
+remains undefined with its existing reason; a conservative candidate match
+never establishes a numeric outcome or turns unknown history into zero.
 
 Planning and calculation share existing tenant privacy fences/backlog gates.
 Deleted source evidence cannot be restored by a receipt. Redaction between

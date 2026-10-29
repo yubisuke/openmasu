@@ -2,15 +2,17 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { after,beforeEach,describe,it } from "node:test";
-import { jcs,sha256,type CandidateAttempt } from "@openmasu/attribution-core";
+import { evaluate,jcs,sha256,type CandidateAttempt } from "@openmasu/attribution-core";
 import { basisAcquisitionKpiDefinitions, horizonAcquisitionKpiDefinitions } from "@openmasu/contracts/definitions";
 import { createAppPool,createReaderPool,createSeedPool,withTenant } from "@openmasu/runtime";
 import { saveMetricCorrectionPolicy,metricCorrectionStatus } from "../../api/src/metric-correction-policy.js";
 import { listMetricRecalculations, requestMetricRecalculation } from "../../api/src/metric-recalculations.js";
-import { metricReport } from "../../api/src/reporting.js";
+import { encodeMetricReport,metricReport } from "../../api/src/reporting.js";
 import { ingestFixture } from "./test-support/fixture-ingestion.js";
 import { ingestRuntimeBatch } from "./ingestion.js";
 import { persistAttributionWithClient } from "./ingestion/derived-repository.js";
+import { persistRawWithClient,persistDeliveryWithClient,persistLogicalWithClient } from "./ingestion/record-repository.js";
+import { persistProjectionWithClient } from "./ingestion/fact-projections.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
 import { persistCostImport } from "./import/cost.js";
 import { planAutomaticMetricCorrections } from "./automatic-metric-corrections.js";
@@ -206,6 +208,116 @@ describe("opt-in receipt-driven bounded automatic metric corrections",{concurren
     const final = await artifacts();
     assert.ok(!final.some(r => r.supersedes_metric_run_id?.startsWith("synthetic-horizon-frozen-d7:")));
     for (const run of before) assert.equal(jcs(final.find(r => r.metric_run_id === run.metric_run_id)), jcs(run));
+  });
+
+  it("corrects both saved engagement campaigns when a late open commits before its first attribution, then late conversions once",async()=>{
+    const fixture=JSON.parse(readFileSync("fixtures/v0.4/64-first-party-engagement/input.json","utf8")
+      .replaceAll('"tenant-a"',JSON.stringify(identity.tenantId)));
+    const lateOpen=structuredClone(fixture.batches.find((b:Any)=>b.records[0].record_id==="open64-b"));
+    const lateConversion=structuredClone(fixture.batches.find((b:Any)=>b.records[0].record_id==="conversion64-b"));
+    const evaluations=fixture.metric_evaluations.slice(0,2).map((e:Any)=>({...e,privacy_state:"after"}));
+    fixture.batches=fixture.batches.filter((b:Any)=>b.records[0].record_id!=="open64-b" && b.records[0].event_name!=="custom_event");
+    fixture.metric_evaluations=[];
+    await ingestFixture("synthetic-engagement-auto-race",fixture,app,seed);
+    const before=await computeSqlMetricRuns(app,{...fixture,metric_evaluations:evaluations},true);
+    const names=fixture.metric_definitions.map((m:Any)=>m.metric_name);
+    const current=()=>metricReport(reader,identity,{tenantId:identity.tenantId,appId:identity.appId,metricNames:names,supersession:"latest",limit:100});
+    const values=async()=>Object.fromEntries((await current()).data.map(r=>[`${r.grouping.campaign_id}/${r.metric_name}`,r.value_unscaled??r.undefined_reason]));
+    const money="engagement_ad_revenue_24h_usd",converted="engagement_custom_event_converters_24h";
+    assert.equal((await values())[`synthetic-engagement-a/${money}`],"5000000");
+    assert.equal((await values())[`synthetic-engagement-b/${money}`],"empty_cohort");
+    await saveMetricCorrectionPolicy(app,identity,{...policy,date_from:"2026-08-21",date_to:"2026-08-21",runs_per_page:10});
+    lateOpen.server_context.received_at=lateOpen.records[0].received_at="2030-01-01T00:00:00.000Z";
+    const split={...fixture,batches:[lateOpen]},admitted=evaluate(split);
+    assert.equal(admitted.rejections.length,0);assert.equal(admitted.attributions.length,1);
+    // Production ingestion commits the logical record before derived attribution.
+    // Pause exactly between those commits, without deleting or editing a ledger row.
+    await withTenant(app,identity.tenantId,async client=>{
+      await persistRawWithClient(client,admitted.raw_records[0],lateOpen.server_context.policy_digest);
+      await client.query(`INSERT INTO ledger.raw_payload_states (tenant_id,app_id,record_id,lifecycle_status,changed_at)
+        VALUES ($1,$2,$3,'available',$4)`,[identity.tenantId,identity.appId,"open64-b",lateOpen.records[0].received_at]);
+      await persistDeliveryWithClient(client,admitted.deliveries[0]);
+      await persistLogicalWithClient(client,admitted.logical_events[0]);
+      await persistProjectionWithClient(client,admitted.logical_events[0],split);
+    });
+    await drain();
+    assert.equal((await values())[`synthetic-engagement-a/${money}`],"5000000");
+    assert.equal((await values())[`synthetic-engagement-b/${money}`],"empty_cohort");
+    const firstAttribution={...admitted.attributions[0],decided_at:"2030-01-02T00:00:00.000Z",input_cutoff_at:"2030-01-02T00:00:00.000Z"};
+    await withTenant(app,identity.tenantId,client=>persistAttributionWithClient(client,firstAttribution));
+    await drain();
+    assert.equal((await values())[`synthetic-engagement-a/${money}`],"2000000");
+    assert.equal((await values())[`synthetic-engagement-b/${money}`],"3000000");
+    const attempts:CandidateAttempt[]=[...fixture.batches,lateOpen].flatMap((b:Any)=>b.records.map((record:Any)=>({server:b.server_context,record,batch_id:b.batch_id})));
+    lateConversion.server_context.received_at=lateConversion.records[0].received_at="2030-01-03T00:00:00.000Z";
+    const conversion:CandidateAttempt={record:lateConversion.records[0],server:lateConversion.server_context,batch_id:lateConversion.batch_id};
+    assert.equal((await ingestRuntimeBatch([conversion],app,attempts)).rejections.length,0);await drain();
+    assert.equal((await values())[`synthetic-engagement-a/${converted}`],"0");
+    assert.equal((await values())[`synthetic-engagement-b/${converted}`],"1");
+    const revisedAttribution={...firstAttribution,attribution_id:"attr:synthetic-engagement-revised",
+      supersedes_attribution_id:firstAttribution.attribution_id,decided_at:"2030-01-04T00:00:00.000Z",input_cutoff_at:"2030-01-04T00:00:00.000Z"};
+    await withTenant(app,identity.tenantId,client=>persistAttributionWithClient(client,revisedAttribution));await drain();
+    assert.equal((await values())[`synthetic-engagement-a/${money}`],"2000000");
+    assert.equal((await values())[`synthetic-engagement-b/${money}`],"3000000");
+    const final=await artifacts();
+    await ingestRuntimeBatch([conversion],app,[...attempts,conversion]);
+    await withTenant(app,identity.tenantId,client=>persistAttributionWithClient(client,firstAttribution));await drain();
+    assert.equal((await artifacts()).length,final.length);
+    for(const old of before) assert.equal(jcs(final.find(r=>r.metric_run_id===old.metric_run_id)),jcs(old));
+    const report=await metricReport(reader,identity,{tenantId:identity.tenantId,appId:identity.appId,metricNames:names,supersession:"all",limit:100});
+    assert.ok(report.data.some(r=>r.superseded));assert.ok(report.data.some(r=>r.supersedes_metric_run_id));
+    const csv=encodeMetricReport(report,"csv").body;
+    assert.match(csv,/supersedes_metric_run_id/);
+    for(const old of before) assert.ok(csv.includes(old.metric_run_id));
+    assert.ok(report.data.every(r=>r.measurement_series==="first_party_engagement"));
+    assert.ok((await listMetricRecalculations(reader,identity)).some(j=>j.trigger_kind==="attribution_revision" && j.state==="completed"));
+  });
+
+  it("corrects verified engagement refunds and reversals then late inactivity history while unknown history stays undefined",async()=>{
+    const fixture=JSON.parse(readFileSync("fixtures/v0.4/75-engagement-policy/input.json","utf8")
+      .replaceAll('"tenant-a"',JSON.stringify(identity.tenantId)));
+    const refund=structuredClone(fixture.batches.find((b:Any)=>b.records[0].record_id==="refund75-a"));
+    const net="engagement_policy_purchase_net_usd";
+    const evaluations=fixture.metric_evaluations.slice(0,3).map((e:Any)=>({...e,metric_names:[net]}));
+    fixture.batches=fixture.batches.filter((b:Any)=>b.records[0].record_id!=="refund75-a");fixture.metric_evaluations=[];
+    await ingestFixture("synthetic-engagement-auto-policy",fixture,app,seed);
+    const before=await computeSqlMetricRuns(app,{...fixture,metric_evaluations:evaluations},true);
+    const current=()=>metricReport(reader,identity,{tenantId:identity.tenantId,appId:identity.appId,metricNames:[net],supersession:"latest",limit:100});
+    const values=async()=>Object.fromEntries((await current()).data.map(r=>[r.grouping.campaign_id,r.value_unscaled??r.undefined_reason]));
+    const originalContexts=new Map((await current()).data.map(r=>[r.grouping.campaign_id,r.comparison_context]));
+    assert.deepEqual(await values(),{"synthetic-engagement-a":"8000000","synthetic-engagement-b":"empty_cohort","synthetic-engagement-c":"insufficient_activity_history"});
+    await saveMetricCorrectionPolicy(app,identity,{...policy,date_from:"2026-08-21",date_to:"2026-08-21",metric_names:[net],runs_per_page:10});
+    const attempts:CandidateAttempt[]=fixture.batches.flatMap((b:Any)=>b.records.map((record:Any)=>({record,server:b.server_context,batch_id:b.batch_id})));
+    async function admit(batch:Any,received:string) {
+      batch.server_context.received_at=batch.records[0].received_at=received;
+      const attempt={record:batch.records[0],server:batch.server_context,batch_id:batch.batch_id};
+      assert.equal((await ingestRuntimeBatch([attempt],app,attempts)).rejections.length,0);attempts.push(attempt);await drain();return attempt;
+    }
+    const refundAttempt=await admit(refund,"2030-02-01T00:00:00.000Z");
+    assert.equal((await values())["synthetic-engagement-a"],"5000000");
+    const reversal=structuredClone(refund);reversal.batch_id="synthetic-engagement-reversal";
+    for(const field of ["record_id","event_id","delivery_id"]) reversal.records[0][field]+="-reversal";
+    reversal.records[0].occurred_at="2026-08-21T15:00:00.000Z";
+    Object.assign(reversal.records[0].payload,{transaction_id:"synthetic-engagement-reversal",financial_status:"reversed",reverses_refund_record_id:"refund75-a"});
+    const reversalAttempt=await admit(reversal,"2030-02-02T00:00:00.000Z");
+    assert.equal((await values())["synthetic-engagement-a"],"8000000");
+    const beforeDuplicates=(await artifacts()).length;
+    await ingestRuntimeBatch([refundAttempt,reversalAttempt],app,attempts);await drain();
+    assert.equal((await artifacts()).length,beforeDuplicates);
+    const session=structuredClone(fixture.batches.find((b:Any)=>b.records[0].record_id==="conversion64-a"));
+    session.batch_id="synthetic-engagement-late-session";
+    Object.assign(session.records[0],{record_id:"synthetic-engagement-late-session",event_id:"synthetic-engagement-late-session",
+      delivery_id:"synthetic-engagement-late-session",event_name:"session_start",occurred_at:"2026-08-20T12:00:00.000Z",
+      payload:{event_name:"session_start",installation_id:"installation:engagement-75-x",session_id:"synthetic-late-session"}});
+    await admit(session,"2030-02-03T00:00:00.000Z");
+    assert.deepEqual(await values(),{"synthetic-engagement-a":"empty_cohort","synthetic-engagement-b":"empty_cohort","synthetic-engagement-c":"insufficient_activity_history"});
+    const final=await artifacts();
+    for(const old of before) assert.equal(jcs(final.find(r=>r.metric_run_id===old.metric_run_id)),jcs(old));
+    const currentRows=(await current()).data;
+    assert.ok(currentRows.every(r=>r.comparison_context?.definition_digest===originalContexts.get(r.grouping.campaign_id)?.definition_digest
+      && r.comparison_context?.fx_digest===originalContexts.get(r.grouping.campaign_id)?.fx_digest));
+    assert.ok(currentRows.every(r=>r.comparison_context?.definition.engagement_inactivity_days===7
+      && r.comparison_context.definition.definition.window.day===2));
   });
 
   it("drains more than 100 committed inputs and a paged run manifest across pause, resume and concurrent workers without duplicates",async()=>{
