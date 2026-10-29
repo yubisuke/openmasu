@@ -7,8 +7,12 @@ import { receiveAppleStoreNotification } from "../apple-store-notifications-rece
 import type { RequestHandlerDependencies } from "../http-types.js";
 import type { HttpRequestContext } from "./context.js";
 import { json } from "../http-responses.js";
+import { serveRuntimeHealth } from "@openmasu/runtime";
 
-export function createReceiversControllers(dependencies: Pick<RequestHandlerDependencies, "maxConfig" | "maxBucket" | "pool" | "payloadStore" | "applePostback" | "googlePlayRtdn" | "appleStoreNotifications" | "sdk" | "server">) {
+export function createReceiversControllers(dependencies: Pick<RequestHandlerDependencies, "readiness" | "maxConfig" | "maxBucket" | "pool" | "payloadStore" | "applePostback" | "googlePlayRtdn" | "appleStoreNotifications" | "sdk" | "server">) {
+  const ready = async ({ request, response }: HttpRequestContext): Promise<void> => {
+    serveRuntimeHealth(request, response, dependencies.readiness);
+  };
   const health = async ({ response }: HttpRequestContext): Promise<void> => {
     json(response, 200, { status: "ok" });
     return;
@@ -102,6 +106,7 @@ export function createReceiversControllers(dependencies: Pick<RequestHandlerDepe
   };
 
   return {
+    ready: { boundary: "receiver", handle: ready },
     health: { boundary: "receiver", handle: health },
     max_ingest: { boundary: "receiver", handle: maxIngest },
     apple_skan_postback: { boundary: "receiver", handle: appleSkanPostback },

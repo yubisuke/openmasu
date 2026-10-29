@@ -18,6 +18,7 @@ export type DashboardConfig = {
 };
 
 export type RequestHandlerDependencies = {
+  readonly readiness?: () => Promise<boolean>;
   readonly pool: Pool;
   readonly readerPool: Pool;
   readonly payloadStore: PayloadStore;

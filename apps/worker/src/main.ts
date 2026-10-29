@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { createServer } from "node:http";
 import { Pool } from "pg";
 import {
   EncryptedFilePayloadStore,
@@ -12,6 +13,8 @@ import {
   costRefreshEnabled,
   loadCostRefreshSecrets,
   type ScheduledWorkerJob,
+  createRuntimeReadiness,
+  serveRuntimeHealth,
 } from "@openmasu/runtime";
 import { AdServicesLookupLimiter, processAdServicesLookups } from "./adservices-worker.js";
 import { processMaxInbox } from "./import/max-worker.js";
@@ -67,6 +70,11 @@ const poolSizes = workerPoolSizes(workerConcurrency);
 const pool = new Pool({ connectionString, max: poolSizes.jobs });
 const schedulerPool = new Pool({ connectionString, max: poolSizes.scheduler });
 const coordinationPool = new Pool({ connectionString, max: poolSizes.coordination });
+const heartbeatPool = new Pool({ connectionString, max: 1, connectionTimeoutMillis: 750, statement_timeout: 750 });
+heartbeatPool.on("error", () => undefined);
+for (const workerPool of [pool, schedulerPool, coordinationPool]) {
+  workerPool.on("error", () => { process.stderr.write('{"event":"idle_database_connection_lost","component":"worker"}\n'); });
+}
 await Promise.all([pool.query("SELECT 1"), schedulerPool.query("SELECT 1"), coordinationPool.query("SELECT 1")]);
 process.stdout.write('{"event":"service_started","component":"worker"}\n');
 
@@ -364,6 +372,18 @@ const coordinator = new TenantWorkCoordinator({
 });
 let pollInFlight: Promise<void> | undefined;
 let stopping = false;
+let lastPollAt = 0;
+const heartbeatTtlMs = Math.max(30_000, interval * 3);
+const readiness = createRuntimeReadiness({
+  databaseUrl: process.env.OPENMASU_READER_DATABASE_URL!, tenantId: maxTenantId,
+  payloadDirectory: process.env.OPENMASU_PAYLOAD_STORE_DIR ?? ".openmasu/payloads",
+  localWorkerHealthy: () => !stopping && Date.now() - lastPollAt < heartbeatTtlMs,
+});
+// Container-local only: no public worker API or extra service.
+const healthServer = createServer((request, response) => {
+  if (!serveRuntimeHealth(request, response, readiness.check)) response.writeHead(404).end();
+});
+healthServer.listen(8091, "127.0.0.1");
 
 async function discoverAndSubmitTenantWork(): Promise<void> {
   try {
@@ -377,7 +397,13 @@ async function discoverAndSubmitTenantWork(): Promise<void> {
         await runTenantCycle({ coordinationPool, pools: [pool, schedulerPool], tenantId,
           task: ({ pools }) => processTenantCycle(tenantId, pools[0], pools[1]) });
       });
+      await withTenant(heartbeatPool, tenantId, client => client.query(
+        `INSERT INTO control.worker_heartbeats (tenant_id,observed_at,expires_at)
+         VALUES ($1,clock_timestamp(),clock_timestamp()+$2::bigint*interval '1 millisecond')
+         ON CONFLICT (tenant_id) DO UPDATE SET observed_at=EXCLUDED.observed_at,expires_at=EXCLUDED.expires_at`,
+        [tenantId, heartbeatTtlMs]));
     }
+    lastPollAt = Date.now();
   }
   catch {
     process.stderr.write('{"event":"worker_tick_failed","component":"worker","retry":"next_poll"}\n');
@@ -399,6 +425,7 @@ async function stop(): Promise<void> {
   if (!stopPromise) {
     stopPromise = (async () => {
       stopping = true;
+      healthServer.close();
       clearInterval(timer);
       coordinator.close();
       const drained = await waitForWorkerDrain(
@@ -412,7 +439,7 @@ async function stop(): Promise<void> {
         );
         process.exit(1);
       }
-      await Promise.all([pool.end(), schedulerPool.end(), coordinationPool.end()]);
+      await Promise.all([pool.end(), schedulerPool.end(), coordinationPool.end(), heartbeatPool.end(), readiness.close()]);
       process.exit(0);
     })();
   }

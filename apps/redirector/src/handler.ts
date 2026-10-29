@@ -11,7 +11,7 @@ import {
   type RedirectResolution,
   type TrackingLink,
 } from "@openmasu/redirector-core";
-import { appendDurableBatch, uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
+import { appendDurableBatch, uuidV7, withTenant, serveRuntimeHealth, type PayloadStore } from "@openmasu/runtime";
 
 export type RedirectRateLimiter = {
   allow(key: string): boolean;
@@ -19,6 +19,7 @@ export type RedirectRateLimiter = {
 };
 
 export type RedirectorDependencies = {
+  readiness?: () => Promise<boolean>;
   pool: Pool;
   payloadStore: PayloadStore;
   tenantId: string;
@@ -155,6 +156,7 @@ async function persistClick(dependencies: RedirectorDependencies, result: Redire
 export function createRedirectorHandler(dependencies: RedirectorDependencies): RequestListener {
   const fallback = fallbackResponse(dependencies.fallbackUrl);
   return (request: IncomingMessage, response: ServerResponse) => {
+    if (serveRuntimeHealth(request, response, dependencies.readiness)) return;
     void (async () => {
       const target = new URL(request.url ?? "/", "http://openmasu.local");
       const wellKnown = request.method === "GET" && (target.pathname === "/.well-known/assetlinks.json"

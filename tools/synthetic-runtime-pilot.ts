@@ -78,6 +78,9 @@ export function plannedSyntheticPilotSteps(load: boolean): string[] {
     "resume_runtime",
     "stable_worker",
     "normal_restart",
+    "dependency_readiness",
+    "worker_crash_recovery",
+    "intentional_stop",
     "runtime_smoke",
     ...(load ? ["synthetic_load"] : []),
     "cleanup",
@@ -326,6 +329,44 @@ export async function runSyntheticRuntimePilot(
     runStep("normal_restart", [...compose, "up", "-d", "--wait"]);
     try { assertRestartPreserved(beforeRestart, restartSnapshot()); }
     catch { steps.set("normal_restart", "failed"); throw new PilotStepError("normal_restart"); }
+    const healthProbe = (status: number) => [
+      ...compose, "exec", "-T", "api", "node", "--input-type=module", "-e",
+      `import assert from 'node:assert/strict'; for(const port of [8080,8090]) { const host=port===8080?'127.0.0.1':'redirector'; for(const path of ['/health','/ready']) { const r=await fetch('http://'+host+':'+port+path,{signal:AbortSignal.timeout(2500)}); assert.equal(r.status,path==='/health'?200:${status}); const body=await r.json(); assert.deepEqual(body,{status:path==='/health'?'ok':${status}===200?'ready':'not_ready'}); } }`,
+    ];
+    const sql = (statement: string) => [...compose, "exec", "-T", "postgres", "psql", "-U", "postgres", "-d", "openmasu", "-v", "ON_ERROR_STOP=1", "-c", statement];
+    runStep("dependency_readiness", sql("UPDATE public.schema_migrations SET name='synthetic_inventory_mismatch' WHERE version='082'"));
+    await new Promise(resolve => setTimeout(resolve, 1100));
+    try { runStep("dependency_readiness", healthProbe(503)); }
+    finally { runStep("dependency_readiness", sql("UPDATE public.schema_migrations SET name='082_runtime_readiness.sql' WHERE version='082'")); }
+    runStep("dependency_readiness", [...compose, "stop", "postgres"]);
+    await new Promise(resolve => setTimeout(resolve, 1100));
+    runStep("dependency_readiness", healthProbe(503));
+    runStep("dependency_readiness", [...compose, "up", "-d", "--wait"]);
+    runStep("dependency_readiness", healthProbe(200));
+
+    // Signal the verified application child of Docker init, not namespace PID 1
+    // (which ignores peer SIGKILL/SIGSTOP) or Docker's intentional-stop API.
+    const signalWorker = (signal: "SIGSTOP" | "SIGKILL") => [...compose, "exec", "-T", "worker", "node", "-e",
+      `const fs=require('node:fs'); const children=fs.readFileSync('/proc/1/task/1/children','utf8').trim().split(/\\s+/).map(Number); const pid=children.find(pid=>fs.readFileSync('/proc/'+pid+'/cmdline','utf8').split('\\0').includes('apps/worker/src/main.ts')); if(!pid||pid<=1)process.exit(2); process.kill(pid,'${signal}');`];
+    const beforeCrash = Number(requireSuccess("worker_crash_recovery", "docker", ["inspect", "--format", "{{.RestartCount}}", workerId], staging).stdout.trim());
+    runStep("worker_crash_recovery", signalWorker("SIGSTOP"));
+    runStep("worker_crash_recovery", [...compose, "exec", "-T", "api", ...shell("set -a && . /run/openmasu/app/runtime.env && set +a && node --import tsx tools/test-support/runtime-recovery.ts enqueue")]);
+    // Exit status may reflect the killed exec container; inspect is authoritative.
+    execute("docker", signalWorker("SIGKILL"), staging);
+    const recoveryDeadline = Date.now() + 60_000;
+    let recovered = false;
+    while (Date.now() < recoveryDeadline) {
+      const result = execute("docker", ["inspect", "--format", "{{.RestartCount}} {{.State.Health.Status}}", workerId], staging);
+      const [count, health] = result.stdout.trim().split(" ");
+      if (Number(count) > beforeCrash && health === "healthy") { recovered = true; break; }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    if (!recovered) throw new PilotStepError("worker_crash_recovery");
+    runStep("worker_crash_recovery", [...compose, "exec", "-T", "api", ...shell("set -a && . /run/openmasu/app/runtime.env && set +a && node --import tsx tools/test-support/runtime-recovery.ts verify")]);
+    runStep("intentional_stop", [...compose, "stop", "worker"]);
+    await new Promise(resolve => setTimeout(resolve, 2500));
+    runVerifiedStep("intentional_stop", ["inspect", "--format", "{{.State.Status}}", workerId], result => assert.equal(result.stdout.trim(), "exited"));
+    runStep("intentional_stop", [...compose, "up", "-d", "--wait"]);
     runVerifiedStep("runtime_smoke", [
       ...compose, "exec", "-T", "api",
       ...shell("set -a && . /run/openmasu/app/runtime.env && set +a && OPENMASU_API_HOST_PORT=8080 OPENMASU_RUNTIME_SMOKE_REDIRECTOR_PROBE_BASE_URL=http://redirector:8090 node --import tsx tools/runtime-smoke.ts"),
