@@ -1,13 +1,14 @@
 import { jcs } from "@openmasu/attribution-core/canonical";
 import { assertSnapshotPeriod, boundedComparisonSnapshot, parseComparisonRegistration, recurringComparisonResult,
   recurringComparisonLimits, type SavedComparison } from "@openmasu/runtime/recurring-comparisons";
+import type { prepareComparisonRegistration } from "@openmasu/runtime/recurring-comparisons";
 import { comparisonDigest, snapshotAssurance, type Snapshot } from "@openmasu/runtime/comparison-model";
 
 type Scope = { tenantId: string; appId: string };
 type Plan = SavedComparison & { privacy_state: string };
 export type ComparisonFormPreview = {
   command: Record<string, unknown>; digest: string; action: string; name: string;
-  resultState: string; snapshots: { side: string; snapshot: Snapshot; meaning: string; maturity: string }[];
+  resultState: string; snapshots: { side: string; snapshot: Snapshot; meaning: string; maturity: string; source?: string }[];
 };
 const scalar = (form: FormData, name: string) => {
   const value = form.get(name);
@@ -45,24 +46,31 @@ function observed(side: string, snapshot: Snapshot) {
   return { side, snapshot, meaning: assurance.meaning, maturity: assurance.conditions.maturity.value ?? "unknown" };
 }
 /** No storage or provider calls: typed fields use the same validators as the JSON API. */
-export async function previewComparisonForm(form: FormData, scope: Scope, plans: Plan[]): Promise<ComparisonFormPreview> {
+export async function previewComparisonForm(form: FormData, scope: Scope, plans: Plan[],
+    prepareLocal?: (input: unknown) => ReturnType<typeof prepareComparisonRegistration>): Promise<ComparisonFormPreview> {
   const action = scalar(form, "action");
-  if (action === "register") {
+  if (action === "register" || action === "register_local") {
+    const local = action === "register_local";
     exactFields(form, ["action", "name", "first_date", "last_date", "watermark_lag_days", "retention_days", "mode",
-      "threshold_value_unscaled", "threshold_scale", "supersedes_id", "left_snapshot", "right_snapshot"]);
-    const registration = { name: scalar(form, "name"), first_date: scalar(form, "first_date"), last_date: scalar(form, "last_date"),
+      "threshold_value_unscaled", "threshold_scale", "supersedes_id", "right_snapshot",
+      ...(local ? ["metric_schedule_id", "metric_name"] : ["left_snapshot"])]);
+    const registration: Record<string, unknown> = { name: scalar(form, "name"), first_date: scalar(form, "first_date"), last_date: scalar(form, "last_date"),
       watermark_lag_days: integer(form, "watermark_lag_days"), retention_days: integer(form, "retention_days"), mode: scalar(form, "mode"),
       threshold: { value_unscaled: scalar(form, "threshold_value_unscaled"), scale: integer(form, "threshold_scale") },
       supersedes_id: scalar(form, "supersedes_id") || null,
-      left_snapshot: await upload(form, "left_snapshot", scope), right_snapshot: await upload(form, "right_snapshot", scope) };
-    const parsed = parseComparisonRegistration(registration);
+      ...(local ? { local_selection: { metric_schedule_id: scalar(form, "metric_schedule_id"), metric_name: scalar(form, "metric_name") } }
+        : { left_snapshot: await upload(form, "left_snapshot", scope) }), right_snapshot: await upload(form, "right_snapshot", scope) };
+    if (local && !prepareLocal) throw Error("comparison_local_capture_required");
+    const parsed = local ? (await prepareLocal!(registration)).parsed : parseComparisonRegistration(registration);
+    if (local) registration.expected_left_snapshot_digest = comparisonDigest(parsed.left);
     if (parsed.supersedes_id && !plans.some(plan => plan.comparison_id === parsed.supersedes_id && plan.active && plan.privacy_state === "current")) {
       throw Error("comparison_revision_not_active");
     }
-    const command = { action, registration };
-    return { command, digest: comparisonDigest(command), action, name: parsed.name,
+    const command = { action: "register", registration };
+    return { command, digest: comparisonDigest(command), action: "register", name: parsed.name,
       resultState: recurringComparisonResult(parsed.definition, parsed.definition.first_date, parsed.left, parsed.right).state,
-      snapshots: [observed("left", parsed.left), observed("right", parsed.right)] };
+      snapshots: [{ ...observed("left", parsed.left), source: local ? "server_saved_runs" : "operator_uploaded" },
+        { ...observed("right", parsed.right), source: "operator_uploaded" }] };
   }
   if (action !== "deposit" && action !== "delete") throw Error("comparison_action_invalid");
   exactFields(form, action === "deposit" ? ["action", "comparison_id", "target_date", "side", "snapshot"] : ["action", "comparison_id"]);
@@ -74,6 +82,7 @@ export async function previewComparisonForm(form: FormData, scope: Scope, plans:
   }
   const day = scalar(form, "target_date"), side = scalar(form, "side");
   if (side !== "left" && side !== "right") throw Error("comparison_side_invalid");
+  if (side === "left" && plan.definition.local_selection) throw Error("comparison_local_deposit_forbidden");
   const snapshot = await upload(form, "snapshot", scope);
   assertSnapshotPeriod(plan.definition, day, snapshot);
   const command = { action, comparison_id: id, target_date: day, side, snapshot };

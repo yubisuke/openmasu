@@ -5,6 +5,10 @@ operator-controlled PostgreSQL deployment. The existing worker compares each UTC
 target date at its fixed receipt cutoff. This is optional private runtime storage,
 not a new service, provider connection or notification system.
 
+The left operand can instead come directly from an explicitly selected saved
+metric schedule. This avoids exporting and uploading the server's report each
+day; the right operand is still an explicit operator upload.
+
 The [one-off comparator](cohort-comparison.md) remains stateless and reader-only.
 Both paths use the same parser, meaning checks and exact integer delta engine.
 Uploaded captured contexts are operator-supplied assertions; their hashes bind
@@ -30,8 +34,9 @@ ROAS definition: 1.50 versus 1.75, delta 0.25, threshold integer 300000 / scale 
 The initial result is `within_threshold`. These are synthetic operator uploads,
 not fresh event ingestion or actual provider measurements.
 
-The worker runs after ordinary metric processing and considers at most ten due
-dates per app in one cycle. A target of `2026-08-01` with lag 9 uses exactly
+The worker runs after ordinary metric processing, attempts at most ten new local
+captures and stores at most twenty due comparison results per app in one cycle.
+A target of `2026-08-01` with lag 9 uses exactly
 `2026-08-10T00:00:00.000000Z`, not the worker's current time. This delay also
 respects the comparator's conservative elapsed-window maturity. The comparison
 date range is one UTC target date: `[date, date + 1)`. The source metric may have
@@ -43,6 +48,42 @@ external aggregate file with the existing one-off workflow. Deposit the resultin
 snapshot, not CSV bytes. No automatic external authentication or data transfer is
 performed. Keep real inputs, private commands and credentials outside this public
 checkout; checked-in examples and tests are synthetic only.
+
+## Automatically capture the server operand
+
+Choose **Use saved server runs for the left operand**, then enter a saved metric
+schedule ID and one metric name. The active schedule must contain exactly one
+evaluation for that metric. Its definition version, complete definition digest,
+date dimension, fixed grouping and grain are frozen with the comparison revision.
+Ambiguous or unavailable schedules are refused instead of selecting a latest run
+by name. The first date must already have complete, mature saved runs at the fixed
+cutoff; the right file must cover that same first date and cutoff.
+
+Preview uses the reader role and the same complete, bounded, privacy-fenced
+repeatable-read export as Reports. Confirmation repeats the read and rejects a
+changed snapshot digest. Subsequent worker captures use that same path: all pages
+or no operand, no recalculation, no value inference, and no fallback to older runs.
+Missing runs or an unelapsed window are recorded explicitly. When new saved runs
+arrive for a previously missing day, that day becomes eligible again. Repeated
+semantic failures against the same saved run set do not crowd out later dates;
+transient acquisition failures remain retryable. A new definition needs a new
+comparison revision.
+
+For the JSON API, replace `left_snapshot` with
+`"local_selection": { "metric_schedule_id": "synthetic-schedule", "metric_name": "d7_roas" }`.
+Do not supply both. The dashboard also supplies `expected_left_snapshot_digest`
+from its review step. That digest is checked against a new server read; it is not
+proof accepted from the caller. Manual deposits into an automatic left side are
+refused. Deposit only the right side for later dates.
+
+The stored operand is JCS-identical to a manual export with the same selection.
+Storage provenance is separate from those bytes: `server_saved_runs` records the
+selected schedule, query digest and privacy epoch; `operator_uploaded` remains
+the default for all uploaded snapshots, even if their source text or acquisition
+receipt claims otherwise. Automatic comparison results expose `input_provenance`
+and, when a capture was attempted, `local_input` with a closed status and an opaque
+saved-run-set signature. Neither provenance establishes upstream completeness,
+which remains `unknown`, nor authenticates the external operand.
 
 ## HTTP and dashboard commands
 
@@ -62,6 +103,7 @@ command clients remain compatible; the dashboard no longer displays that editor.
   `right_snapshot`, and `supersedes_id` (explicit null initially). The two initial
   snapshots must match `first_date` and its fixed cutoff. The service records each
   side's definition/meaning digest and the complete comparison-definition digest.
+  The automatic-left variant replaces only `left_snapshot` as described above.
 - **Deposit:** `{ "action": "deposit", "comparison_id": "<returned revision>",
   "target_date": "2026-08-02", "side": "left", "snapshot": { ... } }`.
   Deposit the right side independently. Each revision/date/side is immutable;
@@ -114,6 +156,10 @@ optional mapping digests, not the underlying file. Tiny aggregate groups are sti
 potentially sensitive; this is private operator storage, not public publication.
 
 All reads/writes and worker publication share the existing tenant privacy fence.
+A local capture also carries the epoch observed inside its read transaction.
+Publication rechecks that epoch and the immutable plan after reacquiring the
+privacy fence. A deletion between capture and publication discards the capture;
+no stale value is published and no nested pool checkout is required.
 A pending deletion hides results. Any new tenant deletion record invalidates all
 older comparison revisions conservatively, including other apps in that tenant:
 old values become unreadable, the worker deletes their snapshots/results and

@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { it } from "node:test";
 import { jcs } from "@openmasu/attribution-core/canonical";
 import { comparisonDigest, compareSnapshots } from "./cohort-comparison.js";
-import { parseComparisonRegistration, recurringComparisonResult, boundedComparisonSnapshot, assertSnapshotPeriod } from "./recurring-comparison-model.js";
+import { parseComparisonRegistration, recurringComparisonResult, boundedComparisonSnapshot, assertSnapshotPeriod,
+  snapshotDefinitionDigest, parseLocalComparisonReference, type LocalComparisonSelection } from "./recurring-comparison-model.js";
+import { localComparisonQuery, resolveLocalComparisonSelection } from "./recurring-comparison-local.js";
+import { projectMetricComparisonDefinition } from "./metric-comparison.js";
+import type { PoolClient } from "pg";
 import { syntheticComparisonRegistration, syntheticRecurringSnapshot } from "../../../tools/synthetic-recurring-comparison.js";
 import { syntheticExternalComparisonCases, syntheticExternalComparisonPair } from "../../../tools/synthetic-external-comparison-cases.js";
 import { aggregateCsvToSnapshot } from "../../api/src/aggregate-csv-snapshot.js";
@@ -47,4 +51,34 @@ it("recurring_external_installs_cost_and_CPI_preserve_the_offline_comparator_byt
     assert.equal(result.comparison.assurance.right.acquisition.upstream_completeness, "unknown");
     assert.deepEqual(result.comparison.assurance.right.execution, []);
   }
+});
+it("local_comparison_freezes_schedule_selection_without_confusing_schedule_and_snapshot_definition_digests", async () => {
+  const input = syntheticComparisonRegistration(), snapshot = input.left_snapshot;
+  const metric = snapshot.comparison_contexts![0].context.definition;
+  const definition = { metric_definitions: [metric], evaluations: [{ metric_names: [metric.metric_name],
+    date_dimension: "cohort_date", grouping: { attribution_status: "non_organic" } }] };
+  const reference = { metric_schedule_id: "synthetic-schedule", metric_name: metric.metric_name };
+  const client = { query: async (_sql: string, args: unknown[]) => {
+    assert.deepEqual(args, ["tenant-synthetic", "app-a", reference.metric_schedule_id]);
+    return { rows: [{ definition, definition_digest: comparisonDigest(definition) }] };
+  } } as unknown as PoolClient;
+  const selection = await resolveLocalComparisonSelection(client, { tenantId: "tenant-synthetic", appId: "app-a" }, reference);
+  assert.equal(selection.metric_definition_digest, comparisonDigest(projectMetricComparisonDefinition(metric)));
+  const { left_snapshot: _left, ...rest } = input;
+  const registration = { ...rest, local_selection: reference, expected_left_snapshot_digest: comparisonDigest(snapshot) };
+  const parsed = parseComparisonRegistration(registration, { selection, snapshot });
+  assert.equal(parsed.definition.version, 1);
+  assert.equal(parsed.definition.left_definition_digest, snapshotDefinitionDigest(snapshot));
+  assert.notEqual(parsed.definition.left_definition_digest, selection.schedule_definition_digest);
+  assert.equal(jcs(parsed.left), jcs(snapshot), "storage provenance must not alter operand bytes");
+  const query = localComparisonQuery({ tenantId: "tenant-synthetic", appId: "app-a" }, selection, parsed.definition, "2026-08-02");
+  assert.equal(query.dateFrom, "2026-08-02"); assert.equal(query.dateTo, "2026-08-03");
+  assert.equal(query.watermarkAtMost, "2026-08-11T00:00:00.000000Z");
+  assert.equal(query.metricScheduleId, reference.metric_schedule_id); assert.equal(query.supersession, "latest");
+  assert.throws(() => parseComparisonRegistration(registration), /local_capture_required/);
+  assert.throws(() => parseComparisonRegistration({ ...registration, left_snapshot: snapshot }, { selection, snapshot }), /invalid_fields/);
+  assert.throws(() => parseComparisonRegistration({ ...registration, expected_left_snapshot_digest: "0".repeat(64) }, { selection, snapshot }), /preview_changed/);
+  assert.throws(() => parseLocalComparisonReference({ ...reference, source: "server_saved_runs" }), /invalid_fields/);
+  definition.evaluations.push(definition.evaluations[0]);
+  await assert.rejects(resolveLocalComparisonSelection(client, { tenantId: "tenant-synthetic", appId: "app-a" }, reference), /selection_ambiguous/);
 });

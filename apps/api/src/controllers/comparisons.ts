@@ -1,5 +1,5 @@
 import { depositComparisonSnapshot, deleteComparison, readComparisons, readComparisonRun, registerComparison,
-  recurringComparisonLimits } from "@openmasu/runtime/recurring-comparisons";
+  recurringComparisonLimits, prepareComparisonRegistration } from "@openmasu/runtime/recurring-comparisons";
 import { jcs } from "@openmasu/attribution-core/canonical";
 import type { RequestHandlerDependencies } from "../http-types.js";
 import type { DashboardAppContext, AdminRequestContext } from "./context.js";
@@ -72,7 +72,8 @@ export function createComparisonsControllers(dependencies: Pick<RequestHandlerDe
         if (!await authorizeDashboardForm(dependencies, { request, response, session }, new URLSearchParams({ csrf_token: token }), "comparison_mutation", "app", appId)) return;
         if (route.handler === "dashboard_comparison_runs_preview") {
           const saved = await readComparisons(pool, appIdentity);
-          const preview = await previewComparisonForm(form, appIdentity, saved.plans);
+          const preview = await previewComparisonForm(form, appIdentity, saved.plans,
+            input => prepareComparisonRegistration(dependencies.readerPool, appIdentity, input));
           dashboardHtml(response, 200, boundedComparisonOutput(renderComparisonFormPreview(appId, csrfToken(session.token), preview), startedAt + 30_000));
           return;
         }

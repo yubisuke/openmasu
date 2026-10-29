@@ -5,6 +5,7 @@ import { parseComparisonRegistration, recurringComparisonResult } from "@openmas
 import { syntheticComparisonRegistration } from "../../../tools/synthetic-recurring-comparison.js";
 import { confirmedComparisonForm, previewComparisonForm } from "./recurring-comparison-form.js";
 import { renderComparisonFormPreview, renderRecurringComparisons } from "./dashboard/recurring-comparisons.js";
+import { comparisonDigest } from "@openmasu/runtime/comparison-model";
 
 const scope = { tenantId: "tenant-synthetic", appId: "app-a" };
 function registrationForm(registration = syntheticComparisonRegistration()) {
@@ -50,4 +51,27 @@ it("typed recurring preview uses existing meaning, maturity, bounds and exact fi
   await assert.rejects(previewComparisonForm(duplicate, scope, []), /comparison_input_invalid/);
   const raw = registrationForm(); raw.set("left_snapshot", new Blob(["not json"]), "bad.json");
   await assert.rejects(previewComparisonForm(raw, scope, []), /comparison_invalid_json/);
+});
+it("typed local comparison review binds a server read digest without accepting an uploaded left operand", async () => {
+  const input = syntheticComparisonRegistration(), form = registrationForm(input);
+  form.set("action", "register_local"); form.delete("left_snapshot");
+  form.set("metric_schedule_id", "synthetic-schedule"); form.set("metric_name", "d7_roas");
+  await assert.rejects(previewComparisonForm(form, scope, []), /local_capture_required/);
+  let reads = 0;
+  const preview = await previewComparisonForm(form, scope, [], async registration => {
+    reads++;
+    const selection = { metric_schedule_id: "synthetic-schedule", metric_name: "d7_roas", schedule_definition_digest: "a".repeat(64),
+      metric_definition_version: input.left_snapshot.comparison_contexts![0].context.definition.metric_definition_version,
+      metric_definition_digest: input.left_snapshot.comparison_contexts![0].context.definition_digest,
+      date_dimension: "cohort_date" as const, grouping: { attribution_status: "non_organic" }, grain: "campaign" as const };
+    return { parsed: parseComparisonRegistration(registration, { selection, snapshot: input.left_snapshot }), captured: undefined };
+  });
+  assert.equal(reads, 1); assert.equal(preview.snapshots[0].source, "server_saved_runs");
+  const registration = preview.command.registration as Record<string, unknown>;
+  assert.ok(!("left_snapshot" in registration));
+  assert.equal(registration.expected_left_snapshot_digest, comparisonDigest(input.left_snapshot));
+  assert.match(renderComparisonFormPreview("app-a", "synthetic-csrf", preview), /server_saved_runs/);
+  assert.match(renderRecurringComparisons("app-a", { plans: [], runs: [] }, "synthetic-csrf", true), /name="metric_schedule_id"/);
+  form.set("left_snapshot", new Blob([jcs(input.left_snapshot)]), "forged.json");
+  await assert.rejects(previewComparisonForm(form, scope, []), /input_invalid/);
 });

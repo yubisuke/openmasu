@@ -5573,3 +5573,10 @@ GRANT SELECT,INSERT ON control.cost_backfills TO openmasu_app;
 GRANT SELECT,INSERT,UPDATE ON control.cost_backfill_days TO openmasu_app;
 GRANT SELECT ON control.cost_backfills,control.cost_backfill_days TO openmasu_reader;
 GRANT TRUNCATE ON control.cost_backfills,control.cost_backfill_days TO openmasu_seed;
+
+-- 087_comparison_local_operand.sql
+-- Provenance belongs to the storage receipt, never to operator-supplied snapshot JSON.
+ALTER TABLE control.comparison_snapshots ADD COLUMN provenance jsonb NOT NULL
+  DEFAULT '{"source":"operator_uploaded"}'::jsonb
+  CHECK (jsonb_typeof(provenance)='object' AND octet_length(provenance::text)<=2048
+    AND provenance->>'source' IN ('operator_uploaded','server_saved_runs'));

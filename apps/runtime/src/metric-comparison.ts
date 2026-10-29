@@ -24,15 +24,10 @@ export type MetricComparisonContext = {
   privacy_state: "before" | "after";
 };
 
-export function captureMetricComparisonContext(
-  run: { metric_run_id: string; input_snapshot_id: string },
-  definition: MetricDefinition,
-  fxPolicy: ComparisonFx,
-  privacyState: "before" | "after",
-  digest: (value: unknown) => string,
-): MetricComparisonContext {
+/** Closed shared identity for schedule selection and captured comparison contexts. */
+export function projectMetricComparisonDefinition(definition: MetricDefinition): MetricDefinition {
   // Closed projection even if a caller supplies an object with extra properties.
-  const savedDefinition: MetricDefinition = {
+  return {
     metric_name: definition.metric_name, metric_definition_version: definition.metric_definition_version,
     anchor_event: definition.anchor_event, aggregation_time_zone: definition.aggregation_time_zone,
     value_type: definition.value_type,
@@ -60,6 +55,16 @@ export function captureMetricComparisonContext(
     rule_bundle_id: definition.rule_bundle_id, rule_bundle_version: definition.rule_bundle_version,
     rule_bundle_hash: definition.rule_bundle_hash,
   };
+}
+
+export function captureMetricComparisonContext(
+  run: { metric_run_id: string; input_snapshot_id: string },
+  definition: MetricDefinition,
+  fxPolicy: ComparisonFx,
+  privacyState: "before" | "after",
+  digest: (value: unknown) => string,
+): MetricComparisonContext {
+  const savedDefinition = projectMetricComparisonDefinition(definition);
   const fx: ComparisonFx = fxPolicy.rate_selection ? canonicalDatedFxPolicy(fxPolicy) : {
     policy_version: fxPolicy.policy_version, target_currency: fxPolicy.target_currency,
     target_scale: fxPolicy.target_scale, rounding_mode: fxPolicy.rounding_mode,
