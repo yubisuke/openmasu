@@ -74,6 +74,13 @@ Installation access/portability now has [bounded fixed-set pages](operations/por
 with explicit completion, cursor expiry and per-page authorization/privacy checks.
 Legacy oversized responses require opt-in rather than returning partial history.
 
+[Purpose-scoped consent](privacy-security.md#consent-purpose-and-withdrawal)
+adds independent host declarations to the same Android/iOS queues and Unity
+bridges. Durable revisions, selective queue discard, local diagnostics and
+server replay cover restart, reordered receipt and fresh regrant without
+reviving stopped observations. Legal policy remains with the host; deletion and
+unversioned provider-commerce fences remain independent of SDK regrant.
+
 ## Implemented integration work
 
 The earlier integration plan and structural preparation are complete.

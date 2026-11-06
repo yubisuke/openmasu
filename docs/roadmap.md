@@ -93,6 +93,13 @@ rows; result pages separate import success from report comparability.
 Follow open child dependencies in the backlog, not the closed functional plan.
 Provider access and privacy-policy decisions remain a separate owner boundary.
 
+[Purpose-scoped consent](privacy-security.md#consent-purpose-and-withdrawal)
+extends the SDK operating path: Android, iOS and Unity retain independent host
+declarations, discard only the affected purpose's stale queue and preserve the
+barrier across restart/reset. Revision-aware server enforcement permits fresh
+regrant without reviving old measurement or bypassing server privacy fences.
+This is a current-source capability, not a change to published SDK archives.
+
 The published rc.3 packages the completed source plan. Current source adds the
 rc.2 upgrade entry and extends the existing migration/privacy rehearsal
 ([#315](https://github.com/yubisuke/openmasu/issues/315)); deployment availability

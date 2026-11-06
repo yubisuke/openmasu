@@ -480,6 +480,26 @@ public func openmasuIOSUpdateConsent(
   _ requestId: Int64,
   _ callbackValue: OpenMasuCStringCallback?
 ) {
+  updateConsentFromBridge(purpose: nil, state: state, policyVersion: policyVersion, requestId: requestId, callbackValue: callbackValue)
+}
+
+@_cdecl("openmasu_ios_update_consent_for_purpose")
+public func openmasuIOSUpdateConsentForPurpose(
+  _ purpose: UnsafePointer<CChar>?, _ state: UnsafePointer<CChar>?, _ policyVersion: UnsafePointer<CChar>?,
+  _ requestId: Int64, _ callbackValue: OpenMasuCStringCallback?
+) {
+  guard let purpose else {
+    callback(callbackValue, requestId: requestId, value: "state=not_submitted&error=invalid_consent"); return
+  }
+  let selected = String(cString: purpose)
+  guard ["attribution", "analytics", "revenue_measurement"].contains(selected) else {
+    callback(callbackValue, requestId: requestId, value: "state=not_submitted&error=invalid_consent"); return
+  }
+  updateConsentFromBridge(purpose: selected, state: state, policyVersion: policyVersion, requestId: requestId, callbackValue: callbackValue)
+}
+
+private func updateConsentFromBridge(purpose: String?, state: UnsafePointer<CChar>?, policyVersion: UnsafePointer<CChar>?,
+  requestId: Int64, callbackValue: OpenMasuCStringCallback?) {
   guard let sdk = BridgeState.get() else {
     callback(callbackValue, requestId: requestId, value: "state=not_submitted&error=not_initialized")
     return
@@ -496,7 +516,8 @@ public func openmasuIOSUpdateConsent(
   }
   Task {
     do {
-      try await sdk.updateConsent(state: stateValue, policyVersion: policy)
+      if let purpose { try await sdk.updateConsentForPurpose(purpose, state: stateValue, policyVersion: policy) }
+      else { try await sdk.updateConsent(state: stateValue, policyVersion: policy) }
       callback(callbackValue, requestId: requestId, value: "state=updated")
     } catch {
       callback(callbackValue, requestId: requestId, value: "state=not_submitted&error=consent_update_failed")
@@ -671,13 +692,17 @@ public func openmasuIOSDiagnostics(_ requestId: Int64, _ callbackValue: OpenMasu
     do {
       let value = try await sdk.diagnosticsSnapshot()
       let queue = value.queue
-      let fields = [
+      var fields = [
         "available=true", "collection_enabled=\(value.collectionEnabled)", "consent_barrier_active=\(value.consentBarrierActive)",
         "reset_pending=\(value.resetPending)", "enrolled=\(value.enrolled)", "last_attempt_at_ms=\(value.lastAttemptAtMs.map(String.init) ?? "")",
         "last_operation=\(value.lastOperation.rawValue)", "last_result=\(value.lastResult.rawValue)", "http_class=\(value.httpClass.rawValue)",
         "retry_state=\(value.retryState.rawValue)", "pending_count=\(queue.pendingCount)", "logical_bytes=\(queue.logicalBytes)",
         "evicted_total=\(queue.evictedTotal)", "rejected_total=\(queue.rejectedTotal)",
       ]
+      for consent in value.purposeConsent {
+        fields.append("consent_\(consent.purpose)_state=\(consent.state)")
+        fields.append("consent_\(consent.purpose)_revision=\(consent.revision.map(String.init) ?? "")")
+      }
       callback(callbackValue, requestId: requestId, value: fields.joined(separator: "&"))
     } catch {
       callback(callbackValue, requestId: requestId, value: "error:diagnostics_unavailable")

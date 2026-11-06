@@ -15,8 +15,9 @@ and `consent_revision_unconfirmed` (consent/rejection reason).
 No existing artifact changes meaning: absent optional fields retain the old
 policy, existing schema URNs stay `:v0.4`, and wire/package versions stay
 `0.4.0`. Neither a client grant nor a reset can override server authorization
-or privacy-deletion fences. Purpose-selective native SDK queue APIs are still
-pending; accepting the contract fields is not evidence of native SDK support.
+or privacy-deletion fences. Current Android/iOS source and the Unity bridges
+provide purpose-selective queue APIs and diagnostics. Older published SDK
+archives remain unchanged; hosts need a source-matched SDK for those APIs.
 
 Migration `103_purpose_consent_controls.sql` adds the installation-scoped,
 append-only runtime projection. Existing durable withdrawals migrate as legacy

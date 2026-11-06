@@ -67,6 +67,16 @@ namespace OpenMasu.Unity
     public enum OpenMasuHttpClass { None, Http2xx, Http4xx, Http5xx, Other }
     public enum OpenMasuRetryState { None, Pending, CollectionBlocked, ConsentBlocked, ResetPending }
 
+    public sealed class OpenMasuPurposeConsent
+    {
+        public OpenMasuConsentPurpose Purpose { get; }
+        public OpenMasuConsentState State { get; }
+        public long? Revision { get; }
+        public bool Blocked => State == OpenMasuConsentState.Denied || State == OpenMasuConsentState.Withdrawn;
+        internal OpenMasuPurposeConsent(OpenMasuConsentPurpose purpose, OpenMasuConsentState state, long? revision)
+        { Purpose = purpose; State = state; Revision = revision; }
+    }
+
     /// <summary>Device-local state. Accepted means HTTP 202 admission, never ledger completion.</summary>
     public sealed class OpenMasuDiagnosticsSnapshot
     {
@@ -81,6 +91,7 @@ namespace OpenMasu.Unity
         public OpenMasuHttpClass HttpClass { get; private set; }
         public OpenMasuRetryState RetryState { get; private set; }
         public OpenMasuQueueHealth Queue { get; private set; }
+        public IReadOnlyList<OpenMasuPurposeConsent> PurposeConsent { get; private set; } = Array.Empty<OpenMasuPurposeConsent>();
 
         internal static OpenMasuDiagnosticsSnapshot Parse(string value)
         {
@@ -91,7 +102,7 @@ namespace OpenMasu.Unity
                 if (parts.Length != 2 || fields.ContainsKey(parts[0])) throw Invalid();
                 fields.Add(parts[0], parts[1]);
             }
-            if (fields.Count != 14) throw Invalid();
+            if (fields.Count != 14 && fields.Count != 20) throw Invalid();
             var attempt = Field(fields, "last_attempt_at_ms");
             long? atMs = null;
             if (attempt.Length != 0)
@@ -99,7 +110,7 @@ namespace OpenMasu.Unity
                 if (!long.TryParse(attempt, NumberStyles.None, CultureInfo.InvariantCulture, out var number) || number < 0) throw Invalid();
                 atMs = number;
             }
-            return new OpenMasuDiagnosticsSnapshot {
+            var result = new OpenMasuDiagnosticsSnapshot {
                 Available = Boolean(fields, "available"),
                 CollectionEnabled = Boolean(fields, "collection_enabled"),
                 ConsentBarrierActive = Boolean(fields, "consent_barrier_active"),
@@ -112,6 +123,27 @@ namespace OpenMasu.Unity
                 RetryState = ClosedEnum<OpenMasuRetryState>(fields, "retry_state"),
                 Queue = OpenMasuQueueHealth.Parse(value),
             };
+            if (fields.Count == 20)
+            {
+                var purposes = new List<OpenMasuPurposeConsent>();
+                foreach (OpenMasuConsentPurpose purpose in Enum.GetValues(typeof(OpenMasuConsentPurpose)))
+                {
+                    var name = purpose == OpenMasuConsentPurpose.RevenueMeasurement ? "revenue_measurement" : purpose.ToString().ToLowerInvariant();
+                    var state = ClosedEnum<OpenMasuConsentState>(fields, "consent_" + name + "_state");
+                    var raw = Field(fields, "consent_" + name + "_revision");
+                    long? revision = null;
+                    if (raw.Length != 0)
+                    {
+                        if (!long.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var number) ||
+                            number < 1 || number > 9007199254740991L) throw Invalid();
+                        revision = number;
+                    }
+                    purposes.Add(new OpenMasuPurposeConsent(purpose, state, revision));
+                }
+                if (result.ConsentBarrierActive != purposes.Exists(purpose => purpose.Blocked)) throw Invalid();
+                result.PurposeConsent = purposes.AsReadOnly();
+            }
+            return result;
         }
 
         private static FormatException Invalid() => new FormatException("openmasu_diagnostics_invalid");

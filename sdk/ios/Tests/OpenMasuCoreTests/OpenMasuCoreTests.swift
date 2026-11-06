@@ -528,7 +528,7 @@ final class OpenMasuCoreTests: XCTestCase {
     try await sdk.updateConsent(state: "withdrawn", policyVersion: String(repeating: "x", count: 70_000))
     let storage = try OpenMasuStorage(root: root)
     XCTAssertTrue(try storage.consentBarrierActive())
-    XCTAssertTrue(try storage.consentDeclarations().isEmpty())
+    XCTAssertTrue(try storage.consentDeclarations().isEmpty)
     XCTAssertEqual(try storage.consentCounter(), 3)
   }
 

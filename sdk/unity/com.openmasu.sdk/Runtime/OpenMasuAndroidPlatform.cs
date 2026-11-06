@@ -5,7 +5,7 @@ using UnityEngine;
 namespace OpenMasu.Unity
 {
     public sealed class OpenMasuAndroidPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform,
-        IOpenMasuGooglePlayPurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuAdRevenuePlatform, IOpenMasuDiagnosticsPlatform, IOpenMasuSyntheticValidationPlatform, IOpenMasuPrivacyPlatform
+        IOpenMasuGooglePlayPurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuPurposeConsentPlatform, IOpenMasuAdRevenuePlatform, IOpenMasuDiagnosticsPlatform, IOpenMasuSyntheticValidationPlatform, IOpenMasuPrivacyPlatform
     {
         private AndroidJavaClass bridge;
         private bool disposed;
@@ -52,6 +52,8 @@ namespace OpenMasu.Unity
                 amountUnscaled, amountScale, currency, new StringCallback(completion));
         public void UpdateConsent(string state, string policyVersion, Action<string> completion) =>
             EnsureBridge().CallStatic("updateConsent", state, policyVersion, new StringCallback(completion));
+        public void UpdateConsentForPurpose(string purpose, string state, string policyVersion, Action<string> completion) =>
+            EnsureBridge().CallStatic("updateConsentForPurpose", purpose, state, policyVersion, new StringCallback(completion));
         public void GetQueueHealth(Action<string> completion) =>
             EnsureBridge().CallStatic("getQueueHealth", new StringCallback(completion));
         public void GetDiagnosticsSnapshot(Action<string> completion) =>

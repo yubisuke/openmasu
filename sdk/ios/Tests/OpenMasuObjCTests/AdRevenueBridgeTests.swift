@@ -35,7 +35,10 @@ final class AdRevenueBridgeTests: XCTestCase {
         XCTFail("invalid native money accepted")
       } catch { XCTAssertEqual(error as? OpenMasuError, .invalidAttributes) }
     }
-    try? await reopened.updateConsent(state: "withdrawn", policyVersion: "synthetic-levelplay")
+    try? await reopened.updateConsentForPurpose("analytics", state: "withdrawn", policyVersion: "synthetic-levelplay")
+    let unaffected = try await reopened.pendingEvents().filter { $0.eventName == "ad_revenue" }
+    XCTAssertEqual(unaffected, revenue, "analytics withdrawal must not rewrite or discard revenue")
+    try? await reopened.updateConsentForPurpose("revenue_measurement", state: "withdrawn", policyVersion: "synthetic-levelplay")
     try? await AdRevenueBridge.enqueue(sdk: reopened, impressionId: impression, amount: "1250000", precision: "exact",
       network: "synthetic-network", adUnitId: "synthetic-unit", mediationProvider: "unity-levelplay", format: "rewarded")
     let after = try await reopened.pendingEvents()

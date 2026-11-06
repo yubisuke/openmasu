@@ -9,6 +9,33 @@ See [portable export](../../docs/operations/portable-export.md#native-sdk-and-un
 for partial/complete/failure states, reset guards and explicit host save/share.
 This source API is not present in previously published package archives.
 
+## Purpose-scoped consent (current source)
+
+`client.UpdateConsentForPurpose(OpenMasuConsentPurpose.Analytics,
+OpenMasuConsentState.Withdrawn, "synthetic-policy-v1", completion)` changes only
+that purpose. The closed purposes are `Attribution`, `Analytics`, and
+`RevenueMeasurement`. Existing `UpdateConsent` still applies to all three.
+Custom platforms may implement `IOpenMasuPurposeConsentPlatform`; an older
+platform fails explicitly instead of silently applying a global change.
+
+Native Android/iOS persist purpose state and revision, attach the enqueue-time
+revision to measurement, and discard only the changed purpose's old queue.
+Regrant, restart and installation reset never revive stopped observations.
+`Unknown` leaves the effective state unchanged. The SDK does not decide legal
+basis. Configure the host policy before initializing or recording measurement.
+
+Completions run once through `PumpCallbacks` on the Unity thread. The managed
+ad-revenue gate follows only revenue-purpose or global declarations; analytics
+withdrawal does not invalidate its pending callbacks. Fresh revenue requires a
+successful `Granted` or `NotRequired` acknowledgement. Native and server checks
+remain authoritative. In-flight requests cannot be recalled.
+
+`GetDiagnosticsSnapshot` includes a typed `PurposeConsent` list when the native
+SDK supplies it. An empty list means an older diagnostic provider, not three
+implicit grants. Each entry contains a closed purpose/state, optional revision,
+and derived blocked flag. The legacy aggregate barrier means at least one
+purpose is blocked. These source changes do not modify older published archives.
+
 For verified versioned tarball downloads and minimal host installation, see
 [SDK distribution](../../docs/sdk-distribution.md).
 

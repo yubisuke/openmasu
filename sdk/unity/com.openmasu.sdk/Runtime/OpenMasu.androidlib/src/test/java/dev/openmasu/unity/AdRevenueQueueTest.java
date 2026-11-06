@@ -103,9 +103,10 @@ public final class AdRevenueQueueTest {
           "installation:synthetic", "impression:" + "a".repeat(64), amount, "exact", "synthetic", "synthetic", "unity-levelplay", "banner"));
     Context context = ApplicationProvider.getApplicationContext();
     context.getSharedPreferences("openmasu_private", Context.MODE_PRIVATE).edit().clear().commit();
+    AtomicReference<List<QueuedEvent>> captured = new AtomicReference<>();
     OpenMasuTransport offline = new OpenMasuTransport() {
       public InstallationCredential enroll(String id) { return new InstallationCredential("synthetic", "synthetic"); }
-      public boolean deliver(InstallationCredential key, List<QueuedEvent> events) { return false; }
+      public boolean deliver(InstallationCredential key, List<QueuedEvent> events) { captured.set(events); return false; }
       public boolean deleteInstallation(InstallationCredential key, String id) { return false; }
     };
     OpenMasuSdk sdk = make(context, new OpenMasuConfiguration("https://synthetic.invalid", "synthetic", "synthetic"), offline);
@@ -115,6 +116,25 @@ public final class AdRevenueQueueTest {
       OpenMasuUnityBridge.trackAdRevenue("impression:" + "a".repeat(64), "1000000", "exact", "synthetic", "synthetic", "unity-levelplay", "banner");
       sdk.flushBlocking(10_000L);
       assertEquals(1, sdk.queueHealth().getPendingCount()); // Only the privacy control event.
+      AtomicReference<String> completed = new AtomicReference<>();
+      OpenMasuUnityBridge.updateConsentForPurpose("revenue_measurement", "granted", "synthetic-levelplay", completed::set);
+      sdk.flushBlocking(10_000L);
+      assertEquals("state=updated", completed.get());
+      OpenMasuUnityBridge.updateConsentForPurpose("analytics", "withdrawn", "synthetic-levelplay", completed::set);
+      OpenMasuUnityBridge.trackAdRevenue("impression:" + "b".repeat(64), "1000000", "exact", "synthetic", "synthetic", "unity-levelplay", "banner");
+      sdk.flushBlocking(10_000L);
+      assertTrue(captured.get().stream().anyMatch(event -> event.getEventName().equals("ad_revenue") && Long.valueOf(2).equals(event.getConsentRevision())));
+      java.util.concurrent.CountDownLatch read = new java.util.concurrent.CountDownLatch(1);
+      AtomicReference<String> diagnostic = new AtomicReference<>();
+      OpenMasuUnityBridge.getDiagnosticsSnapshot(value -> { diagnostic.set(value); read.countDown(); });
+      assertTrue(read.await(5, java.util.concurrent.TimeUnit.SECONDS));
+      assertTrue(diagnostic.get().contains("consent_analytics_state=withdrawn"));
+      assertTrue(diagnostic.get().contains("consent_revenue_measurement_revision=2"));
+      OpenMasuUnityBridge.updateConsentForPurpose("revenue_measurement", "withdrawn", "synthetic-levelplay", completed::set);
+      sdk.flushBlocking(10_000L);
+      assertFalse(captured.get().stream().anyMatch(event -> event.getEventName().equals("ad_revenue")));
+      OpenMasuUnityBridge.updateConsentForPurpose("fraud_prevention", "granted", "synthetic-levelplay", completed::set);
+      assertEquals("state=not_submitted&error=invalid_arguments", completed.get());
     } finally { sdk.close(); field.set(null, null); }
   }
 
