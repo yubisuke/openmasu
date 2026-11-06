@@ -96,7 +96,12 @@ describe("opt-in receipt-driven bounded automatic metric corrections",{concurren
         assert.ok(prior.some(run=>run.metric_run_id===row.metric_run_id));
       }
     }
-    assert.equal((await listMetricRecalculations(reader,identity)).filter(job=>job.state==="completed").length,1);
+    // History returns one row per metric item, not one row per job.
+    const completed=(await listMetricRecalculations(reader,identity)).filter(item=>item.state==="completed");
+    assert.equal(completed.length,2);
+    assert.equal(new Set(completed.map(item=>item.recalculation_id)).size,1);
+    assert.deepEqual(completed.map(item=>item.source_metric_run_id).sort(),prior
+      .filter(run=>run.metric_name.startsWith("daily_custom_synthetic_repeat_")).map(run=>run.metric_run_id).sort());
     assert.equal((await planAutomaticMetricCorrections(app,identity.tenantId)).completed,0);
   });
 
