@@ -11,7 +11,7 @@ Implementation and synthetic verification are not live operational qualification
 | Published prerelease | `v0.3.0-rc.3` at `2d689dc`; eight verified SDK assets and exact-commit full CI |
 | Synthetic SDK onboarding | Publication receipt records the downloaded Android SDK/backend journey separately from emulator and provider-shim evidence |
 | Latest stable source release | `v0.2.0`; later features belong to newer source, not this tag |
-| Current source | Contract patch ledger through v0.4.31; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 78 fixtures, 1014 golden artifacts |
+| Current source | Contract patch ledger through v0.4.32; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 79 fixtures, 1027 golden artifacts |
 
 `v0.3.0-rc.3` is the current published source and SDK release, marked as a
 prerelease. Its [release page](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.3)
