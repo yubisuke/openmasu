@@ -87,6 +87,10 @@ payload bytes, serializes against purge and carries key state into matched
 backups; it does not retire secrets needed by historical backups or promise
 zero-downtime operation.
 
+[Shared-proxy configuration](operations/single-host.md#redirector-behind-a-shared-proxy)
+keeps peer admission limits while omitting inapplicable click-rate evidence.
+Existing fraud rules remain active; forwarded identities are not introduced.
+
 ## Implemented integration work
 
 The earlier integration plan and structural preparation are complete.

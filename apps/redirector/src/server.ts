@@ -35,6 +35,8 @@ const payloadStore = new EncryptedFilePayloadStore(
 );
 const geoMode = process.env.OPENMASU_REDIRECTOR_GEO ?? "off";
 if (geoMode !== "off" && geoMode !== "country") throw new Error("OPENMASU_REDIRECTOR_GEO must be off or country");
+const sourceMode = process.env.OPENMASU_REDIRECTOR_SOURCE_MODE ?? "direct";
+if (sourceMode !== "direct" && sourceMode !== "shared_proxy") throw new Error("OPENMASU_REDIRECTOR_SOURCE_MODE must be direct or shared_proxy");
 const server = createServer(createRedirectorHandler({
   readiness: createRuntimeReadiness({
     databaseUrl: process.env.OPENMASU_READER_DATABASE_URL!,
@@ -46,6 +48,7 @@ const server = createServer(createRedirectorHandler({
   tenantId: process.env.OPENMASU_REDIRECTOR_TENANT_ID ?? "tenant-local",
   fallbackUrl: process.env.OPENMASU_REDIRECTOR_FALLBACK_URL ?? "https://play.google.com/store",
   geoMode,
+  sourceMode,
   clientClassEnabled: process.env.OPENMASU_REDIRECTOR_CLIENT_CLASS !== "off",
   remoteClickParameter: process.env.OPENMASU_REDIRECTOR_REMOTE_CLICK_PARAM ?? "cid",
   hostMode: process.env.OPENMASU_REDIRECTOR_LINK_HOST_MODE === "fixed_tenant" ? "fixed_tenant" : "host_header",

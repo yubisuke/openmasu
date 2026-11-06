@@ -45,6 +45,17 @@ function withActions(action: FraudAction): FraudBundle {
 }
 
 describe("WO-14R fraud rule-bundle binding", () => {
+  it("omitting shared-proxy peer-rate classification preserves CTIT, source-day, prefetch and replay decisions", () => {
+    for (const name of ["41-click-injection-suspected", "48-source-scoped-fraud", "19-bot-prefetch", "25-replay-suspected"]) {
+      const direct = withBundle(fixture(name), DEFAULT_FRAUD_BUNDLE);
+      for (const record of direct.records) if (record.event_name === "click") record.payload.source_rate_class = "saturated";
+      const shared = structuredClone(direct);
+      for (const record of shared.records) if (record.event_name === "click") delete record.payload.source_rate_class;
+      const expected = evaluate(direct).fraud_decisions;
+      assert.ok(expected.length > 0, name);
+      assert.equal(canonicalize(evaluate(shared).fraud_decisions), canonicalize(expected), name);
+    }
+  });
   it("F-A-12 replays one recorded revision byte-identically and changes hash and decision after a threshold revision", () => {
     const input = withBundle(fixture("41-click-injection-suspected"), DEFAULT_FRAUD_BUNDLE);
     const first = evaluate(input);

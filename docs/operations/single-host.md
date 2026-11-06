@@ -30,7 +30,7 @@ Internet -> operator-owned CA-trusted HTTPS reverse proxy
 | Public endpoints | Operator HTTPS API and separate redirector origins; the host's API/redirector/PostgreSQL listeners stay `127.0.0.1` |
 | Service network | Backend internal network; explicit service egress/host bridge remains part of existing Compose |
 | Proxy trust | Configured public origin controls redirects, cookies and Origin checks; forwarded IP/proto headers do not grant identity or override it |
-| Rate limits | Socket peer is used; behind the host proxy it may group clients together. Do not advertise per-user client-IP accuracy or add arbitrary trusted forwarding headers |
+| Rate limits | Socket-peer admission limits remain active behind proxies. Set `OPENMASU_REDIRECTOR_SOURCE_MODE=shared_proxy` to omit peer-rate classification from click evidence; this does not identify end clients or trust forwarding headers |
 
 An edge/CDN may front the operator proxy, with caching disabled for authenticated
 API/dashboard responses. PostgreSQL, protected payloads and durable worker jobs
@@ -109,6 +109,25 @@ For upgrades, backup or failures use the [upgrade](upgrade.md) and
 [backup](backup-restore.md) runbooks; do not automatically reopen traffic after an
 incomplete migration or privacy reapplication.
 
+## Redirector behind a shared proxy
+
+In current source, set `OPENMASU_REDIRECTOR_SOURCE_MODE=shared_proxy` before first
+bootstrap, or use the configuration plan/apply procedure below for an existing
+deployment. The single-host environment example selects this mode because its
+layout includes a reverse proxy. The compatible default, `direct`, keeps the
+existing socket-peer classification; neither mode claims per-person accuracy.
+Unknown mode values are rejected rather than silently enabling classification.
+
+Shared mode omits the optional `source_rate_class` from both ordinary clicks and
+prefetch evidence: it is not applicable, **not** a recorded `normal` value.
+The same peer-based admission budget still returns HTTP 429 and `Retry-After`
+when exhausted. Proxy clients share that budget; this setting does not solve
+fairness or increase capacity. No forwarded IP, raw User-Agent or proxy identity
+is added to stored evidence or fraud-rule inputs. Existing bounded client-class
+and prefetch classification, replay checks, campaign/site flooding and CTIT
+rules remain active. Public well-known association routes never consume this
+click-peer budget; their separate global budget and byte limit are unchanged.
+
 ## Change existing non-secret configuration
 
 This command is in current source, not the frozen rc.3 release. Use a release
@@ -116,7 +135,7 @@ that contains it and build its existing Compose image before following this
 procedure. It does not upgrade binaries or create a second deployment.
 
 The closed setting list is API/redirector public origins, the redirect destination
-allowlist, worker concurrency/shutdown timeout, SDK/MAX inbox batch limits, and
+allowlist, redirector source mode, worker concurrency/shutdown timeout, SDK/MAX inbox batch limits, and
 AdServices provider timeout/claim lease. Public origins must be exact HTTPS
 origins; HTTP is accepted only for localhost/loopback synthetic use. Empty
 destination allowlist means deny all custom HTTPS destinations. Shell syntax,
@@ -131,6 +150,7 @@ claim lease.
      "OPENMASU_PUBLIC_BASE_URL": "https://metrics.example.invalid",
      "OPENMASU_REDIRECTOR_BASE_URL": "https://links.example.invalid",
      "OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST": "https://app.example.invalid",
+     "OPENMASU_REDIRECTOR_SOURCE_MODE": "shared_proxy",
      "OPENMASU_WORKER_CONCURRENCY": "4"
    }
    ```

@@ -153,6 +153,49 @@ describe("M2a redirector HTTP shell", () => {
     assert.match(decodeInstallReferrer(referrer).cid, /^[A-Za-z0-9_-]{22,128}$/);
   });
 
+  it("omits shared-proxy click and prefetch classification while preserving peer admission and public association routes", async () => {
+    for (const sourceMode of ["direct", "shared_proxy"] as const) {
+      const peers: string[] = [], classifications: string[] = [];
+      const limited = createServer(createRedirectorHandler({
+        pool, payloadStore, tenantId, fallbackUrl: fallback, geoMode: "off", sourceMode,
+        limiter: {
+          allow(peer) { peers.push(peer); return peers.length <= 2; },
+          classify(peer) { classifications.push(peer); return "saturated"; },
+        },
+      }));
+      limited.listen(0, "127.0.0.1"); await once(limited, "listening");
+      const limitedBase = `http://127.0.0.1:${(limited.address() as AddressInfo).port}`;
+      try {
+        for (const prefetch of [false, true]) {
+          const response = await fetch(`${limitedBase}/r/${slug}`, { redirect: "manual", headers: {
+            "user-agent": "Synthetic Android", "x-forwarded-for": prefetch ? "198.51.100.2" : "198.51.100.1",
+            ...(prefetch ? { purpose: "prefetch" } : {}),
+          } });
+          assert.equal(response.status, 302);
+          const reference = await withTenant(pool, tenantId, async client => (await client.query<{ body_ref: string }>(
+            "SELECT body_ref FROM ledger.ingest_batches WHERE tenant_id=$1 AND app_id=$2 AND producer='redirector' ORDER BY inbox_seq DESC LIMIT 1",
+            [tenantId, appId],
+          )).rows[0].body_ref);
+          const body = (await payloadStore.read(reference)).toString();
+          const payload = JSON.parse(body).records[0].payload;
+          assert.equal(Object.hasOwn(payload, "source_rate_class"), sourceMode === "direct");
+          assert.equal(payload.source_rate_class, sourceMode === "direct" ? "saturated" : undefined);
+          assert.equal(Boolean(payload.bot_prefetch), prefetch);
+          assert.ok(payload.client_class);
+          assert.doesNotMatch(body, /127\.0\.0\.1|198\.51\.100\.[12]|Synthetic Android|x-forwarded-for|shared_proxy/);
+        }
+        const rejected = await fetch(`${limitedBase}/r/${slug}`, { redirect: "manual" });
+        assert.equal(rejected.status, 429); assert.equal(rejected.headers.get("retry-after"), "1");
+        assert.equal(new Set(peers).size, 1);
+        assert.equal(classifications.length, sourceMode === "direct" ? 2 : 0);
+        for (const path of ["/.well-known/assetlinks.json", "/.well-known/apple-app-site-association"]) {
+          assert.equal((await fetchWithHost(limitedBase, path, linkHost)).status, 200);
+        }
+        assert.equal(peers.length, 3, "well-known must not consume the exhausted peer budget");
+      } finally { limited.close(); await once(limited, "close"); }
+    }
+  });
+
   it("DL-A-08 through DL-A-10 resolves tenant hosts and serves byte-stable public association files", async () => {
     const hosted = createServer(createRedirectorHandler({
       pool, payloadStore, tenantId: "unused-fixed-tenant", hostMode: "host_header",

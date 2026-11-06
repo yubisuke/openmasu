@@ -53,6 +53,7 @@ it("rejects invalid and stale configuration before replacing any file", () => wo
     { OPENMASU_PUBLIC_BASE_URL: "https://synthetic.example;echo-secret" },
     { OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST: "https://synthetic.example\nSECRET=leak" },
     { OPENMASU_WORKER_CONCURRENCY: "17" },
+    { OPENMASU_REDIRECTOR_SOURCE_MODE: "forwarded" },
     { OPENMASU_ADSERVICES_CLAIM_LEASE_MS: "30000" },
   ]) assert.throws(() => planDeploymentConfiguration(paths, invalid), /configuration_/);
   const plan = planDeploymentConfiguration(paths, patch);
@@ -61,6 +62,18 @@ it("rejects invalid and stale configuration before replacing any file", () => wo
   writeFileSync(paths.repository, `${before[1]}# changed since plan\n`);
   assert.throws(() => applyDeploymentConfiguration(paths, patch, plan.receipt!), /configuration_plan_stale/);
   assert.equal(readFileSync(paths.app, "utf8"), before[0]);
+}));
+
+it("applies shared-proxy and direct modes without changing the admission budget or secrets", () => workspace(paths => {
+  const before = readFileSync(paths.app, "utf8");
+  for (const mode of ["shared_proxy", "direct"]) {
+    const settings = { OPENMASU_REDIRECTOR_SOURCE_MODE: mode };
+    const plan = planDeploymentConfiguration(paths, settings);
+    assert.equal(plan.status, "planned");
+    applyDeploymentConfiguration(paths, settings, plan.receipt!);
+    for (const path of [paths.app, paths.repository]) assert.match(readFileSync(path, "utf8"), new RegExp(`^OPENMASU_REDIRECTOR_SOURCE_MODE=${mode}$`, "m"));
+    assert.equal(readFileSync(paths.app, "utf8").replace(/^OPENMASU_REDIRECTOR_SOURCE_MODE=.*\n/m, ""), before);
+  }
 }));
 
 it("rolls back an earlier replacement when the second replacement fails", () => workspace(paths => {

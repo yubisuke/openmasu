@@ -7,6 +7,7 @@ import { describe, it } from "node:test";
 
 function generatedAppEnvironment(options: {
   readonly allowlist?: string;
+  readonly redirectorSourceMode?: string;
   readonly costRefreshEnabled?: string;
   readonly costRefreshSecretsFile?: string;
   readonly publicBaseUrl?: string;
@@ -38,6 +39,8 @@ function generatedAppEnvironment(options: {
   environment.OPENMASU_INBOX_APP_MAX_BYTES = options.inboxAppBytes ?? "268435456";
   if (options.allowlist === undefined) delete environment.OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST;
   else environment.OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST = options.allowlist;
+  if (options.redirectorSourceMode === undefined) delete environment.OPENMASU_REDIRECTOR_SOURCE_MODE;
+  else environment.OPENMASU_REDIRECTOR_SOURCE_MODE = options.redirectorSourceMode;
   if (options.costRefreshEnabled === undefined) delete environment.OPENMASU_COST_REFRESH_ENABLED;
   else environment.OPENMASU_COST_REFRESH_ENABLED = options.costRefreshEnabled;
   if (options.costRefreshSecretsFile === undefined) delete environment.OPENMASU_COST_REFRESH_SECRETS_FILE;
@@ -117,6 +120,7 @@ function generatedAppEnvironment(options: {
         "utf8",
       );
       delete environment.OPENMASU_WORKER_CONCURRENCY;
+      environment.OPENMASU_REDIRECTOR_SOURCE_MODE = "direct";
       delete environment.OPENMASU_ADSERVICES_PROVIDER_TIMEOUT_MS;
       delete environment.OPENMASU_ADSERVICES_CLAIM_LEASE_MS;
       result = spawnSync(
@@ -364,6 +368,7 @@ describe("runtime bootstrap environment", () => {
   it("preserves protected worker controls when inherited or checkout settings change without apply", () => {
     const appEnvironment = generatedAppEnvironment({
       workerConcurrency: "7",
+      redirectorSourceMode: "shared_proxy",
       reconciledWorkerConcurrency: "1",
       reconciledSdkInboxBatchLimit: "2",
       reconciledMaxInboxBatchLimit: "3",
@@ -371,6 +376,7 @@ describe("runtime bootstrap environment", () => {
       reconciledAdServicesClaimLease: "90000",
     });
     assert.match(appEnvironment, /^OPENMASU_WORKER_CONCURRENCY=7$/m);
+    assert.match(appEnvironment, /^OPENMASU_REDIRECTOR_SOURCE_MODE=shared_proxy$/m);
     assert.doesNotMatch(appEnvironment, /^OPENMASU_WORKER_CONCURRENCY=1$/m);
     assert.match(appEnvironment, /^OPENMASU_ADMIN_KEY=[A-Za-z0-9_-]+$/m);
     assert.equal(appEnvironment.match(/^OPENMASU_WORKER_CONCURRENCY=/gm)?.length, 1);
@@ -406,5 +412,11 @@ describe("runtime bootstrap environment", () => {
     const compose = readFileSync("compose.yaml", "utf8");
     assert.match(compose, /OPENMASU_INBOX_ADMISSION_ENABLED: \$\{OPENMASU_INBOX_ADMISSION_ENABLED:-off\}/);
     assert.match(compose, /OPENMASU_INBOX_GLOBAL_MAX_BYTES: \$\{OPENMASU_INBOX_GLOBAL_MAX_BYTES:-2147483648\}/);
+  });
+
+  it("defaults redirector classification to direct and validates explicit shared-proxy configuration", () => {
+    assert.match(generatedAppEnvironment(), /^OPENMASU_REDIRECTOR_SOURCE_MODE=direct$/m);
+    assert.match(generatedAppEnvironment({ redirectorSourceMode: "shared_proxy" }), /^OPENMASU_REDIRECTOR_SOURCE_MODE=shared_proxy$/m);
+    assert.throws(() => generatedAppEnvironment({ redirectorSourceMode: "forwarded" }), /must be direct or shared_proxy/);
   });
 });
