@@ -47,8 +47,9 @@ internal static partial class Program
         {
             OpenMasuPrivacyResult result = null;
             client.RequestPrivacyPage(OpenMasuPrivacyRequestType.Access, value => result = value);
-            client.PumpCallbacks();
-            Require(result.Status == OpenMasuPrivacyStatus.Unsupported && OpenMasuiOSPlatform.ActiveCallbackCount == 0,
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (result == null && DateTime.UtcNow < deadline) { client.PumpCallbacks(); System.Threading.Thread.Yield(); }
+            Require(result != null && result.Status == OpenMasuPrivacyStatus.Unsupported && OpenMasuiOSPlatform.ActiveCallbackCount == 0,
                 "Editor claimed native export or leaked callback");
         }
         Console.WriteLine("Privacy page probe passed: partial/final, access/portability, reset, failure, legacy transport, no measurement side effects.");
