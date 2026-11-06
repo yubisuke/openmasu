@@ -6150,6 +6150,7 @@ ALTER TABLE ephemeral.google_conversion_deliveries ADD COLUMN destination_revisi
 ALTER TABLE ephemeral.google_conversion_deliveries ADD FOREIGN KEY (tenant_id,app_id,destination_id,destination_revision)
   REFERENCES control.google_destination_revisions(tenant_id,app_id,destination_id,revision);
 
+-- 100_outcome_cost_reason.sql
 -- An additive reason for the independent cost-per-converted-installation profile.
 ALTER TABLE ledger.metric_runs DROP CONSTRAINT metric_runs_undefined_reason_check;
 ALTER TABLE ledger.metric_runs ADD CONSTRAINT metric_runs_undefined_reason_check
