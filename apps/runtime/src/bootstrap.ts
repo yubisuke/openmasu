@@ -144,6 +144,9 @@ const removedSeedSettings = deploymentPurpose === "persistent"
   ? ["OPENMASU_SEED_DATABASE_PASSWORD", "OPENMASU_SEED_DATABASE_URL"] : [];
 const publicBaseUrl = protectedSettings.OPENMASU_PUBLIC_BASE_URL ?? process.env.OPENMASU_PUBLIC_BASE_URL ?? "http://localhost:8080";
 const redirectorBaseUrl = protectedSettings.OPENMASU_REDIRECTOR_BASE_URL ?? process.env.OPENMASU_REDIRECTOR_BASE_URL ?? "http://localhost:8090";
+const redirectorSourceMode = protectedSettings.OPENMASU_REDIRECTOR_SOURCE_MODE
+  ?? process.env.OPENMASU_REDIRECTOR_SOURCE_MODE ?? existing.OPENMASU_REDIRECTOR_SOURCE_MODE ?? "direct";
+if (redirectorSourceMode !== "direct" && redirectorSourceMode !== "shared_proxy") throw new Error("OPENMASU_REDIRECTOR_SOURCE_MODE must be direct or shared_proxy");
 const databaseHost = process.env.OPENMASU_DATABASE_HOST ?? "localhost";
 const databasePort = process.env.OPENMASU_DATABASE_PORT ?? "5432";
 const databaseName = process.env.OPENMASU_DATABASE_NAME ?? "openmasu";
@@ -224,6 +227,7 @@ if (runtimeExists) {
   }
   reconcileEnvSettings(appEnvPath, {
     ...inboxAdmissionSettings,
+    OPENMASU_REDIRECTOR_SOURCE_MODE: redirectorSourceMode,
     OPENMASU_WORKER_CONCURRENCY: workerConcurrency,
     OPENMASU_WORKER_SHUTDOWN_TIMEOUT_MS: workerShutdownTimeout,
     OPENMASU_SDK_INBOX_BATCH_LIMIT: sdkInboxBatchLimit,
@@ -344,6 +348,7 @@ const appEntries: Record<string, string> = {
   OPENMASU_REDIRECTOR_RATE_RPS: "20",
   OPENMASU_REDIRECTOR_RATE_BURST: "50",
   OPENMASU_REDIRECTOR_CLIENT_CLASS: "on",
+  OPENMASU_REDIRECTOR_SOURCE_MODE: redirectorSourceMode,
   OPENMASU_REDIRECTOR_REMOTE_CLICK_PARAM: "cid",
   OPENMASU_REFERRER_MAX_ENCODED_CHARS: "512",
   OPENMASU_WELLKNOWN_RATE_RPS: "5",

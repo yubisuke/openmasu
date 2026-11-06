@@ -344,6 +344,12 @@ new raw input or identifier and do not create a device identity. The aggregate
 fact that traffic shares a source or client class remains a privacy and false-
 positive risk and must be treated conservatively.
 
+With explicit [shared-proxy mode](operations/single-host.md#redirector-behind-a-shared-proxy),
+the redirector omits `source_rate_class` instead of treating pooled traffic as
+end-client evidence or substituting `normal` for an unobserved classification.
+Peer admission limits remain active; no forwarded identity or new raw data is
+stored. Campaign/site, prefetch/replay and CTIT fraud decisions are unchanged.
+
 The project permanently excludes third-party IP/device intelligence,
 cross-advertiser history, device graphs, and fingerprinting. It cannot reliably
 detect real-device farms from the permitted evidence and deliberately does not

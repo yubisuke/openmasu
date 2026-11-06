@@ -105,6 +105,11 @@ recovery operations without changing encrypted payloads or contract artifacts.
 Bounded rewrap/verification, resume and matched backup state reuse the existing
 store and CLI. All writers stay stopped; old-backup key custody remains explicit.
 
+[Shared-proxy configuration](operations/single-host.md#redirector-behind-a-shared-proxy)
+separates peer admission limits from optional click-rate evidence. It omits an
+inapplicable classification without disabling the other recorded fraud rules or
+introducing forwarded identity.
+
 The published rc.3 packages the completed source plan. Current source adds the
 rc.2 upgrade entry and extends the existing migration/privacy rehearsal
 ([#315](https://github.com/yubisuke/openmasu/issues/315)); deployment availability

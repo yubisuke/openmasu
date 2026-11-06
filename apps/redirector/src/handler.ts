@@ -32,6 +32,7 @@ export type RedirectorDependencies = {
   wellKnownCacheSeconds?: number;
   wellKnownMaximumBytes?: number;
   clientClassEnabled?: boolean;
+  sourceMode?: "direct" | "shared_proxy";
   remoteClickParameter?: string;
   clock?: () => Date;
 };
@@ -212,7 +213,9 @@ export function createRedirectorHandler(dependencies: RedirectorDependencies): R
       }
       const remoteClickRef = target.searchParams.get(dependencies.remoteClickParameter ?? "cid") ?? undefined;
       if (remoteClickRef && !/^[A-Za-z0-9._~-]{1,128}$/.test(remoteClickRef)) return send(response, fallback);
-      const sourceRateClass = dependencies.limiter.classify?.(remoteAddress) ?? "normal";
+      // A shared peer's availability budget is not evidence about an end client.
+      const sourceRateClass = dependencies.sourceMode === "shared_proxy"
+        ? undefined : dependencies.limiter.classify?.(remoteAddress) ?? "normal";
       const clientClass = dependencies.clientClassEnabled === false
         ? undefined
         : classifyClientClass(String(request.headers["user-agent"] ?? ""));

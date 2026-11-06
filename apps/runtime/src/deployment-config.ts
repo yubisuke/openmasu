@@ -12,6 +12,7 @@ const integerSettings = {
 } as const;
 export const deploymentSettingNames = [
   "OPENMASU_PUBLIC_BASE_URL", "OPENMASU_REDIRECTOR_BASE_URL", "OPENMASU_REDIRECTOR_DESTINATION_ALLOWLIST",
+  "OPENMASU_REDIRECTOR_SOURCE_MODE",
   ...Object.keys(integerSettings),
 ] as readonly string[];
 export type ConfigurationPaths = { app: string; repository: string };
@@ -54,6 +55,10 @@ function origin(value: string): boolean {
 }
 function setting(name: string, value: unknown): string {
   if (typeof value !== "string" || value.length > 10000) throw new Error("configuration_value_invalid");
+  if (name === "OPENMASU_REDIRECTOR_SOURCE_MODE") {
+    if (value !== "direct" && value !== "shared_proxy") throw new Error("configuration_value_invalid");
+    return value;
+  }
   if (name in integerSettings) {
     const [minimum, maximum] = integerSettings[name as keyof typeof integerSettings];
     if (!/^[0-9]+$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) < minimum || Number(value) > maximum) {
