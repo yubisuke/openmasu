@@ -37,7 +37,7 @@ let package = Package(
     ),
     .testTarget(name: "OpenMasuCoreTests", dependencies: ["OpenMasuCore"]),
     .testTarget(name: "OpenMasuObjCTests", dependencies: ["OpenMasuObjC", "OpenMasuCore"]),
-    .testTarget(name: "OpenMasuApplePostbackTests", dependencies: ["OpenMasuApplePostback", "OpenMasuCore"], resources: [.process("Vectors")]),
+    .testTarget(name: "OpenMasuApplePostbackTests", dependencies: ["OpenMasuApplePostback", "OpenMasuCore", "OpenMasuObjC"], resources: [.process("Vectors")]),
     .testTarget(name: "OpenMasuMaxTests", dependencies: ["OpenMasuMax"]),
   ],
   swiftLanguageVersions: [.v5]

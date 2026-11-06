@@ -1,0 +1,6 @@
+{
+  "format": "openmasu.apple-conversion-meaning.v1",
+  "schema_version": "2.0.0",
+  "schema_digest": "1f1d34137531516b47d84f489342966738e4a50d18110e9d3ced2dfc5202b5e0",
+  "canonical_definition": "{\"coarse\":{\"high_from\":8,\"medium_from\":4},\"effective_from\":\"2026-01-01T00:00:00.000Z\",\"effective_to\":\"2027-01-01T00:00:00.000Z\",\"event_keys\":[\"onboarding_complete\",\"purchase\"],\"lock_at_maximum\":true,\"profile\":\"event_revenue_v1\",\"revenue\":{\"amount_scale\":2,\"currency\":\"USD\",\"event_key\":\"purchase\",\"thresholds\":[\"0\",\"100\",\"500\"]},\"schema_version\":\"2.0.0\"}"
+}

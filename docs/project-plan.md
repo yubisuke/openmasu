@@ -110,6 +110,8 @@ Apple [postback observations](apple-postback-observations.md), [conversion meani
 and [campaign cost](cost-refresh.md#apple-ads-campaign-cost) are implemented.
 Conversion meanings include a profile form, complete state preview and immutable
 version/digest bundle export; this does not deploy SDK configuration automatically.
+Unity hosts can consume that bundle through the typed native meaning bridge,
+without a second evaluator or automatic window inference.
 Postbacks are not unique installs, selected meaning is not a verified binding,
 and live Apple permissions/billing remain unverified. Other explicit dependencies
 remain in the linked issues.

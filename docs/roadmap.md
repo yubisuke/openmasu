@@ -146,6 +146,8 @@ Apple [postback observations](apple-postback-observations.md), [registered conve
 and [scoped campaign cost](cost-refresh.md#apple-ads-campaign-cost) are implemented.
 Conversion meanings include a profile form, complete state preview and immutable
 version/digest bundle export; this does not deploy SDK configuration automatically.
+Unity hosts can consume that bundle through the typed native meaning bridge,
+without a second evaluator or automatic window inference.
 Selected decoding remains unverified; live provider access is not established.
 
 Saved daily analysis and [broader external cohort comparison](cohort-comparison.md#expanded-closed-declaration)
