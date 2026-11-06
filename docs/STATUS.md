@@ -147,6 +147,9 @@ windows, unsigned values, verification, retries and missing metadata.
 digest with the SDK and expose ranges without inventing postback bindings. A
 dashboard profile form previews every fine/coarse state before registration and
 exports exact version/digest bundles; deployment remains an explicit SDK step.
+Unity's [typed meaning bridge](../sdk/unity/README.md#registered-conversion-meanings)
+reuses the native state/digest and explicit install windows; real iOS delivery is
+still outside synthetic evidence.
 [Apple Ads campaign cost](cost-refresh.md#apple-ads-campaign-cost) now uses the
 existing bounded refresh and correction path with explicit UTC days and currency.
 [Unity purchase binding](../sdk/unity/README.md#protected-store-purchases) now reuses

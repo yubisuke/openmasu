@@ -58,6 +58,7 @@ internal static partial class Program
         ExerciseAdRevenue();
         ExerciseLevelPlayAdapter();
         ExerciseAppleConversionPlatformCompatibility();
+        ExerciseAppleMeaning(mainThread);
         ExerciseAndroidManifestGeneration();
         ExerciseAndroidGradleSettings();
         ExerciseAndroidPostprocessorWithoutLinkSettings();

@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 import OpenMasuCore
 @testable import OpenMasuApplePostback
+@testable import OpenMasuObjC
 
 final class ConversionMeaningTests: XCTestCase {
   private let digest = "1f1d34137531516b47d84f489342966738e4a50d18110e9d3ced2dfc5202b5e0"
@@ -45,6 +46,60 @@ final class ConversionMeaningTests: XCTestCase {
     invalidRevenue["thresholds"] = ["0", "100\n"]
     invalid["revenue"] = invalidRevenue
     XCTAssertThrowsError(try ConversionMeaningSchema.load(data: JSONSerialization.data(withJSONObject: invalid), registeredVersion: "2.0.0", registeredDigest: digest))
+  }
+
+  func testUnityMeaningBridgeSharesVectorsAndNativePersistenceBoundaries() async throws {
+    let definition = String(decoding: try JSONSerialization.data(withJSONObject: vectors()["definition"]!, options: [.sortedKeys, .withoutEscapingSlashes]), as: UTF8.self)
+    let schema = try AppleMeaningBridge.load(definition, version: "2.0.0", digest: digest)
+    XCTAssertThrowsError(try AppleMeaningBridge.load(definition, version: "2.0.0", digest: String(repeating: "0", count: 64))) {
+      XCTAssertEqual(AppleMeaningBridge.failure($0), "state=not_applied&error=digest_mismatch")
+    }
+    for row in try XCTUnwrap(vectors()["cases"] as? [[String: Any]]) {
+      let directory = root(), updater = MeaningUpdater()
+      let host = try sdk(directory)
+      let controller = MeaningConversionController(schema: schema, sdk: host, updater: updater)
+      let keys = row["keys"] as! [String]
+      if keys.isEmpty { continue } // No signal is deliberately not an update API call.
+      var result = ""
+      for key in keys {
+        result = await AppleMeaningBridge.record(controller: controller, operation: "operation-\(key)", event: key,
+          amount: key == "purchase" ? row["revenue"] as? String : nil, window: 0, consent: true, now: now)
+      }
+      XCTAssertEqual(result, "state=updated&fine=\(row["fine"] as! Int)&coarse=\(row["coarse"] as! String)&lock=\(row["lock"] as! Bool)")
+      let before = await updater.values.count
+      let restarted = try sdk(directory)
+      let resumed = MeaningConversionController(schema: schema, sdk: restarted, updater: updater)
+      let key = keys.last!
+      let retry = await AppleMeaningBridge.record(controller: resumed, operation: "operation-\(key)", event: key,
+        amount: key == "purchase" ? row["revenue"] as? String : nil, window: 0, consent: true, now: now)
+      XCTAssertEqual(retry, result)
+      let after = await updater.values.count
+      XCTAssertEqual(after, before, "restart/duplicate must not call the OS again")
+      if key == "purchase" {
+        let conflict = await AppleMeaningBridge.record(controller: resumed, operation: "operation-purchase", event: "purchase",
+          amount: "101", window: 0, consent: true, now: now)
+        XCTAssertEqual(conflict, "state=not_applied&error=event_conflict")
+      }
+      try await restarted.updateConsent(state: "withdrawn", policyVersion: "synthetic-v1")
+      let revoked = await AppleMeaningBridge.record(controller: resumed, operation: "new-operation", event: "purchase",
+        amount: "100", window: 0, consent: true, now: now)
+      XCTAssertEqual(revoked, "state=not_applied&error=consent_required")
+      let afterWithdrawal = try sdk(directory)
+      let blocked = MeaningConversionController(schema: schema, sdk: afterWithdrawal, updater: updater)
+      let denied = await AppleMeaningBridge.record(controller: blocked, operation: "new-operation", event: "purchase",
+        amount: "100", window: 0, consent: true, now: now)
+      XCTAssertEqual(denied, revoked, "withdrawal survives a new native bridge/controller")
+      try await afterWithdrawal.updateConsent(state: "granted", policyVersion: "synthetic-v1")
+      try await afterWithdrawal.initialize() // Fake transport only, needed for native reset enrollment.
+      try await afterWithdrawal.resetInstallationId()
+      let reset = await AppleMeaningBridge.record(controller: blocked, operation: "operation-purchase", event: "purchase",
+        amount: "100", window: 0, consent: true, now: now)
+      XCTAssertEqual(reset, "state=updated&fine=6&coarse=medium&lock=false", "reset removes previous mask/lock/dedupe state")
+      let refused = await AppleMeaningBridge.record(controller: blocked, operation: "denied", event: "purchase",
+        amount: "100", window: 1, consent: false, now: now)
+      XCTAssertEqual(refused, "state=not_applied&error=consent_required")
+    }
+    XCTAssertEqual(AppleMeaningBridge.failure(OpenMasuError.storage("private body")), "state=not_applied&error=update_failed")
   }
 
   func testOrderDuplicatesRestartAndWindowLocalLock() async throws {

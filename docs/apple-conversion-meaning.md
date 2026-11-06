@@ -122,8 +122,10 @@ not discover Apple's hidden window state or handle re-engagement tags. Deploymen
 dates are half-open midnight-UTC declarations checked before SDK operations,
 not inferred installation or receipt dates. A definition cannot be replaced
 mid-measurement while its stored state remains. Legacy APIs remain available.
-Swift is mirrored into the Unity iOS sources; no new C# configuration facade or
-published SDK asset is implied.
+Swift is mirrored into the Unity iOS sources. Unity hosts can use the
+[typed meaning bridge](../sdk/unity/README.md#registered-conversion-meanings)
+with the same registered bundle. Source integration does not publish a new SDK
+asset or establish real-device delivery.
 
 Apple APIs and SQLite are not one transaction. A crash after OS acceptance but
 before persistence, or one-framework success followed by another-framework

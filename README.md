@@ -171,6 +171,8 @@ receipt windows, signature results, retries and unknown/source-value states.
 Optional [conversion meanings](docs/apple-conversion-meaning.md) can be designed,
 previewed and exported from the dashboard as an exact registered SDK definition;
 decoded ranges remain unverified, not measured revenue.
+Unity's [typed meaning bridge](sdk/unity/README.md#registered-conversion-meanings)
+uses that exact bundle and explicit install windows; real Apple delivery remains unverified.
 
 The configured SDK bundle path is
 `build/sdk-release/openmasu-sdk-0.3.0-rc.3`. An untagged bundle is only a local candidate artifact.

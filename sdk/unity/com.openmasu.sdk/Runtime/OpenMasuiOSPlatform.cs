@@ -7,7 +7,7 @@ using AOT;
 namespace OpenMasu.Unity
 {
     public sealed class OpenMasuiOSPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform,
-        IOpenMasuAppleConversionPlatform, IOpenMasuAppStorePurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuAdRevenuePlatform, IOpenMasuDiagnosticsPlatform, IOpenMasuSyntheticValidationPlatform
+        IOpenMasuAppleConversionPlatform, IOpenMasuAppleMeaningPlatform, IOpenMasuAppStorePurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuAdRevenuePlatform, IOpenMasuDiagnosticsPlatform, IOpenMasuSyntheticValidationPlatform
     {
         private delegate void NativeCallback(long requestId, IntPtr value);
         private static readonly NativeCallback Callback = OnNativeCallback;
@@ -28,6 +28,28 @@ namespace OpenMasu.Unity
             openmasu_ios_initialize(options.Endpoint, options.SdkKeyId, options.SdkSecret, requestId, Callback);
 #else
             CompleteSynthetic(requestId, "ok");
+#endif
+        }
+
+        public void InitializeAppleMeaning(OpenMasuOptions options, OpenMasuAppleMeaningConfiguration configuration, Action<string> completion)
+        {
+            var requestId = RegisterPurchase(completion);
+#if UNITY_IOS && !UNITY_EDITOR
+            openmasu_ios_initialize_meaning(options.Endpoint, options.SdkKeyId, options.SdkSecret,
+                configuration.CanonicalDefinition, configuration.SchemaVersion, configuration.SchemaDigest, requestId, Callback);
+#else
+            CompleteSynthetic(requestId, "state=not_applied&error=platform_unavailable");
+#endif
+        }
+
+        public void RecordAppleMeaning(string localOperationKey, string eventKey, string revenueUnscaled,
+            OpenMasuAppleWindow window, bool consentGranted, Action<string> completion)
+        {
+            var requestId = RegisterPurchase(completion);
+#if UNITY_IOS && !UNITY_EDITOR
+            openmasu_ios_record_meaning(localOperationKey, eventKey, revenueUnscaled, (int)window, consentGranted, requestId, Callback);
+#else
+            CompleteSynthetic(requestId, "state=not_applied&error=platform_unavailable");
 #endif
         }
 
@@ -297,6 +319,12 @@ namespace OpenMasu.Unity
         }
 
 #if UNITY_IOS && !UNITY_EDITOR
+        [DllImport("__Internal")]
+        private static extern void openmasu_ios_initialize_meaning(string endpoint, string sdkKeyId, string sdkSecret,
+            string canonicalDefinition, string schemaVersion, string schemaDigest, long requestId, NativeCallback callback);
+        [DllImport("__Internal")]
+        private static extern void openmasu_ios_record_meaning(string localOperationKey, string eventKey, string revenueUnscaled,
+            int window, [MarshalAs(UnmanagedType.I1)] bool consentGranted, long requestId, NativeCallback callback);
         [DllImport("__Internal")]
         private static extern void openmasu_ios_prepare_app_store_purchase(
             string productId, string requestId, [MarshalAs(UnmanagedType.I1)] bool revenueMeasurementConsent,

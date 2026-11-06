@@ -62,9 +62,30 @@ private enum BridgeState {
   static let lock = NSLock()
   static var sdk: OpenMasuSDK?
   static var conversionController: ConversionValueController?
+  static var meaningController: MeaningConversionController?
+  static var initializationRevision: UInt64 = 0
 
   static func set(_ value: OpenMasuSDK, conversionController valueController: ConversionValueController) {
-    lock.lock(); sdk = value; conversionController = valueController; lock.unlock()
+    lock.lock(); initializationRevision &+= 1
+    sdk = value; conversionController = valueController; meaningController = nil; lock.unlock()
+  }
+
+  static func beginMeaningInitialization() -> UInt64 {
+    lock.lock(); defer { lock.unlock() }
+    initializationRevision &+= 1; sdk = nil; conversionController = nil; meaningController = nil
+    return initializationRevision
+  }
+
+  static func setMeaning(_ value: OpenMasuSDK, controller: MeaningConversionController, revision: UInt64) -> Bool {
+    lock.lock(); defer { lock.unlock() }
+    guard revision == initializationRevision else { return false }
+    sdk = value; meaningController = controller; conversionController = nil
+    return true
+  }
+
+  static func getMeaningController() -> MeaningConversionController? {
+    lock.lock(); defer { lock.unlock() }
+    return meaningController
   }
 
   static func get() -> OpenMasuSDK? {
@@ -186,6 +207,101 @@ public func openmasuIOSInitialize(
     }
   } catch {
     callback(callbackValue, requestId: requestId, value: "error:storage_failed")
+  }
+}
+
+// Keep evaluation and persistence in the native controller; the bridge only transports typed inputs/results.
+enum AppleMeaningBridge {
+  static func load(_ definition: String, version: String, digest: String) throws -> ConversionMeaningSchema {
+    guard definition.utf8.count <= 32_768, version.count <= 128 else {
+      throw OpenMasuError.conversionSchema("conversion_meaning_invalid")
+    }
+    return try ConversionMeaningSchema.load(data: Data(definition.utf8), registeredVersion: version, registeredDigest: digest)
+  }
+
+  static func failure(_ error: Error) -> String {
+    let reason: String
+    switch error as? OpenMasuError {
+    case .collectionDisabled: reason = "collection_disabled"
+    case .resetRequiresEnrollment: reason = "not_initialized"
+    case .resetPending, .purchaseContextChanged: reason = "context_changed"
+    case .conversionSchema(let code):
+      switch code {
+      case "conversion_schema_digest_mismatch": reason = "digest_mismatch"
+      case "conversion_signal_invalid": reason = "invalid_signal"
+      case "conversion_revenue_invalid": reason = "invalid_revenue"
+      case "conversion_event_conflict": reason = "event_conflict"
+      case "conversion_consent_required": reason = "consent_required"
+      case "conversion_context_changed", "conversion_active_schema_changed": reason = "context_changed"
+      case "conversion_context_busy": reason = "context_busy"
+      case "conversion_state_limit": reason = "state_limit"
+      case "conversion_meaning_invalid", "conversion_configuration_mismatch": reason = "invalid_definition"
+      default: reason = "update_failed"
+      }
+    case .none where error is DecodingError: reason = "invalid_definition"
+    default: reason = "update_failed"
+    }
+    return "state=not_applied&error=\(reason)"
+  }
+
+  static func record(controller: MeaningConversionController, operation: String, event: String, amount: String?,
+                     window: Int, consent: Bool, now: Date = Date()) async -> String {
+    do {
+      let value = try await controller.record(eventID: operation, eventKey: event, revenueUnscaled: amount,
+        windowSequence: window, consentGranted: consent, now: now)
+      return "state=updated&fine=\(value.fineValue)&coarse=\(value.coarseValue.rawValue)&lock=\(value.lockPostback)"
+    } catch { return failure(error) }
+  }
+}
+
+@_cdecl("openmasu_ios_initialize_meaning")
+public func openmasuIOSInitializeMeaning(
+  _ endpoint: UnsafePointer<CChar>?, _ sdkKeyId: UnsafePointer<CChar>?, _ sdkSecret: UnsafePointer<CChar>?,
+  _ definition: UnsafePointer<CChar>?, _ version: UnsafePointer<CChar>?, _ digest: UnsafePointer<CChar>?,
+  _ requestId: Int64, _ callbackValue: OpenMasuCStringCallback?
+) {
+  let revision = BridgeState.beginMeaningInitialization()
+  guard let endpoint, let sdkKeyId, let sdkSecret, let definition, let version, let digest,
+        let endpointURL = URL(string: String(cString: endpoint)),
+        endpointURL.scheme == "https" || endpointURL.host == "127.0.0.1" || endpointURL.host == "localhost" else {
+    callback(callbackValue, requestId: requestId, value: "state=not_applied&error=invalid_definition"); return
+  }
+  do {
+    let schema = try AppleMeaningBridge.load(String(cString: definition), version: String(cString: version), digest: String(cString: digest))
+    let configuration = OpenMasuConfiguration(endpoint: endpointURL, sdkKeyId: String(cString: sdkKeyId),
+      sdkSecret: String(cString: sdkSecret), wrapperVersion: "unity-0.3.0-rc.3",
+      conversionSchemaVersion: schema.schema_version, conversionSchemaSha256: try schema.digest,
+      deepLinkHosts: Set(Bundle.main.object(forInfoDictionaryKey: "OpenMasuLinkHosts") as? [String] ?? []),
+      deepLinkSchemes: Set(Bundle.main.object(forInfoDictionaryKey: "OpenMasuLinkSchemes") as? [String] ?? []))
+    let sdk = try OpenMasuSDK(configuration: configuration, tokenProvider: SystemAdServicesTokenProvider())
+    let controller = MeaningConversionController(schema: schema, sdk: sdk, updater: SystemAppleConversionUpdater())
+    Task {
+      do {
+        try await sdk.initialize()
+        let installed = BridgeState.setMeaning(sdk, controller: controller, revision: revision)
+        callback(callbackValue, requestId: requestId, value: installed ? "state=ready" : "state=not_applied&error=context_changed")
+      } catch { callback(callbackValue, requestId: requestId, value: AppleMeaningBridge.failure(error)) }
+    }
+  } catch { callback(callbackValue, requestId: requestId, value: AppleMeaningBridge.failure(error)) }
+}
+
+@_cdecl("openmasu_ios_record_meaning")
+public func openmasuIOSRecordMeaning(
+  _ operation: UnsafePointer<CChar>?, _ event: UnsafePointer<CChar>?, _ amount: UnsafePointer<CChar>?,
+  _ window: Int32, _ consent: Bool, _ requestId: Int64, _ callbackValue: OpenMasuCStringCallback?
+) {
+  guard let controller = BridgeState.getMeaningController() else {
+    callback(callbackValue, requestId: requestId, value: "state=not_applied&error=not_initialized"); return
+  }
+  guard let operation, let event else {
+    callback(callbackValue, requestId: requestId, value: "state=not_applied&error=invalid_signal"); return
+  }
+  // Copy caller-owned C strings before entering asynchronous work.
+  let operationValue = String(cString: operation), eventValue = String(cString: event), amountValue = amount.map(String.init(cString:))
+  Task {
+    let result = await AppleMeaningBridge.record(controller: controller, operation: operationValue, event: eventValue,
+      amount: amountValue, window: Int(window), consent: consent)
+    callback(callbackValue, requestId: requestId, value: result)
   }
 }
 

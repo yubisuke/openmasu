@@ -267,6 +267,62 @@ setting; expiry resumes ordinary unlabelled batches under unchanged collection
 rules. HTTP 202 is admission only; follow validation receipts in the administrator
 UI. Use synthetic data exclusively and do not log or publish session tokens.
 
+## Registered conversion meanings
+
+For the opt-in `event_revenue_v1` profile, download an exact version/digest bundle
+from the [conversion-definition dashboard](../../docs/apple-conversion-meaning.md).
+Use one `OpenMasuiOSPlatform` / client per application and storage directory, and
+initialize it once with this API **instead of** `Initialize`. Do not run the
+legacy count controller alongside it. Existing legacy APIs remain available for
+apps not opting into this profile.
+
+```csharp
+var meaning = OpenMasuAppleMeaningConfiguration.FromBundle(bundleJson);
+client.InitializeAppleMeaning(options, meaning, result => {
+    if (result.State != OpenMasuAppleMeaningState.Ready) return;
+    // Use a stable host-owned operation key across retries, never a user/device ID.
+    client.RecordAppleMeaning("local-purchase-operation-1", "purchase", "100",
+        OpenMasuAppleWindow.First, consentGranted, update => {
+            // Updated is a local controller result, NOT verified Apple delivery.
+            Debug.Log($"Conversion state: {update.State}, error: {update.Error}");
+        });
+});
+```
+
+Continue calling `PumpCallbacks()` on the Unity thread. Both initialization and
+update completions use the existing dispatcher; disposal suppresses queued
+meaning callbacks. Wait for `Ready` before recording. It means the configured
+controller is installed, not that enrollment, consent or an Apple update is
+proven. Collection/consent/reset checks still apply when recording. Update results
+expose nullable fine/coarse/lock fields; refusals do not become zero-valued updates.
+Callbacks contain closed error codes, not native error descriptions or event data.
+
+The C# configuration preserves canonical UTF-8 bytes and checks their SHA-256;
+Swift validates the registered version/digest and profile again. There is no
+second C# evaluator or dedupe store. The existing Swift controller owns persistent
+duplicate/conflict handling, window-local locks, withdrawal and reset. Identical
+retries can return the previous local result without calling Apple again. A
+definition cannot be changed while its previous measurement state remains.
+
+Pass exact integer minor units (for example `"100"` at scale 2) or `null` for a
+non-revenue signal. Currency and scale come from the definition, not the call.
+Window `First`/`Second`/`Third` is a host declaration, never an inferred Apple
+window. This profile is install-only with the existing iOS 18+ system updater;
+it does not accept re-engagement targets or conversion tags. Consent must be
+explicit; the collection switch is not a substitute for consent.
+
+The iOS measurement sample includes `SyntheticAppleMeaningSample.cs` and
+`conversion-meaning.synthetic.json`, matching the native/server shared vectors.
+The example declaration applies only during 2026. It is not a production
+configuration; register and embed your own exact bundle. Initialization can use
+the normal SDK transport, so do not run the sample against a live provider as a
+synthetic test. Editor returns `PlatformUnavailable`; Android/custom platforms
+without the optional interface throw `NotSupportedException`.
+
+The bridge and native controller have synthetic tests and Apple compile gates.
+Physical devices, Unity iOS IL2CPP export, App Store submission and real postback
+delivery remain unverified. This source change is not a new published SDK release.
+
 ## Apple conversion updates
 
 On iOS, `OpenMasuClient.RecordAppleConversion` reaches the bundled
