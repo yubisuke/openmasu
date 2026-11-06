@@ -1233,6 +1233,30 @@ def metric_definitions(value: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def validate_metric_definition_series(definition: dict[str, Any]) -> None:
+    if (definition.get("rule_bundle_id") == "metric-outcome-acquisition-cost"
+            or definition.get("definition", {}).get("calculation") == "cost_over_outcome"
+            or re.match(r"^acquisition_d7_(cpa_|payer_cost$)", definition.get("metric_name", ""))):
+        payer = definition.get("definition", {}).get("denominator") == "paying_installations"
+        key, name = definition.get("conversion_event_key"), definition.get("metric_name", "")
+        if not payer and (not isinstance(key, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", key)
+                          or not re.fullmatch(r"acquisition_d7_cpa_[a-z][a-z0-9_]{0,63}", name)):
+            raise ValueError("conversion_event_key_invalid")
+        expected = {
+            "metric_name": "acquisition_d7_payer_cost" if payer else name, "metric_definition_version": "0.4.33",
+            "anchor_event": "install", "aggregation_time_zone": "UTC", "acquisition_basis": "selected_first_party_click",
+            "fraud_policy": "gross", "value_type": "money", "currency": "USD", "amount_scale": 6,
+            "definition": {"calculation": "cost_over_outcome", "numerator": "cost",
+                           "denominator": "paying_installations" if payer else "converted_installations",
+                           "window": {"type": "elapsed", "day": 7}, "cost_basis": "cohort_acquisition_day_current_snapshot"},
+            "grouping_dimensions": ["campaign_id", "network", "country", "cohort_date", "attribution_status"],
+            "cost_selection_policy": "reject_overlapping_grains", "rule_bundle_id": "metric-outcome-acquisition-cost",
+            "rule_bundle_version": "0.4.33", "rule_bundle_hash": "11d4ee5f197e03b9d625515b13691109d770231bce83fe9b6c9b12eee3997cee",
+        }
+        if not payer:
+            expected["conversion_event_key"] = key
+        if definition != expected:
+            raise ValueError(f"metric_definition_series_mismatch:{name}")
+        return
     payer_rows = {
         "cohort_purchase_count_d7": ("purchase_count", "purchases", "count", None),
         "cohort_paying_installations_d7": ("paying_installations", "paying_installations", "count", None),
@@ -2241,14 +2265,15 @@ def metric_runs(
             if metric_name not in definitions_by_name:
                 raise ValueError(f"unknown metric definition: {metric_name}")
             definition = definitions_by_name[metric_name]
-            if (definition.get("rule_bundle_id") in {"metric-basis-acquisition-kpis", "metric-horizon-acquisition-kpis"}
+            if (definition.get("rule_bundle_id") in {"metric-basis-acquisition-kpis", "metric-horizon-acquisition-kpis", "metric-outcome-acquisition-cost"}
                     and (not evaluation.get("grouping", {}).get("cohort_date")
                          or set(evaluation.get("grouping", {})) - set(definition.get("grouping_dimensions", [])))):
                 raise ValueError("acquisition_kpi_grouping_invalid")
-            cost_calculation = definition["definition"]["calculation"] in ("cost_sum", "cost_over_cohort")
+            cost_calculation = definition["definition"]["calculation"] in ("cost_sum", "cost_over_cohort", "cost_over_outcome")
+            outcome_cost_profile = definition.get("rule_bundle_id") == "metric-outcome-acquisition-cost"
             payer_profile = definition.get("rule_bundle_id") == "metric-verified-payers"
             uses_fx = cost_calculation or definition["definition"]["calculation"] in ("revenue_sum", "revenue_over_cost", "revenue_over_cohort", "revenue_over_paying_installations")
-            if ((policy.get("rate_selection") or payer_profile) and definition["value_type"] == "money"
+            if ((policy.get("rate_selection") or payer_profile or outcome_cost_profile) and definition["value_type"] == "money"
                     and (definition["currency"] != policy["target_currency"] or definition["amount_scale"] != policy["target_scale"])):
                 raise ValueError("dated_fx_target_mismatch")
             missing_fx = False
@@ -2378,7 +2403,7 @@ def metric_runs(
                 install["server"]["tenant_id"] == item["server"]["tenant_id"]
                 and install["server"]["app_id"] == item["server"]["app_id"]
                 and install["record"]["payload"]["installation_id"] == item["record"]["payload"].get("installation_id")
-                and eligible_revenue(definition, install["record"], item["record"]) for install in eligible_installs)] if payer_profile else []
+                and eligible_revenue(definition, install["record"], item["record"]) for install in eligible_installs)] if payer_profile or outcome_cost_profile else []
             if not definition.get("engagement_credit_policy") and definition["definition"]["numerator"] in {"purchase_net_revenue", "total_net_revenue"}:
                 for item in (payer_purchases if payer_profile else purchases):
                     if definition.get("import_provider") and item["record"]["producer"] != f"import:{definition['import_provider']}":
@@ -2430,8 +2455,9 @@ def metric_runs(
             calculation = definition["definition"]["calculation"]
             amount: int | None = None
             undefined_reason: str | None = None
+            outcome_cost_operands = None
             horizon_close = None
-            if definition.get("rule_bundle_id") == "metric-horizon-acquisition-kpis":
+            if definition.get("rule_bundle_id") == "metric-horizon-acquisition-kpis" or outcome_cost_profile:
                 cohort_date = evaluation["grouping"]["cohort_date"]
                 if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", cohort_date):
                     raise ValueError("acquisition_kpi_cohort_date_required")
@@ -2485,7 +2511,29 @@ def metric_runs(
                     if cost["currency"] != policy["target_currency"]:
                         raise ValueError(f"cost currency mismatch: {cost['cost_record_id']}")
                     cost_value += scale_money(cost, int(policy["target_scale"]))
-                if overlapping_costs:
+                if outcome_cost_profile:
+                    events = payer_purchases if definition["definition"]["denominator"] == "paying_installations" else [
+                        item for item in visible if item["record"]["event_name"] == "custom_event"
+                        and item["record"]["payload"]["event_key"] == definition["conversion_event_key"]
+                        and any(install["server"]["tenant_id"] == item["server"]["tenant_id"]
+                                and install["server"]["app_id"] == item["server"]["app_id"]
+                                and install["record"]["payload"]["installation_id"] == item["record"]["payload"]["installation_id"]
+                                and eligible_revenue(definition, install["record"], item["record"]) for install in eligible_installs)]
+                    count = len({(item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["payload"]["installation_id"]) for item in events})
+                    outcome_cost_operands = {"outcome_installation_count": str(count)}
+                    if not overlapping_costs and not missing_fx and current_costs:
+                        outcome_cost_operands["cost_unscaled"] = str(cost_value)
+                    if overlapping_costs:
+                        undefined_reason = "overlapping_cost_grains"
+                    elif cohort_size == 0:
+                        undefined_reason = "empty_cohort"
+                    elif not current_costs:
+                        undefined_reason = "no_attributed_cost"
+                    elif count == 0:
+                        undefined_reason = "no_paying_installations" if definition["definition"]["denominator"] == "paying_installations" else "no_converted_installations"
+                    else:
+                        amount = round_half_even(cost_value, count)
+                elif overlapping_costs:
                     undefined_reason = "overlapping_cost_grains"
                 elif calculation == "cost_over_cohort" and cohort_size == 0:
                     undefined_reason = "empty_cohort"
@@ -2675,6 +2723,8 @@ def metric_runs(
             }
             if definition.get("fraud_policy"):
                 run["fraud_policy"] = definition["fraud_policy"]
+            if outcome_cost_operands is not None:
+                run["outcome_cost_operands"] = outcome_cost_operands
             if amount is None:
                 run |= {"value_state": "undefined", "undefined_reason": undefined_reason}
             else:

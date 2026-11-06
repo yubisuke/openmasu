@@ -41,7 +41,8 @@ export type PreparedMetricCalculation = {
 };
 export type MetricValue = ({ value_state: "present"; value_unscaled: string } | {
   value_state: "undefined"; undefined_reason: NonNullable<MetricRun["undefined_reason"]>;
-}) & { operands?: RoasOperands; revenueAggregates?: RoasOperands; totalNetOperands?: TotalNetRoasOperands };
+}) & { operands?: RoasOperands; revenueAggregates?: RoasOperands; totalNetOperands?: TotalNetRoasOperands;
+  outcomeCostOperands?: MetricRun["outcome_cost_operands"] };
 
 export type SnapshotRecord = {
   tenant_id: string;

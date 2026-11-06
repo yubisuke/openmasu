@@ -29,6 +29,7 @@ export const metricColumns = [
   "attribution_update_state",
   "fx_conversion_snapshot", "acquisition_kpi_set_key",
   "activity_unit", "activity_date",
+  "outcome_cost_operands",
 ] as const;
 
 export const differenceColumns = [

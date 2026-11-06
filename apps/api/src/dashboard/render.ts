@@ -193,7 +193,8 @@ function measurementHealthSection(view: DashboardView): string {
 function metricTable(caption: string, rows: DashboardView["rows"], appId?: string): string {
   if (rows.length === 0) return "";
   return `<table><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">Metric</th><th scope="col">Grouping</th><th scope="col">Value</th><th scope="col">Freshness</th><th scope="col">Computed at</th><th scope="col">Rule bundle</th><th scope="col">Reproducibility</th></tr></thead><tbody>${rows.map((row) => {
-    const details = appId ? `<small><a href="/dashboard/apps/${encodeURIComponent(appId)}/metrics/${encodeURIComponent(row.metric_run_id)}/explanation">Saved run details</a></small>` : "";
+    const details = (appId ? `<small><a href="/dashboard/apps/${encodeURIComponent(appId)}/metrics/${encodeURIComponent(row.metric_run_id)}/explanation">Saved run details</a></small>` : "")
+      + (row.value_state !== "unavailable" && row.outcome_cost_operands ? `<small>Saved operands: cost ${escapeHtml(row.outcome_cost_operands.cost_unscaled ?? "unknown")} (USD scale 6) / ${escapeHtml(row.outcome_cost_operands.outcome_installation_count)} outcome installations (not people).</small>` : "");
     const value = row.value_state === "unavailable"
       ? `<span class="undefined-value">${escapeHtml(metricValueLabel(row))}</span>`
       : row.value_state === "undefined"

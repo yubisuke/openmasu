@@ -11,7 +11,7 @@ Implementation and synthetic verification are not live operational qualification
 | Published prerelease | `v0.3.0-rc.3` at `2d689dc`; eight verified SDK assets and exact-commit full CI |
 | Synthetic SDK onboarding | Publication receipt records the downloaded Android SDK/backend journey separately from emulator and provider-shim evidence |
 | Latest stable source release | `v0.2.0`; later features belong to newer source, not this tag |
-| Current source | Contract patch ledger through v0.4.32; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 79 fixtures, 1027 golden artifacts |
+| Current source | Contract patch ledger through v0.4.33; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 80 fixtures, 1040 golden artifacts |
 
 `v0.3.0-rc.3` is the current published source and SDK release, marked as a
 prerelease. Its [release page](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.3)
@@ -46,6 +46,7 @@ qualification is stated. No row establishes production readiness.
 | Apple aggregate measurement | Signed synthetic receivers, separate bounded observations, registered event/revenue meaning profiles and window-local SDK state | Postbacks are not unique installs; selected-schema decoding is unverified, not actual revenue or a verified postback binding; live delivery is unverified |
 | Acquisition and money | Selected native/platform/imported profiles; safe cost grain; purchase/refund/reversal, ROAS/LTV, saved FX, native D0/D7/D30 and basis-separated D7 same-set KPIs | New D0/D30 sets are native/UTC/USD only, with all roles undefined until complete-window maturity; imported D7 sets require an exact provider and fixed grouping, without target discovery; no inferred cost ownership/allocation or live FX service |
 | Retention and outcomes | Opt-in D3/D14/D30 retained-installation horizons and multiple custom D7 outcome keys | Incomplete windows are not zero; native/platform/imported populations stay separate |
+| Cost per outcome | Native UTC D7 acquisition cost per exact-key converter or verified paying installation; saved cost/count operands, CSV/HTML and bounded late/cost correction lineage | Gross policy, USD scale 6 and nine-day daily-cohort maturity only; not per-person CPA, platform/imported CPA or live completeness |
 | Calendar metrics | Explicit UTC, Tokyo and New York calendar definitions coexist with historical elapsed definitions | Other zones are not qualified; time-zone-data upgrades require boundary requalification |
 | Daily activity | Separate UTC session-start/custom-event counts and distinct active installations; opt-in exact-key custom frequency/reach, saved schedules, corrections and CSV | Recorded gross activity only; installations are not people, daily uniques are not period uniques, and acquisition dimensions are not inferred |
 | Ongoing calculation | Durable daily schedules, bounded target discovery, Google/Apple cost refresh, saved replay and explicit/opt-in automatic corrections | Not every profile supports discovery or automatic correction; no implicit all-history scan; live cost access and billing agreement remain unverified |

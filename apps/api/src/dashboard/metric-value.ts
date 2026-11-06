@@ -1,5 +1,5 @@
 import type { MetricReportRow } from "../reporting.js";
-import { isPayerMetricDefinition } from "@openmasu/contracts/definitions";
+import { isPayerMetricDefinition, isOutcomeCostMetricDefinition } from "@openmasu/contracts/definitions";
 
 /** Decimal placement only: no floating-point conversion and no display rounding. */
 export function exactDecimal(integer: string, scale: number): string {
@@ -20,7 +20,11 @@ export function metricValueLabel(row: MetricReportRow): string {
   if (row.value_unscaled === undefined) return "Value unavailable";
   const payer = isPayerMetricDefinition(row.comparison_context?.definition);
   if (row.value_type === "money" && row.amount_scale !== null && row.currency) {
-    return `${row.currency} ${exactDecimal(row.value_unscaled, row.amount_scale)}${payer ? " per paying installation (not person)" : ""}`;
+    const outcome = isOutcomeCostMetricDefinition(row.comparison_context?.definition);
+    const unit = outcome ? row.comparison_context!.definition.definition.denominator === "paying_installations"
+      ? " per verified paying installation (not person)" : " per converted installation (not person)"
+      : payer ? " per paying installation (not person)" : "";
+    return `${row.currency} ${exactDecimal(row.value_unscaled, row.amount_scale)}${unit}`;
   }
   if (row.value_type === "ratio" && row.ratio_scale !== null) {
     return `${exactDecimal(row.value_unscaled, row.ratio_scale)} ${payer ? "paying installations / cohort installations" : "×"}`;

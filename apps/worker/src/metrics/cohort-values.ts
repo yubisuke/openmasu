@@ -1,5 +1,5 @@
 import type { RoasOperands, TotalNetRoasOperands } from "@openmasu/runtime";
-import { standardRetentionClosesAt, horizonAcquisitionKpiClosesAt } from "@openmasu/contracts/definitions";
+import { standardRetentionClosesAt, horizonAcquisitionKpiClosesAt, outcomeCostClosesAt, payerMetricDefinitions } from "@openmasu/contracts/definitions";
 import { metricAcquisitionSql, metricAcquisitionJoinSql } from "./selected-acquisition.js";
 import { engagementMetricValue } from "./engagement.js";
 import { calendarActivityValue, customConversionValue, eventCountValue } from "./event-values.js";
@@ -390,10 +390,37 @@ export async function metricValue(
   selectedCosts?: CostSelection,
 ): Promise<MetricValue> {
   const calculation = definition.definition.calculation;
-  const horizonClose = horizonAcquisitionKpiClosesAt(definition, grouping?.cohort_date);
+  const horizonClose = outcomeCostClosesAt(definition, grouping?.cohort_date)
+    ?? horizonAcquisitionKpiClosesAt(definition, grouping?.cohort_date);
   if (horizonClose && Date.parse(watermark) < Date.parse(horizonClose)) return { value_state: "undefined", undefined_reason: "observation_window_not_elapsed" };
   const closesAt = standardRetentionClosesAt(definition, grouping?.cohort_date);
   if (closesAt && watermark < closesAt) return { value_state: "undefined", undefined_reason: "observation_window_not_elapsed" };
+  if (calculation === "cost_over_outcome") {
+    // Reuse the same SQL cohort, cost selection and qualified purchase projections.
+    // Internal operations are not independently persisted metric definitions.
+    const population = await metricValue(client, scope, watermark, grouping, { ...definition,
+      definition: { ...definition.definition, calculation: "cohort_size", numerator: "cohort_size" } }, fxPolicy, privacyState, selectedCosts);
+    const denominator = definition.definition.denominator === "paying_installations"
+      ? await purchaseNetRevenueValue(client, scope, watermark, grouping, payerMetricDefinitions()[1], fxPolicy, privacyState)
+      : await customConversionValue(client, scope, watermark, grouping, { ...definition,
+        definition: { ...definition.definition, calculation: "converted_installations", numerator: "converted_installations" } }, privacyState);
+    const cost = await metricValue(client, scope, watermark, grouping, { ...definition,
+      definition: { ...definition.definition, calculation: "cost_sum" } }, fxPolicy, privacyState, selectedCosts);
+    const count = denominator.value_state === "present" ? denominator.value_unscaled : "0";
+    const outcomeCostOperands = { outcome_installation_count: count,
+      ...(cost.value_state === "present" ? { cost_unscaled: cost.value_unscaled } : {}) };
+    if (cost.value_state === "undefined" && ["overlapping_cost_grains", "missing_fx_rate"].includes(cost.undefined_reason)) {
+      return { ...cost, outcomeCostOperands };
+    }
+    if (population.value_state === "present" && population.value_unscaled === "0") {
+      return { value_state: "undefined", undefined_reason: "empty_cohort", outcomeCostOperands };
+    }
+    if (cost.value_state === "undefined") return { ...cost, outcomeCostOperands };
+    if (BigInt(count) === 0n) return { value_state: "undefined", undefined_reason:
+      definition.definition.denominator === "paying_installations" ? "no_paying_installations" : "no_converted_installations", outcomeCostOperands };
+    const result = await client.query<{ value: string }>("SELECT ledger.half_even_div($1::numeric,$2::numeric)::text AS value", [cost.value_unscaled, count]);
+    return { value_state: "present", value_unscaled: result.rows[0].value, outcomeCostOperands };
+  }
   if (definition.engagement_credit_policy) {
     return engagementMetricValue(client, scope, watermark, grouping, definition, fxPolicy, privacyState);
   }

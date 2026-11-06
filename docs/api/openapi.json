@@ -550,7 +550,8 @@
                   "fx_conversion_snapshot",
                   "acquisition_kpi_set_key",
                   "activity_unit",
-                  "activity_date"
+                  "activity_date",
+                  "outcome_cost_operands"
                 ]
               }
             }
@@ -1900,7 +1901,8 @@
                   "missing_fx_rate",
                   "observation_window_not_elapsed",
                   "no_paying_installations",
-                  "insufficient_activity_history"
+                  "insufficient_activity_history",
+                  "no_converted_installations"
                 ]
               },
               {
@@ -2151,6 +2153,23 @@
                 "type": "null"
               }
             ]
+          },
+          "outcome_cost_operands": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "outcome_installation_count"
+            ],
+            "properties": {
+              "outcome_installation_count": {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              "cost_unscaled": {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              }
+            }
           }
         },
         "additionalProperties": false,
@@ -2204,7 +2223,8 @@
                     "missing_fx_rate",
                     "observation_window_not_elapsed",
                     "no_paying_installations",
-                    "insufficient_activity_history"
+                    "insufficient_activity_history",
+                    "no_converted_installations"
                   ]
                 }
               }

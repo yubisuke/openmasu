@@ -19,7 +19,7 @@
       "additionalProperties": false,
       "required": ["calculation", "window", "numerator"],
       "properties": {
-        "calculation": { "enum": ["revenue_sum", "revenue_over_cost", "active_installations_over_cohort", "revenue_over_cohort", "cohort_size", "event_count", "converted_installations", "converted_installations_over_cohort", "cost_sum", "cost_over_cohort", "active_installations_count", "purchase_count", "paying_installations", "paying_installations_over_cohort", "revenue_over_paying_installations"] },
+        "calculation": { "enum": ["revenue_sum", "revenue_over_cost", "active_installations_over_cohort", "revenue_over_cohort", "cohort_size", "event_count", "converted_installations", "converted_installations_over_cohort", "cost_sum", "cost_over_cohort", "active_installations_count", "purchase_count", "paying_installations", "paying_installations_over_cohort", "revenue_over_paying_installations", "cost_over_outcome"] },
         "window": {
           "type": "object",
           "additionalProperties": false,
@@ -30,7 +30,7 @@
           }
         },
         "numerator": { "enum": ["revenue", "purchase_net_revenue", "total_net_revenue", "active_installations", "cohort_size", "events", "converted_installations", "cost", "purchases", "paying_installations"] },
-        "denominator": { "enum": ["cost", "cohort_size", "paying_installations"] },
+        "denominator": { "enum": ["cost", "cohort_size", "paying_installations", "converted_installations"] },
         "cost_basis": { "const": "cohort_acquisition_day_current_snapshot" }
       }
     },
@@ -63,6 +63,43 @@
     "rule_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
   },
   "$defs": {
+    "outcomeCost": {
+      "type": "object", "additionalProperties": true,
+      "required": ["currency", "amount_scale", "grouping_dimensions", "acquisition_basis", "fraud_policy", "cost_selection_policy"],
+      "properties": {
+        "metric_definition_version": { "const": "0.4.33" },
+        "rule_bundle_id": { "const": "metric-outcome-acquisition-cost" },
+        "rule_bundle_version": { "const": "0.4.33" },
+        "rule_bundle_hash": { "const": "11d4ee5f197e03b9d625515b13691109d770231bce83fe9b6c9b12eee3997cee" },
+        "anchor_event": { "const": "install" }, "aggregation_time_zone": { "const": "UTC" },
+        "acquisition_basis": { "const": "selected_first_party_click" }, "fraud_policy": { "const": "gross" },
+        "value_type": { "const": "money" }, "currency": { "const": "USD" }, "amount_scale": { "const": 6 },
+        "cost_selection_policy": { "const": "reject_overlapping_grains" },
+        "grouping_dimensions": { "const": ["campaign_id", "network", "country", "cohort_date", "attribution_status"] },
+        "definition": {
+          "type": "object", "additionalProperties": true, "required": ["denominator", "cost_basis"],
+          "properties": {
+            "calculation": { "const": "cost_over_outcome" }, "numerator": { "const": "cost" }, "denominator": {},
+            "window": { "const": { "type": "elapsed", "day": 7 } },
+            "cost_basis": { "const": "cohort_acquisition_day_current_snapshot" }
+          }
+        },
+        "activity_events": false, "event_names": false, "ratio_scale": false, "import_provider": false,
+        "calendar_cohort_policy": false, "retention_maturity_policy": false, "acquisition_dimension_policy": false,
+        "engagement_credit_policy": false, "engagement_inactivity_days": false, "refund_reversal_policy": false
+      },
+      "oneOf": [
+        { "properties": {
+          "metric_name": { "type": "string", "pattern": "^acquisition_d7_cpa_[a-z][a-z0-9_]{0,63}$" },
+          "conversion_event_key": {},
+          "definition": { "type": "object", "additionalProperties": true, "properties": { "denominator": { "const": "converted_installations" } } }
+        }, "required": ["conversion_event_key"] },
+        { "properties": {
+          "metric_name": { "const": "acquisition_d7_payer_cost" }, "conversion_event_key": false,
+          "definition": { "type": "object", "additionalProperties": true, "properties": { "denominator": { "const": "paying_installations" } } }
+        } }
+      ]
+    },
     "engagementPolicy": {
       "type": "object", "additionalProperties": true,
       "required": ["engagement_credit_policy", "engagement_inactivity_days", "grouping_dimensions"],
@@ -660,6 +697,13 @@
       ]
     }
   },
+  "allOf": [{ "if": { "anyOf": [
+    { "properties": { "rule_bundle_id": { "const": "metric-outcome-acquisition-cost" } }, "required": ["rule_bundle_id"] },
+    { "properties": { "metric_name": { "type": "string", "pattern": "^acquisition_d7_(cpa_|payer_cost$)" } }, "required": ["metric_name"] },
+    { "properties": { "definition": { "type": "object", "additionalProperties": true, "properties": { "calculation": { "const": "cost_over_outcome" } }, "required": ["calculation"] } }, "required": ["definition"] }
+  ] },
+  "then": { "$ref": "#/$defs/outcomeCost" },
+  "else": {
   "allOf": [{
     "if": { "anyOf": [
       { "properties": { "engagement_inactivity_days": {} }, "required": ["engagement_inactivity_days"] },
@@ -2809,6 +2853,7 @@
     }
     ] }
   }]
+  } }]
   } }]
   } }]
   } }]

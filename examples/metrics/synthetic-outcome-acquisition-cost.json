@@ -1,0 +1,114 @@
+{
+  "fx_policy": {
+    "policy_version": "0.4.22",
+    "rate_selection": "utc_event_date_and_cost_date",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "1",
+        "rate_scale": 0,
+        "effective_date": "2026-08-06",
+        "as_of": "2026-08-12T00:00:00.000Z",
+        "source": "synthetic-identity-snapshot-70"
+      },
+      {
+        "currency": "USD",
+        "rate_unscaled": "1",
+        "rate_scale": 0,
+        "effective_date": "2026-08-07",
+        "as_of": "2026-08-12T00:00:00.000Z",
+        "source": "synthetic-identity-snapshot-70"
+      }
+    ]
+  },
+  "metric_definitions": [
+    {
+      "metric_name": "acquisition_d7_cpa_synthetic_outcome",
+      "metric_definition_version": "0.4.33",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "acquisition_basis": "selected_first_party_click",
+      "fraud_policy": "gross",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "conversion_event_key": "synthetic_outcome",
+      "definition": {
+        "calculation": "cost_over_outcome",
+        "numerator": "cost",
+        "denominator": "converted_installations",
+        "window": {
+          "type": "elapsed",
+          "day": 7
+        },
+        "cost_basis": "cohort_acquisition_day_current_snapshot"
+      },
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "cost_selection_policy": "reject_overlapping_grains",
+      "rule_bundle_id": "metric-outcome-acquisition-cost",
+      "rule_bundle_version": "0.4.33",
+      "rule_bundle_hash": "11d4ee5f197e03b9d625515b13691109d770231bce83fe9b6c9b12eee3997cee"
+    },
+    {
+      "metric_name": "acquisition_d7_payer_cost",
+      "metric_definition_version": "0.4.33",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "acquisition_basis": "selected_first_party_click",
+      "fraud_policy": "gross",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "cost_over_outcome",
+        "numerator": "cost",
+        "denominator": "paying_installations",
+        "window": {
+          "type": "elapsed",
+          "day": 7
+        },
+        "cost_basis": "cohort_acquisition_day_current_snapshot"
+      },
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "cost_selection_policy": "reject_overlapping_grains",
+      "rule_bundle_id": "metric-outcome-acquisition-cost",
+      "rule_bundle_version": "0.4.33",
+      "rule_bundle_hash": "11d4ee5f197e03b9d625515b13691109d770231bce83fe9b6c9b12eee3997cee"
+    }
+  ],
+  "metric_evaluations": [
+    {
+      "metric_run_id_prefix": "outcome80-a",
+      "metric_names": [
+        "acquisition_d7_cpa_synthetic_outcome",
+        "acquisition_d7_payer_cost"
+      ],
+      "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+      "computed_at": "2026-08-16T00:00:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "grouping": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-a",
+        "network": "synthetic-network"
+      }
+    }
+  ]
+}

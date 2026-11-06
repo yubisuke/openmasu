@@ -1,0 +1,881 @@
+{
+  "contract_version": "0.4.0",
+  "fx_policy": {
+    "policy_version": "0.4.22",
+    "rate_selection": "utc_event_date_and_cost_date",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "1",
+        "rate_scale": 0,
+        "effective_date": "2026-08-06",
+        "as_of": "2026-08-12T00:00:00.000Z",
+        "source": "synthetic-identity-snapshot-70"
+      },
+      {
+        "currency": "USD",
+        "rate_unscaled": "1",
+        "rate_scale": 0,
+        "effective_date": "2026-08-07",
+        "as_of": "2026-08-12T00:00:00.000Z",
+        "source": "synthetic-identity-snapshot-70"
+      }
+    ]
+  },
+  "metric_evaluations": [
+    {
+      "metric_run_id_prefix": "outcome80-a",
+      "metric_names": [
+        "acquisition_d7_cpa_synthetic_outcome",
+        "acquisition_d7_payer_cost"
+      ],
+      "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+      "computed_at": "2026-08-16T00:00:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "grouping": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-a",
+        "network": "synthetic-network"
+      }
+    },
+    {
+      "metric_run_id_prefix": "outcome80-b",
+      "metric_names": [
+        "acquisition_d7_cpa_synthetic_outcome",
+        "acquisition_d7_payer_cost"
+      ],
+      "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+      "computed_at": "2026-08-16T00:00:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "grouping": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-b",
+        "network": "synthetic-network"
+      }
+    },
+    {
+      "metric_run_id_prefix": "outcome80-organic",
+      "metric_names": [
+        "acquisition_d7_cpa_synthetic_outcome",
+        "acquisition_d7_payer_cost"
+      ],
+      "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+      "computed_at": "2026-08-16T00:00:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "grouping": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "organic"
+      }
+    },
+    {
+      "metric_run_id_prefix": "outcome80-cost-only",
+      "metric_names": [
+        "acquisition_d7_cpa_synthetic_outcome",
+        "acquisition_d7_payer_cost"
+      ],
+      "input_received_at_watermark": "2026-08-16T00:00:00.000Z",
+      "computed_at": "2026-08-16T00:00:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "grouping": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-cost-only",
+        "network": "synthetic-network"
+      }
+    },
+    {
+      "metric_run_id_prefix": "outcome80-immature",
+      "metric_names": [
+        "acquisition_d7_cpa_synthetic_outcome",
+        "acquisition_d7_payer_cost"
+      ],
+      "input_received_at_watermark": "2026-08-14T00:00:00.000Z",
+      "computed_at": "2026-08-16T00:00:00.000Z",
+      "data_freshness": "complete",
+      "privacy_state": "before",
+      "grouping": {
+        "country": "US",
+        "cohort_date": "2026-08-06",
+        "attribution_status": "non_organic",
+        "campaign_id": "kpi70-a",
+        "network": "synthetic-network"
+      }
+    }
+  ],
+  "reconciliation_inputs": [],
+  "privacy_requests": [],
+  "metric_definitions": [
+    {
+      "metric_name": "acquisition_d7_cpa_synthetic_outcome",
+      "metric_definition_version": "0.4.33",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "acquisition_basis": "selected_first_party_click",
+      "fraud_policy": "gross",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "conversion_event_key": "synthetic_outcome",
+      "definition": {
+        "calculation": "cost_over_outcome",
+        "numerator": "cost",
+        "denominator": "converted_installations",
+        "window": {
+          "type": "elapsed",
+          "day": 7
+        },
+        "cost_basis": "cohort_acquisition_day_current_snapshot"
+      },
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "cost_selection_policy": "reject_overlapping_grains",
+      "rule_bundle_id": "metric-outcome-acquisition-cost",
+      "rule_bundle_version": "0.4.33",
+      "rule_bundle_hash": "11d4ee5f197e03b9d625515b13691109d770231bce83fe9b6c9b12eee3997cee"
+    },
+    {
+      "metric_name": "acquisition_d7_payer_cost",
+      "metric_definition_version": "0.4.33",
+      "anchor_event": "install",
+      "aggregation_time_zone": "UTC",
+      "acquisition_basis": "selected_first_party_click",
+      "fraud_policy": "gross",
+      "value_type": "money",
+      "currency": "USD",
+      "amount_scale": 6,
+      "definition": {
+        "calculation": "cost_over_outcome",
+        "numerator": "cost",
+        "denominator": "paying_installations",
+        "window": {
+          "type": "elapsed",
+          "day": 7
+        },
+        "cost_basis": "cohort_acquisition_day_current_snapshot"
+      },
+      "grouping_dimensions": [
+        "campaign_id",
+        "network",
+        "country",
+        "cohort_date",
+        "attribution_status"
+      ],
+      "cost_selection_policy": "reject_overlapping_grains",
+      "rule_bundle_id": "metric-outcome-acquisition-cost",
+      "rule_bundle_version": "0.4.33",
+      "rule_bundle_hash": "11d4ee5f197e03b9d625515b13691109d770231bce83fe9b6c9b12eee3997cee"
+    }
+  ],
+  "cost_records": [
+    {
+      "contract_version": "0.4.0",
+      "cost_record_id": "kpi70-cost-a",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "campaign_id": "kpi70-a",
+      "network": "synthetic-network",
+      "country": "US",
+      "date": "2026-08-06",
+      "amount_unscaled": "10",
+      "amount_scale": 0,
+      "currency": "USD",
+      "source": "imported_reported",
+      "as_of": "2026-08-12T00:00:00.000Z",
+      "dimension_digest": "ac2952ac3e9a05839cb7cedd20f3dab477c5734d45dd72bf64a39480d597b435",
+      "report_snapshot_digest": "91b9eb4394927701e265b75c0b6a94f06eb16fb6f50e97af9aa7accf949760a8"
+    },
+    {
+      "contract_version": "0.4.0",
+      "cost_record_id": "kpi70-cost-b",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "campaign_id": "kpi70-b",
+      "network": "synthetic-network",
+      "country": "US",
+      "date": "2026-08-06",
+      "amount_unscaled": "4",
+      "amount_scale": 0,
+      "currency": "USD",
+      "source": "imported_reported",
+      "as_of": "2026-08-12T00:00:00.000Z",
+      "dimension_digest": "4968a8d86623d4cab1577716f0ede795b86f34e07ba3c97d4d4c4158bafeca88",
+      "report_snapshot_digest": "391db2517d3b0fb5fad1ee55bfb4fb5e363eda9c2424dfcb5fc6b9f550e3098c"
+    },
+    {
+      "contract_version": "0.4.0",
+      "cost_record_id": "kpi70-cost-cost-only",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "campaign_id": "kpi70-cost-only",
+      "network": "synthetic-network",
+      "country": "US",
+      "date": "2026-08-06",
+      "amount_unscaled": "2",
+      "amount_scale": 0,
+      "currency": "USD",
+      "source": "imported_reported",
+      "as_of": "2026-08-12T00:00:00.000Z",
+      "dimension_digest": "38421b660fbc66019e34e77268a8575f951d3fd5cfe94e1db6cab27daa08745c",
+      "report_snapshot_digest": "153baa4d9b6ec625c2d58fed8d2f5ef0e75eedd682e9ef760ed7cb4f910de494"
+    }
+  ],
+  "batches": [
+    {
+      "batch_id": "outcome80-base",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-12T00:00:00.000Z",
+        "policy_digest": "policy-v0.1",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "analytics",
+            "consent_required": false,
+            "policy_version": "consent-v0.1"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "kpi70-click-a",
+          "delivery_id": "delivery:kpi70-click-a",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "redirector",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:kpi70-click-a",
+          "event_name": "click",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-05T00:00:00.000Z",
+          "occurred_at_source": "server",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 1,
+          "payload": {
+            "click_id": "click-kpi70a_0000000000000000",
+            "tracking_link_id": "kpi70-link-a",
+            "campaign_id": "kpi70-a",
+            "redirector_click_at": "2026-08-05T00:00:00.000Z",
+            "redirector_time_status": "available",
+            "network": "synthetic-network"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "kpi70-install-a-0",
+          "delivery_id": "delivery:kpi70-install-a-0",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:kpi70-install-a-0",
+          "event_name": "install",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-06T00:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 2,
+          "payload": {
+            "installation_id": "installation:kpi70-install-a-0",
+            "install_type": "first_install",
+            "referrer_status": "available",
+            "click_id": "click-kpi70a_0000000000000000",
+            "install_begin_at_server_status": "available",
+            "install_begin_at_server": "2026-08-06T00:00:00.000Z",
+            "protected_referrer_evidence_ref": "protected:referrer:kpi70-install-a-0",
+            "country": "US"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "kpi70-install-a-1",
+          "delivery_id": "delivery:kpi70-install-a-1",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:kpi70-install-a-1",
+          "event_name": "install",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-06T01:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 3,
+          "payload": {
+            "installation_id": "installation:kpi70-install-a-1",
+            "install_type": "first_install",
+            "referrer_status": "available",
+            "click_id": "click-kpi70a_0000000000000000",
+            "install_begin_at_server_status": "available",
+            "install_begin_at_server": "2026-08-06T01:00:00.000Z",
+            "protected_referrer_evidence_ref": "protected:referrer:kpi70-install-a-1",
+            "country": "US"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "kpi70-install-a-2",
+          "delivery_id": "delivery:kpi70-install-a-2",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:kpi70-install-a-2",
+          "event_name": "install",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-06T02:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 4,
+          "payload": {
+            "installation_id": "installation:kpi70-install-a-2",
+            "install_type": "first_install",
+            "referrer_status": "available",
+            "click_id": "click-kpi70a_0000000000000000",
+            "install_begin_at_server_status": "available",
+            "install_begin_at_server": "2026-08-06T02:00:00.000Z",
+            "protected_referrer_evidence_ref": "protected:referrer:kpi70-install-a-2",
+            "country": "US"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "kpi70-ad-a",
+          "delivery_id": "delivery:kpi70-ad-a",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:kpi70-ad-a",
+          "event_name": "ad_revenue",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-06T12:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 5,
+          "payload": {
+            "subject_scope": "installation_level",
+            "installation_id": "installation:kpi70-install-a-0",
+            "ad_network": "synthetic-ad-network",
+            "revenue_source": "client_estimated",
+            "amount_unscaled": "6",
+            "amount_scale": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "kpi70-purchase-a",
+          "delivery_id": "delivery:kpi70-purchase-a",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:kpi70-purchase-a",
+          "event_name": "purchase",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-06T13:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 6,
+          "payload": {
+            "event_name": "purchase",
+            "installation_id": "installation:kpi70-install-a-0",
+            "transaction_id": "kpi70-purchase-a",
+            "amount_unscaled": "8",
+            "amount_scale": 0,
+            "currency": "USD",
+            "financial_status": "settled"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "kpi70-refund-a",
+          "delivery_id": "delivery:kpi70-refund-a",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:kpi70-refund-a",
+          "event_name": "refund",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-07T12:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 7,
+          "payload": {
+            "event_name": "refund",
+            "installation_id": "installation:kpi70-install-a-0",
+            "transaction_id": "kpi70-refund-a",
+            "original_transaction_id": "kpi70-purchase-a",
+            "correction_target_record_id": "kpi70-purchase-a",
+            "amount_unscaled": "2",
+            "amount_scale": 0,
+            "currency": "USD",
+            "financial_status": "settled"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "kpi70-click-b",
+          "delivery_id": "delivery:kpi70-click-b",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "redirector",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:kpi70-click-b",
+          "event_name": "click",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-05T00:00:00.000Z",
+          "occurred_at_source": "server",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 8,
+          "payload": {
+            "click_id": "click-kpi70b_0000000000000000",
+            "tracking_link_id": "kpi70-link-b",
+            "campaign_id": "kpi70-b",
+            "redirector_click_at": "2026-08-05T00:00:00.000Z",
+            "redirector_time_status": "available",
+            "network": "synthetic-network"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "kpi70-install-b-0",
+          "delivery_id": "delivery:kpi70-install-b-0",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:kpi70-install-b-0",
+          "event_name": "install",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-06T03:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 9,
+          "payload": {
+            "installation_id": "installation:kpi70-install-b-0",
+            "install_type": "first_install",
+            "referrer_status": "available",
+            "click_id": "click-kpi70b_0000000000000000",
+            "install_begin_at_server_status": "available",
+            "install_begin_at_server": "2026-08-06T03:00:00.000Z",
+            "protected_referrer_evidence_ref": "protected:referrer:kpi70-install-b-0",
+            "country": "US"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "kpi70-install-b-1",
+          "delivery_id": "delivery:kpi70-install-b-1",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:kpi70-install-b-1",
+          "event_name": "install",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-06T04:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 10,
+          "payload": {
+            "installation_id": "installation:kpi70-install-b-1",
+            "install_type": "first_install",
+            "referrer_status": "available",
+            "click_id": "click-kpi70b_0000000000000000",
+            "install_begin_at_server_status": "available",
+            "install_begin_at_server": "2026-08-06T04:00:00.000Z",
+            "protected_referrer_evidence_ref": "protected:referrer:kpi70-install-b-1",
+            "country": "US"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "kpi70-ad-b",
+          "delivery_id": "delivery:kpi70-ad-b",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:kpi70-ad-b",
+          "event_name": "ad_revenue",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-06T12:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 11,
+          "payload": {
+            "subject_scope": "installation_level",
+            "installation_id": "installation:kpi70-install-b-0",
+            "ad_network": "synthetic-ad-network",
+            "revenue_source": "client_estimated",
+            "amount_unscaled": "4",
+            "amount_scale": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "kpi70-purchase-b",
+          "delivery_id": "delivery:kpi70-purchase-b",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:kpi70-purchase-b",
+          "event_name": "purchase",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-06T13:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 12,
+          "payload": {
+            "event_name": "purchase",
+            "installation_id": "installation:kpi70-install-b-0",
+            "transaction_id": "kpi70-purchase-b",
+            "amount_unscaled": "3",
+            "amount_scale": 0,
+            "currency": "USD",
+            "financial_status": "settled"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "kpi70-refund-b",
+          "delivery_id": "delivery:kpi70-refund-b",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:kpi70-refund-b",
+          "event_name": "refund",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-07T12:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 13,
+          "payload": {
+            "event_name": "refund",
+            "installation_id": "installation:kpi70-install-b-0",
+            "transaction_id": "kpi70-refund-b",
+            "original_transaction_id": "kpi70-purchase-b",
+            "correction_target_record_id": "kpi70-purchase-b",
+            "amount_unscaled": "1",
+            "amount_scale": 0,
+            "currency": "USD",
+            "financial_status": "settled"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "kpi70-install-organic-0",
+          "delivery_id": "delivery:kpi70-install-organic-0",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:kpi70-install-organic-0",
+          "event_name": "install",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-06T05:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 14,
+          "payload": {
+            "installation_id": "installation:kpi70-install-organic-0",
+            "install_type": "first_install",
+            "referrer_status": "none",
+            "install_begin_at_server_status": "available",
+            "install_begin_at_server": "2026-08-06T05:00:00.000Z",
+            "protected_referrer_evidence_ref": "protected:referrer:kpi70-install-organic-0",
+            "country": "US"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "kpi70-ad-organic",
+          "delivery_id": "delivery:kpi70-ad-organic",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:kpi70-ad-organic",
+          "event_name": "ad_revenue",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-06T12:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 15,
+          "payload": {
+            "subject_scope": "installation_level",
+            "installation_id": "installation:kpi70-install-organic-0",
+            "ad_network": "synthetic-ad-network",
+            "revenue_source": "client_estimated",
+            "amount_unscaled": "1",
+            "amount_scale": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "kpi70-purchase-organic",
+          "delivery_id": "delivery:kpi70-purchase-organic",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:kpi70-purchase-organic",
+          "event_name": "purchase",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-06T13:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 16,
+          "payload": {
+            "event_name": "purchase",
+            "installation_id": "installation:kpi70-install-organic-0",
+            "transaction_id": "kpi70-purchase-organic",
+            "amount_unscaled": "2",
+            "amount_scale": 0,
+            "currency": "USD",
+            "financial_status": "settled"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "outcome80-repeat-a1",
+          "delivery_id": "delivery:outcome80-repeat-a1",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:outcome80-repeat-a1",
+          "event_name": "custom_event",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-07T12:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 30,
+          "payload": {
+            "installation_id": "installation:kpi70-install-a-0",
+            "event_key": "synthetic_outcome"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "outcome80-repeat-a2",
+          "delivery_id": "delivery:outcome80-repeat-a2",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:outcome80-repeat-a2",
+          "event_name": "custom_event",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-07T12:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 31,
+          "payload": {
+            "installation_id": "installation:kpi70-install-a-0",
+            "event_key": "synthetic_outcome"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "outcome80-other-install",
+          "delivery_id": "delivery:outcome80-other-install",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:outcome80-other-install",
+          "event_name": "custom_event",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-07T12:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 32,
+          "payload": {
+            "installation_id": "installation:kpi70-install-a-1",
+            "event_key": "synthetic_outcome"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "outcome80-other-key",
+          "delivery_id": "delivery:outcome80-other-key",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:outcome80-other-key",
+          "event_name": "custom_event",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-07T12:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 33,
+          "payload": {
+            "installation_id": "installation:kpi70-install-a-2",
+            "event_key": "synthetic_other"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "outcome80-outside-window",
+          "delivery_id": "delivery:outcome80-outside-window",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:outcome80-outside-window",
+          "event_name": "custom_event",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-14T02:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-14T02:00:01.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 34,
+          "payload": {
+            "installation_id": "installation:kpi70-install-a-2",
+            "event_key": "synthetic_outcome"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "outcome80-redelivery",
+          "delivery_id": "delivery:outcome80-redelivery",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "sdk-android",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:outcome80-repeat-a1",
+          "event_name": "custom_event",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-07T12:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:01.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 45,
+          "payload": {
+            "installation_id": "installation:kpi70-install-a-0",
+            "event_key": "synthetic_outcome"
+          }
+        }
+      ]
+    },
+    {
+      "batch_id": "outcome80-verified",
+      "server_context": {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "received_at": "2026-08-12T00:00:00.000Z",
+        "policy_digest": "verified-commerce-v1",
+        "processing_purposes": [
+          {
+            "processing_purpose_id": "analytics",
+            "consent_required": false,
+            "policy_version": "consent-v0.1"
+          }
+        ],
+        "withdrawals": [],
+        "alternative_legal_bases": []
+      },
+      "records": [
+        {
+          "contract_version": "0.4.0",
+          "record_id": "outcome80-purchase-0",
+          "delivery_id": "delivery:outcome80-purchase-0",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "adapter:synthetic-verified-store",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:outcome80-purchase-0",
+          "event_name": "purchase",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-06T13:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 40,
+          "payload": {
+            "installation_id": "installation:kpi70-install-a-0",
+            "transaction_id": "synthetic-outcome80-0",
+            "amount_unscaled": "1",
+            "amount_scale": 0,
+            "currency": "USD",
+            "financial_status": "settled"
+          }
+        },
+        {
+          "contract_version": "0.4.0",
+          "record_id": "outcome80-purchase-1",
+          "delivery_id": "delivery:outcome80-purchase-1",
+          "tenant_id": "tenant-a",
+          "app_id": "app-a",
+          "producer": "adapter:synthetic-verified-store",
+          "producer_version": "fixture-v0.1",
+          "event_id": "event:outcome80-purchase-1",
+          "event_name": "purchase",
+          "schema_version": "0.4.0",
+          "occurred_at": "2026-08-06T13:00:00.000Z",
+          "occurred_at_source": "device",
+          "received_at": "2026-08-12T00:00:00.000Z",
+          "processing_purpose_id": "analytics",
+          "processing_sequence": 41,
+          "payload": {
+            "installation_id": "installation:kpi70-install-a-0",
+            "transaction_id": "synthetic-outcome80-1",
+            "amount_unscaled": "1",
+            "amount_scale": 0,
+            "currency": "USD",
+            "financial_status": "settled"
+          }
+        }
+      ]
+    }
+  ]
+}

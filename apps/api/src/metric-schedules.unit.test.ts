@@ -6,7 +6,7 @@ import { metricScheduleTargetDate, normalizeMetricScheduleRequest } from "./metr
 import { metricScheduleRequestDefinition } from "./metric-schedule-definition.js";
 import { engagementMetricDefinitions, engagementPolicyMetricDefinitions, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "@openmasu/contracts";
 import { VERIFIED_PLATFORM_METRIC_DEFINITIONS, ACQUISITION_KPI_METRIC_DEFINITIONS, basisAcquisitionKpiDefinitions, horizonAcquisitionKpiDefinitions } from "@openmasu/contracts/definitions";
-import { importedAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
+import { importedAcquisitionMetricDefinitions, outcomeAcquisitionCostDefinitions } from "@openmasu/contracts/definitions";
 import { calendarAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
 
 const body = {
@@ -30,6 +30,15 @@ const body = {
 };
 
 describe("scheduled metric configuration", () => {
+  it("outcome_cost_schedule_requires_cohort_date_and_nine_day_lag", () => {
+    const definitions = outcomeAcquisitionCostDefinitions("synthetic_outcome");
+    const request = { ...body, lag_days: 9, metric_definitions: definitions,
+      evaluations: [{ metric_names: definitions.map(d => d.metric_name), date_dimension: "cohort_date", grouping: {} }] };
+    const normalize = (input: any) => normalizeMetricScheduleRequest(input, new Date("2026-10-01T12:00:00.000Z"));
+    assert.equal(normalize(request).lagDays, 9);
+    assert.throws(() => normalize({ ...request, lag_days: 8 }), /acquisition_kpi_profile_required/);
+    assert.throws(() => normalize({ ...request, evaluations: [{ ...request.evaluations[0], date_dimension: "metric_date" }] }), /acquisition_kpi_profile_required/);
+  });
   it("requires explicit native horizon definitions with cohort dates and two or thirty-two day maturity", () => {
     for (const day of [0, 30] as const) {
       const metric_definitions = horizonAcquisitionKpiDefinitions(day);

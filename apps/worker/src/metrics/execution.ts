@@ -85,13 +85,13 @@ export async function executeMetricCalculation(
     for (const metricName of evaluation.metric_names ?? []) {
       const definition = definitions.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
-      if (["metric-basis-acquisition-kpis", "metric-horizon-acquisition-kpis"].includes(definition.rule_bundle_id)
+      if (["metric-basis-acquisition-kpis", "metric-horizon-acquisition-kpis", "metric-outcome-acquisition-cost"].includes(definition.rule_bundle_id)
           && (!grouping?.cohort_date || Object.keys(grouping)
             .some(key => !definition.grouping_dimensions?.includes(key as never)))) {
         throw new Error("acquisition_kpi_grouping_invalid");
       }
-      const usesFx = ["revenue_sum", "revenue_over_cost", "revenue_over_cohort", "cost_sum", "cost_over_cohort", "revenue_over_paying_installations"].includes(definition.definition.calculation);
-      if ((fxPolicy.rate_selection || definition.rule_bundle_id === "metric-verified-payers") && definition.value_type === "money"
+      const usesFx = ["revenue_sum", "revenue_over_cost", "revenue_over_cohort", "cost_sum", "cost_over_cohort", "cost_over_outcome", "revenue_over_paying_installations"].includes(definition.definition.calculation);
+      if ((fxPolicy.rate_selection || ["metric-verified-payers", "metric-outcome-acquisition-cost"].includes(definition.rule_bundle_id)) && definition.value_type === "money"
           && (definition.currency !== fxPolicy.target_currency || definition.amount_scale !== fxPolicy.target_scale)) {
         throw new Error("dated_fx_target_mismatch");
       }
@@ -180,6 +180,7 @@ export async function executeMetricCalculation(
           ? { value_state: "undefined", undefined_reason: value.undefined_reason }
           : { value_unscaled: value.value_unscaled }),
         ...moneyFields,
+        ...(value.outcomeCostOperands ? { outcome_cost_operands: value.outcomeCostOperands } : {}),
         ...(fxPolicy.rate_selection && usesFx ? { fx_conversion_snapshot: {
           policy: fxPolicy as NonNullable<MetricRun["fx_conversion_snapshot"]>["policy"], snapshot_id: sha256(fxPolicy),
         } } : {}),

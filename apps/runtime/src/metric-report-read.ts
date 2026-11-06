@@ -1,4 +1,5 @@
 import type { PoolClient } from "pg";
+import type { OpenMasuMetricRunV04 } from "@openmasu/contracts/types";
 import type { MetricComparisonContext } from "./metric-comparison.js";
 import { projectDatedFxSnapshot } from "@openmasu/contracts/definitions";
 import { acquisitionKpiSetKey } from "./acquisition-kpi-key.js";
@@ -49,6 +50,7 @@ export type MetricReportRow = {
   readonly acquisition_kpi_set_key?: string | null;
   readonly activity_unit?: ReturnType<typeof calendarActivityUnit>;
   readonly activity_date?: string | null;
+  readonly outcome_cost_operands?: OpenMasuMetricRunV04["outcome_cost_operands"];
 };
 
 export type MetricReportPage = {
@@ -79,6 +81,7 @@ function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, c
     value_state: privacyChanged ? "unavailable" : valueState,
     undefined_reason: privacyChanged ? null : artifact.undefined_reason ?? null,
     ...(valueState === "present" && !privacyChanged ? { value_unscaled: artifact.value_unscaled } : {}),
+    ...(!privacyChanged && artifact.outcome_cost_operands ? { outcome_cost_operands: artifact.outcome_cost_operands } : {}),
     value_type: artifact.value_type,
     currency: artifact.currency ?? null,
     amount_scale: artifact.amount_scale ?? null,

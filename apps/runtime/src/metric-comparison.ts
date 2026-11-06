@@ -1,5 +1,5 @@
 import type { OpenMasuMetricDefinitionV04 as MetricDefinition } from "../../../packages/contracts/src/generated/contract-types.js";
-import { cohortDayStart, addCalendarDays, canonicalDatedFxPolicy, isCalendarActivityMetric, isPayerMetric, isPayerMetricDefinition,
+import { cohortDayStart, addCalendarDays, canonicalDatedFxPolicy, isCalendarActivityMetric, isPayerMetric, isPayerMetricDefinition, isOutcomeCostMetric, isOutcomeCostMetricDefinition,
   isCalendarActivityMetricDefinition, metricProfileMetadata, ENGAGEMENT_POLICY_BUNDLE, ENGAGEMENT_POLICY_VERSION,
   ENGAGEMENT_POLICY_METRIC_NAMES, type DatedFxPolicyInput } from "@openmasu/contracts/definitions";
 
@@ -82,6 +82,23 @@ export function comparisonMeaning(context: MetricComparisonContext) {
   const revenue = ["revenue_sum", "revenue_over_cost", "revenue_over_cohort"].includes(calculation);
   const cost = ["cost_sum", "cost_over_cohort"].includes(calculation);
   const conversion = ["converted_installations", "converted_installations_over_cohort"].includes(calculation);
+  if (isOutcomeCostMetric(d)) {
+    if (!isOutcomeCostMetricDefinition(d) || context.fx.target_currency !== d.currency || context.fx.target_scale !== d.amount_scale) return undefined;
+    return {
+      profile: context.profile, anchor_event: "install", time_zone: "UTC", calculation,
+      numerator: "cost", denominator: d.definition.denominator, cost_basis: d.definition.cost_basis,
+      aggregation: "cumulative", window: { ...window, boundary: "half_open" }, maturity: "cohort_date_plus_nine_days",
+      population: "accepted_native_installation_cohort", acquisition_basis: d.acquisition_basis,
+      outcome_authority: d.conversion_event_key === undefined ? "verified_settled_store_projections" : "accepted_exact_key_custom_events",
+      conversion_event_key: d.conversion_event_key ?? null, distinct_scope: "tenant_app_installation_not_person",
+      cost_selection_policy: d.cost_selection_policy, fraud_policy: "gross", privacy_state: context.privacy_state,
+      grouping_dimensions: [...d.grouping_dimensions!].sort(), value_type: "money", currency: d.currency,
+      amount_scale: d.amount_scale, ratio_scale: null,
+      fx: { target_currency: context.fx.target_currency, target_scale: context.fx.target_scale,
+        ...(context.fx.rate_selection ? { rate_selection: context.fx.rate_selection } : {}),
+        rounding_mode: context.fx.rounding_mode, conversion: "per_cost_round_then_sum_then_divide", rates: context.fx.rates },
+    };
+  }
   if (isPayerMetric(d)) {
     if (!isPayerMetricDefinition(d) || d.value_type === "money" &&
         (context.fx.target_currency !== d.currency || context.fx.target_scale !== d.amount_scale)) return undefined;

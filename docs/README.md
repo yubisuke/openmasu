@@ -29,6 +29,7 @@ These documents describe current source unless they explicitly name a release.
   [retention](standard-retention.md), [custom outcomes](custom-conversion-metrics.md),
   [daily recorded activity](calendar-activity.md),
   [verified payer metrics](payer-metrics.md),
+  [cost per outcome installation](outcome-acquisition-cost.md),
   [calendar cohorts](calendar-cohort-metrics.md), [FX snapshots](fx-snapshots.md),
   [cost selection](cost-selection.md), [re-engagement outcomes](engagement-outcomes.md).
 - **Keep results current:** [scheduled metrics](scheduled-metrics.md),

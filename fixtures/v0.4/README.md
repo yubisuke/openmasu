@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 79 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 80 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -23,6 +23,16 @@ The validator checks every object against its Draft 2020-12 schema, checks regis
 The data is synthetic. It contains no external-source format, campaign data, user data, credential, live fraud rule, or operational threshold.
 
 ## Independent third-oracle calculations
+
+### Fixture 80: cost per outcome installation
+
+The [independent derivation](80-outcome-acquisition-cost/README.md) accounts for
+all thirteen families and ten runs. USD10 / two exact-key installations is USD5;
+USD10 / one verified paying installation is USD10. Repeated events/purchases
+and a redelivery do not inflate denominators. Missing cost, zero outcomes,
+empty cohorts and immature windows are undefined, not zero. Combined JCS hash
+is `9db80bf08db3c948911072a2923a3f31cf7457dacc24111459fc2d05bf28cba7`.
+All previous 79 inputs and 1027 expected artifacts remain unchanged.
 
 ### Fixture 79: exact-key daily activity
 

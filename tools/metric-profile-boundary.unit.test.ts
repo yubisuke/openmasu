@@ -8,7 +8,7 @@ import {
   SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS,
   ACQUISITION_KPI_METRIC_DEFINITIONS, basisAcquisitionKpiDefinitions, horizonAcquisitionKpiDefinitions,
   CALENDAR_ACTIVITY_METRIC_DEFINITIONS, isCalendarActivityMetricDefinition, keyedCalendarActivityMetricDefinitions,
-  PAYER_METRIC_DEFINITIONS,
+  PAYER_METRIC_DEFINITIONS, outcomeAcquisitionCostDefinitions,
   VERIFIED_PLATFORM_METRIC_DEFINITIONS,
   importedAcquisitionMetricDefinitions,
   standardRetentionMetricDefinitions,
@@ -86,6 +86,21 @@ async function boundaryResult(name: string, definition: Definition): Promise<Bou
 }
 
 describe("metric profile entry boundaries", () => {
+  it("outcome_cost_admission_binds_native_D7_distinct_denominators_and_disjoint_cost", async () => {
+    for (const definition of outcomeAcquisitionCostDefinitions("synthetic_outcome")) {
+      assert.deepEqual(await boundaryResult("outcome_cost/valid", definition), {
+        name: "outcome_cost/valid", schema: true, schedule: true, evaluator: true, sql: true,
+      });
+      for (const change of [{ rule_bundle_hash: "0".repeat(64) }, { fraud_policy: "net" },
+        { acquisition_basis: "selected_imported_provider" }, { currency: "EUR" }, { amount_scale: 2 },
+        { cost_selection_policy: undefined }, { grouping_dimensions: ["metric_date"] },
+        { definition: { ...definition.definition, window: { type: "elapsed", day: 30 } } }]) {
+        assert.deepEqual(await boundaryResult("outcome_cost/invalid", { ...definition, ...change } as Definition), {
+          name: "outcome_cost/invalid", schema: false, schedule: false, evaluator: false, sql: false,
+        });
+      }
+    }
+  });
   it("engagement_policy_admission_binds_window_inactivity_and_verified_purchase_net_without_upgrading_24h", async () => {
     const definitions = engagementPolicyMetricDefinitions({ windowDays: 3, minimumInactivityDays: 7, eventKey: "tutorial_complete" });
     for (const definition of definitions) {
@@ -182,6 +197,7 @@ describe("metric profile entry boundaries", () => {
       ...CALENDAR_ACTIVITY_METRIC_DEFINITIONS.map(definition => ({ name: "calendar_activity/valid", definition })),
       ...keyedCalendarActivityMetricDefinitions("synthetic_repeat").map(definition => ({ name: "keyed_calendar_activity/valid", definition })),
       ...PAYER_METRIC_DEFINITIONS.map(definition => ({ name: "payer/valid", definition })),
+      ...outcomeAcquisitionCostDefinitions("synthetic_outcome").map(definition => ({ name: "outcome_cost/valid", definition })),
       ...engagementPolicyMetricDefinitions({ windowDays: 3, minimumInactivityDays: 7, eventKey: "tutorial_complete" })
         .map(definition => ({ name: "engagement_policy/valid", definition })),
       ...SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS.map(definition => ({ name: "daily_acquisition/valid", definition })),
@@ -195,7 +211,7 @@ describe("metric profile entry boundaries", () => {
       ...COHORT_TIME_ZONES.flatMap(zone=>["selected_first_party_click","selected_verified_platform","selected_imported_provider"].flatMap(basis=>
         calendarAcquisitionMetricDefinitions(zone,basis as NonNullable<Definition["acquisition_basis"]>,basis === "selected_imported_provider" ? "synthetic-export" : undefined)
           .map(definition=>({name:"calendar/valid",definition}))))];
-    assert.equal(valid.length, 268 + ACQUISITION_KPI_METRIC_DEFINITIONS.length + CALENDAR_ACTIVITY_METRIC_DEFINITIONS.length + PAYER_METRIC_DEFINITIONS.length);
+    assert.equal(valid.length, 270 + ACQUISITION_KPI_METRIC_DEFINITIONS.length + CALENDAR_ACTIVITY_METRIC_DEFINITIONS.length + PAYER_METRIC_DEFINITIONS.length);
     const exercised = new Set<string>();
     for (const { name, definition } of valid) {
       assert.ok(validateMetricDefinition(definition), name);

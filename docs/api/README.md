@@ -1,5 +1,10 @@
 # Backend event and report HTTP contract
 
+The opt-in [outcome acquisition-cost profile](../outcome-acquisition-cost.md)
+appends `outcome_cost_operands` to saved metric JSON/CSV. The count is distinct
+installations, cost is USD scale 6, and neither operand is reconstructed in the
+client. Privacy-invalidated rows omit both operands and value.
+
 The app-scoped opt-in administration endpoint and reader-safe status for
 [automatic metric corrections](../automatic-metric-corrections.md) are documented
 separately; they are not included in the limited OpenAPI surface below.

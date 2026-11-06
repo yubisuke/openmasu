@@ -57,7 +57,7 @@ export function normalizeMetricRecalculationRequest(value: unknown): MetricRecal
 
 /** Fixed fragments only; a revised input is not proof that the reported value is wrong. */
 export const metricCostScopePredicate = `
-  ((mr.comparison_context->'definition'->'definition'->>'calculation'='revenue_over_cost'
+  ((mr.comparison_context->'definition'->'definition'->>'calculation' IN ('revenue_over_cost','cost_over_outcome')
     AND mr.comparison_context->'definition'->'definition'->>'cost_basis'='cohort_acquisition_day_current_snapshot')
     OR mr.comparison_context->'definition'->>'rule_bundle_id' IN ('${BASIS_ACQUISITION_KPI_BUNDLE}','${HORIZON_ACQUISITION_KPI_BUNDLE}'))
   AND mr.grouping->>'cohort_date' IS NOT NULL

@@ -1,0 +1,127 @@
+[
+  {
+    "metric_name": "acquisition_d7_cpa_synthetic_outcome",
+    "metric_definition_version": "0.4.33",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "acquisition_basis": "selected_first_party_click",
+    "fraud_policy": "gross",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "conversion_event_key": "synthetic_outcome",
+    "definition": {
+      "calculation": "cost_over_outcome",
+      "numerator": "cost",
+      "denominator": "converted_installations",
+      "window": {
+        "type": "elapsed",
+        "day": 7
+      },
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "cost_selection_policy": "reject_overlapping_grains",
+    "rule_bundle_id": "metric-outcome-acquisition-cost",
+    "rule_bundle_version": "0.4.33",
+    "rule_bundle_hash": "11d4ee5f197e03b9d625515b13691109d770231bce83fe9b6c9b12eee3997cee"
+  },
+  {
+    "metric_name": "acquisition_d7_payer_cost",
+    "metric_definition_version": "0.4.33",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "acquisition_basis": "selected_first_party_click",
+    "fraud_policy": "gross",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "cost_over_outcome",
+      "numerator": "cost",
+      "denominator": "paying_installations",
+      "window": {
+        "type": "elapsed",
+        "day": 7
+      },
+      "cost_basis": "cohort_acquisition_day_current_snapshot"
+    },
+    "grouping_dimensions": [
+      "campaign_id",
+      "network",
+      "country",
+      "cohort_date",
+      "attribution_status"
+    ],
+    "cost_selection_policy": "reject_overlapping_grains",
+    "rule_bundle_id": "metric-outcome-acquisition-cost",
+    "rule_bundle_version": "0.4.33",
+    "rule_bundle_hash": "11d4ee5f197e03b9d625515b13691109d770231bce83fe9b6c9b12eee3997cee"
+  },
+  {
+    "metric_name": "d0_install_to_24h_ad_revenue_usd",
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": {
+        "type": "elapsed",
+        "day": 0
+      },
+      "numerator": "revenue"
+    },
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
+  },
+  {
+    "metric_name": "d0_jst_install_calendar_ad_revenue_usd",
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "aggregation_time_zone": "Asia/Tokyo",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue"
+    },
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
+  },
+  {
+    "metric_name": "d0_utc_install_calendar_ad_revenue_usd",
+    "metric_definition_version": "0.3.0",
+    "anchor_event": "install",
+    "aggregation_time_zone": "UTC",
+    "value_type": "money",
+    "currency": "USD",
+    "amount_scale": 6,
+    "definition": {
+      "calculation": "revenue_sum",
+      "window": {
+        "type": "calendar_day",
+        "day": 0
+      },
+      "numerator": "revenue"
+    },
+    "rule_bundle_id": "metric-default",
+    "rule_bundle_version": "0.3.0",
+    "rule_bundle_hash": "f765891ef3ac0337da9811cfb00f3883e3eece5a0ef3ec4ac23a6b2d0a24e443"
+  }
+]
