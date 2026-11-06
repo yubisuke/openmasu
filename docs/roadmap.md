@@ -36,7 +36,7 @@ ownership. Completion refers to their declared synthetic scope.
 | iOS and Apple aggregate measurement | Swift SDK, Apple receivers and separate aggregate series |
 | Operational control foundation | Roles, restore/privacy reapplication, authenticated observability and operator procedures |
 | Deterministic fraud controls | Bound fraud definitions, public rules and synthetic integrity verification |
-| Deep links and re-engagement | Direct links on both OSes, Android deferred links and separate engagement outcomes |
+| Deep links and re-engagement | Direct links on both OSes, Android deferred links and separate engagement outcomes with bounded saved-run correction |
 | Verified commerce lifecycle | Native verified purchase/refund/reversal and financial projections |
 | Import and financial compatibility | Explicit mappings, exact money, backfill cutoffs and bounded import throughput |
 | Authenticated backend events | Dedicated server credentials and ordinary durable ingestion |

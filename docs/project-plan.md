@@ -121,6 +121,11 @@ is implemented after rc.2: independent outcome windows, recorded SDK inactivity
 and verified purchase/refund net preserve the historical 24h series. Unknown
 history is undefined, device-reported opens remain forgeable, and no acquisition
 or Apple aggregate identity is joined.
+The existing opt-in correction policy also replays saved engagement runs for
+late opens, outcomes, refunds/cancellations and recorded activity. Its bounded
+date range selects the saved `metric_date`; definitions and FX stay fixed,
+supersession preserves old artifacts, and unknown history remains undefined.
+Privacy replay is independently wired and does not depend on that policy.
 
 [App-scoped access](operations/access.md) is implemented after rc.2: one optional
 app restriction narrows existing roles across API/session/list/export/job paths;

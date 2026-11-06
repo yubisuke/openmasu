@@ -2,7 +2,8 @@ import type { Pool, PoolClient } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
 import { acquirePrivacyTenantXactFence, correctionCutoff, correctionMetricNames, expandAcquisitionCompanions,
   isCompanionAcquisitionReplay, metricCostScopePredicate, normalizeMetricCorrectionPolicy,
-  metricAcquisitionSql, metricAcquisitionJoinSql, metricAcquisitionDimensionSql, selectLateMetricInputs, supportsLateMetric, supportsAttributionMetric, withTenant,
+  metricAcquisitionSql, metricAcquisitionJoinSql, metricAcquisitionDimensionSql, selectLateMetricInputs, supportsLateMetric, supportsAttributionMetric,
+  supportsEngagementMetric, engagementInputMatches, withTenant,
   type MetricCorrectionPolicy } from "@openmasu/runtime";
 
 type Any = Record<string, any>;
@@ -35,12 +36,26 @@ async function source(client: PoolClient, r: Receipt) {
   }
   const row=(await client.query(`SELECT artifact,decided_at FROM ledger.attribution_results
     WHERE tenant_id=$1 AND app_id=$2 AND attribution_id=$3`,scope)).rows[0];
-  if (!row?.artifact?.supersedes_attribution_id || row.artifact.subject_scope!=="installation_level") throw Error("input_unavailable");
+  if (!row?.artifact || !(row.artifact.subject_scope==="engagement_level"
+    || (row.artifact.subject_scope==="installation_level" && row.artifact.supersedes_attribution_id))) throw Error("input_unavailable");
   return {cutoff:[row.decided_at,row.artifact.input_cutoff_at].sort().at(-1),digest:sha256(row.artifact),artifact:row.artifact};
 }
 
 async function attributionMatches(client: PoolClient, scope: Scope, row: Any, artifact: Any, watermark: string) {
   const replay=row.replay, metric=replay.metric_definition, grouping=replay.evaluation.grouping;
+  if (artifact.subject_scope==="engagement_level") {
+    const changed=(await client.query(`SELECT raw.record_id,raw.event_name,deep.installation_id,raw.occurred_at,raw.producer
+      FROM ledger.deep_link_open_facts AS deep JOIN ledger.logical_events AS logical
+        ON logical.tenant_id=deep.tenant_id AND logical.app_id=deep.app_id AND logical.logical_event_id=deep.logical_event_id
+      JOIN ledger.raw_records_current AS raw ON raw.tenant_id=logical.tenant_id AND raw.app_id=logical.app_id AND raw.record_id=logical.record_id
+      WHERE deep.tenant_id=$1 AND deep.app_id=$2 AND 'engagement:'||raw.record_id=$3
+        AND raw.payload_lifecycle_status='available' AND raw.received_at<=$4`,
+    [scope.tenantId,scope.appId,artifact.subject_ref,watermark])).rows;
+    if (!changed.length) throw Error("input_unavailable");
+    // The new winner can remove credit from another saved campaign. The shared
+    // selector bounds installation/date/window only; the calculator owns credit.
+    return (await engagementInputMatches(client,scope,replay,changed,watermark)).length>0;
+  }
   // Test both the saved and revised membership: a move OUT of a cohort needs correction too.
   for (const [cutoff,previous] of [[row.input_received_at_watermark,artifact.supersedes_attribution_id],[watermark,null]]) {
     const platform=metric.acquisition_basis === "selected_verified_platform";
@@ -118,7 +133,12 @@ async function enqueuePage(client: PoolClient, r: Receipt, policy: MetricCorrect
       safe_reason:row.replay?.version===1 && (supportsLateMetric(row.replay) || isCompanionAcquisitionReplay(row.replay)) ? null : "unsupported_definition"}));
   } else if (r.source_kind === "attribution_revision") {
     for (const row of current) {
-      if (row.replay?.version!==1 || !(supportsAttributionMetric(row.replay) || isCompanionAcquisitionReplay(row.replay)) || !["selected_first_party_click","selected_verified_platform","selected_imported_provider"].includes(row.replay.metric_definition.acquisition_basis)) {
+      const engagement=revision.artifact.subject_scope==="engagement_level";
+      const engagementRun=row.replay?.metric_definition?.anchor_event==="deep_link_open";
+      if (engagement!==engagementRun) continue;
+      if (row.replay?.version!==1 || (engagement ? !supportsEngagementMetric(row.replay)
+        : !(supportsAttributionMetric(row.replay) || isCompanionAcquisitionReplay(row.replay))
+          || !["selected_first_party_click","selected_verified_platform","selected_imported_provider"].includes(row.replay.metric_definition.acquisition_basis))) {
         selected.push({metric_run_id:row.metric_run_id,replay:row.replay,safe_reason:"unsupported_definition"});
       } else if (await attributionMatches(client,scope,row,revision.artifact,watermark)) {
         selected.push({metric_run_id:row.metric_run_id,replay:row.replay,safe_reason:null});
@@ -175,12 +195,16 @@ export async function planAutomaticMetricCorrections(pool: Pool, tenantId: strin
           next.source_cutoff=correctionCutoff([revision.cutoff,new Date(planning).toISOString()].sort().at(-1)!);
         }
         if (!next.targets) {
-          const rows=await client.query(`SELECT metric_run_id,artifact,comparison_context FROM ledger.metric_runs AS mr
-            WHERE tenant_id=$1 AND app_id=$2 AND grouping->>'cohort_date' BETWEEN $3 AND $4
-              AND ($5::text[] IS NULL OR metric_name=ANY($5::text[]))
+          const rows=await client.query(`SELECT mr.metric_run_id,mr.artifact,mr.comparison_context FROM ledger.metric_runs AS mr
+            LEFT JOIN control.metric_replay_manifests AS manifest ON manifest.tenant_id=mr.tenant_id AND manifest.app_id=mr.app_id
+              AND manifest.source_metric_run_id=mr.metric_run_id
+            WHERE mr.tenant_id=$1 AND mr.app_id=$2 AND CASE WHEN
+              coalesce(mr.comparison_context->'definition'->>'anchor_event',manifest.artifact->'metric_definition'->>'anchor_event')='deep_link_open'
+              THEN mr.grouping->>'metric_date' ELSE mr.grouping->>'cohort_date' END BETWEEN $3 AND $4
+              AND ($5::text[] IS NULL OR mr.metric_name=ANY($5::text[]))
               AND NOT EXISTS (SELECT 1 FROM ledger.metric_runs AS newer WHERE newer.tenant_id=$1 AND newer.app_id=$2
                 AND newer.supersedes_metric_run_id=mr.metric_run_id)
-            ORDER BY metric_run_id COLLATE "C" LIMIT $6`,[tenantId,next.app_id,policy.date_from,policy.date_to,
+            ORDER BY mr.metric_run_id COLLATE "C" LIMIT $6`,[tenantId,next.app_id,policy.date_from,policy.date_to,
               correctionMetricNames(policy.metric_names)??null,policy.maximum_runs_per_receipt+1]);
           if (rows.rows.length>policy.maximum_runs_per_receipt) throw Error("selection_limit");
           next.targets=rows.rows.map(row=>({root_id:row.metric_run_id,meaning:meaning(row)}));
