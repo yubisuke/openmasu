@@ -107,7 +107,10 @@ Separate UTC [daily activity](calendar-activity.md) counts session starts, custo
 events and active installations without acquisition joins or period-unique sums.
 Separate [verified payer metrics](payer-metrics.md) expose transaction and
 paying-installation counts, payer rate and purchase-net ARPPU with explicit
-store-projection authority, refund and undefined-denominator behavior.
+store-projection authority, refund and undefined-denominator behavior. Native
+fraud-net and verified-platform gross/fraud-net profiles consistently select the
+same population for all four operands; original native/gross definitions remain
+unchanged. Imported payer and entitlement analysis remain outside this scope.
 [Scheduled comparisons](recurring-comparisons.md) retain explicit definition
 revisions and aggregate snapshots for fixed-cutoff worker runs, with bounded
 storage, expiry, deletion and conservative privacy suppression.

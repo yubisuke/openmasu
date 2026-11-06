@@ -354,7 +354,8 @@ function validateRegistryReferences(output: Any, label: string): void {
       : definition.rule_bundle_id === "metric-horizon-acquisition-kpis" ? "0.4.31"
       : definition.rule_bundle_id === "metric-basis-acquisition-kpis" ? "0.4.30"
       : definition.rule_bundle_id === "metric-engagement-policy" ? "0.4.28"
-      : definition.rule_bundle_id === "metric-verified-payers" ? "0.4.26"
+      : definition.rule_bundle_id === "metric-verified-payers"
+        ? (PAYER_METRIC_DEFINITIONS.some(row => row.metric_name === definition.metric_name) ? "0.4.26" : "0.4.35")
       : definition.rule_bundle_id === "metric-calendar-activity" ? (definition.conversion_event_key === undefined ? "0.4.25" : "0.4.32")
       : definition.rule_bundle_id === "metric-standard-retention" ? "0.4.24"
       : definition.rule_bundle_id === "metric-acquisition-kpis" ? ACQUISITION_KPI_VERSION
@@ -617,8 +618,8 @@ if (!summaryOnly) {
         }
       });
     }
-    it("contains 81 fixture directories", () => {
-      check(fixtureDirs.length === 81, `expected 81 fixture directories, found ${fixtureDirs.length}`);
+    it("contains 82 fixture directories", () => {
+      check(fixtureDirs.length === 82, `expected 82 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -1270,6 +1271,17 @@ const scenarios: Array<[string, () => void]> = [
       ["consent81-before", 1, 1], ["consent81-fresh", 4, 4], ["consent81-revenue", 3, 3],
     ]), "scenario 81 separate acknowledged purpose revisions");
   }],
+  ["82 payer profiles keep native fraud-net separate from empty platform cohorts", () => {
+    const { output } = fixture("82-payer-cohort-profiles");
+    check(output.metric_runs.length === 12 && output.metric_definitions.length === 15, "scenario 82 inventory");
+    for (const definition of output.metric_definitions.filter((row: Any) => row.rule_bundle_version === "0.4.35")) {
+      const row = output.metric_runs.find((run: Any) => run.metric_name === definition.metric_name)!;
+      const expected = definition.acquisition_basis === "selected_first_party_click"
+        ? { purchase_count: "1", paying_installations: "1", paying_installations_over_cohort: "1000000", revenue_over_paying_installations: "6000000" }
+        : { purchase_count: "0", paying_installations: "0", paying_installations_over_cohort: "empty_cohort", revenue_over_paying_installations: "no_paying_installations" };
+      check((row.value_unscaled ?? row.undefined_reason) === expected[definition.definition.calculation as keyof typeof expected], "scenario 82 independent arithmetic");
+    }
+  }],
   ["72 calendar activity counts logical events and daily installations without acquisition joins", () => {
     const { input, output } = fixture("72-calendar-activity");
     const names = ["daily_session_starts", "daily_custom_events", "daily_active_installations"];
@@ -1283,8 +1295,8 @@ const scenarios: Array<[string, () => void]> = [
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 81 scenario assertions", () => {
-      check(scenarios.length === 81, "scenario assertion inventory must contain 81 entries");
+    it("contains 82 scenario assertions", () => {
+      check(scenarios.length === 82, "scenario assertion inventory must contain 82 entries");
     });
   });
 
@@ -1853,7 +1865,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 81 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 82 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1894,7 +1906,7 @@ const acceptance: Array<[string, () => void]> = [
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
   ["AC21 one command validates every schema registry fixture and golden", () => {
-    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 81 && outputArtifactCount === 81 * 13, "AC21");
+    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 82 && outputArtifactCount === 82 * 13, "AC21");
     checkDocumentationDrift(root, validationSummary());
   }],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {

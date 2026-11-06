@@ -410,7 +410,7 @@ Production signals, IP or User-Agent values, live thresholds, model weights, wat
 
 The validation gate compiles 28 schemas and validates 8 registries. The 80 fixture directories contain synthetic input plus 13 committed golden output classes: raw records, deliveries, logical events, corrections, privacy requests, privacy tombstones, attributions, metric definitions, metric runs, cost records, public fraud decisions, rejections, and reconciliation. Fixture 10 demonstrates both paid reinstall attribution and no-referrer redownload attribution. Fixtures 28 through 32 exercise imported attribution, automatically derived reconciliation, every registered producer form, and stale-evidence rejection. Fixture 33 exercises reporting dimensions, advertiser-side ad views, installation and aggregate revenue, default-currency provenance, append-only cost revisions, per-event half-even FX, attribution-status-separated ROAS, retention, and cohort LTV/count. Fixture 34 exercises the supported platform method/model rows, both Apple aggregate event names, their versioned reasons, synthetic postback producers, and typed Meta evidence. Fixture 35 exercises authenticated tenant-admin and on-device privacy-request provenance plus same-installation scope enforcement. Fixture 36 exercises the child-directed audience boundary without adding an advertising identifier to the canonical event vocabulary. Fixture 37 proves that an organic cohort without attributed cost emits an undefined ROAS rather than zero or infinity. Fixture 38 classifies a modeled external row without an internal candidate as `provider_modeled_conversion`. Fixture 39 classifies a foreign third-party referrer. Fixture 40 validates the closed custom-event envelope plus wrapper provenance. Fixture 41 derives the public click-injection category from server CTIT. Fixture 42 exercises the v0.3.1 `metric_date` dimension with deterministic daily click and organic-install event counts. Fixture 43 exercises the v0.3.2 iOS first-launch, platform-referrer, AdServices outcome, AAK signing-environment, and SKAN minor-version vocabulary. Fixture 44 exercises the v0.3.3 qualified SKAN/AAK postback counts and fine/coarse SKAN conversion buckets. Fixture 45 exercises the v0.3.4 iOS conversion-schema provenance pair and the opt-in conversion-value lifecycle event. Fixture 46 reserves server-assigned Play Integrity and App Attest evidence without making it an attribution or metric input. Fixture 47 exercises the non-identifying payload-schema rejection boundary without storing the rejected payload. Fixtures 48 through 52 exercise deterministic fraud controls and protected integrity-provider normalization. Fixture 53 exercises the negative-CTIT clock diagnostic and day-wide provisional guard. Fixture 54 exercises deep-link opens, engagement-scope attribution, double-count prevention, and separated daily metrics. Fixture 55 exercises settled purchase/refund net revenue, canonical refund targeting, refund-time windows, per-target caps, and unchanged ad revenue. Fixture 56 exercises D30/D90 purchase-net, total-net revenue, ROAS, and LTV with exact D31/D91 boundaries. Fixture 57 accepts current AdAttributionKit re-engagement postbacks and proves they remain aggregate while reporting separately from install postbacks. Fixtures 25, 33, and 34 collectively exercise every registered processing purpose. Validation also exercises invalid calendar timestamps, reconciliation reasons, attribution supersession, replay suspicion, retention expiry, impression-to-revenue evidence, reorder invariance, install-type evidence dominance, record-ID collision, click ambiguity, millisecond normalization boundaries, scoped-reference mutations, child-directed advertising-identifier rejection, CTIT boundaries, custom-event bounds, platform-integrity closure, Apple aggregate qualification and receipt-date authority, refund-target ambiguity/temporal stability/caps, business-transaction conflicts, and unknown-purpose rejection; golden files remain committed human-reviewed artifacts.
 
-The literal validation summary is: `Validated 28 schemas, 8 registries, 81 reviewed fixtures, 1053 golden output artifacts, 81 scenario assertions, 27 acceptance criteria, deterministic TypeScript, independent Python, and RFC 8785 conformance.` It is emitted only after a successful validation run.
+The literal validation summary is: `Validated 28 schemas, 8 registries, 82 reviewed fixtures, 1066 golden output artifacts, 82 scenario assertions, 27 acceptance criteria, deterministic TypeScript, independent Python, and RFC 8785 conformance.` It is emitted only after a successful validation run.
 
 The validation command never writes fixture files. `npm run validate`:
 
@@ -418,8 +418,8 @@ The validation command never writes fixture files. `npm run validate`:
 2. compiles every Draft 2020-12 schema;
 3. validates registry shape, uniqueness, and cross-references;
 4. validates every input event through its event schema;
-5. validates all 1053 golden output artifacts;
-6. runs named assertions for all 81 scenarios and 27 acceptance criteria (AC01-AC27);
+5. validates all 1066 golden output artifacts;
+6. runs named assertions for all 82 scenarios and 27 acceptance criteria (AC01-AC27);
 7. runs deliberate negative mutations;
 8. runs the TypeScript evaluator twice;
 9. runs the independently implemented Python evaluator;
@@ -428,6 +428,28 @@ The validation command never writes fixture files. `npm run validate`:
 Environment setup is `npm ci` and `python -m pip install --require-hashes --requirement requirements-contract.txt`.
 
 ## Version history
+
+### v0.4.35 patch release: independent payer cohort profiles
+
+Bundle `metric-verified-payers` version `0.4.35` adds twelve closed independent
+D7 definitions: each historical payer metric name gains one of the suffixes
+`native_fraud_net`, `platform_gross`, or `platform_fraud_net`. The suffix binds
+`selected_first_party_click` + `net`, `selected_verified_platform` + `gross`,
+or `selected_verified_platform` + `net`, respectively. The original four names
+and version `0.4.26` retain their exact definitions and outputs.
+
+The same selected, privacy-visible eligible installations determine transaction
+count, distinct historical payer count, rate denominator and ARPPU numerator.
+Fraud-net excludes installations; purchase-net deducts exact qualifying refunds.
+A full refund never erases a historical payer. Trusted platform projections
+and explicit source grouping cannot be replaced by matching native/imported
+campaign strings. A removed or superseded proof is not resurrected by gross.
+Verified settled-purchase authority, half-open `[install, install + 8 days)`
+occurrence windows, inclusive receipt cutoffs, per-event half-even FX, missing
+FX and undefined empty-cohort/zero-payer semantics remain those of the payer
+profile. Imported payers and entitlements are not introduced. Wire/package
+versions remain `0.4.0`; schema URNs remain `:v0.4`. Fixture 82 exercises every
+new declaration; earlier goldens are unchanged.
 
 ### v0.4.34 patch release: purpose-scoped consent declarations
 

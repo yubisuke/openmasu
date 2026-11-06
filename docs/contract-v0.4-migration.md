@@ -1,5 +1,24 @@
 # Contract v0.4 Migration
 
+## Independent payer cohort profiles (0.4.35)
+
+Twelve independently named definitions extend verified D7 payer metrics to
+native fraud-net and verified-platform gross/fraud-net. The original four
+`metric-verified-payers` / `0.4.26` definitions remain byte-identical. The new
+version's hash is `d2072d075d3c89f840d182979a0380d5921ef3afc2bcd08ef2fd1bf275a02c26`.
+No operation, registry vocabulary, schema URN, wire version, table or dependency
+changes. Closed-schema admission and Python definition checks bind each new
+name to its declared basis and fraud policy. Existing calculation and privacy
+replay paths are reused. Saved comparisons no longer assume gross/native when
+reading the new definitions; historical comparison meaning is unchanged.
+
+Complete golden inventory: new `82-payer-cohort-profiles/input.json` and all
+thirteen `expected_*.json` files in that directory only. The fixture README
+derives every family, value and snapshot independently. No existing input or
+golden changes. Verify with `git diff --name-status 00bf7d6 -- fixtures/v0.4/`:
+only the new directory and the shared README differ. Golden authoring is
+committed separately from schema/evaluator admission changes.
+
 ## Purpose-scoped consent (0.4.34)
 
 Optional `consent_changed.processing_purpose_id` selects one of the three

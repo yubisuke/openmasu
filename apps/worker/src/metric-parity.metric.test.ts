@@ -208,6 +208,10 @@ describe("verified payer SQL parity and saved reporting", { concurrency: false }
         assertPlatformRunParity(replayed, [row.artifact], `${entry.name}: saved definition and current privacy replay`);
       }
     }
+    const reviewed = JSON.parse(readFileSync("fixtures/v0.4/82-payer-cohort-profiles/input.json", "utf8"));
+    await ingestFixture("payer82-reviewed", reviewed, app, seed);
+    assertPlatformRunParity(await computeSqlMetricRuns(app, reviewed, false), JSON.parse(readFileSync(
+      "fixtures/v0.4/82-payer-cohort-profiles/expected_metric_runs.json", "utf8")), "payer82 independent golden");
   });
   it("payer_SQL_preserves_verified_authority_counts_partial_full_refunds_cancellation_cutoffs_and_empty_denominators", async () => {
     const cases = syntheticPayerCases(JSON.parse(readFileSync("fixtures/v0.4/55-purchase-refund-net-revenue/input.json", "utf8")),
