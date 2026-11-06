@@ -1,4 +1,4 @@
-# Daily recorded activity
+# Recorded activity by UTC day or fixed period
 
 The opt-in `metric-calendar-activity` / `0.4.25` profile measures activity on a
 UTC date, independently of acquisition cohorts. It reuses accepted logical
@@ -45,11 +45,47 @@ append replacements at the selected receipt cutoff. Privacy replay retains
 that key and removes deleted activity; it may conservatively invalidate other
 runs sharing the deleted evidence snapshot, without mixing their counts.
 The existing all-key `0.4.25` profile and D7 acquisition converters are unchanged.
-No period-unique audience, arbitrary attribute grouping or new calculator is added.
+That keyed profile does not add period uniques or arbitrary attribute grouping.
+
+## Seven- and thirty-day active installations
+
+The separate opt-in `metric-calendar-activity / 0.4.36` profile defines
+`period_active_installations_7d` and `period_active_installations_30d`.
+Each counts distinct `(tenant, app, installation_id)` across the union of
+accepted session/custom events in its entire period. An installation active
+every day still counts once. There is no acquisition join, event-key selector,
+identity merging or human-activity inference. Gross is the only supported mode.
+
+`metric_date` is the inclusive UTC period start. The exclusive end is 7 or 30
+days later, not the end of a calendar week/month. For example, August 20 starts
+`[Aug 20 00:00, Aug 27 00:00)` or `[Aug 20 00:00, Sep 19 00:00)`.
+Receipts still obey the saved inclusive watermark; empty observed periods are
+zero, absent saved runs are missing. Late receipts and privacy deletion use the
+existing bounded immutable replay path. Correction requests select a bounded
+range of **period start dates**, then test the changed event against each window.
+The original result is not overwritten, and deletion hides affected values
+until a replacement is ready. Snapshot-based privacy invalidation can be
+conservative; it never discloses erased input to narrow the affected set.
+
+In metric schedules choose **Schedule 7-day active installations** or
+**Schedule 30-day active installations**. The daily worker calculates successive
+period starts with at least 7/30 days of lag, respectively; this closes the
+window but does not prove all input arrived. For explicit API/CLI definitions,
+use `periodActivityMetricDefinitions()` from `@openmasu/contracts/definitions`.
+Select the desired name and exactly `metric_date`, using the same explicit FX
+envelope as daily activity (no money is calculated). Interactive CLI evaluations
+may be partial; saved maturity reports the actual exclusive end.
+
+Saved definitions and comparison contexts retain period length, UTC, event
+union and installation unit. JSON/CSV append `activity_period_start` and
+`activity_period_end_exclusive`; `activity_date` remains the start date.
+Never add daily or overlapping period distinct counts. These are recorded
+installations, not unique people, cross-device audiences or calendar-month MAU.
+Existing all-key and keyed daily definitions and their outputs are unchanged.
 
 ## Date, evidence and limits
 
-- `metric_date` is the activity date, not the installation date. Use the UTC
+- For daily profiles, `metric_date` is the activity date, not the installation date. Use the UTC
   half-open occurrence interval `[00:00, next 00:00)` and include only receipts
   at or before the saved inclusive watermark.
 - UTC and exactly `metric_date` grouping are supported. Country, campaign,
@@ -71,7 +107,8 @@ These are installations, **not unique people or DAU/MAU**. Daily active counts
 must not be summed into a period-unique audience. The same installation can
 appear on several days; period comparison aligns daily values without summing
 them. No identity merging, cross-device inference or monthly-unique estimate
-is provided. Apple aggregate postbacks and unrelated revenue events are not
+is inferred. The explicit fixed-period profiles above compute their own distinct
+sets rather than aggregating daily values. Apple aggregate postbacks and unrelated revenue events are not
 activity inputs. Imported events count only when they are actually admitted
 as canonical session/custom events with an installation ID; matching external
 campaign text is irrelevant.
@@ -109,4 +146,7 @@ admission and deletion replay. No new service, table, dependency or CI job is
 needed. [Fixture 79](../fixtures/v0.4/79-keyed-calendar-activity/README.md)
 adds independently counted per-key values, late receipt, redelivery, deletion
 and observed zero. Physical-device delivery and real-data representativeness
-are unverified.
+are unverified. [Fixture 83](../fixtures/v0.4/83-period-activity/README.md)
+adds 30 days of repeated installation activity, exclusive 7/30-day boundary
+installations, delayed receipt and privacy deletion, with ten independently
+counted values. Runtime evidence covers bounded correction and period CSV.

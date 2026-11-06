@@ -99,7 +99,7 @@ describe("privacy metric correction through the existing durable worker", { conc
     }] }, true, { tenant_id: tenantId, app_id: "app-a" }));
     originals.push(...await computeSqlMetricRuns(app, { ...input, fx_policy: base.fx_policy, metric_evaluations: [{
       metric_run_id_prefix: "synthetic-period-activity", metric_names: periodActivityMetricDefinitions().map(d => d.metric_name),
-      grouping: { metric_date: "2026-08-01" }, privacy_state: "after", data_freshness: "partial",
+      grouping: { metric_date: "2026-08-01" }, privacy_state: "after", data_freshness: "complete",
       input_received_at_watermark: "2026-08-16T00:00:00.000Z", computed_at: "2026-08-16T00:01:00.000Z",
     }] }, true, { tenant_id: tenantId, app_id: "app-a" }));
     foreign = await computeSqlMetricRuns(app, { ...base, metric_evaluations: [{ ...base.metric_evaluations[0],

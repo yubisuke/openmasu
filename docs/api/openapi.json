@@ -551,7 +551,9 @@
                   "acquisition_kpi_set_key",
                   "activity_unit",
                   "activity_date",
-                  "outcome_cost_operands"
+                  "outcome_cost_operands",
+                  "activity_period_start",
+                  "activity_period_end_exclusive"
                 ]
               }
             }
@@ -2170,7 +2172,9 @@
                 "pattern": "^[0-9]+$"
               }
             }
-          }
+          },
+          "activity_period_start": {},
+          "activity_period_end_exclusive": {}
         },
         "additionalProperties": false,
         "allOf": [

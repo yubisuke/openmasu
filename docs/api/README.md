@@ -44,6 +44,11 @@ Daily recorded activity appends `activity_unit` and `activity_date` to metric
 JSON/CSV within the existing `cohort_or_activity` report category. Units come from
 captured closed definitions; installations are not people and daily distinct counts are
 not period-unique audiences. These fields are null for other/unknown profiles.
+Independent 7/30-day activity definitions append `activity_period_start` and
+`activity_period_end_exclusive` in UTC. Their `activity_date` is the inclusive
+start, and the value counts distinct installations across the entire period.
+Those period-boundary fields are absent from other JSON rows (blank CSV cells).
+Never sum daily or overlapping period distinct counts.
 
 Generate the JSON with `npm run api:contract`. Two narrow existing-unit-suite
 tests require the committed JSON to match the builder, route auth/methods and
