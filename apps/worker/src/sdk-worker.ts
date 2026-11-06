@@ -17,6 +17,7 @@ import {
   type PendingGooglePlayProductVerification,
 } from "./google-play-product-verifier.js";
 import { ingestRuntimeBatch } from "./ingestion.js";
+import { canonicalConsentAttempts, persistPurposeConsentWithClient, purposeControlsAtReceipts } from "./purpose-consent.js";
 import {
   DEFAULT_WORKER_INBOX_BATCH_LIMIT,
   parseWorkerInboxBatchLimit,
@@ -80,6 +81,7 @@ type Withdrawal = {
   processing_purpose_id: string;
   withdrawal_recognized_at: string;
   withdrawal_recognized_sequence: number;
+  credential_deleted?: boolean;
 };
 
 type StoredWithdrawal = {
@@ -87,6 +89,7 @@ type StoredWithdrawal = {
   processing_purpose_id: string;
   withdrawal_recognized_at: string;
   withdrawal_recognized_sequence: string;
+  credential_deleted: boolean;
 };
 
 type StoredSubjectWithdrawal = {
@@ -119,7 +122,7 @@ function serverContext(row: InboxRow, record: Any, withdrawals: Withdrawal[]): A
       consent_required: !aggregatePostback && record.processing_purpose_id !== "fraud_prevention",
       policy_version: "sdk-runtime-consent-v0.3",
     }],
-    withdrawals,
+    withdrawals: withdrawals.map(({ credential_deleted: _internal, ...withdrawal }) => withdrawal),
     alternative_legal_bases: [],
     fraud_enabled: process.env.OPENMASU_FRAUD_ENABLED !== "0",
     fraud_actions_enabled: process.env.OPENMASU_FRAUD_ENABLED !== "0"
@@ -619,12 +622,21 @@ function decodedWithdrawalsFor(
     if (!entry.row.installation_key_id) continue;
     for (const record of entry.records) {
       if (record.event_name !== "consent_changed" || !["withdrawn", "denied"].includes(record.payload?.consent_state)) continue;
-      const withdrawals = WITHDRAWAL_PURPOSES.map((processing_purpose_id) => ({
+      const purposes = WITHDRAWAL_PURPOSES.includes(record.payload.processing_purpose_id)
+        ? [record.payload.processing_purpose_id] : WITHDRAWAL_PURPOSES;
+      const withdrawals = purposes.map((processing_purpose_id) => ({
         processing_purpose_id,
         withdrawal_recognized_at: entry.row.received_at,
         withdrawal_recognized_sequence: record.processing_sequence,
       }));
-      result.set(entry.row.installation_key_id, withdrawals);
+      const previous = result.get(entry.row.installation_key_id) ?? [];
+      for (const withdrawal of withdrawals) {
+        const existing = previous.find(value => value.processing_purpose_id === withdrawal.processing_purpose_id);
+        if (!existing) previous.push(withdrawal);
+        else if (withdrawal.withdrawal_recognized_sequence < existing.withdrawal_recognized_sequence)
+          Object.assign(existing, withdrawal);
+      }
+      result.set(entry.row.installation_key_id, previous);
     }
   }
   return result;
@@ -641,14 +653,14 @@ async function durableWithdrawalsFor(
   if (installationKeyIds.length === 0) return new Map();
   const stored = await withTenant(pool, tenantId, (client) => client.query<StoredWithdrawal>(
     `SELECT installation_key_id, processing_purpose_id, withdrawal_recognized_at,
-            withdrawal_recognized_sequence::text
+            withdrawal_recognized_sequence::text, false AS credential_deleted
        FROM control.installation_withdrawals
       WHERE tenant_id=$1 AND installation_key_id=ANY($2::text[])
       UNION ALL
      SELECT credential.installation_key_id,
             purpose.processing_purpose_id,
             credential.status_changed_at,
-            '0'::text
+            '0'::text, true
        FROM control.installation_credentials_current AS credential
        CROSS JOIN (VALUES ('attribution'),('analytics'),('revenue_measurement'))
          AS purpose(processing_purpose_id)
@@ -665,6 +677,7 @@ async function durableWithdrawalsFor(
       processing_purpose_id: row.processing_purpose_id,
       withdrawal_recognized_at: row.withdrawal_recognized_at,
       withdrawal_recognized_sequence: Number(row.withdrawal_recognized_sequence),
+      credential_deleted: row.credential_deleted,
     });
     result.set(row.installation_key_id, values);
   }
@@ -812,7 +825,9 @@ async function persistRecognizedWithdrawals(
     for (const record of entry.records) {
       if (record.event_name !== "consent_changed"
         || !["withdrawn", "denied"].includes(record.payload?.consent_state)) continue;
-      for (const processingPurposeId of WITHDRAWAL_PURPOSES) {
+      const purposes = WITHDRAWAL_PURPOSES.includes(record.payload.processing_purpose_id)
+        ? [record.payload.processing_purpose_id] : WITHDRAWAL_PURPOSES;
+      for (const processingPurposeId of purposes) {
         const artifact = {
           processing_purpose_id: processingPurposeId,
           withdrawal_recognized_at: entry.row.received_at,
@@ -946,7 +961,7 @@ export async function processSdkInbox(
     if (activeDecoded.length === 0) return suppressedPending;
 
     await assertWithdrawalProjectionReady(pool, tenantId, activeDecoded);
-    const historical = await relevantLedgerHistory(pool, tenantId, activeDecoded);
+    let historical = await relevantLedgerHistory(pool, tenantId, activeDecoded);
     const pending: CandidateAttempt[] = [];
     const workRows: InboxRow[] = [];
     const newlyPendingRows: InboxRow[] = [];
@@ -975,7 +990,55 @@ export async function processSdkInbox(
         && row.reason_code === SDK_POST_PROCESSING_PENDING_REASON)
       .map((row) => row.ingest_batch_id));
     try {
-      const output = await ingestRuntimeBatch(pending, pool, historical);
+      // Controls are admitted against the complete candidate set. A measurement
+      // already owning an event ID cannot be displaced by this control phase.
+      const entryByBatch = new Map(activeDecoded.map(entry => [entry.row.ingest_batch_id, entry]));
+      const controls = canonicalConsentAttempts(pending, historical)
+        .filter(attempt => entryByBatch.get(attempt.batch_id)?.row.installation_key_id);
+      const early = new Set(controls);
+      const controlOutputs: Awaited<ReturnType<typeof ingestRuntimeBatch>>[] = [];
+      for (const appId of [...new Set(controls.map(attempt => attempt.server.app_id))]) {
+        const appControls = controls.filter(attempt => attempt.server.app_id === appId);
+        const result = await withTenant(pool, tenantId, async client => {
+          const admitted = await ingestRuntimeBatch(appControls, pool, historical, { persistenceClient: client });
+          for (const attempt of appControls) {
+            const entry = entryByBatch.get(attempt.batch_id)!;
+            await persistPurposeConsentWithClient(client, entry.row.installation_key_id!, attempt);
+            await client.query(
+              `INSERT INTO ledger.ingest_batch_records (ingest_batch_id,tenant_id,app_id,record_id,created_at)
+               VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
+              [attempt.batch_id, tenantId, appId, attempt.record.record_id, entry.row.received_at]);
+            if (admitted.logical_events.some(logical => logical.record_id === attempt.record.record_id)) {
+              await client.query(
+                `INSERT INTO control.installation_withdrawal_backfill_states
+                 (installation_key_id,tenant_id,app_id,completed_at) VALUES ($1,$2,$3,$4)
+                 ON CONFLICT (installation_key_id) DO NOTHING`,
+                [entry.row.installation_key_id, tenantId, appId, entry.row.received_at]);
+            }
+          }
+          return admitted;
+        });
+        controlOutputs.push(result);
+      }
+      if (controls.length > 0) historical = await relevantLedgerHistory(pool, tenantId, activeDecoded);
+      const remaining = pending.filter(attempt => !early.has(attempt));
+      const sdkAttempts = remaining.filter(attempt => entryByBatch.get(attempt.batch_id)?.row.installation_key_id);
+      const projections = await purposeControlsAtReceipts(pool, tenantId, sdkAttempts.map(attempt => ({
+        appId: attempt.server.app_id, installationKeyId: entryByBatch.get(attempt.batch_id)!.row.installation_key_id!,
+        sequence: attempt.record.processing_sequence,
+      })));
+      for (const [index, attempt] of sdkAttempts.entries()) {
+        const declared = projections[index];
+        if (declared.length === 0 && attempt.record.consent_revision === undefined) continue;
+        const entry = entryByBatch.get(attempt.batch_id)!;
+        const hardFences = (withdrawals.get(entry.row.installation_key_id!) ?? []).filter(value => value.credential_deleted);
+        attempt.server = { ...serverContext(entry.row, attempt.record, hardFences), purpose_consent_controls: declared };
+      }
+      const output = await ingestRuntimeBatch(remaining, pool, historical);
+      for (const admitted of controlOutputs) {
+        for (const key of Object.keys(output) as Array<keyof typeof output>)
+          (output[key] as Any[]).push(...admitted[key]);
+      }
       // Persist after the evaluator/ledger transaction. If this insert fails, the inbox row
       // remains retryable; a retry validates the already-written canonical logical event and
       // completes this projection before the batch is marked processed.

@@ -326,7 +326,7 @@ final class AppStorePurchaseTests: XCTestCase {
 
   func testLateResponsesCannotEscapeConsentDisablementOrInstallationReset() async throws {
     for operation in ["prepare", "submit"] {
-      for change in ["consent", "collection", "reset"] {
+      for change in ["consent", "analytics", "collection", "reset"] {
         let root = temporaryDirectory(), storage = try primedStorage(root), transport = PausablePurchaseTransport()
         let sdk = try OpenMasuSDK(configuration: configuration(), storageRoot: root, transport: transport)
         let started = expectation(description: "\(operation)-\(change) request started")
@@ -341,14 +341,17 @@ final class AppStorePurchaseTests: XCTestCase {
         }
         await fulfillment(of: [started], timeout: 3)
         if change == "consent" {
-          try await sdk.updateConsent(state: "withdrawn", policyVersion: "synthetic-v1")
-          try await sdk.updateConsent(state: "granted", policyVersion: "synthetic-v1")
+          try await sdk.updateConsentForPurpose("revenue_measurement", state: "withdrawn", policyVersion: "synthetic-v1")
+          try await sdk.updateConsentForPurpose("revenue_measurement", state: "granted", policyVersion: "synthetic-v1")
+        } else if change == "analytics" {
+          try await sdk.updateConsentForPurpose("analytics", state: "withdrawn", policyVersion: "synthetic-v1")
         } else if change == "collection" {
           try await sdk.setCollectionEnabled(false)
           try await sdk.setCollectionEnabled(true)
         } else { try await sdk.resetInstallationId() }
         await transport.resume()
-        await assertError(.purchaseContextChanged) { try await task.value }
+        if change == "analytics" { try await task.value }
+        else { await assertError(.purchaseContextChanged) { try await task.value } }
         XCTAssertEqual(try storage.count(), 0)
       }
     }

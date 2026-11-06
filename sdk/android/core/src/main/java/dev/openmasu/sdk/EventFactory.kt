@@ -111,6 +111,7 @@ internal object EventFactory {
         .put("occurred_at_source", "device")
         .put("processing_purpose_id", event.processingPurposeId)
         .put("processing_sequence", event.processingSequence)
+        .putOpt("consent_revision", event.consentRevision)
         .put("producer_version", producerVersion)
         .putOpt("wrapper_version", wrapperVersion)
         .put("payload", JSONObject(event.payloadJson))

@@ -285,6 +285,22 @@
             }
           }
         },
+        "purpose_consent_controls": {
+          "description": "Opt-in accepted controls from the same authenticated installation scope. Recognition is server authoritative; this is not client input.",
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["consent_state", "recognized_sequence", "recognized_at"],
+            "properties": {
+              "processing_purpose_id": { "enum": ["attribution", "analytics", "revenue_measurement"] },
+              "consent_state": { "enum": ["granted", "denied", "withdrawn", "not_required", "unknown"] },
+              "consent_revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+              "recognized_sequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "recognized_at": { "$ref": "common.schema.json#/$defs/dateTime" }
+            },
+            "dependentRequired": { "processing_purpose_id": ["consent_revision"] }
+          }
+        },
         "alternative_legal_bases": {
           "type": "array",
           "items": {
@@ -437,6 +453,7 @@
         "subject_scope": { "enum": ["installation_level", "aggregate"] },
         "processing_purpose_id": { "$ref": "common.schema.json#/$defs/processingPurposeId" },
         "processing_sequence": { "type": "integer", "minimum": 0 },
+        "consent_revision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
         "integrity_verdict": { "$ref": "common.schema.json#/$defs/integrityVerdict" },
         "alternative_legal_basis_id": { "$ref": "common.schema.json#/$defs/id" }
       }
@@ -474,7 +491,7 @@
         "reason_code": { "const": "payload_schema_invalid" },
         "processing_purpose_id": { "$ref": "common.schema.json#/$defs/processingPurposeId" },
         "consent_evaluation_policy_version": { "type": "string", "minLength": 1 },
-        "consent_decision_reason_code": { "enum": ["consent_not_required", "consent_valid_before_withdrawal", "documented_alternative_legal_basis", "consent_withdrawn"] }
+        "consent_decision_reason_code": { "enum": ["consent_not_required", "consent_valid_before_withdrawal", "documented_alternative_legal_basis", "consent_withdrawn", "consent_valid_for_revision", "consent_revision_unconfirmed"] }
       }
     },
     "matchingKey": {

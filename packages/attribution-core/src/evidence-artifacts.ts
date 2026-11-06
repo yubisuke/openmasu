@@ -30,6 +30,8 @@ function makeRawRecord(attempt: Attempt, lifecycle: "available" | "redacted" | "
     processing_purpose_id: consent.processing_purpose_id,
     consent_evaluation_policy_version: consent.consent_evaluation_policy_version,
     consent_decision_reason_code: consent.consent_decision_reason_code,
+    ...(consent.consent_revision !== undefined ? { consent_revision: consent.consent_revision } : {}),
+    ...(consent.consent_recognized_revision !== undefined ? { consent_recognized_revision: consent.consent_recognized_revision } : {}),
     ...(consent.withdrawal_recognized_at ? { withdrawal_recognized_at: consent.withdrawal_recognized_at } : {}),
     ...(consent.alternative_legal_basis_id ? {
       alternative_legal_basis_id: consent.alternative_legal_basis_id,
@@ -69,6 +71,8 @@ export function ingestionArtifacts(
       processing_purpose_id: decision.processing_purpose_id,
       consent_evaluation_policy_version: decision.consent_evaluation_policy_version,
       consent_decision_reason_code: decision.consent_decision_reason_code,
+      ...(decision.consent_revision !== undefined ? { consent_revision: decision.consent_revision } : {}),
+      ...(decision.consent_recognized_revision !== undefined ? { consent_recognized_revision: decision.consent_recognized_revision } : {}),
       ...(decision.withdrawal_recognized_at ? { withdrawal_recognized_at: decision.withdrawal_recognized_at } : {}),
       ...(decision.alternative_legal_basis_id ? {
         alternative_legal_basis_id: decision.alternative_legal_basis_id,
@@ -219,6 +223,8 @@ export function rejectionArtifacts(
       processing_purpose_id: decision.processing_purpose_id,
       consent_evaluation_policy_version: decision.consent_evaluation_policy_version,
       consent_decision_reason_code: decision.consent_decision_reason_code,
+      ...(decision.consent_revision !== undefined ? { consent_revision: decision.consent_revision } : {}),
+      ...(decision.consent_recognized_revision !== undefined ? { consent_recognized_revision: decision.consent_recognized_revision } : {}),
       ...(decision.withdrawal_recognized_at ? { withdrawal_recognized_at: decision.withdrawal_recognized_at } : {}),
       ...(decision.reason_code === "timestamp_stale" ? {
         staleness_policy_version: decision.staleness_policy_version,

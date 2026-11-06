@@ -316,6 +316,7 @@ export async function resetLedger(seedPool: Pool): Promise<void> {
       quoted.push("control.metric_recalculation_jobs", "control.metric_recalculation_items");
       // A synthetic reset removes the ledger that these temporary receipts describe.
       quoted.push("ephemeral.synthetic_validation_sessions");
+      quoted.push("control.installation_consent_controls");
       await client.query(`TRUNCATE TABLE ${quoted.join(", ")} CASCADE`);
       await client.query("COMMIT");
     } catch (error) {

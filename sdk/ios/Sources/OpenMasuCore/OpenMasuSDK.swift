@@ -5,11 +5,12 @@ public struct AppleConversionStateLease: Sendable {
   public let state: String?
   fileprivate let id: UUID
   fileprivate let revision: UInt64
+  fileprivate let consentRevision: Int64?
 }
 
 public actor OpenMasuSDK {
   private nonisolated let configuration: OpenMasuConfiguration
-  private let storage: OpenMasuStorage
+  private nonisolated let storage: OpenMasuStorage
   private let transport: any OpenMasuTransport
   private let tokenProvider: any AdServicesTokenProviding
   private nonisolated let deepLinkRouter = DeepLinkRouter()
@@ -33,7 +34,7 @@ public actor OpenMasuSDK {
     if try storage.deletionJournal() != nil { try await resetInstallationId(); return }
     guard try isCollectionEnabled() else { return }
     try storage.purgeConsentRequiredQueueIfBlocked()
-    if try storage.consentBarrierActive() {
+    if try storage.consentSnapshot("attribution").blocked {
       try await flush()
       return
     }
@@ -82,7 +83,10 @@ public actor OpenMasuSDK {
   public nonisolated func handleDeepLink(_ url: URL) -> Bool {
     guard let value = parseDeepLink(url) else { return false }
     deepLinkRouter.deliver(value)
-    Task { try? await self.recordDeepLink(value) }
+    if let consent = try? storage.consentSnapshot("attribution"),
+       let installationId = try? storage.installationId() {
+      Task { try? await self.recordDeepLink(value, consent: consent, installationId: installationId) }
+    }
     return true
   }
 
@@ -306,18 +310,20 @@ public actor OpenMasuSDK {
   }
 
   public func updateConsent(state: String, policyVersion: String) async throws {
-    guard ["granted", "denied", "withdrawn", "not_required", "unknown"].contains(state) else {
-      throw OpenMasuError.invalidAttributes
+    try await updateConsentScope(nil, state: state, policyVersion: policyVersion)
+  }
+
+  public func updateConsentForPurpose(_ purpose: String, state: String, policyVersion: String) async throws {
+    guard OpenMasuStorage.consentPurposes.contains(purpose) else { throw OpenMasuError.invalidAttributes }
+    try await updateConsentScope(purpose, state: state, policyVersion: policyVersion)
+  }
+
+  private func updateConsentScope(_ purpose: String?, state: String, policyVersion: String) async throws {
+    let control = try storage.recordConsent(state: state, policyVersion: policyVersion, purpose: purpose,
+      maxBytes: configuration.maxQueueBytes)
+    if try storage.deletionJournal() == nil {
+      _ = try storage.enqueue(control, capacity: QueueCapacity(maxRecords: configuration.maxQueueRecords, maxBytes: configuration.maxQueueBytes))
     }
-    purchaseContextRevision &+= 1
-    try storage.applyConsentState(state)
-    try storage.purgeConsentRequiredQueueIfBlocked()
-    try enqueue(eventName: "consent_changed", purpose: "fraud_prevention", payloadJson: EventFactory.json([
-      "event_name": "consent_changed",
-      "consent_state": state,
-      "effective_at": EventFactory.canonicalNow(),
-      "consent_policy_version": policyVersion,
-    ]))
     if try isCollectionEnabled() {
       if (state == "granted" || state == "not_required"), try storage.isResetPending() {
         try await completePendingReset(installationId: storage.installationId())
@@ -360,9 +366,10 @@ public actor OpenMasuSDK {
       guard let capable = transport as? any OpenMasuPrivacyTransport else { return .init(.unsupported) }
       guard let credential = try storage.credential() else { return .init(.notEnrolled) }
       let installationId = try storage.installationId(), revision = purchaseContextRevision
+      let consentCounter = try storage.consentCounter()
       let data = try await capable.privacyPage(credential: credential, installationId: installationId,
         requestType: requestType, cursor: cursor, pageSize: pageSize)
-      guard try revision == purchaseContextRevision && !purchaseResetInFlight && storage.deletionJournal() == nil &&
+      guard try revision == purchaseContextRevision && consentCounter == storage.consentCounter() && !purchaseResetInFlight && storage.deletionJournal() == nil &&
         !storage.isResetPending() && storage.installationId() == installationId && storage.credential() == credential
       else { return .init(.contextChanged) }
       let page = try OpenMasuPrivacyPage.parse(data, requestType: requestType, pageSize: pageSize)
@@ -402,10 +409,11 @@ public actor OpenMasuSDK {
   }
 
   private func completePendingReset(installationId: String) async throws {
-    if try storage.consentBarrierActive() || !isCollectionEnabled() { return }
+    if try storage.consentSnapshot("attribution").blocked || !isCollectionEnabled() { return }
     if try storage.credential() == nil {
-      try storage.setCredential(try await observeTransport(.enrollment) { try await transport.enroll(installationId: installationId) })
+      _ = try await ensureCredential()
     }
+    guard try storage.installationId() == installationId && storage.deletionJournal() == nil else { throw OpenMasuError.purchaseContextChanged }
     if try !storage.isInstallRecorded() {
       let eventId = "event:reset:\(installationId)"
       if try !storage.hasQueuedEvent(eventId) { try enqueue(
@@ -435,14 +443,30 @@ public actor OpenMasuSDK {
       return
     }
     guard try isCollectionEnabled() else { return }
-    if try storage.isResetPending() {
+    if try storage.isResetPending() && !storage.consentSnapshot("attribution").blocked {
       try await completePendingReset(installationId: storage.installationId())
       return
     }
     try storage.purgeConsentRequiredQueueIfBlocked()
-    let events = try storage.pending(limit: 100)
-    guard !events.isEmpty else { return }
+    let queued = try storage.pending(limit: 97)
+    guard !queued.isEmpty else { return }
+    let installationId = try storage.installationId()
     let credential = try await ensureCredential()
+    guard try isCollectionEnabled() && storage.deletionJournal() == nil && storage.installationId() == installationId else { return }
+    let current = try queued.filter { event in
+      guard Self.consentRequiredPurposes.contains(event.processingPurposeId) else { return true }
+      let consent = try storage.consentSnapshot(event.processingPurposeId)
+      return !consent.blocked && consent.revision == event.consentRevision
+    }
+    var seen = Set<String>()
+    let events = try (storage.consentDeclarations() + current).filter { seen.insert($0.eventId).inserted }.map { event in
+      guard event.eventName == "consent_changed" else { return event }
+      let id = "event:consent:" + SdkRequestSigner.sha256(Data((installationId + "\n" + credential.keyId + "\n" + event.eventId).utf8))
+      return QueuedEvent(eventId: id, eventName: event.eventName, processingPurposeId: event.processingPurposeId,
+        payloadJson: event.payloadJson, occurredAt: event.occurredAt, processingSequence: event.processingSequence,
+        enqueuedAtMs: event.enqueuedAtMs, consentRevision: event.consentRevision)
+    }
+    guard !events.isEmpty else { return }
     let session = try storage.syntheticValidationSession()
     try await observeTransport(.delivery) {
       if let session, session.isActive(nowMs: Int64(Date().timeIntervalSince1970 * 1_000)) {
@@ -452,7 +476,7 @@ public actor OpenMasuSDK {
         try await transport.deliver(credential: credential, events: events)
       }
     }
-    try storage.delete(eventIds: events.map(\.eventId))
+    try storage.deleteDelivered(queued)
   }
 
   public func installationIdForMeasurement() throws -> String { try storage.installationId() }
@@ -470,7 +494,7 @@ public actor OpenMasuSDK {
     return OpenMasuDiagnosticsSnapshot(
       collectionEnabled: enabled, consentBarrierActive: barrier, resetPending: reset, enrolled: try storage.credential() != nil,
       lastAttemptAtMs: attempt.atMs, lastOperation: attempt.operation, lastResult: attempt.result, httpClass: attempt.httpClass,
-      retryState: retry, queue: queue
+      retryState: retry, queue: queue, purposeConsent: try OpenMasuStorage.consentPurposes.map(storage.consentSnapshot)
     )
   }
   public func storageRoot() -> URL { storage.root }
@@ -479,7 +503,8 @@ public actor OpenMasuSDK {
     guard configuration.conversionSchemaVersion == schemaVersion, configuration.conversionSchemaSha256 == schemaDigest else {
       throw OpenMasuError.conversionSchema("conversion_configuration_mismatch")
     }
-    guard consentGranted, try !storage.consentBarrierActive() else { throw OpenMasuError.conversionSchema("conversion_consent_required") }
+    let consent = try storage.consentSnapshot("attribution")
+    guard consentGranted, !consent.blocked else { throw OpenMasuError.conversionSchema("conversion_consent_required") }
     guard try isCollectionEnabled() else { throw OpenMasuError.collectionDisabled }
     guard !purchaseResetInFlight, try !storage.isResetPending(), appleConversionLease == nil else {
       throw OpenMasuError.conversionSchema("conversion_context_busy")
@@ -487,13 +512,15 @@ public actor OpenMasuSDK {
     let state = try storage.appleConversionState()
     let id = UUID()
     appleConversionLease = id
-    return AppleConversionStateLease(state: state, id: id, revision: purchaseContextRevision)
+    return AppleConversionStateLease(state: state, id: id, revision: purchaseContextRevision, consentRevision: consent.revision)
   }
 
   public func finishAppleConversionState(_ lease: AppleConversionStateLease, state: String) throws {
     guard appleConversionLease == lease.id else { throw OpenMasuError.conversionSchema("conversion_context_changed") }
     defer { appleConversionLease = nil }
-    guard lease.revision == purchaseContextRevision, try !storage.consentBarrierActive(), try isCollectionEnabled(), !purchaseResetInFlight else {
+    let consent = try storage.consentSnapshot("attribution")
+    guard lease.revision == purchaseContextRevision, !consent.blocked, lease.consentRevision == consent.revision,
+          try isCollectionEnabled(), !purchaseResetInFlight else {
       throw OpenMasuError.conversionSchema("conversion_context_changed")
     }
     guard state.utf8.count <= 262_144 else { throw OpenMasuError.conversionSchema("conversion_state_limit") }
@@ -506,7 +533,9 @@ public actor OpenMasuSDK {
 
   private func ensureCredential() async throws -> InstallationCredential {
     if let credential = try storage.credential() { return credential }
-    let credential = try await observeTransport(.enrollment) { try await transport.enroll(installationId: storage.installationId()) }
+    let installationId = try storage.installationId()
+    let credential = try await observeTransport(.enrollment) { try await transport.enroll(installationId: installationId) }
+    guard try storage.installationId() == installationId && storage.deletionJournal() == nil else { throw OpenMasuError.purchaseContextChanged }
     try storage.setCredential(credential)
     return credential
   }
@@ -550,6 +579,7 @@ public actor OpenMasuSDK {
 
   private struct AppStorePurchaseContext {
     let revision: UInt64
+    let consentRevision: Int64?
     let installationId: String
     let credential: InstallationCredential
   }
@@ -558,35 +588,42 @@ public actor OpenMasuSDK {
     guard consent else { throw OpenMasuError.purchaseConsentRequired }
     guard !purchaseResetInFlight, try storage.deletionJournal() == nil, try !storage.isResetPending() else { throw OpenMasuError.purchaseContextChanged }
     guard try isCollectionEnabled() else { throw OpenMasuError.collectionDisabled }
-    guard try !storage.consentBarrierActive() else { throw OpenMasuError.purchaseConsentRequired }
+    let consent = try storage.consentSnapshot("revenue_measurement")
+    guard !consent.blocked else { throw OpenMasuError.purchaseConsentRequired }
     guard try storage.isInstallRecorded(), let credential = try storage.credential() else {
       throw OpenMasuError.resetRequiresEnrollment
     }
     return AppStorePurchaseContext(
-      revision: purchaseContextRevision, installationId: try storage.installationId(), credential: credential
+      revision: purchaseContextRevision, consentRevision: consent.revision, installationId: try storage.installationId(), credential: credential
     )
   }
 
   private func checkAppStorePurchaseContext(_ before: AppStorePurchaseContext) throws {
     guard before.revision == purchaseContextRevision else { throw OpenMasuError.purchaseContextChanged }
     let current = try appStorePurchaseContext(consent: true)
-    guard before.installationId == current.installationId, before.credential == current.credential
+    guard before.installationId == current.installationId, before.credential == current.credential,
+          before.consentRevision == current.consentRevision
     else { throw OpenMasuError.purchaseContextChanged }
   }
 
-  private func recordDeepLink(_ value: OpenMasuDeepLink) async throws {
+  private func recordDeepLink(_ value: OpenMasuDeepLink, consent: OpenMasuPurposeConsent, installationId: String) async throws {
     guard try isCollectionEnabled() else { return }
+    let current = try storage.consentSnapshot("attribution")
+    guard !consent.blocked, !current.blocked, consent.revision == current.revision,
+          try storage.installationId() == installationId else { return }
     try enqueue(
       eventName: "deep_link_open",
       purpose: "attribution",
-      payloadJson: EventFactory.deepLink(installationId: storage.installationId(), value: value)
+      payloadJson: EventFactory.deepLink(installationId: installationId, value: value)
     )
     try await flush()
   }
 
   private func enqueue(eventName: String, purpose: String, payloadJson: String, eventId: String? = nil) throws {
     if try storage.deletionJournal() != nil { return }
-    if try storage.consentBarrierActive(), Self.consentRequiredPurposes.contains(purpose) { return }
+    let consent = try storage.consentSnapshot(purpose)
+    if consent.blocked { return }
+    try storage.purgeConsentRequiredQueueIfBlocked()
     _ = try storage.enqueue(QueuedEvent(
       eventId: eventId ?? EventFactory.identifier("event"),
       eventName: eventName,
@@ -594,7 +631,8 @@ public actor OpenMasuSDK {
       payloadJson: payloadJson,
       occurredAt: EventFactory.canonicalNow(),
       processingSequence: storage.nextSequence(),
-      enqueuedAtMs: Int64(Date().timeIntervalSince1970 * 1_000)
+      enqueuedAtMs: Int64(Date().timeIntervalSince1970 * 1_000),
+      consentRevision: consent.revision
     ), capacity: QueueCapacity(
       maxRecords: configuration.maxQueueRecords,
       maxBytes: configuration.maxQueueBytes

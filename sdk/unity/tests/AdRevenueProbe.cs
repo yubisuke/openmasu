@@ -61,10 +61,32 @@ internal static partial class Program
             client.Dispose(); client.PumpCallbacks();
             Require(platform.Events.Count == 1, "disposed client invoked the native revenue bridge");
         }
-        Console.WriteLine("Managed ad revenue passed: nullable money, exact micros, opaque repeat identity, main-thread dispatch, consent epochs, pause/reset and disposal.");
+        var scopedPlatform = new AdRevenueProbePlatform(Environment.CurrentManagedThreadId);
+        using (var client = new OpenMasuClient(scopedPlatform, new OpenMasuDispatcher()))
+        {
+            client.SetCollectionEnabled(true);
+            client.UpdateConsentForPurpose(OpenMasuConsentPurpose.RevenueMeasurement, OpenMasuConsentState.Granted, "synthetic-v1", _ => { });
+            scopedPlatform.ConsentCompletion("state=updated"); client.PumpCallbacks();
+            Require(client.TryTrackAdRevenue(value), "revenue-specific grant did not release the managed gate");
+            client.UpdateConsentForPurpose(OpenMasuConsentPurpose.Analytics, OpenMasuConsentState.Withdrawn, "synthetic-v1", _ => { });
+            scopedPlatform.ConsentCompletion("state=updated"); client.PumpCallbacks();
+            Require(scopedPlatform.Events.Count == 1, "analytics withdrawal discarded unrelated revenue");
+            client.UpdateConsent(OpenMasuConsentState.Unknown, "synthetic-v1", _ => { });
+            scopedPlatform.ConsentCompletion("state=updated"); client.PumpCallbacks();
+            Require(client.TryTrackAdRevenue(value), "unknown changed the existing revenue grant");
+            client.UpdateConsentForPurpose(OpenMasuConsentPurpose.RevenueMeasurement, OpenMasuConsentState.Withdrawn, "synthetic-v1", _ => { });
+            scopedPlatform.ConsentCompletion("state=updated");
+            client.UpdateConsentForPurpose(OpenMasuConsentPurpose.RevenueMeasurement, OpenMasuConsentState.Granted, "synthetic-v1", _ => { });
+            scopedPlatform.ConsentCompletion("state=updated"); client.PumpCallbacks();
+            Require(scopedPlatform.Events.Count == 1, "scoped regrant revived a stopped revenue callback");
+            Require(client.TryTrackAdRevenue(value), "scoped regrant did not allow a fresh observation");
+            client.PumpCallbacks();
+            Require(scopedPlatform.Events.Count == 2, "fresh revenue did not reach native dispatch");
+        }
+        Console.WriteLine("Managed ad revenue passed: nullable money, exact micros, opaque repeat identity, main-thread dispatch, purpose consent epochs, pause/reset and disposal.");
     }
 
-    private sealed class AdRevenueProbePlatform : IOpenMasuPlatform, IOpenMasuAdRevenuePlatform, IOpenMasuConsentPlatform
+    private sealed class AdRevenueProbePlatform : IOpenMasuPlatform, IOpenMasuAdRevenuePlatform, IOpenMasuConsentPlatform, IOpenMasuPurposeConsentPlatform
     {
         private readonly int threadId;
         public readonly List<OpenMasuAdRevenueEvent> Events = new List<OpenMasuAdRevenueEvent>();
@@ -73,6 +95,7 @@ internal static partial class Program
         public void TrackAdRevenue(OpenMasuAdRevenueEvent value)
         { Require(Environment.CurrentManagedThreadId == threadId, "native revenue bridge called off the Unity thread"); Events.Add(value); }
         public void UpdateConsent(string state, string policy, Action<string> completion) => ConsentCompletion = completion;
+        public void UpdateConsentForPurpose(string purpose, string state, string policy, Action<string> completion) => ConsentCompletion = completion;
         public void Initialize(OpenMasuOptions options) { }
         public void TrackCustomEvent(string eventKey) { }
         public void StartSession() { }

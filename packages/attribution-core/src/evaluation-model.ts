@@ -30,6 +30,7 @@ export type IngestionDecision = Pick<Delivery,
   Partial<Pick<Delivery,
     "canonical_record_id" | "received_at" | "reason_code" | "processing_purpose_id" |
     "withdrawal_recognized_at" | "alternative_legal_basis_id" | "alternative_legal_basis_policy_version" |
+    "consent_revision" | "consent_recognized_revision" |
     "staleness_policy_version" | "staleness_policy_digest" | "staleness_authority">> &
   { event_name?: RawRecord["event_name"]; allowed?: boolean; payload_disposition: Rejection["payload_disposition"] };
 /** Canonical history is not a newly emitted delivery and deliberately has no invented metadata. */
@@ -38,7 +39,7 @@ export type PreIngestionDecision = IngestionDecision & Pick<Delivery, "received_
 export type RejectedDecision = IngestionDecision & Required<Pick<IngestionDecision, "reason_code">>;
 export type Decisions = Map<string, IngestionDecision>;
 export type ConsentDecision = Pick<Delivery, "consent_evaluation_policy_version" | "consent_decision_reason_code"> &
-  Partial<Pick<Delivery, "processing_purpose_id" | "withdrawal_recognized_at" |
+  Partial<Pick<Delivery, "processing_purpose_id" | "withdrawal_recognized_at" | "consent_revision" | "consent_recognized_revision" |
     "alternative_legal_basis_id" | "alternative_legal_basis_policy_version">> & { allowed: boolean };
 
 export type CandidateHistoryState = {

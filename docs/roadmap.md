@@ -17,7 +17,7 @@ store or production qualification. Those remain separate operator evidence.
 ## Completed contract and product milestones
 
 The contract gate preserves deterministic artifacts across 28 schemas,
-8 registries, and 80 reviewed synthetic fixtures. Patch definitions and
+8 registries, and 81 reviewed synthetic fixtures. Patch definitions and
 derivations are in the [specification](../spec/event-metric-contract-v0.4.md)
 and [fixture guide](../fixtures/v0.4/README.md).
 
@@ -28,7 +28,7 @@ ownership. Completion refers to their declared synthetic scope.
 | --- | --- |
 | Contract v0.2 | Coherent event, attribution, metric and reconciliation contract |
 | Contract v0.3 | Android/platform referrer, revenue and device-producer vocabulary |
-| Contract v0.4 | OpenMasu identity and additive patch ledger, currently through v0.4.33 |
+| Contract v0.4 | OpenMasu identity and additive patch ledger, currently through v0.4.34 |
 | Shadow ledger and import foundation | Durable admission, atomic ledger writes, explicit three-family imports and privacy controls |
 | Cohort metrics and difference audit | SQL/reference parity, saved snapshots, exact arithmetic and aggregate exports |
 | Android, Unity, and redirector | SDK queues, credentials, redirect evidence and synthetic bridges |
@@ -92,6 +92,13 @@ the existing worker imports it. Registration and preview alone do not import
 rows; result pages separate import success from report comparability.
 Follow open child dependencies in the backlog, not the closed functional plan.
 Provider access and privacy-policy decisions remain a separate owner boundary.
+
+[Purpose-scoped consent](privacy-security.md#consent-purpose-and-withdrawal)
+extends the SDK operating path: Android, iOS and Unity retain independent host
+declarations, discard only the affected purpose's stale queue and preserve the
+barrier across restart/reset. Revision-aware server enforcement permits fresh
+regrant without reviving old measurement or bypassing server privacy fences.
+This is a current-source capability, not a change to published SDK archives.
 
 The published rc.3 packages the completed source plan. Current source adds the
 rc.2 upgrade entry and extends the existing migration/privacy rehearsal

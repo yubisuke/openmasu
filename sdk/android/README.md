@@ -49,7 +49,7 @@ Building locally without that emulator result is not device-delivery evidence.
 The queue is bounded by record count and logical UTF-8 bytes. A normal retry is
 idempotent only when every persisted field is identical. A deterministic
 commerce retry may use a new occurrence time and queue sequence, but its event
-ID, event name, purpose, and payload must match. Any other event-ID reuse, or a
+ID, event name, purpose, consent revision, and payload must match. Any other event-ID reuse, or a
 processing sequence already owned by another event, raises
 `queue_event_conflict` before eviction. Android and iOS run the same synthetic
 cases from `sdk/queue-semantics-vectors.json`. Collection disablement blocks new
@@ -74,6 +74,41 @@ the modern data-extraction rules and legacy backup attributes. SQLite
 `secure_delete` is a limited local measure, not a guarantee that every device
 storage copy is erased.
 
+## Purpose-scoped consent (current source)
+
+Declare the host application's policy before initializing or recording measurement.
+The SDK does not choose a legal basis. `updateConsent(state, policyVersion)` remains
+the all-purpose API; `updateConsentForPurpose` changes only one of `attribution`,
+`analytics`, or `revenue_measurement`:
+
+```kotlin
+sdk.updateConsent("granted", "synthetic-policy-v1")
+sdk.updateConsentForPurpose("analytics", "withdrawn", "synthetic-policy-v1")
+// Attribution and revenue keep their own state; analytics cannot enqueue.
+```
+
+States are `granted`, `not_required`, `denied`, `withdrawn`, and `unknown`.
+Only explicit `granted` or `not_required` releases a purpose's local barrier;
+`unknown` does not clear it. Each definitive declaration advances a durable revision.
+Measurements retain their enqueue-time revision. Changing a purpose discards that
+purpose's older queued measurements, including work waiting on the executor; a
+later grant cannot revive them. Other purposes keep their revisions and queues.
+Legacy unversioned records remain unversioned until a declaration changes their
+purpose. The existing Room queue migrates in place without deleting other records.
+
+Consent and revision counters survive restart and installation reset. Delivery
+prefixes at most three current declarations, with stable per-credential event IDs,
+so queue eviction or reset does not lose the policy context. This is bounded
+metadata in existing private storage, not a second delivery queue. Consent controls
+use the non-disableable `fraud_prevention` purpose. A callback reports local queue
+admission, not server recognition. An oversized notification can return `false`
+while still installing the local barrier and purging the affected queue; it is
+not smuggled into a later batch. Retry with a bounded policy value. Requests already
+in flight cannot be recalled; server receipt ordering and privacy fences remain
+authoritative. See the [contract](../../spec/event-metric-contract-v0.4.md).
+
+This source API is not included by implication in older published SDK assets.
+
 ## Local diagnostics
 
 `sdk.diagnosticsSnapshot { snapshot -> ... }` asynchronously reads local state
@@ -85,6 +120,12 @@ enrollment/delivery/deletion attempt's timestamp, closed result and HTTP class.
 The closed attempt metadata survives reopening, including background delivery
 from another SDK instance. No identifier, secret, URL, payload or response body
 is returned. Do not update Android UI directly from the completion callback.
+
+Current Android source also returns `purposeConsent`: exactly the three measurement
+purposes, each with state, optional revision, and blocked flag. The existing aggregate
+`consentBarrierActive` and `CONSENT_BLOCKED` retry state mean at least one purpose is
+blocked, not that every purpose is stopped. Consult the per-purpose entries before
+interpreting other-purpose delivery as a contradiction.
 
 `ACCEPTED` means HTTP 202 admission, **not ledger completion**. Authentication
 rejection, rate limiting and network unavailability remain distinct. Existing

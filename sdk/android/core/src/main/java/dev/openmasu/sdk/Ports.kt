@@ -46,6 +46,9 @@ enum class OpenMasuDiagnosticResult {
 enum class OpenMasuHttpClass { NONE, HTTP_2XX, HTTP_4XX, HTTP_5XX, OTHER }
 enum class OpenMasuRetryState { NONE, PENDING, COLLECTION_BLOCKED, CONSENT_BLOCKED, RESET_PENDING }
 
+/** State declared by the host app; the SDK does not choose a legal basis. */
+data class OpenMasuPurposeConsent(val purpose: String, val state: String, val revision: Long?, val blocked: Boolean)
+
 /** Closed local metadata only. ACCEPTED means HTTP admission, never ledger completion. */
 data class OpenMasuDiagnosticsSnapshot(
   val collectionEnabled: Boolean,
@@ -58,6 +61,7 @@ data class OpenMasuDiagnosticsSnapshot(
   val httpClass: OpenMasuHttpClass,
   val retryState: OpenMasuRetryState,
   val queue: OpenMasuQueueHealth,
+  val purposeConsent: List<OpenMasuPurposeConsent> = emptyList(),
 )
 
 /** Optional transport capability; legacy Boolean transports need no changes. */

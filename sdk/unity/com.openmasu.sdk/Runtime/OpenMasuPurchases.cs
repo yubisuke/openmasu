@@ -27,7 +27,13 @@ namespace OpenMasu.Unity
         void UpdateConsent(string state, string policyVersion, Action<string> completion);
     }
 
+    public interface IOpenMasuPurposeConsentPlatform
+    {
+        void UpdateConsentForPurpose(string purpose, string state, string policyVersion, Action<string> completion);
+    }
+
     public enum OpenMasuConsentState { Granted, Denied, Withdrawn, NotRequired, Unknown }
+    public enum OpenMasuConsentPurpose { Attribution, Analytics, RevenueMeasurement }
     // None of these states is proof of store verification or entitlement.
     public enum OpenMasuPurchaseState { NotSubmitted, Prepared, Queued, Pending }
 
@@ -132,14 +138,35 @@ namespace OpenMasu.Unity
             if (!IsIdentifier(policyVersion)) throw new ArgumentException("consent_policy_version_invalid", nameof(policyVersion));
             if (completion == null) throw new ArgumentNullException(nameof(completion));
             var nativeState = state == OpenMasuConsentState.NotRequired ? "not_required" : state.ToString().ToLowerInvariant();
-            var revenueEpoch = BeginAdRevenueConsentChange();
+            var changesRevenue = state != OpenMasuConsentState.Unknown;
+            var revenueEpoch = changesRevenue ? BeginAdRevenueConsentChange() : 0;
             PurchasePlatform<IOpenMasuConsentPlatform>().UpdateConsent(nativeState, policyVersion,
                 OnceOnMainThread(value => {
                     var updated = OpenMasuPurchaseResult.Fields(value).TryGetValue("state", out var result) && result == "updated";
-                    CompleteAdRevenueConsentChange(revenueEpoch,
+                    if (changesRevenue) CompleteAdRevenueConsentChange(revenueEpoch,
                         state == OpenMasuConsentState.Granted || state == OpenMasuConsentState.NotRequired, updated);
                     completion(updated);
                 }));
+        }
+
+        public void UpdateConsentForPurpose(OpenMasuConsentPurpose purpose, OpenMasuConsentState state,
+            string policyVersion, Action<bool> completion)
+        {
+            if (!Enum.IsDefined(typeof(OpenMasuConsentPurpose), purpose)) throw new ArgumentOutOfRangeException(nameof(purpose));
+            if (!Enum.IsDefined(typeof(OpenMasuConsentState), state)) throw new ArgumentOutOfRangeException(nameof(state));
+            if (!IsIdentifier(policyVersion)) throw new ArgumentException("consent_policy_version_invalid", nameof(policyVersion));
+            if (completion == null) throw new ArgumentNullException(nameof(completion));
+            var capable = PurchasePlatform<IOpenMasuPurposeConsentPlatform>();
+            var nativePurpose = purpose == OpenMasuConsentPurpose.RevenueMeasurement ? "revenue_measurement" : purpose.ToString().ToLowerInvariant();
+            var nativeState = state == OpenMasuConsentState.NotRequired ? "not_required" : state.ToString().ToLowerInvariant();
+            var changesRevenue = purpose == OpenMasuConsentPurpose.RevenueMeasurement && state != OpenMasuConsentState.Unknown;
+            var revenueEpoch = changesRevenue ? BeginAdRevenueConsentChange() : 0;
+            capable.UpdateConsentForPurpose(nativePurpose, nativeState, policyVersion, OnceOnMainThread(value => {
+                var updated = OpenMasuPurchaseResult.Fields(value).TryGetValue("state", out var result) && result == "updated";
+                if (changesRevenue) CompleteAdRevenueConsentChange(revenueEpoch,
+                    state == OpenMasuConsentState.Granted || state == OpenMasuConsentState.NotRequired, updated);
+                completion(updated);
+            }));
         }
 
         private T PurchasePlatform<T>() where T : class

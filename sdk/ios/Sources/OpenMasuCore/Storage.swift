@@ -40,6 +40,13 @@ public final class OpenMasuStorage: @unchecked Sendable {
       )
       """)
     try execute("CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    let columns = try prepare("PRAGMA table_info(queued_events)")
+    var hasConsentRevision = false
+    while sqlite3_step(columns) == SQLITE_ROW {
+      if text(columns, 1) == "consent_revision" { hasConsentRevision = true }
+    }
+    sqlite3_finalize(columns)
+    if !hasConsentRevision { try execute("ALTER TABLE queued_events ADD COLUMN consent_revision INTEGER") }
     try reassertBackupExclusion()
   }
 
@@ -138,7 +145,71 @@ public final class OpenMasuStorage: @unchecked Sendable {
     try setMetadata("collection_enabled", value: enabled ? "1" : "0")
   }
 
-  func consentBarrierActive() throws -> Bool { try metadata("consent_barrier") == "1" }
+  static let consentPurposes = ["attribution", "analytics", "revenue_measurement"]
+
+  func consentBarrierActive() throws -> Bool {
+    try Self.consentPurposes.contains { try consentSnapshot($0).blocked }
+  }
+
+  func consentSnapshot(_ purpose: String) throws -> OpenMasuPurposeConsent {
+    try lock.withLock {
+      guard Self.consentPurposes.contains(purpose) else {
+        return OpenMasuPurposeConsent(purpose: purpose, state: "not_required", revision: nil)
+      }
+      let entry = try consentDocument().entries[purpose]
+      let state = try entry?.state ?? (metadataUnlocked("consent_barrier") == "1" ? "withdrawn" : "unknown")
+      return OpenMasuPurposeConsent(purpose: purpose, state: state, revision: entry?.revision)
+    }
+  }
+
+  func consentCounter() throws -> Int64 { try lock.withLock { try consentDocument().counter } }
+
+  private func consentDocument() throws -> PurposeConsentDocument {
+    guard let value = try metadataUnlocked("purpose_consent_v1") else { return PurposeConsentDocument() }
+    // Corrupt durable state must not silently become a grant or an unversioned state.
+    return try JSONDecoder().decode(PurposeConsentDocument.self, from: Data(value.utf8))
+  }
+
+  func consentDeclarations() throws -> [QueuedEvent] {
+    try lock.withLock {
+      var seen = Set<String>()
+      return try Self.consentPurposes.compactMap { try consentDocument().entries[$0]?.event }
+        .filter { seen.insert($0.eventId).inserted }.sorted { $0.processingSequence < $1.processingSequence }
+    }
+  }
+
+  /// Persist the epoch and its purge together. Queue admission may still refuse an oversized control.
+  func recordConsent(state: String, policyVersion: String, purpose: String?, maxBytes: Int64) throws -> QueuedEvent {
+    guard ["granted", "denied", "withdrawn", "not_required", "unknown"].contains(state),
+          purpose == nil || Self.consentPurposes.contains(purpose!) else { throw OpenMasuError.invalidAttributes }
+    return try lock.withLock {
+      try execute("BEGIN IMMEDIATE")
+      do {
+        var document = try consentDocument()
+        guard document.counter < 9_007_199_254_740_991 else { throw OpenMasuError.storage("consent_revision_exhausted") }
+        document.counter += 1
+        let sequence = (Int64(try metadataUnlocked("processing_sequence") ?? "0") ?? 0) + 1
+        let at = EventFactory.canonicalNow()
+        var payload: [String: Any] = ["event_name": "consent_changed", "consent_state": state,
+          "consent_policy_version": policyVersion, "effective_at": at, "consent_revision": document.counter]
+        if let purpose { payload["processing_purpose_id"] = purpose }
+        let event = QueuedEvent(eventId: EventFactory.identifier("event"), eventName: "consent_changed",
+          processingPurposeId: "fraud_prevention", payloadJson: try EventFactory.json(payload), occurredAt: at,
+          processingSequence: sequence, enqueuedAtMs: Int64(Date().timeIntervalSince1970 * 1_000))
+        if state != "unknown" {
+          let entry = PurposeConsentDeclaration(state: state, revision: document.counter,
+            event: event.logicalQueueBytes <= maxBytes ? event : nil)
+          for target in purpose.map({ [$0] }) ?? Self.consentPurposes { document.entries[target] = entry }
+        }
+        try setMetadataUnlocked("processing_sequence", value: String(sequence))
+        try setMetadataUnlocked("purpose_consent_v1", value: String(decoding: JSONEncoder().encode(document), as: UTF8.self))
+        if state == "denied" || state == "withdrawn" { try setSyntheticValidationSession(nil) }
+        try purgeConsentRequiredQueueIfBlocked()
+        try execute("COMMIT")
+        return event
+      } catch { try? execute("ROLLBACK"); throw error }
+    }
+  }
 
   func diagnosticAttempt() throws -> DiagnosticAttempt {
     guard let value = try metadata("diagnostic_attempt"),
@@ -191,9 +262,21 @@ public final class OpenMasuStorage: @unchecked Sendable {
   }
 
   func purgeConsentRequiredQueueIfBlocked() throws {
-    if try consentBarrierActive() {
-      try clearAppleConversionState()
-      try purge(processingPurposes: ["attribution", "analytics", "revenue_measurement"])
+    try lock.withLock {
+      for purpose in Self.consentPurposes {
+        let consent = try consentSnapshot(purpose)
+        if consent.blocked {
+          if purpose == "attribution" { try clearAppleConversionState() }
+          try purge(processingPurposes: [purpose])
+        } else {
+          let statement = try prepare("DELETE FROM queued_events WHERE processing_purpose_id=? AND consent_revision IS NOT ?")
+          defer { sqlite3_finalize(statement) }
+          bind(purpose, to: statement, at: 1)
+          if let revision = consent.revision { sqlite3_bind_int64(statement, 2, revision) }
+          else { sqlite3_bind_null(statement, 2) }
+          guard sqlite3_step(statement) == SQLITE_DONE else { throw databaseError("consent_purge_failed") }
+        }
+      }
     }
   }
 
@@ -276,8 +359,8 @@ public final class OpenMasuStorage: @unchecked Sendable {
         let statement = try prepare("""
           INSERT INTO queued_events (
             event_id,event_name,processing_purpose_id,payload_json,occurred_at,
-            processing_sequence,enqueued_at_ms
-          ) VALUES (?,?,?,?,?,?,?)
+            processing_sequence,enqueued_at_ms,consent_revision
+          ) VALUES (?,?,?,?,?,?,?,?)
           """)
         defer { sqlite3_finalize(statement) }
         bind(event.eventId, to: statement, at: 1)
@@ -287,6 +370,8 @@ public final class OpenMasuStorage: @unchecked Sendable {
         bind(event.occurredAt, to: statement, at: 5)
         sqlite3_bind_int64(statement, 6, event.processingSequence)
         sqlite3_bind_int64(statement, 7, event.enqueuedAtMs)
+        if let revision = event.consentRevision { sqlite3_bind_int64(statement, 8, revision) }
+        else { sqlite3_bind_null(statement, 8) }
         guard sqlite3_step(statement) == SQLITE_DONE else { throw databaseError("queue_insert_failed") }
         if !victims.isEmpty { try incrementMetadataUnlocked("queue_evicted_total", by: Int64(victims.count)) }
         try execute("COMMIT")
@@ -303,7 +388,7 @@ public final class OpenMasuStorage: @unchecked Sendable {
     try lock.withLock {
       let statement = try prepare("""
         SELECT event_id,event_name,processing_purpose_id,payload_json,occurred_at,
-               processing_sequence,enqueued_at_ms
+               processing_sequence,enqueued_at_ms,consent_revision
         FROM queued_events ORDER BY processing_sequence LIMIT ?
         """)
       defer { sqlite3_finalize(statement) }
@@ -317,7 +402,8 @@ public final class OpenMasuStorage: @unchecked Sendable {
           payloadJson: text(statement, 3),
           occurredAt: text(statement, 4),
           processingSequence: sqlite3_column_int64(statement, 5),
-          enqueuedAtMs: sqlite3_column_int64(statement, 6)
+          enqueuedAtMs: sqlite3_column_int64(statement, 6),
+          consentRevision: sqlite3_column_type(statement, 7) == SQLITE_NULL ? nil : sqlite3_column_int64(statement, 7)
         ))
       }
       return events
@@ -335,6 +421,21 @@ public final class OpenMasuStorage: @unchecked Sendable {
     }
   }
 
+  /// A completed old request cannot delete a replacement enqueued while it was in flight.
+  func deleteDelivered(_ events: [QueuedEvent]) throws {
+    try lock.withLock {
+      for event in events {
+        let statement = try prepare("DELETE FROM queued_events WHERE event_id=? AND processing_sequence=? AND consent_revision IS ?")
+        defer { sqlite3_finalize(statement) }
+        bind(event.eventId, to: statement, at: 1)
+        sqlite3_bind_int64(statement, 2, event.processingSequence)
+        if let revision = event.consentRevision { sqlite3_bind_int64(statement, 3, revision) }
+        else { sqlite3_bind_null(statement, 3) }
+        guard sqlite3_step(statement) == SQLITE_DONE else { throw databaseError("delivery_delete_failed") }
+      }
+    }
+  }
+
   public func purge(processingPurposes: [String]) throws {
     guard !processingPurposes.isEmpty else { return }
     try lock.withLock {
@@ -348,14 +449,10 @@ public final class OpenMasuStorage: @unchecked Sendable {
 
   public func clearForReset() throws {
     try lock.withLock {
-      let consentBarrier = try metadataUnlocked("consent_barrier")
-      let collection = try metadataUnlocked("collection_enabled")
       try execute("BEGIN IMMEDIATE")
       do {
         try execute("DELETE FROM queued_events")
-        try execute("DELETE FROM metadata")
-        if let consentBarrier { try setMetadataUnlocked("consent_barrier", value: consentBarrier) }
-        if let collection { try setMetadataUnlocked("collection_enabled", value: collection) }
+        try execute("DELETE FROM metadata WHERE key NOT IN ('consent_barrier','collection_enabled','purpose_consent_v1','processing_sequence')")
         try execute("COMMIT")
       } catch {
         try? execute("ROLLBACK")
@@ -445,7 +542,7 @@ public final class OpenMasuStorage: @unchecked Sendable {
       SELECT COALESCE(SUM(
         length(CAST(event_id AS BLOB)) + length(CAST(event_name AS BLOB)) +
         length(CAST(processing_purpose_id AS BLOB)) + length(CAST(payload_json AS BLOB)) +
-        length(CAST(occurred_at AS BLOB)) + 16
+        length(CAST(occurred_at AS BLOB)) + 16 + CASE WHEN consent_revision IS NULL THEN 0 ELSE 8 END
       ), 0) FROM queued_events
       """)
     defer { sqlite3_finalize(statement) }
@@ -456,7 +553,7 @@ public final class OpenMasuStorage: @unchecked Sendable {
   private func evictionCandidatesUnlocked(incomingPriority: Int) throws -> [QueuedEvent] {
     let statement = try prepare("""
       SELECT event_id,event_name,processing_purpose_id,payload_json,occurred_at,
-             processing_sequence,enqueued_at_ms
+             processing_sequence,enqueued_at_ms,consent_revision
       FROM queued_events
       WHERE ? = 3 OR
         (? = 0 AND CASE
@@ -491,7 +588,8 @@ public final class OpenMasuStorage: @unchecked Sendable {
         eventId: text(statement, 0), eventName: text(statement, 1),
         processingPurposeId: text(statement, 2), payloadJson: text(statement, 3),
         occurredAt: text(statement, 4), processingSequence: sqlite3_column_int64(statement, 5),
-        enqueuedAtMs: sqlite3_column_int64(statement, 6)
+        enqueuedAtMs: sqlite3_column_int64(statement, 6),
+        consentRevision: sqlite3_column_type(statement, 7) == SQLITE_NULL ? nil : sqlite3_column_int64(statement, 7)
       ))
     }
     return events
@@ -509,7 +607,7 @@ public final class OpenMasuStorage: @unchecked Sendable {
   private func queuedEvent(eventId: String) throws -> QueuedEvent? {
     let statement = try prepare("""
       SELECT event_id,event_name,processing_purpose_id,payload_json,occurred_at,
-             processing_sequence,enqueued_at_ms
+             processing_sequence,enqueued_at_ms,consent_revision
       FROM queued_events WHERE event_id=?
       """)
     defer { sqlite3_finalize(statement) }
@@ -522,7 +620,8 @@ public final class OpenMasuStorage: @unchecked Sendable {
       payloadJson: text(statement, 3),
       occurredAt: text(statement, 4),
       processingSequence: sqlite3_column_int64(statement, 5),
-      enqueuedAtMs: sqlite3_column_int64(statement, 6)
+      enqueuedAtMs: sqlite3_column_int64(statement, 6),
+      consentRevision: sqlite3_column_type(statement, 7) == SQLITE_NULL ? nil : sqlite3_column_int64(statement, 7)
     )
   }
 
@@ -545,12 +644,14 @@ public final class OpenMasuStorage: @unchecked Sendable {
     // payload, event name, and purpose are the deterministic event semantics.
     return existing.eventName == event.eventName &&
       existing.processingPurposeId == event.processingPurposeId &&
+      existing.consentRevision == event.consentRevision &&
       existing.payloadJson == event.payloadJson
   }
 
   private func isExactQueueDuplicate(_ event: QueuedEvent, existing: QueuedEvent) -> Bool {
     existing.eventName == event.eventName &&
       existing.processingPurposeId == event.processingPurposeId &&
+      existing.consentRevision == event.consentRevision &&
       existing.payloadJson == event.payloadJson &&
       existing.occurredAt == event.occurredAt &&
       existing.processingSequence == event.processingSequence &&

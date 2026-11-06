@@ -119,7 +119,7 @@ public struct InstallationCredential: Codable, Equatable, Sendable {
   }
 }
 
-public struct QueuedEvent: Equatable, Sendable {
+public struct QueuedEvent: Codable, Equatable, Sendable {
   public let eventId: String
   public let eventName: String
   public let processingPurposeId: String
@@ -127,6 +127,7 @@ public struct QueuedEvent: Equatable, Sendable {
   public let occurredAt: String
   public let processingSequence: Int64
   public let enqueuedAtMs: Int64
+  public let consentRevision: Int64?
 
   public init(
     eventId: String,
@@ -135,7 +136,8 @@ public struct QueuedEvent: Equatable, Sendable {
     payloadJson: String,
     occurredAt: String,
     processingSequence: Int64,
-    enqueuedAtMs: Int64
+    enqueuedAtMs: Int64,
+    consentRevision: Int64? = nil
   ) {
     self.eventId = eventId
     self.eventName = eventName
@@ -144,6 +146,7 @@ public struct QueuedEvent: Equatable, Sendable {
     self.occurredAt = occurredAt
     self.processingSequence = processingSequence
     self.enqueuedAtMs = enqueuedAtMs
+    self.consentRevision = consentRevision
   }
 }
 
@@ -170,6 +173,25 @@ public enum OpenMasuRetryState: String, Sendable {
   case none, pending, collectionBlocked = "collection_blocked", consentBlocked = "consent_blocked", resetPending = "reset_pending"
 }
 
+public struct OpenMasuPurposeConsent: Equatable, Sendable {
+  public let purpose: String
+  public let state: String
+  public let revision: Int64?
+  public var blocked: Bool { state == "denied" || state == "withdrawn" }
+}
+
+struct PurposeConsentDocument: Codable {
+  var counter: Int64 = 0
+  var entries: [String: PurposeConsentDeclaration] = [:]
+}
+
+struct PurposeConsentDeclaration: Codable {
+  let state: String
+  let revision: Int64
+  // An oversized notification still installs a bounded local state, never a retry payload.
+  let event: QueuedEvent?
+}
+
 /// Closed local metadata. HTTP acceptance is not ledger completion or recognized revenue.
 public struct OpenMasuDiagnosticsSnapshot: Equatable, Sendable {
   public let collectionEnabled: Bool
@@ -182,6 +204,7 @@ public struct OpenMasuDiagnosticsSnapshot: Equatable, Sendable {
   public let httpClass: OpenMasuHttpClass
   public let retryState: OpenMasuRetryState
   public let queue: OpenMasuQueueHealth
+  public var purposeConsent: [OpenMasuPurposeConsent] = []
 }
 
 struct DiagnosticAttempt: Codable {
@@ -219,7 +242,7 @@ struct QueueAdmissionResult: Equatable, Sendable {
 extension QueuedEvent {
   var logicalQueueBytes: Int64 {
     Int64(eventId.utf8.count + eventName.utf8.count + processingPurposeId.utf8.count +
-      payloadJson.utf8.count + occurredAt.utf8.count + 16)
+      payloadJson.utf8.count + occurredAt.utf8.count + 16 + (consentRevision == nil ? 0 : 8))
   }
 
   var queuePriority: Int {
@@ -335,6 +358,7 @@ enum EventFactory {
         "payload": payload,
       ]
       if let wrapperVersion { record["wrapper_version"] = wrapperVersion }
+      if let consentRevision = event.consentRevision { record["consent_revision"] = consentRevision }
       return record
     }
     return try JSONSerialization.data(withJSONObject: ["records": records], options: [.sortedKeys, .withoutEscapingSlashes])

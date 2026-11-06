@@ -112,6 +112,18 @@ public final class OpenMasuUnityBridge {
   }
 
   public static void updateConsent(String state, String policyVersion, StringCallback callback) {
+    updateConsentScope(null, state, policyVersion, callback);
+  }
+
+  public static void updateConsentForPurpose(String purpose, String state, String policyVersion, StringCallback callback) {
+    if (callback == null) throw new IllegalArgumentException("callback_required");
+    if (!"attribution".equals(purpose) && !"analytics".equals(purpose) && !"revenue_measurement".equals(purpose)) {
+      callback.onResult("state=not_submitted&error=invalid_arguments"); return;
+    }
+    updateConsentScope(purpose, state, policyVersion, callback);
+  }
+
+  private static void updateConsentScope(String purpose, String state, String policyVersion, StringCallback callback) {
     if (callback == null) throw new IllegalArgumentException("callback_required");
     OpenMasuSdk current = sdk;
     if (current == null) {
@@ -119,10 +131,12 @@ public final class OpenMasuUnityBridge {
       return;
     }
     try {
-      current.updateConsent(state, policyVersion, updated -> {
+      kotlin.jvm.functions.Function1<Boolean, kotlin.Unit> completed = updated -> {
         callback.onResult(updated ? "state=updated" : "state=not_submitted&error=native_failure");
         return kotlin.Unit.INSTANCE;
-      });
+      };
+      if (purpose == null) current.updateConsent(state, policyVersion, completed);
+      else current.updateConsentForPurpose(purpose, state, policyVersion, completed);
     } catch (IllegalArgumentException exception) {
       callback.onResult("state=not_submitted&error=invalid_arguments");
     } catch (RuntimeException exception) {
@@ -151,6 +165,12 @@ public final class OpenMasuUnityBridge {
   public static void getDiagnosticsSnapshot(StringCallback callback) {
     requireSdk().diagnosticsSnapshot(value -> {
       OpenMasuQueueHealth queue = value.getQueue();
+      StringBuilder purposes = new StringBuilder();
+      for (dev.openmasu.sdk.OpenMasuPurposeConsent consent : value.getPurposeConsent()) {
+        purposes.append("&consent_").append(consent.getPurpose()).append("_state=").append(consent.getState());
+        purposes.append("&consent_").append(consent.getPurpose()).append("_revision=")
+            .append(consent.getRevision() == null ? "" : consent.getRevision());
+      }
       callback.onResult("available=true&collection_enabled=" + value.getCollectionEnabled() +
           "&consent_barrier_active=" + value.getConsentBarrierActive() + "&reset_pending=" + value.getResetPending() +
           "&enrolled=" + value.getEnrolled() + "&last_attempt_at_ms=" + (value.getLastAttemptAtMs() == null ? "" : value.getLastAttemptAtMs()) +
@@ -159,7 +179,7 @@ public final class OpenMasuUnityBridge {
           "&http_class=" + value.getHttpClass().name().toLowerCase(java.util.Locale.ROOT) +
           "&retry_state=" + value.getRetryState().name().toLowerCase(java.util.Locale.ROOT) +
           "&pending_count=" + queue.getPendingCount() + "&logical_bytes=" + queue.getLogicalBytes() +
-          "&evicted_total=" + queue.getEvictedTotal() + "&rejected_total=" + queue.getRejectedTotal());
+          "&evicted_total=" + queue.getEvictedTotal() + "&rejected_total=" + queue.getRejectedTotal() + purposes);
       return kotlin.Unit.INSTANCE;
     });
   }

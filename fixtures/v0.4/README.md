@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 80 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 81 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -23,6 +23,14 @@ The validator checks every object against its Draft 2020-12 schema, checks regis
 The data is synthetic. It contains no external-source format, campaign data, user data, credential, live fraud rule, or operational threshold.
 
 ## Independent third-oracle calculations
+
+### Fixture 81: purpose-scoped consent
+
+The [independent admission matrix](81-purpose-consent/README.md) derives eight
+accepted logical/raw records, ten deliveries and two payload-discarding
+rejections. Regrant accepts revision 4, never revives queued revision 1; analytics
+withdrawal does not stop separately declared revenue measurement. All thirteen
+families are independently authored; existing 80 inputs/1040 goldens are unchanged.
 
 ### Fixture 80: cost per outcome installation
 

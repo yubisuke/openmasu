@@ -30,6 +30,7 @@ export type OpenMasuEventDeliveryV04 = {
   reason_code?:
     | "client_scope_mismatch"
     | "consent_withdrawn"
+    | "consent_revision_unconfirmed"
     | "aggregate_installation_join_forbidden"
     | "event_id_conflict"
     | "record_id_collision"
@@ -43,7 +44,11 @@ export type OpenMasuEventDeliveryV04 = {
     | "consent_not_required"
     | "consent_valid_before_withdrawal"
     | "documented_alternative_legal_basis"
-    | "consent_withdrawn";
+    | "consent_withdrawn"
+    | "consent_valid_for_revision"
+    | "consent_revision_unconfirmed";
+  consent_revision?: number;
+  consent_recognized_revision?: number;
   withdrawal_recognized_at?: string;
   alternative_legal_basis_id?: string;
   alternative_legal_basis_policy_version?: string;
@@ -370,6 +375,7 @@ export type OpenMasuRejectionV04 = {
   reason_code:
     | "client_scope_mismatch"
     | "consent_withdrawn"
+    | "consent_revision_unconfirmed"
     | "aggregate_installation_join_forbidden"
     | "event_id_conflict"
     | "record_id_collision"
@@ -386,7 +392,11 @@ export type OpenMasuRejectionV04 = {
     | "consent_not_required"
     | "consent_valid_before_withdrawal"
     | "documented_alternative_legal_basis"
-    | "consent_withdrawn";
+    | "consent_withdrawn"
+    | "consent_valid_for_revision"
+    | "consent_revision_unconfirmed";
+  consent_revision?: number;
+  consent_recognized_revision?: number;
   withdrawal_recognized_at?: string;
   staleness_policy_version?: string;
   staleness_policy_digest?: string;
@@ -479,7 +489,11 @@ export interface OpenMasuRawRecordV04 {
     | "consent_not_required"
     | "consent_valid_before_withdrawal"
     | "documented_alternative_legal_basis"
-    | "consent_withdrawn";
+    | "consent_withdrawn"
+    | "consent_valid_for_revision"
+    | "consent_revision_unconfirmed";
+  consent_revision?: number;
+  consent_recognized_revision?: number;
   withdrawal_recognized_at?: string;
   alternative_legal_basis_id?: string;
   alternative_legal_basis_policy_version?: string;

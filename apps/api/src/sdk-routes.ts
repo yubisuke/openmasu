@@ -87,6 +87,9 @@ function normalizedRecord(
 ): Any {
   const payload = source.payload;
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("event_payload_invalid");
+  if (source.consent_revision !== undefined && (!Number.isSafeInteger(source.consent_revision) || source.consent_revision < 0)) {
+    throw new Error("consent_revision_invalid");
+  }
   if (payload.adservices_context !== undefined || payload.extensions?.adservices_context !== undefined) {
     throw new Error("device_adservices_claim_forbidden");
   }
@@ -203,6 +206,7 @@ function normalizedRecord(
     // Processing purpose is assigned by the authenticated runtime, never trusted from the client.
     processing_purpose_id: processingPurposeId,
     processing_sequence: source.processing_sequence,
+    ...(source.consent_revision !== undefined ? { consent_revision: source.consent_revision } : {}),
     payload,
   };
 }
@@ -284,7 +288,7 @@ export async function handleSdkBatch(
         requestDigest: identity.requestDigest, outcome: "failed", reasonCode: reason,
       });
     }
-    return writeJson(response, 403, { error: reason });
+    return writeJson(response, reason === "consent_revision_invalid" ? 400 : 403, { error: reason });
   }
   const durableBody = Buffer.from(JSON.stringify({ records }), "utf8");
   let ingestBatchId: string;

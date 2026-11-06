@@ -203,7 +203,7 @@ class OpenMasuSdkTest {
     assertEquals(OpenMasuHttpClass.NONE, attempted.httpClass)
     assertEquals(OpenMasuRetryState.PENDING, attempted.retryState)
     val keys = OpenMasuDiagnosticsSnapshot::class.java.declaredFields.filter { !it.isSynthetic }.map { it.name }.toSet()
-    assertEquals(setOf("collectionEnabled", "consentBarrierActive", "resetPending", "enrolled", "lastAttemptAtMs", "lastOperation", "lastResult", "httpClass", "retryState", "queue"), keys)
+    assertEquals(setOf("collectionEnabled", "consentBarrierActive", "resetPending", "enrolled", "lastAttemptAtMs", "lastOperation", "lastResult", "httpClass", "retryState", "queue", "purposeConsent"), keys)
     assertFalse(attempted.toString().contains("synthetic-secret"))
   }
 
@@ -386,6 +386,100 @@ class OpenMasuSdkTest {
     assertEquals(setOf("fraud_prevention"), remaining.map { it.processingPurposeId }.toSet())
   }
 
+  @Test fun `purpose declarations stop only their queue and survive restart with their enqueue revision`() {
+    val transport = RecordingTransport(false)
+    val sdk = sdk(transport)
+    sdk.updateConsent("granted","synthetic-v1")
+    sdk.updateConsentForPurpose("analytics","withdrawn","synthetic-v1")
+    sdk.updateConsentForPurpose("revenue_measurement","not_required","synthetic-v1")
+    sdk.initialize()
+    sdk.startSession()
+    sdk.trackPurchase("transaction:purpose","100",2,"USD")
+    sdk.pendingCount()
+    val queue = sdk.pendingEvents()
+    assertTrue(queue.any { it.eventName == "install" && it.consentRevision == 1L })
+    assertTrue(queue.any { it.eventName == "purchase" && it.consentRevision == 3L })
+    assertFalse(queue.any { it.processingPurposeId == "analytics" })
+    val states = diagnostics(sdk).purposeConsent.associateBy { it.purpose }
+    assertEquals("granted",states.getValue("attribution").state)
+    assertEquals("withdrawn",states.getValue("analytics").state)
+    assertEquals("not_required",states.getValue("revenue_measurement").state)
+    assertTrue(states.getValue("analytics").blocked)
+    sdk.close(); created.remove(sdk)
+    val reopened = sdk(transport)
+    reopened.initialize()
+    reopened.updateConsentForPurpose("analytics","unknown","synthetic-v1")
+    reopened.startSession()
+    reopened.pendingCount()
+    assertFalse(reopened.pendingEvents().any { it.processingPurposeId == "analytics" })
+    reopened.updateConsentForPurpose("analytics","granted","synthetic-v1")
+    reopened.startSession()
+    reopened.pendingCount()
+    val session = reopened.pendingEvents().single { it.eventName == "session_start" }
+    assertEquals(5L,session.consentRevision)
+    assertEquals(5L,JSONObject(EventFactory.envelope(listOf(session),"synthetic",null))
+      .getJSONArray("records").getJSONObject(0).getLong("consent_revision"))
+    assertTrue(reopened.pendingEvents().any { it.eventName == "purchase" && it.consentRevision == 3L })
+    reopened.updateConsent("denied","synthetic-global")
+    reopened.pendingCount()
+    assertTrue(diagnostics(reopened).purposeConsent.all { it.blocked })
+    assertFalse(reopened.pendingEvents().any { it.processingPurposeId in OpenMasuStorage.CONSENT_PURPOSES })
+  }
+
+  @Test fun `in-flight withdrawal and immediate regrant cannot revive old analytics or stop unrelated revenue`() {
+    val entered = CountDownLatch(1)
+    val release = CountDownLatch(1)
+    val calls = AtomicInteger()
+    val delivered = java.util.concurrent.CopyOnWriteArrayList<List<QueuedEvent>>()
+    val transport = object : OpenMasuTransport {
+      override fun enroll(installationId: String) = InstallationCredential("synthetic-key","synthetic-secret")
+      override fun deliver(credential: InstallationCredential, events: List<QueuedEvent>): Boolean {
+        delivered += events
+        if (calls.getAndIncrement() == 0) { entered.countDown(); check(release.await(5,TimeUnit.SECONDS)) }
+        return false
+      }
+      override fun deleteInstallation(credential: InstallationCredential, installationId: String) = true
+    }
+    val sdk = sdk(transport)
+    sdk.startSession()
+    assertTrue(entered.await(5,TimeUnit.SECONDS))
+    try {
+      sdk.trackCustomEvent("old_waiting_call")
+      sdk.trackPurchase("transaction:unaffected","100",2,"USD")
+      sdk.updateConsentForPurpose("analytics","withdrawn","synthetic-v1")
+      sdk.updateConsentForPurpose("analytics","granted","synthetic-v1")
+      sdk.trackCustomEvent("fresh_after_grant")
+    } finally { release.countDown() }
+    sdk.pendingCount()
+    assertFalse(sdk.pendingEvents().any { it.eventName == "session_start" || it.payloadJson.contains("old_waiting_call") })
+    assertTrue(sdk.pendingEvents().any { it.payloadJson.contains("fresh_after_grant") && it.consentRevision == 2L })
+    assertTrue(sdk.pendingEvents().any { it.eventName == "purchase" && it.consentRevision == null })
+    assertFalse(delivered.drop(1).flatten().any { it.eventName == "session_start" || it.payloadJson.contains("old_waiting_call") })
+    assertTrue(delivered.drop(1).all { it.size <= 100 })
+  }
+
+  @Test fun `current declarations survive control eviction and reset without reviving a stopped purpose`() {
+    val transport = RecordingTransport(false)
+    val sdk = sdk(transport, configuration = OpenMasuConfiguration(
+      "http://127.0.0.1","sdk-key:synthetic","synthetic-secret",maxQueueRecords=1,maxQueueBytes=65_536))
+    sdk.updateConsentForPurpose("analytics","withdrawn","synthetic-v1")
+    sdk.updateConsentForPurpose("revenue_measurement","not_required","synthetic-v1")
+    sdk.pendingCount()
+    assertEquals(1,sdk.pendingCount())
+    assertEquals(setOf("analytics","revenue_measurement"),transport.deliveredPayloads.last()
+      .filter { it.eventName == "consent_changed" }.map { JSONObject(it.payloadJson).getString("processing_purpose_id") }.toSet())
+    val before = transport.deliveredPayloads.last().map { it.eventId }.toSet()
+    val priorId = sdk.installationId()
+    assertTrue(resetResult(sdk))
+    sdk.pendingCount()
+    assertNotEquals(priorId,sdk.installationId())
+    assertTrue(diagnostics(sdk).purposeConsent.single { it.purpose == "analytics" }.blocked)
+    assertTrue(transport.deliveredPayloads.last().filter { it.eventName == "consent_changed" }.none { it.eventId in before })
+    sdk.startSession(); sdk.pendingCount()
+    assertFalse(sdk.pendingEvents().any { it.processingPurposeId == "analytics" })
+    assertEquals(2L,OpenMasuStorage(context).consentCounter())
+  }
+
   @Test fun `persisted consent barrier re-purges after restart and blocks new measurement`() {
     val storage = OpenMasuStorage(context)
     val database = OpenMasuQueueDatabase.open(context)
@@ -550,7 +644,7 @@ class OpenMasuSdkTest {
       }.get(5, TimeUnit.SECONDS)
       assertEquals(listOf("event:legacy"), result.first)
       assertEquals(null, result.second)
-      assertEquals(2, SQLiteDatabase.openDatabase(queueFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { it.version })
+      assertEquals(3, SQLiteDatabase.openDatabase(queueFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { it.version })
     } finally {
       executor.shutdownNow()
       database.close()
@@ -748,6 +842,7 @@ class OpenMasuSdkTest {
     assertTrue(completed.await(5, TimeUnit.SECONDS))
     assertFalse(result.get())
     assertTrue(OpenMasuStorage(context).consentBarrierActive())
+    assertTrue(OpenMasuStorage(context).consentDeclarations().isEmpty())
     assertTrue(sdk.pendingEvents().none { it.eventName == "purchase" })
   }
 

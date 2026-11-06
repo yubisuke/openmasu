@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+import SQLite3
 @testable import OpenMasuCore
 #if os(macOS)
 import Darwin
@@ -36,7 +37,7 @@ final class OpenMasuCoreTests: XCTestCase {
     XCTAssertEqual(delivered.lastResult, .customSuccess)
     XCTAssertEqual(delivered.httpClass, .none)
     XCTAssertEqual(Set(Mirror(reflecting: delivered).children.compactMap(\.label)), Set([
-      "collectionEnabled", "consentBarrierActive", "resetPending", "enrolled", "lastAttemptAtMs", "lastOperation", "lastResult", "httpClass", "retryState", "queue",
+      "collectionEnabled", "consentBarrierActive", "resetPending", "enrolled", "lastAttemptAtMs", "lastOperation", "lastResult", "httpClass", "retryState", "queue", "purposeConsent",
     ]))
     XCTAssertFalse(String(describing: delivered).contains("synthetic-secret"))
     let reopened = try OpenMasuSDK(configuration: configuration(defaultEnabled: true), storageRoot: root, transport: transport)
@@ -441,6 +442,119 @@ final class OpenMasuCoreTests: XCTestCase {
     let resetPayloads = deliveredPayloads.flatMap { $0 }.map(\.payloadJson)
     XCTAssertTrue(resetPayloads.contains { $0.contains("\"install_origin\":\"identifier_reset\"") })
     XCTAssertTrue(resetPayloads.contains { $0.contains("\"referrer_status\":\"not_applicable\"") })
+  }
+
+  func testPurposeConsentPersistsIndependentStatesAndEnqueueRevisions() async throws {
+    let root = temporaryDirectory("purpose-consent"), transport = RecordingTransport(deliveryFailure: true)
+    let sdk = try OpenMasuSDK(configuration: configuration(defaultEnabled: true), storageRoot: root, transport: transport)
+    try await allowDeliveryFailure { try await sdk.updateConsent(state: "granted", policyVersion: "synthetic-v1") }
+    try await allowDeliveryFailure { try await sdk.updateConsentForPurpose("analytics", state: "withdrawn", policyVersion: "synthetic-v1") }
+    try await allowDeliveryFailure { try await sdk.updateConsentForPurpose("revenue_measurement", state: "not_required", policyVersion: "synthetic-v1") }
+    try await allowDeliveryFailure { try await sdk.initialize() }
+    try await allowDeliveryFailure { try await sdk.startSession() }
+    try await allowDeliveryFailure { try await sdk.trackSettledPurchase(transactionId: "transaction:purpose", amountUnscaled: "100", amountScale: 2, currency: "USD") }
+    let before = try await sdk.pendingEvents()
+    XCTAssertTrue(before.contains { $0.eventName == "install" && $0.consentRevision == 1 })
+    XCTAssertTrue(before.contains { $0.eventName == "purchase" && $0.consentRevision == 3 })
+    XCTAssertFalse(before.contains { $0.processingPurposeId == "analytics" })
+    let diagnostic = try await sdk.diagnosticsSnapshot()
+    XCTAssertEqual(diagnostic.purposeConsent.map(\.state), ["granted", "withdrawn", "not_required"])
+    XCTAssertEqual(diagnostic.retryState, .consentBlocked)
+
+    let reopened = try OpenMasuSDK(configuration: configuration(defaultEnabled: true), storageRoot: root, transport: transport)
+    try await allowDeliveryFailure { try await reopened.updateConsentForPurpose("analytics", state: "unknown", policyVersion: "synthetic-v1") }
+    try await allowDeliveryFailure { try await reopened.startSession() }
+    let stillBlocked = try await reopened.pendingEvents()
+    XCTAssertFalse(stillBlocked.contains { $0.processingPurposeId == "analytics" })
+    try await allowDeliveryFailure { try await reopened.updateConsentForPurpose("analytics", state: "granted", policyVersion: "synthetic-v1") }
+    try await allowDeliveryFailure { try await reopened.startSession() }
+    let current = try await reopened.pendingEvents()
+    let session = try XCTUnwrap(current.first { $0.eventName == "session_start" })
+    XCTAssertEqual(session.consentRevision, 5)
+    XCTAssertTrue(current.contains { $0.eventName == "purchase" && $0.consentRevision == 3 })
+    let envelope = try JSONSerialization.jsonObject(with: EventFactory.envelope(events: [session], producerVersion: "synthetic", wrapperVersion: nil)) as! [String: Any]
+    XCTAssertEqual((envelope["records"] as! [[String: Any]])[0]["consent_revision"] as? Int, 5)
+    try await allowDeliveryFailure { try await reopened.updateConsent(state: "denied", policyVersion: "synthetic-global") }
+    let denied = try await reopened.diagnosticsSnapshot()
+    XCTAssertTrue(denied.purposeConsent.allSatisfy(\.blocked))
+    let remaining = try await reopened.pendingEvents()
+    XCTAssertFalse(remaining.contains { OpenMasuStorage.consentPurposes.contains($0.processingPurposeId) })
+  }
+
+  func testPurposeWithdrawalDuringDeliveryDoesNotReviveOldQueueOrStopRevenue() async throws {
+    let started = expectation(description: "first delivery is in flight")
+    let transport = PausedConsentTransport(started: started)
+    let sdk = try OpenMasuSDK(configuration: configuration(defaultEnabled: true), storageRoot: temporaryDirectory("purpose-race"), transport: transport)
+    let sending = Task { try await sdk.startSession() }
+    await fulfillment(of: [started], timeout: 3)
+    try await allowDeliveryFailure { try await sdk.trackSettledPurchase(transactionId: "transaction:unaffected", amountUnscaled: "100", amountScale: 2, currency: "USD") }
+    try await allowDeliveryFailure { try await sdk.updateConsentForPurpose("analytics", state: "withdrawn", policyVersion: "synthetic-v1") }
+    try await allowDeliveryFailure { try await sdk.updateConsentForPurpose("analytics", state: "granted", policyVersion: "synthetic-v1") }
+    try await allowDeliveryFailure { try await sdk.trackCustomEvent("fresh_after_grant") }
+    await transport.resume()
+    try await allowDeliveryFailure { try await sending.value }
+    let current = try await sdk.pendingEvents()
+    XCTAssertFalse(current.contains { $0.eventName == "session_start" })
+    XCTAssertTrue(current.contains { $0.eventName == "purchase" && $0.consentRevision == nil })
+    XCTAssertTrue(current.contains { $0.eventName == "custom_event" && $0.consentRevision == 2 })
+    let batches = await transport.batches()
+    XCTAssertFalse(batches.dropFirst(2).flatMap { $0 }.contains { $0.eventName == "session_start" })
+    XCTAssertTrue(batches.allSatisfy { $0.count <= 100 })
+  }
+
+  func testPurposeDeclarationsSurviveEvictionResetAndOversizedControlRefusal() async throws {
+    let root = temporaryDirectory("purpose-reset"), transport = RecordingTransport(deliveryFailure: true)
+    let config = OpenMasuConfiguration(endpoint: URL(string: "http://127.0.0.1:1")!, sdkKeyId: "sdk-key:synthetic",
+      sdkSecret: "synthetic-secret", maxQueueRecords: 1, maxQueueBytes: 65_536)
+    let sdk = try OpenMasuSDK(configuration: config, storageRoot: root, transport: transport)
+    try await allowDeliveryFailure { try await sdk.updateConsentForPurpose("analytics", state: "withdrawn", policyVersion: "synthetic-v1") }
+    try await allowDeliveryFailure { try await sdk.updateConsentForPurpose("revenue_measurement", state: "not_required", policyVersion: "synthetic-v1") }
+    let count = try await sdk.pendingCount()
+    XCTAssertEqual(count, 1)
+    let before = await transport.deliveredPayloads().last!
+    XCTAssertEqual(before.count, 2, "the evicted declaration is recovered from bounded metadata")
+    let oldId = try await sdk.installationIdForMeasurement()
+    await transport.setDeliveryFailure(false)
+    try await sdk.resetInstallationId()
+    let replacement = try await sdk.installationIdForMeasurement()
+    XCTAssertNotEqual(oldId, replacement)
+    let after = await transport.deliveredPayloads().last!
+    XCTAssertTrue(after.filter { $0.eventName == "consent_changed" }.allSatisfy { event in !before.contains { $0.eventId == event.eventId } })
+    let state = try await sdk.diagnosticsSnapshot()
+    XCTAssertTrue(state.purposeConsent.first { $0.purpose == "analytics" }!.blocked)
+    try await sdk.startSession()
+    let remaining = try await sdk.pendingEvents()
+    XCTAssertFalse(remaining.contains { $0.processingPurposeId == "analytics" })
+    try await sdk.updateConsent(state: "withdrawn", policyVersion: String(repeating: "x", count: 70_000))
+    let storage = try OpenMasuStorage(root: root)
+    XCTAssertTrue(try storage.consentBarrierActive())
+    XCTAssertTrue(try storage.consentDeclarations().isEmpty)
+    XCTAssertEqual(try storage.consentCounter(), 3)
+  }
+
+  func testUnversionedQueueMigratesWithoutDiscardingEvidence() throws {
+    let root = temporaryDirectory("consent-migration")
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    var database: OpaquePointer?
+    XCTAssertEqual(sqlite3_open(root.appendingPathComponent("queue.sqlite3").path, &database), SQLITE_OK)
+    let sql = """
+      CREATE TABLE queued_events (event_id TEXT PRIMARY KEY, event_name TEXT NOT NULL, processing_purpose_id TEXT NOT NULL,
+        payload_json TEXT NOT NULL, occurred_at TEXT NOT NULL, processing_sequence INTEGER NOT NULL UNIQUE, enqueued_at_ms INTEGER NOT NULL);
+      INSERT INTO queued_events VALUES ('event:legacy','session_start','analytics','{}','2026-08-26T00:00:00.000Z',1,1);
+      """
+    XCTAssertEqual(sqlite3_exec(database, sql, nil, nil, nil), SQLITE_OK)
+    sqlite3_close(database)
+    let storage = try OpenMasuStorage(root: root)
+    let event = try XCTUnwrap(storage.pending().first)
+    XCTAssertEqual(event.eventId, "event:legacy")
+    XCTAssertNil(event.consentRevision)
+    try storage.purgeConsentRequiredQueueIfBlocked()
+    XCTAssertEqual(try storage.pending(), [event])
+  }
+
+  private func allowDeliveryFailure(_ work: () async throws -> Void) async throws {
+    do { try await work() }
+    catch { XCTAssertEqual(error as? OpenMasuError, .transport(503)) }
   }
 
   func testConsentBarrierSurvivesRestartAndRepurgesBeforeDelivery() async throws {
@@ -926,6 +1040,24 @@ private final class DeepLinkRecorder: @unchecked Sendable {
   private var threads: [Thread] = []
   func append(_ value: OpenMasuDeepLink) { lock.lock(); values.append(value); threads.append(Thread.current); lock.unlock() }
   func snapshot() -> ([OpenMasuDeepLink], [Thread]) { lock.lock(); defer { lock.unlock() }; return (values, threads) }
+}
+
+private actor PausedConsentTransport: OpenMasuTransport {
+  let started: XCTestExpectation
+  private var continuation: CheckedContinuation<Void, Never>?
+  private var deliveries: [[QueuedEvent]] = []
+  init(started: XCTestExpectation) { self.started = started }
+  func enroll(installationId: String) async throws -> InstallationCredential { .init(keyId: "synthetic-key", secret: "synthetic-secret") }
+  func deliver(credential: InstallationCredential, events: [QueuedEvent]) async throws {
+    deliveries.append(events)
+    if deliveries.count == 1 {
+      await withCheckedContinuation { continuation in self.continuation = continuation; started.fulfill() }
+    }
+    throw OpenMasuError.transport(503)
+  }
+  func deleteInstallation(credential: InstallationCredential, installationId: String) async throws { }
+  func resume() { continuation?.resume(); continuation = nil }
+  func batches() -> [[QueuedEvent]] { deliveries }
 }
 
 private actor RecordingTransport: OpenMasuTransport {

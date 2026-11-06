@@ -1,0 +1,329 @@
+{
+  "contract_version": "0.4.0",
+  "fx_policy": {
+    "policy_version": "synthetic-fx-v1",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "1",
+        "rate_scale": 0,
+        "source": "synthetic-fixture-rate",
+        "as_of": "2026-11-01T00:00:00.000Z"
+      }
+    ]
+  },
+  "server_context": {
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-11-01T00:00:10.000Z",
+    "policy_digest": "synthetic-consent-policy-81",
+    "processing_purposes": [
+      {
+        "processing_purpose_id": "attribution",
+        "consent_required": true,
+        "policy_version": "purpose-consent-v1"
+      },
+      {
+        "processing_purpose_id": "analytics",
+        "consent_required": true,
+        "policy_version": "purpose-consent-v1"
+      },
+      {
+        "processing_purpose_id": "revenue_measurement",
+        "consent_required": true,
+        "policy_version": "purpose-consent-v1"
+      }
+    ],
+    "withdrawals": [],
+    "alternative_legal_bases": [],
+    "purpose_consent_controls": [
+      {
+        "consent_state": "granted",
+        "consent_revision": 1,
+        "recognized_sequence": 1,
+        "recognized_at": "2026-11-01T00:00:01.000Z"
+      },
+      {
+        "processing_purpose_id": "analytics",
+        "consent_state": "withdrawn",
+        "consent_revision": 2,
+        "recognized_sequence": 3,
+        "recognized_at": "2026-11-01T00:00:03.000Z"
+      },
+      {
+        "processing_purpose_id": "revenue_measurement",
+        "consent_state": "not_required",
+        "consent_revision": 3,
+        "recognized_sequence": 4,
+        "recognized_at": "2026-11-01T00:00:04.000Z"
+      },
+      {
+        "processing_purpose_id": "analytics",
+        "consent_state": "granted",
+        "consent_revision": 4,
+        "recognized_sequence": 6,
+        "recognized_at": "2026-11-01T00:00:06.000Z"
+      },
+      {
+        "processing_purpose_id": "attribution",
+        "consent_state": "granted",
+        "consent_revision": 5,
+        "recognized_sequence": 9,
+        "recognized_at": "2026-11-01T00:00:09.000Z"
+      }
+    ]
+  },
+  "records": [
+    {
+      "contract_version": "0.4.0",
+      "record_id": "consent81-control-1",
+      "delivery_id": "delivery:consent81-control-1",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "synthetic-consent-v1",
+      "event_id": "event:consent81-control-1",
+      "event_name": "consent_changed",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-11-01T00:00:01.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-11-01T00:00:01.000Z",
+      "processing_purpose_id": "fraud_prevention",
+      "processing_sequence": 1,
+      "payload": {
+        "event_name": "consent_changed",
+        "consent_state": "granted",
+        "consent_revision": 1,
+        "effective_at": "2026-11-01T00:00:01.000Z",
+        "consent_policy_version": "synthetic-purpose-v1"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "consent81-control-2",
+      "delivery_id": "delivery:consent81-control-2",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "synthetic-consent-v1",
+      "event_id": "event:consent81-control-2",
+      "event_name": "consent_changed",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-11-01T00:00:03.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-11-01T00:00:03.000Z",
+      "processing_purpose_id": "fraud_prevention",
+      "processing_sequence": 3,
+      "payload": {
+        "event_name": "consent_changed",
+        "consent_state": "withdrawn",
+        "consent_revision": 2,
+        "processing_purpose_id": "analytics",
+        "effective_at": "2026-11-01T00:00:03.000Z",
+        "consent_policy_version": "synthetic-purpose-v1"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "consent81-control-3",
+      "delivery_id": "delivery:consent81-control-3",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "synthetic-consent-v1",
+      "event_id": "event:consent81-control-3",
+      "event_name": "consent_changed",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-11-01T00:00:04.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-11-01T00:00:04.000Z",
+      "processing_purpose_id": "fraud_prevention",
+      "processing_sequence": 4,
+      "payload": {
+        "event_name": "consent_changed",
+        "consent_state": "not_required",
+        "consent_revision": 3,
+        "processing_purpose_id": "revenue_measurement",
+        "effective_at": "2026-11-01T00:00:04.000Z",
+        "consent_policy_version": "synthetic-purpose-v1"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "consent81-control-4",
+      "delivery_id": "delivery:consent81-control-4",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "synthetic-consent-v1",
+      "event_id": "event:consent81-control-4",
+      "event_name": "consent_changed",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-11-01T00:00:06.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-11-01T00:00:06.000Z",
+      "processing_purpose_id": "fraud_prevention",
+      "processing_sequence": 6,
+      "payload": {
+        "event_name": "consent_changed",
+        "consent_state": "granted",
+        "consent_revision": 4,
+        "processing_purpose_id": "analytics",
+        "effective_at": "2026-11-01T00:00:06.000Z",
+        "consent_policy_version": "synthetic-purpose-v1"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "consent81-control-5",
+      "delivery_id": "delivery:consent81-control-5",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "synthetic-consent-v1",
+      "event_id": "event:consent81-control-5",
+      "event_name": "consent_changed",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-11-01T00:00:09.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-11-01T00:00:09.000Z",
+      "processing_purpose_id": "fraud_prevention",
+      "processing_sequence": 9,
+      "payload": {
+        "event_name": "consent_changed",
+        "consent_state": "granted",
+        "consent_revision": 5,
+        "processing_purpose_id": "attribution",
+        "effective_at": "2026-11-01T00:00:09.000Z",
+        "consent_policy_version": "synthetic-purpose-v1"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "consent81-before",
+      "delivery_id": "delivery:consent81-before",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "synthetic-consent-v1",
+      "event_id": "event:consent81-before",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-11-01T00:00:02.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-11-01T00:00:02.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 2,
+      "consent_revision": 1,
+      "payload": {
+        "event_name": "session_start",
+        "installation_id": "synthetic-installation-81",
+        "session_id": "synthetic-session-before"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "consent81-blocked",
+      "delivery_id": "delivery:consent81-blocked",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "synthetic-consent-v1",
+      "event_id": "event:consent81-blocked",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-11-01T00:00:05.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-11-01T00:00:05.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 5,
+      "consent_revision": 1,
+      "payload": {
+        "event_name": "session_start",
+        "installation_id": "synthetic-installation-81",
+        "session_id": "synthetic-session-blocked"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "consent81-stale",
+      "delivery_id": "delivery:consent81-stale",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "synthetic-consent-v1",
+      "event_id": "event:consent81-stale",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-11-01T00:00:07.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-11-01T00:00:07.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 7,
+      "consent_revision": 1,
+      "payload": {
+        "event_name": "session_start",
+        "installation_id": "synthetic-installation-81",
+        "session_id": "synthetic-session-stale"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "consent81-fresh",
+      "delivery_id": "delivery:consent81-fresh",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "synthetic-consent-v1",
+      "event_id": "event:consent81-fresh",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-11-01T00:00:08.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-11-01T00:00:08.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 8,
+      "consent_revision": 4,
+      "payload": {
+        "event_name": "session_start",
+        "installation_id": "synthetic-installation-81",
+        "session_id": "synthetic-session-fresh"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "consent81-revenue",
+      "delivery_id": "delivery:consent81-revenue",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "synthetic-consent-v1",
+      "event_id": "event:consent81-revenue",
+      "event_name": "ad_revenue",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-11-01T00:00:05.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-11-01T00:00:05.000Z",
+      "processing_purpose_id": "revenue_measurement",
+      "processing_sequence": 5,
+      "consent_revision": 3,
+      "payload": {
+        "event_name": "ad_revenue",
+        "subject_scope": "installation_level",
+        "installation_id": "synthetic-installation-81",
+        "ad_network": "synthetic-network",
+        "amount_unscaled": "1250000",
+        "amount_scale": 6,
+        "currency": "USD",
+        "revenue_source": "client_estimated"
+      }
+    }
+  ],
+  "metric_evaluations": [],
+  "reconciliation_inputs": [],
+  "privacy_requests": [],
+  "metric_definitions": []
+}

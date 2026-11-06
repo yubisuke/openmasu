@@ -1,4 +1,5 @@
 import { clickInjectionPolicyDigest } from "@openmasu/fraud-rules";
+import { purposeConsentAt, purposeConsentAdmission } from "@openmasu/contracts/definitions";
 import { sha256 } from "./canonical.js";
 import { attemptDecisionKey, candidatePayloadDigest, compareCandidateAttempts, decisionFor, evidenceKey, scopeKey, semanticCandidate, type CandidateProvider } from "./candidates.js";
 import { compositeKey, time, TimestampInvalidError } from "./evaluation-utils.js";
@@ -287,13 +288,37 @@ export function consentDecision(attempt: Attempt): ConsentDecision {
   const withdrawal = (server.withdrawals ?? []).find(
     (entry: Any) => entry.processing_purpose_id === record.processing_purpose_id,
   );
-  const base = {
+  const base: Omit<ConsentDecision, "allowed" | "consent_decision_reason_code"> = {
     processing_purpose_id: record.processing_purpose_id,
     consent_evaluation_policy_version: purpose?.policy_version ?? "not-applicable",
     withdrawal_recognized_at: withdrawal?.withdrawal_recognized_at,
+    ...(record.consent_revision !== undefined ? { consent_revision: record.consent_revision } : {}),
   };
   if (!record.processing_purpose_id || !purpose?.consent_required || isControlEvent(record)) {
     return { ...base, allowed: true, consent_decision_reason_code: "consent_not_required" };
+  }
+  if (server.purpose_consent_controls !== undefined || record.consent_revision !== undefined) {
+    const snapshot = purposeConsentAt(server.purpose_consent_controls ?? [], record.processing_sequence)
+      .find(entry => entry.processing_purpose_id === record.processing_purpose_id);
+    const admission = purposeConsentAdmission(snapshot, record.consent_revision);
+    if (snapshot) base.consent_recognized_revision = snapshot.consent_revision;
+    if (admission === "revision_unconfirmed") {
+      return { ...base, allowed: false, consent_decision_reason_code: "consent_revision_unconfirmed" };
+    }
+    if (admission === "withdrawn") {
+      const recognizedAt = snapshot?.unversioned_withdrawal_sequence !== undefined
+        && snapshot.unversioned_withdrawal_sequence >= snapshot.recognized_sequence
+        ? snapshot.unversioned_withdrawal_at : snapshot?.recognized_at;
+      return { ...base, withdrawal_recognized_at: recognizedAt,
+        allowed: false, consent_decision_reason_code: "consent_withdrawn" };
+    }
+    // Explicit server withdrawal fences are never lifted by a client grant.
+    // The opt-in runtime supplies ordinary consent withdrawals as controls.
+    if ((!withdrawal || record.processing_sequence < withdrawal.withdrawal_recognized_sequence)
+        && (admission === "allowed" || admission === "not_required")) {
+      return { ...base, allowed: true, consent_decision_reason_code:
+        admission === "not_required" ? "consent_not_required" : "consent_valid_for_revision" };
+    }
   }
   if (!withdrawal || Number(record.processing_sequence) < Number(withdrawal.withdrawal_recognized_sequence)) {
     return { ...base, allowed: true, consent_decision_reason_code: "consent_valid_before_withdrawal" };
@@ -323,11 +348,13 @@ export function timestampInvalidDecision(attempt: Attempt): IngestionDecision {
   const withdrawal = (server.withdrawals ?? []).find(
     (entry: Any) => entry.processing_purpose_id === record.processing_purpose_id,
   );
-  const consentReason = !record.processing_purpose_id || !purpose?.consent_required || isControlEvent(record)
+  const revisionConsent = server.purpose_consent_controls !== undefined || record.consent_revision !== undefined
+    ? consentDecision({ ...attempt, server: { ...server, alternative_legal_bases: [] } }) : undefined;
+  const consentReason = revisionConsent?.consent_decision_reason_code ?? (!record.processing_purpose_id || !purpose?.consent_required || isControlEvent(record)
     ? "consent_not_required"
     : !withdrawal || Number(record.processing_sequence) < Number(withdrawal.withdrawal_recognized_sequence)
       ? "consent_valid_before_withdrawal"
-      : "consent_withdrawn";
+      : "consent_withdrawn");
   return {
     record_id: record.record_id,
     delivery_id: record.delivery_id,
@@ -343,6 +370,7 @@ export function timestampInvalidDecision(attempt: Attempt): IngestionDecision {
     consent_evaluation_policy_version: purpose?.policy_version ?? "not-applicable",
     consent_decision_reason_code: consentReason,
     ...(withdrawal?.withdrawal_recognized_at ? { withdrawal_recognized_at: withdrawal.withdrawal_recognized_at } : {}),
+    ...(revisionConsent ?? {}),
     reason_code: "timestamp_invalid",
   };
 }
@@ -429,7 +457,8 @@ export function decide(attempt: Attempt, candidates: CandidateProvider): Ingesti
     reason_code = "record_id_collision";
   } else if (!consent.allowed) {
     ingestion_status = "rejected";
-    reason_code = "consent_withdrawn";
+    reason_code = consent.consent_decision_reason_code === "consent_revision_unconfirmed"
+      ? "consent_revision_unconfirmed" : "consent_withdrawn";
   } else if (server.timestamp_stale_policy &&
     time(record.occurred_at, "occurred_at") < time(server.timestamp_stale_policy.before, "timestamp_stale_policy.before")) {
     ingestion_status = "rejected";

@@ -69,7 +69,7 @@ class OpenMasuSdk private constructor(
     if (!isCollectionEnabled()) return
     executor.execute {
       purgeConsentRequiredQueueIfBlocked()
-      if (storage.consentBarrierActive()) {
+      if (storage.consentBarrierActive("attribution")) {
         drain()
         return@execute
       }
@@ -79,13 +79,14 @@ class OpenMasuSdk private constructor(
       }
       val installationId = storage.installationId()
       if (!storage.referrerConsumed()) {
+        val consent = storage.consentSnapshot("attribution")
         val play = normalizeDeferred(playReader.read())
         val meta = metaReader.read()
-        enqueueJson("install", "attribution", EventFactory.install(installationId, configuration.wrapperVersion ?: configuration.sdkVersion, play, meta, "play_first_launch"))
+        enqueueJson("install", "attribution", EventFactory.install(installationId, configuration.wrapperVersion ?: configuration.sdkVersion, play, meta, "play_first_launch"), consent = consent)
         val deferred = DeepLinkParser.fromReferrer(play)
         if (deferred != null && !storage.deferredDestinationConsumed()) {
           deepLinkListener?.onDeepLink(deferred)
-          enqueueJson("deep_link_open", "attribution", EventFactory.deepLink(installationId, deferred))
+          enqueueJson("deep_link_open", "attribution", EventFactory.deepLink(installationId, deferred), consent = consent)
           storage.markDeferredDestinationConsumed()
         }
         if (!play.shouldRetry) storage.markReferrerConsumed()
@@ -98,17 +99,15 @@ class OpenMasuSdk private constructor(
     require(eventKey.matches(Regex("^[a-z][a-z0-9_]{0,63}$"))) { "event_key_invalid" }
     require(attributes.size <= 20) { "too_many_attributes" }
     if (!isCollectionEnabled()) return
-    executor.execute {
-      enqueueJson("custom_event", "analytics", EventFactory.custom(storage.installationId(), eventKey, attributes))
-      drain()
+    submitMeasurement("analytics") { consent, installationId ->
+      enqueueJson("custom_event", "analytics", EventFactory.custom(installationId, eventKey, attributes), consent = consent)
     }
   }
 
   fun startSession() {
     if (!isCollectionEnabled()) return
-    executor.execute {
-      enqueueJson("session_start", "analytics", EventFactory.session(storage.installationId(), EventFactory.newSessionId()))
-      drain()
+    submitMeasurement("analytics") { consent, installationId ->
+      enqueueJson("session_start", "analytics", EventFactory.session(installationId, EventFactory.newSessionId()), consent = consent)
     }
   }
 
@@ -119,9 +118,8 @@ class OpenMasuSdk private constructor(
   fun handleDeepLink(intent: Intent): Boolean {
     val value = DeepLinkParser.direct(intent, configuration.deepLinkHosts, configuration.deepLinkSchemes) ?: return false
     deepLinkListener?.onDeepLink(value)
-    if (isCollectionEnabled()) executor.execute {
-      enqueueJson("deep_link_open", "attribution", EventFactory.deepLink(storage.installationId(), value))
-      drain()
+    if (isCollectionEnabled()) submitMeasurement("attribution") { consent, installationId ->
+      enqueueJson("deep_link_open", "attribution", EventFactory.deepLink(installationId, value), consent = consent)
     }
     return true
   }
@@ -129,7 +127,7 @@ class OpenMasuSdk private constructor(
   @JvmOverloads
   fun enqueueAdRevenue(payload: JSONObject, eventId: String? = null) {
     if (!isCollectionEnabled()) return
-    executor.execute { enqueueJson("ad_revenue", "revenue_measurement", payload, eventId); drain() }
+    submitMeasurement("revenue_measurement") { consent, _ -> enqueueJson("ad_revenue", "revenue_measurement", payload, eventId, consent) }
   }
 
   fun trackPurchase(
@@ -140,8 +138,7 @@ class OpenMasuSdk private constructor(
   ) {
     if (!isCollectionEnabled()) return
     validateCommerceEvent(transactionId, amountUnscaled, amountScale, currency)
-    executor.execute {
-      val installationId = storage.installationId()
+    submitMeasurement("revenue_measurement") { consent, installationId ->
       enqueueJson(
         "purchase",
         "revenue_measurement",
@@ -155,8 +152,8 @@ class OpenMasuSdk private constructor(
         EventFactory.commerceEventId(
           "purchase", installationId, transactionId, null, amountUnscaled, amountScale, currency,
         ),
+        consent,
       )
-      drain()
     }
   }
 
@@ -212,6 +209,7 @@ class OpenMasuSdk private constructor(
     }
     require(productId.matches(Regex("^[A-Za-z0-9._:-]{1,255}$"))) { "google_play_product_id_invalid" }
     val revision = measurementRevision.get()
+    val consent = storage.consentSnapshot("revenue_measurement")
     val installationId = storage.installationId()
     try {
       executor.execute {
@@ -219,9 +217,10 @@ class OpenMasuSdk private constructor(
           when {
             storage.deletionReceipt() != null && measurementRevision.get() != revision -> OpenMasuPurchaseQueueResult.CONTEXT_CHANGED
             !isCollectionEnabled() -> OpenMasuPurchaseQueueResult.COLLECTION_DISABLED
-            storage.consentBarrierActive() -> OpenMasuPurchaseQueueResult.CONSENT_REQUIRED
+            storage.consentBarrierActive("revenue_measurement") -> OpenMasuPurchaseQueueResult.CONSENT_REQUIRED
             storage.installationId() != installationId -> OpenMasuPurchaseQueueResult.INSTALLATION_CHANGED
             measurementRevision.get() != revision -> OpenMasuPurchaseQueueResult.CONTEXT_CHANGED
+            storage.consentSnapshot("revenue_measurement").revision != consent.revision -> OpenMasuPurchaseQueueResult.CONTEXT_CHANGED
             else -> {
               val extensions = JSONObject()
                 .put("google_play_purchase_token_protected", purchaseToken)
@@ -238,6 +237,7 @@ class OpenMasuSdk private constructor(
                   installationId, transactionId, amountUnscaled, amountScale, currency, "pending", extensions,
                 ),
                 eventId,
+                consent,
               )
               if (admitted) OpenMasuPurchaseQueueResult.QUEUED else OpenMasuPurchaseQueueResult.QUEUE_REJECTED
             }
@@ -264,8 +264,7 @@ class OpenMasuSdk private constructor(
     if (!isCollectionEnabled()) return
     validateCommerceEvent(transactionId, amountUnscaled, amountScale, currency)
     require(originalTransactionId.matches(IDENTIFIER_PATTERN)) { "original_transaction_id_invalid" }
-    executor.execute {
-      val installationId = storage.installationId()
+    submitMeasurement("revenue_measurement") { consent, installationId ->
       enqueueJson(
         "refund",
         "revenue_measurement",
@@ -281,8 +280,8 @@ class OpenMasuSdk private constructor(
           "refund", installationId, transactionId, originalTransactionId,
           amountUnscaled, amountScale, currency,
         ),
+        consent,
       )
-      drain()
     }
   }
 
@@ -292,17 +291,25 @@ class OpenMasuSdk private constructor(
 
   @JvmOverloads
   fun updateConsent(state: String, policyVersion: String, onComplete: ((Boolean) -> Unit)? = null) {
-    require(state in setOf("granted", "denied", "withdrawn", "not_required", "unknown"))
-    if (state == "denied" || state == "withdrawn") measurementRevision.incrementAndGet()
-    storage.applyConsentState(state)
+    updateConsentScope(null,state,policyVersion,onComplete)
+  }
+
+  @JvmOverloads
+  fun updateConsentForPurpose(purpose: String, state: String, policyVersion: String, onComplete: ((Boolean) -> Unit)? = null) {
+    require(purpose in OpenMasuStorage.CONSENT_PURPOSES) { "consent_purpose_invalid" }
+    updateConsentScope(purpose,state,policyVersion,onComplete)
+  }
+
+  private fun updateConsentScope(purpose: String?, state: String, policyVersion: String, onComplete: ((Boolean) -> Unit)?) {
+    val event = storage.recordConsent(state,policyVersion,purpose,configuration.maxQueueBytes)
     try {
       executor.execute {
         val updated = runCatching {
           var admitted = false
-          database.runInTransaction {
+          storage.withConsentLock { database.runInTransaction {
             purgeConsentRequiredQueueIfBlocked()
-            admitted = enqueueJson("consent_changed", "fraud_prevention", EventFactory.consent(state, policyVersion))
-          }
+            admitted = database.queue().admit(event,configuration.maxQueueRecords,configuration.maxQueueBytes).admitted
+          } }
           admitted
         }.getOrDefault(false)
         try {
@@ -344,6 +351,7 @@ class OpenMasuSdk private constructor(
   fun requestPrivacyPage(requestType: OpenMasuPrivacyRequestType, cursor: String? = null, pageSize: Int = 200,
     onComplete: (OpenMasuPrivacyResult) -> Unit) {
     val revision = measurementRevision.get()
+    val consentCounter = storage.consentCounter()
     val installationId = storage.installationId()
     val wasResetting = storage.deletionReceipt() != null || storage.resetInstallPending()
     executor.execute {
@@ -353,12 +361,12 @@ class OpenMasuSdk private constructor(
         when {
           !OpenMasuPrivacyPage.validRequest(cursor, pageSize) -> OpenMasuPrivacyResult(OpenMasuPrivacyResultStatus.INVALID_REQUEST)
           wasResetting || storage.deletionReceipt() != null || storage.resetInstallPending() -> OpenMasuPrivacyResult(OpenMasuPrivacyResultStatus.RESET_PENDING)
-          revision != measurementRevision.get() || installationId != storage.installationId() -> OpenMasuPrivacyResult(OpenMasuPrivacyResultStatus.CONTEXT_CHANGED)
+          revision != measurementRevision.get() || consentCounter != storage.consentCounter() || installationId != storage.installationId() -> OpenMasuPrivacyResult(OpenMasuPrivacyResultStatus.CONTEXT_CHANGED)
           capable == null -> OpenMasuPrivacyResult(OpenMasuPrivacyResultStatus.UNSUPPORTED)
           credential == null -> OpenMasuPrivacyResult(OpenMasuPrivacyResultStatus.NOT_ENROLLED)
           else -> {
             val json = capable.privacyPage(credential, installationId, requestType, cursor, pageSize)
-            if (revision != measurementRevision.get() || installationId != storage.installationId() ||
+            if (revision != measurementRevision.get() || consentCounter != storage.consentCounter() || installationId != storage.installationId() ||
               credential != storage.credential() || storage.deletionReceipt() != null || storage.resetInstallPending())
               OpenMasuPrivacyResult(OpenMasuPrivacyResultStatus.CONTEXT_CHANGED)
             else {
@@ -412,12 +420,27 @@ class OpenMasuSdk private constructor(
   internal fun drain(): Boolean {
     if (storage.deletionReceipt() != null) return resumeDeletion()
     if (!isCollectionEnabled()) return false
-    if (storage.resetInstallPending() && !storage.consentBarrierActive()) return completePendingResetInstall()
-    purgeConsentRequiredQueueIfBlocked()
-    val batch = database.queue().pending(100)
-    if (batch.isEmpty()) return true
-    val credential = runCatching { storage.credential() ?: ensureCredential(storage.installationId()) }
+    if (storage.resetInstallPending() && !storage.consentBarrierActive("attribution")) return completePendingResetInstall()
+    val queued = storage.withConsentLock {
+      purgeConsentRequiredQueueIfBlocked()
+      database.queue().pending(97)
+    }
+    if (queued.isEmpty()) return true
+    val sendingInstallationId = storage.installationId()
+    val credential = runCatching { storage.credential() ?: ensureCredential(sendingInstallationId) }
       .getOrElse { backstopScheduler(context); return false }
+    // A bounded prefix makes a declaration survive queue eviction and identity reset.
+    // The declaration's transport ID is stable for this credential, never reused for its replacement.
+    val batch = storage.withConsentLock {
+      if (storage.deletionReceipt() != null || sendingInstallationId != storage.installationId()) return@withConsentLock emptyList<QueuedEvent>()
+      val current = queued.filter { event -> event.processingPurposeId !in CONSENT_REQUIRED_PURPOSES ||
+        storage.consentSnapshot(event.processingPurposeId).let { !it.blocked && it.revision == event.consentRevision } }
+      (storage.consentDeclarations() + current).distinctBy { it.eventId }.map { event ->
+        if (event.eventName != "consent_changed") event else event.copy(eventId = "event:consent:" +
+          SdkRequestSigner.sha256((sendingInstallationId + "\n" + credential.keyId + "\n" + event.eventId).toByteArray(Charsets.UTF_8)))
+      }
+    }
+    if (batch.isEmpty()) return false
     return if (runCatching {
       observeTransport(OpenMasuDiagnosticOperation.DELIVERY) {
         val session = storage.syntheticValidationSession()
@@ -432,7 +455,9 @@ class OpenMasuSdk private constructor(
         } else transport.deliver(credential, batch)
       }
     }.getOrDefault(false)) {
-      database.queue().deleteByIds(batch.map { it.eventId })
+      database.runInTransaction {
+        for (event in queued) database.queue().deleteDelivered(event.eventId,event.processingSequence,event.consentRevision)
+      }
       if (database.queue().count() > 0) backstopScheduler(context)
       true
     } else {
@@ -463,7 +488,7 @@ class OpenMasuSdk private constructor(
           barrier -> OpenMasuRetryState.CONSENT_BLOCKED
           queue.pendingCount > 0 -> OpenMasuRetryState.PENDING
           else -> OpenMasuRetryState.NONE
-        }, queue,
+        }, queue, OpenMasuStorage.CONSENT_PURPOSES.map(storage::consentSnapshot),
       ))
     }
   }
@@ -485,7 +510,10 @@ class OpenMasuSdk private constructor(
 
   private fun ensureCredential(installationId: String): InstallationCredential = storage.credential()
     ?: observeTransport(OpenMasuDiagnosticOperation.ENROLLMENT) { transport.enroll(installationId) }
-      .also { storage.setCredential(it) }
+      .also { credential -> storage.withConsentLock {
+        check(storage.installationId() == installationId && storage.deletionReceipt() == null) { "enrollment_context_changed" }
+        storage.setCredential(credential)
+      } }
 
   private fun <T> observeTransport(operation: OpenMasuDiagnosticOperation, work: () -> T): T {
     val attempt = DiagnosticAttempt(System.currentTimeMillis(), operation, OpenMasuDiagnosticResult.IN_FLIGHT)
@@ -525,24 +553,48 @@ class OpenMasuSdk private constructor(
     return value.copy(deferredDeepLinkStatus = value.deferredDeepLinkStatus ?: "delivered")
   }
 
-  private fun enqueueJson(eventName: String, purpose: String, payload: JSONObject, eventId: String? = null): Boolean {
-    if (storage.deletionReceipt() != null) return false
-    if (!isCollectionEnabled() && eventName != "consent_changed") return false
-    if (storage.consentBarrierActive() && purpose in CONSENT_REQUIRED_PURPOSES) return false
+  private fun submitMeasurement(purpose: String, work: (OpenMasuPurposeConsent, String) -> Unit) {
+    val consent = storage.consentSnapshot(purpose)
+    val installationId = storage.installationId()
+    val revision = measurementRevision.get()
+    executor.execute {
+      storage.withConsentLock {
+        if (!consent.blocked && isCollectionEnabled() && revision == measurementRevision.get() &&
+          installationId == storage.installationId() && consent.revision == storage.consentSnapshot(purpose).revision) {
+          work(consent,installationId)
+        }
+      }
+      drain()
+    }
+  }
+
+  private fun enqueueJson(eventName: String, purpose: String, payload: JSONObject, eventId: String? = null,
+    consent: OpenMasuPurposeConsent = storage.consentSnapshot(purpose)): Boolean = storage.withConsentLock {
+    if (storage.deletionReceipt() != null) return@withConsentLock false
+    if (!isCollectionEnabled() && eventName != "consent_changed") return@withConsentLock false
+    val current = storage.consentSnapshot(purpose)
+    if (consent.blocked || current.blocked || consent.revision != current.revision) return@withConsentLock false
+    purgeConsentRequiredQueueIfBlocked()
     val now = EventFactory.canonicalNow()
-    return database.queue().admit(
-      QueuedEvent(eventId ?: EventFactory.newEventId(), eventName, purpose, payload.toString(), now, storage.nextSequence(), System.currentTimeMillis()),
+    database.queue().admit(
+      QueuedEvent(eventId ?: EventFactory.newEventId(), eventName, purpose, payload.toString(), now, storage.nextSequence(), System.currentTimeMillis(), consent.revision),
       configuration.maxQueueRecords,
       configuration.maxQueueBytes,
     ).admitted
   }
 
   private fun purgeConsentRequiredQueueIfBlocked() {
-    if (storage.consentBarrierActive()) database.queue().deleteByPurposes(CONSENT_REQUIRED_PURPOSES.toList())
+    storage.withConsentLock {
+      for (purpose in CONSENT_REQUIRED_PURPOSES) {
+        val consent = storage.consentSnapshot(purpose)
+        if (consent.blocked) database.queue().deleteByPurposes(listOf(purpose))
+        else database.queue().deleteStaleConsent(purpose,consent.revision)
+      }
+    }
   }
 
   private fun completePendingResetInstall(installationId: String = storage.installationId()): Boolean {
-    if (!storage.resetInstallPending() || storage.consentBarrierActive() || !isCollectionEnabled()) return true
+    if (!storage.resetInstallPending() || storage.consentBarrierActive("attribution") || !isCollectionEnabled()) return true
     return runCatching {
       ensureCredential(installationId)
       val eventId = "event:reset:$installationId"

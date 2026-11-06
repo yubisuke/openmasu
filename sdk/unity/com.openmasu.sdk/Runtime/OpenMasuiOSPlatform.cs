@@ -7,7 +7,7 @@ using AOT;
 namespace OpenMasu.Unity
 {
     public sealed class OpenMasuiOSPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform,
-        IOpenMasuAppleConversionPlatform, IOpenMasuAppleMeaningPlatform, IOpenMasuAppStorePurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuAdRevenuePlatform, IOpenMasuDiagnosticsPlatform, IOpenMasuSyntheticValidationPlatform, IOpenMasuPrivacyPlatform
+        IOpenMasuAppleConversionPlatform, IOpenMasuAppleMeaningPlatform, IOpenMasuAppStorePurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuPurposeConsentPlatform, IOpenMasuAdRevenuePlatform, IOpenMasuDiagnosticsPlatform, IOpenMasuSyntheticValidationPlatform, IOpenMasuPrivacyPlatform
     {
         private delegate void NativeCallback(long requestId, IntPtr value);
         private static readonly NativeCallback Callback = OnNativeCallback;
@@ -138,6 +138,16 @@ namespace OpenMasu.Unity
             var callbackId = RegisterPurchase(completion);
 #if UNITY_IOS && !UNITY_EDITOR
             openmasu_ios_update_consent(state, policyVersion, callbackId, Callback);
+#else
+            CompleteSynthetic(callbackId, "state=not_submitted&error=platform_unavailable");
+#endif
+        }
+
+        public void UpdateConsentForPurpose(string purpose, string state, string policyVersion, Action<string> completion)
+        {
+            var callbackId = RegisterPurchase(completion);
+#if UNITY_IOS && !UNITY_EDITOR
+            openmasu_ios_update_consent_for_purpose(purpose, state, policyVersion, callbackId, Callback);
 #else
             CompleteSynthetic(callbackId, "state=not_submitted&error=platform_unavailable");
 #endif
@@ -347,6 +357,9 @@ namespace OpenMasu.Unity
         [DllImport("__Internal")]
         private static extern void openmasu_ios_update_consent(
             string state, string policyVersion, long callbackId, NativeCallback callback);
+        [DllImport("__Internal")]
+        private static extern void openmasu_ios_update_consent_for_purpose(
+            string purpose, string state, string policyVersion, long callbackId, NativeCallback callback);
         [DllImport("__Internal")]
         private static extern void openmasu_ios_initialize(
             string endpoint, string sdkKeyId, string sdkSecret, long requestId, NativeCallback callback);

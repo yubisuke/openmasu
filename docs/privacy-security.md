@@ -100,12 +100,26 @@ record may be accepted only under a documented, purpose-specific configuration;
 the SDK default is to purge its queue on withdrawal. Withdrawal does not make
 processing completed before withdrawal retroactively unlawful.
 
-The server projects a recognized installation withdrawal into tenant-scoped
-durable control state before marking its SDK batch complete. Later enforcement
-therefore does not depend on retaining or replaying the encrypted batch body.
-The durable row contains the credential key reference, purpose, sequence,
-recognition time, and canonical source-record reference, but not the consent
-payload or installation identifier. The routine worker never reopens processed
+Current Android, iOS and Unity source supports separate host declarations for
+`attribution`, `analytics` and `revenue_measurement`. The legacy global API
+declares all three. Each purpose retains its state and revision across restart
+and installation reset. Changing a purpose discards its older queued measurement;
+an explicit regrant admits only fresh observations, never relabels old ones.
+`unknown` does not clear a denial or grant permission. Fraud prevention is not a
+host-disableable measurement purpose. Native diagnostics report the three local
+states; they are not proof of server acceptance or legal authorization.
+
+The server projects accepted installation declarations into tenant-scoped
+durable control state before marking their SDK batch complete. Revision-aware
+SDK measurement must match the latest recognized declaration for its purpose;
+out-of-order controls cannot replace a newer revision. A fresh grant cannot
+override deletion, credential revocation or an explicit server privacy fence.
+Unversioned provider-originated commerce retains the conservative withdrawal
+fence, rather than inheriting an SDK regrant without enqueue-time evidence.
+Later enforcement does not depend on retaining the encrypted batch body. The
+durable rows contain credential references, purpose, state/revision, recognition
+time and canonical source-record references, not the consent payload or raw
+installation identifier. The routine worker never reopens processed
 bodies to repair a missing legacy projection. If a deployment contains an
 accepted consent-control event from before durable projection and has neither a
 projection-complete marker nor durable withdrawal rows, later work for that

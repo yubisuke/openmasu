@@ -12,6 +12,10 @@ internal static partial class Program
             try { legacy.PrepareAppStorePurchase("synthetic.product", Guid.NewGuid(), true, _ => { }); }
             catch (NotSupportedException) { unsupported = true; }
             Require(unsupported, "legacy purchase platform silently supported store verification");
+            unsupported = false;
+            try { legacy.UpdateConsentForPurpose(OpenMasuConsentPurpose.Analytics, OpenMasuConsentState.Withdrawn, "synthetic-v1", _ => { }); }
+            catch (NotSupportedException) { unsupported = true; }
+            Require(unsupported, "legacy platform silently broadened scoped consent to global consent");
             legacy.TrackPurchase("transaction:synthetic", "1000", 2, "USD");
         }
         var platform = new SyntheticPurchasePlatform();
@@ -57,6 +61,18 @@ internal static partial class Program
         Require(platform.ConsentState == "withdrawn", "consent was not forwarded to native");
         platform.Completion("state=updated"); client.PumpCallbacks();
         Require(consentUpdated == true, "consent acknowledgement was lost");
+        consentUpdated = null;
+        client.UpdateConsentForPurpose(OpenMasuConsentPurpose.Analytics, OpenMasuConsentState.Withdrawn, "policy:synthetic", value => {
+            Require(Environment.CurrentManagedThreadId == mainThread, "scoped consent callback left the Unity thread");
+            consentUpdated = value;
+        });
+        Require(platform.ConsentPurpose == "analytics" && platform.ConsentState == "withdrawn", "scoped consent lost its selector");
+        callback = platform.Completion;
+        thread = new Thread(() => { callback("state=updated"); callback("state=updated"); });
+        thread.Start(); thread.Join();
+        Require(consentUpdated == null, "scoped callback ran before PumpCallbacks");
+        client.PumpCallbacks();
+        Require(consentUpdated == true, "scoped consent acknowledgement was lost");
         client.SubmitAppStorePurchase(purchase, "synthetic.header.signature", true, completion);
         platform.Completion("state=not_submitted&error=purchase_context_changed"); client.PumpCallbacks();
         Require(result.State == OpenMasuPurchaseState.NotSubmitted, "changed installation context became pending");
@@ -83,10 +99,10 @@ internal static partial class Program
     }
 
     private sealed class SyntheticPurchasePlatform : IOpenMasuPlatform, IOpenMasuAppStorePurchasePlatform,
-        IOpenMasuGooglePlayPurchasePlatform, IOpenMasuConsentPlatform
+        IOpenMasuGooglePlayPurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuPurposeConsentPlatform
     {
         public Action<string> Completion;
-        public string RequestId, Prepared, SignedTransaction, ConsentState;
+        public string RequestId, Prepared, SignedTransaction, ConsentState, ConsentPurpose;
         public bool Subscription;
         public void PrepareAppStorePurchase(string productId, string requestId, bool consent, Action<string> completion)
         { RequestId = requestId; Completion = completion; }
@@ -98,6 +114,8 @@ internal static partial class Program
         { Subscription = true; Completion = completion; }
         public void UpdateConsent(string state, string policy, Action<string> completion)
         { ConsentState = state; Completion = completion; }
+        public void UpdateConsentForPurpose(string purpose, string state, string policy, Action<string> completion)
+        { ConsentPurpose = purpose; ConsentState = state; Completion = completion; }
         public void Initialize(OpenMasuOptions options) { }
         public void TrackCustomEvent(string eventKey) { }
         public void StartSession() { }

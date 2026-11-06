@@ -401,6 +401,27 @@ internal static partial class Program
         }
         Require(typeof(OpenMasuDiagnosticsSnapshot).GetProperties().All(property => property.PropertyType != typeof(string)),
             "diagnostic DTO exposes arbitrary strings");
+        var purposes = (prefix + "accepted" + suffix).Replace("consent_barrier_active=false", "consent_barrier_active=true") +
+            "&consent_attribution_state=granted&consent_attribution_revision=1" +
+            "&consent_analytics_state=withdrawn&consent_analytics_revision=2" +
+            "&consent_revenue_measurement_state=not_required&consent_revenue_measurement_revision=3";
+        var scoped = OpenMasuDiagnosticsSnapshot.Parse(purposes);
+        Require(scoped.PurposeConsent.Count == 3 && scoped.PurposeConsent[1].Purpose == OpenMasuConsentPurpose.Analytics &&
+            scoped.PurposeConsent[1].Blocked && scoped.PurposeConsent[2].Revision == 3 && !scoped.PurposeConsent[2].Blocked,
+            "purpose diagnostics lost closed states or revisions");
+        Require(OpenMasuDiagnosticsSnapshot.Parse(prefix + "accepted" + suffix).PurposeConsent.Count == 0,
+            "legacy diagnostics invented purpose state");
+        foreach (var invalid in new[] {
+            purposes.Replace("consent_analytics_revision=2", "consent_analytics_revision=-1"),
+            purposes.Replace("consent_analytics_state=withdrawn", "consent_analytics_state=provider_secret"),
+            purposes.Replace("consent_barrier_active=true", "consent_barrier_active=false"),
+            purposes.Replace("consent_analytics_revision=2", "consent_analytics_revision=9007199254740992"),
+        })
+        {
+            var rejected = false;
+            try { OpenMasuDiagnosticsSnapshot.Parse(invalid); } catch (FormatException) { rejected = true; }
+            Require(rejected, "purpose diagnostics accepted inconsistent or unbounded state");
+        }
     }
 
     private static void ExerciseSyntheticValidation()
