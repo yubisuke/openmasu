@@ -1,0 +1,1050 @@
+{
+  "contract_version": "0.4.0",
+  "fx_policy": {
+    "policy_version": "fx-v0.4.25",
+    "target_currency": "USD",
+    "target_scale": 6,
+    "rounding_mode": "half_even",
+    "rates": [
+      {
+        "currency": "USD",
+        "rate_unscaled": "100000000",
+        "rate_scale": 8,
+        "source": "synthetic-fixture-rate",
+        "as_of": "2026-08-20T00:00:00.000Z"
+      }
+    ]
+  },
+  "metric_definitions": [
+    {
+      "metric_name": "period_active_installations_7d",
+      "metric_definition_version": "0.4.36",
+      "anchor_event": "calendar_day",
+      "aggregation_time_zone": "UTC",
+      "value_type": "count",
+      "definition": {
+        "calculation": "active_installations_count",
+        "numerator": "active_installations",
+        "window": {
+          "type": "calendar_day",
+          "day": 6
+        }
+      },
+      "event_names": [
+        "session_start",
+        "custom_event"
+      ],
+      "grouping_dimensions": [
+        "metric_date"
+      ],
+      "fraud_policy": "gross",
+      "rule_bundle_id": "metric-calendar-activity",
+      "rule_bundle_version": "0.4.36",
+      "rule_bundle_hash": "2d9c3050280e232c1a3cf92b1c1373abb331caaa2e99cd4c76aa0cb3573418b6"
+    },
+    {
+      "metric_name": "period_active_installations_30d",
+      "metric_definition_version": "0.4.36",
+      "anchor_event": "calendar_day",
+      "aggregation_time_zone": "UTC",
+      "value_type": "count",
+      "definition": {
+        "calculation": "active_installations_count",
+        "numerator": "active_installations",
+        "window": {
+          "type": "calendar_day",
+          "day": 29
+        }
+      },
+      "event_names": [
+        "session_start",
+        "custom_event"
+      ],
+      "grouping_dimensions": [
+        "metric_date"
+      ],
+      "fraud_policy": "gross",
+      "rule_bundle_id": "metric-calendar-activity",
+      "rule_bundle_version": "0.4.36",
+      "rule_bundle_hash": "2d9c3050280e232c1a3cf92b1c1373abb331caaa2e99cd4c76aa0cb3573418b6"
+    }
+  ],
+  "metric_evaluations": [
+    {
+      "metric_run_id_prefix": "period83-initial",
+      "metric_names": [
+        "period_active_installations_7d",
+        "period_active_installations_30d"
+      ],
+      "input_received_at_watermark": "2026-08-21T00:00:00.000Z",
+      "computed_at": "2026-09-20T00:05:00.000Z",
+      "data_freshness": "partial",
+      "privacy_state": "before",
+      "grouping": {
+        "metric_date": "2026-08-20"
+      }
+    },
+    {
+      "metric_run_id_prefix": "period83-late",
+      "metric_names": [
+        "period_active_installations_7d",
+        "period_active_installations_30d"
+      ],
+      "input_received_at_watermark": "2026-09-20T00:00:00.000Z",
+      "computed_at": "2026-09-20T00:05:00.000Z",
+      "data_freshness": "partial",
+      "privacy_state": "before",
+      "grouping": {
+        "metric_date": "2026-08-20"
+      }
+    },
+    {
+      "metric_run_id_prefix": "period83-private",
+      "metric_names": [
+        "period_active_installations_7d",
+        "period_active_installations_30d"
+      ],
+      "input_received_at_watermark": "2026-09-20T00:00:00.000Z",
+      "computed_at": "2026-09-20T00:05:00.000Z",
+      "data_freshness": "partial",
+      "privacy_state": "after",
+      "grouping": {
+        "metric_date": "2026-08-20"
+      }
+    },
+    {
+      "metric_run_id_prefix": "period83-next",
+      "metric_names": [
+        "period_active_installations_7d",
+        "period_active_installations_30d"
+      ],
+      "input_received_at_watermark": "2026-09-20T00:00:00.000Z",
+      "computed_at": "2026-09-20T00:05:00.000Z",
+      "data_freshness": "partial",
+      "privacy_state": "after",
+      "grouping": {
+        "metric_date": "2026-08-27"
+      }
+    },
+    {
+      "metric_run_id_prefix": "period83-empty",
+      "metric_names": [
+        "period_active_installations_7d",
+        "period_active_installations_30d"
+      ],
+      "input_received_at_watermark": "2026-09-20T00:00:00.000Z",
+      "computed_at": "2026-09-20T00:05:00.000Z",
+      "data_freshness": "partial",
+      "privacy_state": "after",
+      "grouping": {
+        "metric_date": "2026-06-01"
+      }
+    }
+  ],
+  "reconciliation_inputs": [],
+  "privacy_requests": [
+    {
+      "contract_version": "0.4.0",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "privacy_request_id": "privacy-calendar72-b",
+      "deletion_subject_digest": "7272727272727272727272727272727272727272727272727272727272727272",
+      "deletion_scope": "installation",
+      "requested_via": "tenant_admin_api",
+      "requester_auth_ref": "admin_key:synthetic-calendar72",
+      "requested_at": "2026-08-22T00:01:00.000Z",
+      "completed_at": "2026-08-22T00:02:00.000Z",
+      "status": "completed",
+      "reason_code": "privacy_deletion",
+      "policy_version": "privacy-v0.4.25",
+      "affected_records": [
+        {
+          "record_id": "custom-b-72",
+          "lifecycle_status": "redacted"
+        },
+        {
+          "record_id": "session-b-72",
+          "lifecycle_status": "redacted"
+        }
+      ]
+    }
+  ],
+  "server_context": {
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "received_at": "2026-08-22T00:05:00.000Z",
+    "policy_digest": "policy-v0.4.25",
+    "processing_purposes": [
+      {
+        "processing_purpose_id": "analytics",
+        "consent_required": false,
+        "policy_version": "consent-v0.4.25"
+      }
+    ],
+    "withdrawals": [],
+    "alternative_legal_bases": []
+  },
+  "records": [
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session-a-first-72",
+      "delivery_id": "delivery:session-a-first-72",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session-a-first-72",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-20T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-20T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 1,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session-a-first-72"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session-a-second-72",
+      "delivery_id": "delivery:session-a-second-72",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session-a-second-72",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-20T12:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-20T12:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 2,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session-a-second-72"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session-b-72",
+      "delivery_id": "delivery:session-b-72",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session-b-72",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-20T23:59:59.999Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-21T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 3,
+      "payload": {
+        "installation_id": "installation:calendar72-b",
+        "session_id": "session:session-b-72"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "custom-a-72",
+      "delivery_id": "delivery:custom-a-72",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:custom-a-72",
+      "event_name": "custom_event",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-20T12:01:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-20T12:01:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 4,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "event_key": "synthetic_activity"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "custom-b-72",
+      "delivery_id": "delivery:custom-b-72",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:custom-b-72",
+      "event_name": "custom_event",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-20T12:02:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-20T12:02:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 5,
+      "payload": {
+        "installation_id": "installation:calendar72-b",
+        "event_key": "synthetic_activity"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "custom-c-72",
+      "delivery_id": "delivery:custom-c-72",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:custom-c-72",
+      "event_name": "custom_event",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-20T12:03:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-20T12:03:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 6,
+      "payload": {
+        "installation_id": "installation:calendar72-c",
+        "event_key": "synthetic_activity"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session-a-next-72",
+      "delivery_id": "delivery:session-a-next-72",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session-a-next-72",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-21T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-21T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 7,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session-a-next-72"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session-d-late-72",
+      "delivery_id": "delivery:session-d-late-72",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session-d-late-72",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-20T13:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-22T00:00:00.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 8,
+      "payload": {
+        "installation_id": "installation:calendar72-d",
+        "session_id": "session:session-d-late-72"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session-a-retry-72",
+      "delivery_id": "delivery:session-a-retry-72",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session-a-first-72",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-20T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-20T00:00:02.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 9,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session-a-first-72"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-01",
+      "delivery_id": "delivery:session83-a-day-01",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-01",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-21T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-21T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 20,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-01"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-02",
+      "delivery_id": "delivery:session83-a-day-02",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-02",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-22T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-22T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 21,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-02"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-03",
+      "delivery_id": "delivery:session83-a-day-03",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-03",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-23T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-23T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 22,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-03"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-04",
+      "delivery_id": "delivery:session83-a-day-04",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-04",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-24T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-24T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 23,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-04"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-05",
+      "delivery_id": "delivery:session83-a-day-05",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-05",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-25T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-25T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 24,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-05"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-06",
+      "delivery_id": "delivery:session83-a-day-06",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-06",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-26T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-26T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 25,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-06"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-07",
+      "delivery_id": "delivery:session83-a-day-07",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-07",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-27T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-27T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 26,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-07"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-08",
+      "delivery_id": "delivery:session83-a-day-08",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-08",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-28T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-28T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 27,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-08"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-09",
+      "delivery_id": "delivery:session83-a-day-09",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-09",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-29T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-29T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 28,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-09"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-10",
+      "delivery_id": "delivery:session83-a-day-10",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-10",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-30T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-30T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 29,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-10"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-11",
+      "delivery_id": "delivery:session83-a-day-11",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-11",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-31T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-31T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 30,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-11"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-12",
+      "delivery_id": "delivery:session83-a-day-12",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-12",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-01T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-01T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 31,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-12"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-13",
+      "delivery_id": "delivery:session83-a-day-13",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-13",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-02T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-02T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 32,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-13"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-14",
+      "delivery_id": "delivery:session83-a-day-14",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-14",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-03T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-03T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 33,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-14"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-15",
+      "delivery_id": "delivery:session83-a-day-15",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-15",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-04T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-04T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 34,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-15"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-16",
+      "delivery_id": "delivery:session83-a-day-16",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-16",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-05T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-05T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 35,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-16"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-17",
+      "delivery_id": "delivery:session83-a-day-17",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-17",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-06T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-06T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 36,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-17"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-18",
+      "delivery_id": "delivery:session83-a-day-18",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-18",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-07T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-07T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 37,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-18"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-19",
+      "delivery_id": "delivery:session83-a-day-19",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-19",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-08T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-08T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 38,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-19"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-20",
+      "delivery_id": "delivery:session83-a-day-20",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-20",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-09T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-09T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 39,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-20"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-21",
+      "delivery_id": "delivery:session83-a-day-21",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-21",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-10T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-10T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 40,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-21"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-22",
+      "delivery_id": "delivery:session83-a-day-22",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-22",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-11T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-11T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 41,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-22"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-23",
+      "delivery_id": "delivery:session83-a-day-23",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-23",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-12T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-12T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 42,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-23"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-24",
+      "delivery_id": "delivery:session83-a-day-24",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-24",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-13T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-13T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 43,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-24"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-25",
+      "delivery_id": "delivery:session83-a-day-25",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-25",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-14T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-14T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 44,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-25"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-26",
+      "delivery_id": "delivery:session83-a-day-26",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-26",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-15T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-15T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 45,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-26"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-27",
+      "delivery_id": "delivery:session83-a-day-27",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-27",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-16T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-16T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 46,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-27"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-28",
+      "delivery_id": "delivery:session83-a-day-28",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-28",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-17T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-17T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 47,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-28"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-a-day-29",
+      "delivery_id": "delivery:session83-a-day-29",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-a-day-29",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-18T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-18T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 48,
+      "payload": {
+        "installation_id": "installation:calendar72-a",
+        "session_id": "session:session83-a-day-29"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-before",
+      "delivery_id": "delivery:session83-before",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-before",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-19T23:59:59.999Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-20T00:00:00.999Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 49,
+      "payload": {
+        "installation_id": "installation:period83-g",
+        "session_id": "session:session83-before"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-end7",
+      "delivery_id": "delivery:session83-end7",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-end7",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-08-27T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-08-27T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 50,
+      "payload": {
+        "installation_id": "installation:period83-e",
+        "session_id": "session:session83-end7"
+      }
+    },
+    {
+      "contract_version": "0.4.0",
+      "record_id": "session83-end30",
+      "delivery_id": "delivery:session83-end30",
+      "tenant_id": "tenant-a",
+      "app_id": "app-a",
+      "producer": "sdk-android",
+      "producer_version": "fixture-v0.4.25",
+      "event_id": "event:session83-end30",
+      "event_name": "session_start",
+      "schema_version": "0.4.0",
+      "occurred_at": "2026-09-19T00:00:00.000Z",
+      "occurred_at_source": "device",
+      "received_at": "2026-09-19T00:00:01.000Z",
+      "processing_purpose_id": "analytics",
+      "processing_sequence": 51,
+      "payload": {
+        "installation_id": "installation:period83-f",
+        "session_id": "session:session83-end30"
+      }
+    }
+  ]
+}
