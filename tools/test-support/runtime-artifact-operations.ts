@@ -15,8 +15,9 @@ const url = process.env.OPENMASU_MIGRATION_DATABASE_URL!;
 assert.equal(process.env.OPENMASU_DEPLOYMENT_PURPOSE, "synthetic_disposable");
 assert.equal(new URL(url).hostname, "postgres");
 const identity = sourceIdentity(); assert.ok(identity.runtime);
-assert.equal(identity.runtime.source_tag, null);
-assert.throws(() => assertUpgradeTarget(`runtime-v${identity.runtime!.runtime_version}`), /upgrade_target_identity_mismatch/);
+if (identity.runtime.source_tag) assertUpgradeTarget(identity.runtime.source_tag);
+else assert.throws(() => assertUpgradeTarget(`runtime-v${identity.runtime!.runtime_version}`), /upgrade_target_identity_mismatch/);
+assert.throws(() => assertUpgradeTarget("runtime-v9999.0.0-unrelated"), /upgrade_target_identity_mismatch/);
 let admin = new Client({ connectionString: url }); await admin.connect();
 assert.equal((await admin.query("SELECT purpose FROM control.deployment_purpose WHERE singleton")).rows[0].purpose, "synthetic_disposable");
 assert.equal((await admin.query("SELECT count(*)::int AS n FROM ledger.raw_records")).rows[0].n, 0);
@@ -58,7 +59,7 @@ try {
     assert.equal((await upgradePreflight(old, declaration)).pending, 0);
     assert.equal(await migrateDatabase(old, migrations, undefined, "persistent"), 0);
   } finally { await old.end(); }
-  console.log("Runtime artifact operations passed: backup=create/check/restore upgrade=48-to-current privacy=reapplied candidate-upgrade=refused.");
+  console.log("Runtime artifact operations passed: backup=create/check/restore upgrade=48-to-current privacy=reapplied target-identity=verified.");
 } finally {
   // Restore cluster-role login state for the original disposable pilot DB.
   // Only the two generated test databases are eligible for removal.

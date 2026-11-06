@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { runDeploymentConfiguration, type ConfigurationCommand } from "./deployment-config.js";
 import { buildRuntimeArtifact } from "./runtime-artifact.js";
 
-type PilotArguments = { disposable: true; load: boolean; artifact: boolean };
+type PilotArguments = { disposable: true; load: boolean; artifact: boolean; artifactTag?: string };
 type CommandResult = { status: number | null; stdout: string; stderr: string };
 type StepStatus = { id: string; status: "passed" | "failed" | "not_run"; exit_code?: number };
 
@@ -20,10 +20,13 @@ class PilotStepError extends Error {
 
 export function parseSyntheticPilotArguments(args: readonly string[]): PilotArguments {
   const allowed = new Set(["--disposable", "--load", "--artifact"]);
-  const unknown = args.filter((value) => !allowed.has(value));
+  const tagArgs = args.filter(value => /^--artifact-tag=runtime-v\d+\.\d+\.\d+(?:-[a-z0-9.]+)?$/.test(value));
+  const unknown = args.filter((value) => !allowed.has(value) && !tagArgs.includes(value));
   assert.deepEqual(unknown, [], `unknown synthetic pilot arguments: ${unknown.join(", ")}`);
   assert.ok(args.includes("--disposable"), "--disposable is required; this command deletes its isolated Compose volumes");
-  return { disposable: true, load: args.includes("--load"), artifact: args.includes("--artifact") };
+  assert.ok(tagArgs.length <= 1 && (!tagArgs.length || args.includes("--artifact")), "artifact tag requires one artifact build");
+  return { disposable: true, load: args.includes("--load"), artifact: args.includes("--artifact"),
+    ...(tagArgs.length ? { artifactTag: tagArgs[0].slice("--artifact-tag=".length) } : {}) };
 }
 
 export function syntheticProcessEnvironment(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -240,7 +243,7 @@ export async function runSyntheticRuntimePilot(
     if (options.artifact) {
       assert.equal(process.platform, "linux", "runtime artifact pilot currently supports Linux amd64");
       const bundle = join(root, "build", "runtime-artifact", sourceRevision);
-      const manifest = await buildRuntimeArtifact(bundle, root);
+      const manifest = await buildRuntimeArtifact(bundle, root, options.artifactTag);
       artifactImage = manifest.image_id;
       cpSync(bundle, staging, { recursive: true });
       assert.ok(!existsSync(join(staging, "package.json")) && !existsSync(join(staging, "apps")) && !existsSync(join(staging, ".git")));
@@ -322,7 +325,7 @@ export async function runSyntheticRuntimePilot(
       }
       steps.set("artifact_identity", "passed");
       runVerifiedStep("artifact_backup_upgrade_restore", [...compose, "--profile", "operations", "run", "--rm", "--no-deps", "operations", "run", "test:runtime-artifact-operations"],
-        result => assert.match(result.stdout, /Runtime artifact operations passed: backup=create\/check\/restore upgrade=48-to-current privacy=reapplied candidate-upgrade=refused\./));
+        result => assert.match(result.stdout, /Runtime artifact operations passed: backup=create\/check\/restore upgrade=48-to-current privacy=reapplied target-identity=verified\./));
     }
     runVerifiedStep("seed_contract_fixtures", [
       ...compose, "--profile", "seed", "run", "--rm", "seed",

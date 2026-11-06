@@ -3,7 +3,7 @@
 The runtime packager builds the existing Dockerfile into one Linux/amd64 image
 for bootstrap, migrations, API, worker, redirector and operator commands. The
 bundle contains the existing Compose file plus an image-only override, not a
-second deployment topology. Operators need Docker Engine, Compose 2.24.4 or newer,
+second deployment topology. Operators need Docker Engine, Compose 2.32.4 or newer,
 a POSIX shell and `sha256sum`; they do not need a source checkout or host
 Node/npm/Python/Git/PostgreSQL client tools.
 
@@ -138,9 +138,18 @@ an existing release, and re-download/verify it. Record the source and Runtime ru
 in the release receipt. Development CI artifacts expire; they are not a permanent
 release channel. See [Release runbook](release.md).
 
+For approved tagged publication, dispatch the existing Runtime workflow **at that
+tag** with `runtime_artifact_tag=runtime-v<approved-version>`. The same full pilot
+packages and verifies tagged bytes; download its `runtime-image-archive` rather
+than relabelling a previous untagged artifact. The builder checks the annotated
+tag's peeled commit against HEAD before building. This input does not create a
+tag, publish a release or bypass the release-owner approval.
+
 Primary Docker/Alpine references checked 2026-11-06:
 
 - https://docs.docker.com/reference/cli/docker/image/save/
 - https://docs.docker.com/reference/cli/docker/image/load/
 - https://docs.docker.com/reference/compose-file/merge/
+- https://github.com/docker/compose/releases/tag/v2.32.3 (local image-ID fix)
+- https://github.com/docker/compose/releases/tag/v2.32.4 (corrected version reporting)
 - https://pkgs.alpinelinux.org/package/v3.22/main/x86_64/postgresql17-client

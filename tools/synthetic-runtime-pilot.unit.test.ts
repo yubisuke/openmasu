@@ -19,6 +19,9 @@ describe("disposable synthetic runtime pilot", () => {
     assert.deepEqual(parseSyntheticPilotArguments(["--disposable"]), { disposable: true, load: false, artifact: false });
     assert.deepEqual(parseSyntheticPilotArguments(["--disposable", "--load"]), { disposable: true, load: true, artifact: false });
     assert.deepEqual(parseSyntheticPilotArguments(["--disposable", "--artifact"]), { disposable: true, load: false, artifact: true });
+    assert.equal(parseSyntheticPilotArguments(["--disposable", "--artifact", "--artifact-tag=runtime-v0.1.0-rc.1"]).artifactTag, "runtime-v0.1.0-rc.1");
+    assert.throws(() => parseSyntheticPilotArguments(["--disposable", "--artifact-tag=runtime-v0.1.0"]));
+    assert.throws(() => parseSyntheticPilotArguments(["--disposable", "--artifact", "--artifact-tag=v0.3.0"]));
   });
 
   it("passes only host process primitives and strips Docker, OpenMasu, proxy, Node, npm, and credential variables", () => {
