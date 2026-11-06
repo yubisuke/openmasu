@@ -120,6 +120,11 @@ async function consentCredential(input: Scope, label: string): Promise<string> {
       (installation_key_id,tenant_id,app_id,installation_id_digest,sdk_key_id,secret_ref,created_at,artifact)
       VALUES ($1,$2,$3,$4,$5,$6,$7,'{}')`, [key,input.tenantId,input.appId,
       createHash("sha256").update(`synthetic:${key}`).digest("hex"),sdkKey,`synthetic:${key}`,input.receivedAt]);
+    await client.query(`INSERT INTO control.sdk_key_states (sdk_key_id,tenant_id,app_id,status,changed_at,artifact)
+      VALUES ($1,$2,$3,'active',$4,'{}')`,[sdkKey,input.tenantId,input.appId,input.receivedAt]);
+    await client.query(`INSERT INTO control.installation_credential_states
+      (installation_key_id,tenant_id,app_id,status,changed_at,artifact)
+      VALUES ($1,$2,$3,'active',$4,'{}')`,[key,input.tenantId,input.appId,input.receivedAt]);
   });
   return key;
 }

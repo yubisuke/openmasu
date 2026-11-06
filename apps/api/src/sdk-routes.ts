@@ -288,7 +288,7 @@ export async function handleSdkBatch(
         requestDigest: identity.requestDigest, outcome: "failed", reasonCode: reason,
       });
     }
-    return writeJson(response, 403, { error: reason });
+    return writeJson(response, reason === "consent_revision_invalid" ? 400 : 403, { error: reason });
   }
   const durableBody = Buffer.from(JSON.stringify({ records }), "utf8");
   let ingestBatchId: string;
