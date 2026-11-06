@@ -29,6 +29,7 @@ export const METRIC_PROFILE_BINDINGS = {
   standard_retention: binding("metric-standard-retention"),
   calendar_activity: binding("metric-calendar-activity"),
   keyed_calendar_activity: binding("metric-calendar-activity-v0.4.32"),
+  period_calendar_activity: binding("metric-calendar-activity-v0.4.36"),
   payer: binding("metric-verified-payers"),
   payer_cohort: binding("metric-verified-payers-v0.4.35"),
   outcome_cost: binding("metric-outcome-acquisition-cost"),
@@ -90,6 +91,7 @@ const labels: Record<MetricProfileKey, string> = {
   standard_retention: "D3/D14/D30 retained installations (complete observation window)",
   calendar_activity: "UTC daily activity (events and distinct installations, not people)",
   keyed_calendar_activity: "UTC daily custom-key activity (events and distinct installations, not people)",
+  period_calendar_activity: "UTC 7/30-day distinct active installations (not people)",
   payer: "Verified settled purchase transactions and paying installations (not people)",
   payer_cohort: "Verified payers in explicit native fraud-net or platform gross/net cohorts",
   outcome_cost: "Acquisition cost per converted or verified paying installation (not people)",
@@ -104,9 +106,9 @@ export const METRIC_PROFILE_METADATA: readonly MetricProfileMetadata[] =
       rule_bundle_version: METRIC_PROFILE_BINDINGS[key].rule_bundle_version,
       rule_bundle_hash: METRIC_PROFILE_BINDINGS[key].rule_bundle_hash,
     },
-    scheduleValidation: ["detail", "engagement", "engagement_policy", "daily_acquisition", "platform", "imported", "calendar", "acquisition_kpis", "basis_acquisition_kpis", "horizon_acquisition_kpis", "standard_retention", "calendar_activity", "keyed_calendar_activity", "payer", "payer_cohort", "outcome_cost"].includes(key) ? "schema_profile"
+    scheduleValidation: ["detail", "engagement", "engagement_policy", "daily_acquisition", "platform", "imported", "calendar", "acquisition_kpis", "basis_acquisition_kpis", "horizon_acquisition_kpis", "standard_retention", "calendar_activity", "keyed_calendar_activity", "period_calendar_activity", "payer", "payer_cohort", "outcome_cost"].includes(key) ? "schema_profile"
       : ["selected", "safe_cost", "commerce", "refund", "custom"].includes(key) ? "manual_profile" : "legacy_operation",
-    evaluationValidation: ["refund", "detail", "custom", "engagement", "engagement_policy", "daily_acquisition", "platform", "imported", "calendar", "acquisition_kpis", "basis_acquisition_kpis", "horizon_acquisition_kpis", "standard_retention", "calendar_activity", "keyed_calendar_activity", "payer", "payer_cohort", "outcome_cost"].includes(key) ? "schema_profile"
+    evaluationValidation: ["refund", "detail", "custom", "engagement", "engagement_policy", "daily_acquisition", "platform", "imported", "calendar", "acquisition_kpis", "basis_acquisition_kpis", "horizon_acquisition_kpis", "standard_retention", "calendar_activity", "keyed_calendar_activity", "period_calendar_activity", "payer", "payer_cohort", "outcome_cost"].includes(key) ? "schema_profile"
       : ["purchase", "purchase_horizon", "total", "commerce"].includes(key) ? "named_series"
       : ["selected", "safe_cost"].includes(key) ? "manual_profile" : "operation",
   }));

@@ -7,7 +7,7 @@ import { captureMetricComparisonContext, comparisonMeaning, comparisonMaturity }
 import { engagementMetricDefinitions, engagementPolicyMetricDefinitions } from "@openmasu/contracts";
 import { importedAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
 import { calendarAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
-import { calendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
+import { calendarActivityMetricDefinitions, periodActivityMetricDefinitions } from "@openmasu/contracts/definitions";
 import { payerMetricDefinitions, PAYER_COHORT_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 import { horizonAcquisitionKpiDefinitions, ACQUISITION_KPI_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 
@@ -62,6 +62,17 @@ it("calendar_activity_comparison_preserves_event_units_daily_distinct_scope_and_
     return meaning;
   });
   assert.equal(new Set(meanings.map(meaning => JSON.stringify(meaning))).size, 3);
+  for (const definition of periodActivityMetricDefinitions()) {
+    const context = captureMetricComparisonContext(run, definition, fx, "after", sha256);
+    const days = definition.definition.window.day + 1;
+    const closes = new Date(Date.parse("2026-08-06") + days * 86400000).toISOString();
+    const meaning = comparisonMeaning(context)!;
+    assert.equal(meaning.aggregation, "whole_period_distinct");
+    assert.equal(meaning.distinct_scope, "tenant_app_installation_per_period");
+    assert.ok(meanings.every(daily => JSON.stringify(daily) !== JSON.stringify(meaning)));
+    assert.equal(comparisonMaturity(context, { metric_date: "2026-08-06" }, new Date(Date.parse(closes)-1).toISOString()).state, "unknown");
+    assert.deepEqual(comparisonMaturity(context, { metric_date: "2026-08-06" }, closes), { state: "window_elapsed", closes_at: closes });
+  }
 });
 it("dated_FX_comparison_freezes_currency_date_source_as_of_and_digest_without_legacy_reinterpretation", () => {
   const fixture = JSON.parse(readFileSync("fixtures/v0.4/69-dated-fx-cohorts/input.json", "utf8"));

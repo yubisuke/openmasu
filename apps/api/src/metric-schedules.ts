@@ -232,6 +232,10 @@ export function normalizeMetricScheduleRequest(
           ?.rule_bundle_id !== "metric-calendar-activity"))) {
       throw new Error("metric_schedule_calendar_activity_profile_required");
     }
+    if (calendarActivity && evaluation.metric_names.some(name => {
+      const metric = suppliedDefinitions.find(definition => definition.metric_name === name)!;
+      return lagDays < Number((metric.definition.window as JsonObject).day) + 1;
+    })) throw new Error("metric_schedule_calendar_activity_window_not_elapsed");
     if ((dailyAcquisition || grouping.acquisition_campaign_state !== undefined)
         && (dateDimension !== "metric_date" || evaluation.metric_names.some(name =>
           suppliedDefinitions.find(definition => definition.metric_name === name)?.rule_bundle_id !== "metric-selected-daily-acquisition"))) {

@@ -324,6 +324,46 @@ describe("calendar activity SQL parity and saved reporting", { concurrency: fals
     assert.deepEqual((await metricReport(reader, identity, { ...query, dateFrom: "2026-08-19", dateTo: "2026-08-20" })).data, []);
     assert.equal((await processMetricRecalculations(app, "tenant-a", 10)).completed, 0);
   });
+  it("period_activity_deduplicates_all_days_and_replays_only_windows_containing_late_evidence", async () => {
+    const source = JSON.parse(readFileSync("fixtures/v0.4/83-period-activity/input.json", "utf8"));
+    await ingestFixture("period83-parity", source, app, seed);
+    const actual = await computeSqlMetricRuns(app, source, false);
+    assertPlatformRunParity(actual, evaluate(source).metric_runs, "period activity evaluator");
+    assertPlatformRunParity(actual, JSON.parse(readFileSync("fixtures/v0.4/83-period-activity/expected_metric_runs.json", "utf8")), "independent period golden");
+    const live = { ...source, privacy_requests: [] };
+    await ingestFixture("period83-corrections", live, app, seed);
+    const initial = { ...live.metric_evaluations[0], privacy_state: "after" };
+    const prior = await computeSqlMetricRuns(app, { ...live, metric_evaluations: [initial] }, true);
+    const identity = { tenantId: "tenant-a", appId: "app-a", keyId: "synthetic-period83", role: "admin" as const };
+    const request = { trigger_kind: "late_events", date_from: "2026-08-20", date_to: "2026-08-20", watermark: "2026-09-20T00:00:00.000Z" };
+    // F is at the exclusive 30-day end: neither saved period includes it.
+    assert.equal((await requestMetricRecalculation(app, identity, { ...request, source_record_ids: ["session83-end30"] })).selected_runs, 0);
+    // E is at the exclusive seven-day end, but inside the 30-day period.
+    assert.equal((await requestMetricRecalculation(app, identity, { ...request, source_record_ids: ["session83-end7"] })).selected_runs, 1);
+    assert.deepEqual(await processMetricRecalculations(app, "tenant-a", 10).then(r => [r.completed, r.failed]), [1, 0]);
+    assert.equal((await requestMetricRecalculation(app, identity, { ...request, source_record_ids: ["session-d-late-72"] })).selected_runs, 1);
+    assert.deepEqual(await processMetricRecalculations(app, "tenant-a", 10).then(r => [r.completed, r.failed]), [1, 0]);
+    const page = await metricReport(reader, identity, { tenantId: "tenant-a", appId: "app-a", supersession: "latest", limit: 200 });
+    const csv = parseCsv(encodeMetricReport(page, "csv").body);
+    assert.equal(page.data.length, 2);
+    for (const row of page.data) {
+      const days = row.comparison_context!.definition.definition.window.day + 1;
+      assert.equal(row.value_unscaled, days === 7 ? "4" : "5");
+      assert.equal(row.activity_unit, "distinct_installations");
+      assert.equal(row.activity_period_start, "2026-08-20T00:00:00.000Z");
+      assert.equal(row.activity_period_end_exclusive, days === 7 ? "2026-08-27T00:00:00.000Z" : "2026-09-19T00:00:00.000Z");
+      const exported = csv.find(value => value.metric_run_id === row.metric_run_id)!;
+      assert.equal(exported.activity_period_start, row.activity_period_start);
+      assert.equal(exported.activity_period_end_exclusive, row.activity_period_end_exclusive);
+      assert.equal(exported.activity_unit, row.activity_unit);
+      assert.equal(exported.value_unscaled, row.value_unscaled);
+    }
+    for (const run of prior) {
+      const stored = await withTenant(app, "tenant-a", c => c.query("SELECT artifact FROM ledger.metric_runs WHERE metric_run_id=$1", [run.metric_run_id]));
+      assert.equal(jcs(stored.rows[0].artifact), jcs(run));
+    }
+    assert.equal((await processMetricRecalculations(app, "tenant-a", 10)).completed, 0);
+  });
   it("calendar_activity_canonical_events_distinct_installations_cutoffs_privacy_and_empty_days_match_reviewed_bytes", async () => {
     await ingestFixture("calendar72-parity", calendarActivitySource, app, seed);
     const actual = await computeSqlMetricRuns(app, calendarActivitySource, false);

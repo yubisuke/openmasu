@@ -1368,11 +1368,34 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     assert.ok(csvRows.every(row => row.activity_date === "2026-08-20"));
     const html = renderDashboard(buildDashboardView({ apps: [{ app_id: appId, created_at: "2026-08-01T00:00:00.000Z" }], selectedAppId: appId,
       query, metrics: page, csrfToken: "synthetic-calendar-activity" }));
-    assert.match(html, /3 distinct installations \(not people\)/); assert.match(html, /Daily calendar activity/);
-    assert.match(html, /Never add daily distinct counts into period-unique users/);
+    assert.match(html, /3 distinct installations \(not people\)/); assert.match(html, /Calendar activity/);
+    assert.match(html, /Never sum daily or overlapping period distinct counts/);
     assert.doesNotMatch(html, /<script|javascript:|\son[a-z]+=/i);
     assert.equal((await processMetricSchedules(appPool, tenantId, { now: clock, maximumCatchupDates: 1 })).completedDates, 0);
     assert.equal(jcs(await metricReport(readerPool, reportIdentity, query)), jcs(page));
     await disableMetricSchedule({ pool: appPool, identity: reportIdentity, metricScheduleId: registered.metric_schedule_id, now: clock });
+    for (const days of [7, 30]) {
+      const response = await fetch(`${baseUrl}${path}`, { method: "POST", redirect: "manual",
+        headers: { cookie, origin: "http://localhost:8080", "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ csrf_token: csrfToken(session.token), calendar_activity: String(days), start_date: "2026-08-20" }) });
+      assert.equal(response.status, 303);
+      const schedules = (await (await admin(`/v1/admin/apps/${appId}/metric-schedules`)).json() as { data: MetricScheduleRecord[] }).data;
+      const period = schedules.find(row => row.status === "active")!;
+      const now = new Date("2026-09-20T01:00:00.000Z");
+      assert.deepEqual(await processMetricSchedules(appPool, tenantId, { now, maximumCatchupDates: 1 }),
+        { schedules: 1, completedDates: 1, replayedDates: 0, failedSchedules: 0 });
+      const page = await metricReport(readerPool, reportIdentity, { ...query, metricScheduleId: period.metric_schedule_id });
+      assert.equal(page.data.length, 1);
+      assert.equal(page.data[0].value_unscaled, "3");
+      assert.equal(page.data[0].activity_period_start, "2026-08-20T00:00:00.000Z");
+      assert.equal(page.data[0].activity_period_end_exclusive, new Date(Date.parse("2026-08-20")+days*86400000).toISOString());
+      const selection = new URLSearchParams({ metric_schedule_id: period.metric_schedule_id, format: "csv" });
+      const api = await admin(`/v1/reports/metrics?app_id=${appId}&${selection}`);
+      const dashboard = await fetch(`${baseUrl}/dashboard/apps/${appId}/cohorts.csv?${selection}`, { headers: { cookie } });
+      assert.equal(api.status, 200); assert.equal(dashboard.status, 200);
+      const csv = await api.text(); assert.equal(await dashboard.text(), csv);
+      assert.equal(parseCsv(csv)[0].activity_period_end_exclusive, page.data[0].activity_period_end_exclusive);
+      await disableMetricSchedule({ pool: appPool, identity: reportIdentity, metricScheduleId: period.metric_schedule_id, now });
+    }
   });
 });

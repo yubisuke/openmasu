@@ -1,4 +1,4 @@
-import { calendarActivityMetricDefinitions, metricProfileMetadata, standardRetentionMetricDefinitions } from "@openmasu/contracts/definitions";
+import { calendarActivityMetricDefinitions, periodActivityMetricDefinitions, metricProfileMetadata, standardRetentionMetricDefinitions } from "@openmasu/contracts/definitions";
 import type { MetricScheduleRecord } from "../metric-schedules.js";
 import { metricScheduleRequestDefinition } from "../metric-schedule-definition.js";
 import type { MetricScheduleReplacementPreview } from "../metric-schedule-replacements.js";
@@ -12,11 +12,13 @@ export function metricScheduleFormRequest(form: URLSearchParams, disable = false
   if (!disable && form.has("calendar_activity")) {
     const allowed = ["csrf_token", "calendar_activity", "lag_days", "start_date"];
     if ([...form.keys()].some(key => !allowed.includes(key) || form.getAll(key).length !== 1)
-        || form.get("calendar_activity") !== "true" || !/^\d{1,3}$/.test(form.get("lag_days") ?? "1")) {
+        || !["true", "7", "30"].includes(form.get("calendar_activity") ?? "") || !/^\d{1,3}$/.test(form.get("lag_days") ?? "1")) {
       throw new Error("metric_schedule_form_invalid");
     }
-    const definitions = calendarActivityMetricDefinitions();
-    return { lag_days: Number(form.get("lag_days") ?? "1"), ...(form.get("start_date") ? { start_date: form.get("start_date") } : {}),
+    const period = form.get("calendar_activity");
+    const definitions = period === "true" ? calendarActivityMetricDefinitions()
+      : periodActivityMetricDefinitions().filter(definition => definition.definition.window.day + 1 === Number(period));
+    return { lag_days: Number(form.get("lag_days") ?? (period === "true" ? "1" : period)), ...(form.get("start_date") ? { start_date: form.get("start_date") } : {}),
       fx_policy: { policy_version: "calendar-activity-no-money-v1", target_currency: "USD", target_scale: 6,
         rounding_mode: "half_even", rates: [{ currency: "USD", rate_unscaled: "1", rate_scale: 0,
           source: "identity-not-used-for-activity", as_of: "1970-01-01T00:00:00.000Z" }] },
@@ -113,7 +115,8 @@ function renderStandardRetentionForm(base: string, csrf: string): string {
 }
 
 function renderCalendarActivityForm(base: string, csrf: string): string {
-  return `<section><h2>Schedule daily activity</h2><p>Three separate UTC activity-date series: session starts (accepted session_start events, not unique sessions), custom events (all accepted keys), and distinct active installations across either event kind. Installations are not people or DAU. Daily distinct counts must not be added into period-unique users. These gross recorded counts do not infer acquisition, country or campaign, and do not prove human activity. A one-day lag closes the UTC day, not late-input completeness.</p><form method="post" action="${base}">${csrf}<input type="hidden" name="calendar_activity" value="true"><label>Lag days <input type="number" name="lag_days" min="1" max="365" value="1" required></label><label>Start activity date (optional)<input type="date" name="start_date"></label><button type="submit">Register daily activity</button></form></section>`;
+  const periods = [7, 30].map(days => `<section><h2>Schedule ${days}-day active installations</h2><p>Distinct installations across the whole UTC period starting on the selected metric date, not a sum of daily counts or unique people. The exclusive end is ${days} days later. Gross session and custom-event activity only; elapsed windows do not prove receipt completeness.</p><form method="post" action="${base}">${csrf}<input type="hidden" name="calendar_activity" value="${days}"><label>Lag days <input type="number" name="lag_days" min="${days}" max="365" value="${days}" required></label><label>First period start (optional)<input type="date" name="start_date"></label><button type="submit">Register ${days}-day activity</button></form></section>`).join("");
+  return periods + `<section><h2>Schedule daily activity</h2><p>Three separate UTC activity-date series: session starts (accepted session_start events, not unique sessions), custom events (all accepted keys), and distinct active installations across either event kind. Installations are not people or DAU. Daily distinct counts must not be added into period-unique users. These gross recorded counts do not infer acquisition, country or campaign, and do not prove human activity. A one-day lag closes the UTC day, not late-input completeness.</p><form method="post" action="${base}">${csrf}<input type="hidden" name="calendar_activity" value="true"><label>Lag days <input type="number" name="lag_days" min="1" max="365" value="1" required></label><label>Start activity date (optional)<input type="date" name="start_date"></label><button type="submit">Register daily activity</button></form></section>`;
 }
 
 export function renderMetricSchedules(appId: string, schedules: readonly MetricScheduleRecord[], csrfToken: string, keys: readonly string[] = [], health?: MeasurementHealth): string {

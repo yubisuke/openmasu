@@ -57,6 +57,7 @@ export {
 } from "./rule-bundle-provenance.js";
 export { OUTCOME_COST_BUNDLE, OUTCOME_COST_VERSION, outcomeAcquisitionCostDefinitions,
   isOutcomeCostMetric, isOutcomeCostMetricDefinition, outcomeCostClosesAt } from "./outcome-cost-definitions.js";
+export { periodActivityMetricDefinitions } from "./calendar-activity-definitions.js";
 export { CONSENT_PURPOSES, purposeConsentAt, purposeConsentAdmission,
   type ConsentPurpose, type ConsentState, type PurposeConsentControl,
   type PurposeConsentSnapshot, type PurposeConsentAdmission } from "./purpose-consent.js";
