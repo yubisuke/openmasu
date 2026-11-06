@@ -9,6 +9,7 @@ import { createReportsControllers } from "./reports.js";
 import { createTrackingControllers } from "./tracking.js";
 import { createKeysControllers } from "./keys.js";
 import { createOperationsControllers } from "./operations.js";
+import { createWebhookRecoveryControllers } from "./webhook-recovery.js";
 import { createPrivacyControllers } from "./privacy.js";
 import { createAnalysesControllers } from "./analyses.js";
 import { createComparisonsControllers } from "./comparisons.js";
@@ -40,6 +41,7 @@ export function assertHandlerRegistry(registry: Readonly<Partial<Record<RouteHan
 
 export function createHandlerRegistry(dependencies: RequestHandlerDependencies): HandlerRegistry {
   const registry = {
+    ...createWebhookRecoveryControllers(dependencies),
     ...createGoogleDestinationControllers({pool:dependencies.pool,dashboard:dependencies.dashboard}),
     ...createWebhookContentControllers({ pool: dependencies.pool, dashboard: dependencies.dashboard }),
     ...createAppleMeaningsControllers({pool:dependencies.pool,dashboard:dependencies.dashboard}),

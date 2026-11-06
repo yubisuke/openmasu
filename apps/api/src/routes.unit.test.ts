@@ -14,6 +14,15 @@ import {
 } from "./routes.js";
 
 describe("declarative API route security", () => {
+  it("requires administrator writes for audited webhook recovery previews and confirmations", () => {
+    for (const prefix of ["/v1/admin/apps/app-a", "/dashboard/apps/app-a"]) for (const action of ["preview","confirm"]) {
+      const path = `${prefix}/operator-webhook-deliveries/018f0000-0000-7000-8000-000000000001/recovery-${action}`;
+      const route = matchRoute("POST",path)!;
+      assert.equal(route.capability,"administer"); assert.equal(route.mutates,true);
+      assert.equal(route.auth,prefix.startsWith("/v1") ? "admin_bearer" : "dashboard_session");
+      assert.equal(matchRoute("GET",path),undefined);
+    }
+  });
   it("keeps meaning configuration reads and preview read-only, with administrator-only registration", () => {
     for(const [method,suffix,capability,mutates] of [["GET","","read",false],["GET","/view","read",false],
       ["GET","/bundle","read",false],["POST","/preview","administer",false],["POST","","administer",true]] as const) {

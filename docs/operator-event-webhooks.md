@@ -375,6 +375,64 @@ delivery metadata to the ledger.
 
 ## Observe and validate
 
+### Recover a failed delivery
+
+Administrators can select **Preview recovery** on a failed delivery in the app
+dashboard, review the original digest and signing revision, and confirm within
+ten minutes. The equivalent management requests are:
+
+```http
+POST /v1/admin/apps/<app-id>/operator-webhook-deliveries/<delivery-id>/recovery-preview
+Authorization: Bearer <tenant-admin-key>
+Content-Type: application/json
+
+{}
+```
+
+```http
+POST /v1/admin/apps/<app-id>/operator-webhook-deliveries/<delivery-id>/recovery-confirm
+Authorization: Bearer <tenant-admin-key>
+Content-Type: application/json
+
+{"preview_id":"<returned-preview-id>","receipt":"<returned-receipt>"}
+```
+
+Preview writes a non-secret audit receipt but does not send or retain the
+reconstructed body. Both requests require administrator authority; dashboard
+forms also require session/CSRF validation. The body itself is never displayed.
+Confirmation rechecks eligibility under the same privacy/record/destination
+locks as dispatch, and requeues the **same delivery ID, original body digest,
+content policy revision and signing revision**. It does not rediscover the event
+or apply the latest content policy. Repeated confirmation returns
+`already_requested` without another enqueue or confirmation audit entry.
+
+Recovery is possible only while the original evidence remains available:
+
+- Ordinary events use immutable facts, the recorded content policy and original
+  emission time. The protected source must still exist and remain available.
+- Comparison notices use the retained original run/transition and must still
+  satisfy the existing expiry, privacy, mute and sequence checks.
+- Opted-in deletion notices use the same recognized deletion and previously sent
+  subject reference; they never reconstruct a deleted ordinary event.
+
+Every reconstructed body must match the stored SHA-256 exactly. Missing or
+expired evidence, withdrawn/deleted ordinary events, inactive destinations,
+expired/retired signing revisions, changed digests, successful/active deliveries,
+busy dispatch locks and stale/expired previews are refused. Fixing receiver or
+egress configuration does not override these checks. A lost original key cannot
+be replaced with the current signing key for recovery.
+
+Attempts and original terminal results are not reset or overwritten. Existing
+retry policy applies to the resumed attempt; if its automatic budget was already
+exhausted, a failed resumed attempt is terminal again. The existing hard ceiling
+of 32 total attempts remains. This command extends neither retention nor key
+lifetime. Audit actions `operator_webhook_recovery_previewed` and
+`operator_webhook_recovery_confirmed` correlate by receipt/delivery ID; subsequent
+results remain in `ledger.operator_webhook_delivery_results`. A queued recovery
+is not proof of receiver acceptance or exactly-once downstream effects.
+
+### Delivery health
+
 Authenticated `/metrics` output includes the fixed-label
 `operator_webhooks` backlog and the `operator_webhook_delivery` job status.
 Receiver response bodies are not retained or logged.

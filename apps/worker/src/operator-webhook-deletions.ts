@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { buildOperatorWebhookDeletionRequest, recognizedWebhookDeletion } from "@openmasu/runtime/operator-webhook-envelope";
+export { buildOperatorWebhookDeletionRequest, recognizedWebhookDeletion } from "@openmasu/runtime/operator-webhook-envelope";
 import type { Pool, PoolClient } from "pg";
 import { operatorWebhookReference, uuidV7, withTenant, type PayloadStore } from "@openmasu/runtime";
 import { webhookSigningRevision } from "@openmasu/runtime/operator-webhook-signing";
@@ -6,40 +7,9 @@ import { webhookSigningRevision } from "@openmasu/runtime/operator-webhook-signi
 type Scope = Readonly<{ tenantId: string; appId: string }>;
 type Candidate = { app_id: string; destination_id: string; privacy_request_id: string; subject_ref: string; recognized_at: string };
 
-/** Closed, pseudonymous request. Neither the privacy request ID nor raw IDs leave the worker. */
-export function buildOperatorWebhookDeletionRequest(input: Readonly<{
-  deliveryId: string; appId: string; subjectRef: string; recognizedAt: string; endpointUrl: string;
-}>) {
-  if (!/^[a-f0-9]{64}$/.test(input.subjectRef)
-      || !Number.isFinite(Date.parse(input.recognizedAt))
-      || new Date(input.recognizedAt).toISOString() !== input.recognizedAt) {
-    throw Error("operator_webhook_deletion_request_invalid");
-  }
-  const envelope = { schema: "openmasu.subject_deletion.v1" as const, delivery_id: input.deliveryId,
-    app_id: input.appId, subject_ref: input.subjectRef, recognized_at: input.recognizedAt };
-  const body = Buffer.from(JSON.stringify(envelope), "utf8");
-  return { deliveryId: input.deliveryId, endpointUrl: input.endpointUrl, envelope, body,
-    requestDigest: createHash("sha256").update(body).digest("hex") };
-}
-
 async function lockDestination(client: PoolClient, scope: Scope, destinationId: string) {
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended('openmasu:operator-webhook-destination:' || $1 || ':' || $2 || ':' || $3,0))",
     [scope.tenantId, scope.appId, destinationId]);
-}
-
-/** Recheck the exact recognized request/subject against a successful ordinary delivery. */
-export async function recognizedWebhookDeletion(client: PoolClient, scope: Scope, destinationId: string,
-  privacyRequestId: string, subjectRef: string): Promise<string | undefined> {
-  const result = await client.query<{ recognized_at: string | null }>(
-    `SELECT MIN(t.created_at)::text AS recognized_at
-      FROM ephemeral.operator_webhook_deliveries source
-      JOIN ledger.privacy_tombstones t ON t.tenant_id=source.tenant_id AND t.app_id=source.app_id AND t.record_id=source.record_id
-      JOIN control.privacy_deletion_jobs job ON job.tenant_id=t.tenant_id AND job.privacy_request_id=t.privacy_request_id
-      WHERE source.tenant_id=$1 AND source.app_id=$2 AND source.destination_id=$3
-        AND source.subject_ref=$5 AND source.state='succeeded' AND source.logical_event_id IS NOT NULL
-        AND source.record_id IS NOT NULL AND t.privacy_request_id=$4`,
-    [scope.tenantId, scope.appId, destinationId, privacyRequestId, subjectRef]);
-  return result.rows[0]?.recognized_at ?? undefined;
 }
 
 const installation = "COALESCE(session.installation_id,custom.installation_id,purchase.installation_id,refund.installation_id,revenue.installation_id)";
