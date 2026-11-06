@@ -608,6 +608,24 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     assert.match(appHtml, new RegExp(`/dashboard/apps/${newAppId}/sdk-keys`));
     assert.match(appHtml, new RegExp(`/dashboard/apps/${newAppId}/apple-registration`));
     assert.match(appHtml, /Google Data Manager delivery health/);
+    const destinationPath = `/v1/admin/apps/${newAppId}/google-data-manager`;
+    const unknownDestination = { operating_account_id: "1234567890", conversion_action_id: "987654321", enabled: true, app_audience: "general", readiness: {} };
+    const destinationPreview = await fetch(`${baseUrl}${destinationPath}/preview`, { method: "POST", headers, body: JSON.stringify(unknownDestination) });
+    assert.equal(destinationPreview.status, 200);
+    const previewed = await destinationPreview.json();
+    assert.equal(previewed.ready, false);
+    assert.equal(previewed.live_access_verified, false);
+    assert.deepEqual((await (await fetch(`${baseUrl}${destinationPath}`, { headers })).json()).revisions, [], "preview does not activate a destination");
+    assert.equal((await fetch(`${baseUrl}${destinationPath}`, { method: "POST", headers,
+      body: JSON.stringify({ ...unknownDestination, expected_revision: 0, preview_digest: previewed.preview_digest }) })).status, 400);
+    assert.equal((await fetch(`${baseUrl}${destinationPath}/preview`, { method: "POST", headers: { authorization: `Bearer ${readerKey}` }, body: JSON.stringify(unknownDestination) })).status, 403);
+    const destinationPage = await fetch(`${baseUrl}/dashboard/apps/${newAppId}/google-data-manager`, { headers: { cookie: dashboardCookie } });
+    assert.equal(destinationPage.status, 200);
+    assert.match(await destinationPage.text(), /Preview without contacting Google/);
+    const destinationForm = new URLSearchParams({ csrf_token: csrf, operating_account_id: "1234567890", conversion_action_id: "987654321", enabled: "true", app_audience: "general" });
+    const previewPage = await fetch(`${baseUrl}/dashboard/apps/${newAppId}/google-data-manager/preview`, { method: "POST", headers: { cookie: dashboardCookie, origin: configuredOrigin }, body: destinationForm });
+    assert.equal(previewPage.status, 200);
+    assert.doesNotMatch(await previewPage.text(), /Activate reviewed revision/);
     assert.match(appHtml, /No Google conversion deliveries are recorded/);
     assert.match(appHtml, /Operator delivery health/);
     assert.match(appHtml, /No operator webhook deliveries are recorded/);
