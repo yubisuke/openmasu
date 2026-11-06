@@ -41,7 +41,7 @@ export async function configureGoogleDataManagerDestination(options: {
       definition.enabled, configuredAt, JSON.stringify(definition), revision]);
     await client.query(`INSERT INTO ledger.audit_logs
       (audit_log_id,tenant_id,app_id,occurred_at,actor_type,actor_ref,action,target_scope,target_ref,policy_version,request_digest,outcome)
-      VALUES ($1,$2,$3,$4,'admin_key',$5,'google_destination_activated','app',$3,'google-destination-v2',$6,'succeeded')`,
+      VALUES ($1,$2,$3::text,$4,'admin_key',$5,'google_destination_activated','app',$3::text,'google-destination-v2',$6,'succeeded')`,
     [uuidV7(now.valueOf()), tenantId, appId, configuredAt, `admin_key:${keyId}`, preview.preview_digest]);
     return { ...definition, destination_id: destinationId, tenant_id: tenantId, app_id: appId, revision, configured_at: configuredAt };
   });
