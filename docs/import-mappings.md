@@ -41,6 +41,8 @@ lock, and the CLI cannot bypass an existing managed receipt. Terminal import
 metadata and the managed result commit together; event chunks keep their existing
 per-record atomicity and idempotency. Transient worker failures receive at most
 three attempts, bounded by upload expiry. This is not whole-file atomicity.
+Recovery after committed event chunks preserves their append-only delivery-attempt
+evidence; a retry can add an attempt without adding another logical measurement.
 
 The result shows its import-run reference, counts and links to saved metric
 schedules and reports. **Schema/mapping accepted** does not mean distinct logical

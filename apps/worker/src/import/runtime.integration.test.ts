@@ -1506,7 +1506,14 @@ it("Issue 347 rolls back terminal publication on callback failure and retries fi
   const completed=await readManagedUpload(appPool,scope,id);assert.equal(completed.state,"completed",completed.safe_reason ?? "");
   await withTenant(appPool,scope.tenantId,async client=>{
     assert.equal((await client.query("SELECT 1 FROM ledger.logical_events WHERE tenant_id=$1",[scope.tenantId])).rowCount,1);
-    assert.equal((await client.query("SELECT 1 FROM ledger.event_deliveries WHERE tenant_id=$1",[scope.tenantId])).rowCount,1);
+    // Retrying after a partial failure is a second delivery attempt, not a second
+    // measurement. Keep both append-only attempts pointing at the same evidence.
+    const attempts=(await client.query(`SELECT count(*)::int AS attempts,
+      count(DISTINCT delivery_attempt_id)::int AS attempt_ids,count(DISTINCT delivery_id)::int AS deliveries,
+      count(DISTINCT record_id)::int AS records,count(DISTINCT canonical_record_id)::int AS canonical_records,
+      count(DISTINCT received_at)::int AS receipt_times FROM ledger.event_deliveries WHERE tenant_id=$1`,[scope.tenantId])).rows[0];
+    assert.deepEqual(attempts,{attempts:2,attempt_ids:2,deliveries:1,records:1,canonical_records:1,receipt_times:1});
+    assert.equal((await client.query("SELECT 1 FROM ledger.raw_records WHERE tenant_id=$1",[scope.tenantId])).rowCount,1);
     assert.equal((await client.query("SELECT 1 FROM control.import_files WHERE tenant_id=$1",[scope.tenantId])).rowCount,1);
   });
 });
