@@ -121,7 +121,9 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
     );
     await ingestFixture(fixtureName, input, appPool, seedPool);
     // This dedicated rehearsal resets its synthetic ledger; discard prior test jobs with it.
-    await seedPool.query("TRUNCATE control.privacy_payload_purges,control.privacy_deletion_jobs");
+    // Deletion notices reference the job even after the synthetic ledger reset.
+    // Truncate the explicit dependent set together; never broaden this to CASCADE.
+    await seedPool.query("TRUNCATE ephemeral.operator_webhook_deliveries,control.privacy_payload_purges,control.privacy_deletion_jobs");
     const baseline = await computeSqlMetricRuns(appPool, input, true);
     assert.equal(baseline.find((run) => run.metric_name === "cohort_install_count")?.value_unscaled, "1");
 
