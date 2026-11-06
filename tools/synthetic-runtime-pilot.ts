@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runDeploymentConfiguration, type ConfigurationCommand } from "./deployment-config.js";
+import { buildRuntimeArtifact } from "./runtime-artifact.js";
 
-type PilotArguments = { disposable: true; load: boolean };
+type PilotArguments = { disposable: true; load: boolean; artifact: boolean; artifactTag?: string };
 type CommandResult = { status: number | null; stdout: string; stderr: string };
 type StepStatus = { id: string; status: "passed" | "failed" | "not_run"; exit_code?: number };
 
@@ -18,11 +19,14 @@ class PilotStepError extends Error {
 }
 
 export function parseSyntheticPilotArguments(args: readonly string[]): PilotArguments {
-  const allowed = new Set(["--disposable", "--load"]);
-  const unknown = args.filter((value) => !allowed.has(value));
+  const allowed = new Set(["--disposable", "--load", "--artifact"]);
+  const tagArgs = args.filter(value => /^--artifact-tag=runtime-v\d+\.\d+\.\d+(?:-[a-z0-9.]+)?$/.test(value));
+  const unknown = args.filter((value) => !allowed.has(value) && !tagArgs.includes(value));
   assert.deepEqual(unknown, [], `unknown synthetic pilot arguments: ${unknown.join(", ")}`);
   assert.ok(args.includes("--disposable"), "--disposable is required; this command deletes its isolated Compose volumes");
-  return { disposable: true, load: args.includes("--load") };
+  assert.ok(tagArgs.length <= 1 && (!tagArgs.length || args.includes("--artifact")), "artifact tag requires one artifact build");
+  return { disposable: true, load: args.includes("--load"), artifact: args.includes("--artifact"),
+    ...(tagArgs.length ? { artifactTag: tagArgs[0].slice("--artifact-tag=".length) } : {}) };
 }
 
 export function syntheticProcessEnvironment(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -68,12 +72,13 @@ export function syntheticComposeEnvironment(ports: { api: number; postgres: numb
   return `${Object.entries(entries).map(([key, value]) => `${key}=${value}`).join("\n")}\n`;
 }
 
-export function plannedSyntheticPilotSteps(load: boolean): string[] {
+export function plannedSyntheticPilotSteps(load: boolean, artifact = false): string[] {
   return [
     "compose_config",
     "compose_up",
     "clean_demo",
     "stop_writers",
+    ...(artifact ? ["artifact_identity", "artifact_backup_upgrade_restore"] : []),
     "seed_contract_fixtures",
     "verify_runtime_parity",
     "resume_runtime",
@@ -233,9 +238,20 @@ export async function runSyntheticRuntimePilot(
     rmSync(control, { recursive: true, force: true });
   };
   const envPath = join(control, "synthetic-pilot.env");
+  let artifactImage: string | undefined;
   try {
-    const prefixPath = `${staging.replaceAll("\\", "/")}/`;
-    requireSuccess("tracked_staging", "git", ["checkout-index", "--all", "--force", `--prefix=${prefixPath}`]);
+    if (options.artifact) {
+      assert.equal(process.platform, "linux", "runtime artifact pilot currently supports Linux amd64");
+      const bundle = join(root, "build", "runtime-artifact", sourceRevision);
+      const manifest = await buildRuntimeArtifact(bundle, root, options.artifactTag);
+      artifactImage = manifest.image_id;
+      cpSync(bundle, staging, { recursive: true });
+      assert.ok(!existsSync(join(staging, "package.json")) && !existsSync(join(staging, "apps")) && !existsSync(join(staging, ".git")));
+      requireSuccess("artifact_load", "sh", ["runtime.sh", "load"], staging);
+    } else {
+      const prefixPath = `${staging.replaceAll("\\", "/")}/`;
+      requireSuccess("tracked_staging", "git", ["checkout-index", "--all", "--force", `--prefix=${prefixPath}`]);
+    }
     const [api, postgres, redirector] = await freeLoopbackPorts(3);
     assert.ok(api !== postgres && api !== redirector && postgres !== redirector);
     const ports = { api, postgres, redirector };
@@ -246,7 +262,7 @@ export async function runSyntheticRuntimePilot(
   }
   const project = safeProjectName();
   const compose = ["compose", "--project-name", project, "--env-file", envPath];
-  const steps = new Map(plannedSyntheticPilotSteps(options.load).map((id) => [id, "not_run" as StepStatus["status"]]));
+  const steps = new Map(plannedSyntheticPilotSteps(options.load, options.artifact).map((id) => [id, "not_run" as StepStatus["status"]]));
   let primaryFailure: PilotStepError | undefined;
   let composeAttempted = false;
   let demoCounts: { raw_records: number; logical_events: number } | undefined;
@@ -299,6 +315,18 @@ export async function runSyntheticRuntimePilot(
     const parsedDemo = JSON.parse(demo.stdout) as { ledger_counts: { raw_records: number; logical_events: number } };
     demoCounts = { raw_records: parsedDemo.ledger_counts.raw_records, logical_events: parsedDemo.ledger_counts.logical_events };
     runStep("stop_writers", [...compose, "stop", "worker", "api", "redirector"]);
+    if (artifactImage) {
+      const config = JSON.parse(requireSuccess("artifact_identity", "docker", [...compose, "config", "--format", "json"], staging).stdout);
+      for (const name of ["bootstrap", "migrate", "api", "worker", "redirector"]) {
+        assert.equal(config.services[name].build, undefined);
+        assert.equal(config.services[name].image, artifactImage);
+        const id = requireSuccess("artifact_identity", "docker", [...compose, "ps", "--all", "-q", name], staging).stdout.trim();
+        assert.equal(requireSuccess("artifact_identity", "docker", ["inspect", "--format", "{{.Image}}", id], staging).stdout.trim(), artifactImage);
+      }
+      steps.set("artifact_identity", "passed");
+      runVerifiedStep("artifact_backup_upgrade_restore", [...compose, "--profile", "operations", "run", "--rm", "--no-deps", "operations", "run", "test:runtime-artifact-operations"],
+        result => assert.match(result.stdout, /Runtime artifact operations passed: backup=create\/check\/restore upgrade=48-to-current privacy=reapplied target-identity=verified\./));
+    }
     runVerifiedStep("seed_contract_fixtures", [
       ...compose, "--profile", "seed", "run", "--rm", "seed",
     ], (result) => assertSeedOutput(result.stdout, runtimeInventory));
@@ -447,6 +475,8 @@ export async function runSyntheticRuntimePilot(
     scope: "synthetic_compose",
     status,
     source_revision: sourceRevision,
+    distribution: options.artifact ? "source_free_image_archive" : "source_build",
+    ...(artifactImage ? { image_id: artifactImage } : {}),
     project,
     environment: {
       real_data: false,

@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -39,6 +39,7 @@ export function runDeploymentConfiguration(command: ConfigurationCommand, option
     return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
   });
   const compose = ["compose", "--project-directory", cwd, "-f", resolve(cwd, "compose.yaml"), "--project-name", command.project, "--env-file", command.envFile];
+  if (existsSync(resolve(cwd, "compose.override.yaml"))) compose.push("-f", resolve(cwd, "compose.override.yaml"));
   const config = run([...compose, "config", "--format", "json"]);
   if (config.status !== 0 || JSON.parse(config.stdout).name !== command.project) throw new Error("configuration_project_unverified");
   if (command.mode === "apply") {

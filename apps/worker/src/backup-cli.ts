@@ -1,4 +1,5 @@
-import { execFile, execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { sourceIdentity } from "@openmasu/runtime/source-identity";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -47,8 +48,7 @@ async function main(): Promise<void> {
     return value;
   };
   if (!["create", "check", "boundary", "restore"].includes(command)) throw new Error("backup_command_invalid");
-  const revision = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-  if (execFileSync("git", ["status", "--porcelain", "--untracked-files=no"], { encoding: "utf8" }).trim()) throw new Error("backup_clean_checkout_required");
+  const { revision } = sourceIdentity();
   const boundary = async () => validatePrivacyBoundary(JSON.parse(await readFile(required("--boundary"), "utf8")));
   const maximumAgeHours = Number(options.get("--maximum-age-hours") ?? "24");
   if (!Number.isFinite(maximumAgeHours) || maximumAgeHours <= 0) throw new Error("backup_freshness_limit_invalid");

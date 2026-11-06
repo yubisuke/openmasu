@@ -132,6 +132,14 @@ version pins.
 
 ## 5. Review the release boundary
 
+Runtime images have a separate version/source manifest and annotated
+`runtime-v<version>` identity. Follow [Runtime image archives](runtime-artifacts.md)
+to build and verify the archive plus SBOM and image-only Compose override from
+the exact candidate. The Runtime pilot now exercises that source-free deployment
+path once, rather than duplicating the source-build pilot. Do not attach a
+post-tag runtime candidate to an older SDK release; runtime publication requires
+the release owner's approved new tag and receipt. No container registry is used.
+
 Release notes must state:
 
 - what OpenMasu is;

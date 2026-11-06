@@ -188,6 +188,17 @@ services:
         condition: service_completed_successfully
     restart: "no"
 
+  operations:
+    <<: *app
+    profiles: ["operations"]
+    entrypoint: ["/bin/sh", "-c", "set -a && . /run/openmasu/app/runtime.env && . /run/openmasu/migration/runtime.env && set +a && exec npm \"$$@\"", "--"]
+    command: ["run", "db:schema:check"]
+    volumes:
+      - migration-secrets:/run/openmasu/migration:ro
+      - app-secrets:/run/openmasu/app:ro
+      - payload-objects:/run/openmasu/payloads
+    restart: "no"
+
   proxy:
     restart: unless-stopped
     image: caddy:2.11.4-alpine

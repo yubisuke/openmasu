@@ -4,6 +4,11 @@ Use the existing CLI and native PostgreSQL 17 `pg_dump` / `pg_restore` tools.
 No backup service or second deployment stack is required. This is a stopped-writer,
 same-source-revision recovery path, not evidence of a live backup schedule,
 off-site durability or a recovery-time objective. Rehearse with synthetic data first.
+
+With a verified [runtime image archive](runtime-artifacts.md), run these same
+commands in the opt-in `operations` Compose service. The image carries PostgreSQL
+17 client tools and a validated fixed source identity, so host Git/Node/PostgreSQL
+tools are unnecessary. Source-checkout commands below retain their existing path.
 The frozen `v0.2.0` forward-upgrade path remains in [Safe upgrade](upgrade.md);
 its backup declaration and version limits are separate from this current-source CLI.
 

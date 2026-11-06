@@ -3,6 +3,9 @@ name: Runtime
 on:
   workflow_dispatch:
     inputs:
+      runtime_artifact_tag:
+        description: Optional exact annotated runtime-v tag at this ref (empty builds a development candidate)
+        type: string
       published_sdk_onboarding:
         description: Run only the selected public native SDK onboarding seam
         type: boolean
@@ -55,6 +58,7 @@ jobs:
       OPENMASU_POSTGRES_HOST_PORT: "55432"
       OPENMASU_API_HOST_PORT: "8080"
       OPENMASU_PILOT_PROJECT: openmasu-synthetic-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      OPENMASU_RUNTIME_ARTIFACT_TAG: ${{ inputs.runtime_artifact_tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -143,11 +147,20 @@ jobs:
         env:
           OPENMASU_CI_RUN_LOAD: ${{ steps.scope.outputs.run_runtime_performance }}
         run: |
-          if [ "$OPENMASU_CI_RUN_LOAD" = "true" ]; then
-            npm run pilot:synthetic -- --disposable --load
-          else
-            npm run pilot:synthetic -- --disposable
-          fi
+          args=(--disposable --artifact)
+          if [ -n "$OPENMASU_RUNTIME_ARTIFACT_TAG" ]; then args+=("--artifact-tag=$OPENMASU_RUNTIME_ARTIFACT_TAG"); fi
+          if [ "$OPENMASU_CI_RUN_LOAD" = "true" ]; then args+=(--load); fi
+          npm run pilot:synthetic -- "${args[@]}"
+      - name: Upload source-bound runtime image archive
+        if: steps.scope.outputs.run_runtime == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: runtime-image-archive
+          path: build/runtime-artifact/
+          # Only the committed public .env.example is copied into this bundle;
+          # generated pilot .env and secrets stay in separate temporary paths.
+          include-hidden-files: true
+          if-no-files-found: error
       - name: Upload synthetic runtime pilot evidence
         if: always() && steps.scope.outputs.run_runtime == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

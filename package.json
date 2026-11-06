@@ -25,6 +25,8 @@
     "benchmark:import": "npm run benchmark:import --workspace @openmasu/worker",
     "benchmark:m5": "node --import tsx tools/m5-load.ts",
     "build:sdk-release": "python tools/build-sdk-release.py",
+    "build:runtime-artifact": "node --import tsx tools/runtime-artifact.ts",
+    "test:runtime-artifact-operations": "node --import tsx tools/test-support/runtime-artifact-operations.ts",
     "bootstrap": "node --import tsx apps/runtime/src/bootstrap.ts",
     "commerce:backfill": "npm run commerce:backfill --workspace @openmasu/worker --",
     "db:migrate": "npm run db:migrate --workspace @openmasu/runtime",

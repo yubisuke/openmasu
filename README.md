@@ -101,6 +101,12 @@ agreement. Run `npm run --silent demo:shadow` alone for console-only output.
 
 ### Disposable runtime walkthrough
 
+For a source-free runtime candidate, the exact successful Runtime CI run provides
+a versioned image archive, checksums, SBOM and the same Compose topology. See
+[Runtime image archives](docs/operations/runtime-artifacts.md). This Linux/amd64
+path needs Docker but no host npm/Python or source checkout; development artifacts
+are not retroactively part of the published SDK release.
+
 After `npm ci`, from a clean checkout without `.env` or `.openmasu`:
 
 ```bash
