@@ -6,15 +6,23 @@ import {
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { AppNotFoundError } from "./apps-admin.js";
 import { recordDashboardAuditWithClient } from "./session.js";
+import { configurationChange } from "./configuration-change.js";
 
 export { listImportMappingRevisions, previewImportMappingHeaders };
 
 export function saveImportMappingRevision(pool: Pool, payloadStore: PayloadStore, identity: AppAdminIdentity, body: unknown) {
   return registerImportMappingRevision({ pool, payloadStore, scope: identity, body,
     onRegistered: async (client, metadata) => {
+      const prior = (await client.query<{ definition_digest: string; kind: string; header_count: number }>(
+        `SELECT definition_digest,kind,header_count FROM control.import_mapping_revisions
+         WHERE tenant_id=$1 AND app_id=$2 AND mapping_id=$3 AND revision=$4`,
+        [identity.tenantId, identity.appId, metadata.mapping_id, metadata.revision - 1])).rows[0];
+      const reference = (number: number) => `mapping:${metadata.mapping_id}:${number}`;
       await recordDashboardAuditWithClient(client, { tenantId: identity.tenantId, appId: identity.appId,
         actorRef: `admin_key:${identity.keyId}`, action: "import_mapping_revision_registered", targetScope: "app",
-        targetRef: `mapping:${metadata.mapping_id}:${metadata.revision}`, outcome: "succeeded" });
+        targetRef: reference(metadata.revision), outcome: "succeeded", now: new Date(metadata.created_at),
+        configurationChange: configurationChange("import_mapping", prior ? reference(metadata.revision - 1) : null, prior ?? null,
+          reference(metadata.revision), { definition_digest: metadata.definition_digest, kind: metadata.kind, header_count: metadata.header_count }) });
     },
   });
 }

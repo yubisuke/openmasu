@@ -20,6 +20,7 @@ import { createImportsControllers } from "./imports.js";
 import { createAppleMeaningsControllers } from "./apple-meanings.js";
 import { createWebhookContentControllers } from "./webhook-content.js";
 import { createGoogleDestinationControllers } from "./google-destination.js";
+import { createConfigurationHistoryControllers } from "./configuration-history.js";
 
 export type HandlerRegistry = Readonly<Record<RouteHandler, RegisteredController>>;
 
@@ -41,6 +42,7 @@ export function assertHandlerRegistry(registry: Readonly<Partial<Record<RouteHan
 
 export function createHandlerRegistry(dependencies: RequestHandlerDependencies): HandlerRegistry {
   const registry = {
+    ...createConfigurationHistoryControllers(),
     ...createWebhookRecoveryControllers(dependencies),
     ...createGoogleDestinationControllers({pool:dependencies.pool,dashboard:dependencies.dashboard}),
     ...createWebhookContentControllers({ pool: dependencies.pool, dashboard: dependencies.dashboard }),

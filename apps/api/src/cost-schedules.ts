@@ -3,6 +3,7 @@ import { sha256 } from "@openmasu/attribution-core/canonical";
 import { costAdapterCapability, normalizeCostRefreshDefinition, uuidV7, withTenant } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
+import { configurationChange } from "./configuration-change.js";
 
 export async function registerCostSchedule(pool: Pool, identity: AppAdminIdentity, body: unknown, now = new Date()) {
   const definition = normalizeCostRefreshDefinition(body);
@@ -36,6 +37,9 @@ export async function registerCostSchedule(pool: Pool, identity: AppAdminIdentit
     await recordDashboardAuditWithClient(client, {
       tenantId: identity.tenantId, appId: identity.appId, actorRef: `admin_key:${identity.keyId}`,
       action: "cost_schedule_registered", targetScope: "app", targetRef: scheduleId, outcome: "succeeded", now,
+      configurationChange: configurationChange("cost_schedule", null, null, scheduleId,
+        { status: "active", definition_digest: definitionDigest, lag_days: definition.lag_days,
+          lookback_days: definition.lookback_days, provider: definition.provider, currency: definition.currency }),
     });
     return { cost_schedule_id: scheduleId, definition_digest: definitionDigest, status: "active" as const };
   });
@@ -92,6 +96,7 @@ export async function disableCostSchedule(pool: Pool, identity: AppAdminIdentity
     await recordDashboardAuditWithClient(client, {
       tenantId: identity.tenantId, appId: identity.appId, actorRef: `admin_key:${identity.keyId}`,
       action: "cost_schedule_disabled", targetScope: "app", targetRef: scheduleId, outcome: "succeeded", now,
+      configurationChange: configurationChange("cost_schedule", scheduleId, { status: "active" }, scheduleId, { status: "disabled" }),
     });
     return { cost_schedule_id: scheduleId, status: "disabled" as const };
   });

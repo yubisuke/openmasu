@@ -13,6 +13,7 @@ import {
 } from "./metric-schedules.js";
 import { metricScheduleRequestDefinition } from "./metric-schedule-definition.js";
 import { recordDashboardAuditWithClient } from "./session.js";
+import { configurationChange, metricConfigurationFields } from "./configuration-change.js";
 
 type Json = Record<string, unknown>;
 type SourceRun = {
@@ -231,7 +232,9 @@ export async function replaceMetricSchedule(pool: Pool, identity: AppAdminIdenti
     });
     await recordDashboardAuditWithClient(client, { tenantId: identity.tenantId, appId: identity.appId,
       actorRef: `admin_key:${identity.keyId}`, action: "metric_schedule_replaced", targetScope: "metric_schedule",
-      targetRef: sourceId, outcome: "succeeded", now });
+      targetRef: sourceId, outcome: "succeeded", now,
+      configurationChange: configurationChange("metric_schedule", sourceId, metricConfigurationFields(source),
+        saved.metric_schedule_id, metricConfigurationFields(saved)) });
     return { ...saved, replayed: false };
   });
 }

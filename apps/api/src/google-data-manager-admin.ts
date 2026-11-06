@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import { uuidV7, withTenant } from "@openmasu/runtime";
 import type { AdminIdentity } from "./admin-auth.js";
 import { previewGoogleDestination } from "./google-destination-readiness.js";
+import { configurationChange } from "./configuration-change.js";
 
 type AppIdentity = AdminIdentity & { readonly appId: string };
 export type GoogleDataManagerDestination = ReturnType<typeof previewGoogleDestination>["definition"] & {
@@ -26,6 +27,10 @@ export async function configureGoogleDataManagerDestination(options: {
     const current = (await client.query<{ destination_id: string; current_revision: number }>(
       "SELECT destination_id::text,current_revision FROM control.google_data_manager_destinations WHERE tenant_id=$1 AND app_id=$2 FOR UPDATE", [tenantId, appId])).rows[0];
     if ((current?.current_revision ?? 0) !== options.body.expected_revision) throw Error("google_destination_revision_stale");
+    const prior = current ? (await client.query<{ definition: typeof definition; definition_digest: string; ready: boolean }>(
+      `SELECT definition,definition_digest,ready FROM control.google_destination_revisions
+       WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3 AND revision=$4`,
+      [tenantId, appId, current.destination_id, current.current_revision])).rows[0] : undefined;
     const now = options.now ?? new Date(), configuredAt = now.toISOString();
     const destinationId = current?.destination_id ?? uuidV7(now.valueOf()), revision = (current?.current_revision ?? 0) + 1;
     if (!current) await client.query(`INSERT INTO control.google_data_manager_destinations
@@ -40,9 +45,12 @@ export async function configureGoogleDataManagerDestination(options: {
     [tenantId, appId, destinationId, definition.operating_account_id, definition.conversion_action_id, definition.app_audience,
       definition.enabled, configuredAt, JSON.stringify(definition), revision]);
     await client.query(`INSERT INTO ledger.audit_logs
-      (audit_log_id,tenant_id,app_id,occurred_at,actor_type,actor_ref,action,target_scope,target_ref,policy_version,request_digest,outcome)
-      VALUES ($1,$2,$3::text,$4,'admin_key',$5,'google_destination_activated','app',$3::text,'google-destination-v2',$6,'succeeded')`,
-    [uuidV7(now.valueOf()), tenantId, appId, configuredAt, `admin_key:${keyId}`, preview.preview_digest]);
+      (audit_log_id,tenant_id,app_id,occurred_at,actor_type,actor_ref,action,target_scope,target_ref,policy_version,request_digest,outcome,configuration_change)
+      VALUES ($1,$2,$3::text,$4,'admin_key',$5,'google_destination_activated','app',$3::text,'google-destination-v2',$6,'succeeded',$7::jsonb)`,
+    [uuidV7(now.valueOf()), tenantId, appId, configuredAt, `admin_key:${keyId}`, preview.preview_digest,
+      JSON.stringify(configurationChange("google_destination", prior ? `${destinationId}:${current!.current_revision}` : null,
+        prior ? { enabled: prior.definition.enabled, app_audience: prior.definition.app_audience, ready: prior.ready, definition_digest: prior.definition_digest } : null,
+        `${destinationId}:${revision}`, { enabled: definition.enabled, app_audience: definition.app_audience, ready: preview.ready, definition_digest: preview.preview_digest }))]);
     return { ...definition, destination_id: destinationId, tenant_id: tenantId, app_id: appId, revision, configured_at: configuredAt };
   });
 }

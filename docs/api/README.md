@@ -15,6 +15,8 @@ administrator endpoint; the report accepts an explicit version/digest pair,
 never an inferred postback binding.
 The administrator-only [fraud policy preview](../fraud-preview.md) and its
 receipt-bound activation workflow are also outside the limited OpenAPI surface.
+The reader-only [configuration history](../configuration-history.md) similarly
+documents its bounded app-scoped timeline separately.
 
 [openapi.json](openapi.json) is a limited OpenAPI 3.1.1 description of four
 existing endpoints. It is not a new API or a claim of complete API coverage:

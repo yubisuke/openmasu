@@ -2,6 +2,7 @@ import type { Pool, PoolClient } from "pg";
 import { withTenant, uuidV7 } from "@openmasu/runtime";
 import { parseWebhookContentPolicy, webhookContentDigest, type StoredWebhookContentPolicy } from "@openmasu/runtime/webhook-content";
 import type { AppAdminIdentity } from "./admin-auth.js";
+import { configurationChange, webhookConfigurationFields } from "./configuration-change.js";
 
 export type ContentRevision = { policy_revision: number; definition: StoredWebhookContentPolicy; definition_digest: string; created_at: string };
 export async function webhookContentHistory(client: PoolClient, identity: AppAdminIdentity, destinationId: string): Promise<ContentRevision[]> {
@@ -41,9 +42,11 @@ export async function activateWebhookContent(pool: Pool, identity: AppAdminIdent
       (tenant_id,app_id,destination_id,policy_revision,definition,definition_digest,created_at) VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7)`,
     [identity.tenantId, identity.appId, destinationId, revision.policy_revision, JSON.stringify(policy), digest, revision.created_at]);
     await client.query(`INSERT INTO ledger.audit_logs
-      (audit_log_id,tenant_id,app_id,occurred_at,actor_type,actor_ref,action,target_scope,target_ref,policy_version,request_digest,outcome)
-      VALUES ($1,$2,$3,$4,'admin_key',$5,'operator_webhook_content_activated','webhook_destination',$6,'operator-webhook-content-v1',$7,'succeeded')`,
-    [uuidV7(now.valueOf()), identity.tenantId, identity.appId, revision.created_at, `admin_key:${identity.keyId}`, destinationId, digest]);
+      (audit_log_id,tenant_id,app_id,occurred_at,actor_type,actor_ref,action,target_scope,target_ref,policy_version,request_digest,outcome,configuration_change)
+      VALUES ($1,$2,$3,$4,'admin_key',$5,'operator_webhook_content_activated','webhook_destination',$6,'operator-webhook-content-v1',$7,'succeeded',$8::jsonb)`,
+    [uuidV7(now.valueOf()), identity.tenantId, identity.appId, revision.created_at, `admin_key:${identity.keyId}`, destinationId, digest,
+      JSON.stringify(configurationChange("webhook_content", `${destinationId}:${current.policy_revision}`, webhookConfigurationFields(current.definition, current.definition_digest),
+        `${destinationId}:${revision.policy_revision}`, webhookConfigurationFields(policy, digest)))]);
     return revision;
   });
 }

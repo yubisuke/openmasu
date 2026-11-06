@@ -5,6 +5,7 @@ import { NON_FRAUD_RULE_BUNDLES, validateNonFraudBundleDefinition, FIRST_PARTY_W
 import { uuidV7 } from "@openmasu/runtime";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
+import { configurationChange } from "./configuration-change.js";
 import { FraudPreviewError,parseFraudPreviewRequest,fraudPreviewWithClient,withFraudSnapshot } from "./fraud-preview.js";
 import { AttributionWindowPreviewError, parseAttributionWindowRequest, attributionWindowPreviewWithClient } from "./attribution-window-preview.js";
 
@@ -109,8 +110,8 @@ export async function activateRuleBundle(input: {
     activated_at: activatedAt,
   };
   await withFraudSnapshot(input.pool,input.identity,false,async (client) => {
-    const current = await client.query<{ rule_bundle_revision_id: string }>(
-      `SELECT rule_bundle_revision_id
+    const current = await client.query<{ rule_bundle_revision_id: string; definition: Any | null; definition_digest: string | null }>(
+      `SELECT rule_bundle_revision_id,definition,definition_digest
          FROM control.rule_bundles_current
         WHERE tenant_id=$1 AND app_id=$2 AND rule_bundle_id=$3
         ORDER BY activated_at DESC, rule_bundle_revision_id DESC
@@ -173,6 +174,9 @@ export async function activateRuleBundle(input: {
       targetRef: revisionId,
       outcome: "succeeded",
       now,
+      ...(windowBundle ? { configurationChange: configurationChange("attribution_window", currentId ?? null,
+        currentId ? { lookback_days: Number(current.rows[0].definition!.lookback_days), definition_digest: current.rows[0].definition_digest! } : null,
+        revisionId, { lookback_days: Number(value.definition!.lookback_days), definition_digest: value.definitionDigest! }) } : {}),
     });
   },JSON.stringify([input.identity.tenantId,input.identity.appId,value.ruleBundleId.startsWith("fraud-") ? "fraud-policy" : value.ruleBundleId]));
   return artifact;

@@ -29,7 +29,7 @@ it or treating its judgment as first-party evidence.
 | Observe subscription changes | [Google Play states, verified renewals and observed expiries](docs/subscription-observations.md); notifications and old observations are not current entitlement or churn |
 | Maintain | Daily schedules, bounded Google/Apple [cost refresh](docs/cost-refresh.md) and corrections, receipt diagnostics and confirmed ingest recovery |
 | Explain | Reader-only dashboard, saved daily analyses and bounded previous-period views; explicit external revenue/ROAS/LTV, retention and outcome comparison with preserved evidence levels |
-| Operate | PostgreSQL role isolation, privacy deletion/reapplication, backup/restore, signed webhooks and bulk exports |
+| Operate | PostgreSQL role isolation, [safe configuration history](docs/configuration-history.md), privacy deletion/reapplication, backup/restore, signed webhooks and bulk exports |
 
 These are bounded, synthetically verified capabilities, not universal provider
 support. [Project status](docs/STATUS.md) lists their limits; the

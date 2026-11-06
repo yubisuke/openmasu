@@ -37,6 +37,7 @@ These documents describe current source unless they explicitly name a release.
   [explicit corrections](metric-corrections.md),
   [automatic corrections](automatic-metric-corrections.md).
 - **Read and compare:** [dashboard analysis](dashboard-analysis.md),
+  [configuration history](configuration-history.md),
   [Apple postback observations](apple-postback-observations.md),
   [Apple conversion meanings](apple-conversion-meaning.md),
   [saved calculation evidence](metric-explanations.md),

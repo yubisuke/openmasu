@@ -18,6 +18,10 @@ import { ensureAdminKeys } from "./admin-auth.js";
 import { KeyedTokenBucket, TokenBucket } from "./rate-limit.js";
 import { createRequestHandler } from "./router.js";
 import { executePrivacyRequest, privacySubjectDigest } from "./privacy.js";
+import { registerCostSchedule, disableCostSchedule } from "./cost-schedules.js";
+import { configurationChange } from "./configuration-change.js";
+import { recordDashboardAuditWithClient } from "./session.js";
+import type { ConfigurationHistoryPage } from "./configuration-history.js";
 import { ingestRuntimeBatch } from "../../worker/src/ingestion.js";
 import type { CandidateAttempt } from "@openmasu/attribution-core";
 import type { MeasurementHealth } from "./measurement-health.js";
@@ -145,6 +149,67 @@ describe("M3 dashboard identity and control plane", { concurrency: false }, () =
     assert.equal((await fetch(`${endpoint}/${created.session_id}`, { headers: { authorization: `Bearer ${readOnly}` } })).status, 200);
     assert.equal((await fetch(`${endpoint}/${created.session_id}/close`, { method: "POST", headers })).status, 200);
     assert.equal((await fetch(`${endpoint}/${created.session_id}`, { headers })).status, 404);
+  });
+
+  it("reads bounded configuration receipts with stable keysets, app/tenant isolation and no GET writes", async () => {
+    const historyApp = `app-history-${suffix}`, otherApp = `app-history-other-${suffix}`, foreignTenant = `tenant-history-other-${suffix}`;
+    const at = new Date("2026-10-01T00:00:00.000Z");
+    for (const [tenant, app] of [[tenantId, historyApp], [tenantId, otherApp], [foreignTenant, historyApp]]) {
+      await withTenant(appPool, tenant, client => client.query("INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ($1,$2,$3)", [tenant, app, at.toISOString()]));
+    }
+    const identity = { tenantId, appId: historyApp, keyId: "synthetic-history-admin", role: "admin" as const };
+    const definition = { provider: "google_ads", customer_id: "4300000000", currency: "USD", lookback_days: 7 };
+    const saved = await registerCostSchedule(appPool, identity, definition, at);
+    await assert.rejects(registerCostSchedule(appPool, identity, definition, at), /active_exists/);
+    await disableCostSchedule(appPool, identity, saved.cost_schedule_id, at);
+    await assert.rejects(disableCostSchedule(appPool, identity, saved.cost_schedule_id, at), /not_active/);
+    const audit = (tenant: string, app: string, targetRef: string, outcome: "succeeded" | "failed", change?: ReturnType<typeof configurationChange>, now = at) =>
+      withTenant(appPool, tenant, client => recordDashboardAuditWithClient(client, {
+        tenantId: tenant, appId: app, actorRef: "admin_key:synthetic-history-admin", action: "cost_schedule_registered",
+        targetScope: "app", targetRef, outcome, now, ...(change ? { configurationChange: change } : {}),
+      }));
+    await audit(tenantId, historyApp, "synthetic-legacy", "succeeded");
+    await audit(tenantId, historyApp, "synthetic-failed", "failed");
+    await audit(tenantId, historyApp, "synthetic-revision-only", "succeeded",
+      configurationChange("cost_schedule", "synthetic:1", { status: "active" }, "synthetic:2", { status: "active" }));
+    await audit(tenantId, otherApp, "synthetic-other-app", "succeeded");
+    await audit(foreignTenant, historyApp, "synthetic-foreign-tenant", "succeeded");
+    const scopedKey = `synthetic-history-reader-${suffix}-${"h".repeat(32)}`;
+    await ensureAdminKeys(appPool, { tenantId, appId: historyApp }, [{ key: scopedKey, role: "read_only", appScope: historyApp }]);
+    const headers = { authorization: `Bearer ${scopedKey}` }, sessionCookie = cookie(await login(scopedKey));
+    const endpoint = `${baseUrl}/v1/admin/apps/${historyApp}/configuration-history`;
+    const dashboard = `${baseUrl}/dashboard/apps/${historyApp}/configuration-history`;
+    const firstResponse = await fetch(`${endpoint}?limit=2`, { headers }); assert.equal(firstResponse.status, 200);
+    const first = await firstResponse.json() as ConfigurationHistoryPage;
+    assert.equal(first.data.length, 2); assert.ok(first.next_cursor);
+    await audit(tenantId, historyApp, "synthetic-newer", "succeeded", undefined, new Date("2026-10-02T00:00:00.000Z"));
+    const counts = () => withTenant(readerPool, tenantId, async client => (await client.query(
+      "SELECT count(*)::text AS count FROM ledger.audit_logs WHERE tenant_id=$1", [tenantId])).rows);
+    const beforeReads = await counts();
+    const rows = [...first.data]; let after: string | null = first.next_cursor;
+    for (let page = 0; after && page < 4; page++) {
+      const response: Response = await fetch(`${endpoint}?limit=2&after=${after}`, { headers }); assert.equal(response.status, 200);
+      const next: ConfigurationHistoryPage = await response.json(); rows.push(...next.data); after = next.next_cursor;
+    }
+    assert.equal(after, null); assert.equal(rows.length, 5); assert.equal(new Set(rows.map(row => row.audit_log_id)).size, 5);
+    assert.deepEqual(rows.filter(row => row.change_state === "fields_changed").map(row => row.change!.after.status).sort(), ["active", "disabled"]);
+    assert.equal(rows.find(row => row.target_ref === "synthetic-legacy")!.change_state, "details_not_recorded");
+    assert.equal(rows.find(row => row.target_ref === "synthetic-failed")!.change_state, "failed");
+    assert.equal(rows.find(row => row.target_ref === "synthetic-revision-only")!.change_state, "revision_only");
+    assert.ok(rows.every(row => row.actor_ref === "admin_key:synthetic-history-admin" && row.app_id === historyApp));
+    const body = JSON.stringify(rows);
+    for (const forbidden of [definition.customer_id, "synthetic-other-app", "synthetic-foreign-tenant", "synthetic-newer", scopedKey, "protected_ref"])
+      assert.equal(body.includes(forbidden), false, forbidden);
+    const rendered = await fetch(dashboard, { headers: { cookie: sessionCookie } }); assert.equal(rendered.status, 200);
+    const html = await rendered.text(); assert.match(html, /Field-level details were not recorded/); assert.match(html, /no change in the displayed safe fields/);
+    assert.doesNotMatch(html, /<form|<script\b|javascript:|\son[a-z]+=/i);
+    assert.equal((await fetch(endpoint, { headers: { cookie: sessionCookie } })).status, 401);
+    assert.equal((await fetch(dashboard, { headers })).status, 401);
+    assert.equal((await fetch(`${endpoint}?limit=101`, { headers })).status, 400);
+    assert.equal((await fetch(`${endpoint}?tenant_id=foreign`, { headers })).status, 400);
+    assert.equal((await fetch(`${baseUrl}/v1/admin/apps/${otherApp}/configuration-history`, { headers })).status, 404);
+    assert.equal((await fetch(`${baseUrl}/dashboard/apps/${otherApp}/configuration-history`, { headers: { cookie: sessionCookie } })).status, 404);
+    assert.deepEqual(await counts(), beforeReads, "history GET does not write audit or configuration");
   });
 
   it("reads safe deletion progress through API and SSR without changing jobs or crossing app scope", async () => {

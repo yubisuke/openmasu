@@ -274,6 +274,14 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
     const history = await (await admin(policyPath)).json();
     assert.deepEqual(history.revisions.map((row: { policy_revision: number }) => row.policy_revision), [3, 2, 1]);
     assert.deepEqual(history.revisions[1].definition, first.policy);
+    const auditPage = await admin(`/v1/admin/apps/${appId}/configuration-history`);
+    assert.equal(auditPage.status, 200);
+    const auditText = await auditPage.text(), receipts = JSON.parse(auditText).data.filter((row: any) => row.target_ref === destination.destination_id);
+    assert.equal(receipts.length, 3, "registration and two activations, not rejected stale activation");
+    const contentChange = receipts.find((row: any) => row.change.after_revision.endsWith(":3")).change;
+    assert.equal(contentChange.before_revision, `${destination.destination_id}:2`);
+    assert.equal(contentChange.after.definition_digest, second.preview_digest);
+    assert.equal(auditText.includes("receiver_first"), false); assert.equal(auditText.includes("receiver_second"), false);
     const readOnly = await withTenant(readerPool, tenantId, client => client.query(
       "SELECT definition FROM control.operator_webhook_content_revisions WHERE destination_id=$1", [destination.destination_id]));
     assert.equal(readOnly.rowCount, 3);
