@@ -8,8 +8,10 @@ import org.json.JSONObject
 internal class OpenMasuStorage(context: Context) {
   private val preferences: SharedPreferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
 
-  fun installationId(): String = preferences.getString(KEY_INSTALLATION_ID, null)
-    ?: "installation:${UUID.randomUUID()}".also { preferences.edit().putString(KEY_INSTALLATION_ID, it).commit() }
+  fun installationId(): String = withConsentLock {
+    preferences.getString(KEY_INSTALLATION_ID, null)
+      ?: "installation:${UUID.randomUUID()}".also { check(preferences.edit().putString(KEY_INSTALLATION_ID, it).commit()) }
+  }
 
   fun replaceInstallationId(): String = "installation:${UUID.randomUUID()}".also {
     preferences.edit().putString(KEY_INSTALLATION_ID, it).commit()
@@ -22,7 +24,61 @@ internal class OpenMasuStorage(context: Context) {
     preferences.edit().putBoolean(KEY_COLLECTION_ENABLED, enabled).commit()
   }
 
-  fun consentBarrierActive(): Boolean = preferences.getBoolean(KEY_CONSENT_BARRIER, false)
+  fun consentBarrierActive(): Boolean = CONSENT_PURPOSES.any { consentSnapshot(it).blocked }
+
+  fun consentBarrierActive(purpose: String): Boolean = consentSnapshot(purpose).blocked
+
+  fun consentCounter(): Long = withConsentLock { consentDocument().optLong("counter", 0) }
+
+  fun consentSnapshot(purpose: String): OpenMasuPurposeConsent = withConsentLock {
+    if (purpose !in CONSENT_PURPOSES) return@withConsentLock OpenMasuPurposeConsent(purpose,"not_required",null,false)
+    val payload = consentDocument().optJSONObject(purpose)?.getJSONObject("payload")
+    val legacyBlocked = preferences.getBoolean(KEY_CONSENT_BARRIER, false)
+    val state = payload?.getString("consent_state") ?: if (legacyBlocked) "withdrawn" else "unknown"
+    OpenMasuPurposeConsent(purpose,state,payload?.getLong("consent_revision"),state == "denied" || state == "withdrawn")
+  }
+
+  /** A durable epoch, not wall-clock order. Reset deliberately retains this document. */
+  fun recordConsent(state: String, policyVersion: String, purpose: String?, maxQueueBytes: Long): QueuedEvent = withConsentLock {
+    require(state in setOf("granted","denied","withdrawn","not_required","unknown"))
+    require(purpose == null || purpose in CONSENT_PURPOSES) { "consent_purpose_invalid" }
+    val document = consentDocument()
+    val revision = document.optLong("counter",0) + 1
+    check(revision in 1..9_007_199_254_740_991L) { "consent_revision_exhausted" }
+    val at = EventFactory.canonicalNow()
+    val event = QueuedEvent(EventFactory.newEventId(),"consent_changed","fraud_prevention",
+      EventFactory.consent(state,policyVersion).put("effective_at",at).put("consent_revision",revision)
+        .putOpt("processing_purpose_id",purpose).toString(),at,nextSequence(),System.currentTimeMillis())
+    document.put("counter",revision)
+    if (state != "unknown") {
+      // A refused oversized notification must still install the local barrier, but
+      // must not bypass queue limits through the recoverable declaration prefix.
+      val deliverable = event.logicalQueueBytes() <= maxQueueBytes
+      val payload = JSONObject(event.payloadJson)
+      if (!deliverable) payload.remove("consent_policy_version")
+      val encoded = JSONObject().put("event_id",event.eventId).put("at",at)
+        .put("sequence",event.processingSequence).put("created_at_ms",event.createdAtEpochMs)
+        .put("payload",payload).put("deliverable",deliverable)
+      for (target in purpose?.let { listOf(it) } ?: CONSENT_PURPOSES) document.put(target,encoded)
+    }
+    val editor = preferences.edit().putString(KEY_PURPOSE_CONSENT,document.toString())
+    if (state == "denied" || state == "withdrawn") editor.remove("synthetic_validation_session")
+    check(editor.commit()) { "consent_storage_failed" }
+    event
+  }
+
+  /** At most three current declarations, also recoverable if queue capacity evicted a control. */
+  fun consentDeclarations(): List<QueuedEvent> = withConsentLock {
+    val document = consentDocument()
+    CONSENT_PURPOSES.mapNotNull { purpose -> document.optJSONObject(purpose)?.let { value ->
+      if (!value.optBoolean("deliverable",true)) return@let null
+      QueuedEvent(value.getString("event_id"),"consent_changed","fraud_prevention",
+        value.getJSONObject("payload").toString(),value.getString("at"),value.getLong("sequence"),value.getLong("created_at_ms"))
+    } }.distinctBy { it.eventId }.sortedBy { it.processingSequence }
+  }
+
+  fun <T> withConsentLock(work: () -> T): T = synchronized(CONSENT_LOCK) { work() }
+  private fun consentDocument(): JSONObject = JSONObject(preferences.getString(KEY_PURPOSE_CONSENT,null) ?: "{}")
 
   fun diagnosticAttempt(): DiagnosticAttempt = runCatching {
     val value = JSONObject(preferences.getString("diagnostic_attempt", null) ?: return DiagnosticAttempt())
@@ -70,21 +126,21 @@ internal class OpenMasuStorage(context: Context) {
 
   fun resetInstallPending(): Boolean = preferences.getBoolean(KEY_RESET_INSTALL_PENDING, false)
   fun deletionReceipt(): String? = preferences.getString("deletion_receipt", null)
-  @Synchronized fun beginDeletion(): String = deletionReceipt() ?: ByteArray(32).also {
+  fun beginDeletion(): String = withConsentLock { deletionReceipt() ?: ByteArray(32).also {
     java.security.SecureRandom().nextBytes(it)
   }.joinToString("") { "%02x".format(it) }.also {
     check(preferences.edit().putString("deletion_receipt", it).commit()) { "reset_persist_failed" }
-  }
+  } }
 
   /** One preferences commit switches identity and clears the pre-deletion fence. */
-  fun completeDeletion(receipt: String): String {
-    if (deletionReceipt() != receipt) return installationId()
+  fun completeDeletion(receipt: String): String = withConsentLock {
+    if (deletionReceipt() != receipt) return@withConsentLock installationId()
     val replacement = "installation:${UUID.randomUUID()}"
     check(preferences.edit().putString(KEY_INSTALLATION_ID, replacement)
-      .remove(KEY_INSTALLATION_KEY_ID).remove(KEY_INSTALLATION_SECRET).remove(KEY_SEQUENCE)
+      .remove(KEY_INSTALLATION_KEY_ID).remove(KEY_INSTALLATION_SECRET)
       .putBoolean(KEY_RESET_INSTALL_PENDING, true).putBoolean(KEY_REFERRER_CONSUMED, true)
       .putBoolean(KEY_DEFERRED_DESTINATION_CONSUMED, true).remove("deletion_receipt").commit()) { "reset_persist_failed" }
-    return replacement
+    replacement
   }
   fun markResetInstallPending() { preferences.edit().putBoolean(KEY_RESET_INSTALL_PENDING, true).commit() }
   fun clearResetInstallPending() { preferences.edit().remove(KEY_RESET_INSTALL_PENDING).commit() }
@@ -94,10 +150,10 @@ internal class OpenMasuStorage(context: Context) {
   fun deferredDestinationConsumed(): Boolean = preferences.getBoolean(KEY_DEFERRED_DESTINATION_CONSUMED, false)
   fun markDeferredDestinationConsumed() { preferences.edit().putBoolean(KEY_DEFERRED_DESTINATION_CONSUMED, true).commit() }
 
-  fun nextSequence(): Long {
+  fun nextSequence(): Long = withConsentLock {
     val next = preferences.getLong(KEY_SEQUENCE, 0L) + 1L
-    preferences.edit().putLong(KEY_SEQUENCE, next).commit()
-    return next
+    check(preferences.edit().putLong(KEY_SEQUENCE, next).commit()) { "sequence_storage_failed" }
+    next
   }
 
   fun credential(): InstallationCredential? {
@@ -140,11 +196,13 @@ internal class OpenMasuStorage(context: Context) {
     preferences.edit()
       .remove(KEY_INSTALLATION_KEY_ID)
       .remove(KEY_INSTALLATION_SECRET)
-      .remove(KEY_SEQUENCE)
       .commit()
   }
 
   companion object {
+    val CONSENT_PURPOSES = listOf("attribution","analytics","revenue_measurement")
+    private val CONSENT_LOCK = Any()
+    private const val KEY_PURPOSE_CONSENT = "purpose_consent_v1"
     private val SYNTHETIC_VALIDATION_LOCK = Any()
     const val SUBTREE = "openmasu"
     const val PREFERENCES = "openmasu_private"

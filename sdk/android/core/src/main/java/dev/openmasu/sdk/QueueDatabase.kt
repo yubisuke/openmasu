@@ -23,6 +23,7 @@ data class QueuedEvent(
   val occurredAt: String,
   val processingSequence: Long,
   val createdAtEpochMs: Long,
+  val consentRevision: Long? = null,
 )
 
 data class QueueAdmissionResult(val admitted: Boolean, val evicted: Int, val rejected: Int)
@@ -52,7 +53,7 @@ internal fun QueuedEvent.logicalQueueBytes(): Long =
     processingPurposeId.toByteArray(Charsets.UTF_8).size +
     payloadJson.toByteArray(Charsets.UTF_8).size +
     occurredAt.toByteArray(Charsets.UTF_8).size +
-    16L
+    16L + if (consentRevision == null) 0L else 8L
 
 internal fun QueuedEvent.queuePriority(): Int = when {
   eventName == "consent_changed" -> 3
@@ -69,6 +70,7 @@ private fun QueuedEvent.isIdempotentCommerceDuplicateOf(existing: QueuedEvent): 
     eventId.matches(Regex("^event:commerce:[0-9a-f]{64}$")) &&
     existing.eventName == eventName &&
     existing.processingPurposeId == processingPurposeId &&
+    existing.consentRevision == consentRevision &&
     existing.payloadJson == payloadJson
 
 @Dao
@@ -103,7 +105,7 @@ abstract class QueueDao {
     SELECT COALESCE(SUM(
       length(CAST(eventId AS BLOB)) + length(CAST(eventName AS BLOB)) +
       length(CAST(processingPurposeId AS BLOB)) + length(CAST(payloadJson AS BLOB)) +
-      length(CAST(occurredAt AS BLOB)) + 16
+      length(CAST(occurredAt AS BLOB)) + 16 + CASE WHEN consentRevision IS NULL THEN 0 ELSE 8 END
     ), 0) FROM queued_events
   """)
   abstract fun logicalBytes(): Long
@@ -138,8 +140,14 @@ abstract class QueueDao {
   @Query("DELETE FROM queued_events WHERE eventId IN (:eventIds)")
   abstract fun deleteByIds(eventIds: List<String>)
 
+  @Query("DELETE FROM queued_events WHERE eventId = :eventId AND processingSequence = :sequence AND consentRevision IS :revision")
+  abstract fun deleteDelivered(eventId: String, sequence: Long, revision: Long?)
+
   @Query("DELETE FROM queued_events WHERE processingPurposeId IN (:purposes)")
   abstract fun deleteByPurposes(purposes: List<String>): Int
+
+  @Query("DELETE FROM queued_events WHERE processingPurposeId = :purpose AND consentRevision IS NOT :revision")
+  abstract fun deleteStaleConsent(purpose: String, revision: Long?): Int
 
   @Query("DELETE FROM queued_events")
   abstract fun deleteAll(): Int
@@ -194,7 +202,7 @@ abstract class QueueDao {
   }
 }
 
-@Database(entities = [QueuedEvent::class, QueueStats::class], version = 2, exportSchema = true)
+@Database(entities = [QueuedEvent::class, QueueStats::class], version = 3, exportSchema = true)
 abstract class OpenMasuQueueDatabase : RoomDatabase() {
   abstract fun queue(): QueueDao
 
@@ -206,7 +214,7 @@ abstract class OpenMasuQueueDatabase : RoomDatabase() {
         OpenMasuQueueDatabase::class.java,
         File(subtree, "queue.db").absolutePath,
       ).setJournalMode(JournalMode.AUTOMATIC)
-        .addMigrations(MIGRATION_1_2)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
         .build()
     }
 
@@ -220,6 +228,12 @@ abstract class OpenMasuQueueDatabase : RoomDatabase() {
             PRIMARY KEY(`id`)
           )
         """.trimIndent())
+      }
+    }
+
+    private val MIGRATION_2_3 = object : Migration(2, 3) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE queued_events ADD COLUMN consentRevision INTEGER")
       }
     }
   }
