@@ -8,7 +8,7 @@ import { analysisQuery, savedAnalysisInput, previousAnalysisQuery, dailyAnalysis
 import { buildPeriodAnalysis, encodePeriodAnalysisCsv } from "./period-analysis.js";
 import { renderPeriodAnalysis } from "./dashboard/saved-analysis.js";
 import type { MetricReportRow } from "./reporting.js";
-import { acquisitionKpiRole, basisAcquisitionKpiDefinitions, horizonAcquisitionKpiDefinitions, calendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
+import { acquisitionKpiRole, basisAcquisitionKpiDefinitions, horizonAcquisitionKpiDefinitions, calendarActivityMetricDefinitions, keyedCalendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
 import { calendarActivityUnit } from "./metric-series.js";
 type Any = Record<string, any>;
 const identity = { tenantId: "tenant-a", appId: "app-a", keyId: "synthetic-analysis", role: "admin" as const };
@@ -99,7 +99,7 @@ it("period_analysis_retention_compares_saved_cohorts_but_never_invents_period_de
 });
 
 it("period_analysis_aligns_daily_activity_without_summing_distinct_installations_into_period_users", () => {
-  const definitions = calendarActivityMetricDefinitions();
+  const definitions = [...calendarActivityMetricDefinitions(), ...keyedCalendarActivityMetricDefinitions("synthetic_repeat")];
   const adapt = (date: string, prefix: string): MetricReportRow[] => definitions.map(definition => {
     const row = structuredClone(rows(date, prefix)[0]) as Any;
     row.metric_run_id = `${prefix}:${date}:${definition.metric_name}`;
@@ -117,7 +117,7 @@ it("period_analysis_aligns_daily_activity_without_summing_distinct_installations
   const current = [...adapt("2026-08-06", "current"), ...adapt("2026-08-07", "current")];
   const previous = [...adapt("2026-08-04", "previous"), ...adapt("2026-08-05", "previous")];
   const analysis = buildPeriodAnalysis(selection, current, previous);
-  assert.equal(analysis.rows.length, 6);
+  assert.equal(analysis.rows.length, 10);
   assert.deepEqual(analysis.summaries, []);
   assert.ok(analysis.rows.every(row => row.status === "compared" && row.current[0].value_unscaled === "2"
     && row.delta_current_minus_previous === "0"));

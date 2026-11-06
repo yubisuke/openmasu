@@ -88,6 +88,7 @@ The v0.4 line adds independently exercised optional vocabulary and definitions:
 | 0.4.29 | optional closed first-party attribution binding for 1/7/30-day native SDK Install Referrer policies; complete definition hashes and separate attribution IDs, original-receipt revision retention, unchanged default/platform/imported/engagement behavior |
 | 0.4.30 | closed opt-in UTC elapsed D7 acquisition KPI sets for verified-platform and exact imported-provider populations; same-set saved identity, strict imported commerce binding and unchanged first-party definitions |
 | 0.4.31 | closed opt-in native UTC D0/D30 eight-role acquisition KPI sets; complete-window maturity, minimum schedule lags and bounded same-horizon corrections; unchanged native/platform/imported D7 identities |
+| 0.4.32 | closed opt-in UTC exact-key custom-event frequency and distinct reached installations using the existing optional `conversion_event_key`; definition-bound schedules, comparisons and corrections, unchanged all-key activity and D7 converters |
 
 Existing schema `$id` values remain on `v0.4`; existing event artifact version
 fields remain `0.4.0` where their schema did not change.

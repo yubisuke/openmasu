@@ -1285,6 +1285,41 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
     await disableMetricSchedule({ pool: appPool, identity: reportIdentity, metricScheduleId: registered.metric_schedule_id, now: clock });
   });
 
+  it("keyed_daily_activity_form_registers_exact_keys_and_saves_current_privacy_counts", async () => {
+    const source = JSON.parse(readFileSync("fixtures/v0.4/79-keyed-calendar-activity/input.json", "utf8"),
+      (key, value) => key === "tenant_id" ? tenantId : key === "app_id" ? appId : value);
+    await seedPool.query("TRUNCATE control.metric_schedules,control.metric_schedule_states,control.metric_schedule_checkpoints CASCADE");
+    await ingestFixture("keyed79-schedule", source, appPool, seedPool);
+    const path = `/dashboard/apps/${appId}/metric-schedules`, cookie = `openmasu_dashboard=${session.token}`;
+    const form = new URLSearchParams({ csrf_token: csrfToken(session.token), custom_activity_event_keys: "synthetic_repeat", lag_days: "2", start_date: "2026-08-20" });
+    form.append("custom_activity_event_keys", "synthetic_activity");
+    const response = await fetch(`${baseUrl}${path}`, { method: "POST", redirect: "manual",
+      headers: { cookie, origin: "http://localhost:8080", "content-type": "application/x-www-form-urlencoded" }, body: form });
+    assert.equal(response.status, 303);
+    const schedules = (await (await admin(`/v1/admin/apps/${appId}/metric-schedules`)).json() as { data: MetricScheduleRecord[] }).data;
+    const registered = schedules.find(row => row.status === "active")!;
+    assert.equal(registered.definition.evaluations[0].date_dimension, "metric_date");
+    assert.equal(registered.definition.metric_definitions.length, 4);
+    const clock = new Date("2026-08-22T01:00:00.000Z");
+    const processed = await processMetricSchedules(appPool, tenantId, { now: clock, maximumCatchupDates: 1 });
+    assert.equal(processed.completedDates, 1); assert.equal(processed.failedSchedules, 0);
+    const query = { tenantId, appId, metricScheduleId: registered.metric_schedule_id, supersession: "latest" as const, limit: 200 };
+    const page = await metricReport(readerPool, reportIdentity, query);
+    assert.deepEqual(Object.fromEntries(page.data.map(row => [row.metric_name, row.value_unscaled])), {
+      daily_custom_synthetic_repeat_events: "3", daily_custom_synthetic_repeat_installations: "1",
+      daily_custom_synthetic_activity_events: "2", daily_custom_synthetic_activity_installations: "2",
+    });
+    for (const row of page.data) assert.equal(row.comparison_context?.definition.conversion_event_key,
+      row.metric_name.includes("synthetic_repeat") ? "synthetic_repeat" : "synthetic_activity");
+    const selection = new URLSearchParams({ metric_schedule_id: registered.metric_schedule_id, format: "csv" });
+    const apiCsv = await admin(`/v1/reports/metrics?app_id=${appId}&${selection}`);
+    const dashboardCsv = await fetch(`${baseUrl}/dashboard/apps/${appId}/cohorts.csv?${selection}`, { headers: { cookie } });
+    assert.equal(apiCsv.status, 200); assert.equal(dashboardCsv.status, 200);
+    assert.equal(await apiCsv.text(), await dashboardCsv.text());
+    assert.equal((await processMetricSchedules(appPool, tenantId, { now: clock, maximumCatchupDates: 1 })).completedDates, 0);
+    await disableMetricSchedule({ pool: appPool, identity: reportIdentity, metricScheduleId: registered.metric_schedule_id, now: clock });
+  });
+
   it("calendar_activity_form_runs_saved_UTC_counts_and_exports_installation_units_without_period_sums", async () => {
     const source = JSON.parse(readFileSync("fixtures/v0.4/72-calendar-activity/input.json", "utf8"),
       (key, value) => key === "tenant_id" ? tenantId : key === "app_id" ? appId : value);

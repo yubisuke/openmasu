@@ -185,6 +185,48 @@ describe("verified payer SQL parity and saved reporting", { concurrency: false }
 describe("calendar activity SQL parity and saved reporting", { concurrency: false }, () => {
   const app = createAppPool(), seed = createSeedPool(), reader = createReaderPool();
   after(async () => { await Promise.all([app.end(), seed.end(), reader.end()]); });
+  it("keyed_daily_activity_matches_reviewed_counts_and_replays_only_the_late_key", async () => {
+    const source = JSON.parse(readFileSync("fixtures/v0.4/79-keyed-calendar-activity/input.json", "utf8"));
+    await ingestFixture("keyed79-parity", source, app, seed);
+    const actual = await computeSqlMetricRuns(app, source, false);
+    assertPlatformRunParity(actual, evaluate(source).metric_runs, "keyed activity TS/Python contract");
+    assertPlatformRunParity(actual, JSON.parse(readFileSync("fixtures/v0.4/79-keyed-calendar-activity/expected_metric_runs.json", "utf8")), "independent keyed activity golden");
+    const scalar = (prefix: string, suffix: string) => actual.find(run => run.metric_run_id === `keyed79-${prefix}:daily_custom_synthetic_repeat_${suffix}`)?.value_unscaled;
+    assert.deepEqual([scalar("initial", "events"), scalar("initial", "installations")], ["3", "1"]);
+    assert.deepEqual([scalar("late", "events"), scalar("late", "installations")], ["4", "2"]);
+    assert.deepEqual([scalar("private", "events"), scalar("private", "installations")], ["3", "1"]);
+    assert.deepEqual([scalar("next", "events"), scalar("empty", "events")], ["1", "0"]);
+    const live = { ...source, privacy_requests: [] };
+    await ingestFixture("keyed79-late-replay", live, app, seed);
+    const initial = { ...live.metric_evaluations[0], privacy_state: "after" };
+    const prior = await computeSqlMetricRuns(app, { ...live, metric_evaluations: [initial] }, true);
+    const identity = { tenantId: "tenant-a", appId: "app-a", keyId: "synthetic-keyed79", role: "admin" as const };
+    const request = { trigger_kind: "late_events", source_record_ids: ["repeat79-b-late"],
+      date_from: "2026-08-20", date_to: "2026-08-20", watermark: "2026-08-22T00:00:00.000Z" };
+    assert.equal((await requestMetricRecalculation(app, identity, request)).selected_runs, 2);
+    const replay = await processMetricRecalculations(app, "tenant-a", 10);
+    assert.equal(replay.completed, 2); assert.equal(replay.failed, 0);
+    const query = { tenantId: "tenant-a", appId: "app-a", supersession: "latest" as const, limit: 200 };
+    const page = await metricReport(reader, identity, query);
+    const csv = parseCsv(encodeMetricReport(page, "csv").body);
+    assert.equal(page.data.length, 4);
+    for (const row of page.data) {
+      const key = row.comparison_context!.definition.conversion_event_key;
+      assert.ok(["synthetic_repeat", "synthetic_activity"].includes(key!));
+      assert.equal(row.activity_date, "2026-08-20"); assert.ok(row.activity_unit);
+      const exported = csv.find(value => value.metric_run_id === row.metric_run_id)!;
+      assert.deepEqual(JSON.parse(exported.comparison_context), row.comparison_context);
+      assert.equal(exported.value_unscaled, row.value_unscaled);
+      assert.equal(row.value_unscaled, key === "synthetic_repeat" ? (row.activity_unit === "custom_events" ? "4" : "2") : "3");
+      if (key === "synthetic_activity") assert.ok(prior.some(run => run.metric_run_id === row.metric_run_id));
+    }
+    for (const run of prior) {
+      const stored = await withTenant(app, "tenant-a", client => client.query("SELECT artifact FROM ledger.metric_runs WHERE metric_run_id=$1", [run.metric_run_id]));
+      assert.equal(jcs(stored.rows[0].artifact), jcs(run));
+    }
+    assert.deepEqual((await metricReport(reader, identity, { ...query, dateFrom: "2026-08-19", dateTo: "2026-08-20" })).data, []);
+    assert.equal((await processMetricRecalculations(app, "tenant-a", 10)).completed, 0);
+  });
   it("calendar_activity_canonical_events_distinct_installations_cutoffs_privacy_and_empty_days_match_reviewed_bytes", async () => {
     await ingestFixture("calendar72-parity", calendarActivitySource, app, seed);
     const actual = await computeSqlMetricRuns(app, calendarActivitySource, false);

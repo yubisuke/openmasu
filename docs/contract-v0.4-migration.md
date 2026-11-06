@@ -1,5 +1,38 @@
 # Contract v0.4 Migration
 
+## Exact-key daily custom activity (0.4.32)
+
+The independent `metric-calendar-activity` version `0.4.32` binds the existing
+optional `conversion_event_key` to UTC custom-event count and distinct reached
+installations. Existing all-key activity, D7 converter definitions, schema URNs,
+wire/package versions and all 78 previous inputs/1014 expected files remain
+unchanged. No dependency or database migration is added.
+
+Complete new golden inventory in `79-keyed-calendar-activity/`:
+
+- `expected_raw_records.json`, `expected_logical_events.json`: ten current
+  canonical artifacts each after three B records are redacted;
+- `expected_deliveries.json`: fifteen attempts, including two retries;
+- `expected_corrections.json`, `expected_privacy_tombstones.json`: three each;
+- `expected_privacy_requests.json`: one completed synthetic request;
+- `expected_metric_definitions.json`: three unchanged defaults and four keyed
+  definitions with registered bundle hash
+  `b6de51a6d28ebff0662ff6b0049d393a9b85df8f894634bcaba1e5d23731d534`;
+- `expected_metric_runs.json`: twenty manually counted values, independently
+  hashed snapshot/grouping/provenance and saved cutoffs;
+- `expected_attributions.json`, `expected_cost_records.json`,
+  `expected_fraud_decisions.json`, `expected_rejections.json`,
+  `expected_reconciliation.json`: empty, with no qualifying input;
+- new `input.json` and [complete independent derivation](../fixtures/v0.4/79-keyed-calendar-activity/README.md).
+
+The new expected families were constructed independently of evaluator output
+and committed separately from behavior/schema changes. Combined JCS SHA-256:
+`f91f2baaab65c3ae8ea0c69af5b74af7b3853275c007cbfffa4f4acc45f61da6`.
+`git diff --name-status 4902c926fede5c66b77978f101a09de0cd00f713 -- fixtures/v0.4/`
+must show only new directory 79 and the shared README, proving the old golden
+inventory is unchanged. Runtime replay preserves the declared key, including
+conservative privacy invalidation of shared evidence snapshots.
+
 Contract v0.4.0 completed the identity migration from the immutable
 `contract-v0.3.6` tag to the OpenMasu namespace. The migration changed public
 contract identity but did not change field meaning, attribution behavior, metric

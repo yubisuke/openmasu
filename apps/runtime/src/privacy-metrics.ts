@@ -119,7 +119,7 @@ export async function replayPrivacyMetricItem(
   if (!replayAvailable(replay) || sha256(replay) !== item.replay_digest
       || replay.source_metric_run_id !== item.source_metric_run_id) throw new Error("definition_changed");
   const name = replay.metric_definition.metric_name;
-  if (typeof name !== "string" || !/^[a-z][a-z0-9_]{2,80}$/.test(name)) throw new Error("definition_changed");
+  if (typeof name !== "string" || !/^[a-z][a-z0-9_]{2,127}$/.test(name)) throw new Error("definition_changed");
   const prefix = `privacy-recalc:${sha256([item.privacy_request_id, item.app_id, item.source_metric_run_id]).slice(0, 32)}`;
   const evaluation = { ...replay.evaluation, metric_names: [name], metric_run_id_prefix: prefix,
     supersedes_metric_run_id_prefix: undefined, supersedes_metric_run_id: item.source_metric_run_id,

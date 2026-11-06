@@ -353,7 +353,7 @@ function validateRegistryReferences(output: Any, label: string): void {
       : definition.rule_bundle_id === "metric-basis-acquisition-kpis" ? "0.4.30"
       : definition.rule_bundle_id === "metric-engagement-policy" ? "0.4.28"
       : definition.rule_bundle_id === "metric-verified-payers" ? "0.4.26"
-      : definition.rule_bundle_id === "metric-calendar-activity" ? "0.4.25"
+      : definition.rule_bundle_id === "metric-calendar-activity" ? (definition.conversion_event_key === undefined ? "0.4.25" : "0.4.32")
       : definition.rule_bundle_id === "metric-standard-retention" ? "0.4.24"
       : definition.rule_bundle_id === "metric-acquisition-kpis" ? ACQUISITION_KPI_VERSION
       : definition.rule_bundle_id === "metric-calendar-acquisition" ? "0.4.21"
@@ -616,7 +616,7 @@ if (!summaryOnly) {
       });
     }
     it("contains 77 fixture directories", () => {
-      check(fixtureDirs.length === 78, `expected 78 fixture directories, found ${fixtureDirs.length}`);
+      check(fixtureDirs.length === 79, `expected 78 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -1238,6 +1238,13 @@ const scenarios: Array<[string, () => void]> = [
       return row.value_unscaled ?? row.undefined_reason;
     }), values), `scenario 73 ${suffix} independent arithmetic`);
   }],
+  ["79 keyed daily activity separates frequency reach late delivery and privacy", () => {
+    const { output } = fixture("79-keyed-calendar-activity");
+    const names = ["synthetic_repeat_events", "synthetic_repeat_installations", "synthetic_activity_events", "synthetic_activity_installations"];
+    const expected = { initial: ["3", "1", "3", "3"], late: ["4", "2", "3", "3"], private: ["3", "1", "2", "2"], next: ["1", "1", "0", "0"], empty: ["0", "0", "0", "0"] };
+    check(output.metric_runs.length === 20 && output.raw_records.length === 10 && output.deliveries.length === 15, "scenario 79 reviewed inventory");
+    for (const [cutoff, values] of Object.entries(expected)) check(equal(names.map(name => output.metric_runs.find((run: Any) => run.metric_run_id === `keyed79-${cutoff}:daily_custom_${name}`)?.value_unscaled), values), `scenario 79 ${cutoff} independent arithmetic`);
+  }],
   ["72 calendar activity counts logical events and daily installations without acquisition joins", () => {
     const { input, output } = fixture("72-calendar-activity");
     const names = ["daily_session_starts", "daily_custom_events", "daily_active_installations"];
@@ -1251,8 +1258,8 @@ const scenarios: Array<[string, () => void]> = [
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 77 scenario assertions", () => {
-      check(scenarios.length === 78, "scenario assertion inventory must contain 78 entries");
+    it("contains 79 scenario assertions", () => {
+      check(scenarios.length === 79, "scenario assertion inventory must contain 79 entries");
     });
   });
 
@@ -1821,7 +1828,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 78 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 79 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1862,7 +1869,7 @@ const acceptance: Array<[string, () => void]> = [
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
   ["AC21 one command validates every schema registry fixture and golden", () => {
-    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 78 && outputArtifactCount === 78 * 13, "AC21");
+    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 79 && outputArtifactCount === 79 * 13, "AC21");
     checkDocumentationDrift(root, validationSummary());
   }],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {

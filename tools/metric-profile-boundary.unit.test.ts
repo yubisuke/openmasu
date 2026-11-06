@@ -7,7 +7,7 @@ import {
   REFUND_REVERSAL_METRIC_DEFINITIONS, SELECTED_ACQUISITION_METRIC_DEFINITIONS,
   SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS,
   ACQUISITION_KPI_METRIC_DEFINITIONS, basisAcquisitionKpiDefinitions, horizonAcquisitionKpiDefinitions,
-  CALENDAR_ACTIVITY_METRIC_DEFINITIONS, isCalendarActivityMetricDefinition,
+  CALENDAR_ACTIVITY_METRIC_DEFINITIONS, isCalendarActivityMetricDefinition, keyedCalendarActivityMetricDefinitions,
   PAYER_METRIC_DEFINITIONS,
   VERIFIED_PLATFORM_METRIC_DEFINITIONS,
   importedAcquisitionMetricDefinitions,
@@ -143,6 +143,22 @@ describe("metric profile entry boundaries", () => {
       }
     }
     assert.equal(validateMetricDefinition({ ...M3_METRIC_DEFINITIONS[0], event_names: ["session_start"] }), false);
+    for (const definition of keyedCalendarActivityMetricDefinitions("synthetic_repeat")) {
+      assert.ok(isCalendarActivityMetricDefinition(definition));
+      assert.deepEqual(await boundaryResult("keyed_activity/valid", definition), {
+        name: "keyed_activity/valid", schema: true, schedule: true, evaluator: true, sql: true,
+      });
+      for (const change of [{ conversion_event_key: undefined }, { conversion_event_key: "Synthetic_repeat" },
+        { rule_bundle_version: "0.4.25" }, { rule_bundle_hash: "0".repeat(64) },
+        { event_names: ["session_start"] }, { fraud_policy: "net" }, { aggregation_time_zone: "Asia/Tokyo" },
+        { metric_name: "daily_custom_events" }, { grouping_dimensions: ["metric_date", "country"] }]) {
+        const invalid = { ...structuredClone(definition), ...change } as Definition;
+        assert.equal(isCalendarActivityMetricDefinition(invalid), false);
+        assert.deepEqual(await boundaryResult("keyed_activity/invalid", invalid), {
+          name: "keyed_activity/invalid", schema: false, schedule: false, evaluator: false, sql: false,
+        });
+      }
+    }
   });
   it("calendar_profile_requires_its_policy_zone_name_day_and_binding_without_upgrading_legacy_definitions", () => {
     const definition = calendarAcquisitionMetricDefinitions("America/New_York")[0];
@@ -164,6 +180,7 @@ describe("metric profile entry boundaries", () => {
         ...basisAcquisitionKpiDefinitions("selected_imported_provider", "synthetic-export")]
         .map(definition => ({ name: "basis_acquisition_kpis/valid", definition })),
       ...CALENDAR_ACTIVITY_METRIC_DEFINITIONS.map(definition => ({ name: "calendar_activity/valid", definition })),
+      ...keyedCalendarActivityMetricDefinitions("synthetic_repeat").map(definition => ({ name: "keyed_calendar_activity/valid", definition })),
       ...PAYER_METRIC_DEFINITIONS.map(definition => ({ name: "payer/valid", definition })),
       ...engagementPolicyMetricDefinitions({ windowDays: 3, minimumInactivityDays: 7, eventKey: "tutorial_complete" })
         .map(definition => ({ name: "engagement_policy/valid", definition })),
@@ -178,7 +195,7 @@ describe("metric profile entry boundaries", () => {
       ...COHORT_TIME_ZONES.flatMap(zone=>["selected_first_party_click","selected_verified_platform","selected_imported_provider"].flatMap(basis=>
         calendarAcquisitionMetricDefinitions(zone,basis as NonNullable<Definition["acquisition_basis"]>,basis === "selected_imported_provider" ? "synthetic-export" : undefined)
           .map(definition=>({name:"calendar/valid",definition}))))];
-    assert.equal(valid.length, 266 + ACQUISITION_KPI_METRIC_DEFINITIONS.length + CALENDAR_ACTIVITY_METRIC_DEFINITIONS.length + PAYER_METRIC_DEFINITIONS.length);
+    assert.equal(valid.length, 268 + ACQUISITION_KPI_METRIC_DEFINITIONS.length + CALENDAR_ACTIVITY_METRIC_DEFINITIONS.length + PAYER_METRIC_DEFINITIONS.length);
     const exercised = new Set<string>();
     for (const { name, definition } of valid) {
       assert.ok(validateMetricDefinition(definition), name);

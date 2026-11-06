@@ -45,15 +45,17 @@ export function metricScheduleFormRequest(form: URLSearchParams, disable = false
       metric_definitions: definitions, evaluations: [{ metric_names: definitions.map(definition => definition.metric_name),
         date_dimension: "cohort_date", grouping: {} }] };
   }
-  if (!disable && form.has("custom_conversion_event_keys")) {
-    const allowed = ["csrf_token", "custom_conversion_event_keys", "lag_days", "start_date"];
+  if (!disable && (form.has("custom_conversion_event_keys") || form.has("custom_activity_event_keys"))) {
+    const field = form.has("custom_activity_event_keys") ? "custom_activity_event_keys" : "custom_conversion_event_keys";
+    const defaultLag = field === "custom_activity_event_keys" ? "1" : "9";
+    const allowed = ["csrf_token", field, "lag_days", "start_date"];
     if ([...form.keys()].some(key => !allowed.includes(key)
-        || key !== "custom_conversion_event_keys" && form.getAll(key).length !== 1)) {
+        || key !== field && form.getAll(key).length !== 1)) {
       throw new Error("metric_schedule_form_invalid");
     }
-    if (!/^\d{1,3}$/.test(form.get("lag_days") ?? "9")) throw new Error("custom_conversion_lag_days_invalid");
-    return { custom_conversion_event_keys: form.getAll("custom_conversion_event_keys"),
-      lag_days: Number(form.get("lag_days") ?? "9"),
+    if (!/^\d{1,3}$/.test(form.get("lag_days") ?? defaultLag)) throw new Error("custom_conversion_lag_days_invalid");
+    return { [field]: form.getAll(field),
+      lag_days: Number(form.get("lag_days") ?? defaultLag),
       ...(form.get("start_date") ? { start_date: form.get("start_date") } : {}) };
   }
   const allowed = disable ? ["csrf_token"] : ["csrf_token", "request_json"];
@@ -99,7 +101,11 @@ export function renderMetricScheduleReplacement(appId: string, preview: MetricSc
 
 export function renderCustomConversionScheduleForm(base: string, csrf: string, keys: readonly string[]): string {
   const catalog = base.replace(/\/metric-schedules$/, "/event-catalog");
-  return `<section><h2>Schedule custom outcomes</h2><p>This bounded picker includes planned/active catalog keys and unmanaged observed keys. <a href="${catalog}">Search, page through or plan events in the event catalog</a>; outcome registration is not limited to the first 100 keys. Each exact key owns independent D7 count/rate series. Display names never change calculation meaning. The app-wide cohort is used, and a nine-day lag covers the complete elapsed window. Not observed is unknown, not a healthy zero; a schedule cannot establish SDK delivery.</p>${keys.length ? `<form method="post" action="${base}">${csrf}<fieldset><legend>Available outcome keys (select up to 50)</legend>${keys.map(key => `<label><input type="checkbox" name="custom_conversion_event_keys" value="${escape(key)}">${escape(key)}</label>`).join("")}</fieldset><label>Lag days <input type="number" name="lag_days" min="9" max="365" value="9" required></label><label>Start cohort date (optional) <input type="date" name="start_date"></label><button type="submit">Register selected outcomes</button></form>` : "<p>No selectable keys on this page. Plan an event in the catalog before receipt, or inspect another page.</p>"}</section>`;
+  return renderDailyCustomActivityForm(base, csrf, keys) + `<section><h2>Schedule custom outcomes</h2><p>This bounded picker includes planned/active catalog keys and unmanaged observed keys. <a href="${catalog}">Search, page through or plan events in the event catalog</a>; outcome registration is not limited to the first 100 keys. Each exact key owns independent D7 count/rate series. Display names never change calculation meaning. The app-wide cohort is used, and a nine-day lag covers the complete elapsed window. Not observed is unknown, not a healthy zero; a schedule cannot establish SDK delivery.</p>${keys.length ? `<form method="post" action="${base}">${csrf}<fieldset><legend>Available outcome keys (select up to 50)</legend>${keys.map(key => `<label><input type="checkbox" name="custom_conversion_event_keys" value="${escape(key)}">${escape(key)}</label>`).join("")}</fieldset><label>Lag days <input type="number" name="lag_days" min="9" max="365" value="9" required></label><label>Start cohort date (optional) <input type="date" name="start_date"></label><button type="submit">Register selected outcomes</button></form>` : "<p>No selectable keys on this page. Plan an event in the catalog before receipt, or inspect another page.</p>"}</section>`;
+}
+
+function renderDailyCustomActivityForm(base: string, csrf: string, keys: readonly string[]): string {
+  return `<section><h2>Schedule daily custom-key activity</h2><p>Each exact key has separate UTC-day event and distinct installation counts, independent of acquisition cohorts. Three different events from one installation count as 3 events and 1 installation; redelivery adds nothing. These are recorded gross counts, not people or proof of human activity. Missing runs stay missing; a calculated zero does not prove SDK delivery. Late receipts and deletion require saved replacement runs.</p>${keys.length ? `<form method="post" action="${base}">${csrf}<fieldset><legend>Daily activity keys (select up to 50)</legend>${keys.map(key => `<label><input type="checkbox" name="custom_activity_event_keys" value="${escape(key)}">${escape(key)}</label>`).join("")}</fieldset><label>Lag days <input type="number" name="lag_days" min="1" max="365" value="1" required></label><label>Start activity date (optional) <input type="date" name="start_date"></label><button type="submit">Register daily custom-key activity</button></form>` : "<p>Select or plan a key in the event catalog first.</p>"}</section>`;
 }
 
 function renderStandardRetentionForm(base: string, csrf: string): string {

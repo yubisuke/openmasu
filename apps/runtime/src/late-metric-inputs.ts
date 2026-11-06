@@ -1,7 +1,7 @@
 import type { PoolClient } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
 import { validateMetricDefinition } from "@openmasu/contracts/validation";
-import { isPayerMetricDefinition, isVerifiedPurchaseProjection } from "@openmasu/contracts/definitions";
+import { isPayerMetricDefinition, isVerifiedPurchaseProjection, isCalendarActivityMetricDefinition } from "@openmasu/contracts/definitions";
 import { metricAcquisitionSql, metricAcquisitionJoinSql, metricAcquisitionDimensionSql } from "./platform-acquisition.js";
 import { correctionMetricNames, expandAcquisitionCompanions, isCompanionAcquisitionReplay,
   type CorrectionCandidate, type LateEventRecalculationRequest } from "./metric-recalculation.js";
@@ -98,6 +98,7 @@ export type LateSelection = {
 
 /** A narrow operational selector, not another metric definition or calculator. */
 export function supportsLateMetric(replay: Any): boolean {
+  if (supportsKeyedActivityMetric(replay)) return true;
   if (supportsEngagementMetric(replay)) return true;
   const metric = replay.metric_definition, definition = metric?.definition;
   return !!metric && validateMetricDefinition(metric) && metric.anchor_event === "install"
@@ -118,12 +119,22 @@ export function supportsLateMetric(replay: Any): boolean {
 
 /** Attribution membership can change counts and retention as well as revenue. */
 export function supportsAttributionMetric(replay: Any): boolean {
+  if (supportsKeyedActivityMetric(replay)) return false;
   if (supportsLateMetric(replay)) return true;
   const metric = replay.metric_definition;
   return !!metric && validateMetricDefinition(metric) && (["selected_verified_platform","selected_imported_provider"].includes(metric.acquisition_basis ?? "")
     || metric.calendar_cohort_policy === "cumulative_revenue_on_day_activity")
     && ["cohort_size", "active_installations_over_cohort"].includes(metric.definition.calculation)
     && typeof replay.evaluation?.grouping?.cohort_date === "string";
+}
+
+function supportsKeyedActivityMetric(replay: Any): boolean {
+  const definition = replay.metric_definition, grouping = replay.evaluation?.grouping;
+  const date = grouping?.metric_date;
+  return isCalendarActivityMetricDefinition(definition) && definition.conversion_event_key !== undefined
+    && typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)
+    && Number.isFinite(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date
+    && Object.keys(grouping).length === 1;
 }
 
 export async function selectLateMetricInputs(
@@ -221,12 +232,14 @@ export async function selectLateMetricInputs(
      LEFT JOIN control.metric_replay_manifests AS manifest ON manifest.tenant_id=mr.tenant_id
        AND manifest.app_id=mr.app_id AND manifest.source_metric_run_id=mr.metric_run_id
      WHERE mr.tenant_id=$1 AND mr.app_id=$2 AND mr.input_received_at_watermark<$3
-       AND (CASE WHEN coalesce(mr.comparison_context->'definition'->>'anchor_event',manifest.artifact->'metric_definition'->>'anchor_event')='deep_link_open'
+       AND (CASE WHEN coalesce(mr.comparison_context->'definition'->>'anchor_event',manifest.artifact->'metric_definition'->>'anchor_event') IN ('deep_link_open','calendar_day')
          THEN mr.grouping->>'metric_date' BETWEEN $4 AND $5
          ELSE $8::boolean AND mr.grouping->>'cohort_date' BETWEEN $4 AND $5 END)
        AND ($6::text[] IS NULL OR mr.metric_name=ANY($6::text[]))
        AND ($7::text[] IS NULL OR mr.metric_run_id=ANY($7::text[]))
        AND (mr.comparison_context IS NULL OR mr.comparison_context->'definition'->>'rule_bundle_id' IN ('metric-basis-acquisition-kpis','metric-horizon-acquisition-kpis')
+         OR (mr.comparison_context->'definition'->>'rule_bundle_id'='metric-calendar-activity'
+           AND mr.comparison_context->'definition'->>'metric_definition_version'='0.4.32')
          OR mr.comparison_context->'definition'->'definition'->>'calculation'
          IN ('revenue_sum','revenue_over_cohort','revenue_over_cost','converted_installations','converted_installations_over_cohort',
            'purchase_count','paying_installations','paying_installations_over_cohort','revenue_over_paying_installations'))
@@ -245,6 +258,16 @@ export async function selectLateMetricInputs(
     if (row.replay?.version !== 1 || !row.replay.evaluation || !row.replay.fx_policy) reason = "replay_unavailable";
     else if (!supportsLateMetric(row.replay)) reason = "unsupported_definition";
     else if (row.evidence_unavailable) reason = "input_unavailable";
+    else if (supportsKeyedActivityMetric(row.replay)) {
+      const definition = row.replay.metric_definition, date = row.replay.evaluation.grouping.metric_date;
+      const start = Date.parse(`${date}T00:00:00.000Z`);
+      const impacted = eligible.filter(event => (committedReceipt || event.received_at > row.watermark)
+        && event.event_name === "custom_event" && event.event_key === definition.conversion_event_key
+        && Date.parse(event.occurred_at!) >= start && Date.parse(event.occurred_at!) < start + 86400000);
+      if (!impacted.length) continue;
+      for (const event of impacted) matchedRecords.add(event.record_id);
+      if (row.pending) reason = "already_pending";
+    }
     else if (supportsEngagementMetric(row.replay)) {
       const changes = committedReceipt ? eligible : eligible.filter(event => event.received_at > row.watermark);
       const impacted = await engagementInputMatches(client, scope, row.replay, changes, request.watermark);

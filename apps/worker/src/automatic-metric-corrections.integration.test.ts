@@ -72,6 +72,39 @@ describe("opt-in receipt-driven bounded automatic metric corrections",{concurren
     throw Error("synthetic_auto_drain_exceeded");
   }
 
+  it("automatically_corrects_only_the_saved_custom_activity_key_and_UTC_date",async()=>{
+    const source=JSON.parse(readFileSync("fixtures/v0.4/79-keyed-calendar-activity/input.json","utf8")
+      .replaceAll('"tenant-a"',JSON.stringify(identity.tenantId)));
+    source.privacy_requests=[];
+    const late=source.records.find((record:Any)=>record.record_id==="repeat79-b-late");
+    const initial={...source,records:source.records.filter((record:Any)=>record!==late),metric_evaluations:[]};
+    await ingestFixture(`synthetic-keyed-auto-${identity.tenantId}`,initial,app,seed);
+    const prior=await computeSqlMetricRuns(app,{...initial,metric_evaluations:[{...source.metric_evaluations[0],privacy_state:"after"}]},true);
+    await saveMetricCorrectionPolicy(app,identity,{...policy,date_from:"2026-08-20",date_to:"2026-08-20"});
+    const history=initial.records.map((record:Any)=>({server:source.server_context,record,batch_id:"synthetic-keyed-initial"}));
+    await ingestRuntimeBatch([{server:{...source.server_context,received_at:late.received_at},record:late,batch_id:"synthetic-keyed-late"}],app,history);
+    await drain();
+    const latest=(await metricReport(reader,identity,{tenantId:identity.tenantId,appId:identity.appId,supersession:"latest",limit:100})).data;
+    assert.equal(latest.length,4);
+    for(const row of latest){
+      const key=row.comparison_context!.definition.conversion_event_key;
+      if(key==="synthetic_repeat"){
+        assert.equal(row.value_unscaled,row.activity_unit==="custom_events"?"4":"2");
+        assert.ok(row.supersedes_metric_run_id);
+      }else{
+        assert.equal(key,"synthetic_activity");assert.equal(row.value_unscaled,"3");
+        assert.ok(prior.some(run=>run.metric_run_id===row.metric_run_id));
+      }
+    }
+    // History returns one row per metric item, not one row per job.
+    const completed=(await listMetricRecalculations(reader,identity)).filter(item=>item.state==="completed");
+    assert.equal(completed.length,2);
+    assert.equal(new Set(completed.map(item=>item.recalculation_id)).size,1);
+    assert.deepEqual(completed.map(item=>item.source_metric_run_id).sort(),prior
+      .filter(run=>run.metric_name.startsWith("daily_custom_synthetic_repeat_")).map(run=>run.metric_run_id).sort());
+    assert.equal((await planAutomaticMetricCorrections(app,identity.tenantId)).completed,0);
+  });
+
   it("corrects two days of late revenue then cost and selected attribution revisions once without touching unrelated runs",async()=>{
     assert.equal((await metricCorrectionStatus(reader,identity)).policy,null);
     await saveMetricCorrectionPolicy(app,identity,policy);

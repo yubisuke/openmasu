@@ -399,6 +399,7 @@ export function metricRuns(
         dateAt(`${metricDate}T00:00:00.000Z`, "UTC", "metric_date");
         const eventNames = new Set<string>(definition.event_names ?? []);
         const events = visible.filter(attempt => eventNames.has(attempt.record.event_name)
+          && (definition.conversion_event_key === undefined || attempt.record.payload.event_key === definition.conversion_event_key)
           && dateAt(attempt.record.occurred_at, "UTC", "occurred_at") === metricDate);
         value = definition.definition.calculation === "active_installations_count"
           ? BigInt(new Set(events.map(attempt => compositeKey([

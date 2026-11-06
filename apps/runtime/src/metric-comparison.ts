@@ -108,6 +108,7 @@ export function comparisonMeaning(context: MetricComparisonContext) {
       window: { ...window, boundary: "half_open" }, population: "accepted_calendar_activity",
       acquisition_basis: "not_applicable", cost_selection_policy: "not_applicable", fraud_policy: "gross",
       grouping_dimensions: ["metric_date"], event_names: [...d.event_names!].sort(),
+      ...(d.conversion_event_key !== undefined ? { conversion_event_key: d.conversion_event_key } : {}),
       distinct_scope: calculation === "active_installations_count" ? "tenant_app_installation_per_day" : null,
       activity_unit: calculation === "active_installations_count" ? "distinct_installations"
         : d.metric_name === "daily_session_starts" ? "session_starts" : "custom_events",
