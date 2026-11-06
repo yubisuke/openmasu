@@ -7,7 +7,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Pool } from "pg";
 import { jcs, sha256 } from "@openmasu/attribution-core/canonical";
-import { CALENDAR_ACTIVITY_METRIC_DEFINITIONS, keyedCalendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
+import { CALENDAR_ACTIVITY_METRIC_DEFINITIONS, keyedCalendarActivityMetricDefinitions, periodActivityMetricDefinitions } from "@openmasu/contracts/definitions";
 import { createAppPool, createReaderPool, createSeedPool, PayloadNotFoundError,
   processPrivacyDeletionJobs, uuidV7, withTenant } from "@openmasu/runtime";
 import { parseCsv as readCsv } from "@openmasu/runtime/import-normalization";
@@ -78,7 +78,7 @@ describe("privacy metric correction through the existing durable worker", { conc
     batches.push({ batch_id: "synthetic-custom", server_context: custom.server_context, records: custom.records }, ...engagement.batches, ...payer.batches);
     input = { ...base, records: undefined, batches, cost_records: [], metric_evaluations: [],
       metric_definitions: [...base.metric_definitions, ...custom.metric_definitions, ...engagement.metric_definitions,
-        ...CALENDAR_ACTIVITY_METRIC_DEFINITIONS, ...keyedCalendarActivityMetricDefinitions("tutorial_complete"), ...payer.metric_definitions] };
+        ...CALENDAR_ACTIVITY_METRIC_DEFINITIONS, ...keyedCalendarActivityMetricDefinitions("tutorial_complete"), ...periodActivityMetricDefinitions(), ...payer.metric_definitions] };
     await ingestFixture(`synthetic-privacy-${tenantId}`, input, app, seed);
     originals = [];
     for (const [fxPolicy, group] of [[base.fx_policy, evaluations], [custom.fx_policy, custom.metric_evaluations],
@@ -95,6 +95,11 @@ describe("privacy metric correction through the existing durable worker", { conc
     originals.push(...await computeSqlMetricRuns(app, { ...input, fx_policy: base.fx_policy, metric_evaluations: [{
       metric_run_id_prefix: "synthetic-keyed-activity", metric_names: keyedCalendarActivityMetricDefinitions("tutorial_complete").map(definition => definition.metric_name),
       grouping: { metric_date: "2026-08-07" }, privacy_state: "after", data_freshness: "complete",
+      input_received_at_watermark: "2026-08-16T00:00:00.000Z", computed_at: "2026-08-16T00:01:00.000Z",
+    }] }, true, { tenant_id: tenantId, app_id: "app-a" }));
+    originals.push(...await computeSqlMetricRuns(app, { ...input, fx_policy: base.fx_policy, metric_evaluations: [{
+      metric_run_id_prefix: "synthetic-period-activity", metric_names: periodActivityMetricDefinitions().map(d => d.metric_name),
+      grouping: { metric_date: "2026-08-01" }, privacy_state: "after", data_freshness: "complete",
       input_received_at_watermark: "2026-08-16T00:00:00.000Z", computed_at: "2026-08-16T00:01:00.000Z",
     }] }, true, { tenant_id: tenantId, app_id: "app-a" }));
     foreign = await computeSqlMetricRuns(app, { ...base, metric_evaluations: [{ ...base.metric_evaluations[0],
@@ -151,7 +156,10 @@ describe("privacy metric correction through the existing durable worker", { conc
   }
 
   it("synthetic privacy_multi_group_recalculation updates two days times two campaigns plus retention/custom/engagement/calendar_activity without touching unrelated runs", async () => {
-    assert.equal(originals.length, 29);
+    assert.equal(originals.length, 31);
+    for (const definition of periodActivityMetricDefinitions()) {
+      assert.ok(BigInt(originals.find(run => run.metric_name === definition.metric_name)!.value_unscaled) > 0n);
+    }
     assert.equal(originals.find(run => run.metric_name === "daily_custom_tutorial_complete_events")?.value_unscaled, "3");
     assert.equal(originals.find(run => run.metric_name === "daily_custom_tutorial_complete_installations")?.value_unscaled, "3");
     assert.equal(originals.find(run => run.metric_name === "cohort_arppu_d7_usd")?.value_unscaled, "6000000");
@@ -163,7 +171,8 @@ describe("privacy metric correction through the existing durable worker", { conc
     assert.equal((await erase()).status, "completed");
     const pending = await report();
     assert.ok(pending.data.every(row => row.value_state === "unavailable" && row.value_unscaled === undefined
-      && row.privacy_update_state === "recalculation_pending" && row.data_freshness === "complete"));
+      && row.privacy_update_state === "recalculation_pending"
+      && row.data_freshness === originals.find(run => run.metric_run_id === row.metric_run_id)!.data_freshness));
     assert.ok((await report("app-a", "all", "2026-08-23T00:00:00.000Z")).data.every(row => row.value_unscaled === undefined));
     assert.equal((await statuses()).length, originals.length);
     const csv = readCsv(encodeMetricReport(pending, "csv").body);
@@ -188,6 +197,13 @@ describe("privacy metric correction through the existing durable worker", { conc
     await assertSuccessors();
     assert.equal((await saved()).find(run => run.supersedes_metric_run_id === dailyActive.metric_run_id)?.value_unscaled, "0");
     const latest = await report("app-a", "latest");
+    for (const definition of periodActivityMetricDefinitions()) {
+      const row = latest.data.find(value => value.metric_name === definition.metric_name)!;
+      assert.equal(row.value_unscaled, "0");
+      assert.equal(row.activity_unit, "distinct_installations");
+      assert.equal(row.activity_period_start, "2026-08-01T00:00:00.000Z");
+      assert.equal(row.activity_period_end_exclusive, new Date(Date.parse("2026-08-01") + (definition.definition.window.day + 1) * 86400000).toISOString());
+    }
     assert.equal(latest.data.length, originals.length);
     assert.ok(latest.data.every(row => row.value_state !== "unavailable" && row.data_freshness === "recalculated"));
     assert.deepEqual((await report("app-unrelated")).data.map(row => row.value_unscaled), foreign.map(row => row.value_unscaled));

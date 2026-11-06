@@ -29,6 +29,14 @@ it("registers closed daily activity separately from cohort and targeting dimensi
   assert.match(html, /Schedule daily activity/); assert.match(html, /Installations are not people or DAU/);
   assert.match(html, /name="calendar_activity" value="true"/);
   assert.doesNotMatch(html, /<script|javascript:|\son\w+=/i);
+  for (const days of [7, 30]) {
+    const period = metricScheduleFormRequest(new URLSearchParams({ calendar_activity: String(days), start_date: "2026-08-06" }));
+    const schedule = normalizeMetricScheduleRequest(period, new Date("2026-10-01T00:00:00.000Z"));
+    assert.equal(schedule.lagDays, days);
+    assert.deepEqual(schedule.definition.evaluations[0].metric_names, [`period_active_installations_${days}d`]);
+    assert.throws(() => normalizeMetricScheduleRequest({ ...period, lag_days: days - 1 }, new Date("2026-10-01T00:00:00.000Z")), /calendar_activity_window_not_elapsed/);
+    assert.match(html, new RegExp(`name="calendar_activity" value="${days}"`));
+  }
 });
 
 it("opts into bounded standard retention days with separate populations and rejects immature schedule lags", () => {

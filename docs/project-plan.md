@@ -105,6 +105,8 @@ standard retention, multiple custom outcomes, guided setup, recent receipt
 diagnostics, safe ingest recovery and optional monitoring rules/runbooks.
 Separate UTC [daily activity](calendar-activity.md) counts session starts, custom
 events and active installations without acquisition joins or period-unique sums.
+Independent seven/thirty-day profiles deduplicate across each whole UTC window,
+retaining start/end, unit, bounded corrections and current-privacy replay.
 Separate [verified payer metrics](payer-metrics.md) expose transaction and
 paying-installation counts, payer rate and purchase-net ARPPU with explicit
 store-projection authority, refund and undefined-denominator behavior. Native

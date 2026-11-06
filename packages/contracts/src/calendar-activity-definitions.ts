@@ -27,6 +27,16 @@ export function calendarActivityMetricDefinitions(): Definition[] {
   return structuredClone([...CALENDAR_ACTIVITY_METRIC_DEFINITIONS]);
 }
 
+/** Metric date is the inclusive UTC start; each period has an exclusive end. */
+export function periodActivityMetricDefinitions(): Definition[] {
+  return [7, 30].map(days => ({ ...structuredClone(CALENDAR_ACTIVITY_METRIC_DEFINITIONS[2]),
+    metric_name: `period_active_installations_${days}d`, metric_definition_version: "0.4.36",
+    definition: { calculation: "active_installations_count", numerator: "active_installations",
+      window: { type: "calendar_day", day: days - 1 } },
+    rule_bundle_version: "0.4.36", rule_bundle_hash: nonFraudBundleHash("metric-calendar-activity-v0.4.36"),
+  }));
+}
+
 export const KEYED_CALENDAR_ACTIVITY_VERSION = "0.4.32";
 /** Exact key is definition meaning; its readable metric-name alias is not the selector. */
 export function keyedCalendarActivityMetricDefinitions(eventKey: string): Definition[] {
@@ -65,7 +75,7 @@ export function isCalendarActivityMetricDefinition(value: unknown): value is Def
       return canonicalize(value) === canonicalize({ ...expected, metric_name: name });
     } catch { return false; }
   }
-  const expected = CALENDAR_ACTIVITY_METRIC_DEFINITIONS.find(definition =>
+  const expected = [...CALENDAR_ACTIVITY_METRIC_DEFINITIONS, ...periodActivityMetricDefinitions()].find(definition =>
     definition.metric_name === (value as Record<string, unknown>).metric_name);
   if (!expected) return false;
   try { return canonicalize(value) === canonicalize(expected); } catch { return false; }

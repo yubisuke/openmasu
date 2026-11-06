@@ -1,5 +1,28 @@
 # Contract v0.4 Migration
 
+## Fixed-period active installations (0.4.36)
+
+Two independently named definitions add whole-window installation distincts,
+not a reinterpretation or sum of the daily profiles. `metric-calendar-activity`
+version `0.4.36` binds UTC, gross, the session/custom union, inclusive metric-date
+start and exclusive 7/30-day end. Existing definitions, wire/package `0.4.0`,
+schema URNs and earlier outputs are unchanged. No table, service or dependency
+is added. Saved comparison meaning, schedule lag and bounded late/privacy replay
+retain the declared window. JSON/CSV append explicit period start/end fields;
+existing columns keep their positions.
+
+Complete golden inventory: new `83-period-activity/input.json`, README and all
+thirteen `expected_*.json` families in that directory. There are no changes to
+the earlier 82 inputs or 1066 goldens. Confirm with
+`git diff --name-status 6f416dd -- fixtures/v0.4/`: only new fixture 83 and the
+shared README differ. Its [independent derivation](../fixtures/v0.4/83-period-activity/README.md)
+accounts for all fields and ten values. Unique-set pairs for initial/late/private/
+next/empty are `(3,3)/(4,5)/(3,4)/(2,3)/(0,0)`. Thirty days of installation A's
+activity contribute one member, E lies at the exclusive seven-day end, F at
+the exclusive thirty-day end, and G just precedes the start. Existing retry,
+delayed D receipt and B deletion retain their distinct meanings. Independent
+arrays matched both evaluators before separate golden promotion.
+
 ## Independent payer cohort profiles (0.4.35)
 
 Twelve independently named definitions extend verified D7 payer metrics to

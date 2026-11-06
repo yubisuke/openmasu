@@ -123,12 +123,14 @@ export function comparisonMeaning(context: MetricComparisonContext) {
     if (!isCalendarActivityMetricDefinition(d)) return undefined;
     return {
       profile: context.profile, anchor_event: "calendar_day", time_zone: "UTC", calculation,
-      numerator: d.definition.numerator, denominator: null, cost_basis: null, aggregation: "on_day",
+      numerator: d.definition.numerator, denominator: null, cost_basis: null,
+      aggregation: window.day === 0 ? "on_day" : "whole_period_distinct",
       window: { ...window, boundary: "half_open" }, population: "accepted_calendar_activity",
       acquisition_basis: "not_applicable", cost_selection_policy: "not_applicable", fraud_policy: "gross",
       grouping_dimensions: ["metric_date"], event_names: [...d.event_names!].sort(),
       ...(d.conversion_event_key !== undefined ? { conversion_event_key: d.conversion_event_key } : {}),
-      distinct_scope: calculation === "active_installations_count" ? "tenant_app_installation_per_day" : null,
+      distinct_scope: calculation === "active_installations_count"
+        ? window.day === 0 ? "tenant_app_installation_per_day" : "tenant_app_installation_per_period" : null,
       activity_unit: calculation === "active_installations_count" ? "distinct_installations"
         : d.metric_name === "daily_session_starts" ? "session_starts" : "custom_events",
       privacy_state: context.privacy_state, value_type: "count", currency: null, amount_scale: null, ratio_scale: null, fx: null,
@@ -232,7 +234,8 @@ export function comparisonMaturity(context: MetricComparisonContext, grouping: R
   // Installs may occur anywhere within the cohort date. Use its exclusive end,
   // plus the complete elapsed/activity window, never an inferred install time.
   const days = d.rule_bundle_id === "metric-horizon-acquisition-kpis" ? d.definition.window.day + 2
-    : calculation === "event_count" || isCalendarActivityMetric(d) || calculation === "cohort_size" ? 1 : d.definition.window.day + 2;
+    : isCalendarActivityMetric(d) ? d.definition.window.day + 1
+    : calculation === "event_count" || calculation === "cohort_size" ? 1 : d.definition.window.day + 2;
   const closesAt = new Date(Date.parse(day) - offset + days * 86_400_000).toISOString();
   return { state: Date.parse(watermark) >= Date.parse(closesAt) ? "window_elapsed" : "unknown",
     closes_at: closesAt } as const;

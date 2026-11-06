@@ -1399,6 +1399,21 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
         if definition != expected:
             raise ValueError(f"metric_definition_series_mismatch:{name}")
         return
+    if definition.get("rule_bundle_id") == "metric-calendar-activity" and definition.get("metric_definition_version") == "0.4.36":
+        name = definition.get("metric_name")
+        days = {"period_active_installations_7d": 7, "period_active_installations_30d": 30}.get(name)
+        expected = {
+            "metric_name": name, "metric_definition_version": "0.4.36",
+            "anchor_event": "calendar_day", "aggregation_time_zone": "UTC", "value_type": "count",
+            "definition": {"calculation": "active_installations_count", "numerator": "active_installations",
+                           "window": {"type": "calendar_day", "day": (days or 1) - 1}},
+            "event_names": ["session_start", "custom_event"], "grouping_dimensions": ["metric_date"], "fraud_policy": "gross",
+            "rule_bundle_id": "metric-calendar-activity", "rule_bundle_version": "0.4.36",
+            "rule_bundle_hash": "2d9c3050280e232c1a3cf92b1c1373abb331caaa2e99cd4c76aa0cb3573418b6",
+        }
+        if days is None or definition != expected:
+            raise ValueError(f"metric_definition_series_mismatch:{name}")
+        return
     activity_events = {"daily_session_starts": ["session_start"], "daily_custom_events": ["custom_event"],
                        "daily_active_installations": ["session_start", "custom_event"]}
     if (definition.get("rule_bundle_id") == "metric-calendar-activity" or definition.get("metric_name") in activity_events
@@ -2575,10 +2590,11 @@ def metric_runs(
                 metric_date = grouping.get("metric_date")
                 if not isinstance(metric_date, str) or set(grouping) != {"metric_date"}:
                     raise ValueError(f"calendar_activity requires only metric_date grouping: {metric_name}")
-                day(f"{metric_date}T00:00:00.000Z", "UTC", "metric_date")
+                period_start = datetime.fromisoformat(f"{metric_date}T00:00:00+00:00")
+                period_end = period_start + timedelta(days=definition["definition"]["window"]["day"] + 1)
                 events = [item for item in visible if item["record"]["event_name"] in definition["event_names"]
                           and ("conversion_event_key" not in definition or item["record"]["payload"].get("event_key") == definition["conversion_event_key"])
-                          and day(item["record"]["occurred_at"], "UTC", "occurred_at") == metric_date]
+                          and period_start <= datetime.fromisoformat(item["record"]["occurred_at"].replace("Z", "+00:00")) < period_end]
                 amount = len({(item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["payload"]["installation_id"])
                               for item in events}) if calculation == "active_installations_count" else len(events)
             elif definition.get("engagement_credit_policy"):

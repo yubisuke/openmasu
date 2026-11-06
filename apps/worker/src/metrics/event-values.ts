@@ -32,9 +32,10 @@ export async function calendarActivityValue(
        AND raw.received_at <= $3
        AND ($4='before' OR raw.payload_lifecycle_status='available')
        AND control.canonical_timestamp_value(raw.occurred_at) >= ($6::date::timestamp AT TIME ZONE 'UTC')
-       AND control.canonical_timestamp_value(raw.occurred_at) < (($6::date + 1)::timestamp AT TIME ZONE 'UTC')`,
+       AND control.canonical_timestamp_value(raw.occurred_at) < (($6::date + $9::int)::timestamp AT TIME ZONE 'UTC')`,
     [scope.tenant_id, scope.app_id, watermark, privacyState, definition.event_names,
-      grouping.metric_date, definition.definition.calculation, definition.conversion_event_key ?? null],
+      grouping.metric_date, definition.definition.calculation, definition.conversion_event_key ?? null,
+      definition.definition.window.day + 1],
   );
   return { value_state: "present", value_unscaled: result.rows[0].value_unscaled };
 }

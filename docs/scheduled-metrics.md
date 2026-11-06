@@ -30,6 +30,10 @@ and requires nine days of lag; advanced grouping still uses the ordinary request
 For UTC key-specific daily frequency and reached installations, use
 **Schedule daily custom activity** or the `custom_activity_event_keys` request
 in [daily recorded activity](calendar-activity.md#select-a-custom-event-key).
+For period-wide distinct installations, use the separate 7/30-day activity
+forms or `periodActivityMetricDefinitions()`, with exactly `metric_date` as
+the inclusive UTC start and at least 7/30 days of lag. Successive starts may
+overlap; never add their distinct counts. See [fixed-period activity](calendar-activity.md).
 It requires at least one day of lag and has no acquisition-cohort population.
 The exact key is part of calculation ownership and saved comparison meaning.
 

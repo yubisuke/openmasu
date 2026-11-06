@@ -50,6 +50,8 @@ export type MetricReportRow = {
   readonly acquisition_kpi_set_key?: string | null;
   readonly activity_unit?: ReturnType<typeof calendarActivityUnit>;
   readonly activity_date?: string | null;
+  readonly activity_period_start?: string;
+  readonly activity_period_end_exclusive?: string;
   readonly outcome_cost_operands?: OpenMasuMetricRunV04["outcome_cost_operands"];
 };
 
@@ -103,6 +105,10 @@ function metricRow(artifact: Any, groupingDigest: string, superseded: boolean, c
     engagement_evidence_trust: metricSeries(artifact.metric_name) === "first_party_engagement" ? "device_reported_forgeable" : null,
     activity_unit: calendarActivityUnit(comparisonContext?.definition),
     activity_date: calendarActivityUnit(comparisonContext?.definition) ? artifact.grouping?.dimensions?.metric_date ?? null : null,
+    ...(calendarActivityUnit(comparisonContext?.definition) && comparisonContext!.definition.definition.window.day > 0
+      ? { activity_period_start: `${artifact.grouping.dimensions.metric_date}T00:00:00.000Z`,
+        activity_period_end_exclusive: new Date(Date.parse(`${artifact.grouping.dimensions.metric_date}T00:00:00.000Z`)
+          + (comparisonContext!.definition.definition.window.day + 1) * 86400000).toISOString() } : {}),
     privacy_update_state: privacyChanged ? privacyUpdateState ?? "unavailable" : "not_affected",
     unavailable_reason: privacyChanged ? "privacy_deletion" : null,
     ...(projectDatedFxSnapshot(artifact.fx_conversion_snapshot)

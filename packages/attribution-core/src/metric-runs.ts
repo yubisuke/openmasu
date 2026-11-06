@@ -400,10 +400,12 @@ export function metricRuns(
           throw new Error(`calendar_activity requires only metric_date grouping: ${metricName}`);
         }
         dateAt(`${metricDate}T00:00:00.000Z`, "UTC", "metric_date");
+        const periodStart = Date.parse(`${metricDate}T00:00:00.000Z`);
+        const periodEnd = periodStart + (definition.definition.window.day + 1) * 86_400_000;
         const eventNames = new Set<string>(definition.event_names ?? []);
         const events = visible.filter(attempt => eventNames.has(attempt.record.event_name)
           && (definition.conversion_event_key === undefined || attempt.record.payload.event_key === definition.conversion_event_key)
-          && dateAt(attempt.record.occurred_at, "UTC", "occurred_at") === metricDate);
+          && Date.parse(attempt.record.occurred_at) >= periodStart && Date.parse(attempt.record.occurred_at) < periodEnd);
         value = definition.definition.calculation === "active_installations_count"
           ? BigInt(new Set(events.map(attempt => compositeKey([
             attempt.server.tenant_id, attempt.server.app_id, attempt.record.payload.installation_id,

@@ -55,7 +55,7 @@ export type NonFraudRuleBundleId =
   | "metric-purchase-net"
   | "metric-total-net";
 
-export type NonFraudRuleBundleKey = NonFraudRuleBundleId | "metric-purchase-net-v0.4.9" | "metric-calendar-activity-v0.4.32" | "metric-verified-payers-v0.4.35";
+export type NonFraudRuleBundleKey = NonFraudRuleBundleId | "metric-purchase-net-v0.4.9" | "metric-calendar-activity-v0.4.32" | "metric-verified-payers-v0.4.35" | "metric-calendar-activity-v0.4.36";
 
 export type NonFraudRuleBundleDefinition = {
   readonly id: NonFraudRuleBundleId;
@@ -95,6 +95,15 @@ export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonF
       "received-evidence-as-of-watermark", "current-privacy-visibility", "gross-recorded-activity-only",
       "metric-date-only-no-acquisition-join", "missing-run-is-not-observed-zero",
       "daily-installations-not-persons-or-period-uniques", "preserve-all-key-activity-v0.4.25"],
+  },
+  "metric-calendar-activity-v0.4.36": {
+    id: "metric-calendar-activity", version: "0.4.36", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["metric-date-is-inclusive-utc-period-start", "fixed-seven-or-thirty-days-exclusive-end",
+      "accepted-canonical-session-and-custom-event-union", "distinct-tenant-app-installations-across-whole-period",
+      "received-evidence-as-of-watermark", "current-privacy-visibility", "gross-recorded-activity-only",
+      "no-acquisition-join-or-person-inference", "empty-period-zero-missing-run-missing",
+      "never-sum-daily-or-overlapping-period-uniques", "preserve-daily-and-keyed-definitions"],
   },
   "metric-horizon-acquisition-kpis": {
     id: "metric-horizon-acquisition-kpis", version: "0.4.31", kind: "metric",

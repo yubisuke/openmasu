@@ -217,6 +217,28 @@
           "definition": { "const": { "calculation": "active_installations_count", "numerator": "active_installations", "window": { "type": "calendar_day", "day": 0 } } } } }
       ]
     },
+    "periodCalendarActivity": {
+      "type": "object", "additionalProperties": true,
+      "required": ["event_names", "grouping_dimensions", "fraud_policy"],
+      "properties": {
+        "metric_definition_version": { "const": "0.4.36" },
+        "rule_bundle_id": { "const": "metric-calendar-activity" }, "rule_bundle_version": { "const": "0.4.36" },
+        "rule_bundle_hash": { "const": "2d9c3050280e232c1a3cf92b1c1373abb331caaa2e99cd4c76aa0cb3573418b6" },
+        "anchor_event": { "const": "calendar_day" }, "aggregation_time_zone": { "const": "UTC" },
+        "value_type": { "const": "count" }, "fraud_policy": { "const": "gross" },
+        "event_names": { "const": ["session_start", "custom_event"] }, "grouping_dimensions": { "const": ["metric_date"] },
+        "currency": false, "amount_scale": false, "ratio_scale": false, "activity_events": false,
+        "acquisition_basis": false, "import_provider": false, "calendar_cohort_policy": false,
+        "retention_maturity_policy": false, "acquisition_dimension_policy": false, "conversion_event_key": false,
+        "engagement_credit_policy": false, "engagement_inactivity_days": false, "cost_selection_policy": false, "refund_reversal_policy": false
+      },
+      "oneOf": [
+        { "properties": { "metric_name": { "const": "period_active_installations_7d" },
+          "definition": { "const": { "calculation": "active_installations_count", "numerator": "active_installations", "window": { "type": "calendar_day", "day": 6 } } } } },
+        { "properties": { "metric_name": { "const": "period_active_installations_30d" },
+          "definition": { "const": { "calculation": "active_installations_count", "numerator": "active_installations", "window": { "type": "calendar_day", "day": 29 } } } } }
+      ]
+    },
     "calendarActivity": {
       "type": "object", "additionalProperties": true,
       "required": ["event_names", "grouping_dimensions", "fraud_policy"],
@@ -745,7 +767,7 @@
       { "properties": { "metric_name": { "type": "string", "pattern": "^daily_custom_[a-z][a-z0-9_]{0,63}_(events|installations)$" } }, "required": ["metric_name"] },
       { "properties": { "definition": { "type": "object", "additionalProperties": true, "properties": { "calculation": { "const": "active_installations_count" } }, "required": ["calculation"] } }, "required": ["definition"] }
     ] },
-    "then": { "anyOf": [{ "$ref": "#/$defs/calendarActivity" }, { "$ref": "#/$defs/keyedCalendarActivity" }] },
+    "then": { "anyOf": [{ "$ref": "#/$defs/calendarActivity" }, { "$ref": "#/$defs/keyedCalendarActivity" }, { "$ref": "#/$defs/periodCalendarActivity" }] },
     "else": { "allOf": [{
     "if": { "anyOf": [
       { "properties": { "retention_maturity_policy": {} }, "required": ["retention_maturity_policy"] },

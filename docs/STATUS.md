@@ -11,7 +11,7 @@ Implementation and synthetic verification are not live operational qualification
 | Published prerelease | `v0.3.0-rc.3` at `2d689dc`; eight verified SDK assets and exact-commit full CI |
 | Synthetic SDK onboarding | Publication receipt records the downloaded Android SDK/backend journey separately from emulator and provider-shim evidence |
 | Latest stable source release | `v0.2.0`; later features belong to newer source, not this tag |
-| Current source | Contract patch ledger through v0.4.35; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 82 fixtures, 1066 golden artifacts |
+| Current source | Contract patch ledger through v0.4.36; wire/package identity `0.4.0`, schema URNs `:v0.4`; 28 schemas, 8 registries, 83 fixtures, 1079 golden artifacts |
 
 `v0.3.0-rc.3` is the current published source and SDK release, marked as a
 prerelease. Its [release page](https://github.com/yubisuke/openmasu/releases/tag/v0.3.0-rc.3)
@@ -56,7 +56,7 @@ qualification is stated. No row establishes production readiness.
 | Retention and outcomes | Opt-in D3/D14/D30 retained-installation horizons and multiple custom D7 outcome keys | Incomplete windows are not zero; native/platform/imported populations stay separate |
 | Cost per outcome | Native UTC D7 acquisition cost per exact-key converter or verified paying installation; saved cost/count operands, CSV/HTML and bounded late/cost correction lineage | Gross policy, USD scale 6 and nine-day daily-cohort maturity only; not per-person CPA, platform/imported CPA or live completeness |
 | Calendar metrics | Explicit UTC, Tokyo and New York calendar definitions coexist with historical elapsed definitions | Other zones are not qualified; time-zone-data upgrades require boundary requalification |
-| Daily activity | Separate UTC session-start/custom-event counts and distinct active installations; opt-in exact-key custom frequency/reach, saved schedules, corrections and CSV | Recorded gross activity only; installations are not people, daily uniques are not period uniques, and acquisition dimensions are not inferred |
+| Recorded activity | Separate UTC daily session/custom counts, exact-key frequency/reach and daily or fixed 7/30-day distinct installations; saved schedules, corrections, privacy replay and period CSV | Gross recorded activity only; installations are not people; daily or overlapping period counts cannot be summed; no inferred acquisition dimensions |
 | Ongoing calculation | Durable daily schedules, bounded target discovery, Google/Apple cost refresh, saved replay and explicit/opt-in automatic corrections | Not every profile supports discovery or automatic correction; no implicit all-history scan; live cost access and billing agreement remain unverified |
 | Dashboard and comparison | Server-rendered reader-only reports; saved filters, bounded previous-period views and operands; external revenue/ROAS/LTV, retention and outcome declarations via the same offline/web comparator | External meaning remains operator-declared; no provider completeness, imported-binding or engagement-equivalence claim; incompatible/missing/undefined/zero remain distinct |
 | Setup and diagnostics | Recommended measurement form, recent event/SDK-version classes and confirmation-bound ingest recovery | SDK versions are client-declared; absent receipts do not prove an outage; invalid/deleted/claimed evidence is not replayed |
@@ -111,6 +111,8 @@ Its provider types use an explicit shim; actual provider/device qualification
 is unverified. This is included in rc.3; older assets remain unchanged.
 
 [Daily recorded activity](calendar-activity.md) is included in rc.3.
+The separate fixed 7/30-day distinct profiles are current-source additions,
+not a change to that release's frozen artifacts.
 Its UTC activity population is independent
 of acquisition cohorts and does not establish human-level uniqueness.
 
