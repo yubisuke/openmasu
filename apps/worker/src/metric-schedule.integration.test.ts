@@ -1381,7 +1381,8 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
       assert.equal(response.status, 303);
       const schedules = (await (await admin(`/v1/admin/apps/${appId}/metric-schedules`)).json() as { data: MetricScheduleRecord[] }).data;
       const period = schedules.find(row => row.status === "active")!;
-      const now = new Date("2026-09-20T01:00:00.000Z");
+      // Exactly one date is due: this tests the period, not catch-up overflow.
+      const now = new Date(Date.parse("2026-08-20T01:00:00.000Z") + days * 86400000);
       assert.deepEqual(await processMetricSchedules(appPool, tenantId, { now, maximumCatchupDates: 1 }),
         { schedules: 1, completedDates: 1, replayedDates: 0, failedSchedules: 0 });
       const page = await metricReport(readerPool, reportIdentity, { ...query, metricScheduleId: period.metric_schedule_id });
