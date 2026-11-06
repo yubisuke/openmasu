@@ -1,6 +1,6 @@
 # Contract v0.4 fixture provenance
 
-The JSON files in the 81 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
+The JSON files in the 82 numbered directories are reviewed, immutable golden contract examples. They are committed as source artifacts; the validation command never creates, updates, or regenerates them.
 
 Each fixture has one synthetic input and 13 independently asserted output classes:
 
@@ -706,6 +706,15 @@ definition identity. D0/D30 bind `metric-horizon-acquisition-kpis` version
 The fourth evaluation is an immature D30 set: all eight runs omit a value and
 emit `undefined/observation_window_not_elapsed`, rather than zero. Conservative
 daily-cohort maturity is UTC midnight plus 2 days for D0 and 32 days for D30.
+
+## Fixture 82: explicit payer cohort populations
+
+The [independent derivation](82-payer-cohort-profiles/README.md) records thirteen
+families and twelve new definition/run pairs. One unexcluded native payer gives
+count 1, payers 1, rate 1 and USD6 net ARPPU; both platform profiles remain empty
+without a trusted platform proof. The earlier 81 inputs and 1053 golden files
+are unchanged. Shared cases exercise positive platform cohorts, all-operand
+fraud exclusion, full refunds, FX absence and current-privacy replay.
 
 ## Adding a fixture procedure
 
