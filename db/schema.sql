@@ -6160,7 +6160,12 @@ ALTER TABLE ledger.metric_runs ADD CONSTRAINT metric_runs_undefined_reason_check
     'no_converted_installations'
   ));
 
--- 101_dsar_snapshot.sql: internal export admission metadata, not contract fields.
+-- 101_dsar_snapshot.sql
+-- Internal admission metadata, never part of a contract artifact. The full XID
+-- excludes transactions still in flight at export start, including backfills.
+-- The server epoch makes restored/previous-server rows historical while cursors
+-- from before a database restart are explicitly invalidated. Legacy NULL rows
+-- predate pagination. Setting defaults separately avoids rewriting the ledger.
 ALTER TABLE ledger.raw_records
   ADD COLUMN export_xid xid8, ADD COLUMN export_epoch timestamptz;
 ALTER TABLE ledger.raw_records ALTER COLUMN export_xid SET DEFAULT pg_current_xact_id(),
