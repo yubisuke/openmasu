@@ -63,6 +63,7 @@ export type DashboardOperatorWebhook = {
   readonly status: "active" | "disabled";
   readonly created_at: string;
   readonly status_changed_at: string;
+  readonly deletion_notifications?: boolean;
   readonly signing_revision?: number;
   readonly signing_revisions?: readonly { signing_revision: number; created_at: string; valid_until: string | null;
     retired_at: string | null; state: "current" | "overlap" | "expired" | "retired" }[];

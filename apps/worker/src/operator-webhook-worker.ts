@@ -5,6 +5,7 @@ import type { LookupFunction } from "node:net";
 import type { Pool, PoolClient } from "pg";
 import { comparisonNotificationEligible, lockComparisonNotifications } from "@openmasu/runtime/recurring-comparisons";
 import { webhookSigningRevision } from "@openmasu/runtime/operator-webhook-signing";
+import { recognizedWebhookDeletion } from "./operator-webhook-deletions.js";
 import {
   operatorWebhookReference,
   operatorWebhookSignature,
@@ -48,14 +49,18 @@ type DeliveryRow = {
   endpoint_url: string;
   signing_revision: string;
   app_id: string;
-  record_id: string;
+  record_id: string | null;
   comparison_id: string | null;
+  event_name: string;
+  subject_ref: string | null;
+  privacy_request_id: string | null;
   request_ref: string;
   request_digest: string;
   state: "queued" | "retry";
   attempts: number;
   created_at: string;
   destination_status: "active" | "disabled";
+  deletion_notifications: boolean;
   payload_lifecycle_status: "available" | "redacted" | "purged";
   withdrawal_recognized_at: string | null;
   tombstoned: boolean;
@@ -179,7 +184,7 @@ export function buildOperatorWebhookRequest(input: Readonly<{
 }
 
 export async function sendOperatorWebhook(
-  prepared: PreparedOperatorWebhook,
+  prepared: Pick<PreparedOperatorWebhook, "deliveryId" | "endpointUrl" | "body" | "requestDigest">,
   secret: Buffer,
   options: OperatorWebhookTransportOptions,
 ): Promise<OperatorWebhookDeliveryResult> {
@@ -407,12 +412,12 @@ export async function discoverOperatorWebhookDeliveries(
         const result = await client.query(
           `INSERT INTO ephemeral.operator_webhook_deliveries (
              delivery_id,tenant_id,app_id,destination_id,logical_event_id,record_id,event_name,
-             request_ref,request_digest,state,attempts,next_attempt_at,created_at,updated_at,signing_revision
-           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'queued',0,$10,$11,$12,$13)
+             request_ref,request_digest,state,attempts,next_attempt_at,created_at,updated_at,signing_revision,subject_ref
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'queued',0,$10,$11,$12,$13,$14)
            ON CONFLICT (tenant_id,app_id,destination_id,logical_event_id) DO NOTHING`,
           [deliveryId, tenantId, candidate.app_id, candidate.destination_id, candidate.logical_event_id,
             candidate.record_id, candidate.event_name, requestRef, prepared.requestDigest,
-            now.toISOString(), now.toISOString(), now.toISOString(), signing.signing_revision],
+            now.toISOString(), now.toISOString(), now.toISOString(), signing.signing_revision, prepared.envelope.event.subject_ref ?? null],
         );
         return result.rowCount === 1;
       });
@@ -457,7 +462,7 @@ export async function processOperatorWebhookDeliveries(
     let purgeRef: string | undefined;
     let appId: string | undefined;
     await withTenant(pool, tenantId, async (client) => {
-      const candidate = await client.query<{ record_id: string; comparison_id: string | null; app_id: string; destination_id: string }>(
+      const candidate = await client.query<{ record_id: string | null; comparison_id: string | null; app_id: string; destination_id: string }>(
         `SELECT record_id,comparison_id,app_id,destination_id
            FROM ephemeral.operator_webhook_deliveries
           WHERE tenant_id=$1 AND delivery_id=$2
@@ -468,7 +473,7 @@ export async function processOperatorWebhookDeliveries(
       // Privacy deletion takes this advisory lock before it locks delivery rows.
       // Use the same order here so the privacy/dispatch race cannot deadlock.
       if (candidate.rows[0].comparison_id) await lockComparisonNotifications(client, tenantId);
-      else await lockRecord(client, candidate.rows[0].record_id);
+      else if (candidate.rows[0].record_id) await lockRecord(client, candidate.rows[0].record_id);
       await lockDestination(
         client,
         tenantId,
@@ -479,6 +484,7 @@ export async function processOperatorWebhookDeliveries(
       const selected = await client.query<DeliveryRow>(
         `SELECT delivery.delivery_id::text,delivery.destination_id,destination.endpoint_url,
                 delivery.signing_revision::text,delivery.app_id,delivery.record_id,delivery.comparison_id,delivery.request_ref,
+                delivery.event_name,delivery.subject_ref,delivery.privacy_request_id,destination.deletion_notifications,
                 delivery.request_digest,delivery.state,delivery.attempts,delivery.created_at,
                 destination.status AS destination_status,
                 raw.payload_lifecycle_status,raw.withdrawal_recognized_at,
@@ -511,6 +517,11 @@ export async function processOperatorWebhookDeliveries(
         : !signing ? "signing_key_unavailable"
         : signing.state === "retired" ? "signing_key_retired"
         : signing.state === "expired" ? "signing_key_expired"
+        : row.event_name === "subject_deletion"
+          ? !row.deletion_notifications ? "deletion_notifications_disabled"
+            : !row.privacy_request_id || !row.subject_ref || !await recognizedWebhookDeletion(client,
+              { tenantId, appId: row.app_id }, row.destination_id, row.privacy_request_id, row.subject_ref)
+              ? "deletion_not_recognized" : undefined
         : row.comparison_id
           ? await comparisonNotificationEligible(client, { tenantId,appId:row.app_id }, row.delivery_id, attemptAt) ? undefined : "comparison_suppressed"
         : row.payload_lifecycle_status !== "available" || row.withdrawal_recognized_at || row.tombstoned
@@ -562,7 +573,6 @@ export async function processOperatorWebhookDeliveries(
       const result = await sendOperatorWebhook({
         deliveryId: row.delivery_id,
         endpointUrl: row.endpoint_url,
-        envelope: JSON.parse(body.toString("utf8")) as OperatorWebhookEnvelope,
         body,
         requestDigest: row.request_digest,
       }, secret, {

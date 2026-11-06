@@ -16,6 +16,7 @@ import {
   processOperatorWebhookDeliveries,
 } from "../../worker/src/operator-webhook-worker.js";
 import { processSdkInbox } from "../../worker/src/sdk-worker.js";
+import { discoverOperatorWebhookDeletionNotifications } from "../../worker/src/operator-webhook-deletions.js";
 import { ensureAdminKeys } from "./admin-auth.js";
 import { KeyedTokenBucket } from "./rate-limit.js";
 import { createRequestHandler } from "./router.js";
@@ -46,6 +47,7 @@ const received: Array<{ path: string; body: Buffer; signature: string; deliveryI
 let deliverStatuses = [500, 204];
 let comparisonStatuses = [500, 204];
 let rotationStatuses = [500, 204];
+let deletionStatuses = [503, 204];
 let raceGate: {
   entered: Promise<void>;
   release: Promise<void>;
@@ -91,15 +93,16 @@ async function admin(path: string, init: RequestInit = {}): Promise<Response> {
   });
 }
 
-async function submit(eventId: string, installationId: string): Promise<Response> {
+async function submit(eventId: string, installationId: string,
+  source = { appId, serverKeyId, serverSecret }): Promise<Response> {
   const body = Buffer.from(JSON.stringify({ records: [event(eventId, installationId)] }), "utf8");
   const timestampMs = Date.now();
   const nonce = randomBytes(18).toString("base64url");
-  const signature = signServerRequest(serverSecret, {
+  const signature = signServerRequest(source.serverSecret, {
     method: "POST",
     path: "/v1/events/server",
-    appId,
-    serverKeyId,
+    appId: source.appId,
+    serverKeyId: source.serverKeyId,
     timestampMs,
     nonce,
     body,
@@ -108,8 +111,8 @@ async function submit(eventId: string, installationId: string): Promise<Response
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-openmasu-app-id": appId,
-      "x-openmasu-server-key-id": serverKeyId,
+      "x-openmasu-app-id": source.appId,
+      "x-openmasu-server-key-id": source.serverKeyId,
       "x-openmasu-timestamp-ms": String(timestampMs),
       "x-openmasu-nonce": nonce,
       "x-openmasu-signature": signature,
@@ -136,7 +139,9 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
       }
       const status = request.url === "/deliver" ? (deliverStatuses.shift() ?? 204)
         : request.url === "/comparison" ? (comparisonStatuses.shift() ?? 204)
-        : request.url === "/rotation" ? (rotationStatuses.shift() ?? 204) : 204;
+        : request.url === "/rotation" ? (rotationStatuses.shift() ?? 204)
+        : request.url === "/deletion" && JSON.parse(Buffer.concat(chunks).toString()).schema === "openmasu.subject_deletion.v1"
+          ? (deletionStatuses.shift() ?? 204) : 204;
       response.writeHead(status);
       response.end();
     });
@@ -741,5 +746,151 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
     assert.equal((await admin(`/v1/admin/apps/${appId}/operator-webhooks/${encodeURIComponent(destinationId)}/disable`,
       { method: "POST", body: "{}" })).status, 200);
     for (const reference of [baseRef, ...references]) await assert.rejects(payloadStore.read(reference));
+  });
+
+  it("notifies only accepted opted-in subjects with stable references and retry bytes without claiming downstream erasure", async () => {
+    const destinationPath = `/v1/admin/apps/${appId}/operator-webhooks`;
+    const register = async (path: string, enabled: boolean, targetAppId = appId) => {
+      const response = await admin(`/v1/admin/apps/${targetAppId}/operator-webhooks`, { method: "POST", body: JSON.stringify({
+        endpoint_url: `${receiverOrigin}/${path}`, events: ["custom_event"], deletion_notifications: enabled }) });
+      assert.equal(response.status, 201);
+      return response.json() as Promise<{ destination_id: string; signing_secret: string }>;
+    };
+    const destination = await register("deletion", true), optedOut = await register("deletion-off", false);
+    const policyPath = `${destinationPath}/${encodeURIComponent(destination.destination_id)}/deletion-notifications`;
+    const otherAppId = `app-webhook-other-${run}`;
+    await withTenant(pool, tenantId, client => client.query(
+      "INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ($1,$2,$3)", [tenantId, otherAppId, new Date().toISOString()]));
+    assert.equal((await admin(`/v1/admin/apps/${otherAppId}/operator-webhooks/${encodeURIComponent(destination.destination_id)}/deletion-notifications`,
+      { method: "POST", body: '{"enabled":false}' })).status, 404, "a registered app cannot select another app's destination");
+    const otherDestination = await register("deletion-other", true, otherAppId);
+    const otherKeyResponse = await admin(`/v1/admin/apps/${otherAppId}/server-keys`, { method: "POST",
+      body: JSON.stringify({ producer: "postback:first-party" }) });
+    assert.equal(otherKeyResponse.status, 201);
+    const otherKey = await otherKeyResponse.json() as { server_key_id: string; server_key: string };
+    const installationId = `installation:webhook-deletion:${run}`, unsentId = `installation:webhook-never-sent:${run}`;
+    const submittedId = `event:webhook-before-deletion:${run}`;
+    const at = (seconds = 0) => new Date(Date.now() + 1000 + seconds * 1000);
+    const dispatch = (now: Date) => processOperatorWebhookDeliveries(pool, payloadStore, tenantId, {
+      enabled: true, destinationAllowlist: [receiverOrigin], allowSyntheticLoopback: true, now: () => now });
+    assert.equal((await submit(submittedId, installationId)).status, 202);
+    assert.equal((await submit(`event:webhook-other-app:${run}`, installationId,
+      { appId: otherAppId, serverKeyId: otherKey.server_key_id, serverSecret: otherKey.server_key })).status, 202);
+    await processSdkInbox(pool, payloadStore, tenantId);
+    await discoverOperatorWebhookDeliveries(pool, payloadStore, tenantId, at());
+    await dispatch(at());
+    const delivered = received.find(entry => entry.path === "/deletion")!;
+    assert.ok(delivered);
+    const subjectRef = JSON.parse(delivered.body.toString()).event.subject_ref as string;
+    const otherDelivered = received.find(entry => entry.path === "/deletion-other")!;
+    assert.ok(otherDelivered);
+    const otherSubjectRef = JSON.parse(otherDelivered.body.toString()).event.subject_ref as string;
+    assert.notEqual(otherSubjectRef, subjectRef, "the same raw installation string does not join destinations or apps");
+    const rotation = await rotateOperatorWebhookSigningKey({ pool, payloadStore,
+      identity: { tenantId, appId, keyId: "synthetic-deletion-rotation", role: "admin" }, destinationId: destination.destination_id,
+      body: { expected_revision: 1, overlap_seconds: 0 }, now: at(1) });
+    assert.equal(rotation.signing_revision, 2);
+    // An accepted pre-upgrade delivery has no copied subject reference yet.
+    await withTenant(pool, tenantId, client => client.query(
+      "UPDATE ephemeral.operator_webhook_deliveries SET subject_ref=NULL WHERE tenant_id=$1 AND delivery_id=$2",
+      [tenantId, delivered.deliveryId]));
+
+    for (const [suffix, subject] of [["pending", installationId], ["never-sent", unsentId]]) {
+      assert.equal((await submit(`event:webhook-deletion-${suffix}:${run}`, subject)).status, 202);
+    }
+    await processSdkInbox(pool, payloadStore, tenantId);
+    await discoverOperatorWebhookDeliveries(pool, payloadStore, tenantId, at(2));
+    const remove = async (scope: "installation" | "app" | "tenant", subject: string) => {
+      const response = await admin("/v1/admin/privacy-requests", { method: "POST", body: JSON.stringify({
+        tenant_id: tenantId, app_id: appId, requested_via: "tenant_admin_api", deletion_scope: scope, deletion_subject_ref: subject }) });
+      assert.equal(response.status, 201);
+      return response.json() as Promise<{ privacy_request_id: string; status: string }>;
+    };
+    const recognized = await remove("installation", installationId);
+    await remove("installation", unsentId);
+    assert.equal(recognized.status, "completed", "local erasure does not wait for recipient notification");
+    assert.equal((await submit(`event:webhook-after-deletion:${run}`, installationId)).status, 403);
+    assert.equal(await discoverOperatorWebhookDeletionNotifications(pool, payloadStore, tenantId, at(3)), 1);
+    assert.equal(await discoverOperatorWebhookDeletionNotifications(pool, payloadStore, tenantId, at(3)), 0);
+    assert.equal(await discoverOperatorWebhookDeletionNotifications(pool, payloadStore, `tenant-other-${run}`, at(3)), 0);
+    const notices = await withTenant(pool, tenantId, async client => (await client.query<{
+      delivery_id: string; destination_id: string; subject_ref: string; privacy_request_id: string; request_ref: string; signing_revision: string;
+    }>(`SELECT delivery_id::text,destination_id,subject_ref,privacy_request_id,request_ref,signing_revision::text
+      FROM ephemeral.operator_webhook_deliveries WHERE tenant_id=$1 AND event_name='subject_deletion'`, [tenantId])).rows);
+    assert.equal(notices.length, 1, "neither opted-out destinations nor never-delivered subjects receive a notice");
+    const notice = notices[0];
+    assert.equal(notice.destination_id, destination.destination_id);
+    assert.equal(notice.subject_ref, subjectRef);
+    assert.equal(notice.privacy_request_id, recognized.privacy_request_id);
+    assert.equal(notice.signing_revision, "2");
+    const originalBody = await payloadStore.read(notice.request_ref);
+    const envelope = JSON.parse(originalBody.toString());
+    assert.deepEqual(Object.keys(envelope).sort(), ["app_id", "delivery_id", "recognized_at", "schema", "subject_ref"]);
+    assert.equal(envelope.schema, "openmasu.subject_deletion.v1");
+    assert.equal(envelope.subject_ref, subjectRef);
+    for (const forbidden of [installationId, unsentId, submittedId, recognized.privacy_request_id, "installation_id", "payload", "downstream_completed"]) {
+      assert.equal(originalBody.includes(Buffer.from(forbidden)), false, forbidden);
+    }
+    deletionStatuses = [503, 204];
+    await dispatch(at(4));
+    const afterFailedNotice = received.filter(entry => entry.path === "/deletion");
+    assert.equal(afterFailedNotice.length, 2, "no pending subject event crosses deletion recognition");
+    assert.equal((await withTenant(pool, tenantId, async client => (await client.query<{ state: string }>(
+      "SELECT state FROM ephemeral.operator_webhook_deliveries WHERE tenant_id=$1 AND delivery_id=$2", [tenantId, notice.delivery_id])).rows[0])).state, "retry");
+
+    // Broader subsequent deletions must not erase an already pending deletion notice.
+    let tenantRequestId = "";
+    for (const [scope, subject] of [["app", appId], ["tenant", tenantId]] as const) {
+      const request = await remove(scope, subject);
+      assert.equal(request.status, "completed");
+      if (scope === "tenant") tenantRequestId = request.privacy_request_id;
+      else assert.equal((await withTenant(pool, tenantId, async client => (await client.query(
+        "SELECT 1 FROM ledger.privacy_tombstones WHERE tenant_id=$1 AND app_id=$2 AND privacy_request_id=$3",
+        [tenantId, otherAppId, request.privacy_request_id])).rowCount)), 0, "app deletion does not include another app's subject");
+      assert.deepEqual(await payloadStore.read(notice.request_ref), originalBody);
+      assert.equal((await withTenant(pool, tenantId, async client => (await client.query<{ state: string }>(
+        "SELECT state FROM ephemeral.operator_webhook_deliveries WHERE tenant_id=$1 AND delivery_id=$2", [tenantId, notice.delivery_id])).rows[0])).state, "retry");
+    }
+    await dispatch(at(70));
+    const attempts = received.filter(entry => entry.deliveryId === notice.delivery_id);
+    assert.equal(attempts.length, 2);
+    for (const attempt of attempts) {
+      assert.equal(attempt.signingRevision, "2");
+      assert.deepEqual(attempt.body, originalBody);
+      assert.equal(attempt.signature, `sha256=${createHmac("sha256", Buffer.from(rotation.signing_secret)).update(originalBody).digest("hex")}`);
+    }
+    const receipts = await withTenant(pool, tenantId, async client => (await client.query<{ state: string; http_status: number; artifact: Record<string, unknown> }>(
+      "SELECT state,http_status,artifact FROM ledger.operator_webhook_delivery_results WHERE tenant_id=$1 AND delivery_id=$2 ORDER BY attempt",
+      [tenantId, notice.delivery_id])).rows);
+    assert.deepEqual(receipts.map(row => [row.state, row.http_status]), [["retry", 503], ["succeeded", 204]]);
+    for (const receipt of receipts) assert.equal(Object.hasOwn(receipt.artifact, "deletion_completed"), false,
+      "HTTP acceptance is not evidence that the recipient erased anything");
+    assert.equal(received.some(entry => entry.path === "/deletion-off" && JSON.parse(entry.body.toString()).schema === "openmasu.subject_deletion.v1"), false);
+
+    assert.equal(await discoverOperatorWebhookDeletionNotifications(pool, payloadStore, tenantId, at(71)), 3);
+    const otherNotice = await withTenant(pool, tenantId, async client => (await client.query<{ delivery_id: string; subject_ref: string }>(
+      `SELECT delivery_id::text,subject_ref FROM ephemeral.operator_webhook_deliveries
+        WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3 AND privacy_request_id=$4 AND event_name='subject_deletion'`,
+      [tenantId, otherAppId, otherDestination.destination_id, tenantRequestId])).rows[0]);
+    assert.ok(otherNotice, "tenant deletion anchored at one app notifies the other app's accepted subject");
+    assert.equal(otherNotice.subject_ref, otherSubjectRef);
+    await dispatch(at(72));
+    const otherNotification = received.find(entry => entry.deliveryId === otherNotice.delivery_id)!;
+    assert.ok(otherNotification);
+    assert.equal(JSON.parse(otherNotification.body.toString()).app_id, otherAppId);
+    assert.equal(JSON.parse(otherNotification.body.toString()).subject_ref, otherSubjectRef);
+    assert.equal(otherNotification.body.includes(Buffer.from(installationId)), false);
+    await remove("installation", installationId);
+    assert.equal(await discoverOperatorWebhookDeletionNotifications(pool, payloadStore, tenantId, at(73)), 1);
+    const beforeOptOut = received.length;
+    assert.equal((await admin(policyPath, { method: "POST", headers: { authorization: `Bearer ${operatorKey}` }, body: '{"enabled":false}' })).status, 403);
+    assert.equal((await admin(policyPath, { method: "POST", body: '{"enabled":false}' })).status, 200);
+    await dispatch(at(74));
+    assert.equal(received.length, beforeOptOut, "opt-out suppresses pending notices without sending them");
+    assert.equal(await discoverOperatorWebhookDeletionNotifications(pool, payloadStore, tenantId, at(75)), 0);
+    for (const value of [destination, optedOut]) assert.equal((await admin(
+      `${destinationPath}/${encodeURIComponent(value.destination_id)}/disable`, { method: "POST", body: "{}" })).status, 200);
+    assert.equal((await admin(`/v1/admin/apps/${otherAppId}/operator-webhooks/${encodeURIComponent(otherDestination.destination_id)}/disable`,
+      { method: "POST", body: "{}" })).status, 200);
   });
 });

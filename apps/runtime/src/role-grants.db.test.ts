@@ -307,6 +307,7 @@ try {
     "control.operator_webhook_destination_states.app_id",
     "control.operator_webhook_destination_states.status",
     "control.operator_webhook_destination_states.changed_at",
+    "control.operator_webhook_destination_states.deletion_notifications",
     "control.operator_webhook_signing_revisions.tenant_id",
     "control.operator_webhook_signing_revisions.app_id",
     "control.operator_webhook_signing_revisions.destination_id",

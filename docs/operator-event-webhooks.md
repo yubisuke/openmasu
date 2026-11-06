@@ -214,11 +214,78 @@ unavailability, transport failure, and timeout retry with bounded exponential
 delay. Redirects and other `4xx` responses fail terminally. The reference
 configuration attempts at most eight times and caps each request at 64 KiB.
 
+## Optional subject-deletion notices
+
+Subject-deletion notifications default to **off**, including destinations created
+before this capability existed. An administrator may set
+`"deletion_notifications": true` when registering an ordinary event destination,
+or explicitly change an existing destination:
+
+```http
+POST /v1/admin/apps/app-synthetic/operator-webhooks/<destination-id>/deletion-notifications
+Authorization: Bearer <tenant-admin-key>
+Content-Type: application/json
+
+{"enabled": true}
+```
+
+Only the `enabled` boolean is accepted by this command. The destination list
+reports `deletion_notifications`; the dashboard offers an initially unchecked
+registration checkbox and explicit enable/disable actions. Reader and operator
+roles cannot change the policy. Comparison-only destinations cannot enable it.
+
+An eligible recipient must be an active, opted-in destination with **recorded
+successful ordinary delivery** for the subject and a recognized, app-scoped
+deletion tombstone/job. A queued, rejected or failed original event is not proof
+of receipt. Neither a timeout nor a connection loss proves that the receiver did
+or did not accept the event; no successful-recipient claim is inferred from that
+uncertainty. Eligibility depends on retained local evidence, not a search of the
+recipient's system. Comparison notifications have no ordinary event subject and
+are not recipients for this path.
+
+Notices use a separate, versioned envelope with these fields only:
+
+```json
+{
+  "schema": "openmasu.subject_deletion.v1",
+  "delivery_id": "00000000-0000-7000-8000-000000000001",
+  "app_id": "app-synthetic",
+  "subject_ref": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "recognized_at": "2026-10-29T00:00:00.000Z"
+}
+```
+
+`subject_ref` is exactly the destination-scoped reference previously sent as
+`event.subject_ref`; it does not expose the installation ID. The envelope does
+not contain privacy-request IDs, raw-record IDs, deleted event details or
+provider response bodies. The same encrypted outbox, destination allowlist,
+signature revision header and bounded transport/retry rules apply. The current
+signing revision is fixed when the notice is queued, and retries retain its
+delivery ID and body bytes. Receivers should verify the signature, deduplicate
+by delivery ID, and act on the app-scoped subject reference.
+
+**HTTP acceptance is not evidence that the recipient completed deletion.**
+OpenMasu records local delivery outcomes; a successful HTTP response does not
+establish downstream erasure, backup removal, human review or compliance. A
+timeout leaves acceptance unknown. Operators must obtain any required recipient
+completion evidence through their separate process.
+
+Set `{"enabled": false}` to opt out. This appends the disabled notification
+policy and suppresses only queued/retrying `subject_deletion` notices, purging
+their protected bodies after commit. Ordinary event delivery and its signing
+keys remain enabled. Repeating the same operation does not add another policy
+entry and permits interrupted cleanup to be retried. Fully disabling the
+destination stops both ordinary events and deletion notices. Dispatch and policy
+changes share the destination lock: an already authorized bounded send may
+complete before the policy change is acknowledged; it cannot be recalled.
+
 ## Privacy and deletion ordering
 
 Pending bodies are encrypted and referenced from a durable outbox. Immediately
-before network transmission, the worker rechecks destination state, payload
-lifecycle, withdrawal state, and privacy tombstones.
+before ordinary event transmission, the worker rechecks destination state,
+payload lifecycle, withdrawal state, and privacy tombstones. A subject-deletion
+notice instead requires the recognized deletion and its explicit notification
+policy; it never re-exposes the deleted ordinary event body.
 
 Deletion recognition and webhook transmission take the same per-record lock.
 If deletion obtains it first, the pending request is suppressed and purged. If

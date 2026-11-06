@@ -403,6 +403,7 @@ describe("M3 zero-JavaScript dashboard", () => {
       operatorWebhooks: [{
         destination_id: "webhook:one", endpoint_url: "https://events.example.test/openmasu",
         events: ["custom_event"], status: "active" as const,
+        deletion_notifications: false,
         created_at: "2026-08-20T00:00:00.000Z", status_changed_at: "2026-08-20T00:00:00.000Z",
         signing_revision: 2, signing_revisions: [
           { signing_revision: 2, state: "current" as const, created_at: "2026-08-21T00:00:00.000Z", valid_until: null, retired_at: null },
@@ -431,6 +432,20 @@ describe("M3 zero-JavaScript dashboard", () => {
     assert.match(admin, /name="expected_revision" value="2"/);
     assert.match(admin, /name="overlap_seconds" value="3600" min="0" max="86400"/);
     assert.match(admin, /signing-keys\/retire/);
+    assert.match(admin, /Subject-deletion notices: Off/);
+    assert.match(admin, /name="deletion_notifications" value="yes">/);
+    assert.match(admin, /operator-webhooks\/webhook%3Aone\/deletion-notifications/);
+    assert.match(admin, /HTTP acceptance is not confirmation that the recipient completed deletion/);
+    assert.match(admin, /timeout leaves recipient acceptance unknown/);
+    assert.doesNotMatch(admin, /name="deletion_notifications"[^>]*checked/);
+    assert.doesNotMatch(operator, /Enable subject-deletion notices|Disable subject-deletion notices/);
+    const optedIn = renderDashboard(buildDashboardView({ ...base, canAdminister: true,
+      operatorWebhooks: base.operatorWebhooks.map(d => ({ ...d, deletion_notifications: true })) }));
+    assert.match(optedIn, /Subject-deletion notices: On/);
+    assert.match(optedIn, /Disable subject-deletion notices/);
+    const comparisonOnly = renderDashboard(buildDashboardView({ ...base, canAdminister: true,
+      operatorWebhooks: base.operatorWebhooks.map(d => ({ ...d, events: [] })) }));
+    assert.doesNotMatch(comparisonOnly, /action="[^"]*webhook%3Aone\/deletion-notifications"/);
     assert.doesNotMatch(operator, /Rotate signing key|Retire signing revision/);
     const overlapping = renderDashboard(buildDashboardView({ ...base, canAdminister: true,
       operatorWebhooks: base.operatorWebhooks.map(d => ({ ...d, signing_revisions: d.signing_revisions.map(k => k.signing_revision === 1 ? { ...k, state: "overlap" as const } : k) })) }));

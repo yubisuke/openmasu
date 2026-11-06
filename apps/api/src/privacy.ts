@@ -352,6 +352,8 @@ export async function executePrivacyRequest(
            WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3) ORDER BY request_ref`,
           [body.tenant_id, body.deletion_scope, body.app_id],
         );
+    // An already queued deletion notice must survive broader app/tenant erasure.
+    // Ordinary event and comparison bodies still stop at recognition.
     const operatorWebhookPayloads = body.deletion_scope === "installation"
       ? await client.query<{
           delivery_id: string;
@@ -380,6 +382,7 @@ export async function executePrivacyRequest(
              FROM ephemeral.operator_webhook_deliveries
             WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3)
               AND state IN ('queued','retry')
+              AND event_name <> 'subject_deletion'
             ORDER BY delivery_id FOR UPDATE`,
           [body.tenant_id, body.deletion_scope, body.app_id],
         );
