@@ -2,6 +2,10 @@ FROM node:22.18.0-alpine
 
 WORKDIR /app
 
+# The shipped operations profile uses the existing backup/restore CLI inside
+# the image; consumers do not need host PostgreSQL, Node, Python or Git tools.
+RUN apk add --no-cache postgresql17-client
+
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/runtime/package.json apps/runtime/package.json

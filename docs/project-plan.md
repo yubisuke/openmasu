@@ -222,6 +222,11 @@ declared responsibility cleanly.
 
 ## Change acceptance
 
+Source-free runtime distribution reuses the Dockerfile and Compose topology.
+The existing Runtime pilot owns image-archive startup and packaged recovery
+evidence; exact-tag publication remains a release-owner step. This is the same
+distribution scope recorded in the [roadmap](roadmap.md), not a second stack.
+
 Every change reports:
 
 - its user-visible or operational outcome;

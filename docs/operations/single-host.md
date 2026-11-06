@@ -3,6 +3,11 @@
 Use the **one existing `compose.yaml`**: PostgreSQL 17, migration, API, worker and
 redirector on one Docker host. Build from an exact annotated source release tag;
 do not track a moving `main` checkout or describe a source candidate as deployed.
+
+Alternatively, a verified [runtime image archive](runtime-artifacts.md) supplies
+the same Compose topology and an image-only override, without host source/build
+tools. Preserve its source/tag identity and the same volumes/project name; a CI
+candidate is not a published runtime release.
 The published target is `v0.3.0-rc.3`; rc.2-to-current upgrades remain unsupported.
 Existing deployments first follow [Safe upgrade](upgrade.md). This guide is an
 operator configuration path, not evidence of a live or production installation.

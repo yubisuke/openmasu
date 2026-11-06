@@ -57,6 +57,7 @@ metric, evaluator and ingestion boundaries. Use those seams rather than another
 framework or parallel service.
 
 For deployment and recovery, see [operator access](operations/access.md),
+[source-free runtime archives](operations/runtime-artifacts.md),
 [single-host operation](operations/single-host.md),
 [upgrades](operations/upgrade.md), [backup/restore](operations/backup-restore.md),
 [observability](operations/observability.md),

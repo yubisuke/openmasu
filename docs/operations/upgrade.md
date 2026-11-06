@@ -22,6 +22,12 @@ relabel a backup as rc.1, or bypass target/source checks.
 
 ## One ordered procedure
 
+The [runtime image archive](runtime-artifacts.md) exposes the same preflight and
+migrations through its `operations` service without a host checkout. Its target
+must match its annotated `runtime-v<version>` identity and verified image bytes;
+untagged development images refuse deployment preflight. Existing source-tag
+commands and recognized backup sources below remain unchanged.
+
 1. Record the source tag/commit and all tenant IDs privately. Stop API, worker,
    redirector, import, metric and administrator writers. Do not run seed, reset,
    `down --volumes`, or a down migration. Keep traffic stopped on any error.

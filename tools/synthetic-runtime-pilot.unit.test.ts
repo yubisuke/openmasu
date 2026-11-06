@@ -16,8 +16,9 @@ describe("disposable synthetic runtime pilot", () => {
   it("requires an explicit destructive-scope flag and rejects unknown options", () => {
     assert.throws(() => parseSyntheticPilotArguments([]), /--disposable is required/);
     assert.throws(() => parseSyntheticPilotArguments(["--disposable", "--keep"]), /unknown synthetic pilot arguments/);
-    assert.deepEqual(parseSyntheticPilotArguments(["--disposable"]), { disposable: true, load: false });
-    assert.deepEqual(parseSyntheticPilotArguments(["--disposable", "--load"]), { disposable: true, load: true });
+    assert.deepEqual(parseSyntheticPilotArguments(["--disposable"]), { disposable: true, load: false, artifact: false });
+    assert.deepEqual(parseSyntheticPilotArguments(["--disposable", "--load"]), { disposable: true, load: true, artifact: false });
+    assert.deepEqual(parseSyntheticPilotArguments(["--disposable", "--artifact"]), { disposable: true, load: false, artifact: true });
   });
 
   it("passes only host process primitives and strips Docker, OpenMasu, proxy, Node, npm, and credential variables", () => {

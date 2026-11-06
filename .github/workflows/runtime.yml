@@ -144,10 +144,17 @@ jobs:
           OPENMASU_CI_RUN_LOAD: ${{ steps.scope.outputs.run_runtime_performance }}
         run: |
           if [ "$OPENMASU_CI_RUN_LOAD" = "true" ]; then
-            npm run pilot:synthetic -- --disposable --load
+            npm run pilot:synthetic -- --disposable --artifact --load
           else
-            npm run pilot:synthetic -- --disposable
+            npm run pilot:synthetic -- --disposable --artifact
           fi
+      - name: Upload source-bound runtime image archive
+        if: steps.scope.outputs.run_runtime == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: runtime-image-archive
+          path: build/runtime-artifact/
+          if-no-files-found: error
       - name: Upload synthetic runtime pilot evidence
         if: always() && steps.scope.outputs.run_runtime == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

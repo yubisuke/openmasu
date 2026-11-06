@@ -183,6 +183,12 @@ parity. SDK and operator work does not need unrelated structural prerequisites.
 
 ## Optional operator evidence
 
+The source-free runtime distribution path reuses the same Dockerfile and Compose
+topology. Runtime CI packages and starts the image archive with fixed source,
+SDK/contract and migration identities, then exercises existing recovery tooling.
+Tagged publication remains a release-owner step; CI candidates are not stable
+runtime releases. See [Runtime image archives](operations/runtime-artifacts.md).
+
 These checks require separate authorization and private infrastructure:
 
 - comparison with another measurement system under matching definitions;

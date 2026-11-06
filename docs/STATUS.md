@@ -26,6 +26,12 @@ synthetic instance for rc.3 rather than resetting an existing ledger.
 
 ## What the status means
 
+Current source can package a Linux/amd64 runtime image archive with a fixed
+source identity, migration inventory, SBOM and image-only Compose override.
+The Runtime pilot owns source-free startup and packaged backup/upgrade checks.
+These CI candidates are not a published runtime release or an ARM64/production
+qualification; see [runtime artifacts](operations/runtime-artifacts.md).
+
 - **Implemented:** code exists.
 - **Synthetically verified:** the relevant repository or CI gate passed.
 - **Operator-verified:** a named private deployment/device/provider check passed.
