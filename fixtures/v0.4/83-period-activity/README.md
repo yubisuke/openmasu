@@ -50,7 +50,8 @@ before examples use available lifecycle; current examples mark both B records
 redacted. The last tuple supplies the ledger position. All snapshot records
 remain in sorted scoped evidence references, not only contributing activity.
 Hash exactly `{metric_date}` for grouping. Runs retain the reviewed count-run
-shape, half-even metadata, explicit `partial` freshness and no invented
+shape, half-even metadata, `late_excluded` for the initial cutoff and `complete`
+for the later as-of snapshot, and no invented
 supersession. Historical before examples never authorize publishing deleted data.
 
 All thirteen independently constructed arrays matched both TypeScript and
