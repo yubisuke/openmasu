@@ -12,6 +12,7 @@ import {
 import type { AdminIdentity } from "./admin-auth.js";
 import { webhookSigningRevision, listWebhookSigningRevisions } from "@openmasu/runtime/operator-webhook-signing";
 import { defaultWebhookContentPolicy, parseWebhookContentPolicy, webhookContentDigest } from "@openmasu/runtime/webhook-content";
+import { configurationChange, webhookConfigurationFields, type ConfigurationChange } from "./configuration-change.js";
 
 type AppIdentity = AdminIdentity & { readonly appId: string };
 
@@ -41,17 +42,18 @@ async function audit(
     action: string;
     occurredAt: string;
     digest: string;
+    configurationChange?: ConfigurationChange;
   }>,
 ): Promise<void> {
   await client.query(
     `INSERT INTO ledger.audit_logs (
        audit_log_id,tenant_id,app_id,occurred_at,actor_type,actor_ref,action,
-       target_scope,target_ref,policy_version,request_digest,outcome,reason_code
+       target_scope,target_ref,policy_version,request_digest,outcome,reason_code,configuration_change
      ) VALUES ($1,$2,$3,$4,'admin_key',$5,$6,'webhook_destination',$7,
-       'operator-webhook-v1',$8,'succeeded',NULL)`,
+       'operator-webhook-v1',$8,'succeeded',NULL,$9::jsonb)`,
     [uuidV7(Date.parse(input.occurredAt) + 1), input.identity.tenantId, input.identity.appId,
       input.occurredAt, `admin_key:${input.identity.keyId}`, input.action,
-      input.destinationId, input.digest],
+      input.destinationId, input.digest, input.configurationChange ? JSON.stringify(input.configurationChange) : null],
   );
 }
 
@@ -132,6 +134,8 @@ export async function registerOperatorWebhookDestination(options: Readonly<{
         action: "operator_webhook_destination_registered",
         occurredAt: createdAt,
         digest: requestDigest({ endpoint_url: endpoint.url.href, events, deletion_notifications: deletionNotifications }),
+        ...(!comparisonOnly ? { configurationChange: configurationChange("webhook_content", null, null,
+          `${destinationId}:1`, webhookConfigurationFields(content, contentDigest)) } : {}),
       });
       return {
         destination_id: destinationId,

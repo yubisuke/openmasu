@@ -6,6 +6,7 @@ import { ENGAGEMENT_METRIC_NAMES, M1B_METRIC_DEFINITIONS, REFERENCE_AD_REVENUE_M
 import { validateScheduledMetricDefinition as validMetricDefinition, type ScheduledMetricDefinition } from "@openmasu/contracts/validation";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
+import { configurationChange, metricConfigurationFields } from "./configuration-change.js";
 import { expandConversionScheduleRequest, expandActivityScheduleRequest, conversionCalculationKey } from "./custom-conversion-schedules.js";
 import { expandRecommendedMetricSchedule, recommendedSchedulePreviewDigest } from "./recommended-metric-schedules.js";
 import { lockEventCatalog, rejectDeprecatedConversionKeys, selectableConversionKeys } from "./event-catalog.js";
@@ -421,6 +422,10 @@ export async function saveMetricScheduleWithClient(
       targetRef: scheduleId,
       outcome: "succeeded",
       now,
+      // A replacement has its own atomic old -> new receipt; do not count its
+      // supporting registration as another configuration change.
+      ...(!replacement ? { configurationChange: configurationChange("metric_schedule", null, null, scheduleId,
+        { ...metricConfigurationFields(artifact), status: "active" }) } : {}),
     });
     return {
       ...artifact,
@@ -501,6 +506,8 @@ export async function disableMetricSchedule(input: Readonly<{
       targetRef: input.metricScheduleId,
       outcome: "succeeded",
       now,
+      configurationChange: configurationChange("metric_schedule", input.metricScheduleId, { status: "active" },
+        input.metricScheduleId, { status: "disabled" }),
     });
     return { metric_schedule_id: input.metricScheduleId, status: "disabled", changed_at: changedAt };
   });

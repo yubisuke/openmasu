@@ -1284,6 +1284,15 @@ describe("managed import mapping revisions", () => {
       const conflict = await send(endpoint, "POST", adminKey, { ...body, mapping: changed });
       assert.equal(conflict.status, 409); assert.deepEqual(await conflict.json(), { error: "import_mapping_revision_conflict" });
       assert.equal((await send(endpoint, "POST", adminKey, { ...body, revision: 2, mapping: changed })).status, 201);
+      const auditPage = await send(`${base}${scope.appId}/configuration-history`, "GET", readerKey);
+      assert.equal(auditPage.status, 200);
+      const auditText = await auditPage.text(), auditData = JSON.parse(auditText).data;
+      assert.equal(auditData.length, 2, "mapping retry and rejected conflict do not add successful changes");
+      const mappingChange = auditData.find((entry: any) => entry.change.after_revision.endsWith(":2")).change;
+      assert.equal(mappingChange.before_revision, `mapping:${body.mapping_id}:1`);
+      assert.equal(mappingChange.before.definition_digest, originalMetadata.definition_digest);
+      assert.notEqual(mappingChange.after.definition_digest, mappingChange.before.definition_digest);
+      assert.equal(auditText.includes("synthetic_private_"), false);
       const original = await loadImportMappingRevision(appPool, payloadStore, scope, selection);
       assert.deepEqual(original.metadata, originalMetadata);
       const row = { synthetic_private_network_header: "synthetic-network", synthetic_private_amount_header: "123" };

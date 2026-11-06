@@ -2,6 +2,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypt
 import type { Pool, PoolClient } from "pg";
 import { uuidV7, withTenant } from "@openmasu/runtime";
 import type { AdminRole } from "./admin-auth.js";
+import { parseConfigurationChange } from "./configuration-change.js";
 
 const csrfPurpose = "openmasu-dashboard-csrf-v1";
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
@@ -158,12 +159,14 @@ export type DashboardAuditInput = {
     readonly outcome: "succeeded" | "failed";
     readonly reasonCode?: string;
     readonly now?: Date;
+    readonly configurationChange?: import("./configuration-change.js").ConfigurationChange;
 };
 
 export async function recordDashboardAuditWithClient(
   client: PoolClient,
   input: DashboardAuditInput,
 ): Promise<string> {
+  if (input.configurationChange && !parseConfigurationChange(input.configurationChange)) throw Error("configuration_audit_projection_invalid");
   const now = input.now ?? new Date();
   const auditId = uuidV7(now.getTime());
   const requestDigest = digest([
@@ -177,12 +180,13 @@ export async function recordDashboardAuditWithClient(
     `INSERT INTO ledger.audit_logs (
       audit_log_id, tenant_id, app_id, occurred_at, actor_type, actor_ref,
       action, target_scope, target_ref, policy_version, request_digest,
-      outcome, reason_code
-    ) VALUES ($1,$2,$3,$4,'admin_key',$5,$6,$7,$8,'dashboard-v1',$9,$10,$11)`,
+      outcome, reason_code, configuration_change
+    ) VALUES ($1,$2,$3,$4,'admin_key',$5,$6,$7,$8,'dashboard-v1',$9,$10,$11,$12::jsonb)`,
     [
       auditId, input.tenantId, input.appId ?? null, now.toISOString(),
       input.actorRef, input.action, input.targetScope, input.targetRef,
       requestDigest, input.outcome, input.reasonCode ?? null,
+      input.configurationChange ? JSON.stringify(input.configurationChange) : null,
     ],
   );
   return auditId;

@@ -17,6 +17,7 @@ import { ensureAdminKeys,verifyAdminKey,type AppAdminIdentity } from "./admin-au
 import { createRequestHandler } from "./router.js";
 import { previewFraudBundle } from "./fraud-preview.js";
 import { activateRuleBundle } from "./rule-bundles.js";
+import { configurationHistory } from "./configuration-history.js";
 import { firstPartyWindowDefinition,firstPartyWindowHash } from "@openmasu/contracts/definitions";
 import { previewAttributionWindow } from "./attribution-window-preview.js";
 
@@ -110,6 +111,13 @@ it("first_party_window_preview_confirm_keeps_history_and_late_install_receipt_re
       FROM control.rule_bundle_revisions WHERE tenant_id=$1 AND app_id=$2 AND rule_bundle_id=$3 ORDER BY activated_at`,[tenantId,appId,definition.id]));
     assert.deepEqual(revisions.rows.map(row=>row.rule_bundle_hash),[firstPartyWindowHash(definition),firstPartyWindowHash(changed),firstPartyWindowHash(definition)]);
     assert.equal(revisions.rows[2].supersedes_rule_bundle_revision_id,revisions.rows[1].rule_bundle_revision_id);
+    const configuration = await configurationHistory(pool, identity, { limit: 100 });
+    assert.equal(configuration.data.length, 3);
+    const windowChange = configuration.data.find(row => row.change?.after_revision === restored.rule_bundle_revision_id)!.change!;
+    assert.equal(windowChange.kind, "attribution_window");
+    assert.equal(windowChange.before_revision, revisions.rows[1].rule_bundle_revision_id);
+    assert.equal(windowChange.after.lookback_days, 1);
+    assert.equal(JSON.stringify(configuration).includes("installation_id"), false);
     const seven=firstPartyWindowDefinition(7),stale=await previewAttributionWindow(pool,identity,{...request,definition:seven});
     const another=structuredClone(input.records.find((row:any)=>row.event_name==="install"));
     Object.assign(another,{record_id:"window-backfilled-install",event_id:"window-backfilled-install",delivery_id:"window-backfilled-install"});

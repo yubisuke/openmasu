@@ -19,6 +19,7 @@ import {
 import { ensureAdminKeys } from "../../api/src/admin-auth.js";
 import { disableMetricSchedule, registerMetricSchedule, type MetricScheduleRecord } from "../../api/src/metric-schedules.js";
 import { previewMetricScheduleReplacement, replaceMetricSchedule } from "../../api/src/metric-schedule-replacements.js";
+import { configurationHistory } from "../../api/src/configuration-history.js";
 import { csrfToken, issueDashboardSession, type DashboardSession } from "../../api/src/session.js";
 import { buildDashboardView } from "../../api/src/dashboard/view.js";
 import { renderDashboard } from "../../api/src/dashboard/render.js";
@@ -1085,6 +1086,16 @@ describe("durable scheduled metric runs", { concurrency: false }, () => {
       assert.ok(html.includes("fx_policy")); assert.ok(html.includes("new_series")); assert.ok(html.includes("2026-08-01"));
       assert.doesNotMatch(html, /<script\b|javascript:|\son[a-z]+=/i);
       const replacement = await replaceMetricSchedule(appPool, reportIdentity, source.metric_schedule_id, { ...request, preview_digest: preview.preview_digest }, clock);
+      const configuration = await configurationHistory(readerPool, reportIdentity, { limit: 100 });
+      const receipt = configuration.data.find(row => row.action === "metric_schedule_replaced" && row.target_ref === source.metric_schedule_id)!;
+      assert.equal(receipt.change!.before_revision, source.metric_schedule_id);
+      assert.equal(receipt.change!.after_revision, replacement.metric_schedule_id);
+      assert.equal(receipt.change!.before!.definition_digest, source.definition_digest);
+      assert.equal(receipt.change!.after.definition_digest, replacement.definition_digest);
+      assert.equal(receipt.change_state, "fields_changed");
+      assert.equal(configuration.data.some(row => row.action === "metric_schedule_registered" && row.target_ref === replacement.metric_schedule_id), false);
+      assert.equal((await replaceMetricSchedule(appPool, reportIdentity, source.metric_schedule_id, { ...request, preview_digest: preview.preview_digest }, clock)).replayed, true);
+      assert.deepEqual(await configurationHistory(readerPool, reportIdentity, { limit: 100 }), configuration);
       await processMetricSchedules(appPool, tenantId, { now: clock });
       const oldRows = (await metricReport(readerPool, reportIdentity, report(source.metric_schedule_id))).data;
       const newRows = (await metricReport(readerPool, reportIdentity, report(replacement.metric_schedule_id))).data;

@@ -13,6 +13,7 @@ import {
 } from "@openmasu/runtime";
 import { executePrivacyRequest, privacySubjectDigest } from "../../api/src/privacy.js";
 import { configureGoogleDataManagerDestination, googleDestinationHistory } from "../../api/src/google-data-manager-admin.js";
+import { configurationHistory } from "../../api/src/configuration-history.js";
 import { previewGoogleDestination } from "../../api/src/google-destination-readiness.js";
 import {
   discoverGoogleConversionDeliveries,
@@ -188,6 +189,13 @@ describe("Google Data Manager verified-conversion integration", () => {
     }>("SELECT request_ref,request_digest,destination_revision FROM ephemeral.google_conversion_deliveries WHERE tenant_id=$1", [scope.tenantId])).rows[0]);
     const bytes = await payloadStore.read(queued.request_ref);
     await activateSyntheticDestination(scope, 1, "111111111");
+    const changes = await configurationHistory(pool, identity, { limit: 100 });
+    assert.equal(changes.data.length, 2, "failed readiness does not add successful changes");
+    const change = changes.data.find(row => row.change?.after_revision.endsWith(":2"))!.change!;
+    assert.equal(change.before_revision, `${revision.destination_id}:1`);
+    assert.notEqual(change.before!.definition_digest, change.after.definition_digest);
+    for (const forbidden of ["operating_account_id", "conversion_action_id", "111111111", "readiness"])
+      assert.equal(JSON.stringify(changes).includes(forbidden), false, forbidden);
     assert.equal(await discoverGoogleConversionDeliveries(pool, payloadStore, scope.tenantId), 0);
     assert.deepEqual(await payloadStore.read(queued.request_ref), bytes);
     const calls: string[] = [];

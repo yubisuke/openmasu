@@ -2,6 +2,8 @@ export type RouteAuth = "public" | "admin_bearer" | "sdk_hmac" | "privacy_receip
 export type RouteCapability = "read" | "operate" | "administer";
 
 export type RouteHandler =
+  | "admin_configuration_history"
+  | "dashboard_configuration_history"
   | "admin_webhook_recovery_preview"
   | "admin_webhook_recovery_confirm"
   | "dashboard_webhook_recovery_preview"
@@ -381,6 +383,8 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_fraud_preview", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/rule-bundles\/preview$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_attribution_window", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/attribution-window$/, auth: "dashboard_session", mutates: false, capability: "administer" },
   { handler: "admin_privacy_jobs", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/privacy-jobs(?:\/[^/]+)?$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "admin_configuration_history", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/configuration-history$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "dashboard_configuration_history", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/configuration-history$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_privacy_jobs", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/privacy-jobs(?:\/[^/]+)?$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_google_data_manager", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/google-data-manager$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_app", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+$/, auth: "dashboard_session", mutates: false, capability: "read" },
