@@ -16,6 +16,11 @@ references. It excludes raw payloads, provider credentials, encrypted blobs,
 unrelated installations, and internal database rows. Responses use `no-store`
 and are independently audited from deletion.
 
+The [bounded export protocol](../operations/portable-export.md) freezes receipt
+cutoff and committed membership, then traverses three allowlisted series with
+an encrypted credential-bound keyset cursor. Every page rechecks privacy and
+authorization. Legacy requests remain whole-response only within explicit limits.
+
 ## Rule provenance
 
 Attribution, metric, Apple postback, and fraud artifacts bind the exact rule

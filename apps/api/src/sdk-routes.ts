@@ -5,6 +5,7 @@ import { appendDurableBatch, uuidV7, withTenant, type PayloadStore, attachSynthe
   syntheticValidationToken, syntheticValidationTokenDigest, SyntheticValidationError } from "@openmasu/runtime";
 import { executePrivacyRequest, privacyResponseStatus, type PrivacyRequestBody } from "./privacy.js";
 import { assertDsarResponseSafe, generateDsarResponse, parseDsarRequest } from "./dsar.js";
+import { DsarError } from "./dsar-pagination.js";
 import { type KeyedTokenBucket } from "./rate-limit.js";
 import { ApplePurchaseIntentError, prepareApplePurchaseIntent, type ApplePurchaseEnvironment } from "./apple-purchase-intents.js";
 import { submitApplePurchase } from "./apple-purchase-submission.js";
@@ -445,10 +446,15 @@ export async function handleDeviceDsar(
     });
     return writeJson(response, 403, { error: "installation_scope_mismatch" });
   }
-  const artifact = await generateDsarResponse({
+  let artifact: Any;
+  try { artifact = await generateDsarResponse({
     pool: dependencies.pool, tenantId: identity.tenantId, appId: identity.appId,
-    installationId: parsed.installationId, requestType: parsed.requestType,
-  });
+    ...parsed, installationKeyId:identity.installationKeyId!, sdkKeyId:identity.sdkKeyId,
+    installationDigest:identity.installationIdDigest!, cursorSecret:dependencies.config.installationDigestKey,
+  }); } catch (error) {
+    if (error instanceof DsarError) return writeJson(response,error.status,{error:error.code});
+    return writeJson(response,503,{error:"dsar_temporarily_unavailable"});
+  }
   assertDsarResponseSafe(artifact);
   await recordSdkAudit(dependencies.pool, dependencies.config, {
     actorType: "sdk_installation", actorRef: `sdk_installation:${identity.installationKeyId}`,
