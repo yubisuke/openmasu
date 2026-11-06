@@ -617,8 +617,8 @@ if (!summaryOnly) {
         }
       });
     }
-    it("contains 77 fixture directories", () => {
-      check(fixtureDirs.length === 80, `expected 80 fixture directories, found ${fixtureDirs.length}`);
+    it("contains 81 fixture directories", () => {
+      check(fixtureDirs.length === 81, `expected 81 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -1257,6 +1257,19 @@ const scenarios: Array<[string, () => void]> = [
       { cost_unscaled: "10000000", outcome_installation_count: "1" },
     ]), "scenario 80 saved operands");
   }],
+  ["81 purpose consent preserves receipt order and rejects stale revisions after regrant", () => {
+    const { output } = fixture("81-purpose-consent");
+    check(output.raw_records.length === 8 && output.logical_events.length === 8
+      && output.deliveries.length === 10 && output.rejections.length === 2, "scenario 81 inventory");
+    check(equal(output.rejections.map((row: Any) => [row.record_id, row.reason_code, row.payload_disposition]), [
+      ["consent81-blocked", "consent_withdrawn", "discarded"],
+      ["consent81-stale", "consent_revision_unconfirmed", "discarded"],
+    ]), "scenario 81 independent admission matrix");
+    check(equal(output.raw_records.filter((row: Any) => row.consent_revision !== undefined)
+      .map((row: Any) => [row.record_id, row.consent_revision, row.consent_recognized_revision]), [
+      ["consent81-before", 1, 1], ["consent81-fresh", 4, 4], ["consent81-revenue", 3, 3],
+    ]), "scenario 81 separate acknowledged purpose revisions");
+  }],
   ["72 calendar activity counts logical events and daily installations without acquisition joins", () => {
     const { input, output } = fixture("72-calendar-activity");
     const names = ["daily_session_starts", "daily_custom_events", "daily_active_installations"];
@@ -1270,8 +1283,8 @@ const scenarios: Array<[string, () => void]> = [
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 80 scenario assertions", () => {
-      check(scenarios.length === 80, "scenario assertion inventory must contain 80 entries");
+    it("contains 81 scenario assertions", () => {
+      check(scenarios.length === 81, "scenario assertion inventory must contain 81 entries");
     });
   });
 
@@ -1840,7 +1853,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 80 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 81 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1881,7 +1894,7 @@ const acceptance: Array<[string, () => void]> = [
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
   ["AC21 one command validates every schema registry fixture and golden", () => {
-    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 80 && outputArtifactCount === 80 * 13, "AC21");
+    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 81 && outputArtifactCount === 81 * 13, "AC21");
     checkDocumentationDrift(root, validationSummary());
   }],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {
@@ -2332,6 +2345,56 @@ const validRevenue = {
 };
 if (!summaryOnly) {
   describe("semantic mutations", () => {
+    it("purpose_consent_reorder_conflict_regrant_and_server_fences_match_independent_TS_Python", () => {
+      const source = fixture("81-purpose-consent").input;
+      const cases: { name: string; input: Any; reason?: string; unchanged?: boolean }[] = [];
+      const add = (name: string, mutate: (value: Any) => void, reason?: string, unchanged = false) => {
+        const input = structuredClone(source); mutate(input); cases.push({ name, input, reason, unchanged });
+      };
+      const controls = (value: Any): Any[] => value.server_context.purpose_consent_controls;
+      const fresh = (value: Any): Any => value.records.find((row: Any) => row.record_id === "consent81-fresh");
+      const late = (state: string, revision: number) => ({ processing_purpose_id: "analytics", consent_state: state,
+        consent_revision: revision, recognized_sequence: 7, recognized_at: "2026-11-01T00:00:07.000Z" });
+      add("input permutation", value => { value.records.reverse(); controls(value).reverse(); }, undefined, true);
+      add("late old grant", value => controls(value).push(late("granted", 1)), undefined, true);
+      add("late old denial", value => controls(value).push(late("denied", 2)), undefined, true);
+      add("unknown is not permission", value => controls(value).push(late("unknown", 20)), undefined, true);
+      add("duplicate control projection", value => controls(value).push(structuredClone(controls(value)[3])), undefined, true);
+      add("conflicting revision", value => controls(value).push(late("denied", 4)), "consent_revision_unconfirmed");
+      add("future grant unavailable", value => { fresh(value).processing_sequence = 5; }, "consent_withdrawn");
+      add("missing declared revision", value => { delete fresh(value).consent_revision; }, "consent_revision_unconfirmed");
+      add("unrecognized future revision", value => { fresh(value).consent_revision = 99; }, "consent_revision_unconfirmed");
+      add("legacy withdrawal still fences", value => {
+        controls(value).push({ consent_state: "withdrawn", recognized_sequence: 7, recognized_at: "2026-11-01T00:00:07.000Z" });
+      }, "consent_withdrawn");
+      add("server fence cannot be lifted", value => {
+        value.server_context.withdrawals.push({ processing_purpose_id: "analytics", withdrawal_recognized_sequence: 7,
+          withdrawal_recognized_at: "2026-11-01T00:00:07.000Z" });
+      }, "consent_withdrawn");
+      add("client revision without trusted controls", value => { delete value.server_context.purpose_consent_controls; }, "consent_revision_unconfirmed");
+      add("timestamp rejection retains consent provenance", value => { fresh(value).occurred_at = "2026-02-30T00:00:00.000Z"; }, "timestamp_invalid");
+      const python = pythonOutputs(cases.map(entry => entry.input));
+      for (const [index, entry] of cases.entries()) {
+        const output = evaluate(entry.input);
+        check(equal(output, python[index]), `${entry.name}: independent purpose consent parity`);
+        if (entry.unchanged) check(equal(output, fixture("81-purpose-consent").output), `${entry.name}: original artifacts unchanged`);
+        else check(output.rejections.some(row => row.record_id === "consent81-fresh" && row.reason_code === entry.reason), `${entry.name}: fail closed`);
+        check(output.raw_records.every(row => row.record_id !== "consent81-stale"), `${entry.name}: no stale queue resurrection`);
+      }
+    });
+    it("purpose_consent_schema_rejects_unbounded_revisions_and_unregistered_selectors", () => {
+      const validate = validatorFor("urn:openmasu:schema:event-consent-changed:v0.4");
+      const source = { event_name: "consent_changed", consent_state: "granted", effective_at: "2026-11-01T00:00:00.000Z",
+        consent_policy_version: "synthetic-v1" };
+      check(validate(source), "legacy global control remains valid");
+      for (const scope of ["attribution", "analytics", "revenue_measurement"]) {
+        check(validate({ ...source, processing_purpose_id: scope, consent_revision: 1 }), `valid scope ${scope}`);
+        check(!validate({ ...source, processing_purpose_id: scope }), `scope ${scope} requires revision`);
+      }
+      for (const revision of [0, -1, 1.5, 9007199254740992, "1"])
+        check(!validate({ ...source, consent_revision: revision }), "invalid control revision rejected");
+      check(!validate({ ...source, processing_purpose_id: "fraud_prevention", consent_revision: 1 }), "cannot disable privacy controls");
+    });
     it("outcome_cost_distinct_counts_cost_failures_maturity_and_rounding_match_independent_TS_Python", () => {
       const cases = syntheticOutcomeCostCases(fixture("80-outcome-acquisition-cost").input);
       const python = pythonOutputs(cases.map(entry => entry.input));

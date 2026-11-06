@@ -619,6 +619,62 @@ def resolve_refund_target(
     return targets.get(attempt_decision_key(refund))
 
 
+def purpose_consent_at(controls: list[dict[str, Any]], sequence: int) -> list[dict[str, Any]]:
+    purposes = ("attribution", "analytics", "revenue_measurement")
+    safe = lambda value: type(value) is int and 0 <= value <= 9007199254740991
+    if not safe(sequence):
+        raise ValueError("purpose_consent_sequence_invalid")
+    for control in controls:
+        if (not safe(control.get("recognized_sequence"))
+                or control.get("consent_state") not in ("granted", "denied", "withdrawn", "not_required", "unknown")
+                or "processing_purpose_id" in control and control["processing_purpose_id"] not in purposes
+                or "consent_revision" in control and (not safe(control["consent_revision"]) or control["consent_revision"] == 0)
+                or "processing_purpose_id" in control and "consent_revision" not in control):
+            raise ValueError("purpose_consent_control_invalid")
+        try:
+            timestamp(control.get("recognized_at"), "purpose_consent_control.recognized_at")
+        except (TimestampInvalidError, TypeError) as error:
+            raise ValueError("purpose_consent_control_invalid") from error
+    output = []
+    for purpose in purposes:
+        eligible = [item for item in controls if item["recognized_sequence"] <= sequence
+                    and item["consent_state"] != "unknown"
+                    and ("processing_purpose_id" not in item or item["processing_purpose_id"] == purpose)]
+        eligible.sort(key=lambda item: (item["recognized_sequence"], item["recognized_at"], item["consent_state"]))
+        legacy = next((item for item in reversed(eligible) if "consent_revision" not in item
+                       and item["consent_state"] in ("denied", "withdrawn")), None)
+        versioned = [item for item in eligible if "consent_revision" in item]
+        revision = max((item["consent_revision"] for item in versioned), default=0)
+        latest = [item for item in versioned if item["consent_revision"] == revision]
+        selected = latest[0] if latest else legacy
+        if selected is None:
+            continue
+        snapshot = {"processing_purpose_id": purpose, "consent_revision": revision,
+                    "consent_state": selected["consent_state"], "recognized_sequence": selected["recognized_sequence"],
+                    "recognized_at": selected["recognized_at"],
+                    "conflicting_revision": len({item["consent_state"] for item in latest}) > 1}
+        if legacy is not None:
+            snapshot.update(unversioned_withdrawal_sequence=legacy["recognized_sequence"],
+                            unversioned_withdrawal_at=legacy["recognized_at"])
+        output.append(snapshot)
+    return output
+
+
+def purpose_consent_admission(snapshot: dict[str, Any] | None, revision: int | None) -> str:
+    if revision is not None and (type(revision) is not int or not 0 <= revision <= 9007199254740991):
+        return "revision_unconfirmed"
+    if snapshot is None:
+        return "legacy" if revision is None or revision == 0 else "revision_unconfirmed"
+    if snapshot["conflicting_revision"]:
+        return "revision_unconfirmed"
+    if (snapshot["consent_state"] in ("denied", "withdrawn")
+            or snapshot.get("unversioned_withdrawal_sequence", -1) >= snapshot["recognized_sequence"]):
+        return "withdrawn"
+    if revision != snapshot["consent_revision"]:
+        return "revision_unconfirmed"
+    return "not_required" if snapshot["consent_state"] == "not_required" else "allowed"
+
+
 def consent_decision(attempt: dict[str, Any]) -> dict[str, Any]:
     server, record = attempt["server"], attempt["record"]
     purpose = next(
@@ -638,6 +694,8 @@ def consent_decision(attempt: dict[str, Any]) -> dict[str, Any]:
         base["processing_purpose_id"] = record["processing_purpose_id"]
     if withdrawal:
         base["withdrawal_recognized_at"] = withdrawal["withdrawal_recognized_at"]
+    if "consent_revision" in record:
+        base["consent_revision"] = record["consent_revision"]
     if (
         not record.get("processing_purpose_id")
         or not purpose
@@ -645,6 +703,24 @@ def consent_decision(attempt: dict[str, Any]) -> dict[str, Any]:
         or record["event_name"] in ("consent_changed", "privacy_control")
     ):
         return base | {"allowed": True, "consent_decision_reason_code": "consent_not_required"}
+    if "purpose_consent_controls" in server or "consent_revision" in record:
+        snapshot = next((item for item in purpose_consent_at(server.get("purpose_consent_controls", []), record["processing_sequence"])
+                         if item["processing_purpose_id"] == record["processing_purpose_id"]), None)
+        admission = purpose_consent_admission(snapshot, record.get("consent_revision"))
+        if snapshot is not None:
+            base["consent_recognized_revision"] = snapshot["consent_revision"]
+        if admission == "revision_unconfirmed":
+            return base | {"allowed": False, "consent_decision_reason_code": "consent_revision_unconfirmed"}
+        if admission == "withdrawn":
+            recognized_at = snapshot["recognized_at"]
+            if snapshot.get("unversioned_withdrawal_sequence", -1) >= snapshot["recognized_sequence"]:
+                recognized_at = snapshot["unversioned_withdrawal_at"]
+            return base | {"allowed": False, "consent_decision_reason_code": "consent_withdrawn",
+                           "withdrawal_recognized_at": recognized_at}
+        if ((not withdrawal or record["processing_sequence"] < withdrawal["withdrawal_recognized_sequence"])
+                and admission in ("allowed", "not_required")):
+            return base | {"allowed": True, "consent_decision_reason_code":
+                           "consent_not_required" if admission == "not_required" else "consent_valid_for_revision"}
     if not withdrawal or int(record["processing_sequence"]) < int(withdrawal["withdrawal_recognized_sequence"]):
         return base | {"allowed": True, "consent_decision_reason_code": "consent_valid_before_withdrawal"}
     configured = next(
@@ -708,6 +784,8 @@ def timestamp_invalid_decision(attempt: dict[str, Any]) -> dict[str, Any]:
         result["processing_purpose_id"] = record["processing_purpose_id"]
     if withdrawal and withdrawal.get("withdrawal_recognized_at"):
         result["withdrawal_recognized_at"] = withdrawal["withdrawal_recognized_at"]
+    if "purpose_consent_controls" in server or "consent_revision" in record:
+        result.update(consent_decision(attempt | {"server": server | {"alternative_legal_bases": []}}))
     return result
 
 
@@ -783,7 +861,8 @@ def decide(attempt: dict[str, Any], attempts: list[dict[str, Any]]) -> dict[str,
     elif duplicate == "record_id_collision":
         status, reason = "rejected", "record_id_collision"
     elif not consent["allowed"]:
-        status, reason = "rejected", "consent_withdrawn"
+        status, reason = "rejected", ("consent_revision_unconfirmed" if consent["consent_decision_reason_code"]
+                                      == "consent_revision_unconfirmed" else "consent_withdrawn")
     elif server.get("timestamp_stale_policy") and timestamp(record["occurred_at"], "occurred_at") < timestamp(server["timestamp_stale_policy"]["before"], "timestamp_stale_policy.before"):
         status, reason = "rejected", "timestamp_stale"
     elif record.get("subject_scope") == "aggregate" and record["payload"].get("installation_id"):
@@ -861,6 +940,7 @@ def raw_record(attempt: dict[str, Any], lifecycle: str) -> dict[str, Any]:
     }
     for key in (
         "processing_purpose_id", "withdrawal_recognized_at",
+        "consent_revision", "consent_recognized_revision",
         "alternative_legal_basis_id", "alternative_legal_basis_policy_version",
     ):
         if consent.get(key) is not None:
@@ -2922,6 +3002,7 @@ def evaluate(value: dict[str, Any]) -> dict[str, Any]:
             for key in (
                 "processing_purpose_id", "consent_evaluation_policy_version",
                 "consent_decision_reason_code", "withdrawal_recognized_at",
+                "consent_revision", "consent_recognized_revision",
                 "alternative_legal_basis_id", "alternative_legal_basis_policy_version",
                 "reason_code", "staleness_policy_version", "staleness_policy_digest", "staleness_authority",
             )
@@ -3284,6 +3365,7 @@ def evaluate(value: dict[str, Any]) -> dict[str, Any]:
             key: decision[key]
             for key in (
                 "processing_purpose_id", "withdrawal_recognized_at",
+                "consent_revision", "consent_recognized_revision",
                 "staleness_policy_version", "staleness_policy_digest", "staleness_authority",
             )
             if decision.get(key) is not None

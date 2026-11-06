@@ -90,6 +90,7 @@ The v0.4 line adds independently exercised optional vocabulary and definitions:
 | 0.4.31 | closed opt-in native UTC D0/D30 eight-role acquisition KPI sets; complete-window maturity, minimum schedule lags and bounded same-horizon corrections; unchanged native/platform/imported D7 identities |
 | 0.4.32 | closed opt-in UTC exact-key custom-event frequency and distinct reached installations using the existing optional `conversion_event_key`; definition-bound schedules, comparisons and corrections, unchanged all-key activity and D7 converters |
 | 0.4.33 | closed opt-in native UTC D7 outcome acquisition cost, converted-installation denominator, `no_converted_installations` and optional saved cost/count operands; unchanged existing definitions and goldens |
+| 0.4.34 | optional purpose-scoped consent declarations, revision-bound measurement admission and trusted accepted-control replay; additive decision reasons/provenance, unchanged unversioned inputs and existing goldens |
 
 Existing schema `$id` values remain on `v0.4`; existing event artifact version
 fields remain `0.4.0` where their schema did not change.

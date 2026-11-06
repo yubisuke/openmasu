@@ -1,5 +1,32 @@
 # Contract v0.4 Migration
 
+## Purpose-scoped consent (0.4.34)
+
+Optional `consent_changed.processing_purpose_id` selects one of the three
+existing measurement purposes; omitted scope remains global. Scoped controls
+require a positive safe-integer `consent_revision`. Measurement envelopes may
+carry their enqueue-time revision. Optional trusted
+`server_context.purpose_consent_controls` binds accepted declarations to
+authoritative receipt order; it must not be constructed from unaccepted input.
+Raw records, deliveries and rejections add optional declared/resolved revisions.
+The registry/schema additions are `consent_valid_for_revision` (consent reason)
+and `consent_revision_unconfirmed` (consent/rejection reason).
+
+No existing artifact changes meaning: absent optional fields retain the old
+policy, existing schema URNs stay `:v0.4`, and wire/package versions stay
+`0.4.0`. Neither a client grant nor a reset can override server authorization
+or privacy-deletion fences. This contract stage does not by itself ship the
+runtime projection or purpose-selective SDK queue APIs.
+
+All thirteen new golden files are enumerated with counts, the independent
+admission table and payload digest derivations in
+[fixture 81](../fixtures/v0.4/81-purpose-consent/README.md). There are eight raw
+and logical records, ten deliveries, two rejections, three unchanged default
+metric definitions and eight empty families. No existing golden is modified.
+`git diff --name-only f2c4e75 -- fixtures/v0.4` must list only the new
+`81-purpose-consent/` directory and the fixture provenance index. Golden
+artifacts are committed separately from evaluator/schema behavior.
+
 ## Outcome acquisition cost (0.4.33)
 
 The independent native/UTC/D7 profile adds `cost_over_outcome`, the
