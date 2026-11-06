@@ -335,8 +335,10 @@ namespace OpenMasu.Unity
         }
         public void ResetInstallationId(Action<bool> completion)
         {
+            privacyRevision++;
+            privacyResetPending = true;
             ResetAdRevenueContext();
-            platform.ResetInstallationId(value => dispatcher.Post(() => completion(value)));
+            platform.ResetInstallationId(value => dispatcher.Post(() => { privacyResetPending = !value; completion(value); }));
         }
         public void PingFromBackground(string value, Action<string> completion) =>
             platform.PingFromBackground(value, result => dispatcher.Post(() => completion(result)));
@@ -411,6 +413,7 @@ namespace OpenMasu.Unity
 
         public void Dispose()
         {
+            privacyRevision++;
             lock (adRevenueGate)
             {
                 if (disposed) return;

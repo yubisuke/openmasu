@@ -7,7 +7,7 @@ using AOT;
 namespace OpenMasu.Unity
 {
     public sealed class OpenMasuiOSPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform,
-        IOpenMasuAppleConversionPlatform, IOpenMasuAppleMeaningPlatform, IOpenMasuAppStorePurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuAdRevenuePlatform, IOpenMasuDiagnosticsPlatform, IOpenMasuSyntheticValidationPlatform
+        IOpenMasuAppleConversionPlatform, IOpenMasuAppleMeaningPlatform, IOpenMasuAppStorePurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuAdRevenuePlatform, IOpenMasuDiagnosticsPlatform, IOpenMasuSyntheticValidationPlatform, IOpenMasuPrivacyPlatform
     {
         private delegate void NativeCallback(long requestId, IntPtr value);
         private static readonly NativeCallback Callback = OnNativeCallback;
@@ -227,6 +227,17 @@ namespace OpenMasu.Unity
 #endif
         }
 
+        public void RequestPrivacyPage(string requestType, string cursor, int pageSize, Action<string> completion)
+        {
+            ThrowIfDisposed();
+            var requestId = Register(completion);
+#if UNITY_IOS && !UNITY_EDITOR
+            openmasu_ios_privacy_page(requestType, cursor ?? string.Empty, pageSize, requestId, Callback);
+#else
+            CompleteSynthetic(requestId, "unsupported\n");
+#endif
+        }
+
         public void SetCollectionEnabled(bool enabled)
         {
             ThrowIfDisposed();
@@ -389,6 +400,8 @@ namespace OpenMasu.Unity
         private static extern void openmasu_ios_set_synthetic_validation_session(string token, long expiresAtMs, long requestId, NativeCallback callback);
         [DllImport("__Internal")]
         private static extern void openmasu_ios_clear_synthetic_validation_session(long requestId, NativeCallback callback);
+        [DllImport("__Internal")]
+        private static extern void openmasu_ios_privacy_page(string requestType, string cursor, int pageSize, long requestId, NativeCallback callback);
         [DllImport("__Internal")]
         private static extern void openmasu_ios_set_collection_enabled([MarshalAs(UnmanagedType.I1)] bool enabled);
         [DllImport("__Internal")]

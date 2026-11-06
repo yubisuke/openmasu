@@ -4,6 +4,61 @@ import XCTest
 @testable import OpenMasuCore
 
 final class AppStorePurchaseTests: XCTestCase {
+  func testPrivacyPagesUseInstallationSignatureAndNeverEnterEventStorage() async throws {
+    let recorder = PurchaseRequestRecorder()
+    let (sdk, storage) = try httpSdk { request in
+      let body = try requestBody(request); recorder.append(request, body)
+      XCTAssertEqual(request.url?.path, "/v1/privacy/access")
+      let value = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+      XCTAssertEqual(value["pagination"] as? String, "cursor_v1")
+      return (200, try privacyPageData(complete: value["cursor"] != nil))
+    }
+    let first = await sdk.requestPrivacyPage(.portability, pageSize: 2)
+    XCTAssertEqual(first.status, .pageReady)
+    let page = try XCTUnwrap(first.page)
+    let last = await sdk.requestPrivacyPage(.portability, cursor: page.nextCursor, pageSize: 2)
+    XCTAssertEqual(last.status, .complete); XCTAssertNil(last.page?.nextCursor)
+    XCTAssertEqual(page.requestId, last.page?.requestId)
+    for (request, body) in recorder.values() {
+      let value = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+      XCTAssertEqual(value["installation_id"] as? String, try storage.installationId())
+      let canonical = SdkRequestSigner.canonical(method: "POST", path: "/v1/privacy/access", sdkKeyId: "sdk-key:synthetic",
+        installationKeyId: "installation-key:synthetic", timestampMs: Int64(request.value(forHTTPHeaderField: "x-openmasu-timestamp-ms")!)!,
+        nonce: request.value(forHTTPHeaderField: "x-openmasu-nonce")!, body: body)
+      XCTAssertEqual(request.value(forHTTPHeaderField: "x-openmasu-signature"),
+        SdkRequestSigner.sign(secret: "synthetic-installation-secret-32-bytes", canonical: canonical))
+    }
+    XCTAssertNotEqual(recorder.values()[0].0.value(forHTTPHeaderField: "x-openmasu-nonce"), recorder.values()[1].0.value(forHTTPHeaderField: "x-openmasu-nonce"))
+    XCTAssertEqual(try storage.count(), 0)
+    let snapshot = try await sdk.diagnosticsSnapshot()
+    XCTAssertEqual(snapshot.lastResult, .notAttempted)
+    XCTAssertEqual(String(describing: page), "OpenMasuPrivacyPage(redacted)")
+    let invalid = await sdk.requestPrivacyPage(.access, cursor: "!", pageSize: 501)
+    XCTAssertEqual(invalid.status, .invalidRequest)
+    XCTAssertEqual(recorder.values().count, 2)
+  }
+
+  func testPrivacyRejectsResetAndStaleResponseAndLegacyTransport() async throws {
+    let root = temporaryDirectory(), storage = try primedStorage(root)
+    let legacy = try OpenMasuSDK(configuration: configuration(), storageRoot: root, transport: EventsOnlyTransport())
+    let unsupported = await legacy.requestPrivacyPage(.access)
+    XCTAssertEqual(unsupported.status, .unsupported)
+    let transport = PausablePrivacyTransport()
+    let sdk = try OpenMasuSDK(configuration: configuration(), storageRoot: root, transport: transport)
+    let started = expectation(description: "privacy request awaiting response")
+    await transport.pause(started)
+    let request = Task { await sdk.requestPrivacyPage(.portability, pageSize: 2) }
+    await fulfillment(of: [started], timeout: 3)
+    try await sdk.resetInstallationId()
+    await transport.resume()
+    let stale = await request.value
+    XCTAssertEqual(stale.status, .contextChanged); XCTAssertNil(stale.page)
+    _ = try storage.beginDeletion()
+    let blocked = await sdk.requestPrivacyPage(.portability, pageSize: 2)
+    XCTAssertEqual(blocked.status, .resetPending)
+    XCTAssertFalse(try storage.pending(limit: 100).contains { $0.payloadJson.contains("synthetic_cursor") })
+    XCTAssertThrowsError(try OpenMasuPrivacyPage.parse(Data(repeating: 32, count: 262145), requestType: .access, pageSize: 2))
+  }
   private let product = "synthetic.monthly"
   private let compact = "syntheticHeader.syntheticPayload.syntheticSignature"
   private let intent = UUID(uuidString: "db636db3-5cdc-4c01-b651-960afc2a7372")!
@@ -464,6 +519,28 @@ private actor EventsOnlyTransport: OpenMasuTransport {
   func enroll(installationId: String) async throws -> InstallationCredential { .init(keyId: "synthetic-key", secret: "synthetic-secret") }
   func deliver(credential: InstallationCredential, events: [QueuedEvent]) async throws { deliveries += 1 }
   func deleteInstallation(credential: InstallationCredential, installationId: String) async throws {}
+}
+
+private func privacyPageData(complete: Bool) throws -> Data {
+  try JSONSerialization.data(withJSONObject: ["dsar_response_version": "internal-v2", "request_type": "portability",
+    "request_id": "synthetic-export", "cutoff_at": "2026-11-01T00:00:00.000Z", "complete": complete,
+    "next_cursor": complete ? NSNull() : "synthetic_cursor" as Any, "returned_count": 0, "page_size": 2,
+    "records": [], "attributions": [], "verified_commerce_lifecycle": []] as [String: Any])
+}
+
+private actor PausablePrivacyTransport: OpenMasuPrivacyTransport {
+  private var started: XCTestExpectation?
+  private var continuation: CheckedContinuation<Void, Never>?
+  func pause(_ started: XCTestExpectation) { self.started = started }
+  func resume() { continuation?.resume(); continuation = nil }
+  func enroll(installationId: String) async throws -> InstallationCredential { .init(keyId: "synthetic-key", secret: "synthetic-secret") }
+  func deliver(credential: InstallationCredential, events: [QueuedEvent]) async throws {}
+  func deleteInstallation(credential: InstallationCredential, installationId: String) async throws {}
+  func privacyPage(credential: InstallationCredential, installationId: String, requestType: OpenMasuPrivacyRequestType,
+    cursor: String?, pageSize: Int) async throws -> Data {
+    await withCheckedContinuation { continuation in self.continuation = continuation; started?.fulfill() }
+    return try privacyPageData(complete: false)
+  }
 }
 
 private actor PausablePurchaseTransport: OpenMasuAppStoreTransport {

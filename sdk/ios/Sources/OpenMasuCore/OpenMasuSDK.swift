@@ -351,6 +351,25 @@ public actor OpenMasuSDK {
 
   public func clearSyntheticValidationSession() throws { try storage.setSyntheticValidationSession(nil) }
 
+  /// Returns one bounded page. No enrollment, event queue, persistence or automatic retry.
+  public func requestPrivacyPage(_ requestType: OpenMasuPrivacyRequestType, cursor: String? = nil,
+    pageSize: Int = 200) async -> OpenMasuPrivacyResult {
+    guard OpenMasuPrivacyPage.validRequest(cursor: cursor, pageSize: pageSize) else { return .init(.invalidRequest) }
+    do {
+      guard try !purchaseResetInFlight && storage.deletionJournal() == nil && !storage.isResetPending() else { return .init(.resetPending) }
+      guard let capable = transport as? any OpenMasuPrivacyTransport else { return .init(.unsupported) }
+      guard let credential = try storage.credential() else { return .init(.notEnrolled) }
+      let installationId = try storage.installationId(), revision = purchaseContextRevision
+      let data = try await capable.privacyPage(credential: credential, installationId: installationId,
+        requestType: requestType, cursor: cursor, pageSize: pageSize)
+      guard try revision == purchaseContextRevision && !purchaseResetInFlight && storage.deletionJournal() == nil &&
+        !storage.isResetPending() && storage.installationId() == installationId && storage.credential() == credential
+      else { return .init(.contextChanged) }
+      let page = try OpenMasuPrivacyPage.parse(data, requestType: requestType, pageSize: pageSize)
+      return .init(page.complete ? .complete : .pageReady, page: page)
+    } catch { return .init(.requestFailed) }
+  }
+
   public func resetInstallationId() async throws {
     try clearSyntheticValidationSession()
     guard !purchaseResetInFlight else { throw OpenMasuError.purchaseContextChanged }

@@ -35,6 +35,88 @@ class OpenMasuSdkTest {
 
   @After fun tearDown() { created.forEach { it.close() } }
 
+  @Test fun `privacy pages sign current installation and stay out of queue and diagnostics`() {
+    val captured = java.util.concurrent.CopyOnWriteArrayList<Pair<String, Map<String, String>>>()
+    val server = java.net.ServerSocket(0, 4, java.net.InetAddress.getByName("127.0.0.1"))
+    val serving = Thread {
+      while (!server.isClosed) runCatching { server.accept().use { socket ->
+        val reader = socket.getInputStream().bufferedReader()
+        assertEquals("POST /v1/privacy/access HTTP/1.1", reader.readLine())
+        val headers = mutableMapOf<String, String>()
+        while (true) { val line = reader.readLine(); if (line.isNullOrEmpty()) break
+          headers[line.substringBefore(':').lowercase()] = line.substringAfter(':').trim() }
+        val body = CharArray(headers.getValue("content-length").toInt())
+        var read = 0
+        while (read < body.size) read += reader.read(body, read, body.size-read)
+        val text = String(body); captured += text to headers
+        val response = privacyJson(JSONObject(text).has("cursor"))
+        socket.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: ${response.length}\r\nConnection: close\r\n\r\n$response".toByteArray())
+      } }
+    }.also { it.isDaemon = true; it.start() }
+    try {
+      val storage = OpenMasuStorage(context)
+      val id = storage.installationId()
+      storage.setCredential(InstallationCredential("synthetic-key", "synthetic-installation-secret"))
+      val config = OpenMasuConfiguration("http://127.0.0.1:${server.localPort}", "sdk-key:synthetic", "synthetic-app-secret")
+      val sdk = sdk(HmacHttpTransport(config), configuration = config)
+      val first = privacyResult(sdk)
+      assertEquals(OpenMasuPrivacyResultStatus.PAGE_READY, first.status)
+      val last = privacyResult(sdk, first.page!!.nextCursor)
+      assertEquals(OpenMasuPrivacyResultStatus.COMPLETE, last.status)
+      assertEquals(null, last.page!!.nextCursor)
+      assertEquals(first.page!!.requestId, last.page!!.requestId)
+      captured.forEach { (body, headers) ->
+        val value = JSONObject(body)
+        assertEquals(id, value.getString("installation_id")); assertEquals("cursor_v1", value.getString("pagination"))
+        val canonical = SdkRequestSigner.canonical("POST", "/v1/privacy/access", config.sdkKeyId, "synthetic-key",
+          headers.getValue("x-openmasu-timestamp-ms").toLong(), headers.getValue("x-openmasu-nonce"), body.toByteArray())
+        assertEquals(SdkRequestSigner.sign("synthetic-installation-secret", canonical), headers["x-openmasu-signature"])
+      }
+      assertNotEquals(captured[0].second["x-openmasu-nonce"], captured[1].second["x-openmasu-nonce"])
+      assertEquals(0, sdk.pendingCount())
+      assertEquals(OpenMasuDiagnosticResult.NOT_ATTEMPTED, diagnostics(sdk).lastResult)
+      assertEquals("OpenMasuPrivacyPage(redacted)", first.page.toString())
+    } finally { server.close(); serving.join(2_000) }
+  }
+
+  @Test fun `privacy requests refuse invalid unsupported reset and stale responses without enqueueing`() {
+    assertEquals(OpenMasuPrivacyResultStatus.UNSUPPORTED, privacyResult(sdk(RecordingTransport(true))).status)
+    lateinit var sdk: OpenMasuSdk
+    val transport = object : OpenMasuPrivacyTransport {
+      var reset = false
+      var oversized = false
+      override fun enroll(installationId: String) = InstallationCredential("synthetic-key", "synthetic-secret")
+      override fun deliver(credential: InstallationCredential, events: List<QueuedEvent>) = true
+      override fun deleteInstallation(credential: InstallationCredential, installationId: String) = false
+      override fun privacyPage(credential: InstallationCredential, installationId: String, requestType: OpenMasuPrivacyRequestType, cursor: String?, pageSize: Int): String {
+        if (reset) sdk.resetInstallationId {}
+        return if (oversized) " ".repeat(OpenMasuPrivacyPage.MAX_BYTES+1) else privacyJson(false)
+      }
+    }
+    sdk = sdk(transport)
+    assertEquals(OpenMasuPrivacyResultStatus.NOT_ENROLLED, privacyResult(sdk).status)
+    assertEquals(OpenMasuPrivacyResultStatus.INVALID_REQUEST, privacyResult(sdk, "!").status)
+    OpenMasuStorage(context).setCredential(InstallationCredential("synthetic-key", "synthetic-secret"))
+    transport.oversized = true
+    assertEquals(OpenMasuPrivacyResultStatus.REQUEST_FAILED, privacyResult(sdk).status)
+    transport.oversized = false; transport.reset = true
+    assertEquals(OpenMasuPrivacyResultStatus.CONTEXT_CHANGED, privacyResult(sdk).status)
+    assertEquals(OpenMasuPrivacyResultStatus.RESET_PENDING, privacyResult(sdk).status)
+    assertEquals(0, sdk.pendingCount())
+  }
+
+  private fun privacyJson(complete: Boolean) = JSONObject().put("dsar_response_version", "internal-v2")
+    .put("request_type", "portability").put("request_id", "synthetic-export").put("cutoff_at", "2026-11-01T00:00:00.000Z")
+    .put("complete", complete).put("next_cursor", if (complete) JSONObject.NULL else "synthetic_cursor")
+    .put("returned_count", 0).put("page_size", 2).put("records", org.json.JSONArray())
+    .put("attributions", org.json.JSONArray()).put("verified_commerce_lifecycle", org.json.JSONArray()).toString()
+
+  private fun privacyResult(sdk: OpenMasuSdk, cursor: String? = null): OpenMasuPrivacyResult {
+    val result = AtomicReference<OpenMasuPrivacyResult>(); val latch = CountDownLatch(1)
+    sdk.requestPrivacyPage(OpenMasuPrivacyRequestType.PORTABILITY, cursor, 2) { result.set(it); latch.countDown() }
+    assertTrue(latch.await(5, TimeUnit.SECONDS)); return result.get()
+  }
+
   @Test fun `synthetic validation is explicit local bounded and cleared on withdrawal and reset`() {
     val token = "A".repeat(43)
     val transport = SyntheticValidationTransport()

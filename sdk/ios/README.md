@@ -1,5 +1,13 @@
 # OpenMasu iOS SDK
 
+## Access and portability
+
+Current source provides the optional `OpenMasuPrivacyTransport` capability and
+`await sdk.requestPrivacyPage` for one signed, bounded page at a time. Existing
+custom transports remain compatible. See [portable export](../../docs/operations/portable-export.md#native-sdk-and-unity-callers)
+for request types, completion, reset guards and host-owned save/share behavior.
+This source API is not a claim that older published SDK assets include it.
+
 The iOS SDK is a source-distributed Swift Package with a deployment floor of
 iOS 16. It provides first-party event
 delivery, Universal Link routing, AdServices token handoff, Apple conversion-value updates, and MAX

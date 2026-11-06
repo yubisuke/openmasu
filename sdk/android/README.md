@@ -1,5 +1,13 @@
 # OpenMasu Android SDK
 
+## Access and portability
+
+Current source provides the optional `OpenMasuPrivacyTransport` capability and
+`sdk.requestPrivacyPage` for one signed, bounded page at a time. Existing custom
+transports remain compatible. See [portable export](../../docs/operations/portable-export.md#native-sdk-and-unity-callers)
+for request types, completion, reset guards and host-owned save/share behavior.
+This source API is not a claim that older published SDK assets include it.
+
 The Android SDK is a source-distributed Kotlin/Gradle project for first-party
 events, Google Play Install Referrer, optional Meta Install Referrer, AppLovin
 MAX impression-level revenue, signed delivery, and consent/reset lifecycle. The

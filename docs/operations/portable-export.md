@@ -79,6 +79,55 @@ temporarily unavailable. Never infer completion from an error.
 Requests without `pagination` retain `internal-v1` and the old fields when the
 entire response fits 200 total rows and the byte budget. Larger requests return
 409 `dsar_pagination_required` with no partial export. They must explicitly opt
-into `cursor_v1`; silently truncating a legacy response is not permitted. Native
-SDK convenience APIs for assembling pages are a separate feature; this signed
-HTTP operation is available now.
+into `cursor_v1`; silently truncating a legacy response is not permitted.
+
+## Native SDK and Unity callers
+
+Current source provides `requestPrivacyPage` on Android and iOS, and
+`RequestPrivacyPage` on Unity. These are explicit, one-page operations using
+the existing installation signing transport. They do not enroll an installation,
+enqueue an event, retain a cursor, save a file, open sharing UI, or automatically
+fetch the entire history. Published SDK archives contain this API only after a
+release built from this source revision.
+
+Pass `access` or `portability`, optional previous `nextCursor`, and a page size
+(default 200, range 1–500). The typed result is `page_ready` for a partial page,
+`complete` for the last page, or a closed failure state: `reset_pending`,
+`context_changed`, `not_enrolled`, `unsupported`, `invalid_request`, or
+`request_failed`. Native naming follows language conventions. A failure never
+contains a page and is never completion. A `request_failed` result includes HTTP,
+network and invalid-response failures without exposing server response bodies.
+
+The page exposes request ID, cutoff, next cursor, completion, returned count and
+the bounded JSON payload. That JSON is sensitive even though it uses the server's
+field allowlist. Only use it for the host user's explicit access, save or share
+action. Do not log the page, cursor or credentials or send them to analytics.
+Custom transport support is optional; old implementations return `unsupported`.
+
+```kotlin
+sdk.requestPrivacyPage(OpenMasuPrivacyRequestType.PORTABILITY, pageSize = 200) { result ->
+  // SDK executor: dispatch to the host UI thread before updating UI.
+  // result.page?.nextCursor is used only when the host requests the next page.
+}
+```
+
+```swift
+let result = await sdk.requestPrivacyPage(.portability, pageSize: 200)
+// result.page?.payloadJSON is transient Data; no automatic save or share.
+```
+
+```csharp
+client.RequestPrivacyPage(OpenMasuPrivacyRequestType.Portability, result => {
+    // Delivered by the existing Unity main-thread dispatcher.
+}, pageSize: 200);
+```
+
+Use Unity client methods on the host main thread and pump callbacks as for the
+existing SDK methods. Native SDKs reject requests during a pending reset and
+discard responses when the installation/credential context changes in flight.
+Unity also discards old responses already queued for main-thread delivery when
+reset starts. Previously delivered pages belong to the host; the SDK cannot erase
+copies the host retained. An old cursor cannot authenticate a new installation.
+Preserve request ID and cutoff when assembling pages; after a failed continuation,
+do not mix a newly started export into an older one. Collection settings do not
+silently initiate or block this explicit privacy request for an enrolled subject.
