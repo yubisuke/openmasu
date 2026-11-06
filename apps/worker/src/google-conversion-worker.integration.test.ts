@@ -12,6 +12,8 @@ import {
   type PayloadStore,
 } from "@openmasu/runtime";
 import { executePrivacyRequest, privacySubjectDigest } from "../../api/src/privacy.js";
+import { configureGoogleDataManagerDestination, googleDestinationHistory } from "../../api/src/google-data-manager-admin.js";
+import { previewGoogleDestination } from "../../api/src/google-destination-readiness.js";
 import {
   discoverGoogleConversionDeliveries,
   processGoogleConversionDeliveries,
@@ -133,15 +135,17 @@ async function seedEligibleConversion(
     ) VALUES ($1,$2,$3,$4,$5,$5,$6,'verified','PURCHASED',true,$7,$8,$9,$10::jsonb,'one_time_product')`,
     [verificationResultId, randomUUID(), tenantId, appId, purchaseRecord, "b".repeat(64),
       `encrypted:synthetic-play-${run}`, "c".repeat(64), at, JSON.stringify({ synthetic: true })]);
-    if (!existing) {
-      await client.query(`INSERT INTO control.google_data_manager_destinations (
-        destination_id,tenant_id,app_id,operating_account_id,conversion_action_id,app_audience,
-        enabled,registered_at,artifact
-      ) VALUES ($1,$2,$3,'123456789','987654321','general',true,$4,$5::jsonb)`,
-      [randomUUID(), tenantId, appId, at, JSON.stringify({ synthetic: true })]);
-    }
   });
+  if (!existing) await activateSyntheticDestination({ tenantId, appId }, 0);
   return { tenantId, appId, installationId, clickRecord, purchaseRecord };
+}
+
+async function activateSyntheticDestination(scope: { tenantId: string; appId: string }, expected_revision: number, action = "987654321") {
+  const preview = previewGoogleDestination({ operating_account_id: "1234567890", conversion_action_id: action, app_audience: "general", enabled: true,
+    readiness: { source: "operator_review", action_type: "UPLOAD_CLICKS", action_status: "ENABLED", action_owner_account_id: "1234567890",
+      conversion_action_id: action, access_model: "direct", permission: "granted", purpose: "click_import" } });
+  return configureGoogleDataManagerDestination({ pool, identity: { ...scope, keyId: "synthetic-admin", role: "admin" },
+    body: { ...preview.definition, preview_digest: preview.preview_digest, expected_revision } });
 }
 
 async function deleteInstallation(
@@ -168,6 +172,62 @@ async function deleteInstallation(
 after(async () => { await pool.end(); rmSync(root, { recursive: true, force: true }); });
 
 describe("Google Data Manager verified-conversion integration", () => {
+  it("binds immutable destination revisions, stops old queues and preserves in-flight diagnostics without rediscovery", async () => {
+    const scope = await seedEligibleConversion("revisions");
+    const identity = { ...scope, keyId: "synthetic-admin", role: "admin" as const };
+    const revision = (await googleDestinationHistory(pool, identity))[0];
+    for (const readiness of [{}, { ...(revision.definition.readiness as object), permission: "denied" },
+      { ...(revision.definition.readiness as object), action_type: "GOOGLE_PLAY_IN_APP_PURCHASE" }]) {
+      const preview = previewGoogleDestination({ ...revision.definition, readiness });
+      await assert.rejects(configureGoogleDataManagerDestination({ pool, identity,
+        body: { ...preview.definition, expected_revision: 1, preview_digest: preview.preview_digest } }), /not_ready/);
+    }
+    assert.equal(await discoverGoogleConversionDeliveries(pool, payloadStore, scope.tenantId), 1);
+    const queued = await withTenant(pool, scope.tenantId, async client => (await client.query<{
+      request_ref: string; request_digest: string; destination_revision: number;
+    }>("SELECT request_ref,request_digest,destination_revision FROM ephemeral.google_conversion_deliveries WHERE tenant_id=$1", [scope.tenantId])).rows[0]);
+    const bytes = await payloadStore.read(queued.request_ref);
+    await activateSyntheticDestination(scope, 1, "111111111");
+    assert.equal(await discoverGoogleConversionDeliveries(pool, payloadStore, scope.tenantId), 0);
+    assert.deepEqual(await payloadStore.read(queued.request_ref), bytes);
+    const calls: string[] = [];
+    assert.equal((await processGoogleConversionDeliveries(pool, payloadStore, scope.tenantId, {
+      enabled: true, credentialsJson: "{}", minimumRequestIntervalMs: 0,
+      dependencies: { accessToken: async () => { throw Error("old queue must stop before credentials"); } },
+    })).processed, 1);
+    await assert.rejects(payloadStore.read(queued.request_ref), PayloadNotFoundError);
+    await seedEligibleConversion("revision-next", scope);
+    assert.equal(await discoverGoogleConversionDeliveries(pool, payloadStore, scope.tenantId), 1);
+    const started = deferred(), release = deferred();
+    const processing = processGoogleConversionDeliveries(pool, payloadStore, scope.tenantId, {
+      enabled: true, credentialsJson: "{}", minimumRequestIntervalMs: 0,
+      dependencies: { accessToken: async () => "synthetic-token", sendEvent: async request => {
+        calls.push(request.request.destinations[0].productDestinationId); started.resolve(); await release.promise;
+        return { outcome: "accepted", requestId: "synthetic-revision-request", httpStatus: 200 };
+      } },
+    });
+    await providerStartedBeforeCompletion(started.promise, processing, "revision binding");
+    await activateSyntheticDestination(scope, 2, "222222222");
+    release.resolve();
+    assert.equal((await processing).processed, 1);
+    assert.deepEqual(calls, ["111111111"]);
+    assert.equal(await discoverGoogleConversionDeliveries(pool, payloadStore, scope.tenantId), 0);
+    await withTenant(pool, scope.tenantId, client => client.query("UPDATE ephemeral.google_conversion_deliveries SET next_attempt_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1", [scope.tenantId]));
+    await processGoogleConversionDeliveries(pool, payloadStore, scope.tenantId, {
+      enabled: true, credentialsJson: "{}", minimumRequestIntervalMs: 0,
+      dependencies: { accessToken: async () => "synthetic-token", sendEvent: async () => { throw Error("must not resend accepted conversion"); },
+        retrieveStatus: async id => { assert.equal(id, "synthetic-revision-request"); return { outcome: "status", status: "success", errors: [], warnings: [] }; } },
+    });
+    const results = await withTenant(pool, scope.tenantId, async client => (await client.query<{ state: string; artifact: { destination_revision: number } }>(
+      "SELECT state,artifact FROM ledger.google_conversion_delivery_results WHERE tenant_id=$1 ORDER BY occurred_at", [scope.tenantId])).rows);
+    assert.ok(results.some(row => row.state === "failed" && row.artifact.destination_revision === 1));
+    assert.ok(results.some(row => row.state === "succeeded" && row.artifact.destination_revision === 2));
+    const history = await googleDestinationHistory(pool, identity);
+    assert.deepEqual(history.map(row => row.revision), [3, 2, 1]);
+    assert.equal(history[2].definition.conversion_action_id, "987654321");
+    await assert.rejects(activateSyntheticDestination(scope, 1), /revision_stale/);
+    await assert.rejects(withTenant(pool, scope.tenantId, client => client.query("UPDATE control.google_destination_revisions SET ready=false WHERE tenant_id=$1", [scope.tenantId])));
+  });
   it("discovers one eligible conversion and fences concurrent and expired delivery claims", async () => {
     const { tenantId, appId, installationId, purchaseRecord } =
       await seedEligibleConversion("claims");

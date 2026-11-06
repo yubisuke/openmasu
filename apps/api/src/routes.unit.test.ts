@@ -75,8 +75,8 @@ describe("declarative API route security", () => {
         && ((route.handler === "admin_cost_backfills_preview" && route.auth === "admin_bearer")
           || (route.handler === "dashboard_cost_backfills_preview" && route.auth === "dashboard_session")))
       || (route.method === "POST" && route.capability === "administer"
-        && ((["admin_metric_schedules_preview_replacement", "admin_webhook_content_preview"].includes(route.handler) && route.auth === "admin_bearer")
-          || (["dashboard_metric_schedules_preview_replacement", "dashboard_metric_schedules_preview_recommended", "dashboard_meanings_preview", "dashboard_webhook_content_preview"].includes(route.handler)
+        && ((["admin_metric_schedules_preview_replacement", "admin_webhook_content_preview", "admin_google_destination_preview"].includes(route.handler) && route.auth === "admin_bearer")
+          || (["dashboard_metric_schedules_preview_replacement", "dashboard_metric_schedules_preview_recommended", "dashboard_meanings_preview", "dashboard_webhook_content_preview", "dashboard_google_destination_preview"].includes(route.handler)
             && route.auth === "dashboard_session")))
       || (route.method === "POST" && route.auth === "dashboard_session"
         && ((route.handler === "dashboard_comparison_submit" && route.capability === "read")

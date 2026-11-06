@@ -114,6 +114,10 @@ export type RouteHandler =
   | "admin_conversion_schema"
   | "admin_rule_bundle"
   | "admin_google_data_manager"
+  | "admin_google_destination_read"
+  | "admin_google_destination_preview"
+  | "dashboard_google_destination_read"
+  | "dashboard_google_destination_preview"
   | "admin_google_delivery_health"
   | "admin_operator_delivery_health"
   | "admin_measurement_health"
@@ -302,6 +306,10 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "admin_rule_bundle", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/rule-bundles$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_fraud_preview", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/rule-bundles\/preview$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_google_data_manager", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/google-data-manager$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "admin_google_destination_read", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/google-data-manager$/, auth: "admin_bearer", mutates: false, capability: "administer" },
+  { handler: "admin_google_destination_preview", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/google-data-manager\/preview$/, auth: "admin_bearer", mutates: false, capability: "administer" },
+  { handler: "dashboard_google_destination_read", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/google-data-manager$/, auth: "dashboard_session", mutates: false, capability: "administer" },
+  { handler: "dashboard_google_destination_preview", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/google-data-manager\/preview$/, auth: "dashboard_session", mutates: false, capability: "administer" },
   { handler: "admin_google_delivery_health", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/google-data-manager\/deliveries$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_operator_delivery_health", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-delivery-health$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_measurement_health", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/measurement-health$/, auth: "admin_bearer", mutates: false, capability: "read" },

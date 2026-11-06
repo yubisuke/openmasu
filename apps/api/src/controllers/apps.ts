@@ -8,7 +8,6 @@ import { AttributionWindowPreviewError, parseAttributionWindowRequest, previewAt
 import { renderAttributionWindowSettings, renderAttributionWindowPreview } from "../dashboard/attribution-window.js";
 import { recordDashboardAudit,csrfToken } from "../session.js";
 import { registerAppLinkIdentity, registerLinkDomain } from "../link-domains.js";
-import { configureGoogleDataManagerDestination } from "../google-data-manager-admin.js";
 import type { RequestHandlerDependencies } from "../http-types.js";
 import type { DashboardTenantContext, DashboardAppContext, AdminRequestContext } from "./context.js";
 import { json, dashboardHtml } from "../http-responses.js";
@@ -80,13 +79,6 @@ export function createAppsControllers(dependencies: Pick<RequestHandlerDependenc
           schemaVersion: form.schema_version, definition: jsonFormValue(body, "definition_json") });
       } else if (route.handler === "dashboard_rule_bundle") {
         await activateRuleBundle({ pool: dependencies.pool, identity: appIdentity, body: jsonFormValue(body, "definition_json") as Record<string, unknown>,requirePreview:true });
-      } else {
-        await configureGoogleDataManagerDestination({ pool: dependencies.pool, identity: appIdentity, body: {
-          operating_account_id: form.operating_account_id,
-          conversion_action_id: form.conversion_action_id,
-          enabled: form.enabled === "true",
-          app_audience: form.app_audience,
-        } });
       }
       response.writeHead(303, { ...dashboardHeaders, location: `/dashboard/apps/${encodeURIComponent(appIdentity.appId)}` }).end();
     } catch (error) {
@@ -145,13 +137,7 @@ export function createAppsControllers(dependencies: Pick<RequestHandlerDependenc
     try {
       const appIdentity = await requireRegisteredApp(dependencies.pool, identity, adminAppId(target.pathname) ?? "");
       const body = await decoder.json();
-      const result = route.handler === "admin_google_data_manager"
-        ? await configureGoogleDataManagerDestination({
-            pool: dependencies.pool,
-            identity: appIdentity,
-            body,
-          })
-        : route.handler === "admin_app_link_identity"
+      const result = route.handler === "admin_app_link_identity"
         ? await registerAppLinkIdentity({ pool: dependencies.pool, identity: appIdentity, body })
         : route.handler === "admin_apple_registration"
         ? await registerAppleApp({
@@ -229,7 +215,6 @@ export function createAppsControllers(dependencies: Pick<RequestHandlerDependenc
     dashboard_apple_registration: { boundary: "dashboard_app", handle: dashboardAppLinkIdentity },
     dashboard_conversion_schema: { boundary: "dashboard_app", handle: dashboardAppLinkIdentity },
     dashboard_rule_bundle: { boundary: "dashboard_app", handle: dashboardAppLinkIdentity },
-    dashboard_google_data_manager: { boundary: "dashboard_app", handle: dashboardAppLinkIdentity },
     admin_apps_list: { boundary: "admin", handle: adminAppsList },
     admin_apps_create: { boundary: "admin", handle: adminAppsCreate },
     admin_link_domain: { boundary: "admin", handle: adminLinkDomain },
@@ -237,6 +222,5 @@ export function createAppsControllers(dependencies: Pick<RequestHandlerDependenc
     admin_conversion_schema: { boundary: "admin", handle: adminAppleRegistration },
     admin_rule_bundle: { boundary: "admin", handle: adminAppleRegistration },
     admin_app_link_identity: { boundary: "admin", handle: adminAppleRegistration },
-    admin_google_data_manager: { boundary: "admin", handle: adminAppleRegistration },
   } as const;
 }

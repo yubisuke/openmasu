@@ -8,6 +8,10 @@ checklist in an authorized deployment before enabling live delivery.
 
 ## Configuration
 
+Use the [readiness and immutable revision workflow](../integrations/google-destination-readiness.md)
+before activation. Existing numeric-only destinations are disabled on upgrade until
+reviewed; old queued requests are never silently rebound to a successor action.
+
 - [ ] Create a dedicated Google credential with Data Manager access; do not reuse the Play-verification credential.
 - [ ] Mount the credential outside the repository and set `OPENMASU_GOOGLE_DATA_MANAGER_SERVICE_ACCOUNT_JSON_FILE`.
 - [ ] Register the exact operating-account ID, conversion-action ID, and app audience through the administrator API.

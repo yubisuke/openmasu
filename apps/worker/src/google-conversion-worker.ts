@@ -17,6 +17,7 @@ import {
 import { googleServiceAccountAccessToken } from "./google-service-account.js";
 
 type Candidate = {
+  destination_revision: number;
   verification_result_id: string; verified_record_id: string; click_record_id: string; app_id: string;
   destination_id: string; operating_account_id: string; conversion_action_id: string;
   app_audience: "general" | "mixed" | "child_directed"; amount_unscaled: string;
@@ -24,6 +25,7 @@ type Candidate = {
   finality: "final" | "provisional"; network: string; remote_click_ref: string;
 };
 type DeliveryRow = {
+  destination_revision: number | null;
   delivery_id: string; app_id: string; destination_id: string; request_ref: string; request_digest: string;
   transaction_digest: string; state: string; attempts: number; provider_request_id: string | null;
   diagnostics_deadline_at: Date | string | null;
@@ -66,6 +68,7 @@ async function appendResult(client: PoolClient, tenantId: string, row: DeliveryR
   now: string, reason?: string, providerRequestId?: string): Promise<void> {
   const artifact = { delivery_id: row.delivery_id, tenant_id: tenantId, app_id: row.app_id, state,
     attempt: row.attempts + 1, occurred_at: now, request_digest: row.request_digest,
+    destination_id: row.destination_id, destination_revision: row.destination_revision,
     ...(providerRequestId ? { provider_request_id: providerRequestId } : {}),
     ...(reason ? { reason_code: reason } : {}) };
   await client.query(
@@ -123,7 +126,7 @@ async function claimGoogleConversionDeliveries(
               updated_at=$2
        FROM due
       WHERE delivery.tenant_id=$1 AND delivery.delivery_id=due.delivery_id
-     RETURNING delivery.delivery_id::text,delivery.app_id,delivery.destination_id::text,delivery.request_ref,
+     RETURNING delivery.delivery_id::text,delivery.app_id,delivery.destination_id::text,delivery.destination_revision,delivery.request_ref,
         delivery.request_digest,delivery.transaction_digest,delivery.state,delivery.attempts,
         delivery.provider_request_id,delivery.diagnostics_deadline_at,
         delivery.claim_token::text,delivery.claimed_until`,
@@ -195,14 +198,27 @@ async function withCurrentDelivery<T>(
   });
 }
 
+async function destinationBindingActive(client: PoolClient, tenantId: string, row: DeliveryRow): Promise<boolean> {
+  // Serialize start-of-I/O against activation, without holding the lock across network I/O.
+  const binding = await client.query(`SELECT 1 FROM control.google_data_manager_destinations destination
+    JOIN control.google_destination_revisions revision ON revision.tenant_id=destination.tenant_id
+      AND revision.app_id=destination.app_id AND revision.destination_id=destination.destination_id AND revision.revision=$4
+    WHERE destination.tenant_id=$1 AND destination.app_id=$2 AND destination.destination_id=$3
+      AND destination.enabled AND revision.ready AND revision.definition->>'enabled'='true'
+      AND ($5<>'queued' OR destination.current_revision=revision.revision) FOR UPDATE OF destination`,
+  [tenantId, row.app_id, row.destination_id, row.destination_revision, row.state]);
+  return binding.rowCount === 1;
+}
+
 async function beginProviderRequest<T>(
   pool: Pool,
   tenantId: string,
   row: DeliveryRow,
   minimumRequestIntervalMs: number,
   operation: () => Promise<T>,
-): Promise<{ readonly outcome: "paced" } | { readonly outcome: "started"; readonly response: Promise<T> } | undefined> {
+): Promise<{ readonly outcome: "paced" } | { readonly outcome: "stopped" } | { readonly outcome: "started"; readonly response: Promise<T> } | undefined> {
   return withCurrentDelivery(pool, tenantId, row, async (client) => {
+    if (!await destinationBindingActive(client, tenantId, row)) return { outcome: "stopped" } as const;
     const reserved = await client.query(
       `UPDATE control.google_data_manager_destinations
           SET next_request_at=clock_timestamp() + ($3::integer * interval '1 millisecond')
@@ -284,6 +300,7 @@ async function discoveryCandidateIsEligible(
   tenantId: string,
   candidate: Candidate,
 ): Promise<boolean> {
+  await client.query("SELECT 1 FROM control.google_data_manager_destinations WHERE tenant_id=$1 AND app_id=$2 FOR UPDATE", [tenantId, candidate.app_id]);
   const eligible = await client.query(
     `SELECT 1
        FROM ledger.raw_records_current AS purchase_raw
@@ -293,7 +310,7 @@ async function discoveryCandidateIsEligible(
          ON destination.tenant_id=purchase_raw.tenant_id AND destination.app_id=purchase_raw.app_id
       WHERE purchase_raw.tenant_id=$1 AND purchase_raw.app_id=$2
         AND purchase_raw.record_id=$3 AND click_raw.record_id=$4
-        AND destination.destination_id=$5::uuid AND destination.enabled=true
+        AND destination.destination_id=$5::uuid AND destination.enabled=true AND destination.current_revision=$6
         AND destination.app_audience <> 'child_directed'
         AND purchase_raw.payload_lifecycle_status='available'
         AND click_raw.payload_lifecycle_status='available'
@@ -305,7 +322,7 @@ async function discoveryCandidateIsEligible(
           WHERE tombstone.tenant_id=$1 AND tombstone.app_id=$2
             AND tombstone.record_id IN ($3,$4))`,
     [tenantId, candidate.app_id, candidate.verified_record_id,
-      candidate.click_record_id, candidate.destination_id],
+      candidate.click_record_id, candidate.destination_id, candidate.destination_revision],
   );
   return eligible.rowCount === 1;
 }
@@ -316,8 +333,10 @@ export async function discoverGoogleConversionDeliveries(
   const candidates = await withTenant(pool, tenantId, (client) => client.query<Candidate>(
     `SELECT result.verification_result_id::text, result.verified_record_id::text,
             click_event.record_id AS click_record_id, result.app_id,
-            destination.destination_id::text, destination.operating_account_id,
-            destination.conversion_action_id, destination.app_audience,
+            destination.destination_id::text,revision.revision AS destination_revision,
+            revision.definition->>'operating_account_id' AS operating_account_id,
+            revision.definition->>'conversion_action_id' AS conversion_action_id,
+            revision.definition->>'app_audience' AS app_audience,
             purchase.amount_unscaled, purchase.amount_scale, purchase.currency,
             purchase.occurred_at, attribution.status,
             attribution.artifact->>'finality' AS finality,
@@ -350,6 +369,9 @@ export async function discoverGoogleConversionDeliveries(
        JOIN control.google_data_manager_destinations destination
          ON destination.tenant_id=result.tenant_id AND destination.app_id=result.app_id
         AND destination.enabled=true
+       JOIN control.google_destination_revisions revision ON revision.tenant_id=destination.tenant_id
+         AND revision.app_id=destination.app_id AND revision.destination_id=destination.destination_id
+         AND revision.revision=destination.current_revision AND revision.ready AND revision.definition->>'enabled'='true'
       WHERE result.tenant_id=$1 AND result.verdict='verified'
         AND attribution.status='non_organic' AND attribution.artifact->>'finality'='final'
         AND click.network='google_ads' AND click.remote_click_ref IS NOT NULL
@@ -391,17 +413,17 @@ export async function discoverGoogleConversionDeliveries(
           `INSERT INTO ephemeral.google_conversion_deliveries (
              delivery_id,tenant_id,app_id,destination_id,verification_result_id,verified_record_id,
              request_ref,request_digest,transaction_digest,state,attempts,next_attempt_at,
-             created_at,updated_at
-           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'queued',0,$10::text::timestamptz,$10,$10)
+             created_at,updated_at,destination_revision
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'queued',0,$10::text::timestamptz,$10,$10,$11)
            ON CONFLICT (tenant_id,app_id,verification_result_id,destination_id) DO NOTHING RETURNING delivery_id`,
           [deliveryId, tenantId, candidate.app_id, candidate.destination_id, candidate.verification_result_id,
-            candidate.verified_record_id, requestRef, sha256(prepared.body), sha256(prepared.transactionId), now.toISOString()],
+            candidate.verified_record_id, requestRef, sha256(prepared.body), sha256(prepared.transactionId), now.toISOString(), candidate.destination_revision],
         );
         if (result.rowCount === 1) await appendResult(client, tenantId, {
           delivery_id: deliveryId, app_id: candidate.app_id, request_ref: requestRef,
           request_digest: sha256(prepared.body), transaction_digest: sha256(prepared.transactionId),
           state: "queued", attempts: -1, provider_request_id: null, diagnostics_deadline_at: null,
-          destination_id: candidate.destination_id, claim_token: null, claimed_until: null,
+          destination_id: candidate.destination_id, destination_revision: candidate.destination_revision, claim_token: null, claimed_until: null,
         }, "queued", now.toISOString());
         return result.rowCount === 1;
       });
@@ -431,6 +453,15 @@ export async function processGoogleConversionDeliveries(pool: Pool, payloadStore
       leaseMs,
     );
     if (!row) break;
+    const binding = await withCurrentDelivery(pool, tenantId, row, client => destinationBindingActive(client, tenantId, row));
+    if (binding === undefined) continue;
+    if (!binding) {
+      const stopped = await finalizeGoogleConversionDelivery(pool, tenantId, row, now, "failed", now,
+        row.provider_request_id ?? undefined, row.diagnostics_deadline_at ? new Date(row.diagnostics_deadline_at) : undefined,
+        "destination_revision_inactive", false);
+      if (stopped) { await payloadStore.purge(row.request_ref); processed += 1; }
+      continue;
+    }
     const providerAccessToken = accessToken ?? await dependencies.accessToken({
       credentialsJson: options.credentialsJson,
       scope: "https://www.googleapis.com/auth/datamanager",
@@ -463,6 +494,12 @@ export async function processGoogleConversionDeliveries(pool: Pool, payloadStore
       ));
       if (!started) continue;
       if (started.outcome === "paced") break;
+      if (started.outcome === "stopped") {
+        if (await finalizeGoogleConversionDelivery(pool, tenantId, row, now, "failed", now, undefined, undefined, "destination_revision_inactive", false)) {
+          await payloadStore.purge(row.request_ref); processed += 1;
+        }
+        continue;
+      }
       const result = await started.response;
       if (result.outcome === "accepted") {
         state = "http_accepted"; providerRequestId = result.requestId;
@@ -484,6 +521,12 @@ export async function processGoogleConversionDeliveries(pool: Pool, payloadStore
             { accessToken: providerAccessToken, baseUrl: options.apiBaseUrl, now: () => now }));
         if (!started) continue;
         if (started.outcome === "paced") break;
+        if (started.outcome === "stopped") {
+          if (await finalizeGoogleConversionDelivery(pool, tenantId, row, now, "failed", now, providerRequestId, deadline, "destination_revision_inactive", false)) {
+            await payloadStore.purge(row.request_ref); processed += 1;
+          }
+          continue;
+        }
         const result = await started.response;
         if (result.outcome === "status") {
           if (result.status === "processing") {
