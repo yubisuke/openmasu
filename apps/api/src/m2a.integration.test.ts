@@ -32,6 +32,7 @@ import {
 import { processCommerceReadbacks } from "../../worker/src/commerce-readback-worker.js";
 import { createRequestHandler } from "./router.js";
 import { recordCommerceNotification } from "./commerce-notifications.js";
+import { subscriptionReport } from "./subscription-reporting.js";
 import { executePrivacyRequest, privacySubjectDigest } from "./privacy.js";
 import { privacyJobProgress } from "./privacy-job-reports.js";
 import { KeyedTokenBucket } from "./rate-limit.js";
@@ -730,7 +731,7 @@ async function prepareCommerceReadback(
 }
 
 async function deleteCommerceReadback(
-  scope: "installation" | "app",
+  scope: "installation" | "app" | "tenant",
   fixture: CommerceReadbackFixture,
 ): Promise<Awaited<ReturnType<typeof executePrivacyRequest>>> {
   const body = privacyRequestFor(
@@ -1938,10 +1939,53 @@ describe("M2a signed SDK ingestion", () => {
         assert.equal(operation, "subscription");
         return { status: 200, body: Buffer.from(JSON.stringify({
           subscriptionState: "SUBSCRIPTION_STATE_ACTIVE",
+          lineItems: [{ productId: playSubscriptionProductId, expiryTime: renewalEnd }],
         })) };
       },
     }), { processed: 2, deferred: 0, failed: 0 },
     "each distinct authenticated RTDN delivery must complete its own state read-back");
+    const reader = createReaderPool();
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const report = await subscriptionReport(reader, { keyId: "synthetic", tenantId, appId, role: "read_only" }, {
+        date_from: new Date(Date.parse(today) - 86400000).toISOString().slice(0, 10), date_to: new Date(Date.parse(today) + 86400000).toISOString().slice(0, 10),
+        watermark_at_most: new Date(Date.now() + 300_000).toISOString(),
+      });
+      assert.equal(report.daily.reduce((sum, day) => sum + day.verified_renewals, 0), 1);
+      assert.equal(report.last_observed_states.find(row => row.state === "active")?.series_count, 1);
+      assert.doesNotMatch(JSON.stringify(report), new RegExp(`${playSubscriptionToken}|${renewalOrderId}`));
+    } finally { await reader.end(); }
+  });
+
+  it("subscription observations use read-back evidence, correct late counts, and disappear for every privacy scope", async () => {
+    const reader = createReaderPool();
+    try {
+      for (const scope of ["installation", "app", "tenant"] as const) {
+        const fixture = await prepareCommerceReadback("google_play", `subscription-report-${scope}`);
+        const observed = new Date(), expiry = observed.toISOString();
+        const day = observed.toISOString().slice(0, 10);
+        const query = { date_from: day, date_to: new Date(Date.parse(day) + 86400000).toISOString().slice(0, 10),
+          watermark_at_most: new Date(observed.getTime() + 30_000).toISOString() };
+        const identity = { keyId: "synthetic", tenantId: fixture.tenantId, appId: fixture.appId, role: "admin" as const };
+        const pending = await subscriptionReport(reader, identity, query);
+        assert.equal(pending.daily[0].observed_expiries, 0, "notification alone never expires a series");
+        assert.deepEqual(await processCommerceReadbacks(pool, payloadStore, fixture.tenantId, { now: observed,
+          googleClient: async () => ({ status: 200, body: Buffer.from(JSON.stringify({
+            subscriptionState: "SUBSCRIPTION_STATE_EXPIRED", lineItems: [{ productId: "synthetic-plan", expiryTime: expiry }],
+          })) }),
+        }), { processed: 1, failed: 0, deferred: 0 });
+        const after = await subscriptionReport(reader, identity, query);
+        assert.equal(after.last_observed_states[0].state, "expired");
+        assert.equal(after.daily[0].observed_expiries, 1);
+        const early = await subscriptionReport(reader, identity, { ...query, watermark_at_most: new Date(observed.getTime() - 1).toISOString() });
+        assert.equal(early.daily[0].observed_expiries, 0, "later read-back cannot leak into an earlier cutoff");
+        assert.equal((await deleteCommerceReadback(scope, fixture)).status, "completed");
+        const deleted = await subscriptionReport(reader, identity, query);
+        assert.equal(deleted.last_observed_states.length, 0);
+        assert.equal(deleted.daily[0].observed_expiries, 0);
+        assert.equal(deleted.daily[0].notification_signals, 0);
+      }
+    } finally { await reader.end(); }
   });
 
   it("WO19 reads a voided order authoritatively and records its exact refund once", async () => {

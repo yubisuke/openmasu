@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-10-30. On `main`, this page describes the current `main` source tree.
+Updated: 2026-11-06. On `main`, this page describes the current `main` source tree.
 When read on a feature branch, it also includes that branch's unmerged changes.
 Implementation and synthetic verification are not live operational qualification.
 
@@ -143,6 +143,10 @@ Broader [external cohort comparison](cohort-comparison.md#expanded-closed-declar
 is implemented, with declared versus captured evidence kept separate.
 The [Apple postback observation view](apple-postback-observations.md) now separates
 windows, unsigned values, verification, retries and missing metadata.
+[Subscription observations](subscription-observations.md) reuse verified Google
+Play bindings and retained read-back evidence for last-observed state and daily
+renewal/expiry counts. This is not entitlement, churn, Apple analytics or proof
+of complete provider delivery; token replacements remain unknown.
 [Apple conversion meanings](apple-conversion-meaning.md) share a registered
 digest with the SDK and expose ranges without inventing postback bindings. A
 dashboard profile form previews every fine/coarse state before registration and

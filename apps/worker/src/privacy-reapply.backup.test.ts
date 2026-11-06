@@ -18,6 +18,8 @@ import {
 import { executePrivacyRequest, privacySubjectDigest } from "../../api/src/privacy.js";
 import { encodeMetricReport, metricReport } from "../../api/src/reporting.js";
 import { parseMetricQuery } from "../../api/src/report-query.js";
+import { subscriptionReport } from "../../api/src/subscription-reporting.js";
+import { recordCommerceNotification } from "../../api/src/commerce-notifications.js";
 import { ingestFixture } from "./test-support/fixture-ingestion.js";
 import { computeSqlMetricRuns } from "./metrics/cohort.js";
 import { reapplyCompletedPrivacyRequests } from "./privacy-reapply.js";
@@ -204,6 +206,15 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
           sha256("synthetic restored Google Play pending token"), `record:google-play:${uuidV7()}`],
       );
     });
+    await recordCommerceNotification({ pool: appPool, payloadStore, tenantId: "tenant-a", appId: "app-a",
+      payload: Buffer.from('{"synthetic":"subscription-restore"}'),
+      notificationDigest: sha256("synthetic-subscription-restore-notification"), subjectDigest: sha256("synthetic-subscription-restore-token"),
+      event: { provider: "google_play", eventKind: "subscription_expired", financialEffect: "none",
+        externalEventDigest: sha256("synthetic-subscription-restore-event"), effectiveAt: "2026-08-19T00:00:00.000Z" },
+      receivedAt: new Date("2026-08-19T00:00:00.000Z") });
+    const subscriptionBefore = await subscriptionReport(appPool, { keyId: "synthetic", tenantId: "tenant-a", appId: "app-a", role: "admin" },
+      { date_from: "2026-08-19", date_to: "2026-08-20", watermark_at_most: "2026-08-21T00:00:00.000Z" });
+    assert.equal(subscriptionBefore.daily[0].unknown_series_signals, 1);
     cpSync(root, join(snapshot, "payloads"), { recursive: true });
 
     const privacy = await executePrivacyRequest(
@@ -463,6 +474,10 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
       assert.equal(restoredReport.data.length, 1);
       assert.equal(restoredReport.data[0].value_unscaled, "0");
       assert.equal(restoredReport.data[0].reproducibility_status, "redaction_affected");
+      const subscriptions = await subscriptionReport(restoredPool, { keyId: "synthetic", tenantId: "tenant-a", appId: "app-a", role: "admin" },
+        { date_from: "2026-08-19", date_to: "2026-08-20", watermark_at_most: "2026-08-21T00:00:00.000Z" });
+      assert.equal(subscriptions.daily[0].notification_signals, 0, "restore and privacy reapplication must not revive subscription observations");
+      assert.equal(subscriptions.last_observed_states.length, 0);
       for (const format of ["json", "csv"] as const) assert.equal(encodeMetricReport(restoredReport, format).body.includes("installation:install-33"), false);
       const auditCount = await withTenant(restoredPool, "tenant-a", async (client) => Number((await client.query<{ count: string }>(
         "SELECT count(*)::text AS count FROM ledger.audit_logs WHERE action='privacy_reapply' AND target_ref=$1",

@@ -128,6 +128,8 @@ type LifecycleInput = {
   readonly transactionDigest?: string;
   readonly originalTransactionDigest?: string;
   readonly subscriptionState?: string;
+  readonly subscriptionObservation?: { readonly expiry_at?: string; readonly requested_at: string; readonly binding: "token" | "unknown" };
+  readonly subjectDigest?: string;
   readonly financialEffect: CommerceFinancialEffect;
   readonly environment?: "Sandbox" | "Production";
   readonly effectiveAt: string;
@@ -140,6 +142,7 @@ async function appendLifecycleFact(client: PoolClient, row: ReadbackRow, input: 
     provider: row.provider, event_kind: input.eventKind, transaction_digest: input.transactionDigest,
     provider_event_digest: input.providerEventDigest ?? row.notification_digest,
     original_transaction_digest: input.originalTransactionDigest, subscription_state: input.subscriptionState,
+    subscription_observation: input.subscriptionObservation,
     financial_effect: input.financialEffect, environment: input.environment,
     effective_at: input.effectiveAt, recorded_at: input.now.toISOString(),
   };
@@ -148,13 +151,13 @@ async function appendLifecycleFact(client: PoolClient, row: ReadbackRow, input: 
        lifecycle_fact_id, provider, tenant_id, app_id, notification_digest, provider_event_digest, event_kind,
        subject_digest, transaction_digest, original_transaction_digest, subscription_state,
        financial_effect, environment, effective_at, recorded_at, artifact
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,NULL,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$16,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)
      ON CONFLICT DO NOTHING`,
     [artifact.lifecycle_fact_id, row.provider, row.tenant_id, row.app_id, row.notification_digest,
       input.providerEventDigest ?? row.notification_digest, input.eventKind,
       input.transactionDigest ?? null, input.originalTransactionDigest ?? null,
       input.subscriptionState ?? null, input.financialEffect, input.environment ?? null,
-      input.effectiveAt, input.now.toISOString(), JSON.stringify(artifact)],
+      input.effectiveAt, input.now.toISOString(), JSON.stringify(artifact), input.subjectDigest ?? null],
   );
 }
 
@@ -363,6 +366,7 @@ export async function processCommerceReadbacks(
         if (row.operation === "google_subscription") {
           const subscription = object(notification.subscriptionNotification, "google_subscription");
           const purchaseToken = string(subscription.purchaseToken, "google_purchase_token");
+          const requestedAt = options.now ?? new Date();
           const started = await beginProviderRequest(pool, row, () => options.googleClient!({
             operation: "subscription", packageName, purchaseToken,
           }));
@@ -375,12 +379,24 @@ export async function processCommerceReadbacks(
             if (await failReadback(pool, payloadStore, row, now)) counts.failed += 1;
             continue;
           }
-          const state = string(parse(response.body, "google_subscription_response").subscriptionState, "google_subscription_state", 128);
+          const verified = parse(response.body, "google_subscription_response");
+          const state = string(verified.subscriptionState, "google_subscription_state", 128);
+          // A replacement chain or multiple items is not a uniquely bound series.
+          // Keep the response protected; persist only bounded analytical evidence.
+          const items = Array.isArray(verified.lineItems) ? verified.lineItems : [];
+          const item = items.length === 1 && items[0] && typeof items[0] === "object" ? items[0] as JsonObject : undefined;
+          const expiry = item?.expiryTime;
+          const expiryAt = typeof expiry === "string" && Number.isFinite(Date.parse(expiry))
+            ? new Date(expiry).toISOString() : undefined;
+          const observedAt = options.now ?? new Date();
           const committed = await withCurrentClaim(pool, row, async (client) => {
             await appendLifecycleFact(client, row, {
               eventKind: "subscription_state_verified", subscriptionState: state.toLowerCase(), financialEffect: "none",
+              subjectDigest: sha256(purchaseToken),
+              subscriptionObservation: { binding: item && typeof item.productId === "string" && item.productId.length > 0 && !verified.linkedPurchaseToken ? "token" : "unknown", requested_at: requestedAt.toISOString(),
+                ...(expiryAt ? { expiry_at: expiryAt } : {}) },
               providerEventDigest: sha256(`${row.notification_digest}\0${state.toLowerCase()}`),
-              effectiveAt: now.toISOString(), now,
+              effectiveAt: observedAt.toISOString(), now: observedAt,
             });
             await finish(client, row, true, now);
             return true;

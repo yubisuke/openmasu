@@ -99,6 +99,13 @@ describe("declarative API route security", () => {
   });
 
   it("matches exact route methods and paths", () => {
+    for (const prefix of ["/v1/admin/apps", "/dashboard/apps"]) {
+      const route = matchRoute("GET", `${prefix}/app-a/subscriptions`)!;
+      assert.equal(route.capability, "read");
+      assert.equal(route.mutates, false);
+      assert.equal(route.auth, prefix.startsWith("/v1") ? "admin_bearer" : "dashboard_session");
+      assert.equal(matchRoute("POST", `${prefix}/app-a/subscriptions`), undefined);
+    }
     assert.equal(matchRoute("GET", "/v1/reports/metrics")?.handler, "report_metrics");
     assert.equal(matchRoute("GET", "/v1/admin/apps/app-a/metrics/run%3Ad7_roas/explanation")?.handler, "admin_metric_explanation");
     assert.equal(matchRoute("GET", "/dashboard/apps/app-a/metrics/run%3Ad7_roas/explanation")?.handler, "dashboard_metric_explanation");

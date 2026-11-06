@@ -1,5 +1,8 @@
 # Verified Commerce Lifecycle Design
 
+The [subscription observation view](../subscription-observations.md) reads this
+existing evidence without creating another financial or entitlement ledger.
+
 Status: implemented and synthetically verified. See
 [Project status](../STATUS.md) for the evidence vocabulary and open operator
 gates.

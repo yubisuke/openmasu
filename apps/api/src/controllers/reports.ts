@@ -22,6 +22,8 @@ import { attributionReport, AttributionReportError, parseAttributionQuery } from
 import { renderAttributionReport } from "../dashboard/attribution-report.js";
 import { costJoinabilityReport, CostJoinabilityError, parseCostJoinabilityQuery } from "../cost-joinability.js";
 import { renderCostJoinability } from "../dashboard/cost-joinability.js";
+import { subscriptionReport, SubscriptionReportError, parseSubscriptionQuery } from "../subscription-reporting.js";
+import { renderSubscriptions } from "../dashboard/subscriptions.js";
 import { applePostbackReport, AppleReportError, parseAppleReportQuery } from "../apple-postback-reporting.js";
 import { renderApplePostbackReport } from "../dashboard/apple-postback-report.js";
 import { csrfToken, verifyCsrfToken } from "../session.js";
@@ -40,6 +42,25 @@ import { dashboardHeaders } from "../http-responses.js";
 import { renderAttributionReportNotCompleted, renderComparisonNotCompleted, renderMetricRunNotFound, renderExportLimitExceeded } from "../dashboard/action-pages.js";
 
 export function createReportsControllers(dependencies: Pick<RequestHandlerDependencies, "readerPool" | "dashboard" | "reportMaximumRows" | "reportMaximumExportRows" | "redirectorBaseUrl" | "privacySubjectDigestKey">) {
+  const dashboardSubscriptions = async ({ response, target, appId, appIdentity, pool }: DashboardAppContext): Promise<void> => {
+    try {
+      const report = [...target.searchParams].length ? await subscriptionReport(pool, appIdentity, parseSubscriptionQuery(target.searchParams)) : undefined;
+      dashboardHtml(response, 200, renderSubscriptions(appId, report));
+    } catch (error) {
+      if (!(error instanceof SubscriptionReportError)) throw error;
+      dashboardHtml(response, error.statusCode, renderSubscriptions(appId, undefined, error.code));
+    }
+  };
+  const adminSubscriptions = async ({ response, target, pool, identity }: AdminRequestContext): Promise<void> => {
+    try {
+      const app = await requireRegisteredApp(pool, identity, adminAppId(target.pathname) ?? "");
+      json(response, 200, await subscriptionReport(pool, app, parseSubscriptionQuery(target.searchParams)));
+    } catch (error) {
+      if (error instanceof AppNotFoundError) json(response, 404, { error: "app_not_found" });
+      else if (error instanceof SubscriptionReportError) json(response, error.statusCode, { error: error.code });
+      else throw error;
+    }
+  };
   const dashboardCostJoinability = async ({ response, target, appId, appIdentity, pool }: DashboardAppContext): Promise<void> => {
     try {
       const report = [...target.searchParams].length ? await costJoinabilityReport(pool, appIdentity, parseCostJoinabilityQuery(target.searchParams)) : undefined;
@@ -375,6 +396,8 @@ export function createReportsControllers(dependencies: Pick<RequestHandlerDepend
   };
 
   return {
+    dashboard_subscriptions: { boundary: "dashboard_app", handle: dashboardSubscriptions },
+    admin_subscriptions: { boundary: "admin", handle: adminSubscriptions },
     dashboard_cost_joinability: { boundary: "dashboard_app", handle: dashboardCostJoinability },
     admin_cost_joinability: { boundary: "admin", handle: adminCostJoinability },
     dashboard_apple_postbacks: { boundary: "dashboard_app", handle: dashboardApplePostbacks },
