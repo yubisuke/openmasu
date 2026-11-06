@@ -53,6 +53,7 @@ const readerNoTableSelect = new Set([
   "ephemeral.operator_bulk_export_batches",
 ]);
 const seedControlTruncate = new Set([
+  "control.installation_consent_controls",
   "control.google_destination_revisions",
   "control.operator_webhook_content_revisions",
   "control.managed_import_receipts",

@@ -69,7 +69,7 @@ function scope(label: string, producer: Scope["producer"]): Scope {
 function record(
   input: Scope,
   label: string,
-  eventName: "click" | "install" | "ad_revenue" | "purchase" | "refund" | "consent_changed",
+  eventName: "click" | "install" | "ad_revenue" | "purchase" | "refund" | "consent_changed" | "session_start",
   payload: Record<string, unknown>,
 ): Record<string, unknown> {
   return {
@@ -106,6 +106,22 @@ async function append(
     receivedAt: input.receivedAt,
     ...(installationKeyId ? { installationKeyId } : {}),
   });
+}
+
+async function consentCredential(input: Scope, label: string): Promise<string> {
+  const key = `installation-key-purpose-${label}-${run}`;
+  const sdkKey = `sdk-key-purpose-${label}-${run}`;
+  await withTenant(pool, input.tenantId, async client => {
+    await client.query("INSERT INTO control.apps (tenant_id,app_id,created_at) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
+      [input.tenantId,input.appId,input.receivedAt]);
+    await client.query(`INSERT INTO control.sdk_keys (sdk_key_id,tenant_id,app_id,secret_ref,created_at,artifact)
+      VALUES ($1,$2,$3,$4,$5,'{}')`, [sdkKey,input.tenantId,input.appId,`synthetic:${sdkKey}`,input.receivedAt]);
+    await client.query(`INSERT INTO control.installation_credentials
+      (installation_key_id,tenant_id,app_id,installation_id_digest,sdk_key_id,secret_ref,created_at,artifact)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,'{}')`, [key,input.tenantId,input.appId,
+      createHash("sha256").update(`synthetic:${key}`).digest("hex"),sdkKey,`synthetic:${key}`,input.receivedAt]);
+  });
+  return key;
 }
 
 async function batchState(input: Scope, batchId: string): Promise<{
@@ -171,6 +187,104 @@ after(async () => {
 });
 
 describe("SDK auxiliary queue recovery", () => {
+  it("keeps purpose revisions durable across worker restart, expired bodies, regrant and out-of-order controls", async () => {
+    const input = scope("purpose-revisions", "sdk-android");
+    const key = await consentCredential(input,"revisions");
+    const control = (label: string, state: string, revision: number, purpose?: string): Any => ({
+      ...record(input,label,"consent_changed",{ consent_state:state,consent_revision:revision,
+        effective_at:input.receivedAt,consent_policy_version:"synthetic-purpose-v1",
+        ...(purpose ? {processing_purpose_id:purpose} : {}) }),processing_purpose_id:"fraud_prevention",
+    });
+    const session = (label: string, revision: number) => ({
+      ...record(input,label,"session_start",{installation_id:`installation:purpose-${run}`,session_id:`session:${label}-${run}`}),
+      processing_purpose_id:"analytics",consent_revision:revision,
+    });
+    const deliver = async (value: Any, credential=key) => {
+      const batch = await append(input,value,credential);
+      assert.equal(await processSdkInbox(pool,payloadStore,input.tenantId),1);
+      assert.deepEqual(await batchState(input,batch),{status:"processed",reason_code:null});
+      return withTenant(pool,input.tenantId,async client => (await client.query<{artifact: Any}>(
+        "SELECT artifact FROM ledger.event_deliveries WHERE tenant_id=$1 AND app_id=$2 AND record_id=$3 ORDER BY received_at",
+        [input.tenantId,input.appId,value.record_id])).rows.at(-1)!.artifact);
+    };
+    const grant = control("global-grant","granted",1);
+    await deliver(grant);
+    assert.equal((await deliver(session("initial",1))).ingestion_status,"accepted");
+    const withdrawal = control("analytics-stop","withdrawn",2,"analytics");
+    await deliver(withdrawal);
+    await purgeRecordEvidence(input,String(grant.record_id));
+    await purgeRecordEvidence(input,String(withdrawal.record_id));
+    assert.equal((await deliver(session("stopped",1))).consent_decision_reason_code,"consent_withdrawn");
+    const purchase = {...record(input,"revenue-unaffected","purchase",{
+      installation_id:`installation:purpose-${run}`,transaction_id:`transaction:purpose-${run}`,
+      amount_unscaled:"1000000",amount_scale:6,currency:"USD",financial_status:"settled"}),consent_revision:1};
+    assert.equal((await deliver(purchase)).ingestion_status,"accepted","analytics withdrawal must not stop revenue");
+    const install = {...record(input,"attribution-unaffected","install",{
+      installation_id:`installation:purpose-${run}`,install_type:"first_install",referrer_status:"unavailable"}),consent_revision:1};
+    assert.equal((await deliver(install)).ingestion_status,"accepted","analytics withdrawal must not stop attribution");
+    await deliver(control("analytics-regrant","granted",4,"analytics"));
+    assert.equal((await deliver(session("stale-queue",1))).consent_decision_reason_code,"consent_revision_unconfirmed");
+    assert.equal((await deliver(session("fresh",4))).ingestion_status,"accepted");
+    await deliver(control("late-withdrawal","withdrawn",3,"analytics"));
+    await deliver(control("late-grant","granted",1,"analytics"));
+    assert.equal((await deliver(session("after-late-controls",4))).ingestion_status,"accepted");
+    await deliver(control("conflicting-revision","denied",4,"analytics"));
+    assert.equal((await deliver(session("conflict",4))).consent_decision_reason_code,"consent_revision_unconfirmed");
+    await deliver(control("analytics-new-grant","granted",5,"analytics"));
+    assert.equal((await deliver(session("after-conflict",5))).ingestion_status,"accepted");
+    const other = await consentCredential(input,"isolated");
+    assert.equal((await deliver(session("other-installation",5),other)).consent_decision_reason_code,"consent_revision_unconfirmed");
+    assert.equal(await processSdkInbox(pool,payloadStore,input.tenantId),0,"completed batches do not replay");
+  });
+
+  it("commits a consent control and its projection atomically and does not project an invalid grant", async () => {
+    const input = scope("purpose-atomic", "sdk-android");
+    const key = await consentCredential(input,"atomic");
+    const grant: Any = {...record(input,"atomic-grant","consent_changed",{
+      consent_state:"granted",consent_revision:1,processing_purpose_id:"analytics",
+      effective_at:input.receivedAt,consent_policy_version:"synthetic-purpose-v1"}),processing_purpose_id:"fraud_prevention"};
+    const batch = await append(input,grant,key);
+    let injected = false;
+    const failingPool = new Proxy(pool, {get(target,property) {
+      if (property === "connect") return async () => {
+        const client = await target.connect();
+        return new Proxy(client,{get(connection,member) {
+          if (member === "query") return (sql: unknown, ...args: unknown[]) => {
+            if (!injected && typeof sql === "string" && /INSERT INTO control\.installation_consent_controls/.test(sql)) {
+              injected = true; return Promise.reject(Error("synthetic_consent_projection_failure"));
+            }
+            return (connection.query as Function).call(connection,sql,...args);
+          };
+          const value = Reflect.get(connection,member);
+          return typeof value === "function" ? value.bind(connection) : value;
+        }});
+      };
+      const value = Reflect.get(target,property);
+      return typeof value === "function" ? value.bind(target) : value;
+    }});
+    await assert.rejects(processSdkInbox(failingPool,payloadStore,input.tenantId),/synthetic_consent_projection_failure/);
+    assert.equal(injected,true);
+    assert.equal((await batchState(input,batch)).status,"failed");
+    assert.equal(await ledgerCount(input,String(grant.record_id)),0,"control ledger must roll back with its projection");
+    const count = () => withTenant(pool,input.tenantId,async client => Number((await client.query(
+      "SELECT count(*) FROM control.installation_consent_controls WHERE tenant_id=$1",[input.tenantId])).rows[0].count));
+    assert.equal(await count(),0);
+    await append(input,grant,key);
+    assert.equal(await processSdkInbox(pool,payloadStore,input.tenantId),1);
+    assert.equal(await ledgerCount(input,String(grant.record_id)),1);
+    assert.equal(await count(),1);
+    await append(input,grant,key);
+    await processSdkInbox(pool,payloadStore,input.tenantId);
+    assert.equal(await count(),1,"redelivery cannot create another consent revision");
+    const invalid: Any = {...record(input,"invalid-grant","consent_changed",{
+      consent_state:"granted",consent_revision:2,processing_purpose_id:"analytics",
+      effective_at:input.receivedAt}),processing_purpose_id:"fraud_prevention"};
+    await append(input,invalid,key);
+    await processSdkInbox(pool,payloadStore,input.tenantId);
+    assert.equal(await count(),1,"schema-invalid controls cannot authorize measurement");
+    assert.equal(await ledgerCount(input,String(invalid.record_id)),0);
+  });
+
   it("recovers one confirmed SDK/auxiliary attempt while refusing stale forms, active claims, invalid or deleted evidence and preserving admitted facts", async () => {
     const input = scope("operator", "sdk-ios");
     const admin = `synthetic-recovery-admin-${run}-${"a".repeat(32)}`;

@@ -2252,6 +2252,30 @@ describe("M2a signed SDK ingestion", () => {
     assert.equal(await count("ingest_batches"), before);
   });
 
+  it("preserves authenticated consent revisions and refuses malformed revisions before enqueue", async () => {
+    const event = {...sourceEvent(`event:revision:${run}`,"session_start",{
+      installation_id:installationId,session_id:`session:revision:${run}`}),consent_revision:17};
+    const before = await count("ingest_batches");
+    for (const consent_revision of [-1,1.5,"17",null,Number.MAX_SAFE_INTEGER+1]) {
+      const response = await signed("/v1/events/batch",{records:[{...event,consent_revision}]},
+        {secret:installationSecret,installationKeyId});
+      assert.equal(response.status,400);
+    }
+    assert.equal(await count("ingest_batches"),before);
+    const response = await signed("/v1/events/batch",{records:[event]}, {secret:installationSecret,installationKeyId});
+    assert.equal(response.status,202);
+    const receipt = await response.json() as {ingest_batch_id:string};
+    await processSdkInbox(pool,payloadStore,tenantId);
+    const evidence = await withTenant(pool,tenantId,async client => (await client.query<{artifact: Record<string,unknown>}>(
+      `SELECT rejection.artifact FROM ledger.rejections rejection
+       JOIN ledger.ingest_batch_records member USING (tenant_id,app_id,record_id)
+       WHERE rejection.tenant_id=$1 AND rejection.app_id=$2 AND member.ingest_batch_id=$3`,
+      [tenantId,appId,receipt.ingest_batch_id])).rows);
+    assert.equal(evidence.length,1);
+    assert.equal(evidence[0].artifact.consent_revision,17);
+    assert.equal(evidence[0].artifact.reason_code,"consent_revision_unconfirmed");
+  });
+
   it("drains durable batches with permanent event idempotency and conflict evidence", async () => {
     const eventId = `event:duplicate:${run}`;
     const event = sourceEvent(eventId, "custom_event", { installation_id: installationId, event_key: "synthetic_event", attributes: { source: "m2a" } });
