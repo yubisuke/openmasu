@@ -55,7 +55,7 @@ export type NonFraudRuleBundleId =
   | "metric-purchase-net"
   | "metric-total-net";
 
-export type NonFraudRuleBundleKey = NonFraudRuleBundleId | "metric-purchase-net-v0.4.9" | "metric-calendar-activity-v0.4.32";
+export type NonFraudRuleBundleKey = NonFraudRuleBundleId | "metric-purchase-net-v0.4.9" | "metric-calendar-activity-v0.4.32" | "metric-verified-payers-v0.4.35";
 
 export type NonFraudRuleBundleDefinition = {
   readonly id: NonFraudRuleBundleId;
@@ -66,6 +66,18 @@ export type NonFraudRuleBundleDefinition = {
 };
 
 export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonFraudRuleBundleDefinition>> = {
+  "metric-verified-payers-v0.4.35": {
+    id: "metric-verified-payers", version: "0.4.35", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["explicit-native-fraud-net-or-verified-platform-gross-net", "utc-install-relative-half-open-d7",
+      "same-eligible-installations-for-transactions-payers-rate-and-net-money",
+      "accepted-canonical-settled-store-projections-only", "server-producer-and-policy-not-client-extensions",
+      "count-transactions-separately-from-distinct-installations", "full-refund-does-not-erase-historical-payer",
+      "fraud-population-exclusion-is-not-refund-deduction", "purchase-net-only-no-ad-revenue",
+      "exact-refund-cancellation-at-watermark", "per-event-fx-before-half-even-net-over-paying-installations",
+      "zero-payers-undefined-arppu", "receipt-cutoff-and-current-privacy",
+      "preserve-native-gross-v0.4.26", "no-imported-payers-person-identity-or-entitlement-claim"],
+  },
   "metric-outcome-acquisition-cost": {
     id: "metric-outcome-acquisition-cost", version: "0.4.33", kind: "metric",
     implementation: "reference-metric-v0.4",

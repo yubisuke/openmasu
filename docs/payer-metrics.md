@@ -3,6 +3,8 @@
 The opt-in `metric-verified-payers` / `0.4.26` profile uses the existing native,
 selected-first-party installation cohort. It adds four independent D7 metrics;
 historical purchase-net and advertising-revenue definitions do not change.
+Independent `0.4.35` profiles additionally select native fraud-net and verified
+platform gross/fraud-net populations. The original four definitions stay exact.
 
 | Metric | Meaning |
 | --- | --- |
@@ -39,9 +41,32 @@ receipt must be at or before the saved inclusive watermark. A refund targets
 one qualifying settled purchase under the existing exact-target rules. Several
 partial refunds each deduct once. A valid `reverses_refund_record_id` cancels
 only its linked deduction at the watermark. A reversal received later cannot
-silently change an earlier saved run. The profile is gross; net/fraud-filtered,
-imported, platform-assigned, calendar-zone and alternative-window variants are
-not inferred from these definitions.
+silently change an earlier saved run. The original profile is gross; other
+populations are never inferred from those historical names. Imported payer,
+calendar-zone and alternative-window variants remain unsupported.
+
+## Explicit population profiles
+
+`payerCohortMetricDefinitions(profile)` from `@openmasu/contracts/definitions`
+returns four closed definitions under bundle `metric-verified-payers` version
+`0.4.35`. Their names append the selected profile to each name above:
+
+| Profile suffix | Acquisition basis | Fraud population |
+| --- | --- | --- |
+| `native_fraud_net` | `selected_first_party_click` | Exclude fraud-excluded installations |
+| `platform_gross` | `selected_verified_platform` | Gross selected platform population |
+| `platform_fraud_net` | `selected_verified_platform` | Exclude fraud-excluded installations |
+
+Fraud-net excludes the same installation from transactions, historical payers,
+the payer-rate cohort denominator and the purchase/refund ARPPU numerator.
+Purchase-net instead deducts qualifying refunds from money; it does not erase
+the historical payer. These are independent operations. A platform campaign
+requires its explicit `network` and trusted server projection; it cannot borrow
+first-party or imported context. Gross does not resurrect a superseded or
+privacy-removed selected platform proof. Comparison/export meaning preserves
+the exact acquisition basis and fraud policy, rather than relabeling it native
+or gross. Existing `payerMetricDefinitions()` still returns only the original
+four native/gross definitions.
 
 Counts remain zero when there is no qualifying purchase. With a nonempty
 cohort, payer rate is zero. Empty-cohort rate is `undefined/empty_cohort`;
@@ -86,10 +111,13 @@ immutable; unverified source claims cannot trigger payer publication.
 ## Evidence and limits
 
 [Fixture 73](../fixtures/v0.4/73-verified-payers/README.md) independently constructs
-all 13 artifact families and 12 saved values. Shared synthetic vectors exercise
+all 13 artifact families and 12 saved values. [Fixture 82](../fixtures/v0.4/82-payer-cohort-profiles/README.md)
+independently exercises all twelve additional definitions without changing
+earlier goldens. Shared synthetic vectors exercise
 multiple transactions/payers, partial/full refunds, targeted cancellation,
 pending/unverified observations, retries, receipt cutoff, empty population and
 missing FX in TS, Python and SQL. Existing privacy-replay tests cover deletion
 and restoration. No service, table or dependency is added. Real store access,
 real-device purchase delivery, actual proceeds and operational completeness
-remain unverified. This source addition is not in the frozen rc.2 SDK release.
+remain unverified. The original native/gross metrics are included in rc.3;
+the additional population profiles are current-source work, not a new SDK release.

@@ -1,0 +1,929 @@
+[
+  {
+    "metric_run_id": "payer82:cohort_arppu_d7_usd_native_fraud_net",
+    "metric_name": "cohort_arppu_d7_usd_native_fraud_net",
+    "metric_definition_version": "0.4.35",
+    "input_snapshot_id": "ed53176d04711fe3e60ff56425d1eec2422c87dc6b8ce2c7a38a853b86a22f14",
+    "input_received_at_watermark": "2026-08-10T00:00:00.000Z",
+    "input_ledger_position": "2026-08-09T03:00:01.000Z|refund-55-pending",
+    "computed_at": "2026-08-10T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-payers",
+    "rule_bundle_version": "0.4.35",
+    "rule_bundle_hash": "d2072d075d3c89f840d182979a0380d5921ef3afc2bcd08ef2fd1bf275a02c26",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "fraud_policy": "net",
+    "value_unscaled": "6000000",
+    "fx_rate_unscaled": "125000000",
+    "fx_rate_scale": 8,
+    "fx_rate_source": "synthetic-fixture-rate",
+    "fx_rate_as_of": "2026-08-01T00:00:00.000Z",
+    "fx_rate_snapshot_id": "5afcd53dab199f150bc0760693e9caf033cbb1eeae1a6751a7db4f2dee584d31",
+    "fx_policy_version": "fx-v0.4.8",
+    "amount_scale": 6,
+    "currency": "USD",
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-08-01"
+      },
+      "dimension_digest": "da81025a9b41f4f1034f8aa9d61c7624801a122eb97ca1af15114ccbac9368cf"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-revenue-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-reversed",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "payer82:cohort_arppu_d7_usd_platform_fraud_net",
+    "metric_name": "cohort_arppu_d7_usd_platform_fraud_net",
+    "metric_definition_version": "0.4.35",
+    "input_snapshot_id": "a8b95351a1bb0784ea3f29353b3edc3d672ce798b443ce17787bdd371b3a71a8",
+    "input_received_at_watermark": "2026-08-10T00:00:00.000Z",
+    "input_ledger_position": "2026-08-09T03:00:01.000Z|refund-55-pending",
+    "computed_at": "2026-08-10T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-payers",
+    "rule_bundle_version": "0.4.35",
+    "rule_bundle_hash": "d2072d075d3c89f840d182979a0380d5921ef3afc2bcd08ef2fd1bf275a02c26",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "fraud_policy": "net",
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-08-01"
+      },
+      "dimension_digest": "da81025a9b41f4f1034f8aa9d61c7624801a122eb97ca1af15114ccbac9368cf"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-revenue-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-reversed",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "value_state": "undefined",
+    "undefined_reason": "no_paying_installations"
+  },
+  {
+    "metric_run_id": "payer82:cohort_arppu_d7_usd_platform_gross",
+    "metric_name": "cohort_arppu_d7_usd_platform_gross",
+    "metric_definition_version": "0.4.35",
+    "input_snapshot_id": "a8b95351a1bb0784ea3f29353b3edc3d672ce798b443ce17787bdd371b3a71a8",
+    "input_received_at_watermark": "2026-08-10T00:00:00.000Z",
+    "input_ledger_position": "2026-08-09T03:00:01.000Z|refund-55-pending",
+    "computed_at": "2026-08-10T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-payers",
+    "rule_bundle_version": "0.4.35",
+    "rule_bundle_hash": "d2072d075d3c89f840d182979a0380d5921ef3afc2bcd08ef2fd1bf275a02c26",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "money",
+    "fraud_policy": "gross",
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-08-01"
+      },
+      "dimension_digest": "da81025a9b41f4f1034f8aa9d61c7624801a122eb97ca1af15114ccbac9368cf"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-revenue-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-reversed",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "value_state": "undefined",
+    "undefined_reason": "no_paying_installations"
+  },
+  {
+    "metric_run_id": "payer82:cohort_payer_rate_d7_native_fraud_net",
+    "metric_name": "cohort_payer_rate_d7_native_fraud_net",
+    "metric_definition_version": "0.4.35",
+    "input_snapshot_id": "ed53176d04711fe3e60ff56425d1eec2422c87dc6b8ce2c7a38a853b86a22f14",
+    "input_received_at_watermark": "2026-08-10T00:00:00.000Z",
+    "input_ledger_position": "2026-08-09T03:00:01.000Z|refund-55-pending",
+    "computed_at": "2026-08-10T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-payers",
+    "rule_bundle_version": "0.4.35",
+    "rule_bundle_hash": "d2072d075d3c89f840d182979a0380d5921ef3afc2bcd08ef2fd1bf275a02c26",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "fraud_policy": "net",
+    "value_unscaled": "1000000",
+    "ratio_scale": 6,
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-08-01"
+      },
+      "dimension_digest": "da81025a9b41f4f1034f8aa9d61c7624801a122eb97ca1af15114ccbac9368cf"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-revenue-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-reversed",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "payer82:cohort_payer_rate_d7_platform_fraud_net",
+    "metric_name": "cohort_payer_rate_d7_platform_fraud_net",
+    "metric_definition_version": "0.4.35",
+    "input_snapshot_id": "a8b95351a1bb0784ea3f29353b3edc3d672ce798b443ce17787bdd371b3a71a8",
+    "input_received_at_watermark": "2026-08-10T00:00:00.000Z",
+    "input_ledger_position": "2026-08-09T03:00:01.000Z|refund-55-pending",
+    "computed_at": "2026-08-10T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-payers",
+    "rule_bundle_version": "0.4.35",
+    "rule_bundle_hash": "d2072d075d3c89f840d182979a0380d5921ef3afc2bcd08ef2fd1bf275a02c26",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "fraud_policy": "net",
+    "ratio_scale": 6,
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-08-01"
+      },
+      "dimension_digest": "da81025a9b41f4f1034f8aa9d61c7624801a122eb97ca1af15114ccbac9368cf"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-revenue-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-reversed",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "value_state": "undefined",
+    "undefined_reason": "empty_cohort"
+  },
+  {
+    "metric_run_id": "payer82:cohort_payer_rate_d7_platform_gross",
+    "metric_name": "cohort_payer_rate_d7_platform_gross",
+    "metric_definition_version": "0.4.35",
+    "input_snapshot_id": "a8b95351a1bb0784ea3f29353b3edc3d672ce798b443ce17787bdd371b3a71a8",
+    "input_received_at_watermark": "2026-08-10T00:00:00.000Z",
+    "input_ledger_position": "2026-08-09T03:00:01.000Z|refund-55-pending",
+    "computed_at": "2026-08-10T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-payers",
+    "rule_bundle_version": "0.4.35",
+    "rule_bundle_hash": "d2072d075d3c89f840d182979a0380d5921ef3afc2bcd08ef2fd1bf275a02c26",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "ratio",
+    "fraud_policy": "gross",
+    "ratio_scale": 6,
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-08-01"
+      },
+      "dimension_digest": "da81025a9b41f4f1034f8aa9d61c7624801a122eb97ca1af15114ccbac9368cf"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-revenue-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-reversed",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ],
+    "value_state": "undefined",
+    "undefined_reason": "empty_cohort"
+  },
+  {
+    "metric_run_id": "payer82:cohort_paying_installations_d7_native_fraud_net",
+    "metric_name": "cohort_paying_installations_d7_native_fraud_net",
+    "metric_definition_version": "0.4.35",
+    "input_snapshot_id": "ed53176d04711fe3e60ff56425d1eec2422c87dc6b8ce2c7a38a853b86a22f14",
+    "input_received_at_watermark": "2026-08-10T00:00:00.000Z",
+    "input_ledger_position": "2026-08-09T03:00:01.000Z|refund-55-pending",
+    "computed_at": "2026-08-10T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-payers",
+    "rule_bundle_version": "0.4.35",
+    "rule_bundle_hash": "d2072d075d3c89f840d182979a0380d5921ef3afc2bcd08ef2fd1bf275a02c26",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "fraud_policy": "net",
+    "value_unscaled": "1",
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-08-01"
+      },
+      "dimension_digest": "da81025a9b41f4f1034f8aa9d61c7624801a122eb97ca1af15114ccbac9368cf"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-revenue-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-reversed",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "payer82:cohort_paying_installations_d7_platform_fraud_net",
+    "metric_name": "cohort_paying_installations_d7_platform_fraud_net",
+    "metric_definition_version": "0.4.35",
+    "input_snapshot_id": "a8b95351a1bb0784ea3f29353b3edc3d672ce798b443ce17787bdd371b3a71a8",
+    "input_received_at_watermark": "2026-08-10T00:00:00.000Z",
+    "input_ledger_position": "2026-08-09T03:00:01.000Z|refund-55-pending",
+    "computed_at": "2026-08-10T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-payers",
+    "rule_bundle_version": "0.4.35",
+    "rule_bundle_hash": "d2072d075d3c89f840d182979a0380d5921ef3afc2bcd08ef2fd1bf275a02c26",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "fraud_policy": "net",
+    "value_unscaled": "0",
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-08-01"
+      },
+      "dimension_digest": "da81025a9b41f4f1034f8aa9d61c7624801a122eb97ca1af15114ccbac9368cf"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-revenue-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-reversed",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "payer82:cohort_paying_installations_d7_platform_gross",
+    "metric_name": "cohort_paying_installations_d7_platform_gross",
+    "metric_definition_version": "0.4.35",
+    "input_snapshot_id": "a8b95351a1bb0784ea3f29353b3edc3d672ce798b443ce17787bdd371b3a71a8",
+    "input_received_at_watermark": "2026-08-10T00:00:00.000Z",
+    "input_ledger_position": "2026-08-09T03:00:01.000Z|refund-55-pending",
+    "computed_at": "2026-08-10T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-payers",
+    "rule_bundle_version": "0.4.35",
+    "rule_bundle_hash": "d2072d075d3c89f840d182979a0380d5921ef3afc2bcd08ef2fd1bf275a02c26",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "fraud_policy": "gross",
+    "value_unscaled": "0",
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-08-01"
+      },
+      "dimension_digest": "da81025a9b41f4f1034f8aa9d61c7624801a122eb97ca1af15114ccbac9368cf"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-revenue-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-reversed",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "payer82:cohort_purchase_count_d7_native_fraud_net",
+    "metric_name": "cohort_purchase_count_d7_native_fraud_net",
+    "metric_definition_version": "0.4.35",
+    "input_snapshot_id": "ed53176d04711fe3e60ff56425d1eec2422c87dc6b8ce2c7a38a853b86a22f14",
+    "input_received_at_watermark": "2026-08-10T00:00:00.000Z",
+    "input_ledger_position": "2026-08-09T03:00:01.000Z|refund-55-pending",
+    "computed_at": "2026-08-10T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-payers",
+    "rule_bundle_version": "0.4.35",
+    "rule_bundle_hash": "d2072d075d3c89f840d182979a0380d5921ef3afc2bcd08ef2fd1bf275a02c26",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "fraud_policy": "net",
+    "value_unscaled": "1",
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-08-01"
+      },
+      "dimension_digest": "da81025a9b41f4f1034f8aa9d61c7624801a122eb97ca1af15114ccbac9368cf"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-revenue-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-reversed",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "payer82:cohort_purchase_count_d7_platform_fraud_net",
+    "metric_name": "cohort_purchase_count_d7_platform_fraud_net",
+    "metric_definition_version": "0.4.35",
+    "input_snapshot_id": "a8b95351a1bb0784ea3f29353b3edc3d672ce798b443ce17787bdd371b3a71a8",
+    "input_received_at_watermark": "2026-08-10T00:00:00.000Z",
+    "input_ledger_position": "2026-08-09T03:00:01.000Z|refund-55-pending",
+    "computed_at": "2026-08-10T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-payers",
+    "rule_bundle_version": "0.4.35",
+    "rule_bundle_hash": "d2072d075d3c89f840d182979a0380d5921ef3afc2bcd08ef2fd1bf275a02c26",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "fraud_policy": "net",
+    "value_unscaled": "0",
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-08-01"
+      },
+      "dimension_digest": "da81025a9b41f4f1034f8aa9d61c7624801a122eb97ca1af15114ccbac9368cf"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-revenue-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-reversed",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  },
+  {
+    "metric_run_id": "payer82:cohort_purchase_count_d7_platform_gross",
+    "metric_name": "cohort_purchase_count_d7_platform_gross",
+    "metric_definition_version": "0.4.35",
+    "input_snapshot_id": "a8b95351a1bb0784ea3f29353b3edc3d672ce798b443ce17787bdd371b3a71a8",
+    "input_received_at_watermark": "2026-08-10T00:00:00.000Z",
+    "input_ledger_position": "2026-08-09T03:00:01.000Z|refund-55-pending",
+    "computed_at": "2026-08-10T00:01:00.000Z",
+    "data_freshness": "complete",
+    "aggregation_time_zone": "UTC",
+    "rule_bundle_id": "metric-verified-payers",
+    "rule_bundle_version": "0.4.35",
+    "rule_bundle_hash": "d2072d075d3c89f840d182979a0380d5921ef3afc2bcd08ef2fd1bf275a02c26",
+    "rounding_mode": "half_even",
+    "reproducibility_status": "fully_reproducible",
+    "value_type": "count",
+    "fraud_policy": "gross",
+    "value_unscaled": "0",
+    "grouping": {
+      "dimensions": {
+        "cohort_date": "2026-08-01"
+      },
+      "dimension_digest": "da81025a9b41f4f1034f8aa9d61c7624801a122eb97ca1af15114ccbac9368cf"
+    },
+    "evidence_refs": [
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "ad-revenue-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "install-55",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "purchase-55-reversed",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-d0",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      },
+      {
+        "tenant_id": "tenant-a",
+        "app_id": "app-a",
+        "ref": "refund-55-pending",
+        "lifecycle_status": "available",
+        "access_class": "protected"
+      }
+    ]
+  }
+]

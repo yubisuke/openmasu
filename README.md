@@ -55,7 +55,7 @@ Do not bypass the upgrade preflight or reset a ledger you need to keep.
 Downloaded native SDK evidence is recorded in the publication receipt; it is
 not physical-device or all-platform onboarding evidence.
 
-Current source includes additions through contract patch `v0.4.34`; the wire
+Current source includes additions through contract patch `v0.4.35`; the wire
 identity remains `0.4.0` with schema URNs ending in `:v0.4`. See
 [current status](docs/STATUS.md) and [post-release scope](docs/releases/next.md).
 Use the matching tag and its documentation when evaluating a published release.
@@ -141,8 +141,8 @@ python -m pip install --require-hashes --requirement requirements-contract.txt
 npm run validate
 ```
 
-It checks 28 schemas, 8 registries, 81 reviewed synthetic fixtures, 1053 golden
-output artifacts, 81 scenario assertions, 27 acceptance criteria,
+It checks 28 schemas, 8 registries, 82 reviewed synthetic fixtures, 1066 golden
+output artifacts, 82 scenario assertions, 27 acceptance criteria,
 TypeScript/Python determinism and RFC 8785 conformance, plus type, documentation,
 release-identity and public-data guardrails. It never regenerates goldens.
 Runtime, database and native SDK evidence have separate CI owners.

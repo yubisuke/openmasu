@@ -8,7 +8,7 @@ import { engagementMetricDefinitions, engagementPolicyMetricDefinitions } from "
 import { importedAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
 import { calendarAcquisitionMetricDefinitions } from "@openmasu/contracts/definitions";
 import { calendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
-import { payerMetricDefinitions } from "@openmasu/contracts/definitions";
+import { payerMetricDefinitions, PAYER_COHORT_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 import { horizonAcquisitionKpiDefinitions, ACQUISITION_KPI_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 
 const fx = { policy_version: "synthetic", target_currency: "USD", target_scale: 6, rounding_mode: "half_even" as const,
@@ -28,17 +28,21 @@ it("native_horizon_comparisons_require_the_complete_window_for_all_roles_and_kee
   assert.equal(comparisonMaturity(oldCount, { cohort_date: "2026-08-06" }, "2026-08-07T00:00:00.000Z").state, "window_elapsed");
 });
 it("payer_comparison_keeps_verified_population_historical_payers_net_money_and_D7_scope", () => {
-  for (const definition of payerMetricDefinitions()) {
+  for (const definition of [...payerMetricDefinitions(), ...PAYER_COHORT_METRIC_DEFINITIONS]) {
     const context = captureMetricComparisonContext(run, definition, fx, "after", sha256);
     const meaning = comparisonMeaning(context);
     assert.ok(meaning && "payer_identity" in meaning);
     assert.equal(meaning.payer_identity, "tenant_app_installation_not_person");
     assert.equal(meaning.refunded_payer, "retained_historical_purchase");
-    assert.equal(meaning.population, "native_cohort_verified_settled_store_projections");
+    assert.equal(meaning.population, definition.acquisition_basis === "selected_verified_platform"
+      ? "platform_cohort_verified_settled_store_projections" : "native_cohort_verified_settled_store_projections");
+    assert.equal(meaning.fraud_policy, definition.fraud_policy);
+    assert.equal(meaning.acquisition_basis, definition.acquisition_basis);
     assert.equal(meaning.aggregation, "cumulative");
     assert.equal(meaning.fx === null, definition.value_type !== "money");
     assert.equal(comparisonMaturity(context, { cohort_date: "2026-08-01" }, "2026-08-10T00:00:00.000Z").state, "window_elapsed");
-    assert.equal(comparisonMeaning({ ...context, definition: { ...definition, fraud_policy: "net" } }), undefined);
+    assert.equal(comparisonMeaning({ ...context, definition: { ...definition,
+      fraud_policy: definition.fraud_policy === "gross" ? "net" : "gross" } }), undefined);
   }
 });
 it("calendar_activity_comparison_preserves_event_units_daily_distinct_scope_and_UTC_maturity", () => {

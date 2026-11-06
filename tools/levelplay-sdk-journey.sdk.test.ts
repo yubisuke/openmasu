@@ -88,7 +88,9 @@ it("levelplay_callback_room_queue_signed_ingest_worker_and_ad_revenue_cohort", {
     assert.equal(revenue.length, 3, "four callbacks must not become four logical impressions");
     assert.equal(new Set(revenue.map(row => row.artifact.event_id)).size, 3);
     assert.equal(await processSdkInbox(pool, payloadStore, tenantId), 0);
-    const day = evidence.find(row => row.event_name === "install")!.occurred_at.slice(0, 10);
+    const install = evidence.filter(row => row.event_name === "install");
+    assert.equal(install.length, 1, "the consented first launch must reach the ledger before cohort calculation");
+    const day = install[0].occurred_at.slice(0, 10);
     const watermark = new Date().toISOString();
     const runs = await computeSqlMetricRuns(pool, { contract_version: "0.4.0",
       fx_policy: { policy_version: "synthetic-levelplay", target_currency: "USD", target_scale: 6,

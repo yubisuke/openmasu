@@ -151,28 +151,44 @@
       "type": "object", "additionalProperties": true,
       "required": ["acquisition_basis", "fraud_policy", "refund_reversal_policy", "grouping_dimensions"],
       "properties": {
-        "metric_definition_version": { "const": "0.4.26" },
-        "rule_bundle_id": { "const": "metric-verified-payers" }, "rule_bundle_version": { "const": "0.4.26" },
-        "rule_bundle_hash": { "const": "a9574eb2d767e0fe816b5861f7dd88e885c30aa799b0d0511ce115d6f81e3b52" },
+        "rule_bundle_id": { "const": "metric-verified-payers" },
         "anchor_event": { "const": "install" }, "aggregation_time_zone": { "const": "UTC" },
-        "acquisition_basis": { "const": "selected_first_party_click" }, "fraud_policy": { "const": "gross" },
         "refund_reversal_policy": { "const": "cancel_target_refund_at_watermark" },
         "grouping_dimensions": { "const": ["campaign_id", "network", "country", "cohort_date", "attribution_status"] },
         "activity_events": false, "event_names": false, "import_provider": false, "calendar_cohort_policy": false,
         "retention_maturity_policy": false, "acquisition_dimension_policy": false, "conversion_event_key": false,
         "engagement_credit_policy": false, "cost_selection_policy": false
       },
+      "allOf": [{ "oneOf": [
+        { "properties": {
+          "metric_definition_version": { "const": "0.4.26" }, "rule_bundle_version": { "const": "0.4.26" },
+          "rule_bundle_hash": { "const": "a9574eb2d767e0fe816b5861f7dd88e885c30aa799b0d0511ce115d6f81e3b52" },
+          "acquisition_basis": { "const": "selected_first_party_click" }, "fraud_policy": { "const": "gross" },
+          "metric_name": { "type": "string", "pattern": "^cohort_(purchase_count_d7|paying_installations_d7|payer_rate_d7|arppu_d7_usd)$" }
+        } },
+        { "properties": {
+          "metric_definition_version": { "const": "0.4.35" }, "rule_bundle_version": { "const": "0.4.35" },
+          "rule_bundle_hash": { "const": "d2072d075d3c89f840d182979a0380d5921ef3afc2bcd08ef2fd1bf275a02c26" }
+        }, "oneOf": [
+          { "properties": { "metric_name": { "type": "string", "pattern": "_native_fraud_net$" },
+            "acquisition_basis": { "const": "selected_first_party_click" }, "fraud_policy": { "const": "net" } } },
+          { "properties": { "metric_name": { "type": "string", "pattern": "_platform_gross$" },
+            "acquisition_basis": { "const": "selected_verified_platform" }, "fraud_policy": { "const": "gross" } } },
+          { "properties": { "metric_name": { "type": "string", "pattern": "_platform_fraud_net$" },
+            "acquisition_basis": { "const": "selected_verified_platform" }, "fraud_policy": { "const": "net" } } }
+        ] }
+      ] }],
       "oneOf": [
-        { "properties": { "metric_name": { "const": "cohort_purchase_count_d7" }, "value_type": { "const": "count" },
+        { "properties": { "metric_name": { "type": "string", "pattern": "^cohort_purchase_count_d7(_native_fraud_net|_platform_gross|_platform_fraud_net)?$" }, "value_type": { "const": "count" },
           "currency": false, "amount_scale": false, "ratio_scale": false,
           "definition": { "const": { "calculation": "purchase_count", "numerator": "purchases", "window": { "type": "elapsed", "day": 7 } } } } },
-        { "properties": { "metric_name": { "const": "cohort_paying_installations_d7" }, "value_type": { "const": "count" },
+        { "properties": { "metric_name": { "type": "string", "pattern": "^cohort_paying_installations_d7(_native_fraud_net|_platform_gross|_platform_fraud_net)?$" }, "value_type": { "const": "count" },
           "currency": false, "amount_scale": false, "ratio_scale": false,
           "definition": { "const": { "calculation": "paying_installations", "numerator": "paying_installations", "window": { "type": "elapsed", "day": 7 } } } } },
-        { "required": ["ratio_scale"], "properties": { "metric_name": { "const": "cohort_payer_rate_d7" }, "value_type": { "const": "ratio" },
+        { "required": ["ratio_scale"], "properties": { "metric_name": { "type": "string", "pattern": "^cohort_payer_rate_d7(_native_fraud_net|_platform_gross|_platform_fraud_net)?$" }, "value_type": { "const": "ratio" },
           "currency": false, "amount_scale": false, "ratio_scale": { "const": 6 },
           "definition": { "const": { "calculation": "paying_installations_over_cohort", "numerator": "paying_installations", "denominator": "cohort_size", "window": { "type": "elapsed", "day": 7 } } } } },
-        { "required": ["currency", "amount_scale"], "properties": { "metric_name": { "const": "cohort_arppu_d7_usd" }, "value_type": { "const": "money" },
+        { "required": ["currency", "amount_scale"], "properties": { "metric_name": { "type": "string", "pattern": "^cohort_arppu_d7_usd(_native_fraud_net|_platform_gross|_platform_fraud_net)?$" }, "value_type": { "const": "money" },
           "currency": { "const": "USD" }, "amount_scale": { "const": 6 }, "ratio_scale": false,
           "definition": { "const": { "calculation": "revenue_over_paying_installations", "numerator": "purchase_net_revenue", "denominator": "paying_installations", "window": { "type": "elapsed", "day": 7 } } } } }
       ]

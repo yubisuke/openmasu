@@ -44,7 +44,7 @@ import { buildAcquisitionKpiSets } from "../../api/src/acquisition-kpis.js";
 import { buildDashboardView } from "../../api/src/dashboard/view.js";
 import { renderDashboard } from "../../api/src/dashboard/render.js";
 import { PAYER_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
-import { syntheticPayerCases } from "../../../tools/synthetic-payer-cases.js";
+import { syntheticPayerCases, syntheticPayerCohortCases } from "../../../tools/synthetic-payer-cases.js";
 import { syntheticOutcomeCostCases } from "../../../tools/synthetic-outcome-cost-cases.js";
 import { metricValueLabel } from "../../api/src/dashboard/metric-value.js";
 
@@ -186,6 +186,34 @@ describe("same-set imported and verified-platform acquisition KPI SQL parity", {
 describe("verified payer SQL parity and saved reporting", { concurrency: false }, () => {
   const app = createAppPool(), seed = createSeedPool(), reader = createReaderPool();
   after(async () => { await Promise.all([app.end(), seed.end(), reader.end()]); });
+  it("payer_cohort_SQL_matches_selected_basis_fraud_net_refunds_FX_and_current_privacy", async () => {
+    const cases = syntheticPayerCohortCases(JSON.parse(readFileSync("fixtures/v0.4/62-explicit-refund-reversal/input.json", "utf8")),
+      JSON.parse(readFileSync("fixtures/v0.4/66-verified-platform-acquisition/input.json", "utf8")));
+    for (const entry of cases) {
+      await ingestFixture(entry.name, entry.input, app, seed);
+      await persistSyntheticPlatformResults(app, entry.input);
+      const actual = await computeSqlMetricRuns(app, entry.input, true);
+      assert.deepEqual(entry.input.metric_definitions.map((definition: Any) => {
+        const row = actual.find(run => run.metric_name === definition.metric_name)!;
+        return row.value_unscaled ?? row.undefined_reason;
+      }), entry.expected, entry.name);
+      assertPlatformRunParity(actual, evaluate(entry.input).metric_runs, entry.name);
+      const stored = await withTenant(app, "tenant-a", client => client.query(`SELECT run.artifact, manifest.artifact AS replay
+        FROM ledger.metric_runs run JOIN control.metric_replay_manifests manifest
+        ON manifest.tenant_id=run.tenant_id AND manifest.app_id=run.app_id AND manifest.source_metric_run_id=run.metric_run_id
+        WHERE run.tenant_id='tenant-a' AND run.app_id='app-a'`));
+      for (const row of stored.rows) {
+        const replayed = await computeSqlMetricRuns(app, { metric_definitions: [row.replay.metric_definition],
+          metric_evaluations: [row.replay.evaluation], fx_policy: row.replay.fx_policy }, false,
+          { tenant_id: "tenant-a", app_id: "app-a" });
+        assertPlatformRunParity(replayed, [row.artifact], `${entry.name}: saved definition and current privacy replay`);
+      }
+    }
+    const reviewed = JSON.parse(readFileSync("fixtures/v0.4/82-payer-cohort-profiles/input.json", "utf8"));
+    await ingestFixture("payer82-reviewed", reviewed, app, seed);
+    assertPlatformRunParity(await computeSqlMetricRuns(app, reviewed, false), JSON.parse(readFileSync(
+      "fixtures/v0.4/82-payer-cohort-profiles/expected_metric_runs.json", "utf8")), "payer82 independent golden");
+  });
   it("payer_SQL_preserves_verified_authority_counts_partial_full_refunds_cancellation_cutoffs_and_empty_denominators", async () => {
     const cases = syntheticPayerCases(JSON.parse(readFileSync("fixtures/v0.4/55-purchase-refund-net-revenue/input.json", "utf8")),
       JSON.parse(readFileSync("fixtures/v0.4/62-explicit-refund-reversal/input.json", "utf8")));

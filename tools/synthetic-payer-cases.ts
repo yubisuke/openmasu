@@ -1,7 +1,110 @@
-import { PAYER_METRIC_DEFINITIONS, DATED_FX_POLICY_VERSION, DATED_FX_RATE_SELECTION } from "@openmasu/contracts/definitions";
+import { PAYER_METRIC_DEFINITIONS, PAYER_COHORT_PROFILES, payerCohortMetricDefinitions,
+  DATED_FX_POLICY_VERSION, DATED_FX_RATE_SELECTION } from "@openmasu/contracts/definitions";
 
 type Any = Record<string, any>;
 export type SyntheticPayerCase = { name: string; input: Any; expected: readonly string[] };
+
+/** Four-value vectors are hand arithmetic, not obtained from either evaluator. */
+export function syntheticPayerCohortCases(nativeSource: Any, platformSource: Any): SyntheticPayerCase[] {
+  const cases: SyntheticPayerCase[] = [];
+  const records = (input: Any): Any[] => input.batches.flatMap((batch: Any) => batch.records);
+  const select = (input: Any, profile: typeof PAYER_COHORT_PROFILES[number]) => {
+    input.metric_definitions = payerCohortMetricDefinitions(profile);
+    input.metric_evaluations[0].metric_names = input.metric_definitions.map((row: Any) => row.metric_name);
+    return input;
+  };
+  const native = syntheticPayerInput(nativeSource);
+  native.metric_evaluations[0].grouping = { cohort_date: "2026-08-06" };
+  native.metric_evaluations[0].computed_at = native.metric_evaluations[0].input_received_at_watermark = "2026-08-13T00:00:00.000Z";
+  // Two payers in three installations: USD 10 - 4 plus USD 20; the USD 20 payer is excluded.
+  for (const suffix of ["nonpayer", "excluded"]) {
+    const installBatch = structuredClone(native.batches.find((batch: Any) => batch.records[0].event_name === "install"));
+    const install = installBatch.records[0];
+    for (const key of ["record_id", "event_id", "delivery_id"]) install[key] += `:${suffix}`;
+    install.payload.installation_id += `:${suffix}`;
+    installBatch.batch_id += `:${suffix}`;
+    if (suffix === "excluded") {
+      const clickBatch = structuredClone(native.batches.find((batch: Any) => batch.records[0].event_name === "click"));
+      const click = clickBatch.records[0];
+      for (const key of ["record_id", "event_id", "delivery_id"]) click[key] += ":excluded";
+      click.payload.click_id = "synthetic_payer_excluded_click"; click.payload.bot_prefetch = true;
+      clickBatch.batch_id += ":excluded"; native.batches.push(clickBatch);
+      install.payload.click_id = click.payload.click_id;
+      const purchaseBatch = structuredClone(native.batches.find((batch: Any) => batch.records[0].event_name === "purchase"));
+      const purchase = purchaseBatch.records[0];
+      for (const key of ["record_id", "event_id", "delivery_id"]) purchase[key] += ":excluded";
+      Object.assign(purchase.payload, { installation_id: install.payload.installation_id,
+        transaction_id: "synthetic-excluded-purchase", amount_unscaled: "20000000" });
+      delete purchase.payload.original_transaction_id;
+      purchaseBatch.batch_id += ":excluded"; native.batches.push(purchaseBatch);
+    }
+    native.batches.push(installBatch);
+  }
+  for (const batch of native.batches) batch.server_context.fraud_actions_enabled = true;
+  cases.push({ name: "payer_native_gross_control_counts_excluded_historical_payer", input: structuredClone(native),
+    expected: ["2", "2", "666667", "13000000"] });
+  select(native, "native_fraud_net");
+  cases.push({ name: "payer_native_fraud_net_excludes_same_installation_from_every_operand", input: native,
+    expected: ["1", "1", "500000", "6000000"] });
+
+  for (const profile of ["platform_gross", "platform_fraud_net"] as const) {
+    const platform = structuredClone(platformSource);
+    platform.cost_records = [];
+    const template = native.batches.find((batch: Any) => batch.records[0].event_name === "purchase");
+    for (const [kind, amount] of [["purchase", "10000000"], ["refund", "4000000"]]) {
+      const batch = structuredClone(template), record = batch.records[0], id = `synthetic-platform-payer-${kind}`;
+      batch.batch_id = id; batch.server_context.received_at = "2026-09-29T12:00:01.000Z";
+      record.record_id = id; record.event_id = `event:${id}`; record.delivery_id = `delivery:${id}`;
+      record.event_name = kind; record.occurred_at = `2026-09-29T${kind === "purchase" ? "10" : "11"}:00:00.000Z`;
+      record.received_at = batch.server_context.received_at;
+      record.payload = { event_name: kind, installation_id: "installation:meta-66", transaction_id: `transaction:${id}`,
+        amount_unscaled: amount, amount_scale: 6, currency: "USD", financial_status: "settled",
+        ...(kind === "refund" ? { original_transaction_id: "transaction:synthetic-platform-payer-purchase",
+          correction_target_record_id: "synthetic-platform-payer-purchase" } : {}) };
+      platform.batches.push(batch);
+    }
+    platform.metric_evaluations = [{ ...platform.metric_evaluations[0], metric_run_id_prefix: "payer-platform",
+      input_received_at_watermark: "2026-10-07T00:00:00.000Z", computed_at: "2026-10-07T00:00:00.000Z" }];
+    select(platform, profile);
+    const add = (name: string, expected: readonly string[], mutate: (input: Any) => void = () => {}) => {
+      const input = structuredClone(platform); mutate(input); cases.push({ name: `${profile}_${name}`, input, expected });
+    };
+    add("selected_source_only", ["1", "1", "1000000", "6000000"]);
+    add("full_refund_retains_payer", ["1", "1", "1000000", "0"], input => {
+      records(input).find(row => row.event_name === "refund")!.payload.amount_unscaled = "10000000";
+    });
+    add("no_verified_purchase", ["0", "0", "0", "no_paying_installations"], input => {
+      for (const batch of input.batches) if (["purchase", "refund"].includes(batch.records[0].event_name))
+        batch.server_context.policy_digest = "synthetic-unverified";
+    });
+    add("missing_FX_keeps_counts", ["1", "1", "1000000", "missing_fx_rate"], input => {
+      input.fx_policy = { policy_version: DATED_FX_POLICY_VERSION, rate_selection: DATED_FX_RATE_SELECTION,
+        target_currency: "USD", target_scale: 6, rounding_mode: "half_even", rates: [{ currency: "EUR",
+          effective_date: "2026-09-29", rate_unscaled: "1", rate_scale: 0, source: "synthetic-only",
+          as_of: "2026-09-29T00:00:00.000Z" }] };
+    });
+    add("different_platform_has_no_payers", ["0", "0", "0", "no_paying_installations"], input => {
+      input.metric_evaluations[0].grouping = { cohort_date: "2026-09-28", campaign_id: "2066", network: "apple_adservices" };
+    });
+    add("native_basis_never_claims_platform_campaign", ["0", "0", "empty_cohort", "no_paying_installations"], input => select(input, "native_fraud_net"));
+    add("current_privacy_removes_payer_population", ["0", "0", "empty_cohort", "no_paying_installations"], input => {
+      // Deletion appends an attribution revision. Bind the synthetic server proof
+      // to that revision, as the ledger join does, not to the superseded ID.
+      const proof = input.platform_acquisition_inputs.find((proof: Any) => proof.install_record_id === "meta-66");
+      proof.lifecycle_status = "redacted";
+      proof.attribution.supersedes_attribution_id = proof.attribution.attribution_id;
+      proof.attribution.attribution_id += ":recalculated";
+      proof.attribution.finality = "superseded";
+      proof.attribution.evidence_refs.find((ref: Any) => ref.ref === "meta-66").lifecycle_status = "redacted";
+      input.privacy_requests = [{ contract_version: "0.4.0", tenant_id: "tenant-a", app_id: "app-a",
+        privacy_request_id: "privacy-payer-cohort", deletion_subject_digest: "7".repeat(64), deletion_scope: "installation",
+        requested_via: "tenant_admin_api", requester_auth_ref: "synthetic-admin", requested_at: "2026-10-08T00:00:00.000Z",
+        completed_at: "2026-10-08T00:01:00.000Z", status: "completed", reason_code: "privacy_deletion", policy_version: "privacy-v1",
+        affected_records: [{ record_id: "meta-66", lifecycle_status: "redacted" }] }];
+    });
+  }
+  return cases;
+}
 
 /** Trusted synthetic server contexts, not credentials or assertions obtained from a store. */
 export function syntheticPayerInput(source: Any): Any {

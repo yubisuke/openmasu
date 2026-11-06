@@ -54,7 +54,10 @@ public final class AdRevenueQueueTest {
       OpenMasuUnityBridge.clearSyntheticValidationSession(sessionResult::set);
       assertEquals("cleared", sessionResult.get());
       assertNull(captured.get());
-      sdk.initialize(); sdk.updateConsent("granted", "synthetic-levelplay"); sdk.flushBlocking(10_000L);
+      // This revenue journey needs one stable consent revision, not a race
+      // between first-launch evidence and a concurrent consent change.
+      sdk.updateConsent("granted", "synthetic-levelplay"); sdk.flushBlocking(10_000L);
+      sdk.initialize(); sdk.flushBlocking(10_000L);
       JSONArray observations = input == null ? syntheticObservations() : new JSONArray(
           new String(Files.readAllBytes(java.nio.file.Paths.get(input)), java.nio.charset.StandardCharsets.UTF_8));
       assertEquals(4, observations.length());
@@ -70,6 +73,7 @@ public final class AdRevenueQueueTest {
       sdk = make(context, configuration, transport); field.set(null, sdk);
       captured.set(null); sdk.flushBlocking(10_000L);
       List<QueuedEvent> pending = captured.get(); assertNotNull(pending);
+      assertEquals(1, pending.stream().filter(value -> value.getEventName().equals("install")).count());
       List<QueuedEvent> revenue = pending.stream().filter(value -> value.getEventName().equals("ad_revenue"))
           .collect(java.util.stream.Collectors.toList());
       assertEquals(3, revenue.size());

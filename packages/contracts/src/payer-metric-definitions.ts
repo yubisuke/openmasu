@@ -25,9 +25,26 @@ export const PAYER_METRIC_DEFINITIONS: readonly Definition[] = [
 
 export function payerMetricDefinitions(): Definition[] { return structuredClone([...PAYER_METRIC_DEFINITIONS]); }
 
+export const PAYER_COHORT_PROFILES = ["native_fraud_net", "platform_gross", "platform_fraud_net"] as const;
+export type PayerCohortProfile = typeof PAYER_COHORT_PROFILES[number];
+
+/** Independent opt-ins; the historical no-argument factory keeps its exact four definitions. */
+export function payerCohortMetricDefinitions(profile: PayerCohortProfile): Definition[] {
+  if (!(PAYER_COHORT_PROFILES as readonly string[]).includes(profile)) throw new Error("payer_cohort_profile_invalid");
+  return payerMetricDefinitions().map(definition => ({ ...definition,
+    metric_name: `${definition.metric_name}_${profile}`, metric_definition_version: "0.4.35",
+    acquisition_basis: profile === "native_fraud_net" ? "selected_first_party_click" : "selected_verified_platform",
+    fraud_policy: profile === "platform_gross" ? "gross" : "net",
+    rule_bundle_version: "0.4.35", rule_bundle_hash: nonFraudBundleHash("metric-verified-payers-v0.4.35"),
+  }));
+}
+
+export const PAYER_COHORT_METRIC_DEFINITIONS: readonly Definition[] = PAYER_COHORT_PROFILES.flatMap(payerCohortMetricDefinitions);
+
 export function isPayerMetricDefinition(value: unknown): value is Definition {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const expected = PAYER_METRIC_DEFINITIONS.find(row => row.metric_name === (value as Record<string, unknown>).metric_name);
+  const expected = [...PAYER_METRIC_DEFINITIONS, ...PAYER_COHORT_METRIC_DEFINITIONS]
+    .find(row => row.metric_name === (value as Record<string, unknown>).metric_name);
   if (!expected) return false;
   try { return canonicalize(value) === canonicalize(expected); } catch { return false; }
 }

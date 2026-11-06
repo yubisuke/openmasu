@@ -18,6 +18,7 @@ export {
 export { M3_METRIC_DEFINITIONS, SELECTED_DAILY_ACQUISITION_METRIC_DEFINITIONS } from "./m3-metric-definitions.js";
 export { calendarAcquisitionMetricDefinitions } from "./calendar-metric-definitions.js";
 export { PAYER_METRIC_BUNDLE, PAYER_METRIC_VERSION, PAYER_METRIC_DEFINITIONS,
+  PAYER_COHORT_PROFILES, PAYER_COHORT_METRIC_DEFINITIONS, payerCohortMetricDefinitions, type PayerCohortProfile,
   payerMetricDefinitions, isPayerMetric, isPayerMetricDefinition, isVerifiedPurchaseProjection } from "./payer-metric-definitions.js";
 export { ENGAGEMENT_POLICY_BUNDLE, ENGAGEMENT_POLICY_VERSION, ENGAGEMENT_POLICY_METRIC_NAMES,
   engagementPolicyMetricDefinitions } from "./engagement-policy-definitions.js";
