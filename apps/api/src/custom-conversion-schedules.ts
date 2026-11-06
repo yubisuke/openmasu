@@ -1,4 +1,5 @@
-import { keyedCustomConversionMetricDefinitions } from "@openmasu/contracts/definitions";
+import { keyedCustomConversionMetricDefinitions, keyedCalendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
+import { canonicalize } from "json-canonicalize";
 import type { ScheduledMetricDefinition } from "@openmasu/contracts/validation";
 
 const keyPattern = /^[a-z][a-z0-9_]{0,63}$/;
@@ -12,28 +13,41 @@ const countOnlyFx = {
 };
 
 export function expandConversionScheduleRequest(body: JsonObject, selectableKeys: readonly string[]): JsonObject {
-  if (Object.keys(body).some(key => !["custom_conversion_event_keys", "lag_days", "start_date"].includes(key))) {
+  return expandCustomKeyScheduleRequest(body, selectableKeys, false);
+}
+export function expandActivityScheduleRequest(body: JsonObject, selectableKeys: readonly string[]): JsonObject {
+  return expandCustomKeyScheduleRequest(body, selectableKeys, true);
+}
+function expandCustomKeyScheduleRequest(body: JsonObject, selectableKeys: readonly string[], activity: boolean): JsonObject {
+  const field = activity ? "custom_activity_event_keys" : "custom_conversion_event_keys";
+  if (Object.keys(body).some(key => ![field, "lag_days", "start_date"].includes(key))) {
     throw new Error("custom_conversion_schedule_field_forbidden");
   }
-  const keys = body.custom_conversion_event_keys;
+  const keys = body[field];
   if (!Array.isArray(keys) || keys.length < 1 || keys.length > 50 || new Set(keys).size !== keys.length
       || keys.some(key => typeof key !== "string" || !keyPattern.test(key))) {
     throw new Error("custom_conversion_event_keys_invalid");
   }
   if (keys.some(key => !selectableKeys.includes(key))) throw new Error("custom_conversion_event_key_unknown");
-  const lag = body.lag_days ?? 9;
-  if (!Number.isSafeInteger(lag) || Number(lag) < 9 || Number(lag) > 365) {
+  const minimumLag = activity ? 1 : 9;
+  const lag = body.lag_days ?? minimumLag;
+  if (!Number.isSafeInteger(lag) || Number(lag) < minimumLag || Number(lag) > 365) {
     throw new Error("custom_conversion_lag_days_invalid");
   }
-  const definitions = [...keys].sort().flatMap(key => keyedCustomConversionMetricDefinitions(key));
+  const definitions = [...keys].sort().flatMap(key => activity
+    ? keyedCalendarActivityMetricDefinitions(key) : keyedCustomConversionMetricDefinitions(key));
   return { lag_days: lag, ...(body.start_date !== undefined ? { start_date: body.start_date } : {}),
     fx_policy: structuredClone(countOnlyFx), metric_definitions: definitions,
     evaluations: [{ metric_names: definitions.map(definition => definition.metric_name),
-      date_dimension: "cohort_date", grouping: {} }] };
+      date_dimension: activity ? "metric_date" : "cohort_date", grouping: {} }] };
 }
 
 /** Meaning ownership ignores aliases, but preserves explicit profile/window/fraud/grouping differences. */
 export function conversionCalculationKey(definition: ScheduledMetricDefinition): string | undefined {
+  if (definition.rule_bundle_id === "metric-calendar-activity" && definition.conversion_event_key !== undefined) {
+    const { metric_name: _alias, ...meaning } = definition;
+    return `calendar_activity:${canonicalize(meaning)}`;
+  }
   if (definition.rule_bundle_id !== "metric-custom-conversion") return undefined;
   return JSON.stringify([definition.conversion_event_key, definition.rule_bundle_id,
     definition.metric_definition_version, definition.rule_bundle_version, definition.rule_bundle_hash,

@@ -1266,6 +1266,27 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
         if definition != expected:
             raise ValueError(f"metric_definition_series_mismatch:{definition['metric_name']}")
         return
+    if definition.get("rule_bundle_id") == "metric-calendar-activity" and "conversion_event_key" in definition:
+        key = definition.get("conversion_event_key")
+        name = definition.get("metric_name", "")
+        if (not isinstance(key, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", key)
+                or not re.fullmatch(r"daily_custom_[a-z][a-z0-9_]{0,63}_(events|installations)", name)):
+            raise ValueError("conversion_event_key_invalid")
+        distinct = name.endswith("_installations")
+        expected = {
+            "metric_name": name, "metric_definition_version": "0.4.32",
+            "anchor_event": "calendar_day", "aggregation_time_zone": "UTC", "value_type": "count",
+            "definition": {"calculation": "active_installations_count" if distinct else "event_count",
+                           "numerator": "active_installations" if distinct else "events",
+                           "window": {"type": "calendar_day", "day": 0}},
+            "conversion_event_key": key, "event_names": ["custom_event"],
+            "grouping_dimensions": ["metric_date"], "fraud_policy": "gross",
+            "rule_bundle_id": "metric-calendar-activity", "rule_bundle_version": "0.4.32",
+            "rule_bundle_hash": "b6de51a6d28ebff0662ff6b0049d393a9b85df8f894634bcaba1e5d23731d534",
+        }
+        if definition != expected:
+            raise ValueError(f"metric_definition_series_mismatch:{name}")
+        return
     activity_events = {"daily_session_starts": ["session_start"], "daily_custom_events": ["custom_event"],
                        "daily_active_installations": ["session_start", "custom_event"]}
     if (definition.get("rule_bundle_id") == "metric-calendar-activity" or definition.get("metric_name") in activity_events
@@ -2442,6 +2463,7 @@ def metric_runs(
                     raise ValueError(f"calendar_activity requires only metric_date grouping: {metric_name}")
                 day(f"{metric_date}T00:00:00.000Z", "UTC", "metric_date")
                 events = [item for item in visible if item["record"]["event_name"] in definition["event_names"]
+                          and ("conversion_event_key" not in definition or item["record"]["payload"].get("event_key") == definition["conversion_event_key"])
                           and day(item["record"]["occurred_at"], "UTC", "occurred_at") == metric_date]
                 amount = len({(item["server"]["tenant_id"], item["server"]["app_id"], item["record"]["payload"]["installation_id"])
                               for item in events}) if calculation == "active_installations_count" else len(events)

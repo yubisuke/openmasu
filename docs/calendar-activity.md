@@ -16,6 +16,37 @@ installation still contribute one active installation. A redelivery of the same
 logical event does not add a session start or custom event. Distinct event IDs
 can represent separate starts even if their session IDs match.
 
+## Select a custom-event key
+
+The separate opt-in `metric-calendar-activity` / `0.4.32` profile measures one
+exact `conversion_event_key`. In **Schedule daily custom activity**, select up
+to 50 keys from the app's bounded observed-key catalog. Each key produces
+`daily_custom_<key>_events` and `daily_custom_<key>_installations` with one day
+of lag by default. Three distinct events from one installation count as three
+events and one installation. A redelivery counts neither again. Other keys
+are excluded; keys are not lowercased or inferred from attributes.
+
+The registration API accepts, for example:
+
+```json
+{"custom_activity_event_keys":["synthetic_repeat"],"lag_days":1,"start_date":"2026-08-20"}
+```
+
+Use this body at `POST /v1/admin/apps/<app-id>/metric-schedules`, with the same
+administrator authorization as ordinary schedules. Unknown/unobserved keys,
+mixed convenience selectors and duplicate calculation ownership are rejected.
+For explicit definitions, use `keyedCalendarActivityMetricDefinitions(key)`
+from `@openmasu/contracts/definitions`. The immutable definition, saved replay
+and comparison context retain the key; a readable metric name is not the
+selector. Different keys cannot be compared as the same meaning.
+
+Bounded late-event corrections match the saved key and UTC activity date and
+append replacements at the selected receipt cutoff. Privacy replay retains
+that key and removes deleted activity; it may conservatively invalidate other
+runs sharing the deleted evidence snapshot, without mixing their counts.
+The existing all-key `0.4.25` profile and D7 acquisition converters are unchanged.
+No period-unique audience, arbitrary attribute grouping or new calculator is added.
+
 ## Date, evidence and limits
 
 - `metric_date` is the activity date, not the installation date. Use the UTC
@@ -75,4 +106,7 @@ they do not join activity to acquisition KPIs or manufacture period uniques.
 both UTC boundaries, delayed receipt, deletion and an empty day. Existing suites
 cover TypeScript/Python/SQL parity, schedule-to-report/CSV, closed-profile
 admission and deletion replay. No new service, table, dependency or CI job is
-needed. Physical-device delivery and real-data representativeness are unverified.
+needed. [Fixture 79](../fixtures/v0.4/79-keyed-calendar-activity/README.md)
+adds independently counted per-key values, late receipt, redelivery, deletion
+and observed zero. Physical-device delivery and real-data representativeness
+are unverified.

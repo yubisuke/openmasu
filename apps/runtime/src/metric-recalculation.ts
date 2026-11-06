@@ -46,7 +46,7 @@ export function normalizeMetricRecalculationRequest(value: unknown): MetricRecal
       || typeof input.watermark !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(input.watermark)
       || !Number.isFinite(Date.parse(input.watermark)) || new Date(input.watermark).toISOString() !== input.watermark) return fail();
   if (input.metric_names !== undefined && (!Array.isArray(input.metric_names) || input.metric_names.length < 1
-      || input.metric_names.length > 100 || input.metric_names.some(name => typeof name !== "string" || !/^[a-z][a-z0-9_]{2,80}$/.test(name)))) return fail();
+      || input.metric_names.length > 100 || input.metric_names.some(name => typeof name !== "string" || !/^[a-z][a-z0-9_]{2,127}$/.test(name)))) return fail();
   const range = { date_from: input.date_from, date_to: input.date_to, watermark: input.watermark,
     ...(input.metric_names ? { metric_names: [...new Set(input.metric_names as string[])].sort() } : {}) };
   return late ? { ...range, trigger_kind: "late_events", ...(input.source_record_ids

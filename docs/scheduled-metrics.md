@@ -27,6 +27,12 @@ Each key gets stable count/rate names in the existing D7 profile, without copyin
 JSON definitions or adding a scheduler. The convenience selection is app-wide
 and requires nine days of lag; advanced grouping still uses the ordinary request.
 
+For UTC key-specific daily frequency and reached installations, use
+**Schedule daily custom activity** or the `custom_activity_event_keys` request
+in [daily recorded activity](calendar-activity.md#select-a-custom-event-key).
+It requires at least one day of lag and has no acquisition-cohort population.
+The exact key is part of calculation ownership and saved comparison meaning.
+
 For independently named `platform_*` cohort metrics, supply the full
 [verified platform profile](verified-platform-acquisition.md). Source namespaces
 stay explicit and cannot be blended with first-party campaign discovery.

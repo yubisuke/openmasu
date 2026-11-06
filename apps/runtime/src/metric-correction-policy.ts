@@ -19,7 +19,7 @@ export function normalizeMetricCorrectionPolicy(value: unknown): MetricCorrectio
     return Number(v);
   };
   if (v.metric_names !== undefined && (!Array.isArray(v.metric_names) || !v.metric_names.length || v.metric_names.length>100
-      || v.metric_names.some(name => typeof name!=="string" || !/^[a-z][a-z0-9_]{2,80}$/.test(name)))) return fail();
+      || v.metric_names.some(name => typeof name!=="string" || !/^[a-z][a-z0-9_]{2,127}$/.test(name)))) return fail();
   return { enabled:v.enabled,date_from:v.date_from,date_to:v.date_to,
     receipts_per_cycle:bounded(v.receipts_per_cycle,5,20),runs_per_page:bounded(v.runs_per_page,20,100),
     maximum_runs_per_receipt:bounded(v.maximum_runs_per_receipt,200,1000),

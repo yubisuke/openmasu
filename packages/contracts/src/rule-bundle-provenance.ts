@@ -54,7 +54,7 @@ export type NonFraudRuleBundleId =
   | "metric-purchase-net"
   | "metric-total-net";
 
-export type NonFraudRuleBundleKey = NonFraudRuleBundleId | "metric-purchase-net-v0.4.9";
+export type NonFraudRuleBundleKey = NonFraudRuleBundleId | "metric-purchase-net-v0.4.9" | "metric-calendar-activity-v0.4.32";
 
 export type NonFraudRuleBundleDefinition = {
   readonly id: NonFraudRuleBundleId;
@@ -65,6 +65,15 @@ export type NonFraudRuleBundleDefinition = {
 };
 
 export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonFraudRuleBundleDefinition>> = {
+  "metric-calendar-activity-v0.4.32": {
+    id: "metric-calendar-activity", version: "0.4.32", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["utc-occurrence-day-half-open", "accepted-canonical-custom-events",
+      "exact-declared-custom-event-key", "count-events-and-distinct-tenant-app-installations",
+      "received-evidence-as-of-watermark", "current-privacy-visibility", "gross-recorded-activity-only",
+      "metric-date-only-no-acquisition-join", "missing-run-is-not-observed-zero",
+      "daily-installations-not-persons-or-period-uniques", "preserve-all-key-activity-v0.4.25"],
+  },
   "metric-horizon-acquisition-kpis": {
     id: "metric-horizon-acquisition-kpis", version: "0.4.31", kind: "metric",
     implementation: "reference-metric-v0.4",

@@ -353,7 +353,7 @@ function validateRegistryReferences(output: Any, label: string): void {
       : definition.rule_bundle_id === "metric-basis-acquisition-kpis" ? "0.4.30"
       : definition.rule_bundle_id === "metric-engagement-policy" ? "0.4.28"
       : definition.rule_bundle_id === "metric-verified-payers" ? "0.4.26"
-      : definition.rule_bundle_id === "metric-calendar-activity" ? "0.4.25"
+      : definition.rule_bundle_id === "metric-calendar-activity" ? (definition.conversion_event_key === undefined ? "0.4.25" : "0.4.32")
       : definition.rule_bundle_id === "metric-standard-retention" ? "0.4.24"
       : definition.rule_bundle_id === "metric-acquisition-kpis" ? ACQUISITION_KPI_VERSION
       : definition.rule_bundle_id === "metric-calendar-acquisition" ? "0.4.21"

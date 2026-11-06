@@ -13,10 +13,10 @@ export async function calendarActivityValue(
   // The facts retain the scoped installation ID without inferring acquisition.
   const result = await client.query<{ value_unscaled: string }>(
     `WITH activity AS (
-       SELECT tenant_id, app_id, logical_event_id, installation_id, 'session_start'::text AS event_name
+       SELECT tenant_id, app_id, logical_event_id, installation_id, 'session_start'::text AS event_name, NULL::text AS event_key
        FROM ledger.session_facts WHERE tenant_id=$1 AND app_id=$2
        UNION ALL
-       SELECT tenant_id, app_id, logical_event_id, installation_id, 'custom_event'::text AS event_name
+       SELECT tenant_id, app_id, logical_event_id, installation_id, 'custom_event'::text AS event_name, event_key
        FROM ledger.custom_event_facts WHERE tenant_id=$1 AND app_id=$2
      )
      SELECT (CASE WHEN $7::text='active_installations_count'
@@ -28,12 +28,13 @@ export async function calendarActivityValue(
      JOIN ledger.raw_records_current AS raw
        ON raw.tenant_id=logical.tenant_id AND raw.app_id=logical.app_id AND raw.record_id=logical.record_id
      WHERE logical.tenant_id=$1 AND logical.app_id=$2 AND logical.event_name=ANY($5::text[])
+       AND ($8::text IS NULL OR activity.event_key=$8)
        AND raw.received_at <= $3
        AND ($4='before' OR raw.payload_lifecycle_status='available')
        AND control.canonical_timestamp_value(raw.occurred_at) >= ($6::date::timestamp AT TIME ZONE 'UTC')
        AND control.canonical_timestamp_value(raw.occurred_at) < (($6::date + 1)::timestamp AT TIME ZONE 'UTC')`,
     [scope.tenant_id, scope.app_id, watermark, privacyState, definition.event_names,
-      grouping.metric_date, definition.definition.calculation],
+      grouping.metric_date, definition.definition.calculation, definition.conversion_event_key ?? null],
   );
   return { value_state: "present", value_unscaled: result.rows[0].value_unscaled };
 }

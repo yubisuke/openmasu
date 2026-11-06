@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
 import { sha256 } from "@openmasu/attribution-core/canonical";
-import { basisAcquisitionKpiDefinitions, horizonAcquisitionKpiDefinitions } from "@openmasu/contracts/definitions";
+import { basisAcquisitionKpiDefinitions, horizonAcquisitionKpiDefinitions, keyedCalendarActivityMetricDefinitions } from "@openmasu/contracts/definitions";
+import { supportsLateMetric, supportsAttributionMetric } from "./late-metric-inputs.js";
+import { normalizeMetricCorrectionPolicy } from "./metric-correction-policy.js";
 import { captureMetricComparisonContext } from "./metric-comparison.js";
 import { correctionMetricNames, expandAcquisitionCompanions, normalizeMetricRecalculationRequest,
   type CorrectionCandidate } from "./metric-recalculation.js";
@@ -23,6 +25,15 @@ it("keeps late-input requests bounded, explicit and independent from cost receip
   const late = { trigger_kind: "late_events", date_from: "2026-08-01", date_to: "2026-08-31",
     watermark: request.watermark, source_record_ids: ["synthetic-b", "synthetic-a", "synthetic-b"] };
   assert.deepEqual(normalizeMetricRecalculationRequest(late), { ...late, source_record_ids: ["synthetic-a", "synthetic-b"] });
+  for (const definition of keyedCalendarActivityMetricDefinitions("s".repeat(64))) {
+    const names = [definition.metric_name];
+    assert.deepEqual(normalizeMetricRecalculationRequest({ ...late, metric_names: names }).metric_names, names);
+    assert.deepEqual(normalizeMetricCorrectionPolicy({ enabled: true, date_from: late.date_from, date_to: late.date_to, metric_names: names }).metric_names, names);
+    const replay = { metric_definition: definition, evaluation: { grouping: { metric_date: "2026-08-20" } } };
+    assert.equal(supportsLateMetric(replay), true);
+    assert.equal(supportsAttributionMetric(replay), false);
+    assert.equal(supportsLateMetric({ ...replay, evaluation: { grouping: { metric_date: "2026-02-30" } } }), false);
+  }
   for (const mutation of [{ source_record_ids: [] }, { source_record_ids: Array(101).fill("synthetic-a") },
     { source_record_ids: ["not/an/identifier"] }, { cost_import_run_id: request.cost_import_run_id },
     { trigger_kind: "all_events" }, { date_to: "2026-09-01" }, { source_record_ids: null }]) {

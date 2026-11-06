@@ -199,7 +199,7 @@ export async function planAutomaticMetricCorrections(pool: Pool, tenantId: strin
             LEFT JOIN control.metric_replay_manifests AS manifest ON manifest.tenant_id=mr.tenant_id AND manifest.app_id=mr.app_id
               AND manifest.source_metric_run_id=mr.metric_run_id
             WHERE mr.tenant_id=$1 AND mr.app_id=$2 AND CASE WHEN
-              coalesce(mr.comparison_context->'definition'->>'anchor_event',manifest.artifact->'metric_definition'->>'anchor_event')='deep_link_open'
+              coalesce(mr.comparison_context->'definition'->>'anchor_event',manifest.artifact->'metric_definition'->>'anchor_event') IN ('deep_link_open','calendar_day')
               THEN mr.grouping->>'metric_date' ELSE mr.grouping->>'cohort_date' END BETWEEN $3 AND $4
               AND ($5::text[] IS NULL OR mr.metric_name=ANY($5::text[]))
               AND NOT EXISTS (SELECT 1 FROM ledger.metric_runs AS newer WHERE newer.tenant_id=$1 AND newer.app_id=$2

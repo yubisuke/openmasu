@@ -6,7 +6,7 @@ import { ENGAGEMENT_METRIC_NAMES, M1B_METRIC_DEFINITIONS, REFERENCE_AD_REVENUE_M
 import { validateScheduledMetricDefinition as validMetricDefinition, type ScheduledMetricDefinition } from "@openmasu/contracts/validation";
 import type { AppAdminIdentity } from "./admin-auth.js";
 import { recordDashboardAuditWithClient } from "./session.js";
-import { expandConversionScheduleRequest, conversionCalculationKey } from "./custom-conversion-schedules.js";
+import { expandConversionScheduleRequest, expandActivityScheduleRequest, conversionCalculationKey } from "./custom-conversion-schedules.js";
 import { expandRecommendedMetricSchedule, recommendedSchedulePreviewDigest } from "./recommended-metric-schedules.js";
 import { lockEventCatalog, rejectDeprecatedConversionKeys, selectableConversionKeys } from "./event-catalog.js";
 
@@ -324,7 +324,9 @@ export async function registerMetricSchedule(input: Readonly<{
       }
       return saveMetricScheduleWithClient(client, input.identity, normalized, now);
     }
-    const body = input.body.custom_conversion_event_keys !== undefined
+    const body = input.body.custom_activity_event_keys !== undefined
+      ? expandActivityScheduleRequest(input.body, await selectableConversionKeys(client, input.identity, input.body.custom_activity_event_keys))
+      : input.body.custom_conversion_event_keys !== undefined
       ? expandConversionScheduleRequest(input.body, await selectableConversionKeys(client, input.identity, input.body.custom_conversion_event_keys)) : input.body;
     return saveMetricScheduleWithClient(client, input.identity, normalizeMetricScheduleRequest(body, now), now);
   });

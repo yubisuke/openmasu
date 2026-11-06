@@ -374,6 +374,29 @@ Environment setup is `npm ci` and `python -m pip install --require-hashes --requ
 
 ## Version history
 
+### v0.4.32 patch release: keyed daily custom activity
+
+The closed opt-in `metric-calendar-activity` bundle version `0.4.32` uses the
+existing optional `conversion_event_key` as an exact selector. Definition
+version is `0.4.32`; bundle JCS/SHA-256 is
+`b6de51a6d28ebff0662ff6b0049d393a9b85df8f894634bcaba1e5d23731d534`.
+It admits only gross UTC `calendar_day` day 0, `metric_date` grouping and
+`event_names=[custom_event]`. `event_count/events` counts canonical accepted
+events; `active_installations_count/active_installations` counts distinct
+scoped installations among those events. Apply the UTC half-open occurrence
+interval and inclusive receipt watermark before counting. Privacy-after
+excludes redacted evidence; redelivery does not add another logical event.
+
+Keys match `^[a-z][a-z0-9_]{0,63}$` without case normalization. Names match
+`daily_custom_<key-shaped-alias>_events` or `_installations`, respectively;
+the declared key, not the name, determines selection. Complete saved
+definitions and comparison meaning retain this key. Observed empty days emit
+present zero; the absence of a saved run does not represent zero. No
+acquisition, attributes, provider or period-unique population is inferred.
+Fixture 79 independently exercises both keys across five cutoffs/states.
+Historical all-key activity `0.4.25`, D7 converters, existing schema URNs,
+wire/package `0.4.0` identities and old goldens are unchanged.
+
 ### v0.4.31 patch release: native acquisition KPI horizons
 
 The closed opt-in `metric-horizon-acquisition-kpis` bundle adds native UTC

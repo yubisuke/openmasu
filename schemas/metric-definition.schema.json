@@ -140,6 +140,30 @@
           "definition": { "const": { "calculation": "revenue_over_paying_installations", "numerator": "purchase_net_revenue", "denominator": "paying_installations", "window": { "type": "elapsed", "day": 7 } } } } }
       ]
     },
+    "keyedCalendarActivity": {
+      "type": "object", "additionalProperties": true,
+      "required": ["conversion_event_key", "event_names", "grouping_dimensions", "fraud_policy"],
+      "properties": {
+        "metric_definition_version": { "const": "0.4.32" },
+        "rule_bundle_id": { "const": "metric-calendar-activity" }, "rule_bundle_version": { "const": "0.4.32" },
+        "rule_bundle_hash": { "const": "b6de51a6d28ebff0662ff6b0049d393a9b85df8f894634bcaba1e5d23731d534" },
+        "anchor_event": { "const": "calendar_day" }, "aggregation_time_zone": { "const": "UTC" },
+        "value_type": { "const": "count" }, "fraud_policy": { "const": "gross" },
+        "conversion_event_key": {}, "event_names": { "const": ["custom_event"] },
+        "grouping_dimensions": { "const": ["metric_date"] },
+        "currency": false, "amount_scale": false, "ratio_scale": false, "activity_events": false,
+        "acquisition_basis": false, "import_provider": false, "calendar_cohort_policy": false,
+        "retention_maturity_policy": false, "acquisition_dimension_policy": false,
+        "engagement_credit_policy": false, "engagement_inactivity_days": false,
+        "cost_selection_policy": false, "refund_reversal_policy": false
+      },
+      "oneOf": [
+        { "properties": { "metric_name": { "type": "string", "pattern": "^daily_custom_[a-z][a-z0-9_]{0,63}_events$" },
+          "definition": { "const": { "calculation": "event_count", "numerator": "events", "window": { "type": "calendar_day", "day": 0 } } } } },
+        { "properties": { "metric_name": { "type": "string", "pattern": "^daily_custom_[a-z][a-z0-9_]{0,63}_installations$" },
+          "definition": { "const": { "calculation": "active_installations_count", "numerator": "active_installations", "window": { "type": "calendar_day", "day": 0 } } } } }
+      ]
+    },
     "calendarActivity": {
       "type": "object", "additionalProperties": true,
       "required": ["event_names", "grouping_dimensions", "fraud_policy"],
@@ -658,9 +682,10 @@
     "if": { "anyOf": [
       { "properties": { "rule_bundle_id": { "const": "metric-calendar-activity" } }, "required": ["rule_bundle_id"] },
       { "properties": { "metric_name": { "enum": ["daily_session_starts", "daily_custom_events", "daily_active_installations"] } }, "required": ["metric_name"] },
+      { "properties": { "metric_name": { "type": "string", "pattern": "^daily_custom_[a-z][a-z0-9_]{0,63}_(events|installations)$" } }, "required": ["metric_name"] },
       { "properties": { "definition": { "type": "object", "additionalProperties": true, "properties": { "calculation": { "const": "active_installations_count" } }, "required": ["calculation"] } }, "required": ["definition"] }
     ] },
-    "then": { "$ref": "#/$defs/calendarActivity" },
+    "then": { "anyOf": [{ "$ref": "#/$defs/calendarActivity" }, { "$ref": "#/$defs/keyedCalendarActivity" }] },
     "else": { "allOf": [{
     "if": { "anyOf": [
       { "properties": { "retention_maturity_policy": {} }, "required": ["retention_maturity_policy"] },
